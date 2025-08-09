@@ -1,0 +1,38 @@
+{
+  "workspace": [
+    "packages/*"
+  ],
+  "imports": {
+    "@std/fs": "jsr:@std/fs@^1.0.19",
+    "@std/path": "jsr:@std/path@^1.1.1",
+    "@types/node": "npm:@types/node@^20.19.9",
+    "tsdown": "npm:tsdown@^0.13.0",
+    "typescript": "npm:typescript@^5.8.3"
+  },
+  "fmt": {
+    "exclude": [
+      "*.md",
+      "**/*.md",
+      "*.yaml",
+      "**/*.yaml",
+      "*.yml",
+      "**/*.yml"
+    ]
+  },
+  "tasks": {
+    "check-versions": "deno run --allow-read --allow-write scripts/check_versions.ts",
+    "check": {
+      "dependencies": [
+        "check-versions"
+      ],
+      "command": "deno check && deno lint && deno fmt --check && deno publish --dry-run --allow-dirty"
+    },
+    "test": "deno test --allow-env --allow-net --env-file=.env.test",
+    "hooks:install": "deno run --allow-read=deno.json,.git/hooks/ --allow-write=.git/hooks/ jsr:@hongminhee/deno-task-hooks",
+    "hooks:pre-commit": {
+      "dependencies": [
+        "check"
+      ]
+    }
+  }
+}

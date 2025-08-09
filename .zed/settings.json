@@ -1,0 +1,70 @@
+{
+  "lsp": {
+    "deno": {
+      "settings": {
+        "deno": {
+          "enable": true
+        }
+      }
+    }
+  },
+  "ensure_final_newline_on_save": true,
+  "format_on_save": "on",
+  "formatter": "language_server",
+  "languages": {
+    "JavaScript": {
+      "language_servers": [
+        "deno",
+        "!typescript-language-server",
+        "!vtsls",
+        "!eslint",
+        "!biome",
+        "..."
+      ]
+    },
+    "JSON": {
+      "language_servers": [
+        "json-language-server",
+        "..."
+      ]
+    },
+    "JSONC": {
+      "language_servers": [
+        "json-language-server",
+        "..."
+      ]
+    },
+    "TypeScript": {
+      "language_servers": [
+        "deno",
+        "!typescript-language-server",
+        "!vtsls",
+        "!eslint",
+        "!biome",
+        "..."
+      ]
+    },
+    "TSX": {
+      "language_servers": [
+        "deno",
+        "!typescript-language-server",
+        "!vtsls",
+        "!eslint",
+        "!biome",
+        "..."
+      ]
+    },
+    "YAML": {
+      "language_servers": [
+        "!yaml-language-server",
+        "!eslint",
+        "!biome",
+        "..."
+      ]
+    }
+  },
+  "show_wrap_guides": true,
+  "wrap_guides": [
+    80
+  ]
+}

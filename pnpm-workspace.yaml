@@ -1,0 +1,10 @@
+packages:
+- packages/*
+
+catalog:
+  "@types/node": ^20.19.9
+  tsdown: ^0.13.0
+  typescript: ^5.8.3
+
+engineStrict: true
+nodeVersion: 20.19.0
