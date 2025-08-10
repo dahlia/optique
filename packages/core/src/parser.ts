@@ -415,6 +415,17 @@ export function argument<T>(
     & Record<symbol, unknown>;
 }
 
+/**
+ * Creates a parser that combines multiple parsers into a single object parser.
+ * Each parser in the object is applied to parse different parts of the input,
+ * and the results are combined into an object with the same structure.
+ * @template T A record type where each value is a {@link Parser}.
+ * @param parsers An object containing named parsers that will be combined
+ *                into a single object parser.
+ * @returns A {@link Parser} that produces an object with the same keys as
+ *          the input, where each value is the result of the corresponding
+ *          parser.
+ */
 export function object<
   T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
 >(
@@ -430,6 +441,18 @@ export function object<
   }
 >;
 
+/**
+ * Creates a labeled parser that combines multiple parsers into a single
+ * object parser with an associated label for documentation or error reporting.
+ * @template T A record type where each value is a {@link Parser}.
+ * @param label A descriptive label for this parser group, used for
+ *              documentation and error messages.
+ * @param parsers An object containing named parsers that will be combined
+ *                into a single object parser.
+ * @returns A {@link Parser} that produces an object with the same keys as
+ *          the input, where each value is the result of the corresponding
+ *          parser.
+ */
 export function object<
   T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
 >(
