@@ -366,6 +366,55 @@ export function option<T>(
     & Record<symbol, unknown>;
 }
 
+/**
+ * Creates a parser that expects a single argument value.
+ * This parser is typically used for positional arguments
+ * that are not options or flags.
+ * @template T The type of the value produced by the parser.
+ * @param valueParser The {@link ValueParser} that defines how to parse
+ *                    the argument value.
+ * @returns A {@link Parser} that expects a single argument value and produces
+ *          the parsed value of type {@link T}.
+ */
+export function argument<T>(
+  valueParser: ValueParser<T>,
+): Parser<T, ValueParserResult<T>> {
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: 5,
+    initialState: { success: false, error: "Too few arguments." },
+    parse(context) {
+      if (context.buffer.length < 1) {
+        return {
+          success: false,
+          consumed: 0,
+          error: "Expected an argument, but got end of input.",
+        };
+      }
+
+      const result = valueParser.parse(context.buffer[0]);
+      return {
+        success: true,
+        next: {
+          ...context,
+          buffer: context.buffer.slice(1),
+          state: result,
+        },
+        consumed: context.buffer.slice(0, 1),
+      };
+    },
+    complete(state) {
+      return state;
+    },
+    [Symbol.for("Deno.customInspect")]() {
+      return `argument()`;
+    },
+  } satisfies
+    & Parser<T, ValueParserResult<T>>
+    & Record<symbol, unknown>;
+}
+
 export function object<
   T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
 >(
@@ -433,8 +482,11 @@ export function object<
           ? `Unexpected option or argument: ${context.buffer[0]}.` // FIXME
           : "Expected an option or argument, but got end of input.",
       };
-      for (const field in parsers) {
-        const parser = parsers[field];
+      const parserPairs = Object.entries(parsers);
+      parserPairs.sort(([_, parserA], [__, parserB]) =>
+        parserB.priority - parserA.priority
+      );
+      for (const [field, parser] of parserPairs) {
         const result = parser.parse({
           ...context,
           state: context.state[field],

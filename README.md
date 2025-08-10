@@ -40,13 +40,14 @@ Example
 
 ~~~~ typescript
 import { integer, string } from "@optique/core/valueparser";
-import { object, option, or, parse } from "@optique/core/parser";
+import { argument, object, option, or, parse } from "@optique/core/parser";
 
 // Define mutually exclusive option groups
 const parser = or(
   object("Server mode", {
     port: option("-p", "--port", integer({ min: 1, max: 65535 })),
     host: option("-h", "--host", string({ metavar: "HOST" })),
+    config: argument(string({ metavar: "FILE" })),
   }),
   object("Client mode", {
     connect: option("-c", "--connect", string({ metavar: "URL" })),
@@ -58,11 +59,12 @@ const result = parse(parser, process.argv.slice(2));
 
 if (result.success) {
   // TypeScript automatically infers the union type:
-  // { port: number | undefined; host: string | undefined } |
-  // { connect: string | undefined; timeout: number | undefined }
+  // { port: number; host: string; config: string } |
+  // { connect: string; timeout: number }
 
   if ("port" in result.value) {
     console.log(`Starting server on ${result.value.host}:${result.value.port}`);
+    console.log(`Using config: ${result.value.config}`);
   } else {
     console.log(`Connecting to ${result.value.connect}`);
   }

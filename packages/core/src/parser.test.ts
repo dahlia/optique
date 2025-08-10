@@ -1,5 +1,12 @@
 import type { ErrorMessage } from "@optique/core/error";
-import { constant, object, option, or, parse } from "@optique/core/parser";
+import {
+  argument,
+  constant,
+  object,
+  option,
+  or,
+  parse,
+} from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -428,6 +435,134 @@ describe("object", () => {
     if (!result.success) {
       assertErrorIncludes(result.error, "Expected an option");
     }
+  });
+});
+
+describe("argument", () => {
+  it("should create a parser that expects a single argument", () => {
+    const parser = argument(string({ metavar: "FILE" }));
+
+    assert.equal(parser.priority, 5);
+    assert.ok(!parser.initialState.success);
+    if (!parser.initialState.success) {
+      assert.equal(parser.initialState.error, "Too few arguments.");
+    }
+  });
+
+  it("should parse a string argument", () => {
+    const parser = argument(string({ metavar: "FILE" }));
+    const context = {
+      buffer: ["myfile.txt"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.ok(result.next.state.success);
+      if (result.next.state.success) {
+        assert.equal(result.next.state.value, "myfile.txt");
+      }
+      assert.deepEqual(result.next.buffer, []);
+      assert.deepEqual(result.consumed, ["myfile.txt"]);
+    }
+  });
+
+  it("should parse an integer argument", () => {
+    const parser = argument(integer({ min: 0 }));
+    const context = {
+      buffer: ["42"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.ok(result.next.state.success);
+      if (result.next.state.success) {
+        assert.equal(result.next.state.value, 42);
+      }
+      assert.deepEqual(result.next.buffer, []);
+      assert.deepEqual(result.consumed, ["42"]);
+    }
+  });
+
+  it("should fail when buffer is empty", () => {
+    const parser = argument(string({ metavar: "FILE" }));
+    const context = {
+      buffer: [] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(result.consumed, 0);
+      assertErrorIncludes(result.error, "Expected an argument");
+    }
+  });
+
+  it("should propagate value parser failures", () => {
+    const parser = argument(integer({ min: 1, max: 100 }));
+    const context = {
+      buffer: ["invalid"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.ok(!result.next.state.success);
+    }
+  });
+
+  it("should complete successfully with valid state", () => {
+    const parser = argument(string({ metavar: "FILE" }));
+    const validState = { success: true as const, value: "test.txt" };
+
+    const result = parser.complete(validState);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "test.txt");
+    }
+  });
+
+  it("should fail completion with invalid state", () => {
+    const parser = argument(string({ metavar: "FILE" }));
+    const invalidState = { success: false as const, error: "Missing argument" };
+
+    const result = parser.complete(invalidState);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(result.error, "Missing argument");
+    }
+  });
+
+  it("should work with different value parser constraints", () => {
+    const fileParser = argument(string({ pattern: /\.(txt|md)$/ }));
+    const portParser = argument(integer({ min: 1024, max: 65535 }));
+
+    const validFileResult = parse(fileParser, ["readme.txt"]);
+    assert.ok(validFileResult.success);
+    if (validFileResult.success) {
+      assert.equal(validFileResult.value, "readme.txt");
+    }
+
+    const invalidFileResult = parse(fileParser, ["script.js"]);
+    assert.ok(!invalidFileResult.success);
+
+    const validPortResult = parse(portParser, ["8080"]);
+    assert.ok(validPortResult.success);
+    if (validPortResult.success) {
+      assert.equal(validPortResult.value, 8080);
+    }
+
+    const invalidPortResult = parse(portParser, ["80"]);
+    assert.ok(!invalidPortResult.success);
   });
 });
 
@@ -938,6 +1073,56 @@ describe("Integration tests", () => {
     assert.ok(result2.success);
     if (result2.success) {
       assert.equal(result2.value.dosPort, 9000);
+    }
+  });
+
+  it("should handle argument parsers in object combinations", () => {
+    const parser = object({
+      verbose: option("-v"),
+      output: option("-o", string({ metavar: "FILE" })),
+      input: argument(string({ metavar: "INPUT" })),
+    });
+
+    const result = parse(parser, ["-v", "-o", "output.txt", "input.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.output, "output.txt");
+      assert.equal(result.value.input, "input.txt");
+    }
+  });
+
+  it("should reproduce example.ts behavior with arguments", () => {
+    const group1 = object("Group 1", {
+      type: constant("group1"),
+      allow: option("-a", "--allow"),
+      value: option("-v", "--value", integer()),
+      arg: argument(string({ metavar: "ARG" })),
+    });
+
+    const group2 = object("Group 2", {
+      type: constant("group2"),
+      foo: option("-f", "--foo"),
+      bar: option("-b", "--bar", string({ metavar: "VALUE" })),
+    });
+
+    const parser = or(group1, group2);
+
+    const group1Result = parse(parser, ["-a", "-v", "123", "myfile.txt"]);
+    assert.ok(group1Result.success);
+    if (
+      group1Result.success && "type" in group1Result.value &&
+      group1Result.value.type === "group1"
+    ) {
+      assert.equal(group1Result.value.allow, true);
+      assert.equal(group1Result.value.value, 123);
+      assert.equal(group1Result.value.arg, "myfile.txt");
+    }
+
+    const group2Result = parse(parser, ["-f", "-b", "hello"]);
+    assert.ok(!group2Result.success);
+    if (!group2Result.success) {
+      assertErrorIncludes(group2Result.error, "Missing option");
     }
   });
 });
