@@ -376,3 +376,63 @@ export function float(options: FloatOptions = {}): ValueParser<number> {
     },
   };
 }
+
+/**
+ * Options for creating a {@link url} parser.
+ */
+export interface UrlOptions {
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `URL` or `ENDPOINT`.
+   * @default `"URL"`
+   */
+  readonly metavar?: string;
+
+  /**
+   * List of allowed URL protocols (e.g., `["http:", "https:"]`).
+   * If specified, the parsed URL must use one of these protocols.
+   * Protocol names should include the trailing colon (e.g., `"https:"`).
+   * If not specified, any protocol is allowed.
+   */
+  readonly allowedProtocols?: readonly string[];
+}
+
+/**
+ * Creates a {@link ValueParser} for URL values.
+ *
+ * This parser validates that the input is a well-formed URL and optionally
+ * restricts the allowed protocols. The parsed result is a JavaScript `URL`
+ * object.
+ * @param options Configuration options for the URL parser.
+ * @returns A {@link ValueParser} that converts string input to `URL` objects.
+ */
+export function url(options: UrlOptions = {}): ValueParser<URL> {
+  const allowedProtocols = options.allowedProtocols?.map((p) =>
+    p.toLowerCase()
+  );
+  return {
+    metavar: options.metavar ?? "URL",
+    parse(input: string): ValueParserResult<URL> {
+      if (!URL.canParse(input)) {
+        return {
+          success: false,
+          error: message`Invalid URL: ${input}.`,
+        };
+      }
+      const url = new URL(input);
+      if (
+        allowedProtocols != null && !allowedProtocols.includes(url.protocol)
+      ) {
+        return {
+          success: false,
+          error:
+            message`URL protocol ${url.protocol} is not allowed. Allowed protocols: ${
+              allowedProtocols.join(", ")
+            }.`,
+        };
+      }
+      return { success: true, value: url };
+    },
+  };
+}

@@ -1,5 +1,5 @@
 import { type ErrorMessage, message } from "@optique/core/error";
-import { float, integer } from "@optique/core/valueparser";
+import { float, integer, url } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -1051,6 +1051,295 @@ describe("float", () => {
     it("should use default metavar when not provided", () => {
       const parser = float({});
       assert.equal(parser.metavar, "NUMBER");
+    });
+  });
+});
+
+describe("url", () => {
+  describe("basic parsing", () => {
+    it("should parse valid URLs", () => {
+      const parser = url({});
+
+      const result1 = parser.parse("https://example.com");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.ok(result1.value instanceof URL);
+        assert.equal(result1.value.hostname, "example.com");
+        assert.equal(result1.value.protocol, "https:");
+      }
+
+      const result2 = parser.parse("http://localhost:8080/path?query=value");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value.hostname, "localhost");
+        assert.equal(result2.value.port, "8080");
+        assert.equal(result2.value.pathname, "/path");
+        assert.equal(result2.value.search, "?query=value");
+      }
+
+      const result3 = parser.parse("ftp://files.example.com/file.txt");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value.protocol, "ftp:");
+        assert.equal(result3.value.hostname, "files.example.com");
+        assert.equal(result3.value.pathname, "/file.txt");
+      }
+    });
+
+    it("should parse URLs with different protocols", () => {
+      const parser = url({});
+
+      const protocols = [
+        "https://example.com",
+        "http://example.com",
+        "ftp://example.com",
+        "file:///path/to/file",
+        "mailto:test@example.com",
+        "ws://websocket.example.com",
+        "wss://secure-websocket.example.com",
+      ];
+
+      for (const urlString of protocols) {
+        const result = parser.parse(urlString);
+        assert.ok(result.success, `Should parse ${urlString}`);
+        if (result.success) {
+          assert.ok(result.value instanceof URL);
+        }
+      }
+    });
+
+    it("should reject invalid URLs", () => {
+      const parser = url({});
+
+      const invalidUrls = [
+        "not-a-url",
+        "://missing-protocol",
+        "http://",
+        "",
+        "   ",
+        "http:// invalid url",
+        "http://[invalid-ipv6",
+      ];
+
+      for (const invalidUrl of invalidUrls) {
+        const result = parser.parse(invalidUrl);
+        assert.ok(!result.success, `Should reject ${invalidUrl}`);
+        if (!result.success) {
+          assert.equal(typeof result.error, "object");
+        }
+      }
+    });
+  });
+
+  describe("protocol restrictions", () => {
+    it("should allow only specified protocols", () => {
+      const parser = url({ allowedProtocols: ["http:", "https:"] });
+
+      const result1 = parser.parse("https://example.com");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value.protocol, "https:");
+      }
+
+      const result2 = parser.parse("http://example.com");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value.protocol, "http:");
+      }
+
+      const result3 = parser.parse("ftp://example.com");
+      assert.ok(!result3.success);
+      if (!result3.success) {
+        assert.equal(typeof result3.error, "object");
+        if (isStructuredError(result3.error)) {
+          assert.equal(result3.error.values.length, 2);
+          assert.equal(result3.error.values[0], "ftp:");
+          assert.equal(result3.error.values[1], "http:, https:");
+        }
+      }
+    });
+
+    it("should handle case insensitive protocol matching", () => {
+      const parser = url({ allowedProtocols: ["HTTP:", "HTTPS:"] });
+
+      const result1 = parser.parse("https://example.com");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("http://example.com");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("ftp://example.com");
+      assert.ok(!result3.success);
+    });
+
+    it("should allow single protocol restriction", () => {
+      const parser = url({ allowedProtocols: ["https:"] });
+
+      const result1 = parser.parse("https://example.com");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("http://example.com");
+      assert.ok(!result2.success);
+    });
+
+    it("should reject all protocols when empty protocol list is provided", () => {
+      const parser = url({ allowedProtocols: [] });
+
+      const result1 = parser.parse("https://example.com");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("ftp://example.com");
+      assert.ok(!result2.success);
+    });
+  });
+
+  describe("URL object properties", () => {
+    it("should provide access to URL components", () => {
+      const parser = url({});
+      const result = parser.parse(
+        "https://user:pass@example.com:8080/path/to/resource?query=value&param=test#fragment",
+      );
+
+      assert.ok(result.success);
+      if (result.success) {
+        const url = result.value;
+        assert.equal(url.protocol, "https:");
+        assert.equal(url.hostname, "example.com");
+        assert.equal(url.port, "8080");
+        assert.equal(url.pathname, "/path/to/resource");
+        assert.equal(url.search, "?query=value&param=test");
+        assert.equal(url.hash, "#fragment");
+        assert.equal(url.username, "user");
+        assert.equal(url.password, "pass");
+      }
+    });
+
+    it("should handle URLs without optional components", () => {
+      const parser = url({});
+      const result = parser.parse("https://example.com");
+
+      assert.ok(result.success);
+      if (result.success) {
+        const url = result.value;
+        assert.equal(url.protocol, "https:");
+        assert.equal(url.hostname, "example.com");
+        assert.equal(url.port, "");
+        assert.equal(url.pathname, "/");
+        assert.equal(url.search, "");
+        assert.equal(url.hash, "");
+        assert.equal(url.username, "");
+        assert.equal(url.password, "");
+      }
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle IPv4 addresses", () => {
+      const parser = url({});
+      const result = parser.parse("http://192.168.1.1:8080/api");
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.hostname, "192.168.1.1");
+        assert.equal(result.value.port, "8080");
+      }
+    });
+
+    it("should handle IPv6 addresses", () => {
+      const parser = url({});
+      const result = parser.parse("http://[2001:db8::1]:8080/api");
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.hostname, "[2001:db8::1]");
+        assert.equal(result.value.port, "8080");
+      }
+    });
+
+    it("should handle URLs with encoded characters", () => {
+      const parser = url({});
+      const result = parser.parse(
+        "https://example.com/path%20with%20spaces?query=hello%20world",
+      );
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.pathname, "/path%20with%20spaces");
+        assert.equal(result.value.search, "?query=hello%20world");
+      }
+    });
+
+    it("should handle file URLs", () => {
+      const parser = url({});
+      const result = parser.parse("file:///absolute/path/to/file.txt");
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.protocol, "file:");
+        assert.equal(result.value.pathname, "/absolute/path/to/file.txt");
+      }
+    });
+
+    it("should handle localhost variations", () => {
+      const parser = url({});
+
+      const localhosts = [
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://[::1]",
+      ];
+
+      for (const localhost of localhosts) {
+        const result = parser.parse(localhost);
+        assert.ok(result.success, `Should parse ${localhost}`);
+      }
+    });
+  });
+
+  describe("error messages", () => {
+    it("should provide structured error messages for invalid URLs", () => {
+      const parser = url({});
+      const result = parser.parse("not-a-url");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          assert.ok("message" in result.error);
+          assert.ok("values" in result.error);
+          assert.equal(result.error.values.length, 1);
+          assert.equal(result.error.values[0], "not-a-url");
+        }
+      }
+    });
+
+    it("should provide structured error messages for protocol violations", () => {
+      const parser = url({ allowedProtocols: ["https:"] });
+      const result = parser.parse("http://example.com");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          assert.ok("message" in result.error);
+          assert.ok("values" in result.error);
+          assert.equal(result.error.values.length, 2);
+          assert.equal(result.error.values[0], "http:");
+          assert.equal(result.error.values[1], "https:");
+        }
+      }
+    });
+  });
+
+  describe("custom metavar", () => {
+    it("should use custom metavar when provided", () => {
+      const parser = url({ metavar: "ENDPOINT" });
+      assert.equal(parser.metavar, "ENDPOINT");
+    });
+
+    it("should use default metavar when not provided", () => {
+      const parser = url({});
+      assert.equal(parser.metavar, "URL");
     });
   });
 });
