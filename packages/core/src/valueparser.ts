@@ -78,7 +78,7 @@ export interface StringOptions {
  * @returns A {@link ValueParser} that parses strings according to the
  *          specified options.
  */
-export function string(options: StringOptions) {
+export function string(options: StringOptions = {}) {
   return {
     metavar: options.metavar ?? "STRING",
     parse(input: string): ValueParserResult<string> {
@@ -261,6 +261,111 @@ export function integer(
             message`Expected a value greater than or equal to ${options.min}, but got ${value}.`,
         };
       } else if (options?.max != null && value > options.max) {
+        return {
+          success: false,
+          error:
+            message`Expected a value less than or equal to ${options.max}, but got ${value}.`,
+        };
+      }
+      return { success: true, value };
+    },
+  };
+}
+
+/**
+ * Options for creating a {@link float} parser.
+ */
+export interface FloatOptions {
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `RATE` or `PRICE`.
+   * @default `"NUMBER"`
+   */
+  readonly metavar?: string;
+
+  /**
+   * Minimum allowed value (inclusive). If not specified,
+   * no minimum is enforced.
+   */
+  readonly min?: number;
+
+  /**
+   * Maximum allowed value (inclusive). If not specified,
+   * no maximum is enforced.
+   */
+  readonly max?: number;
+
+  /**
+   * If `true`, allows the special value `NaN` (not a number).
+   * This is useful for cases where `NaN` is a valid input,
+   * such as in some scientific calculations.
+   * @default `false`
+   */
+  readonly allowNaN?: boolean;
+
+  /**
+   * If `true`, allows the special values `Infinity` and `-Infinity`.
+   * This is useful for cases where infinite values are valid inputs,
+   * such as in mathematical calculations or limits.
+   * @default `false`
+   */
+  readonly allowInfinity?: boolean;
+}
+
+/**
+ * Creates a {@link ValueParser} for floating-point numbers.
+ *
+ * This parser validates that the input is a valid floating-point number
+ * and optionally enforces minimum and maximum value constraints.
+ * @param options Configuration options for the float parser.
+ * @returns A {@link ValueParser} that parses strings into floating-point
+ *          numbers.
+ */
+export function float(options: FloatOptions = {}): ValueParser<number> {
+  // Regular expression to match valid floating-point numbers
+  // Matches: integers, decimals, scientific notation
+  // Does not match: empty strings, whitespace-only, hex/bin/oct numbers
+  const floatRegex = /^[+-]?(?:(?:\d+\.?\d*)|(?:\d*\.\d+))(?:[eE][+-]?\d+)?$/;
+
+  return {
+    metavar: options.metavar ?? "NUMBER",
+    parse(input: string): ValueParserResult<number> {
+      let value: number;
+      const lowerInput = input.toLowerCase();
+
+      if (lowerInput === "nan" && options.allowNaN) {
+        value = NaN;
+      } else if (
+        (lowerInput === "infinity" || lowerInput === "+infinity") &&
+        options.allowInfinity
+      ) {
+        value = Infinity;
+      } else if (lowerInput === "-infinity" && options.allowInfinity) {
+        value = -Infinity;
+      } else if (floatRegex.test(input)) {
+        value = Number(input);
+        // This should not happen with our regex, but let's be safe
+        if (Number.isNaN(value)) {
+          return {
+            success: false,
+            error: message`Expected a valid number, but got ${input}.`,
+          };
+        }
+      } else {
+        return {
+          success: false,
+          error: message`Expected a valid number, but got ${input}.`,
+        };
+      }
+
+      if (options.min != null && value < options.min) {
+        return {
+          success: false,
+          error:
+            message`Expected a value greater than or equal to ${options.min}, but got ${value}.`,
+        };
+      } else if (options.max != null && value > options.max) {
         return {
           success: false,
           error:

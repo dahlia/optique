@@ -1,5 +1,5 @@
 import { type ErrorMessage, message } from "@optique/core/error";
-import { integer } from "@optique/core/valueparser";
+import { float, integer } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -546,6 +546,511 @@ describe("integer", () => {
 
       const result6 = parser2.parse("6");
       assert.ok(!result6.success);
+    });
+  });
+});
+
+describe("float", () => {
+  describe("basic parsing", () => {
+    it("should parse valid floating-point numbers", () => {
+      const parser = float({});
+
+      const result1 = parser.parse("42.5");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 42.5);
+        assert.equal(typeof result1.value, "number");
+      }
+
+      const result2 = parser.parse("0.0");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 0.0);
+      }
+
+      const result3 = parser.parse("-3.14159");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, -3.14159);
+      }
+
+      const result4 = parser.parse("1e5");
+      assert.ok(result4.success);
+      if (result4.success) {
+        assert.equal(result4.value, 100000);
+      }
+
+      const result5 = parser.parse("2.5e-3");
+      assert.ok(result5.success);
+      if (result5.success) {
+        assert.equal(result5.value, 0.0025);
+      }
+
+      const result6 = parser.parse(".5");
+      assert.ok(result6.success);
+      if (result6.success) {
+        assert.equal(result6.value, 0.5);
+      }
+
+      const result7 = parser.parse("-.75");
+      assert.ok(result7.success);
+      if (result7.success) {
+        assert.equal(result7.value, -0.75);
+      }
+    });
+
+    it("should parse integer values as floats", () => {
+      const parser = float({});
+
+      const result1 = parser.parse("42");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 42);
+        assert.equal(typeof result1.value, "number");
+      }
+
+      const result2 = parser.parse("-5");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, -5);
+      }
+    });
+
+    it("should reject Infinity by default", () => {
+      const parser = float({});
+
+      const result1 = parser.parse("Infinity");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("-Infinity");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("+Infinity");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("infinity");
+      assert.ok(!result4.success);
+
+      const result5 = parser.parse("INFINITY");
+      assert.ok(!result5.success);
+    });
+
+    it("should reject NaN by default", () => {
+      const parser = float({});
+
+      const result1 = parser.parse("NaN");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("nan");
+      assert.ok(!result2.success);
+    });
+
+    it("should reject invalid numeric strings", () => {
+      const parser = float({});
+
+      const result1 = parser.parse("abc");
+      assert.ok(!result1.success);
+      if (!result1.success) {
+        assert.equal(typeof result1.error, "object");
+      }
+
+      const result2 = parser.parse("12.34.56");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("--5");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("5e");
+      assert.ok(!result4.success);
+
+      const result5 = parser.parse("e5");
+      assert.ok(!result5.success);
+
+      const result6 = parser.parse("not-a-number");
+      assert.ok(!result6.success);
+
+      const result7 = parser.parse("");
+      assert.ok(!result7.success);
+
+      const result8 = parser.parse("   ");
+      assert.ok(!result8.success);
+
+      const result9 = parser.parse("0x10");
+      assert.ok(!result9.success);
+
+      const result10 = parser.parse("0b10");
+      assert.ok(!result10.success);
+
+      const result11 = parser.parse("0o10");
+      assert.ok(!result11.success);
+
+      const result12 = parser.parse(".");
+      assert.ok(!result12.success);
+
+      const result13 = parser.parse("+");
+      assert.ok(!result13.success);
+
+      const result14 = parser.parse("-");
+      assert.ok(!result14.success);
+
+      const result15 = parser.parse("++5");
+      assert.ok(!result15.success);
+
+      const result16 = parser.parse("5.5.5");
+      assert.ok(!result16.success);
+    });
+  });
+
+  describe("NaN handling", () => {
+    it("should allow NaN when allowNaN is true", () => {
+      const parser = float({ allowNaN: true });
+
+      const result1 = parser.parse("NaN");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.ok(Number.isNaN(result1.value));
+      }
+
+      const result2 = parser.parse("nan");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.ok(Number.isNaN(result2.value));
+      }
+    });
+
+    it("should reject NaN when allowNaN is false", () => {
+      const parser = float({ allowNaN: false });
+
+      const result1 = parser.parse("NaN");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("nan");
+      assert.ok(!result2.success);
+    });
+  });
+
+  describe("Infinity handling", () => {
+    it("should allow Infinity when allowInfinity is true", () => {
+      const parser = float({ allowInfinity: true });
+
+      const result1 = parser.parse("Infinity");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, Infinity);
+      }
+
+      const result2 = parser.parse("-Infinity");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, -Infinity);
+      }
+
+      const result3 = parser.parse("+Infinity");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, Infinity);
+      }
+    });
+
+    it("should allow Infinity with case insensitivity when allowInfinity is true", () => {
+      const parser = float({ allowInfinity: true });
+
+      const result1 = parser.parse("infinity");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, Infinity);
+      }
+
+      const result2 = parser.parse("INFINITY");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, Infinity);
+      }
+
+      const result3 = parser.parse("-infinity");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, -Infinity);
+      }
+
+      const result4 = parser.parse("+INFINITY");
+      assert.ok(result4.success);
+      if (result4.success) {
+        assert.equal(result4.value, Infinity);
+      }
+    });
+
+    it("should reject Infinity when allowInfinity is false", () => {
+      const parser = float({ allowInfinity: false });
+
+      const result1 = parser.parse("Infinity");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("-Infinity");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("infinity");
+      assert.ok(!result3.success);
+    });
+  });
+
+  describe("constraints", () => {
+    it("should enforce minimum constraint", () => {
+      const parser = float({ min: 0 });
+
+      const result1 = parser.parse("5.5");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 5.5);
+      }
+
+      const result2 = parser.parse("0");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 0);
+      }
+
+      const result3 = parser.parse("-1.5");
+      assert.ok(!result3.success);
+      if (!result3.success) {
+        assert.equal(typeof result3.error, "object");
+      }
+    });
+
+    it("should enforce maximum constraint", () => {
+      const parser = float({ max: 100 });
+
+      const result1 = parser.parse("50.5");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 50.5);
+      }
+
+      const result2 = parser.parse("100");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 100);
+      }
+
+      const result3 = parser.parse("150.5");
+      assert.ok(!result3.success);
+      if (!result3.success) {
+        assert.equal(typeof result3.error, "object");
+      }
+    });
+
+    it("should enforce both min and max constraints", () => {
+      const parser = float({ min: -10.5, max: 10.5 });
+
+      const result1 = parser.parse("5.25");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 5.25);
+      }
+
+      const result2 = parser.parse("-10.5");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("10.5");
+      assert.ok(result3.success);
+
+      const result4 = parser.parse("-10.6");
+      assert.ok(!result4.success);
+
+      const result5 = parser.parse("10.6");
+      assert.ok(!result5.success);
+    });
+
+    it("should handle NaN constraints when allowNaN is true", () => {
+      const parser = float({ allowNaN: true, min: 0 });
+
+      const result1 = parser.parse("NaN");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.ok(Number.isNaN(result1.value));
+      }
+
+      const result2 = parser.parse("-5");
+      assert.ok(!result2.success);
+    });
+
+    it("should handle Infinity constraints when allowInfinity is true", () => {
+      const parser = float({ allowInfinity: true, max: 100 });
+
+      const result1 = parser.parse("Infinity");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("-Infinity");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, -Infinity);
+      }
+
+      const result3 = parser.parse("50");
+      assert.ok(result3.success);
+    });
+
+    it("should handle both NaN and Infinity options", () => {
+      const parser = float({ allowNaN: true, allowInfinity: true });
+
+      const result1 = parser.parse("NaN");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.ok(Number.isNaN(result1.value));
+      }
+
+      const result2 = parser.parse("Infinity");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, Infinity);
+      }
+
+      const result3 = parser.parse("-Infinity");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, -Infinity);
+      }
+    });
+  });
+
+  describe("error messages", () => {
+    it("should provide structured error messages for invalid input", () => {
+      const parser = float({});
+      const result = parser.parse("invalid");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (!isStructuredError(result.error)) {
+          throw new Error("Expected structured error message");
+        }
+        assert.ok("message" in result.error);
+        assert.ok("values" in result.error);
+        assert.equal(result.error.values.length, 1);
+        assert.equal(result.error.values[0], "invalid");
+      }
+    });
+
+    it("should provide structured error messages for min constraint violation", () => {
+      const parser = float({ min: 0 });
+      const result = parser.parse("-5.5");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (!isStructuredError(result.error)) {
+          throw new Error("Expected structured error message");
+        }
+        assert.ok("message" in result.error);
+        assert.ok("values" in result.error);
+        assert.equal(result.error.values.length, 2);
+        assert.equal(result.error.values[0], 0);
+        assert.equal(result.error.values[1], -5.5);
+      }
+    });
+
+    it("should provide structured error messages for max constraint violation", () => {
+      const parser = float({ max: 100 });
+      const result = parser.parse("150.5");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (!isStructuredError(result.error)) {
+          throw new Error("Expected structured error message");
+        }
+        assert.ok("message" in result.error);
+        assert.ok("values" in result.error);
+        assert.equal(result.error.values.length, 2);
+        assert.equal(result.error.values[0], 100);
+        assert.equal(result.error.values[1], 150.5);
+      }
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle zero correctly", () => {
+      const parser = float({});
+
+      const result1 = parser.parse("0");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 0);
+      }
+
+      const result2 = parser.parse("-0");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, -0);
+        assert.ok(Object.is(result2.value, -0));
+      }
+
+      const result3 = parser.parse("0.0");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, 0.0);
+      }
+    });
+
+    it("should handle very small and very large numbers", () => {
+      const parser = float({});
+
+      const result1 = parser.parse("1e-10");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 1e-10);
+      }
+
+      const result2 = parser.parse("1e10");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 1e10);
+      }
+    });
+
+    it("should reject numbers with leading/trailing whitespace", () => {
+      const parser = float({});
+
+      // Strict parsing should reject whitespace-padded numbers
+      const result1 = parser.parse("  42.5  ");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("\t3.14\n");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse(" 123");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("456 ");
+      assert.ok(!result4.success);
+    });
+
+    it("should handle precision edge cases", () => {
+      const parser = float({});
+
+      const result1 = parser.parse("0.1");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 0.1);
+      }
+
+      const result2 = parser.parse("0.123456789012345");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 0.123456789012345);
+      }
+    });
+  });
+
+  describe("custom metavar", () => {
+    it("should use custom metavar when provided", () => {
+      const parser = float({ metavar: "RATE" });
+      assert.equal(parser.metavar, "RATE");
+    });
+
+    it("should use default metavar when not provided", () => {
+      const parser = float({});
+      assert.equal(parser.metavar, "NUMBER");
     });
   });
 });
