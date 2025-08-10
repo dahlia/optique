@@ -173,9 +173,9 @@ export type OptionName =
  * @returns A {@link Parser} that can parse the specified options and their
  *          values.
  */
-export function option<T extends NonNullable<unknown>>(
+export function option<T>(
   ...args: readonly [...readonly OptionName[], ValueParser<T>]
-): Parser<T | undefined, ValueParserResult<T | undefined>>;
+): Parser<T, ValueParserResult<T>>;
 
 /**
  * Creates a parser for various styles of command-line options that do not
@@ -188,11 +188,11 @@ export function option(
   ...optionNames: readonly OptionName[]
 ): Parser<boolean, ValueParserResult<boolean>>;
 
-export function option<T extends NonNullable<unknown>>(
+export function option<T>(
   ...args:
     | readonly [...readonly OptionName[], ValueParser<T>]
     | readonly OptionName[]
-): Parser<T | undefined | boolean, ValueParserResult<T | undefined | boolean>> {
+): Parser<T | boolean, ValueParserResult<T | boolean>> {
   const valueParser = typeof args[args.length - 1] === "string"
     ? undefined
     : args[args.length - 1] as ValueParser<T>;
@@ -203,10 +203,9 @@ export function option<T extends NonNullable<unknown>>(
     $valueType: [],
     $stateType: [],
     priority: 10,
-    initialState: {
-      success: true,
-      value: valueParser == null ? false : undefined,
-    },
+    initialState: valueParser == null
+      ? { success: true, value: false }
+      : { success: false, error: `Missing option ${optionNames.join("/")}.` },
     parse(context) {
       if (context.optionsTerminated) {
         return {
@@ -230,6 +229,7 @@ export function option<T extends NonNullable<unknown>>(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
+            state: context.state,
             optionsTerminated: true,
           },
           consumed: context.buffer.slice(0, 1),
@@ -240,10 +240,7 @@ export function option<T extends NonNullable<unknown>>(
       // E.g., `--option value` or `/O value`
       if ((optionNames as string[]).includes(context.buffer[0])) {
         if (
-          context.state.success &&
-          (valueParser == null
-            ? context.state.value
-            : typeof context.state.value !== "undefined")
+          context.state.success && (valueParser != null || context.state.value)
         ) {
           return {
             success: false,
@@ -291,10 +288,7 @@ export function option<T extends NonNullable<unknown>>(
       for (const prefix of prefixes) {
         if (!context.buffer[0].startsWith(prefix)) continue;
         if (
-          context.state.success &&
-          (valueParser == null
-            ? context.state.value
-            : typeof context.state.value !== "undefined")
+          context.state.success && (valueParser != null || context.state.value)
         ) {
           return {
             success: false,
@@ -332,9 +326,7 @@ export function option<T extends NonNullable<unknown>>(
           if (!context.buffer[0].startsWith(shortOption)) continue;
           if (
             context.state.success &&
-            (valueParser == null
-              ? context.state.value
-              : typeof context.state.value !== "undefined")
+            (valueParser != null || context.state.value)
           ) {
             return {
               success: false,
@@ -370,10 +362,7 @@ export function option<T extends NonNullable<unknown>>(
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
   } satisfies
-    & Parser<
-      T | undefined | boolean,
-      ValueParserResult<T | undefined | boolean>
-    >
+    & Parser<T | boolean, ValueParserResult<T | boolean>>
     & Record<symbol, unknown>;
 }
 

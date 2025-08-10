@@ -586,14 +586,12 @@ describe("parse", () => {
   it("should handle options terminator", () => {
     const parser = object({
       verbose: option("-v"),
-      files: option("--files", string({ metavar: "PATTERN" })),
     });
 
     const result = parse(parser, ["-v", "--"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
-      assert.equal(result.value.files, undefined);
     }
   });
 });
@@ -882,10 +880,9 @@ describe("Integration tests", () => {
     const parser = or(group1, group2);
 
     const allowResult = parse(parser, ["--allow"]);
-    assert.ok(allowResult.success);
-    if (allowResult.success && "allow" in allowResult.value) {
-      assert.equal(allowResult.value.allow, true);
-      assert.equal(allowResult.value.value, undefined);
+    assert.ok(!allowResult.success);
+    if (!allowResult.success) {
+      assertErrorIncludes(allowResult.error, "Missing option");
     }
 
     const fooBarResult = parse(parser, ["--foo", "--bar", "hello"]);
@@ -924,7 +921,6 @@ describe("Integration tests", () => {
     const parser = object({
       port: option("--port", integer()),
       name: option("--name", string({ metavar: "NAME" })),
-      dosPort: option("/P", integer()),
     });
 
     const result1 = parse(parser, ["--port=8080", "--name", "test"]);
@@ -934,7 +930,11 @@ describe("Integration tests", () => {
       assert.equal(result1.value.name, "test");
     }
 
-    const result2 = parse(parser, ["/P:9000"]);
+    const dosParser = object({
+      dosPort: option("/P", integer()),
+    });
+
+    const result2 = parse(dosParser, ["/P:9000"]);
     assert.ok(result2.success);
     if (result2.success) {
       assert.equal(result2.value.dosPort, 9000);
