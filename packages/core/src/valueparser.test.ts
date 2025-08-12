@@ -1,5 +1,5 @@
 import { type ErrorMessage, message } from "@optique/core/error";
-import { float, integer, url } from "@optique/core/valueparser";
+import { float, integer, locale, url } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -1340,6 +1340,457 @@ describe("url", () => {
     it("should use default metavar when not provided", () => {
       const parser = url({});
       assert.equal(parser.metavar, "URL");
+    });
+  });
+});
+
+describe("locale", () => {
+  describe("basic parsing", () => {
+    it("should parse valid locale identifiers", () => {
+      const parser = locale({});
+
+      const result1 = parser.parse("en");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.ok(result1.value instanceof Intl.Locale);
+        assert.equal(result1.value.language, "en");
+        assert.equal(result1.value.region, undefined);
+      }
+
+      const result2 = parser.parse("en-US");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value.language, "en");
+        assert.equal(result2.value.region, "US");
+      }
+
+      const result3 = parser.parse("zh-Hans-CN");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value.language, "zh");
+        assert.equal(result3.value.script, "Hans");
+        assert.equal(result3.value.region, "CN");
+      }
+    });
+
+    it("should parse language-only locales", () => {
+      const parser = locale({});
+
+      const languages = [
+        "en",
+        "es",
+        "fr",
+        "de",
+        "ja",
+        "ko",
+        "zh",
+        "ar",
+        "hi",
+        "ru",
+      ];
+
+      for (const lang of languages) {
+        const result = parser.parse(lang);
+        assert.ok(result.success, `Should parse language ${lang}`);
+        if (result.success) {
+          assert.equal(result.value.language, lang);
+        }
+      }
+    });
+
+    it("should parse language-region locales", () => {
+      const parser = locale({});
+
+      const locales = [
+        { input: "en-US", language: "en", region: "US" },
+        { input: "en-GB", language: "en", region: "GB" },
+        { input: "fr-FR", language: "fr", region: "FR" },
+        { input: "de-DE", language: "de", region: "DE" },
+        { input: "ja-JP", language: "ja", region: "JP" },
+        { input: "ko-KR", language: "ko", region: "KR" },
+        { input: "pt-BR", language: "pt", region: "BR" },
+        { input: "es-ES", language: "es", region: "ES" },
+        { input: "es-MX", language: "es", region: "MX" },
+      ];
+
+      for (const { input, language, region } of locales) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Should parse locale ${input}`);
+        if (result.success) {
+          assert.equal(result.value.language, language);
+          assert.equal(result.value.region, region);
+        }
+      }
+    });
+
+    it("should parse locales with scripts", () => {
+      const parser = locale({});
+
+      const locales = [
+        { input: "zh-Hans", language: "zh", script: "Hans" },
+        { input: "zh-Hant", language: "zh", script: "Hant" },
+        { input: "zh-Hans-CN", language: "zh", script: "Hans", region: "CN" },
+        { input: "zh-Hant-TW", language: "zh", script: "Hant", region: "TW" },
+        { input: "sr-Cyrl", language: "sr", script: "Cyrl" },
+        { input: "sr-Latn", language: "sr", script: "Latn" },
+      ];
+
+      for (const { input, language, script, region } of locales) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Should parse locale ${input}`);
+        if (result.success) {
+          assert.equal(result.value.language, language);
+          assert.equal(result.value.script, script);
+          if (region) {
+            assert.equal(result.value.region, region);
+          }
+        }
+      }
+    });
+
+    it("should parse locales with Unicode extensions", () => {
+      const parser = locale({});
+
+      const locales = [
+        "en-US-u-ca-gregory",
+        "ja-JP-u-ca-japanese",
+        "en-US-u-nu-arab",
+        "de-DE-u-co-phonebk",
+        "th-TH-u-nu-thai",
+      ];
+
+      for (const localeString of locales) {
+        const result = parser.parse(localeString);
+        assert.ok(
+          result.success,
+          `Should parse locale with extension ${localeString}`,
+        );
+        if (result.success) {
+          assert.ok(result.value instanceof Intl.Locale);
+        }
+      }
+    });
+
+    it("should reject invalid locale identifiers", () => {
+      const parser = locale({});
+
+      const invalidLocales = [
+        "",
+        "   ",
+        "toolongcode",
+        "en-",
+        "-US",
+        "en--US",
+        "x-private-only", // Private use only without language subtag
+      ];
+
+      for (const invalidLocale of invalidLocales) {
+        const result = parser.parse(invalidLocale);
+        assert.ok(
+          !result.success,
+          `Should reject invalid locale ${invalidLocale}`,
+        );
+        if (!result.success) {
+          assert.equal(typeof result.error, "object");
+        }
+      }
+    });
+  });
+
+  describe("locale object properties", () => {
+    it("should provide access to locale components", () => {
+      const parser = locale({});
+      const result = parser.parse("zh-Hans-CN-u-ca-chinese-nu-hanidec");
+
+      assert.ok(result.success);
+      if (result.success) {
+        const locale = result.value;
+        assert.equal(locale.language, "zh");
+        assert.equal(locale.script, "Hans");
+        assert.equal(locale.region, "CN");
+        assert.ok(locale.toString().includes("zh"));
+      }
+    });
+
+    it("should handle minimal locale identifiers", () => {
+      const parser = locale({});
+      const result = parser.parse("en");
+
+      assert.ok(result.success);
+      if (result.success) {
+        const locale = result.value;
+        assert.equal(locale.language, "en");
+        assert.equal(locale.script, undefined);
+        assert.equal(locale.region, undefined);
+      }
+    });
+
+    it("should normalize locale identifiers", () => {
+      const parser = locale({});
+
+      // Test case normalization
+      const result1 = parser.parse("EN-us");
+      assert.ok(result1.success);
+      if (result1.success) {
+        // Note: Intl.Locale normalizes case
+        assert.equal(result1.value.language, "en");
+        assert.equal(result1.value.region, "US");
+      }
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle private use subtags", () => {
+      const parser = locale({});
+
+      const privateUseCases = [
+        "en-x-private",
+        "en-US-x-private",
+      ];
+
+      for (const privateUse of privateUseCases) {
+        const result = parser.parse(privateUse);
+        assert.ok(
+          result.success,
+          `Should parse private use locale ${privateUse}`,
+        );
+        if (result.success) {
+          assert.ok(result.value instanceof Intl.Locale);
+        }
+      }
+    });
+
+    it("should handle grandfathered locale tags", () => {
+      const parser = locale({});
+
+      const grandfatheredCases = [
+        "i-default",
+        "i-klingon",
+        "art-lojban",
+      ];
+
+      for (const grandfathered of grandfatheredCases) {
+        const result = parser.parse(grandfathered);
+        // Some grandfathered tags may or may not be supported depending on implementation
+        if (result.success) {
+          assert.ok(result.value instanceof Intl.Locale);
+        }
+      }
+    });
+
+    it("should handle variant subtags", () => {
+      const parser = locale({});
+
+      const variantCases = [
+        "de-DE-1996", // German orthography reform
+        "sl-rozaj", // Resian dialect of Slovenian
+        "de-CH-1901", // Traditional German orthography for Switzerland
+      ];
+
+      for (const variant of variantCases) {
+        const result = parser.parse(variant);
+        assert.ok(result.success, `Should parse variant locale ${variant}`);
+        if (result.success) {
+          assert.ok(result.value instanceof Intl.Locale);
+        }
+      }
+    });
+
+    it("should handle case variations", () => {
+      const parser = locale({});
+
+      const caseCombinations = [
+        { input: "EN", expected: "en" },
+        { input: "en-us", expected: "en-US" },
+        { input: "ZH-HANS-CN", expected: "zh-Hans-CN" },
+        { input: "De-De", expected: "de-DE" },
+      ];
+
+      for (const { input, expected } of caseCombinations) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Should parse case variation ${input}`);
+        if (result.success) {
+          // Check if the parsed locale matches expected normalization
+          const normalized = result.value.toString();
+          assert.ok(normalized.toLowerCase().includes(expected.toLowerCase()));
+        }
+      }
+    });
+
+    it("should handle locale options and keywords", () => {
+      const parser = locale({});
+
+      const localeOptions = [
+        "en-US-u-ca-gregory-nu-latn",
+        "ja-JP-u-ca-japanese-hc-h24",
+        "ar-EG-u-nu-arab-ca-islamic",
+        "de-DE-u-co-phonebk-kn-true",
+      ];
+
+      for (const option of localeOptions) {
+        const result = parser.parse(option);
+        assert.ok(result.success, `Should parse locale with options ${option}`);
+        if (result.success) {
+          assert.ok(result.value instanceof Intl.Locale);
+          // Verify the locale string contains expected parts
+          const localeString = result.value.toString();
+          assert.ok(localeString.includes("-u-"));
+        }
+      }
+    });
+  });
+
+  describe("error messages", () => {
+    it("should provide structured error messages for invalid locales", () => {
+      const parser = locale({});
+      const result = parser.parse("x-private-only");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          assert.ok("message" in result.error);
+          assert.ok("values" in result.error);
+          assert.equal(result.error.values.length, 1);
+          assert.equal(result.error.values[0], "x-private-only");
+        }
+      }
+    });
+
+    it("should provide structured error messages for empty input", () => {
+      const parser = locale({});
+      const result = parser.parse("");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          assert.ok("message" in result.error);
+          assert.ok("values" in result.error);
+          assert.equal(result.error.values.length, 1);
+          assert.equal(result.error.values[0], "");
+        }
+      }
+    });
+
+    it("should provide structured error messages for malformed locales", () => {
+      const parser = locale({});
+
+      const malformedLocales = [
+        "en-",
+        "-US",
+        "en--US",
+        "toolongcode",
+      ];
+
+      for (const malformed of malformedLocales) {
+        const result = parser.parse(malformed);
+        assert.ok(
+          !result.success,
+          `Should reject malformed locale ${malformed}`,
+        );
+        if (!result.success) {
+          assert.equal(typeof result.error, "object");
+          if (isStructuredError(result.error)) {
+            assert.ok("message" in result.error);
+            assert.ok("values" in result.error);
+            assert.equal(result.error.values.length, 1);
+            assert.equal(result.error.values[0], malformed);
+          }
+        }
+      }
+    });
+  });
+
+  describe("custom metavar", () => {
+    it("should use custom metavar when provided", () => {
+      const parser = locale({ metavar: "LANG" });
+      assert.equal(parser.metavar, "LANG");
+    });
+
+    it("should use default metavar when not provided", () => {
+      const parser = locale({});
+      assert.equal(parser.metavar, "LOCALE");
+    });
+  });
+
+  describe("real-world locale examples", () => {
+    it("should parse common locale identifiers", () => {
+      const parser = locale({});
+
+      const commonLocales = [
+        // Major world languages
+        "en-US",
+        "en-GB",
+        "en-CA",
+        "en-AU",
+        "es-ES",
+        "es-MX",
+        "es-AR",
+        "fr-FR",
+        "fr-CA",
+        "de-DE",
+        "de-AT",
+        "de-CH",
+        "it-IT",
+        "pt-PT",
+        "pt-BR",
+        "ru-RU",
+        "ja-JP",
+        "ko-KR",
+        "zh-CN",
+        "zh-TW",
+        "zh-HK",
+        "ar-SA",
+        "ar-EG",
+        "hi-IN",
+        "th-TH",
+        "vi-VN",
+        "tr-TR",
+        "pl-PL",
+        "nl-NL",
+        "nl-BE",
+        "sv-SE",
+        "da-DK",
+        "no-NO",
+        "fi-FI",
+      ];
+
+      for (const localeId of commonLocales) {
+        const result = parser.parse(localeId);
+        assert.ok(result.success, `Should parse common locale ${localeId}`);
+        if (result.success) {
+          assert.ok(result.value instanceof Intl.Locale);
+          assert.ok(result.value.language.length >= 2);
+        }
+      }
+    });
+
+    it("should parse complex real-world locales", () => {
+      const parser = locale({});
+
+      const complexLocales = [
+        "zh-Hans-CN-u-ca-chinese-nu-hanidec",
+        "ja-JP-u-ca-japanese-hc-h24-nu-jpan",
+        "ar-SA-u-ca-islamic-nu-arab",
+        "th-TH-u-ca-buddhist-nu-thai",
+        "he-IL-u-ca-hebrew-nu-hebr",
+        "fa-IR-u-ca-persian-nu-arabext",
+        "en-US-u-ca-gregory-hc-h12-nu-latn-tz-usnyc",
+      ];
+
+      for (const complex of complexLocales) {
+        const result = parser.parse(complex);
+        assert.ok(result.success, `Should parse complex locale ${complex}`);
+        if (result.success) {
+          assert.ok(result.value instanceof Intl.Locale);
+          // Verify Unicode extensions are preserved
+          const localeString = result.value.toString();
+          if (complex.includes("-u-")) {
+            assert.ok(localeString.includes("-u-"));
+          }
+        }
+      }
     });
   });
 });

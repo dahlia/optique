@@ -436,3 +436,47 @@ export function url(options: UrlOptions = {}): ValueParser<URL> {
     },
   };
 }
+
+/**
+ * Options for creating a {@link locale} parser.
+ */
+export interface LocaleOptions {
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `LOCALE` or `LANG`.
+   * @default `"LOCALE"`
+   */
+  readonly metavar?: string;
+}
+
+/**
+ * Creates a {@link ValueParser} for locale values.
+ *
+ * This parser validates that the input is a well-formed locale identifier
+ * according to the Unicode Locale Identifier standard (BCP 47).
+ * The parsed result is a JavaScript `Intl.Locale` object.
+ * @param options Configuration options for the locale parser.
+ * @returns A {@link ValueParser} that converts string input to `Intl.Locale`
+ *          objects.
+ */
+export function locale(options: LocaleOptions = {}): ValueParser<Intl.Locale> {
+  return {
+    metavar: options.metavar ?? "LOCALE",
+    parse(input: string): ValueParserResult<Intl.Locale> {
+      let locale: Intl.Locale;
+      try {
+        locale = new Intl.Locale(input);
+      } catch (e) {
+        if (e instanceof RangeError) {
+          return {
+            success: false,
+            error: message`Invalid locale: ${input}.`,
+          };
+        }
+        throw e;
+      }
+      return { success: true, value: locale };
+    },
+  };
+}
