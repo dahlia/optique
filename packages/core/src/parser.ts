@@ -445,6 +445,56 @@ export function argument<T>(
 }
 
 /**
+ * Creates a parser that makes another parser optional, allowing it to succeed
+ * without consuming input if the wrapped parser fails to match.
+ * If the wrapped parser succeeds, this returns its value.
+ * If the wrapped parser fails, this returns `undefined` without consuming input.
+ * @template TValue The type of the value returned by the wrapped parser.
+ * @template TState The type of the state used by the wrapped parser.
+ * @param parser The {@link Parser} to make optional.
+ * @returns A {@link Parser} that produces either the result of the wrapped parser
+ *          or `undefined` if the wrapped parser fails to match.
+ */
+export function optional<TValue, TState>(
+  parser: Parser<TValue, TState>,
+): Parser<TValue | undefined, [TState] | undefined> {
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: parser.priority,
+    initialState: undefined,
+    parse(context) {
+      const result = parser.parse({
+        ...context,
+        state: typeof context.state === "undefined"
+          ? parser.initialState
+          : context.state[0],
+      });
+      if (result.success) {
+        return {
+          success: true,
+          next: {
+            ...result.next,
+            state: [result.next.state],
+          },
+          consumed: result.consumed,
+        };
+      }
+      return result;
+    },
+    complete(state) {
+      if (typeof state === "undefined") {
+        return {
+          success: true,
+          value: undefined,
+        };
+      }
+      return parser.complete(state[0]);
+    },
+  };
+}
+
+/**
  * Creates a parser that combines multiple parsers into a single object parser.
  * Each parser in the object is applied to parse different parts of the input,
  * and the results are combined into an object with the same structure.
