@@ -1,5 +1,5 @@
 import { type ErrorMessage, message } from "@optique/core/error";
-import { float, integer, locale, url } from "@optique/core/valueparser";
+import { choice, float, integer, locale, url } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -546,6 +546,600 @@ describe("integer", () => {
 
       const result6 = parser2.parse("6");
       assert.ok(!result6.success);
+    });
+  });
+});
+
+describe("choice", () => {
+  describe("basic parsing", () => {
+    it("should parse valid values from the choice list", () => {
+      const parser = choice(["red", "green", "blue"]);
+
+      const result1 = parser.parse("red");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "red");
+        assert.equal(typeof result1.value, "string");
+      }
+
+      const result2 = parser.parse("green");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "green");
+      }
+
+      const result3 = parser.parse("blue");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, "blue");
+      }
+    });
+
+    it("should reject values not in the choice list", () => {
+      const parser = choice(["yes", "no"]);
+
+      const result1 = parser.parse("maybe");
+      assert.ok(!result1.success);
+      if (!result1.success) {
+        assert.equal(typeof result1.error, "object");
+        if (isStructuredError(result1.error)) {
+          assert.ok("message" in result1.error);
+          assert.ok("values" in result1.error);
+          assert.equal(result1.error.values.length, 2);
+          assert.equal(result1.error.values[0], "yes, no");
+          assert.equal(result1.error.values[1], "maybe");
+        }
+      }
+
+      const result2 = parser.parse("YES");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("true");
+      assert.ok(!result4.success);
+    });
+
+    it("should work with single value choice", () => {
+      const parser = choice(["only"]);
+
+      const result1 = parser.parse("only");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "only");
+      }
+
+      const result2 = parser.parse("other");
+      assert.ok(!result2.success);
+    });
+
+    it("should work with numeric string choices", () => {
+      const parser = choice(["1", "2", "3"]);
+
+      const result1 = parser.parse("1");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "1");
+        assert.equal(typeof result1.value, "string");
+      }
+
+      const result2 = parser.parse("2");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("4");
+      assert.ok(!result3.success);
+
+      // Should not parse numbers, only exact string matches
+      const result4 = parser.parse("01");
+      assert.ok(!result4.success);
+    });
+
+    it("should work with empty choice list", () => {
+      const parser = choice([]);
+
+      const result1 = parser.parse("anything");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("");
+      assert.ok(!result2.success);
+    });
+
+    it("should handle choices with special characters", () => {
+      const parser = choice(["--verbose", "-v", "debug:trace", "key=value"]);
+
+      const result1 = parser.parse("--verbose");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "--verbose");
+      }
+
+      const result2 = parser.parse("-v");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("debug:trace");
+      assert.ok(result3.success);
+
+      const result4 = parser.parse("key=value");
+      assert.ok(result4.success);
+
+      const result5 = parser.parse("--other");
+      assert.ok(!result5.success);
+    });
+
+    it("should preserve exact string values with whitespace", () => {
+      const parser = choice(["  spaced  ", "tab\there", "new\nline"]);
+
+      const result1 = parser.parse("  spaced  ");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "  spaced  ");
+      }
+
+      const result2 = parser.parse("tab\there");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("new\nline");
+      assert.ok(result3.success);
+
+      // Should not match trimmed versions
+      const result4 = parser.parse("spaced");
+      assert.ok(!result4.success);
+    });
+  });
+
+  describe("case sensitivity", () => {
+    it("should be case sensitive by default", () => {
+      const parser = choice(["Red", "Green", "Blue"]);
+
+      const result1 = parser.parse("Red");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "Red");
+      }
+
+      const result2 = parser.parse("red");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("RED");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("rEd");
+      assert.ok(!result4.success);
+    });
+
+    it("should support case insensitive matching when enabled", () => {
+      const parser = choice(["Red", "Green", "Blue"], {
+        caseInsensitive: true,
+      });
+
+      const result1 = parser.parse("Red");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "Red"); // Should return original casing
+      }
+
+      const result2 = parser.parse("red");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "Red"); // Should return original casing
+      }
+
+      const result3 = parser.parse("RED");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, "Red"); // Should return original casing
+      }
+
+      const result4 = parser.parse("rEd");
+      assert.ok(result4.success);
+      if (result4.success) {
+        assert.equal(result4.value, "Red"); // Should return original casing
+      }
+
+      const result5 = parser.parse("yellow");
+      assert.ok(!result5.success);
+    });
+
+    it("should handle case insensitive matching with mixed case choices", () => {
+      const parser = choice(["CamelCase", "snake_case", "kebab-case"], {
+        caseInsensitive: true,
+      });
+
+      const result1 = parser.parse("camelcase");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "CamelCase");
+      }
+
+      const result2 = parser.parse("SNAKE_CASE");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "snake_case");
+      }
+
+      const result3 = parser.parse("Kebab-Case");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, "kebab-case");
+      }
+    });
+
+    it("should explicitly reject case insensitive when disabled", () => {
+      const parser = choice(["True", "False"], { caseInsensitive: false });
+
+      const result1 = parser.parse("True");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("true");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("FALSE");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle case insensitive matching with accented characters", () => {
+      const parser = choice(["Café", "Naïve", "Résumé"], {
+        caseInsensitive: true,
+      });
+
+      const result1 = parser.parse("café");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "Café");
+      }
+
+      const result2 = parser.parse("NAÏVE");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "Naïve");
+      }
+
+      const result3 = parser.parse("résumé");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, "Résumé");
+      }
+    });
+  });
+
+  describe("custom metavar", () => {
+    it("should use custom metavar when provided", () => {
+      const parser = choice(["on", "off"], { metavar: "SWITCH" });
+      assert.equal(parser.metavar, "SWITCH");
+    });
+
+    it("should use default metavar when not provided", () => {
+      const parser = choice(["yes", "no"]);
+      assert.equal(parser.metavar, "TYPE");
+    });
+
+    it("should use custom metavar with case insensitive option", () => {
+      const parser = choice(["enabled", "disabled"], {
+        metavar: "STATE",
+        caseInsensitive: true,
+      });
+      assert.equal(parser.metavar, "STATE");
+    });
+  });
+
+  describe("error messages", () => {
+    it("should provide structured error messages for invalid input", () => {
+      const parser = choice(["alpha", "beta", "gamma"]);
+      const result = parser.parse("delta");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          assert.ok("message" in result.error);
+          assert.ok("values" in result.error);
+          assert.equal(result.error.values.length, 2);
+          assert.equal(result.error.values[0], "alpha, beta, gamma");
+          assert.equal(result.error.values[1], "delta");
+        }
+      }
+    });
+
+    it("should provide structured error messages with single choice", () => {
+      const parser = choice(["only"]);
+      const result = parser.parse("other");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          assert.equal(result.error.values.length, 2);
+          assert.equal(result.error.values[0], "only");
+          assert.equal(result.error.values[1], "other");
+        }
+      }
+    });
+
+    it("should provide structured error messages for empty choice list", () => {
+      const parser = choice([]);
+      const result = parser.parse("anything");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          assert.equal(result.error.values.length, 2);
+          assert.equal(result.error.values[0], "");
+          assert.equal(result.error.values[1], "anything");
+        }
+      }
+    });
+
+    it("should provide structured error messages for case insensitive parser", () => {
+      const parser = choice(["YES", "NO"], { caseInsensitive: true });
+      const result = parser.parse("maybe");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          assert.equal(result.error.values.length, 2);
+          assert.equal(result.error.values[0], "YES, NO");
+          assert.equal(result.error.values[1], "maybe");
+        }
+      }
+    });
+
+    it("should show original choices in error message, not normalized ones", () => {
+      const parser = choice(["High", "Medium", "Low"], {
+        caseInsensitive: true,
+      });
+      const result = parser.parse("none");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        if (isStructuredError(result.error)) {
+          // Should show original choices, not lowercased versions
+          assert.equal(result.error.values[0], "High, Medium, Low");
+          assert.equal(result.error.values[1], "none");
+        }
+      }
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle choices with duplicate values", () => {
+      const parser = choice(["duplicate", "duplicate", "unique"]);
+
+      const result1 = parser.parse("duplicate");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "duplicate");
+      }
+
+      const result2 = parser.parse("unique");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("other");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle empty string as a valid choice", () => {
+      const parser = choice(["", "value"]);
+
+      const result1 = parser.parse("");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "");
+      }
+
+      const result2 = parser.parse("value");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("other");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle choices with unicode characters", () => {
+      const parser = choice(["🔴", "🟢", "🔵", "α", "β", "γ"]);
+
+      const result1 = parser.parse("🔴");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "🔴");
+      }
+
+      const result2 = parser.parse("α");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "α");
+      }
+
+      const result3 = parser.parse("🟡");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle very long choice lists", () => {
+      const longChoices = Array.from({ length: 100 }, (_, i) => `option${i}`);
+      const parser = choice(longChoices);
+
+      const result1 = parser.parse("option0");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "option0");
+      }
+
+      const result2 = parser.parse("option99");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "option99");
+      }
+
+      const result3 = parser.parse("option100");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle choices with only whitespace differences", () => {
+      const parser = choice([" ", "  ", "\t", "\n"]);
+
+      const result1 = parser.parse(" ");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, " ");
+      }
+
+      const result2 = parser.parse("  ");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "  ");
+      }
+
+      const result3 = parser.parse("\t");
+      assert.ok(result3.success);
+
+      const result4 = parser.parse("\n");
+      assert.ok(result4.success);
+
+      const result5 = parser.parse("   ");
+      assert.ok(!result5.success);
+    });
+
+    it("should maintain type safety with const assertion", () => {
+      // This test verifies TypeScript compile-time behavior
+      const modes = ["development", "production", "test"] as const;
+      const parser = choice(modes);
+
+      const result = parser.parse("development");
+      assert.ok(result.success);
+      if (result.success) {
+        // The type should be "development" | "production" | "test"
+        assert.equal(result.value, "development");
+        assert.ok(["development", "production", "test"].includes(result.value));
+      }
+    });
+
+    it("should handle boundary values correctly with case insensitive", () => {
+      const parser = choice(["a", "A"], { caseInsensitive: true });
+
+      const result1 = parser.parse("a");
+      assert.ok(result1.success);
+      if (result1.success) {
+        // Should return the first match in the original array
+        assert.equal(result1.value, "a");
+      }
+
+      const result2 = parser.parse("A");
+      assert.ok(result2.success);
+      if (result2.success) {
+        // Should return the first match in the original array
+        assert.equal(result2.value, "a");
+      }
+    });
+
+    it("should handle null-like string values", () => {
+      const parser = choice(["null", "undefined", "NaN", "false"]);
+
+      const result1 = parser.parse("null");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "null");
+        assert.equal(typeof result1.value, "string");
+      }
+
+      const result2 = parser.parse("undefined");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("NaN");
+      assert.ok(result3.success);
+
+      const result4 = parser.parse("false");
+      assert.ok(result4.success);
+
+      const result5 = parser.parse("true");
+      assert.ok(!result5.success);
+    });
+  });
+
+  describe("real-world usage examples", () => {
+    it("should handle common boolean-like choices", () => {
+      const parser = choice(["true", "false"], { caseInsensitive: true });
+
+      const result1 = parser.parse("true");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "true");
+      }
+
+      const result2 = parser.parse("FALSE");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "false");
+      }
+
+      const result3 = parser.parse("1");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle log level choices", () => {
+      const parser = choice(["error", "warn", "info", "debug", "trace"]);
+
+      const result1 = parser.parse("error");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("debug");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("verbose");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle environment choices", () => {
+      const parser = choice(["development", "staging", "production"], {
+        metavar: "ENV",
+        caseInsensitive: true,
+      });
+
+      assert.equal(parser.metavar, "ENV");
+
+      const result1 = parser.parse("development");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("PRODUCTION");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "production");
+      }
+
+      const result3 = parser.parse("testing");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle format choices", () => {
+      const parser = choice(["json", "yaml", "xml", "csv"]);
+
+      const result1 = parser.parse("json");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("yaml");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("txt");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle HTTP method choices", () => {
+      const parser = choice(["GET", "POST", "PUT", "DELETE", "PATCH"], {
+        metavar: "METHOD",
+      });
+
+      const result1 = parser.parse("GET");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("POST");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("get");
+      assert.ok(!result3.success); // Case sensitive by default
+
+      const result4 = parser.parse("OPTIONS");
+      assert.ok(!result4.success);
     });
   });
 });

@@ -70,6 +70,67 @@ export interface StringOptions {
 }
 
 /**
+ * Options for creating a {@link choice} parser.
+ */
+export interface ChoiceOptions {
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `TYPE` or `MODE`.
+   * @default `"TYPE"`
+   */
+  readonly metavar?: string;
+
+  /**
+   * If `true`, the parser will perform case-insensitive matching
+   * against the enumerated values. This means that input like "value",
+   * "Value", or "VALUE" will all match the same enumerated value.
+   * If `false`, the matching will be case-sensitive.
+   * @default `false`
+   */
+  readonly caseInsensitive?: boolean;
+}
+
+/**
+ * Creates a {@link ValueParser} that accepts one of multiple
+ * string values, so-called enumerated values.
+ *
+ * This parser validates that the input string matches one of
+ * the specified values. If the input does not match any of the values,
+ * it returns an error message indicating the valid options.
+ * @param values An array of valid string values that this parser can accept.
+ * @param options Configuration options for the choice parser.
+ * @returns A {@link ValueParser} that checks if the input matches one of the
+ *          specified values.
+ */
+export function choice<const T extends string>(
+  values: readonly T[],
+  options: ChoiceOptions = {},
+): ValueParser<T> {
+  const normalizedValues = options.caseInsensitive
+    ? values.map((v) => v.toLowerCase())
+    : values as readonly string[];
+  return {
+    metavar: options.metavar ?? "TYPE",
+    parse(input: string): ValueParserResult<T> {
+      const normalizedInput = options.caseInsensitive
+        ? input.toLowerCase()
+        : input;
+      const index = normalizedValues.indexOf(normalizedInput);
+      if (index < 0) {
+        return {
+          success: false,
+          error: message`Expected one of ${
+            values.join(", ")
+          }, but got ${input}.`,
+        };
+      }
+      return { success: true, value: values[index] };
+    },
+  };
+}
+
+/**
  * Creates a {@link ValueParser} for strings.
  *
  * This parser validates that the input is a string and optionally checks
