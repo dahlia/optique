@@ -2388,3 +2388,6 @@ describe("locale", () => {
     });
   });
 });
+
+// cSpell: ignore résumé phonebk toolongcode hanidec jpan hebr arabext
+// cSpell: ignore localhosts lojban rozaj Resian

@@ -26,8 +26,8 @@ Core concepts
 
 Optique is built around three fundamental concepts: value parsers that convert
 strings to typed values, option parsers that handle command-line flags and
-their arguments, and combinators like `or()` and `object()` that compose
-multiple parsers into sophisticated argument structures.
+their arguments, and combinators like `or()`, `object()`, `optional()`, and
+`multiple()` that compose parsers into sophisticated argument structures.
 
 The library automatically infers the result type of your parser composition,
 ensuring that your parsed CLI arguments are fully typed without manual type
@@ -39,46 +39,133 @@ Example
 -------
 
 ~~~~ typescript
-import { integer, string } from "@optique/core/valueparser";
-import { argument, object, option, or, parse } from "@optique/core/parser";
+import {
+  argument,
+  multiple,
+  object,
+  option,
+  optional,
+  or,
+  parse
+} from "@optique/core/parser";
+import { integer, locale, string, url } from "@optique/core/valueparser";
 
-// Define mutually exclusive option groups
+// Define a sophisticated CLI with optional and repeatable arguments
 const parser = or(
   object("Server mode", {
     port: option("-p", "--port", integer({ min: 1, max: 65535 })),
-    host: option("-h", "--host", string({ metavar: "HOST" })),
-    config: argument(string({ metavar: "FILE" })),
+    host: optional(option("-h", "--host", string({ metavar: "HOST" }))),
+    locales: multiple(option("-l", "--locale", locale())),
+    verbose: optional(option("-v", "--verbose")),
+    config: argument(string({ metavar: "CONFIG_FILE" })),
   }),
   object("Client mode", {
-    connect: option("-c", "--connect", string({ metavar: "URL" })),
-    timeout: option("-t", "--timeout", integer({ min: 0 })),
+    connect: option("-c", "--connect", url({ protocols: ["http", "https"] })),
+    headers: multiple(option("-H", "--header", string())),
+    timeout: optional(option("-t", "--timeout", integer({ min: 0 }))),
+    files: multiple(argument(string({ metavar: "FILE" })), { min: 1, max: 5 }),
   }),
 );
 
 const result = parse(parser, process.argv.slice(2));
 
 if (result.success) {
-  // TypeScript automatically infers the union type:
-  // { port: number; host: string; config: string } |
-  // { connect: string; timeout: number }
-
+  // TypeScript automatically infers the complex union type with optional fields
   if ("port" in result.value) {
-    console.log(`Starting server on ${result.value.host}:${result.value.port}`);
-    console.log(`Using config: ${result.value.config}`);
+    const server = result.value;
+    console.log(`Starting server on ${server.host ?? "localhost"}:${server.port}`);
+    console.log(`Supported locales: ${server.locales.join(", ") || "default"}`);
+    if (server.verbose) console.log("Verbose mode enabled");
   } else {
-    console.log(`Connecting to ${result.value.connect}`);
+    const client = result.value;
+    console.log(`Connecting to ${client.connect}`);
+    console.log(`Processing ${client.files.length} files`);
+    if (client.timeout) console.log(`Timeout: ${client.timeout}ms`);
   }
 } else {
   console.error(result.error);
 }
 ~~~~
 
-This parser accepts either server options (`--port`, `--host`) or
-client options (`--connect`, `--timeout`), but not both.
-Optique automatically enforces this mutual exclusivity and provides clear error
-messages when invalid combinations are attempted.
+This example demonstrates Optique's powerful combinators:
 
-The `or()` combinator tries each alternative in order, while the `object()`
-combinator groups related options together.  Value parsers like `integer()` and
-`string()` handle the conversion from command-line strings to properly typed
-values with validation.
+ -  **`optional()`** makes parsers optional, returning `undefined` when not
+    provided
+ -  **`multiple()`** allows repeating options/arguments with configurable
+    constraints
+ -  **`or()`** creates mutually exclusive alternatives
+ -  **`object()`** groups related options into structured data
+
+The parser handles complex scenarios like:
+
+ -  Optional host (defaults to `undefined`)
+ -  Multiple locale specifications: `-l en-US -l fr-FR`
+ -  Repeatable headers: `-H "Accept: json" -H "User-Agent: myapp"`
+ -  Constrained file arguments (1–5 files required in client mode)
+
+All with full type safety and automatic inference!
+
+
+Parser combinators
+------------------
+
+Optique provides several powerful combinators for composing parsers:
+
+### Core combinators
+
+ -  **`object()`**: Combines multiple parsers into a structured object
+ -  **`or()`**: Creates mutually exclusive alternatives
+    (try first, then second, etc.)
+
+### Modifying combinators
+
+ -  **`optional()`**: Makes any parser optional, returning `undefined` if not
+    matched
+
+    ~~~~ typescript
+    const parser = object({
+      name: option("-n", "--name", string()),
+      verbose: optional(option("-v", "--verbose")), // undefined if not provided
+    });
+    ~~~~
+
+ -  **`multiple()`**: Allows repeating a parser multiple times with constraints
+
+    ~~~~ typescript
+    const parser = object({
+      // Multiple locales: -l en -l fr
+      locales: multiple(option("-l", "--locale", locale())),
+      // 1-3 input files required
+      files: multiple(argument(string()), { min: 1, max: 3 }),
+    });
+    ~~~~
+
+### Advanced patterns
+
+Combinators can be nested and combined in powerful ways:
+
+~~~~ typescript
+const parser = or(
+  // Development mode: optional debug flag, multiple log levels
+  object("dev", {
+    dev: option("--dev"),
+    debug: optional(option("--debug")),
+    logLevel: multiple(option("--log", string()), { max: 3 }),
+  }),
+  // Production mode: required config, multiple workers
+  object("prod", {
+    config: option("-c", "--config", string()),
+    workers: multiple(option("-w", "--worker", integer({ min: 1 }))),
+    ssl: optional(object({
+      cert: option("--cert", string()),
+      key: option("--key", string()),
+    })),
+  }),
+);
+~~~~
+
+The `multiple()` combinator is especially powerful when combined with `object()`
+parsers, as it provides empty arrays as defaults when no matches are found,
+allowing for clean optional repeated arguments.
+
+<!-- cSpell: ignore optparse -->
