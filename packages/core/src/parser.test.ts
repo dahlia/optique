@@ -1120,9 +1120,87 @@ describe("Integration tests", () => {
     }
 
     const group2Result = parse(parser, ["-f", "-b", "hello"]);
-    assert.ok(!group2Result.success);
-    if (!group2Result.success) {
-      assertErrorIncludes(group2Result.error, "Missing option");
+    assert.ok(group2Result.success);
+    if (
+      group2Result.success && "type" in group2Result.value &&
+      group2Result.value.type === "group2"
+    ) {
+      assert.equal(group2Result.value.foo, true);
+      assert.equal(group2Result.value.bar, "hello");
     }
+  });
+
+  it("should handle argument parsing bug regression", () => {
+    // Regression test for bug where first parser incorrectly consumed arguments as options
+    // Before fix: first parser would consume '-t' as argument, preventing second parser from matching
+    // After fix: second parser correctly matches '-t title' as option with value
+
+    const firstParser = object({
+      name: option("-n", "--name", string()),
+      id: argument(string()),
+    });
+
+    const secondParser = object({
+      title: option("-t", "--title", string()),
+    });
+
+    const parser = or(firstParser, secondParser);
+
+    // This should succeed with the second parser, not fail because first parser consumed '-t' as argument
+    const result = parse(parser, ["-t", "title"]);
+    assert.ok(result.success);
+    if (result.success && "title" in result.value) {
+      assert.equal(result.value.title, "title");
+    }
+
+    // Verify that the first parser fails because it doesn't recognize the -t option
+    const firstParserResult = parse(firstParser, ["-t", "title"]);
+    assert.ok(!firstParserResult.success);
+    if (!firstParserResult.success) {
+      assertErrorIncludes(
+        firstParserResult.error,
+        "Unexpected option or argument",
+      );
+    }
+  });
+
+  it("should handle or() with arguments on both sides regression", () => {
+    // Regression test for bug where or() parser with arguments on both sides
+    // wouldn't work properly - first parser consuming arguments would prevent
+    // second parser from getting a chance to match properly
+
+    const parserA = object({
+      name: option("-n", "--name", string()),
+      file: argument(string()),
+    });
+
+    const parserB = object({
+      title: option("-t", "--title", string()),
+      input: argument(string()),
+    });
+
+    const parser = or(parserA, parserB);
+
+    // First case: should match parserB
+    const result1 = parse(parser, ["-t", "My Title", "input.txt"]);
+    assert.ok(result1.success);
+    if (result1.success && "title" in result1.value) {
+      assert.equal(result1.value.title, "My Title");
+      assert.equal(result1.value.input, "input.txt");
+    }
+
+    // Second case: should match parserA
+    const result2 = parse(parser, ["-n", "John", "output.txt"]);
+    assert.ok(result2.success);
+    if (result2.success && "name" in result2.value) {
+      assert.equal(result2.value.name, "John");
+      assert.equal(result2.value.file, "output.txt");
+    }
+
+    // Edge case: test that arguments don't interfere with option parsing across parsers
+    const result3 = parse(parser, ["-t", "Title"]);
+    assert.ok(!result3.success);
+    // This should fail because parserB requires both -t option AND an argument
+    // but we're only providing the option
   });
 });

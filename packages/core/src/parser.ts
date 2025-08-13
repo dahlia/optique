@@ -379,6 +379,7 @@ export function option<T>(
 export function argument<T>(
   valueParser: ValueParser<T>,
 ): Parser<T, ValueParserResult<T>> {
+  const optionPattern = /^--?[a-z0-9-]+$/i;
   return {
     $valueType: [],
     $stateType: [],
@@ -393,15 +394,43 @@ export function argument<T>(
         };
       }
 
-      const result = valueParser.parse(context.buffer[0]);
+      let i = 0;
+      let optionsTerminated = context.optionsTerminated;
+      if (
+        !optionsTerminated
+      ) {
+        if (context.buffer[i] === "--") {
+          optionsTerminated = true;
+          i++;
+        } else if (context.buffer[i].match(optionPattern)) {
+          return {
+            success: false,
+            consumed: i,
+            error: `Expected an argument, but got an option: ${
+              context.buffer[i]
+            }.`,
+          };
+        }
+      }
+
+      if (context.buffer.length < i + 1) {
+        return {
+          success: false,
+          consumed: i,
+          error: "Expected an argument, but got end of input.",
+        };
+      }
+
+      const result = valueParser.parse(context.buffer[i]);
       return {
         success: true,
         next: {
           ...context,
-          buffer: context.buffer.slice(1),
+          buffer: context.buffer.slice(i + 1),
           state: result,
+          optionsTerminated,
         },
-        consumed: context.buffer.slice(0, 1),
+        consumed: context.buffer.slice(0, i + 1),
       };
     },
     complete(state) {
@@ -698,12 +727,17 @@ export function or(
     parse(
       context: ParserContext<[number, ParserResult<unknown>]>,
     ): ParserResult<[number, ParserResult<unknown>]> {
-      let i = 0;
       let error: { consumed: number; error: ErrorMessage } = {
         consumed: 0,
         error: "No parser matched.",
       };
-      for (const parser of parsers) {
+      const orderedParsers = parsers.map((p, i) =>
+        [p, i] as [Parser<unknown, unknown>, number]
+      );
+      orderedParsers.sort(([_, a], [__, b]) =>
+        context.state?.[0] === a ? -1 : context.state?.[0] === b ? 1 : a - b
+      );
+      for (const [parser, i] of orderedParsers) {
         const result = parser.parse({
           ...context,
           state: context.state == null || context.state[0] !== i ||
@@ -734,7 +768,6 @@ export function or(
         } else if (!result.success && error.consumed < result.consumed) {
           error = result;
         }
-        i++;
       }
       return { ...error, success: false };
     },
