@@ -378,13 +378,13 @@ export function option<T>(
  */
 export function argument<T>(
   valueParser: ValueParser<T>,
-): Parser<T, ValueParserResult<T>> {
+): Parser<T, ValueParserResult<T> | undefined> {
   const optionPattern = /^--?[a-z0-9-]+$/i;
   return {
     $valueType: [],
     $stateType: [],
     priority: 5,
-    initialState: { success: false, error: "Too few arguments." },
+    initialState: undefined,
     parse(context) {
       if (context.buffer.length < 1) {
         return {
@@ -421,6 +421,15 @@ export function argument<T>(
         };
       }
 
+      if (context.state != null) {
+        return {
+          success: false,
+          consumed: i,
+          error:
+            `The argument ${valueParser.metavar} cannot be used multiple times.`,
+        };
+      }
+
       const result = valueParser.parse(context.buffer[i]);
       return {
         success: true,
@@ -434,13 +443,14 @@ export function argument<T>(
       };
     },
     complete(state) {
+      if (state == null) return { success: false, error: "Too few arguments." };
       return state;
     },
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
     },
   } satisfies
-    & Parser<T, ValueParserResult<T>>
+    & Parser<T, ValueParserResult<T> | undefined>
     & Record<symbol, unknown>;
 }
 
@@ -490,6 +500,108 @@ export function optional<TValue, TState>(
         };
       }
       return parser.complete(state[0]);
+    },
+  };
+}
+
+/**
+ * Options for the {@link multiple} parser.
+ */
+export interface MultipleOptions {
+  /**
+   * The minimum number of occurrences required for the parser to succeed.
+   * If the number of occurrences is less than this value,
+   * the parser will fail with an error.
+   * @default `0`
+   */
+  readonly min?: number;
+
+  /**
+   * The maximum number of occurrences allowed for the parser.
+   * If the number of occurrences exceeds this value,
+   * the parser will fail with an error.
+   * @default `Infinity`
+   */
+  readonly max?: number;
+}
+
+/**
+ * Creates a parser that allows multiple occurrences of a given parser.
+ * This parser can be used to parse multiple values of the same type,
+ * such as multiple command-line arguments or options.
+ * @template TValue The type of the value that the parser produces.
+ * @template TState The type of the state used by the parser.
+ * @param parser The {@link Parser} to apply multiple times.
+ * @param options Optional configuration for the parser,
+ *                allowing you to specify the minimum and maximum number of
+ *                occurrences allowed.
+ * @returns A {@link Parser} that produces an array of values
+ *          of type {@link TValue} and an array of states
+ *          of type {@link TState}.
+ */
+export function multiple<TValue, TState>(
+  parser: Parser<TValue, TState>,
+  options: MultipleOptions = {},
+): Parser<readonly TValue[], readonly TState[]> {
+  const { min = 0, max = Infinity } = options;
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: parser.priority,
+    initialState: [],
+    parse(context) {
+      let added = context.state.length < 1;
+      let result = parser.parse({
+        ...context,
+        state: context.state.at(-1) ?? parser.initialState,
+      });
+      if (!result.success) {
+        if (!added) {
+          result = parser.parse({
+            ...context,
+            state: parser.initialState,
+          });
+          if (!result.success) return result;
+          added = true;
+        } else {
+          return result;
+        }
+      }
+      return {
+        success: true,
+        next: {
+          ...result.next,
+          state: [
+            ...(added ? context.state : context.state.slice(0, -1)),
+            result.next.state,
+          ],
+        },
+        consumed: result.consumed,
+      };
+    },
+    complete(state) {
+      const result = [];
+      for (const s of state) {
+        const valueResult = parser.complete(s);
+        if (valueResult.success) {
+          result.push(valueResult.value);
+        } else {
+          return { success: false, error: valueResult.error };
+        }
+      }
+      if (result.length < min) {
+        return {
+          success: false,
+          error:
+            `Expected at least ${min} values, but got only ${result.length}.`, // FIXME
+        };
+      } else if (result.length > max) {
+        return {
+          success: false,
+          error: `Expected at most ${max} values, but got ${result.length}.`, // FIXME
+        };
+      }
+      return { success: true, value: result };
     },
   };
 }

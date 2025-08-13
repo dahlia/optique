@@ -2,6 +2,7 @@ import type { ErrorMessage } from "@optique/core/error";
 import {
   argument,
   constant,
+  multiple,
   object,
   option,
   optional,
@@ -444,10 +445,7 @@ describe("argument", () => {
     const parser = argument(string({ metavar: "FILE" }));
 
     assert.equal(parser.priority, 5);
-    assert.ok(!parser.initialState.success);
-    if (!parser.initialState.success) {
-      assert.equal(parser.initialState.error, "Too few arguments.");
-    }
+    assert.equal(parser.initialState, undefined);
   });
 
   it("should parse a string argument", () => {
@@ -461,8 +459,8 @@ describe("argument", () => {
     const result = parser.parse(context);
     assert.ok(result.success);
     if (result.success) {
-      assert.ok(result.next.state.success);
-      if (result.next.state.success) {
+      assert.ok(result.next.state);
+      if (result.next.state && result.next.state.success) {
         assert.equal(result.next.state.value, "myfile.txt");
       }
       assert.deepEqual(result.next.buffer, []);
@@ -481,8 +479,8 @@ describe("argument", () => {
     const result = parser.parse(context);
     assert.ok(result.success);
     if (result.success) {
-      assert.ok(result.next.state.success);
-      if (result.next.state.success) {
+      assert.ok(result.next.state);
+      if (result.next.state && result.next.state.success) {
         assert.equal(result.next.state.value, 42);
       }
       assert.deepEqual(result.next.buffer, []);
@@ -517,7 +515,10 @@ describe("argument", () => {
     const result = parser.parse(context);
     assert.ok(result.success);
     if (result.success) {
-      assert.ok(!result.next.state.success);
+      assert.ok(result.next.state);
+      if (result.next.state) {
+        assert.ok(!result.next.state.success);
+      }
     }
   });
 
@@ -874,6 +875,501 @@ describe("optional", () => {
       assert.equal(missingOptionalResult.value.command, "start");
       assert.equal(missingOptionalResult.value.port, undefined);
       assert.equal(missingOptionalResult.value.debug, undefined);
+    }
+  });
+});
+
+describe("multiple", () => {
+  it("should create a parser with same priority as wrapped parser", () => {
+    const baseParser = option("-l", "--locale", string());
+    const multipleParser = multiple(baseParser);
+
+    assert.equal(multipleParser.priority, baseParser.priority);
+    assert.deepEqual(multipleParser.initialState, []);
+  });
+
+  it("should parse multiple occurrences of wrapped parser", () => {
+    const baseParser = option("-l", "--locale", string());
+    const multipleParser = multiple(baseParser);
+
+    const result = parse(multipleParser, ["-l", "en", "-l", "fr", "-l", "de"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["en", "fr", "de"]);
+    }
+  });
+
+  it("should return empty array when no matches found in object context", () => {
+    const parser = object({
+      locales: multiple(option("-l", "--locale", string())),
+      verbose: option("-v", "--verbose"),
+    });
+
+    const result = parse(parser, ["-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value.locales, []);
+      assert.equal(result.value.verbose, true);
+    }
+  });
+
+  it("should work with argument parsers", () => {
+    const baseParser = argument(string());
+    const multipleParser = multiple(baseParser);
+
+    const result = parse(multipleParser, [
+      "file1.txt",
+      "file2.txt",
+      "file3.txt",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["file1.txt", "file2.txt", "file3.txt"]);
+    }
+  });
+
+  it("should enforce minimum constraint", () => {
+    const baseParser = option("-l", "--locale", string());
+    const multipleParser = multiple(baseParser, { min: 2 });
+
+    const resultTooFew = parse(multipleParser, ["-l", "en"]);
+    assert.ok(!resultTooFew.success);
+    if (!resultTooFew.success) {
+      assertErrorIncludes(
+        resultTooFew.error,
+        "Expected at least 2 values, but got only 1",
+      );
+    }
+
+    const resultEnough = parse(multipleParser, ["-l", "en", "-l", "fr"]);
+    assert.ok(resultEnough.success);
+    if (resultEnough.success) {
+      assert.deepEqual(resultEnough.value, ["en", "fr"]);
+    }
+  });
+
+  it("should enforce maximum constraint", () => {
+    const baseParser = argument(string());
+    const multipleParser = multiple(baseParser, { max: 2 });
+
+    const resultTooMany = parse(multipleParser, [
+      "file1.txt",
+      "file2.txt",
+      "file3.txt",
+    ]);
+    assert.ok(!resultTooMany.success);
+    if (!resultTooMany.success) {
+      assertErrorIncludes(
+        resultTooMany.error,
+        "Expected at most 2 values, but got 3",
+      );
+    }
+
+    const resultOkay = parse(multipleParser, ["file1.txt", "file2.txt"]);
+    assert.ok(resultOkay.success);
+    if (resultOkay.success) {
+      assert.deepEqual(resultOkay.value, ["file1.txt", "file2.txt"]);
+    }
+  });
+
+  it("should enforce both min and max constraints", () => {
+    const baseParser = argument(string());
+    const multipleParser = multiple(baseParser, { min: 1, max: 3 });
+
+    // When used standalone, multiple() fails if it can't parse at least one occurrence
+    const resultTooFew = parse(multipleParser, []);
+    assert.ok(!resultTooFew.success);
+    if (!resultTooFew.success) {
+      assertErrorIncludes(
+        resultTooFew.error,
+        "Expected an argument, but got end of input",
+      );
+    }
+
+    const resultTooMany = parse(multipleParser, ["a", "b", "c", "d"]);
+    assert.ok(!resultTooMany.success);
+    if (!resultTooMany.success) {
+      assertErrorIncludes(
+        resultTooMany.error,
+        "Expected at most 3 values, but got 4",
+      );
+    }
+
+    const resultJustRight = parse(multipleParser, ["a", "b"]);
+    assert.ok(resultJustRight.success);
+    if (resultJustRight.success) {
+      assert.deepEqual(resultJustRight.value, ["a", "b"]);
+    }
+  });
+
+  it("should work with default options (min=0, max=Infinity)", () => {
+    const parser = object({
+      options: multiple(option("-x", string())),
+      help: option("-h", "--help"),
+    });
+
+    // When min=0, should allow empty array in object context
+    const resultEmpty = parse(parser, ["-h"]);
+    assert.ok(resultEmpty.success);
+    if (resultEmpty.success) {
+      assert.deepEqual(resultEmpty.value.options, []);
+      assert.equal(resultEmpty.value.help, true);
+    }
+
+    // Test with many values to ensure no arbitrary limit
+    const manyArgs = Array.from({ length: 10 }, (_, i) => ["-x", `value${i}`])
+      .flat();
+    manyArgs.push("-h");
+    const resultMany = parse(parser, manyArgs);
+    assert.ok(resultMany.success);
+    if (resultMany.success) {
+      assert.equal(resultMany.value.options.length, 10);
+      assert.equal(resultMany.value.options[0], "value0");
+      assert.equal(resultMany.value.options[9], "value9");
+      assert.equal(resultMany.value.help, true);
+    }
+  });
+
+  it("should work in object combinations", () => {
+    const parser = object({
+      locales: multiple(option("-l", "--locale", string())),
+      verbose: option("-v", "--verbose"),
+      files: multiple(argument(string()), { min: 1 }),
+    });
+
+    const result = parse(parser, [
+      "-l",
+      "en",
+      "-l",
+      "fr",
+      "-v",
+      "file1.txt",
+      "file2.txt",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value.locales, ["en", "fr"]);
+      assert.equal(result.value.verbose, true);
+      assert.deepEqual(result.value.files, ["file1.txt", "file2.txt"]);
+    }
+  });
+
+  it("should propagate wrapped parser failures", () => {
+    const baseParser = option("-p", "--port", integer({ min: 1, max: 65535 }));
+    const multipleParser = multiple(baseParser);
+
+    const result = parse(multipleParser, ["-p", "8080", "-p", "invalid"]);
+    assert.ok(!result.success);
+    // The failure should come from the invalid integer parsing
+  });
+
+  it("should handle mixed successful and failed parsing attempts in object context", () => {
+    const parser = object({
+      numbers: multiple(option("-n", "--number", integer())),
+      other: option("--other", string()),
+    });
+
+    const result = parse(parser, ["-n", "42", "-n", "100", "--other", "value"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value.numbers, [42, 100]);
+      assert.equal(result.value.other, "value");
+    }
+  });
+
+  it("should work with boolean flag options", () => {
+    const baseParser = option("-v", "--verbose");
+    const multipleParser = multiple(baseParser);
+
+    const result = parse(multipleParser, ["-v", "-v", "-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [true, true, true]);
+    }
+  });
+
+  it("should handle parse context state management correctly", () => {
+    const baseParser = option("-l", "--locale", string());
+    const multipleParser = multiple(baseParser);
+
+    const context = {
+      buffer: ["-l", "en", "-l", "fr"] as readonly string[],
+      state: multipleParser.initialState,
+      optionsTerminated: false,
+    };
+
+    let parseResult = multipleParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      assert.deepEqual(parseResult.consumed, ["-l", "en"]);
+      assert.equal(parseResult.next.state.length, 1);
+
+      // Parse next occurrence
+      parseResult = multipleParser.parse(parseResult.next);
+      assert.ok(parseResult.success);
+      if (parseResult.success) {
+        assert.deepEqual(parseResult.consumed, ["-l", "fr"]);
+        assert.equal(parseResult.next.state.length, 2);
+      }
+    }
+  });
+
+  it("should complete with proper value array", () => {
+    const baseParser = option("-n", "--number", integer());
+    const multipleParser = multiple(baseParser);
+
+    const mockStates = [
+      { success: true as const, value: 42 },
+      { success: true as const, value: 100 },
+      { success: true as const, value: 7 },
+    ];
+
+    const completeResult = multipleParser.complete(mockStates);
+    assert.ok(completeResult.success);
+    if (completeResult.success) {
+      assert.deepEqual(completeResult.value, [42, 100, 7]);
+    }
+  });
+
+  it("should fail completion if wrapped parser completion fails", () => {
+    const baseParser = option("-n", "--number", integer());
+    const multipleParser = multiple(baseParser);
+
+    const mockStates = [
+      { success: true as const, value: 42 },
+      { success: false as const, error: "Invalid number" },
+      { success: true as const, value: 7 },
+    ];
+
+    const completeResult = multipleParser.complete(mockStates);
+    assert.ok(!completeResult.success);
+    if (!completeResult.success) {
+      assert.equal(completeResult.error, "Invalid number");
+    }
+  });
+
+  it("should handle empty state array with min constraint", () => {
+    const baseParser = option("-l", "--locale", string());
+    const multipleParser = multiple(baseParser, { min: 1 });
+
+    const completeResult = multipleParser.complete([]);
+    assert.ok(!completeResult.success);
+    if (!completeResult.success) {
+      assertErrorIncludes(
+        completeResult.error,
+        "Expected at least 1 values, but got only 0",
+      );
+    }
+  });
+
+  it("should handle max constraint at completion", () => {
+    const baseParser = option("-l", "--locale", string());
+    const multipleParser = multiple(baseParser, { max: 2 });
+
+    const mockStates = [
+      { success: true as const, value: "en" },
+      { success: true as const, value: "fr" },
+      { success: true as const, value: "de" },
+    ];
+
+    const completeResult = multipleParser.complete(mockStates);
+    assert.ok(!completeResult.success);
+    if (!completeResult.success) {
+      assertErrorIncludes(
+        completeResult.error,
+        "Expected at most 2 values, but got 3",
+      );
+    }
+  });
+
+  it("should work with constant parsers", () => {
+    const baseParser = constant("fixed-value");
+    const multipleParser = multiple(baseParser, { min: 1, max: 3 });
+
+    // Since constant parser always succeeds without consuming input,
+    // this would theoretically create infinite loop, but the implementation
+    // should handle it properly by checking state changes
+    const result = parse(multipleParser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // Should get exactly one value since constant doesn't consume input
+      assert.deepEqual(result.value, ["fixed-value"]);
+    }
+  });
+
+  it("should reproduce example.ts usage patterns", () => {
+    // Based on the example.ts usage of multiple()
+    const parser1 = object({
+      name: option("-n", "--name", string()),
+      locales: multiple(option("-l", "--locale", string())),
+      id: argument(string()),
+    });
+
+    const result1 = parse(parser1, [
+      "-n",
+      "John",
+      "-l",
+      "en-US",
+      "-l",
+      "fr-FR",
+      "user123",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.name, "John");
+      assert.deepEqual(result1.value.locales, ["en-US", "fr-FR"]);
+      assert.equal(result1.value.id, "user123");
+    }
+
+    // Test the constrained multiple arguments pattern
+    const parser2 = object({
+      title: option("-t", "--title", string()),
+      ids: multiple(argument(string()), { min: 1, max: 3 }),
+    });
+
+    const result2 = parse(parser2, ["-t", "My Title", "id1", "id2"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.title, "My Title");
+      assert.deepEqual(result2.value.ids, ["id1", "id2"]);
+    }
+
+    // Test constraint violation
+    const result3 = parse(parser2, ["-t", "Title", "id1", "id2", "id3", "id4"]);
+    assert.ok(!result3.success);
+    if (!result3.success) {
+      assertErrorIncludes(
+        result3.error,
+        "Expected at most 3 values, but got 4",
+      );
+    }
+  });
+
+  it("should handle options terminator correctly", () => {
+    const parser = object({
+      locales: multiple(option("-l", "--locale", string())),
+      args: multiple(argument(string())),
+    });
+
+    const result = parse(parser, ["-l", "en", "--", "-l", "fr"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value.locales, ["en"]);
+      assert.deepEqual(result.value.args, ["-l", "fr"]);
+    }
+  });
+
+  it("should handle state transitions and updates correctly", () => {
+    const baseParser = argument(string());
+    const multipleParser = multiple(baseParser);
+
+    // Test initial state
+    assert.deepEqual(multipleParser.initialState, []);
+
+    const context1 = {
+      buffer: ["arg1"] as readonly string[],
+      state: [],
+      optionsTerminated: false,
+    };
+
+    const parseResult1 = multipleParser.parse(context1);
+    assert.ok(parseResult1.success);
+    if (parseResult1.success) {
+      assert.equal(parseResult1.next.state.length, 1);
+      assert.deepEqual(parseResult1.consumed, ["arg1"]);
+
+      const context2 = {
+        ...parseResult1.next,
+        buffer: ["arg2"] as readonly string[],
+      };
+
+      const parseResult2 = multipleParser.parse(context2);
+      assert.ok(parseResult2.success);
+      if (parseResult2.success) {
+        assert.equal(parseResult2.next.state.length, 2);
+        assert.deepEqual(parseResult2.consumed, ["arg2"]);
+      }
+    }
+  });
+
+  it("should work with complex value parsers", () => {
+    const baseParser = option(
+      "-p",
+      "--port",
+      integer({ min: 1024, max: 65535 }),
+    );
+    const multipleParser = multiple(baseParser, { min: 1, max: 5 });
+
+    const validResult = parse(multipleParser, [
+      "-p",
+      "8080",
+      "-p",
+      "9000",
+      "-p",
+      "3000",
+    ]);
+    assert.ok(validResult.success);
+    if (validResult.success) {
+      assert.deepEqual(validResult.value, [8080, 9000, 3000]);
+    }
+
+    const invalidResult = parse(multipleParser, ["-p", "8080", "-p", "100"]);
+    assert.ok(!invalidResult.success);
+    // Should fail due to port 100 being below minimum
+
+    const tooManyResult = parse(multipleParser, [
+      "-p",
+      "8080",
+      "-p",
+      "9000",
+      "-p",
+      "3000",
+      "-p",
+      "4000",
+      "-p",
+      "5000",
+      "-p",
+      "6000",
+    ]);
+    assert.ok(!tooManyResult.success);
+    if (!tooManyResult.success) {
+      assertErrorIncludes(
+        tooManyResult.error,
+        "Expected at most 5 values, but got 6",
+      );
+    }
+  });
+
+  it("should maintain type safety with different value types", () => {
+    const stringMultiple = multiple(option("-s", string()));
+    const integerMultiple = multiple(option("-i", integer()));
+    const booleanMultiple = multiple(option("-b"));
+
+    const stringResult = parse(stringMultiple, ["-s", "hello", "-s", "world"]);
+    assert.ok(stringResult.success);
+    if (stringResult.success) {
+      assert.equal(stringResult.value.length, 2);
+      assert.equal(typeof stringResult.value[0], "string");
+      assert.equal(stringResult.value[0], "hello");
+      assert.equal(stringResult.value[1], "world");
+    }
+
+    const integerResult = parse(integerMultiple, ["-i", "42", "-i", "100"]);
+    assert.ok(integerResult.success);
+    if (integerResult.success) {
+      assert.equal(integerResult.value.length, 2);
+      assert.equal(typeof integerResult.value[0], "number");
+      assert.equal(integerResult.value[0], 42);
+      assert.equal(integerResult.value[1], 100);
+    }
+
+    const booleanResult = parse(booleanMultiple, ["-b", "-b"]);
+    assert.ok(booleanResult.success);
+    if (booleanResult.success) {
+      assert.equal(booleanResult.value.length, 2);
+      assert.equal(typeof booleanResult.value[0], "boolean");
+      assert.equal(booleanResult.value[0], true);
+      assert.equal(booleanResult.value[1], true);
     }
   });
 });
