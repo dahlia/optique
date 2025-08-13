@@ -139,7 +139,7 @@ export function choice<const T extends string>(
  * @returns A {@link ValueParser} that parses strings according to the
  *          specified options.
  */
-export function string(options: StringOptions = {}) {
+export function string(options: StringOptions = {}): ValueParser<string> {
   return {
     metavar: options.metavar ?? "STRING",
     parse(input: string): ValueParserResult<string> {

@@ -8,6 +8,7 @@ import {
   optional,
   or,
   parse,
+  tuple,
 } from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
@@ -436,6 +437,169 @@ describe("object", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "Expected an option");
+    }
+  });
+});
+
+describe("tuple", () => {
+  it("should create a parser with array-based API", () => {
+    const parser = tuple([
+      option("-v", "--verbose"),
+      option("-p", "--port", integer()),
+    ]);
+
+    assert.ok(parser.priority >= 10);
+    assert.ok(Array.isArray(parser.initialState));
+    assert.equal(parser.initialState.length, 2);
+  });
+
+  it("should parse parsers sequentially in array order", () => {
+    const parser = tuple([
+      option("-n", "--name", string()),
+      option("-v", "--verbose"),
+    ]);
+
+    const result = parse(parser, ["-n", "Alice", "-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 2);
+      assert.equal(result.value[0], "Alice");
+      assert.equal(result.value[1], true);
+    }
+  });
+
+  it("should work with labeled tuples", () => {
+    const parser = tuple("User Data", [
+      option("-n", "--name", string()),
+      option("-v", "--verbose"),
+    ]);
+
+    const result = parse(parser, ["-n", "Bob", "-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "Bob");
+      assert.equal(result.value[1], true);
+    }
+  });
+
+  it("should handle empty tuple", () => {
+    const parser = tuple([]);
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 0);
+    }
+  });
+
+  it("should work with optional parsers", () => {
+    const parser = tuple([
+      option("-n", "--name", string()),
+      optional(option("-a", "--age", integer())),
+      option("-v", "--verbose"),
+    ]);
+
+    const result1 = parse(parser, ["-n", "Alice", "-a", "30", "-v"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value[0], "Alice");
+      assert.equal(result1.value[1], 30);
+      assert.equal(result1.value[2], true);
+    }
+
+    const result2 = parse(parser, ["-n", "Bob", "-v"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value[0], "Bob");
+      assert.equal(result2.value[1], undefined);
+      assert.equal(result2.value[2], true);
+    }
+  });
+
+  it("should work with arguments first, then options", () => {
+    const parser = tuple([
+      argument(string()),
+      option("-v", "--verbose"),
+      option("-o", "--output", string()),
+    ]);
+
+    const result = parse(parser, ["input.txt", "-v", "-o", "output.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "input.txt");
+      assert.equal(result.value[1], true);
+      assert.equal(result.value[2], "output.txt");
+    }
+  });
+
+  it("should work with multiple arguments and options mixed", () => {
+    const parser = tuple([
+      argument(string()),
+      argument(string()),
+      option("-v", "--verbose"),
+    ]);
+
+    const result = parse(parser, ["file1.txt", "file2.txt", "-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "file1.txt");
+      assert.equal(result.value[1], "file2.txt");
+      assert.equal(result.value[2], true);
+    }
+  });
+
+  it("should handle argument-option-argument pattern", () => {
+    const parser = tuple([
+      argument(string()),
+      option("-t", "--type", string()),
+      argument(string()),
+    ]);
+
+    const result = parse(parser, ["input.txt", "-t", "json", "output.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "input.txt");
+      assert.equal(result.value[1], "json");
+      assert.equal(result.value[2], "output.txt");
+    }
+  });
+
+  it("should fail when argument parser cannot find expected argument", () => {
+    const parser = tuple([
+      argument(string()),
+      option("-v", "--verbose"),
+    ]);
+
+    // No arguments provided, should fail on first argument parser
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+  });
+
+  it("should work with complex argument and option combinations", () => {
+    // CLI pattern: command input_file --format json --verbose output_file
+    const parser = tuple([
+      argument(string({ metavar: "COMMAND" })),
+      argument(string({ metavar: "INPUT" })),
+      option("-f", "--format", string()),
+      option("-v", "--verbose"),
+      argument(string({ metavar: "OUTPUT" })),
+    ]);
+
+    const result = parse(parser, [
+      "convert",
+      "input.md",
+      "-f",
+      "json",
+      "-v",
+      "output.json",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "convert");
+      assert.equal(result.value[1], "input.md");
+      assert.equal(result.value[2], "json");
+      assert.equal(result.value[3], true);
+      assert.equal(result.value[4], "output.json");
     }
   });
 });

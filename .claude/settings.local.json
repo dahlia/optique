@@ -3,7 +3,13 @@
     "allow": [
       "Bash(deno test:*)",
       "Bash(deno eval:*)",
-      "Bash(deno run:*)"
+      "Bash(deno run:*)",
+      "Bash(timeout 10s deno run:*)",
+      "Bash(timeout:*)",
+      "Bash(deno fmt:*)",
+      "Bash(deno check:*)",
+      "Bash(deno lint:*)",
+      "Bash(deno task:*)"
     ],
     "deny": []
   }

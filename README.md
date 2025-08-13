@@ -26,8 +26,9 @@ Core concepts
 
 Optique is built around three fundamental concepts: value parsers that convert
 strings to typed values, option parsers that handle command-line flags and
-their arguments, and combinators like `or()`, `object()`, `optional()`, and
-`multiple()` that compose parsers into sophisticated argument structures.
+their arguments, and combinators like `or()`, `object()`, `tuple()`,
+`optional()`, and `multiple()` that compose parsers into sophisticated
+argument structures.
 
 The library automatically infers the result type of your parser composition,
 ensuring that your parsed CLI arguments are fully typed without manual type
@@ -116,6 +117,7 @@ Optique provides several powerful combinators for composing parsers:
  -  **`object()`**: Combines multiple parsers into a structured object
  -  **`or()`**: Creates mutually exclusive alternatives
     (try first, then second, etc.)
+ -  **`tuple()`**: Combines multiple parsers into a tuple with preserved order
 
 ### Modifying combinators
 
@@ -137,6 +139,24 @@ Optique provides several powerful combinators for composing parsers:
       locales: multiple(option("-l", "--locale", locale())),
       // 1-3 input files required
       files: multiple(argument(string()), { min: 1, max: 3 }),
+    });
+    ~~~~
+
+ -  **`tuple()`**: Combines parsers into a typed tuple, maintaining order
+
+    ~~~~ typescript
+    const parser = object({
+      // Tuple with mixed types: [name, port, verbose?]
+      config: tuple([
+        option("-n", "--name", string()),
+        option("-p", "--port", integer({ min: 1, max: 65535 })),
+        optional(option("-v", "--verbose")),
+      ]),
+      // Labeled tuple for better readability
+      endpoint: tuple("Server", [
+        option("-h", "--host", string()),
+        option("-p", "--port", integer()),
+      ]),
     });
     ~~~~
 

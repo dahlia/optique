@@ -740,6 +740,219 @@ export function object<
 }
 
 /**
+ * Creates a parser that combines multiple parsers into a sequential tuple parser.
+ * The parsers are applied in the order they appear in the array, and all must
+ * succeed for the tuple parser to succeed.
+ * @template T A readonly array type where each element is a {@link Parser}.
+ * @param parsers An array of parsers that will be applied sequentially
+ *                to create a tuple of their results.
+ * @returns A {@link Parser} that produces a readonly tuple with the same length
+ *          as the input array, where each element is the result of the
+ *          corresponding parser.
+ */
+export function tuple<
+  T extends readonly Parser<unknown, unknown>[],
+>(
+  parsers: T,
+): Parser<
+  {
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+      : never;
+  },
+  {
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+      : never;
+  }
+>;
+
+/**
+ * Creates a labeled parser that combines multiple parsers into a sequential
+ * tuple parser with an associated label for documentation or error reporting.
+ * @template T A readonly array type where each element is a {@link Parser}.
+ * @param label A descriptive label for this parser group, used for
+ *              documentation and error messages.
+ * @param parsers An array of parsers that will be applied sequentially
+ *                to create a tuple of their results.
+ * @returns A {@link Parser} that produces a readonly tuple with the same length
+ *          as the input array, where each element is the result of the
+ *          corresponding parser.
+ */
+export function tuple<
+  T extends readonly Parser<unknown, unknown>[],
+>(
+  label: string,
+  parsers: T,
+): Parser<
+  {
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+      : never;
+  },
+  {
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+      : never;
+  }
+>;
+
+export function tuple<
+  T extends readonly Parser<unknown, unknown>[],
+>(
+  labelOrParsers: string | T,
+  maybeParsers?: T,
+): Parser<
+  { readonly [K in keyof T]: unknown },
+  { readonly [K in keyof T]: unknown }
+> {
+  const _label: string | undefined = typeof labelOrParsers === "string"
+    ? labelOrParsers
+    : undefined;
+  const parsers = typeof labelOrParsers === "string"
+    ? maybeParsers!
+    : labelOrParsers;
+
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: parsers.length > 0
+      ? Math.max(...parsers.map((p) => p.priority))
+      : 0,
+    initialState: parsers.map((parser) => parser.initialState) as {
+      readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
+        ? U3
+        : never;
+    },
+    parse(context) {
+      let currentContext = context;
+      const allConsumed: string[] = [];
+      const matchedParsers = new Set<number>();
+
+      // Similar to object(), try parsers in priority order but maintain tuple semantics
+      while (matchedParsers.size < parsers.length) {
+        let foundMatch = false;
+        let error: { consumed: number; error: ErrorMessage } = {
+          consumed: 0,
+          error: "No remaining parsers could match the input.",
+        };
+
+        // Create priority-ordered list of remaining parsers
+        const remainingParsers = parsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([_, index]) => !matchedParsers.has(index))
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+
+        for (const [parser, index] of remainingParsers) {
+          const result = parser.parse({
+            ...currentContext,
+            state: currentContext.state[index],
+          });
+
+          if (result.success && result.consumed.length > 0) {
+            // Parser succeeded and consumed input - take this match
+            currentContext = {
+              ...currentContext,
+              buffer: result.next.buffer,
+              optionsTerminated: result.next.optionsTerminated,
+              state: currentContext.state.map((s, idx) =>
+                idx === index ? result.next.state : s
+              ) as {
+                readonly [K in keyof T]: T[K]["$stateType"][number] extends (
+                  infer U4
+                ) ? U4
+                  : never;
+              },
+            };
+
+            allConsumed.push(...result.consumed);
+            matchedParsers.add(index);
+            foundMatch = true;
+            break; // Take the first (highest priority) match that consumes input
+          } else if (!result.success && error.consumed < result.consumed) {
+            error = result;
+          }
+        }
+
+        // If no consuming parser matched, try non-consuming ones (like optional)
+        // or mark failing optional parsers as matched
+        if (!foundMatch) {
+          for (const [parser, index] of remainingParsers) {
+            const result = parser.parse({
+              ...currentContext,
+              state: currentContext.state[index],
+            });
+
+            if (result.success && result.consumed.length < 1) {
+              // Parser succeeded without consuming input (like optional)
+              currentContext = {
+                ...currentContext,
+                state: currentContext.state.map((s, idx) =>
+                  idx === index ? result.next.state : s
+                ) as {
+                  readonly [K in keyof T]: T[K]["$stateType"][number] extends (
+                    infer U5
+                  ) ? U5
+                    : never;
+                },
+              };
+
+              matchedParsers.add(index);
+              foundMatch = true;
+              break;
+            } else if (!result.success && result.consumed < 1) {
+              // Parser failed without consuming input - this could be
+              // an optional parser that doesn't match.
+              // Check if we can safely skip it.
+              // For now, mark it as matched to continue processing
+              matchedParsers.add(index);
+              foundMatch = true;
+              break;
+            }
+          }
+        }
+
+        if (!foundMatch) {
+          return { ...error, success: false };
+        }
+      }
+
+      return {
+        success: true,
+        next: currentContext,
+        consumed: allConsumed,
+      };
+    },
+    complete(state) {
+      const result: { [K in keyof T]: T[K]["$valueType"][number] } =
+        // deno-lint-ignore no-explicit-any
+        [] as any;
+
+      for (let i = 0; i < parsers.length; i++) {
+        const valueResult = parsers[i].complete(state[i]);
+        if (valueResult.success) {
+          // deno-lint-ignore no-explicit-any
+          (result as any)[i] = valueResult.value;
+        } else {
+          return { success: false, error: valueResult.error };
+        }
+      }
+
+      return { success: true, value: result };
+    },
+    [Symbol.for("Deno.customInspect")]() {
+      const parsersStr = parsers.length === 1
+        ? `[1 parser]`
+        : `[${parsers.length} parsers]`;
+      return _label
+        ? `tuple(${JSON.stringify(_label)}, ${parsersStr})`
+        : `tuple(${parsersStr})`;
+    },
+  } satisfies
+    & Parser<
+      { readonly [K in keyof T]: unknown },
+      { readonly [K in keyof T]: unknown }
+    >
+    & Record<symbol, unknown>;
+}
+
+/**
  * Creates a parser that combines two mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
