@@ -1,7 +1,9 @@
 import type { ErrorMessage } from "@optique/core/error";
 import {
   argument,
+  command,
   constant,
+  type InferValue,
   merge,
   multiple,
   object,
@@ -1879,7 +1881,10 @@ describe("merge", () => {
 
     const parser = merge(lowPriority, highPriority);
 
-    assert.equal(parser.priority, Math.max(lowPriority.priority, highPriority.priority));
+    assert.equal(
+      parser.priority,
+      Math.max(lowPriority.priority, highPriority.priority),
+    );
 
     const result = parse(parser, ["-o", "value", "argument"]);
     assert.ok(result.success);
@@ -1908,11 +1913,15 @@ describe("merge", () => {
     const parser = merge(stringOptions, numberOptions, booleanOptions);
 
     const result = parse(parser, [
-      "-n", "test",
-      "-p", "8080",
+      "-n",
+      "test",
+      "-p",
+      "8080",
       "-v",
-      "-c", "5",
-      "-t", "My Title",
+      "-c",
+      "5",
+      "-t",
+      "My Title",
       "-d",
     ]);
     assert.ok(result.success);
@@ -2035,12 +2044,12 @@ describe("merge", () => {
   it("should work in or() combinations", () => {
     const basicMode = merge(
       object({ basic: constant("basic") }),
-      object({ flag: option("-f") })
+      object({ flag: option("-f") }),
     );
 
     const advancedMode = merge(
       object({ advanced: constant("advanced") }),
-      object({ value: option("-v", integer()) })
+      object({ value: option("-v", integer()) }),
     );
 
     const parser = or(basicMode, advancedMode);
@@ -2083,12 +2092,17 @@ describe("merge", () => {
     const parser = merge(serverOptions, logOptions, authOptions);
 
     const result = parse(parser, [
-      "-p", "8080",
-      "-h", "localhost",
+      "-p",
+      "8080",
+      "-h",
+      "localhost",
       "-v",
-      "-l", "app.log",
-      "-t", "secret123",
-      "-u", "admin",
+      "-l",
+      "app.log",
+      "-t",
+      "secret123",
+      "-u",
+      "admin",
     ]);
     assert.ok(result.success);
     if (result.success) {
@@ -2243,9 +2257,12 @@ describe("merge", () => {
     const parser = merge(single, multipleFields);
 
     const result = parse(parser, [
-      "-n", "MyApp",
-      "-t", "dev",
-      "-t", "webapp",
+      "-n",
+      "MyApp",
+      "-t",
+      "dev",
+      "-t",
+      "webapp",
       "file1.txt",
       "file2.txt",
     ]);
@@ -2756,5 +2773,416 @@ describe("Integration tests", () => {
     assert.ok(!result3.success);
     // This should fail because parserB requires both -t option AND an argument
     // but we're only providing the option
+  });
+});
+
+describe("command", () => {
+  it("should create a parser that matches a subcommand and applies inner parser", () => {
+    const showParser = command(
+      "show",
+      object({
+        type: constant("show" as const),
+        progress: option("-p", "--progress"),
+        id: argument(string()),
+      }),
+    );
+
+    assert.equal(showParser.priority, 15);
+    assert.equal(showParser.initialState, undefined);
+  });
+
+  it("should parse a basic subcommand with arguments", () => {
+    const showParser = command(
+      "show",
+      object({
+        type: constant("show" as const),
+        progress: option("-p", "--progress"),
+        id: argument(string()),
+      }),
+    );
+
+    const result = parse(showParser, ["show", "--progress", "item123"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.type, "show");
+      assert.equal(result.value.progress, true);
+      assert.equal(result.value.id, "item123");
+    }
+  });
+
+  it("should fail when wrong subcommand is provided", () => {
+    const showParser = command(
+      "show",
+      object({
+        type: constant("show" as const),
+        id: argument(string()),
+      }),
+    );
+
+    const result = parse(showParser, ["edit", "item123"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Expected command `show`");
+    }
+  });
+
+  it("should fail when subcommand is provided but required arguments are missing", () => {
+    const editParser = command(
+      "edit",
+      object({
+        type: constant("edit" as const),
+        id: argument(string()),
+      }),
+    );
+
+    const result = parse(editParser, ["edit"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "too few arguments");
+    }
+  });
+
+  it("should handle optional options in subcommands", () => {
+    const editParser = command(
+      "edit",
+      object({
+        type: constant("edit" as const),
+        editor: optional(option("-e", "--editor", string())),
+        id: argument(string()),
+      }),
+    );
+
+    // Test with optional option
+    const result1 = parse(editParser, ["edit", "-e", "vim", "item123"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.type, "edit");
+      assert.equal(result1.value.editor, "vim");
+      assert.equal(result1.value.id, "item123");
+    }
+
+    // Test without optional option
+    const result2 = parse(editParser, ["edit", "item456"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.type, "edit");
+      assert.equal(result2.value.editor, undefined);
+      assert.equal(result2.value.id, "item456");
+    }
+  });
+
+  it("should work with or() combinator for multiple subcommands", () => {
+    const parser = or(
+      command(
+        "show",
+        object({
+          type: constant("show" as const),
+          progress: option("-p", "--progress"),
+          id: argument(string()),
+        }),
+      ),
+      command(
+        "edit",
+        object({
+          type: constant("edit" as const),
+          editor: optional(option("-e", "--editor", string())),
+          id: argument(string()),
+        }),
+      ),
+    );
+
+    // Test show command
+    const showResult = parse(parser, ["show", "--progress", "item123"]);
+    assert.ok(showResult.success);
+    if (showResult.success) {
+      assert.equal(showResult.value.type, "show");
+      assert.equal(showResult.value.progress, true);
+      assert.equal(showResult.value.id, "item123");
+    }
+
+    // Test edit command
+    const editResult = parse(parser, ["edit", "-e", "vim", "item456"]);
+    assert.ok(editResult.success);
+    if (editResult.success) {
+      assert.equal(editResult.value.type, "edit");
+      assert.equal(editResult.value.editor, "vim");
+      assert.equal(editResult.value.id, "item456");
+    }
+  });
+
+  it("should fail gracefully when no matching subcommand is found in or() combinator", () => {
+    const parser = or(
+      command(
+        "show",
+        object({
+          type: constant("show" as const),
+          id: argument(string()),
+        }),
+      ),
+      command(
+        "edit",
+        object({
+          type: constant("edit" as const),
+          id: argument(string()),
+        }),
+      ),
+    );
+
+    const result = parse(parser, ["delete", "item123"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "No parser matched");
+    }
+  });
+
+  it("should handle empty input", () => {
+    const showParser = command(
+      "show",
+      object({
+        type: constant("show" as const),
+        id: argument(string()),
+      }),
+    );
+
+    const result = parse(showParser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "end of input");
+    }
+  });
+
+  it("should provide correct type inference with InferValue", () => {
+    // Test case from user's example: or() of commands should produce union types
+    const parser = or(
+      command(
+        "show",
+        object({
+          type: constant("show" as const),
+          progress: option("-p", "--progress"),
+          id: argument(string()),
+        }),
+      ),
+      command(
+        "edit",
+        object({
+          type: constant("edit" as const),
+          editor: optional(option("-e", "--editor", string())),
+          id: argument(string()),
+        }),
+      ),
+    );
+
+    // Type assertion test: this should compile without errors
+    type ParserType = InferValue<typeof parser>;
+
+    // Test that the inferred type is a union of the two command types
+    const showResult = parse(parser, ["show", "--progress", "item123"]);
+    const editResult = parse(parser, ["edit", "-e", "vim", "item456"]);
+
+    if (showResult.success) {
+      // These assertions verify runtime behavior matches type expectations
+      const _typeCheck1: ParserType = showResult.value;
+      assert.equal(showResult.value.type, "show");
+      assert.equal(showResult.value.progress, true);
+      assert.equal(showResult.value.id, "item123");
+    }
+
+    if (editResult.success) {
+      // These assertions verify runtime behavior matches type expectations
+      const _typeCheck2: ParserType = editResult.value;
+      assert.equal(editResult.value.type, "edit");
+      assert.equal(editResult.value.editor, "vim");
+      assert.equal(editResult.value.id, "item456");
+    }
+
+    // Verify both parsed successfully
+    assert.ok(showResult.success);
+    assert.ok(editResult.success);
+  });
+
+  it("should maintain type safety with complex nested objects", () => {
+    const complexParser = command(
+      "deploy",
+      object({
+        type: constant("deploy" as const),
+        config: object({
+          env: option("-e", "--env", string()),
+          dryRun: option("--dry-run"),
+        }),
+        targets: multiple(argument(string()), { min: 1 }),
+      }),
+    );
+
+    type ComplexType = InferValue<typeof complexParser>;
+
+    const result = parse(complexParser, [
+      "deploy",
+      "--env",
+      "production",
+      "--dry-run",
+      "web",
+      "api",
+    ]);
+    assert.ok(result.success);
+
+    if (result.success) {
+      // Type check - this should compile
+      const _typeCheck: ComplexType = result.value;
+
+      // Runtime verification
+      assert.equal(result.value.type, "deploy");
+      assert.equal(result.value.config.env, "production");
+      assert.equal(result.value.config.dryRun, true);
+      assert.deepEqual(result.value.targets, ["web", "api"]);
+    }
+  });
+
+  // Edge case tests
+  it("should handle commands with same prefix names", () => {
+    const parser = or(
+      command(
+        "test",
+        object({
+          type: constant("test" as const),
+          id: argument(string()),
+        }),
+      ),
+      command(
+        "testing",
+        object({
+          type: constant("testing" as const),
+          id: argument(string()),
+        }),
+      ),
+    );
+
+    // Should match "test" exactly, not "testing"
+    const result1 = parse(parser, ["test", "item123"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.type, "test");
+    }
+
+    // Should match "testing" exactly
+    const result2 = parse(parser, ["testing", "item456"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.type, "testing");
+    }
+  });
+
+  it("should handle commands that look like options", () => {
+    const parser = command(
+      "--help",
+      object({
+        type: constant("help" as const),
+      }),
+    );
+
+    const result = parse(parser, ["--help"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.type, "help");
+    }
+  });
+
+  it("should handle command with array-like TState (state type safety test)", () => {
+    // Test our CommandState type safety with arrays
+    const multiParser = command("multi", multiple(option("-v", "--verbose")));
+
+    const result1 = parse(multiParser, ["multi", "-v", "-v"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.deepEqual(result1.value, [true, true]);
+    }
+
+    const result2 = parse(multiParser, ["multi"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.deepEqual(result2.value, []);
+    }
+  });
+
+  it("should handle nested commands (command within object parser)", () => {
+    // This tests the interaction between command and other parsers
+    const nestedParser = object({
+      globalFlag: option("--global"),
+      cmd: command(
+        "run",
+        object({
+          type: constant("run" as const),
+          script: argument(string()),
+        }),
+      ),
+    });
+
+    const result = parse(nestedParser, ["--global", "run", "build"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.globalFlag, true);
+      assert.equal(result.value.cmd.type, "run");
+      assert.equal(result.value.cmd.script, "build");
+    }
+  });
+
+  it("should fail when command is used with tuple parser and insufficient elements", () => {
+    const tupleParser = tuple([
+      command("start", constant("start" as const)),
+      argument(string()),
+    ]);
+
+    const result = parse(tupleParser, ["start"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "too few arguments");
+    }
+  });
+
+  it("should handle options terminator with commands", () => {
+    const parser = command(
+      "exec",
+      object({
+        type: constant("exec" as const),
+        args: multiple(argument(string())),
+      }),
+    );
+
+    // Test with -- to terminate options parsing
+    const result = parse(parser, ["exec", "--", "--not-an-option", "arg1"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.type, "exec");
+      assert.deepEqual(result.value.args, ["--not-an-option", "arg1"]);
+    }
+  });
+
+  it("should handle commands with numeric names", () => {
+    const parser = or(
+      command("v1", constant("version1" as const)),
+      command("v2", constant("version2" as const)),
+    );
+
+    const result1 = parse(parser, ["v1"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value, "version1");
+    }
+
+    const result2 = parse(parser, ["v2"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value, "version2");
+    }
+  });
+
+  it("should handle empty command name gracefully", () => {
+    // This is a bit of an edge case, but should not crash
+    const parser = command("", constant("empty" as const));
+
+    const result = parse(parser, [""]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "empty");
+    }
   });
 });

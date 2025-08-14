@@ -27,8 +27,8 @@ Core concepts
 Optique is built around three fundamental concepts: value parsers that convert
 strings to typed values, option parsers that handle command-line flags and
 their arguments, and combinators like `or()`, `object()`, `tuple()`,
-`optional()`, and `multiple()` that compose parsers into sophisticated
-argument structures.
+`optional()`, `multiple()`, and `command()` that compose parsers into
+sophisticated argument structures including git-like subcommand interfaces.
 
 The library automatically infers the result type of your parser composition,
 ensuring that your parsed CLI arguments are fully typed without manual type
@@ -75,7 +75,10 @@ const parser = or(
     }),
   ),
   object("Client mode", {
-    connect: option("-c", "--connect", url({ protocols: ["http", "https"] })),
+    connect: option(
+       "-c", "--connect",
+       url({ allowedProtocols: ["http:", "https:"] }),
+    ),
     headers: multiple(option("-H", "--header", string())),
     timeout: optional(option("-t", "--timeout", integer({ min: 0 }))),
     files: multiple(argument(string({ metavar: "FILE" })), { min: 1, max: 5 }),
@@ -140,6 +143,7 @@ Optique provides several powerful combinators for composing parsers:
  -  **`or()`**: Creates mutually exclusive alternatives
     (try first, then second, etc.)
  -  **`tuple()`**: Combines multiple parsers into a tuple with preserved order
+ -  **`command()`**: Matches subcommands for `git`-like CLI interfaces
 
 ### Modifying combinators
 
@@ -220,5 +224,151 @@ This approach promotes:
 The `multiple()` combinator is especially powerful when combined with `object()`
 parsers, as it provides empty arrays as defaults when no matches are found,
 allowing for clean optional repeated arguments.
+
+### Quick subcommand example
+
+For a quick introduction to subcommands, here's a simple `git`-like interface:
+
+~~~~ typescript
+import { argument, command, constant, object, option, or, parse } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+
+const parser = or(
+  command("add", object({
+    type: constant("add"),
+    all: option("-A", "--all"),
+    file: argument(string()),
+  })),
+  command("commit", object({
+    type: constant("commit"),
+    message: option("-m", "--message", string()),
+    amend: option("--amend"),
+  })),
+);
+
+const result = parse(parser, ["commit", "-m", "Fix parser bug"]);
+// result.value.type === "commit"
+// result.value.message === "Fix parser bug"
+// result.value.amend === false
+~~~~
+
+### Subcommands
+
+The `command()` combinator enables building git-like CLI interfaces with
+subcommands. Each subcommand can have its own set of options and arguments:
+
+~~~~ typescript
+import {
+  argument,
+  command,
+  constant,
+  object,
+  option,
+  optional,
+  or,
+  parse,
+} from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+
+const parser = or(
+  command("show", object({
+    type: constant("show"),
+    progress: option("-p", "--progress"),
+    verbose: optional(option("-v", "--verbose")),
+    id: argument(string({ metavar: "ITEM_ID" })),
+  })),
+  command("edit", object({
+    type: constant("edit"),
+    editor: optional(option("-e", "--editor", string({ metavar: "EDITOR" }))),
+    backup: option("-b", "--backup"),
+    id: argument(string({ metavar: "ITEM_ID" })),
+  })),
+  command("delete", object({
+    type: constant("delete"),
+    force: option("-f", "--force"),
+    recursive: optional(option("-r", "--recursive")),
+    items: multiple(argument(string({ metavar: "ITEM_ID" })), { min: 1 }),
+  })),
+);
+
+const result = parse(parser, process.argv.slice(2));
+
+if (result.success) {
+  // TypeScript infers a union type with discriminated subcommands
+  switch (result.value.type) {
+    case "show":
+      console.log(`Showing item: ${result.value.id}`);
+      if (result.value.progress) console.log("Progress enabled");
+      if (result.value.verbose) console.log("Verbose mode enabled");
+      break;
+    case "edit":
+      console.log(`Editing item: ${result.value.id}`);
+      if (result.value.editor) console.log(`Using editor: ${result.value.editor}`);
+      if (result.value.backup) console.log("Backup enabled");
+      break;
+    case "delete":
+      console.log(`Deleting items: ${result.value.items.join(", ")}`);
+      if (result.value.force) console.log("Force delete enabled");
+      if (result.value.recursive) console.log("Recursive delete enabled");
+      break;
+  }
+}
+~~~~
+
+This example demonstrates:
+
+ -  *Subcommand routing*: `command("show", ...)` matches the first argument
+    and applies the inner parser to remaining arguments
+ -  *Type discrimination*: Using `constant()` with unique values enables
+    TypeScript to discriminate between subcommand types
+ -  *Per-subcommand options*: Each subcommand can have its own unique set
+    of options and arguments
+ -  *Complex arguments*: The `delete` command shows multiple required arguments
+
+Example usage:
+
+~~~~ bash
+# Show command with options
+$ myapp show --progress --verbose item123
+
+# Edit command with optional editor
+$ myapp edit --editor vim --backup item456
+
+# Delete command with multiple items
+$ myapp delete --force item1 item2 item3
+~~~~
+
+### Advanced subcommand patterns
+
+You can also combine subcommands with global options using `object()`:
+
+~~~~ typescript
+const parser = object({
+  // Global options available to all subcommands
+  debug: optional(option("--debug")),
+  config: optional(option("-c", "--config", string())),
+
+  // Subcommand with its own options
+  command: or(
+    command("server", object({
+      type: constant("server" as const),
+      port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+      daemon: option("-d", "--daemon"),
+    })),
+    command("client", object({
+      type: constant("client" as const),
+      connect: option("--connect", url()),
+      timeout: optional(option("-t", "--timeout", integer())),
+    })),
+  ),
+});
+~~~~
+
+This allows for commands like:
+
+~~~~ bash
+$ myapp --debug --config app.json server --port 8080 --daemon
+$ myapp client --connect http://localhost:8080 --timeout 5000
+~~~~
 
 <!-- cSpell: ignore optparse -->

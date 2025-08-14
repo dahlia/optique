@@ -19,7 +19,8 @@ export type ErrorMessageTerm =
   }
   /**
    * An option name term in the error message, which can be a single
-   * option name.
+   * option name.  Although it is named option name, it can also
+   * represent a subcommand.
    */
   | {
     /**
@@ -31,21 +32,6 @@ export type ErrorMessageTerm =
      * For example, `"-f"` or `"--foo"`.
      */
     optionName: string;
-  }
-  /**
-   * A metavariable term in the error message, which can be a single
-   * metavariable.
-   */
-  | {
-    /**
-     * The type of the term, which is `"metavar"` for a metavariable.
-     */
-    type: "metavar";
-    /**
-     * The metavariable name, which is a string that represents
-     * a variable in the error message.  For example, `"VALUE"` or `"ARG"`.
-     */
-    metavar: string;
   }
   /**
    * A list of option names term in the error message, which can be a
@@ -62,6 +48,21 @@ export type ErrorMessageTerm =
      * option names.  For example, `["--foo", "--bar"]`.
      */
     optionNames: readonly string[];
+  }
+  /**
+   * A metavariable term in the error message, which can be a single
+   * metavariable.
+   */
+  | {
+    /**
+     * The type of the term, which is `"metavar"` for a metavariable.
+     */
+    type: "metavar";
+    /**
+     * The metavariable name, which is a string that represents
+     * a variable in the error message.  For example, `"VALUE"` or `"ARG"`.
+     */
+    metavar: string;
   }
   /**
    * A value term in the error message, which can be a single value.

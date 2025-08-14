@@ -1451,6 +1451,127 @@ export function merge(
 }
 
 /**
+ * The state type for the {@link command} parser.
+ * @template TState The type of the inner parser's state.
+ */
+export type CommandState<TState> =
+  | undefined // Command not yet matched
+  | ["matched", string] // Command matched but inner parser not started
+  | ["parsing", TState]; // Command matched and inner parser active
+
+/**
+ * Creates a parser that matches a specific subcommand name and then applies
+ * an inner parser to the remaining arguments.
+ * This is useful for building CLI tools with subcommands like git, npm, etc.
+ * @template T The type of the value returned by the inner parser.
+ * @template TState The type of the state used by the inner parser.
+ * @param name The subcommand name to match (e.g., "show", "edit").
+ * @param parser The {@link Parser} to apply after the command is matched.
+ * @returns A {@link Parser} that matches the command name and delegates
+ *          to the inner parser for the remaining arguments.
+ */
+export function command<T, TState>(
+  name: string,
+  parser: Parser<T, TState>,
+): Parser<T, CommandState<TState>> {
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: 15, // Higher than options to match commands first
+    initialState: undefined,
+    parse(context) {
+      // Handle different states
+      if (context.state === undefined) {
+        // Check if buffer starts with our command name
+        if (context.buffer.length < 1 || context.buffer[0] !== name) {
+          return {
+            success: false,
+            consumed: 0,
+            error: message`Expected command ${eOptionName(name)}, but got ${
+              context.buffer.length > 0 ? context.buffer[0] : "end of input"
+            }.`,
+          };
+        }
+        // Command matched, consume it and move to "matched" state
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: ["matched", name] as ["matched", string],
+          },
+          consumed: context.buffer.slice(0, 1),
+        };
+      } else if (context.state[0] === "matched") {
+        // Command was matched, now start the inner parser
+        const result = parser.parse({
+          ...context,
+          state: parser.initialState,
+        });
+        if (result.success) {
+          return {
+            success: true,
+            next: {
+              ...result.next,
+              state: ["parsing", result.next.state] as ["parsing", TState],
+            },
+            consumed: result.consumed,
+          };
+        }
+        return result;
+      } else if (context.state[0] === "parsing") {
+        // Delegate to inner parser
+        const result = parser.parse({
+          ...context,
+          state: context.state[1],
+        });
+        if (result.success) {
+          return {
+            success: true,
+            next: {
+              ...result.next,
+              state: ["parsing", result.next.state] as ["parsing", TState],
+            },
+            consumed: result.consumed,
+          };
+        }
+        return result;
+      }
+      // Should never reach here
+      return {
+        success: false,
+        consumed: 0,
+        error: message`Invalid command state.`,
+      };
+    },
+    complete(state) {
+      if (state === undefined) {
+        return {
+          success: false,
+          error: message`Command ${eOptionName(name)} was not matched.`,
+        };
+      } else if (state[0] === "matched") {
+        // Command matched but inner parser never started, try to complete with initial state
+        return parser.complete(parser.initialState);
+      } else if (state[0] === "parsing") {
+        // Delegate to inner parser
+        return parser.complete(state[1]);
+      }
+      // Should never reach here
+      return {
+        success: false,
+        error: message`Invalid command state during completion.`,
+      };
+    },
+    [Symbol.for("Deno.customInspect")]() {
+      return `command(${JSON.stringify(name)})`;
+    },
+  } satisfies
+    & Parser<T, CommandState<TState>>
+    & Record<symbol, unknown>;
+}
+
+/**
  * Infers the result value type of a {@link Parser}.
  * @template T The {@link Parser} to infer the result value type from.
  */
