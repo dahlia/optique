@@ -6,10 +6,17 @@ Optique: Type-safe combinatorial CLI parser for TypeScript
 > and is not yet ready for production use.  The API is subject to change,
 > and there may be bugs or missing features.
 
-Optique is a modern command-line interface parser inspired by
-Haskell's [optparse-applicative] and TypeScript's [Zod].  It allows you to
-build complex CLI interfaces using composable parsers with full type safety
-and automatic type inference.
+Optique is a type-safe combinatorial CLI *parser* for TypeScript inspired by
+Haskell's [optparse-applicative] and TypeScript's [Zod]. It provides composable
+parsers for building command-line interfaces with full type safety and
+automatic type inference.
+
+> [!NOTE]
+> Optique is a parsing library that focuses on extracting and
+> validating command-line arguments.  It doesn't dictate your application's
+> structure, handle command execution, or provide scaffolding—it simply
+> transforms command-line input into well-typed data structures that your
+> application can use.
 
 Unlike traditional CLI parsers that rely on configuration objects or
 string-based definitions, Optique uses a functional approach where parsers
