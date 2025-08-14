@@ -24,11 +24,27 @@ while maintaining complete type safety throughout your application.
 Core concepts
 -------------
 
-Optique is built around three fundamental concepts: value parsers that convert
-strings to typed values, option parsers that handle command-line flags and
-their arguments, and combinators like `or()`, `object()`, `tuple()`,
-`optional()`, `multiple()`, and `command()` that compose parsers into
-sophisticated argument structures including git-like subcommand interfaces.
+Optique is built around several key concepts:
+
+ -  *Value parsers* convert strings to typed values
+    (`string()`, `integer()`, `url()`, etc.)
+
+ -  *Primitive parsers* handle the basic building blocks:
+
+     -  `option()` for command-line flags and their arguments
+     -  `argument()` for positional arguments
+     -  `command()` for subcommands
+
+ -   *Modifying combinators* transform and combine parsers:
+     -  `optional()` makes parsers optional
+     -  `multiple()` allows repetition
+     -  `or()` creates alternatives
+     -  `merge()` combines object parsers
+
+- *Construct combinators* build structured results:
+
+     -  `object()` groups parsers into objects
+     -  `tuple()` combines parsers into tuples
 
 The library automatically infers the result type of your parser composition,
 ensuring that your parsed CLI arguments are fully typed without manual type
@@ -133,17 +149,28 @@ All with full type safety and automatic inference!
 Parser combinators
 ------------------
 
-Optique provides several powerful combinators for composing parsers:
+Optique provides several types of parsers and combinators for building sophisticated CLI interfaces:
 
-### Core combinators
+### Primitive parsers
 
- -  **`object()`**: Combines multiple parsers into a structured object
- -  **`merge()`**: Merges multiple `object()` parsers into a single parser,
-    enabling modular composition of option groups
- -  **`or()`**: Creates mutually exclusive alternatives
-    (try first, then second, etc.)
- -  **`tuple()`**: Combines multiple parsers into a tuple with preserved order
+ -  **`option()`**: Handles command-line flags and their arguments
+
+    ~~~~ typescript
+    option("-p", "--port", integer({ min: 1, max: 65535 }))
+    option("-v", "--verbose")  // Boolean flag
+    ~~~~
+
+ -  **`argument()`**: Handles positional arguments
+
+    ~~~~ typescript
+    argument(string({ metavar: "FILE" }))
+    ~~~~
+
  -  **`command()`**: Matches subcommands for `git`-like CLI interfaces
+
+    ~~~~ typescript
+    command("add", object({ file: argument(string()) }))
+    ~~~~
 
 ### Modifying combinators
 
@@ -166,6 +193,43 @@ Optique provides several powerful combinators for composing parsers:
       // 1-3 input files required
       files: multiple(argument(string()), { min: 1, max: 3 }),
     });
+    ~~~~
+
+ -  **`or()`**: Creates mutually exclusive alternatives
+    (try first, then second, etc.)
+
+    ~~~~ typescript
+    or(
+      command("add", addParser),
+      command("remove", removeParser)
+    )
+    ~~~~
+
+ -  **`merge()`**: Merges multiple `object()` parsers into a single parser,
+    enabling modular composition of option groups
+
+    ~~~~ typescript
+    merge(networkOptions, loggingOptions, serverOptions)
+    ~~~~
+
+### Construct combinators
+
+ -  **`object()`**: Combines multiple parsers into a structured object
+
+    ~~~~ typescript
+    object("Server", {
+      port: option("-p", "--port", integer()),
+      host: option("-h", "--host", string()),
+    })
+    ~~~~
+
+ -  **`tuple()`**: Combines multiple parsers into a tuple with preserved order
+
+    ~~~~ typescript
+    tuple(
+      option("-u", "--user", string()),
+      option("-p", "--port", integer())
+    )
     ~~~~
 
 ### Advanced patterns
