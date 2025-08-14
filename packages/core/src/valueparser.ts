@@ -1,4 +1,4 @@
-import { type ErrorMessage, message, text } from "./error.ts";
+import { type ErrorMessage, message, text, values } from "./error.ts";
 
 /**
  * Interface for parsing CLI option values and arguments.
@@ -545,6 +545,97 @@ export function locale(options: LocaleOptions = {}): ValueParser<Intl.Locale> {
         throw e;
       }
       return { success: true, value: locale };
+    },
+  };
+}
+
+/**
+ * Type representing a UUID string.
+ *
+ * A UUID is a 36-character string in the format:
+ * `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+ * where each `x` is a hexadecimal digit.
+ */
+export type Uuid = `${string}-${string}-${string}-${string}-${string}`;
+
+/**
+ * Options for creating a {@link uuid} parser.
+ */
+export interface UuidOptions {
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `UUID` or `ID`.
+   * @default `"UUID"`
+   */
+  readonly metavar?: string;
+
+  /**
+   * List of allowed UUID versions (e.g., `[4, 5]` for UUIDs version 4 and 5).
+   * If specified, the parser will validate that the UUID matches one of the
+   * allowed versions. If not specified, any valid UUID format is accepted.
+   */
+  readonly allowedVersions?: readonly number[];
+}
+
+/**
+ * Creates a {@link ValueParser} for UUID values.
+ *
+ * This parser validates that the input is a well-formed UUID string in the
+ * standard format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` where each `x`
+ * is a hexadecimal digit.  The parser can optionally restrict to specific
+ * UUID versions.
+ *
+ * @param options Configuration options for the UUID parser.
+ * @returns A {@link ValueParser} that converts string input to {@link Uuid}
+ *          strings.
+ */
+export function uuid(options: UuidOptions = {}): ValueParser<Uuid> {
+  // UUID regex pattern: 8-4-4-4-12 hex digits with dashes
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  return {
+    metavar: options.metavar ?? "UUID",
+    parse(input: string): ValueParserResult<Uuid> {
+      if (!uuidRegex.test(input)) {
+        return {
+          success: false,
+          error:
+            message`Expected a valid UUID in format ${"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}, but got ${input}.`,
+        };
+      }
+
+      // Check version if specified
+      if (
+        options.allowedVersions != null && options.allowedVersions.length > 0
+      ) {
+        // Extract version from the first character of the third group
+        const versionChar = input.charAt(14); // Position of version digit
+        const version = parseInt(versionChar, 16);
+
+        if (!options.allowedVersions.includes(version)) {
+          let expectedVersions = message``;
+          let i = 0;
+          for (const v of options.allowedVersions) {
+            expectedVersions = i < 1
+              ? message`${expectedVersions}${v.toLocaleString("en")}`
+              : i + 1 >= options.allowedVersions.length
+              ? message`${expectedVersions}, or ${v.toLocaleString("en")}`
+              : message`${expectedVersions}, ${v.toLocaleString("en")}`;
+            i++;
+          }
+          return {
+            success: false,
+            error:
+              message`Expected UUID version ${expectedVersions}, but got version ${
+                version.toLocaleString("en")
+              }.`,
+          };
+        }
+      }
+
+      return { success: true, value: input as Uuid };
     },
   };
 }

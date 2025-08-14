@@ -10,7 +10,9 @@
       "Bash(deno check:*)",
       "Bash(deno lint:*)",
       "Bash(deno task:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "WebSearch",
+      "WebFetch(domain:en.wikipedia.org)"
     ],
     "deny": []
   }

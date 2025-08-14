@@ -1,5 +1,12 @@
 import { type ErrorMessage, formatErrorMessage } from "@optique/core/error";
-import { choice, float, integer, locale, url } from "@optique/core/valueparser";
+import {
+  choice,
+  float,
+  integer,
+  locale,
+  url,
+  uuid,
+} from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -2244,6 +2251,338 @@ describe("locale", () => {
           }
         }
       }
+    });
+  });
+});
+
+describe("uuid", () => {
+  describe("basic parsing", () => {
+    it("should parse valid UUID strings", () => {
+      const parser = uuid({});
+
+      const result1 = parser.parse("550e8400-e29b-41d4-a716-446655440000");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "550e8400-e29b-41d4-a716-446655440000");
+        assert.equal(typeof result1.value, "string");
+      }
+
+      const result2 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+      }
+
+      const result3 = parser.parse("6ba7b811-9dad-11d1-80b4-00c04fd430c8");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, "6ba7b811-9dad-11d1-80b4-00c04fd430c8");
+      }
+    });
+
+    it("should parse UUIDs with uppercase letters", () => {
+      const parser = uuid({});
+
+      const result1 = parser.parse("550E8400-E29B-41D4-A716-446655440000");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "550E8400-E29B-41D4-A716-446655440000");
+      }
+
+      const result2 = parser.parse("6BA7B810-9DAD-11D1-80B4-00C04FD430C8");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "6BA7B810-9DAD-11D1-80B4-00C04FD430C8");
+      }
+    });
+
+    it("should parse UUIDs with mixed case", () => {
+      const parser = uuid({});
+
+      const result = parser.parse("550e8400-E29B-41d4-A716-446655440000");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "550e8400-E29B-41d4-A716-446655440000");
+      }
+    });
+
+    it("should reject invalid UUID strings", () => {
+      const parser = uuid({});
+
+      const invalidUuids = [
+        "not-a-uuid",
+        "550e8400-e29b-41d4-a716", // too short
+        "550e8400-e29b-41d4-a716-446655440000-extra", // too long
+        "550e8400-e29b-41d4-a716-44665544000g", // invalid character 'g'
+        "550e8400e29b41d4a716446655440000", // missing dashes
+        "550e8400-e29b-41d4-a716-4466554400000", // extra character
+        "", // empty string
+        "   ", // whitespace only
+        "550e8400-e29b-41d4-a716-44665544000", // one character short
+        "550e8400-e29b-41d4-a71-446655440000", // wrong segment length
+      ];
+
+      for (const invalidUuid of invalidUuids) {
+        const result = parser.parse(invalidUuid);
+        assert.ok(
+          !result.success,
+          `Should reject invalid UUID: ${invalidUuid}`,
+        );
+        if (!result.success) {
+          assert.equal(typeof result.error, "object");
+        }
+      }
+    });
+
+    it("should reject UUIDs with wrong format", () => {
+      const parser = uuid({});
+
+      const wrongFormats = [
+        "550e8400_e29b_41d4_a716_446655440000", // underscores instead of dashes
+        "550e8400:e29b:41d4:a716:446655440000", // colons instead of dashes
+        "{550e8400-e29b-41d4-a716-446655440000}", // wrapped in braces
+        "(550e8400-e29b-41d4-a716-446655440000)", // wrapped in parentheses
+        "550e8400-e29b-41d4-a716-446655440000 ", // trailing space
+        " 550e8400-e29b-41d4-a716-446655440000", // leading space
+      ];
+
+      for (const wrongFormat of wrongFormats) {
+        const result = parser.parse(wrongFormat);
+        assert.ok(
+          !result.success,
+          `Should reject wrong format: ${wrongFormat}`,
+        );
+        if (!result.success) {
+          assert.equal(typeof result.error, "object");
+        }
+      }
+    });
+  });
+
+  describe("version validation", () => {
+    it("should allow specific versions when specified", () => {
+      const parser = uuid({ allowedVersions: [4] });
+
+      // UUID v4 (random)
+      const result1 = parser.parse("550e8400-e29b-41d4-a716-446655440000");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "550e8400-e29b-41d4-a716-446655440000");
+      }
+
+      const result2 = parser.parse("f47ac10b-58cc-4372-a567-0e02b2c3d479");
+      assert.ok(result2.success);
+    });
+
+    it("should reject versions not in allowed list", () => {
+      const parser = uuid({ allowedVersions: [4] });
+
+      // UUID v1 (time-based)
+      const result1 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+      assert.ok(!result1.success);
+      if (!result1.success) {
+        assert.equal(typeof result1.error, "object");
+        assertErrorContains(result1.error, '"4"');
+        assertErrorContains(result1.error, 'got version "1"');
+      }
+
+      // UUID v5 (name-based with SHA-1)
+      const result2 = parser.parse("6ba7b815-9dad-51d1-80b4-00c04fd430c8");
+      assert.ok(!result2.success);
+      if (!result2.success) {
+        assertErrorContains(result2.error, '"4"');
+        assertErrorContains(result2.error, 'got version "5"');
+      }
+    });
+
+    it("should allow multiple versions", () => {
+      const parser = uuid({ allowedVersions: [1, 4, 5] });
+
+      // UUID v1
+      const result1 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+      assert.ok(result1.success);
+
+      // UUID v4
+      const result2 = parser.parse("550e8400-e29b-41d4-a716-446655440000");
+      assert.ok(result2.success);
+
+      // UUID v5
+      const result3 = parser.parse("6ba7b815-9dad-51d1-80b4-00c04fd430c8");
+      assert.ok(result3.success);
+
+      // UUID v3 should be rejected
+      const result4 = parser.parse("6ba7b813-9dad-31d1-80b4-00c04fd430c8");
+      assert.ok(!result4.success);
+      if (!result4.success) {
+        assertErrorContains(result4.error, ', or "5"');
+        assertErrorContains(result4.error, 'got version "3"');
+      }
+    });
+
+    it("should accept any version when allowedVersions is not specified", () => {
+      const parser = uuid({});
+
+      const versions = [
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8", // v1
+        "6ba7b812-9dad-21d1-80b4-00c04fd430c8", // v2
+        "6ba7b813-9dad-31d1-80b4-00c04fd430c8", // v3
+        "6ba7b814-9dad-41d1-80b4-00c04fd430c8", // v4
+        "6ba7b815-9dad-51d1-80b4-00c04fd430c8", // v5
+      ];
+
+      for (const uuid of versions) {
+        const result = parser.parse(uuid);
+        assert.ok(result.success, `Should accept any version: ${uuid}`);
+      }
+    });
+
+    it("should accept any version when allowedVersions is empty", () => {
+      const parser = uuid({ allowedVersions: [] });
+
+      const result = parser.parse("6ba7b814-9dad-11d1-80b4-00c04fd430c8");
+      assert.ok(result.success);
+    });
+  });
+
+  describe("real-world UUID examples", () => {
+    it("should parse common UUID formats", () => {
+      const parser = uuid({});
+
+      const realWorldUuids = [
+        "00000000-0000-0000-0000-000000000000", // nil UUID
+        "550e8400-e29b-41d4-a716-446655440000", // example UUID
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8", // namespace DNS
+        "6ba7b811-9dad-11d1-80b4-00c04fd430c8", // namespace URL
+        "6ba7b812-9dad-11d1-80b4-00c04fd430c8", // namespace OID
+        "6ba7b814-9dad-11d1-80b4-00c04fd430c8", // namespace X.500
+        "f47ac10b-58cc-4372-a567-0e02b2c3d479", // random v4
+        "886313e1-3b8a-5372-9b90-0c9aee199e5d", // v5 example
+      ];
+
+      for (const uuid of realWorldUuids) {
+        const result = parser.parse(uuid);
+        assert.ok(result.success, `Should parse real-world UUID: ${uuid}`);
+        if (result.success) {
+          assert.equal(result.value, uuid);
+        }
+      }
+    });
+
+    it("should handle database-generated UUIDs", () => {
+      const parser = uuid({});
+
+      // Simulate UUIDs that might come from different databases/systems
+      const dbUuids = [
+        "01234567-89ab-cdef-0123-456789abcdef", // all hex digits
+        "fedcba98-7654-3210-fedc-ba9876543210", // reverse pattern
+        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", // repeating patterns
+        "12345678-1234-1234-1234-123456789012", // repeating sequences
+      ];
+
+      for (const uuid of dbUuids) {
+        const result = parser.parse(uuid);
+        assert.ok(result.success, `Should parse database UUID: ${uuid}`);
+      }
+    });
+  });
+
+  describe("error messages", () => {
+    it("should provide structured error messages for invalid format", () => {
+      const parser = uuid({});
+      const result = parser.parse("not-a-uuid");
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        assertErrorContains(result.error, "not-a-uuid");
+        assertErrorContains(
+          result.error,
+          "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        );
+      }
+    });
+
+    it("should provide structured error messages for version mismatch", () => {
+      const parser = uuid({ allowedVersions: [4] });
+      const result = parser.parse("6ba7b815-9dad-51d1-80b4-00c04fd430c8"); // v5
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        assertErrorContains(result.error, '"4"');
+        assertErrorContains(result.error, 'got version "5"');
+      }
+    });
+
+    it("should provide structured error messages for multiple version requirements", () => {
+      const parser = uuid({ allowedVersions: [1, 4] });
+      const result = parser.parse("6ba7b815-9dad-51d1-80b4-00c04fd430c8"); // v5
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(typeof result.error, "object");
+        assertErrorContains(result.error, ', or "4"');
+        assertErrorContains(result.error, 'got version "5"');
+      }
+    });
+  });
+
+  describe("custom metavar", () => {
+    it("should use custom metavar when provided", () => {
+      const parser = uuid({ metavar: "ID" });
+      assert.equal(parser.metavar, "ID");
+    });
+
+    it("should use default metavar when not provided", () => {
+      const parser = uuid({});
+      assert.equal(parser.metavar, "UUID");
+    });
+
+    it("should use custom metavar with version restrictions", () => {
+      const parser = uuid({ metavar: "IDENTIFIER", allowedVersions: [4] });
+      assert.equal(parser.metavar, "IDENTIFIER");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle nil UUID", () => {
+      const parser = uuid({});
+      const result = parser.parse("00000000-0000-0000-0000-000000000000");
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "00000000-0000-0000-0000-000000000000");
+      }
+    });
+
+    it("should handle all uppercase UUID", () => {
+      const parser = uuid({});
+      const result = parser.parse("550E8400-E29B-41D4-A716-446655440000");
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "550E8400-E29B-41D4-A716-446655440000");
+      }
+    });
+
+    it("should handle version 0 (invalid but format-correct)", () => {
+      const parser = uuid({});
+      const result = parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8"); // v0
+
+      assert.ok(result.success); // Format is correct, even if version is unusual
+    });
+
+    it("should handle version validation edge cases", () => {
+      const parser = uuid({ allowedVersions: [0, 15] }); // Edge versions
+
+      const result1 = parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8"); // v0
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("6ba7b8f0-9dad-f1d1-80b4-00c04fd430c8"); // v15 (f in hex)
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"); // v1
+      assert.ok(!result3.success);
     });
   });
 });
