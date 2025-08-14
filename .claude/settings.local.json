@@ -9,7 +9,8 @@
       "Bash(deno fmt:*)",
       "Bash(deno check:*)",
       "Bash(deno lint:*)",
-      "Bash(deno task:*)"
+      "Bash(deno task:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

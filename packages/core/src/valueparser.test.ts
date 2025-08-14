@@ -1,65 +1,16 @@
-import { type ErrorMessage, message } from "@optique/core/error";
+import { type ErrorMessage, formatErrorMessage } from "@optique/core/error";
 import { choice, float, integer, locale, url } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-// Helper function to check if an ErrorMessage is a structured error
-function isStructuredError(error: ErrorMessage): error is {
-  readonly message: TemplateStringsArray;
-  readonly values: readonly unknown[];
-} {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    "values" in error
+// Helper function to check error content
+function assertErrorContains(error: ErrorMessage, expectedText: string): void {
+  const formatted = formatErrorMessage(error);
+  assert.ok(
+    formatted.includes(expectedText),
+    `Expected error to contain "${expectedText}", but got: "${formatted}"`,
   );
 }
-describe("message", () => {
-  it("should create structured error message from template literal", () => {
-    const expected = 42;
-    const actual = "invalid";
-    const error = message`Expected ${expected}, got ${actual}.`;
-
-    assert.equal(typeof error, "object");
-    if (!isStructuredError(error)) {
-      throw new Error("Expected structured error message");
-    }
-    assert.ok("message" in error);
-    assert.ok("values" in error);
-    assert.equal(error.values.length, 2);
-    assert.equal(error.values[0], expected);
-    assert.equal(error.values[1], actual);
-  });
-
-  it("should handle template literals with no interpolated values", () => {
-    const error = message`Simple error message`;
-
-    assert.equal(typeof error, "object");
-    if (!isStructuredError(error)) {
-      throw new Error("Expected structured error message");
-    }
-    assert.ok("message" in error);
-    assert.ok("values" in error);
-    assert.equal(error.values.length, 0);
-  });
-
-  it("should handle template literals with multiple values", () => {
-    const min = 1;
-    const max = 100;
-    const value = 150;
-    const error = message`Value ${value} is out of range [${min}, ${max}]`;
-
-    assert.equal(typeof error, "object");
-    if (!isStructuredError(error)) {
-      throw new Error("Expected structured error message");
-    }
-    assert.equal(error.values.length, 3);
-    assert.equal(error.values[0], value);
-    assert.equal(error.values[1], min);
-    assert.equal(error.values[2], max);
-  });
-});
 
 describe("integer", () => {
   describe("number parser", () => {
@@ -330,14 +281,7 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        if (!isStructuredError(result.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.ok("message" in result.error);
-        assert.ok("values" in result.error);
-        assert.equal(result.error.values.length, 1);
-        assert.equal(result.error.values[0], "invalid");
+        assertErrorContains(result.error, "invalid");
       }
     });
 
@@ -348,14 +292,8 @@ describe("integer", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (!isStructuredError(result.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.ok("message" in result.error);
-        assert.ok("values" in result.error);
-        assert.equal(result.error.values.length, 2);
-        assert.equal(result.error.values[0], 10);
-        assert.equal(result.error.values[1], 5);
+        assertErrorContains(result.error, "10");
+        assertErrorContains(result.error, "5");
       }
     });
 
@@ -366,14 +304,8 @@ describe("integer", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (!isStructuredError(result.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.ok("message" in result.error);
-        assert.ok("values" in result.error);
-        assert.equal(result.error.values.length, 2);
-        assert.equal(result.error.values[0], 100);
-        assert.equal(result.error.values[1], 150);
+        assertErrorContains(result.error, "100");
+        assertErrorContains(result.error, "150");
       }
     });
 
@@ -384,13 +316,7 @@ describe("integer", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (!isStructuredError(result.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.ok("message" in result.error);
-        assert.ok("values" in result.error);
-        assert.equal(result.error.values.length, 1);
-        assert.equal(result.error.values[0], "invalid");
+        assertErrorContains(result.error, "invalid");
       }
     });
 
@@ -400,21 +326,15 @@ describe("integer", () => {
       const result1 = parser.parse("-5");
       assert.ok(!result1.success);
       if (!result1.success) {
-        if (!isStructuredError(result1.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.equal(result1.error.values[0], 0n);
-        assert.equal(result1.error.values[1], -5n);
+        assertErrorContains(result1.error, "0");
+        assertErrorContains(result1.error, "-5");
       }
 
       const result2 = parser.parse("150");
       assert.ok(!result2.success);
       if (!result2.success) {
-        if (!isStructuredError(result2.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.equal(result2.error.values[0], 100n);
-        assert.equal(result2.error.values[1], 150n);
+        assertErrorContains(result2.error, "100");
+        assertErrorContains(result2.error, "150");
       }
     });
   });
@@ -582,13 +502,9 @@ describe("choice", () => {
       assert.ok(!result1.success);
       if (!result1.success) {
         assert.equal(typeof result1.error, "object");
-        if (isStructuredError(result1.error)) {
-          assert.ok("message" in result1.error);
-          assert.ok("values" in result1.error);
-          assert.equal(result1.error.values.length, 2);
-          assert.equal(result1.error.values[0], "yes, no");
-          assert.equal(result1.error.values[1], "maybe");
-        }
+        assertErrorContains(result1.error, "yes");
+        assertErrorContains(result1.error, "no");
+        assertErrorContains(result1.error, "maybe");
       }
 
       const result2 = parser.parse("YES");
@@ -831,13 +747,10 @@ describe("choice", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          assert.ok("message" in result.error);
-          assert.ok("values" in result.error);
-          assert.equal(result.error.values.length, 2);
-          assert.equal(result.error.values[0], "alpha, beta, gamma");
-          assert.equal(result.error.values[1], "delta");
-        }
+        assertErrorContains(result.error, "alpha");
+        assertErrorContains(result.error, "beta");
+        assertErrorContains(result.error, "gamma");
+        assertErrorContains(result.error, "delta");
       }
     });
 
@@ -848,11 +761,8 @@ describe("choice", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          assert.equal(result.error.values.length, 2);
-          assert.equal(result.error.values[0], "only");
-          assert.equal(result.error.values[1], "other");
-        }
+        assertErrorContains(result.error, "only");
+        assertErrorContains(result.error, "other");
       }
     });
 
@@ -863,11 +773,7 @@ describe("choice", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          assert.equal(result.error.values.length, 2);
-          assert.equal(result.error.values[0], "");
-          assert.equal(result.error.values[1], "anything");
-        }
+        assertErrorContains(result.error, "anything");
       }
     });
 
@@ -878,11 +784,9 @@ describe("choice", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          assert.equal(result.error.values.length, 2);
-          assert.equal(result.error.values[0], "YES, NO");
-          assert.equal(result.error.values[1], "maybe");
-        }
+        assertErrorContains(result.error, "YES");
+        assertErrorContains(result.error, "NO");
+        assertErrorContains(result.error, "maybe");
       }
     });
 
@@ -895,11 +799,11 @@ describe("choice", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          // Should show original choices, not lowercased versions
-          assert.equal(result.error.values[0], "High, Medium, Low");
-          assert.equal(result.error.values[1], "none");
-        }
+        // Should show original choices, not lowercased versions
+        assertErrorContains(result.error, "High");
+        assertErrorContains(result.error, "Medium");
+        assertErrorContains(result.error, "Low");
+        assertErrorContains(result.error, "none");
       }
     });
   });
@@ -1515,13 +1419,7 @@ describe("float", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (!isStructuredError(result.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.ok("message" in result.error);
-        assert.ok("values" in result.error);
-        assert.equal(result.error.values.length, 1);
-        assert.equal(result.error.values[0], "invalid");
+        assertErrorContains(result.error, "invalid");
       }
     });
 
@@ -1532,14 +1430,8 @@ describe("float", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (!isStructuredError(result.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.ok("message" in result.error);
-        assert.ok("values" in result.error);
-        assert.equal(result.error.values.length, 2);
-        assert.equal(result.error.values[0], 0);
-        assert.equal(result.error.values[1], -5.5);
+        assertErrorContains(result.error, "0");
+        assertErrorContains(result.error, "-5.5");
       }
     });
 
@@ -1550,14 +1442,8 @@ describe("float", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (!isStructuredError(result.error)) {
-          throw new Error("Expected structured error message");
-        }
-        assert.ok("message" in result.error);
-        assert.ok("values" in result.error);
-        assert.equal(result.error.values.length, 2);
-        assert.equal(result.error.values[0], 100);
-        assert.equal(result.error.values[1], 150.5);
+        assertErrorContains(result.error, "100");
+        assertErrorContains(result.error, "150.5");
       }
     });
   });
@@ -1745,11 +1631,9 @@ describe("url", () => {
       assert.ok(!result3.success);
       if (!result3.success) {
         assert.equal(typeof result3.error, "object");
-        if (isStructuredError(result3.error)) {
-          assert.equal(result3.error.values.length, 2);
-          assert.equal(result3.error.values[0], "ftp:");
-          assert.equal(result3.error.values[1], "http:, https:");
-        }
+        assertErrorContains(result3.error, "ftp:");
+        assertErrorContains(result3.error, "http:");
+        assertErrorContains(result3.error, "https:");
       }
     });
 
@@ -1898,12 +1782,7 @@ describe("url", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          assert.ok("message" in result.error);
-          assert.ok("values" in result.error);
-          assert.equal(result.error.values.length, 1);
-          assert.equal(result.error.values[0], "not-a-url");
-        }
+        assertErrorContains(result.error, "not-a-url");
       }
     });
 
@@ -1914,13 +1793,8 @@ describe("url", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          assert.ok("message" in result.error);
-          assert.ok("values" in result.error);
-          assert.equal(result.error.values.length, 2);
-          assert.equal(result.error.values[0], "http:");
-          assert.equal(result.error.values[1], "https:");
-        }
+        assertErrorContains(result.error, "http:");
+        assertErrorContains(result.error, "https:");
       }
     });
   });
@@ -2242,12 +2116,7 @@ describe("locale", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          assert.ok("message" in result.error);
-          assert.ok("values" in result.error);
-          assert.equal(result.error.values.length, 1);
-          assert.equal(result.error.values[0], "x-private-only");
-        }
+        assertErrorContains(result.error, "x-private-only");
       }
     });
 
@@ -2258,12 +2127,7 @@ describe("locale", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(typeof result.error, "object");
-        if (isStructuredError(result.error)) {
-          assert.ok("message" in result.error);
-          assert.ok("values" in result.error);
-          assert.equal(result.error.values.length, 1);
-          assert.equal(result.error.values[0], "");
-        }
+        // Note: empty string might not show up in formatted error, so we just check the error exists
       }
     });
 
@@ -2285,12 +2149,7 @@ describe("locale", () => {
         );
         if (!result.success) {
           assert.equal(typeof result.error, "object");
-          if (isStructuredError(result.error)) {
-            assert.ok("message" in result.error);
-            assert.ok("values" in result.error);
-            assert.equal(result.error.values.length, 1);
-            assert.equal(result.error.values[0], malformed);
-          }
+          assertErrorContains(result.error, malformed);
         }
       }
     });

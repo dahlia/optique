@@ -1,4 +1,4 @@
-import { type ErrorMessage, message } from "./error.ts";
+import { type ErrorMessage, message, text } from "./error.ts";
 
 /**
  * Interface for parsing CLI option values and arguments.
@@ -146,8 +146,9 @@ export function string(options: StringOptions = {}): ValueParser<string> {
       if (options.pattern != null && !options.pattern.test(input)) {
         return {
           success: false,
-          error:
-            message`Expected a string matching pattern ${options.pattern}, but got ${input}.`,
+          error: message`Expected a string matching pattern ${
+            text(options.pattern.source)
+          }, but got ${input}.`,
         };
       }
       return { success: true, value: input };
@@ -291,14 +292,16 @@ export function integer(
         if (options.min != null && value < options.min) {
           return {
             success: false,
-            error:
-              message`Expected a value greater than or equal to ${options.min}, but got ${value}.`,
+            error: message`Expected a value greater than or equal to ${
+              text(options.min.toLocaleString("en"))
+            }, but got ${input}.`,
           };
         } else if (options.max != null && value > options.max) {
           return {
             success: false,
-            error:
-              message`Expected a value less than or equal to ${options.max}, but got ${value}.`,
+            error: message`Expected a value less than or equal to ${
+              text(options.max.toLocaleString("en"))
+            }, but got ${input}.`,
           };
         }
         return { success: true, value };
@@ -318,14 +321,16 @@ export function integer(
       if (options?.min != null && value < options.min) {
         return {
           success: false,
-          error:
-            message`Expected a value greater than or equal to ${options.min}, but got ${value}.`,
+          error: message`Expected a value greater than or equal to ${
+            text(options.min.toLocaleString("en"))
+          }, but got ${input}.`,
         };
       } else if (options?.max != null && value > options.max) {
         return {
           success: false,
-          error:
-            message`Expected a value less than or equal to ${options.max}, but got ${value}.`,
+          error: message`Expected a value less than or equal to ${
+            text(options.max.toLocaleString("en"))
+          }, but got ${input}.`,
         };
       }
       return { success: true, value };
@@ -423,14 +428,16 @@ export function float(options: FloatOptions = {}): ValueParser<number> {
       if (options.min != null && value < options.min) {
         return {
           success: false,
-          error:
-            message`Expected a value greater than or equal to ${options.min}, but got ${value}.`,
+          error: message`Expected a value greater than or equal to ${
+            text(options.min.toLocaleString("en"))
+          }, but got ${input}.`,
         };
       } else if (options.max != null && value > options.max) {
         return {
           success: false,
-          error:
-            message`Expected a value less than or equal to ${options.max}, but got ${value}.`,
+          error: message`Expected a value less than or equal to ${
+            text(options.max.toLocaleString("en"))
+          }, but got ${input}.`,
         };
       }
       return { success: true, value };

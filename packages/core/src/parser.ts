@@ -1,4 +1,12 @@
-import type { ErrorMessage } from "./error.ts";
+import {
+  type ErrorMessage,
+  message,
+  metavar,
+  optionName as eOptionName,
+  optionNames as eOptionNames,
+  text,
+  values,
+} from "./error.ts";
 import type { ValueParser, ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -203,21 +211,22 @@ export function option<T>(
     $valueType: [],
     $stateType: [],
     priority: 10,
-    initialState: valueParser == null
-      ? { success: true, value: false }
-      : { success: false, error: `Missing option ${optionNames.join("/")}.` },
+    initialState: valueParser == null ? { success: true, value: false } : {
+      success: false,
+      error: message`Missing option ${eOptionNames(optionNames)}.`,
+    },
     parse(context) {
       if (context.optionsTerminated) {
         return {
           success: false,
           consumed: 0,
-          error: "No more options can be parsed.",
+          error: message`No more options can be parsed.`,
         };
       } else if (context.buffer.length < 1) {
         return {
           success: false,
           consumed: 0,
-          error: "Expected an option, but got end of input.",
+          error: message`Expected an option, but got end of input.`,
         };
       }
 
@@ -245,7 +254,7 @@ export function option<T>(
           return {
             success: false,
             consumed: 1,
-            error: `${context.buffer[0]} cannot be used multiple times.`,
+            error: message`${context.buffer[0]} cannot be used multiple times.`,
           };
         }
         if (valueParser == null) {
@@ -263,9 +272,9 @@ export function option<T>(
           return {
             success: false,
             consumed: 1,
-            error: `Option ${
-              context.buffer[0]
-            } requires a value, but got no value.`, // FIXME
+            error: message`Option ${
+              eOptionName(context.buffer[0])
+            } requires a value, but got no value.`,
           };
         }
         const result = valueParser.parse(context.buffer[1]);
@@ -293,7 +302,9 @@ export function option<T>(
           return {
             success: false,
             consumed: 1,
-            error: `${prefix} cannot be used multiple times.`,
+            error: message`${
+              eOptionName(prefix)
+            } cannot be used multiple times.`,
           };
         }
         const value = context.buffer[0].slice(prefix.length);
@@ -301,8 +312,9 @@ export function option<T>(
           return {
             success: false,
             consumed: 1,
-            error:
-              `Option ${prefix} is a Boolean flag, but got a value: ${value}.`, // FIXME
+            error: message`Option ${
+              eOptionName(prefix)
+            } is a Boolean flag, but got a value: ${value}.`,
           };
         }
         const result = valueParser.parse(value);
@@ -331,7 +343,9 @@ export function option<T>(
             return {
               success: false,
               consumed: 1,
-              error: `${shortOption} cannot be used multiple times.`,
+              error: message`${
+                eOptionName(shortOption)
+              } cannot be used multiple times.`,
             };
           }
           return {
@@ -352,11 +366,17 @@ export function option<T>(
       return {
         success: false,
         consumed: 0,
-        error: `No matched option for ${context.buffer[0]}.`,
+        error: message`No matched option for ${
+          eOptionName(context.buffer[0])
+        }.`,
       };
     },
     complete(state) {
-      return state;
+      if (state.success) return state;
+      return {
+        success: false,
+        error: message`${eOptionNames(optionNames)}: ${state.error}`,
+      };
     },
     [Symbol.for("Deno.customInspect")]() {
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
@@ -390,7 +410,7 @@ export function argument<T>(
         return {
           success: false,
           consumed: 0,
-          error: "Expected an argument, but got end of input.",
+          error: message`Expected an argument, but got end of input.`,
         };
       }
 
@@ -406,8 +426,8 @@ export function argument<T>(
           return {
             success: false,
             consumed: i,
-            error: `Expected an argument, but got an option: ${
-              context.buffer[i]
+            error: message`Expected an argument, but got an option: ${
+              eOptionName(context.buffer[i])
             }.`,
           };
         }
@@ -417,7 +437,7 @@ export function argument<T>(
         return {
           success: false,
           consumed: i,
-          error: "Expected an argument, but got end of input.",
+          error: message`Expected an argument, but got end of input.`,
         };
       }
 
@@ -425,8 +445,9 @@ export function argument<T>(
         return {
           success: false,
           consumed: i,
-          error:
-            `The argument ${valueParser.metavar} cannot be used multiple times.`,
+          error: message`The argument ${
+            metavar(valueParser.metavar)
+          } cannot be used multiple times.`,
         };
       }
 
@@ -443,8 +464,18 @@ export function argument<T>(
       };
     },
     complete(state) {
-      if (state == null) return { success: false, error: "Too few arguments." };
-      return state;
+      if (state == null) {
+        return {
+          success: false,
+          error: message`Expected a ${
+            metavar(valueParser.metavar)
+          }, but too few arguments.`,
+        };
+      } else if (state.success) return state;
+      return {
+        success: false,
+        error: message`${metavar(valueParser.metavar)}: ${state.error}`,
+      };
     },
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
@@ -592,13 +623,16 @@ export function multiple<TValue, TState>(
       if (result.length < min) {
         return {
           success: false,
-          error:
-            `Expected at least ${min} values, but got only ${result.length}.`, // FIXME
+          error: message`Expected at least ${
+            text(min.toLocaleString("en"))
+          } values, but got only ${text(result.length.toLocaleString("en"))}.`,
         };
       } else if (result.length > max) {
         return {
           success: false,
-          error: `Expected at most ${max} values, but got ${result.length}.`, // FIXME
+          error: message`Expected at most ${
+            text(max.toLocaleString("en"))
+          } values, but got ${text(result.length.toLocaleString("en"))}.`,
         };
       }
       return { success: true, value: result };
@@ -693,8 +727,8 @@ export function object<
       let error: { consumed: number; error: ErrorMessage } = {
         consumed: 0,
         error: context.buffer.length > 0
-          ? `Unexpected option or argument: ${context.buffer[0]}.` // FIXME
-          : "Expected an option or argument, but got end of input.",
+          ? message`Unexpected option or argument: ${context.buffer[0]}.`
+          : message`Expected an option or argument, but got end of input.`,
       };
       const parserPairs = Object.entries(parsers);
       parserPairs.sort(([_, parserA], [__, parserB]) =>
@@ -830,7 +864,7 @@ export function tuple<
         let foundMatch = false;
         let error: { consumed: number; error: ErrorMessage } = {
           consumed: 0,
-          error: "No remaining parsers could match the input.",
+          error: message`No remaining parsers could match the input.`,
         };
 
         // Create priority-ordered list of remaining parsers
@@ -1094,7 +1128,9 @@ export function or(
     complete(
       state: undefined | [number, ParserResult<unknown>],
     ): ValueParserResult<unknown> {
-      if (state == null) return { success: false, error: "No parser matched." };
+      if (state == null) {
+        return { success: false, error: message`No parser matched.` };
+      }
       const [i, result] = state;
       if (result.success) return parsers[i].complete(result.next.state);
       return { success: false, error: result.error };
@@ -1104,7 +1140,7 @@ export function or(
     ): ParserResult<[number, ParserResult<unknown>]> {
       let error: { consumed: number; error: ErrorMessage } = {
         consumed: 0,
-        error: "No parser matched.",
+        error: message`No parser matched.`,
       };
       const orderedParsers = parsers.map((p, i) =>
         [p, i] as [Parser<unknown, unknown>, number]
@@ -1125,9 +1161,9 @@ export function or(
             return {
               success: false,
               consumed: context.buffer.length - result.next.buffer.length,
-              error: `${context.state[1].consumed.join(" ")} and ${
-                result.consumed.join(" ")
-              } cannot be used together.`, // FIXME
+              error: message`${values(context.state[1].consumed)} and ${
+                values(result.consumed)
+              } cannot be used together.`,
             };
           }
           return {

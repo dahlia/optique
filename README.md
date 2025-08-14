@@ -40,6 +40,7 @@ Example
 -------
 
 ~~~~ typescript
+import { formatErrorMessage } from "@optique/core/error";
 import {
   argument,
   multiple,
@@ -84,7 +85,10 @@ if (result.success) {
     if (client.timeout) console.log(`Timeout: ${client.timeout}ms`);
   }
 } else {
-  console.error(result.error);
+  console.error(
+    "Error:",
+    formatErrorMessage(result.error, { colors: true, quotes: false })
+  );
 }
 ~~~~
 

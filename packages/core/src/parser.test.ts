@@ -13,14 +13,11 @@ import {
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { formatErrorMessage } from "./error.ts";
 
 function assertErrorIncludes(error: ErrorMessage, text: string): void {
-  if (typeof error === "string") {
-    assert.ok(error.includes(text));
-  } else {
-    const combined = error.message.join("");
-    assert.ok(combined.includes(text));
-  }
+  const formatted = formatErrorMessage(error);
+  assert.ok(formatted.includes(text));
 }
 
 describe("constant", () => {
@@ -185,7 +182,7 @@ describe("option", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(result.consumed, 0);
-        assert.equal(result.error, "No more options can be parsed.");
+        assertErrorIncludes(result.error, "No more options can be parsed.");
       }
     });
 
@@ -699,12 +696,15 @@ describe("argument", () => {
 
   it("should fail completion with invalid state", () => {
     const parser = argument(string({ metavar: "FILE" }));
-    const invalidState = { success: false as const, error: "Missing argument" };
+    const invalidState = {
+      success: false as const,
+      error: [{ type: "text", text: "Missing argument" }] as ErrorMessage,
+    };
 
     const result = parser.complete(invalidState);
     assert.ok(!result.success);
     if (!result.success) {
-      assert.equal(result.error, "Missing argument");
+      assertErrorIncludes(result.error, "Missing argument");
     }
   });
 
@@ -830,11 +830,14 @@ describe("optional", () => {
     const baseParser = option("-p", "--port", integer({ min: 1 }));
     const optionalParser = optional(baseParser);
 
-    const failedState = { success: false as const, error: "Port must be >= 1" };
+    const failedState = {
+      success: false as const,
+      error: [{ type: "text", text: "Port must be >= 1" }] as ErrorMessage,
+    };
     const completeResult = optionalParser.complete([failedState]);
     assert.ok(!completeResult.success);
     if (!completeResult.success) {
-      assert.equal(completeResult.error, "Port must be >= 1");
+      assertErrorIncludes(completeResult.error, "Port must be >= 1");
     }
   });
 
@@ -1301,14 +1304,17 @@ describe("multiple", () => {
 
     const mockStates = [
       { success: true as const, value: 42 },
-      { success: false as const, error: "Invalid number" },
+      {
+        success: false as const,
+        error: [{ type: "text", text: "Invalid number" }] as ErrorMessage,
+      },
       { success: true as const, value: 7 },
     ];
 
     const completeResult = multipleParser.complete(mockStates);
     assert.ok(!completeResult.success);
     if (!completeResult.success) {
-      assert.equal(completeResult.error, "Invalid number");
+      assertErrorIncludes(completeResult.error, "Invalid number");
     }
   });
 
