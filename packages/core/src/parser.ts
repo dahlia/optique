@@ -536,6 +536,62 @@ export function optional<TValue, TState>(
 }
 
 /**
+ * Creates a parser that makes another parser use a default value when it fails
+ * to match or consume input. This is similar to {@link optional}, but instead
+ * of returning `undefined` when the wrapped parser doesn't match, it returns
+ * a specified default value.
+ * @template TValue The type of the value returned by the wrapped parser.
+ * @template TState The type of the state used by the wrapped parser.
+ * @param parser The {@link Parser} to wrap with default behavior.
+ * @param defaultValue The default value to return when the wrapped parser
+ *                     doesn't match or consume input. Can be a value of type
+ *                     {@link TValue} or a function that returns such a value.
+ * @returns A {@link Parser} that produces either the result of the wrapped parser
+ *          or the default value if the wrapped parser fails to match.
+ */
+export function withDefault<TValue, TState>(
+  parser: Parser<TValue, TState>,
+  defaultValue: TValue | (() => TValue),
+): Parser<TValue, [TState] | undefined> {
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: parser.priority,
+    initialState: undefined,
+    parse(context) {
+      const result = parser.parse({
+        ...context,
+        state: typeof context.state === "undefined"
+          ? parser.initialState
+          : context.state[0],
+      });
+      if (result.success) {
+        return {
+          success: true,
+          next: {
+            ...result.next,
+            state: [result.next.state],
+          },
+          consumed: result.consumed,
+        };
+      }
+      return result;
+    },
+    complete(state) {
+      if (typeof state === "undefined") {
+        return {
+          success: true,
+          value: typeof defaultValue === "function"
+            ? (defaultValue as () => TValue)()
+            : defaultValue,
+        };
+      }
+      return parser.complete(state[0]);
+    },
+  };
+}
+
+/**
  * Options for the {@link multiple} parser.
  */
 export interface MultipleOptions {

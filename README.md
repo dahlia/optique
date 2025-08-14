@@ -44,6 +44,7 @@ Optique is built around several key concepts:
 
  -   *Modifying combinators* transform and combine parsers:
      -  `optional()` makes parsers optional
+     -  `withDefault()` provides default values for optional parsers
      -  `multiple()` allows repetition
      -  `or()` creates alternatives
      -  `merge()` combines object parsers
@@ -72,14 +73,18 @@ import {
   option,
   optional,
   or,
-  parse
+  parse,
+  withDefault
 } from "@optique/core/parser";
 import { choice, integer, locale, string, url } from "@optique/core/valueparser";
 
 // Define a sophisticated CLI with grouped and reusable option sets
 const networkOptions = object("Network", {
   port: option("-p", "--port", integer({ min: 1, max: 65535 })),
-  host: optional(option("-h", "--host", string({ metavar: "HOST" }))),
+  host: withDefault(
+    option("-h", "--host", string({ metavar: "HOST" })),
+    "localhost",
+  ),
 });
 
 const loggingOptions = object("Logging", {
@@ -103,7 +108,7 @@ const parser = or(
        url({ allowedProtocols: ["http:", "https:"] }),
     ),
     headers: multiple(option("-H", "--header", string())),
-    timeout: optional(option("-t", "--timeout", integer({ min: 0 }))),
+    timeout: withDefault(option("-t", "--timeout", integer({ min: 0 })), 30000),
     files: multiple(argument(string({ metavar: "FILE" })), { min: 1, max: 5 }),
   }),
 );
@@ -114,7 +119,7 @@ if (result.success) {
   // TypeScript automatically infers the complex union type with optional fields
   if ("port" in result.value) {
     const server = result.value;
-    console.log(`Starting server on ${server.host ?? "localhost"}:${server.port}`);
+    console.log(`Starting server on ${server.host}:${server.port}`);
     console.log(`Supported locales: ${server.locales.join(", ") || "default"}`);
     if (server.verbose) console.log("Verbose mode enabled");
     if (server.logFile) console.log(`Logging to: ${server.logFile}`);
@@ -122,7 +127,7 @@ if (result.success) {
     const client = result.value;
     console.log(`Connecting to ${client.connect}`);
     console.log(`Processing ${client.files.length} files`);
-    if (client.timeout) console.log(`Timeout: ${client.timeout}ms`);
+    console.log(`Timeout: ${client.timeout}ms`);
   }
 } else {
   console.error(
@@ -138,6 +143,8 @@ This example demonstrates Optique's powerful combinators:
     parser, enabling modular and reusable option groups
  -  **`optional()`** makes parsers optional, returning `undefined` when not
     provided
+ -  **`withDefault()`** provides default values instead of `undefined` for
+    optional parameters, improving usability
  -  **`multiple()`** allows repeating options/arguments with configurable
     constraints
  -  **`or()`** creates mutually exclusive alternatives
@@ -188,6 +195,17 @@ Optique provides several types of parsers and combinators for building sophistic
     const parser = object({
       name: option("-n", "--name", string()),
       verbose: optional(option("-v", "--verbose")), // undefined if not provided
+    });
+    ~~~~
+
+ -  **`withDefault()`**: Makes any parser provide a default value instead of
+    `undefined` when not matched
+
+    ~~~~ typescript
+    const parser = object({
+      name: option("-n", "--name", string()),
+      port: withDefault(option("-p", "--port", integer()), 8080), // 8080 if not provided
+      host: withDefault(option("-h", "--host", string()), "localhost"),
     });
     ~~~~
 

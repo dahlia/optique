@@ -12,7 +12,10 @@
       "Bash(deno task:*)",
       "Bash(sed:*)",
       "WebSearch",
-      "WebFetch(domain:en.wikipedia.org)"
+      "WebFetch(domain:en.wikipedia.org)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "mcp__github__get_file_contents"
     ],
     "deny": []
   }

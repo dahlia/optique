@@ -12,6 +12,7 @@ import {
   or,
   parse,
   tuple,
+  withDefault,
 } from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
@@ -1045,6 +1046,294 @@ describe("optional", () => {
       assert.equal(missingOptionalResult.value.command, "start");
       assert.equal(missingOptionalResult.value.port, undefined);
       assert.equal(missingOptionalResult.value.debug, undefined);
+    }
+  });
+});
+
+describe("withDefault", () => {
+  it("should create a parser with same priority as wrapped parser", () => {
+    const baseParser = option("-v", "--verbose");
+    const defaultParser = withDefault(baseParser, false);
+
+    assert.equal(defaultParser.priority, baseParser.priority);
+    assert.equal(defaultParser.initialState, undefined);
+  });
+
+  it("should return wrapped parser value when it succeeds", () => {
+    const baseParser = option("-v", "--verbose");
+    const defaultParser = withDefault(baseParser, false);
+
+    const context = {
+      buffer: ["-v"] as readonly string[],
+      state: defaultParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = defaultParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = defaultParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, true);
+      }
+    }
+  });
+
+  it("should return default value when parser doesn't match", () => {
+    const baseParser = option("-v", "--verbose");
+    const defaultValue = false;
+    const defaultParser = withDefault(baseParser, defaultValue);
+
+    const completeResult = defaultParser.complete(undefined);
+    assert.ok(completeResult.success);
+    if (completeResult.success) {
+      assert.equal(completeResult.value, defaultValue);
+    }
+  });
+
+  it("should work with function-based default values", () => {
+    let callCount = 0;
+    const defaultFunction = () => {
+      callCount++;
+      return callCount > 1;
+    };
+
+    const baseParser = option("-v", "--verbose");
+    const defaultParser = withDefault(baseParser, defaultFunction);
+
+    // First call
+    const completeResult1 = defaultParser.complete(undefined);
+    assert.ok(completeResult1.success);
+    if (completeResult1.success) {
+      assert.equal(completeResult1.value, false);
+    }
+
+    // Second call should increment
+    const completeResult2 = defaultParser.complete(undefined);
+    assert.ok(completeResult2.success);
+    if (completeResult2.success) {
+      assert.equal(completeResult2.value, true);
+    }
+  });
+
+  it("should propagate successful parse results correctly", () => {
+    const baseParser = option("-n", "--name", string());
+    const defaultParser = withDefault(baseParser, "anonymous");
+
+    const context = {
+      buffer: ["-n", "Alice"] as readonly string[],
+      state: defaultParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = defaultParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      assert.deepEqual(parseResult.next.buffer, []);
+      assert.deepEqual(parseResult.consumed, ["-n", "Alice"]);
+      assert.ok(Array.isArray(parseResult.next.state));
+
+      const completeResult = defaultParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, "Alice");
+      }
+    }
+  });
+
+  it("should propagate failed parse results correctly", () => {
+    const baseParser = option("-v", "--verbose");
+    const defaultParser = withDefault(baseParser, false);
+
+    const context = {
+      buffer: ["--help"] as readonly string[],
+      state: defaultParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = defaultParser.parse(context);
+    assert.ok(!parseResult.success);
+    if (!parseResult.success) {
+      assert.equal(parseResult.consumed, 0);
+      assertErrorIncludes(parseResult.error, "No matched option");
+    }
+  });
+
+  it("should work in object combinations - main use case", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      port: withDefault(option("-p", "--port", integer()), 8080),
+      host: withDefault(option("-h", "--host", string()), "localhost"),
+    });
+
+    const resultWithDefaults = parse(parser, ["-v"]);
+    assert.ok(resultWithDefaults.success);
+    if (resultWithDefaults.success) {
+      assert.equal(resultWithDefaults.value.verbose, true);
+      assert.equal(resultWithDefaults.value.port, 8080);
+      assert.equal(resultWithDefaults.value.host, "localhost");
+    }
+
+    const resultWithValues = parse(parser, [
+      "-v",
+      "-p",
+      "3000",
+      "-h",
+      "example.com",
+    ]);
+    assert.ok(resultWithValues.success);
+    if (resultWithValues.success) {
+      assert.equal(resultWithValues.value.verbose, true);
+      assert.equal(resultWithValues.value.port, 3000);
+      assert.equal(resultWithValues.value.host, "example.com");
+    }
+  });
+
+  it("should work with constant parsers", () => {
+    const baseParser = constant("hello");
+    const defaultParser = withDefault(baseParser, "default");
+
+    const context = {
+      buffer: [] as readonly string[],
+      state: defaultParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = defaultParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = defaultParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, "hello");
+      }
+    }
+  });
+
+  it("should work with different value types", () => {
+    const stringParser = withDefault(option("-s", string()), "default-string");
+    const numberParser = withDefault(option("-n", integer()), 42);
+    const booleanParser = withDefault(option("-b"), true);
+    const arrayParser = withDefault(constant([1, 2, 3]), [1, 2, 3]);
+
+    // Test string default
+    const stringResult = stringParser.complete(undefined);
+    assert.ok(stringResult.success);
+    if (stringResult.success) {
+      assert.equal(stringResult.value, "default-string");
+    }
+
+    // Test number default
+    const numberResult = numberParser.complete(undefined);
+    assert.ok(numberResult.success);
+    if (numberResult.success) {
+      assert.equal(numberResult.value, 42);
+    }
+
+    // Test boolean default
+    const booleanResult = booleanParser.complete(undefined);
+    assert.ok(booleanResult.success);
+    if (booleanResult.success) {
+      assert.equal(booleanResult.value, true);
+    }
+
+    // Test array default (returns constant value, not default when parser succeeds)
+    const arrayResult = arrayParser.complete([[1, 2, 3]]);
+    assert.ok(arrayResult.success);
+    if (arrayResult.success) {
+      assert.deepEqual(arrayResult.value, [1, 2, 3]);
+    }
+  });
+
+  it("should propagate wrapped parser completion failures", () => {
+    const baseParser = option("-p", "--port", integer({ min: 1 }));
+    const defaultParser = withDefault(baseParser, 8080);
+
+    const failedState = {
+      success: false as const,
+      error: [{ type: "text", text: "Port must be >= 1" }] as ErrorMessage,
+    };
+    const completeResult = defaultParser.complete([failedState]);
+    assert.ok(!completeResult.success);
+    if (!completeResult.success) {
+      assertErrorIncludes(completeResult.error, "Port must be >= 1");
+    }
+  });
+
+  it("should handle state transitions correctly", () => {
+    const baseParser = option("-n", "--name", string());
+    const defaultParser = withDefault(baseParser, "anonymous");
+
+    // Test with undefined initial state
+    assert.equal(defaultParser.initialState, undefined);
+
+    // Test state wrapping during successful parse
+    const context = {
+      buffer: ["-n", "test"] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+    };
+
+    const parseResult = defaultParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      assert.ok(Array.isArray(parseResult.next.state));
+      if (Array.isArray(parseResult.next.state)) {
+        assert.equal(parseResult.next.state.length, 1);
+        assert.ok(parseResult.next.state[0].success);
+        if (parseResult.next.state[0].success) {
+          assert.equal(parseResult.next.state[0].value, "test");
+        }
+      }
+    }
+  });
+
+  it("should work with argument parsers in object context", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      file: withDefault(argument(string({ metavar: "FILE" })), "input.txt"),
+    });
+
+    const resultWithArg = parse(parser, ["-v", "custom.txt"]);
+    assert.ok(resultWithArg.success);
+    if (resultWithArg.success) {
+      assert.equal(resultWithArg.value.verbose, true);
+      assert.equal(resultWithArg.value.file, "custom.txt");
+    }
+
+    const resultWithDefault = parse(parser, ["-v"]);
+    assert.ok(resultWithDefault.success);
+    if (resultWithDefault.success) {
+      assert.equal(resultWithDefault.value.verbose, true);
+      assert.equal(resultWithDefault.value.file, "input.txt");
+    }
+  });
+
+  it("should work in complex combinations with validation", () => {
+    const parser = object({
+      command: option("-c", "--command", string()),
+      port: withDefault(
+        option("-p", "--port", integer({ min: 1024, max: 65535 })),
+        8080,
+      ),
+      debug: withDefault(option("-d", "--debug"), false),
+    });
+
+    const validResult = parse(parser, ["-c", "start", "-p", "3000", "-d"]);
+    assert.ok(validResult.success);
+    if (validResult.success) {
+      assert.equal(validResult.value.command, "start");
+      assert.equal(validResult.value.port, 3000);
+      assert.equal(validResult.value.debug, true);
+    }
+
+    const defaultResult = parse(parser, ["-c", "start"]);
+    assert.ok(defaultResult.success);
+    if (defaultResult.success) {
+      assert.equal(defaultResult.value.command, "start");
+      assert.equal(defaultResult.value.port, 8080);
+      assert.equal(defaultResult.value.debug, false);
     }
   });
 });
