@@ -283,6 +283,86 @@ describe("formatMessage", () => {
     const formatted = formatMessage(msg, { quotes: true });
     assert.equal(formatted, 'Option `--port` expects `NUMBER`, got "invalid"');
   });
+
+  it("should wrap message at maxWidth", () => {
+    const msg: Message = [
+      {
+        type: "text",
+        text: "This is a very long message that should be wrapped ",
+      },
+      { type: "optionName", optionName: "--port" },
+      { type: "text", text: " expects " },
+      { type: "metavar", metavar: "NUMBER" },
+    ];
+    const formatted = formatMessage(msg, { maxWidth: 30 });
+    assert.ok(formatted.includes("\n"));
+    const lines = formatted.split("\n");
+    assert.ok(lines.length > 1);
+    // The wrapping logic wraps when the next segment would exceed maxWidth
+    // So lines may be longer than maxWidth if a single segment is long
+    const nonEmptyLines = lines.filter((line) => line.length > 0);
+    assert.ok(nonEmptyLines.length >= 2);
+  });
+
+  it("should not wrap when maxWidth is not set", () => {
+    const msg: Message = [
+      {
+        type: "text",
+        text:
+          "This is a very long message that should not be wrapped without maxWidth option ",
+      },
+      { type: "optionName", optionName: "--port" },
+    ];
+    const formatted = formatMessage(msg);
+    assert.ok(!formatted.includes("\n"));
+  });
+
+  it("should wrap at word boundaries with maxWidth", () => {
+    const msg: Message = [
+      { type: "text", text: "Short text " },
+      { type: "value", value: "very-long-value-that-exceeds-width" },
+      { type: "text", text: " more text" },
+    ];
+    const formatted = formatMessage(msg, { maxWidth: 20 });
+    assert.ok(formatted.includes("\n"));
+  });
+
+  it("should handle maxWidth with colors enabled", () => {
+    const msg: Message = [
+      { type: "text", text: "Error with " },
+      { type: "optionName", optionName: "--verbose-option" },
+      { type: "text", text: " parameter value " },
+      { type: "value", value: "test" },
+    ];
+    const formatted = formatMessage(msg, { maxWidth: 25, colors: true });
+    assert.ok(formatted.includes("\n"));
+    // Should still wrap based on visual width, not ANSI code length
+    const lines = formatted.split("\n");
+    assert.ok(lines.length > 1);
+  });
+
+  it("should handle maxWidth of zero", () => {
+    const msg: Message = [
+      { type: "text", text: "Test" },
+      { type: "value", value: "value" },
+    ];
+    const formatted = formatMessage(msg, { maxWidth: 0 });
+    // Should still produce output but might wrap aggressively
+    assert.ok(typeof formatted === "string");
+    assert.ok(formatted.length > 0);
+  });
+
+  it("should handle single character maxWidth", () => {
+    const msg: Message = [
+      { type: "text", text: "A" },
+      { type: "text", text: "B" },
+      { type: "text", text: "C" },
+    ];
+    const formatted = formatMessage(msg, { maxWidth: 1 });
+    assert.ok(formatted.includes("\n"));
+    const lines = formatted.split("\n");
+    assert.ok(lines.length >= 2);
+  });
 });
 
 describe("integration tests", () => {

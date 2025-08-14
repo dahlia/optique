@@ -228,6 +228,14 @@ export interface MessageFormatOptions {
    * @default `true`
    */
   readonly quotes?: boolean;
+
+  /**
+   * The maximum width of the formatted message.  If specified,
+   * the message will be wrapped to fit within this width.
+   * If not specified, the message will not be wrapped.
+   * @default `undefined`
+   */
+  readonly maxWidth?: number;
 }
 
 /**
@@ -246,49 +254,88 @@ export function formatMessage(
   const useColors = options.colors ?? false;
   const useQuotes = options.quotes ?? true;
 
-  let output = "";
-  for (const term of msg) {
-    if (term.type === "text") {
-      output += term.text;
-    } else if (term.type === "optionName") {
-      const name = useQuotes ? `\`${term.optionName}\`` : term.optionName;
-      output += useColors
-        ? `\x1b[3m${name}\x1b[0m` // Italic for option names
-        : name;
-    } else if (term.type === "optionNames") {
-      const names = term.optionNames.map((name) =>
-        useQuotes ? `\`${name}\`` : name
-      );
-      let i = 0;
-      for (const name of names) {
-        if (i > 0) output += "/";
-        output += useColors
-          ? `\x1b[3m${name}\x1b[0m` // Italic for option names
-          : name;
-        i++;
+  function* stream(): Generator<{ text: string; width: number }> {
+    const wordPattern = /\s*\S+\s*/g;
+    for (const term of msg) {
+      if (term.type === "text") {
+        while (true) {
+          const match = wordPattern.exec(term.text);
+          if (match == null) break;
+          yield { text: match[0], width: match[0].length };
+        }
+      } else if (term.type === "optionName") {
+        const name = useQuotes ? `\`${term.optionName}\`` : term.optionName;
+        yield {
+          text: useColors
+            ? `\x1b[3m${name}\x1b[0m` // Italic for option names
+            : name,
+          width: name.length,
+        };
+      } else if (term.type === "optionNames") {
+        const names = term.optionNames.map((name) =>
+          useQuotes ? `\`${name}\`` : name
+        );
+        let i = 0;
+        for (const name of names) {
+          if (i > 0) yield { text: "/", width: 1 };
+          yield {
+            text: useColors
+              ? `\x1b[3m${name}\x1b[0m` // Italic for option names
+              : name,
+            width: name.length,
+          };
+          i++;
+        }
+      } else if (term.type === "metavar") {
+        const metavar = useQuotes ? `\`${term.metavar}\`` : term.metavar;
+        yield {
+          text: useColors
+            ? `\x1b[1m${metavar}\x1b[0m` // Bold for metavariables
+            : metavar,
+          width: metavar.length,
+        };
+      } else if (term.type === "value") {
+        const value = useQuotes ? `${JSON.stringify(term.value)}` : term.value;
+        yield {
+          text: useColors
+            ? `\x1b[32m${value}\x1b[0m` // Green for values
+            : value,
+          width: value.length,
+        };
+      } else if (term.type === "values") {
+        for (let i = 0; i < term.values.length; i++) {
+          if (i > 0) yield { text: " ", width: 1 };
+          const value = useQuotes
+            ? JSON.stringify(term.values[i])
+            : term.values[i];
+          yield {
+            text: useColors
+              ? i <= 0
+                ? `\x1b[32m${value}`
+                : i + 1 >= term.values.length
+                ? `${value}\x1b[0m`
+                : value
+              : value,
+            width: value.length,
+          };
+        }
+      } else {
+        throw new TypeError(
+          `Invalid MessageTerm type: ${term["type"]}.`,
+        );
       }
-    } else if (term.type === "metavar") {
-      const metavar = useQuotes ? `\`${term.metavar}\`` : term.metavar;
-      output += useColors
-        ? `\x1b[1m${metavar}\x1b[0m` // Bold for metavariables
-        : metavar;
-    } else if (term.type === "value") {
-      const value = useQuotes ? `${JSON.stringify(term.value)}` : term.value;
-      output += useColors
-        ? `\x1b[32m${value}\x1b[0m` // Green for values
-        : value;
-    } else if (term.type === "values") {
-      const values = term.values.map((v) =>
-        useQuotes ? `${JSON.stringify(v)}` : v
-      ).join(" ");
-      output += useColors
-        ? `\x1b[32m${values}\x1b[0m` // Green for values
-        : values;
-    } else {
-      throw new TypeError(
-        `Invalid MessageTerm type: ${term["type"]}.`,
-      );
     }
+  }
+
+  let output = "";
+  let totalWidth = 0;
+  for (const { text, width } of stream()) {
+    if (options.maxWidth != null && totalWidth + width > options.maxWidth) {
+      output += "\n";
+      totalWidth = 0;
+    }
+    output += text;
+    totalWidth += width;
   }
   return output;
 }
