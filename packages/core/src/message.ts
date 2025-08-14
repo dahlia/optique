@@ -11,11 +11,11 @@ export type MessageTerm =
     /**
      * The type of the term, which is always `"text"` for plain text.
      */
-    type: "text";
+    readonly type: "text";
     /**
      * The text content of the term.
      */
-    text: string;
+    readonly text: string;
   }
   /**
    * An option name term in the message, which can be a single
@@ -26,12 +26,12 @@ export type MessageTerm =
     /**
      * The type of the term, which is `"optionName"` for a single option name.
      */
-    type: "optionName";
+    readonly type: "optionName";
     /**
      * The name of the option, which can be a short or long option name.
      * For example, `"-f"` or `"--foo"`.
      */
-    optionName: string;
+    readonly optionName: string;
   }
   /**
    * A list of option names term in the message, which can be a
@@ -42,12 +42,12 @@ export type MessageTerm =
      * The type of the term, which is `"optionNames"` for a list of option
      * names.
      */
-    type: "optionNames";
+    readonly type: "optionNames";
     /**
      * The list of option names, which can include both short and long
      * option names.  For example, `["--foo", "--bar"]`.
      */
-    optionNames: readonly string[];
+    readonly optionNames: readonly string[];
   }
   /**
    * A metavariable term in the message, which can be a single
@@ -57,12 +57,12 @@ export type MessageTerm =
     /**
      * The type of the term, which is `"metavar"` for a metavariable.
      */
-    type: "metavar";
+    readonly type: "metavar";
     /**
      * The metavariable name, which is a string that represents
      * a variable in the message.  For example, `"VALUE"` or `"ARG"`.
      */
-    metavar: string;
+    readonly metavar: string;
   }
   /**
    * A value term in the message, which can be a single value.
@@ -71,12 +71,12 @@ export type MessageTerm =
     /**
      * The type of the term, which is `"value"` for a single value.
      */
-    type: "value";
+    readonly type: "value";
     /**
      * The value, which can be any string representation of a value.
      * For example, `"42"` or `"hello"`.
      */
-    value: string;
+    readonly value: string;
   }
   /**
    * A list of values term in the message, which can be a
@@ -87,12 +87,12 @@ export type MessageTerm =
      * The type of the term, which is `"values"` for a list of consecutive
      * values.
      */
-    type: "values";
+    readonly type: "values";
     /**
      * The list of values, which can include multiple string
      * representations of consecutive values.  For example, `["42", "hello"]`.
      */
-    values: readonly string[];
+    readonly values: readonly string[];
   };
 
 /**
