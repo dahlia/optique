@@ -43,6 +43,7 @@ Example
 import { formatErrorMessage } from "@optique/core/error";
 import {
   argument,
+  merge,
   multiple,
   object,
   option,
@@ -50,17 +51,29 @@ import {
   or,
   parse
 } from "@optique/core/parser";
-import { integer, locale, string, url } from "@optique/core/valueparser";
+import { choice, integer, locale, string, url } from "@optique/core/valueparser";
 
-// Define a sophisticated CLI with optional and repeatable arguments
+// Define a sophisticated CLI with grouped and reusable option sets
+const networkOptions = object("Network", {
+  port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+  host: optional(option("-h", "--host", string({ metavar: "HOST" }))),
+});
+
+const loggingOptions = object("Logging", {
+  verbose: optional(option("-v", "--verbose")),
+  logFile: optional(option("--log-file", string({ metavar: "FILE" }))),
+});
+
 const parser = or(
-  object("Server mode", {
-    port: option("-p", "--port", integer({ min: 1, max: 65535 })),
-    host: optional(option("-h", "--host", string({ metavar: "HOST" }))),
-    locales: multiple(option("-l", "--locale", locale())),
-    verbose: optional(option("-v", "--verbose")),
-    config: argument(string({ metavar: "CONFIG_FILE" })),
-  }),
+  // Server mode: merge network and logging options with server-specific config
+  merge(
+    networkOptions,
+    loggingOptions,
+    object("Server", {
+      locales: multiple(option("-l", "--locale", locale())),
+      config: argument(string({ metavar: "CONFIG_FILE" })),
+    }),
+  ),
   object("Client mode", {
     connect: option("-c", "--connect", url({ protocols: ["http", "https"] })),
     headers: multiple(option("-H", "--header", string())),
@@ -78,6 +91,7 @@ if (result.success) {
     console.log(`Starting server on ${server.host ?? "localhost"}:${server.port}`);
     console.log(`Supported locales: ${server.locales.join(", ") || "default"}`);
     if (server.verbose) console.log("Verbose mode enabled");
+    if (server.logFile) console.log(`Logging to: ${server.logFile}`);
   } else {
     const client = result.value;
     console.log(`Connecting to ${client.connect}`);
@@ -94,6 +108,8 @@ if (result.success) {
 
 This example demonstrates Optique's powerful combinators:
 
+ -  **`merge()`** combines multiple `object()` parsers into a single unified
+    parser, enabling modular and reusable option groups
  -  **`optional()`** makes parsers optional, returning `undefined` when not
     provided
  -  **`multiple()`** allows repeating options/arguments with configurable
@@ -101,12 +117,12 @@ This example demonstrates Optique's powerful combinators:
  -  **`or()`** creates mutually exclusive alternatives
  -  **`object()`** groups related options into structured data
 
-The parser handles complex scenarios like:
+The parser demonstrates modular design by:
 
- -  Optional host (defaults to `undefined`)
- -  Multiple locale specifications: `-l en-US -l fr-FR`
- -  Repeatable headers: `-H "Accept: json" -H "User-Agent: myapp"`
- -  Constrained file arguments (1–5 files required in client mode)
+ -  Separating network options (`--port`, `--host`) for reusability
+ -  Grouping logging configuration (`--verbose`, `--log-file`) separately
+ -  Merging reusable groups with server-specific options using `merge()`
+ -  Supporting complex scenarios like multiple locales: `-l en-US -l fr-FR`
 
 All with full type safety and automatic inference!
 
@@ -119,6 +135,8 @@ Optique provides several powerful combinators for composing parsers:
 ### Core combinators
 
  -  **`object()`**: Combines multiple parsers into a structured object
+ -  **`merge()`**: Merges multiple `object()` parsers into a single parser,
+    enabling modular composition of option groups
  -  **`or()`**: Creates mutually exclusive alternatives
     (try first, then second, etc.)
  -  **`tuple()`**: Combines multiple parsers into a tuple with preserved order
@@ -146,47 +164,58 @@ Optique provides several powerful combinators for composing parsers:
     });
     ~~~~
 
- -  **`tuple()`**: Combines parsers into a typed tuple, maintaining order
-
-    ~~~~ typescript
-    const parser = object({
-      // Tuple with mixed types: [name, port, verbose?]
-      config: tuple([
-        option("-n", "--name", string()),
-        option("-p", "--port", integer({ min: 1, max: 65535 })),
-        optional(option("-v", "--verbose")),
-      ]),
-      // Labeled tuple for better readability
-      endpoint: tuple("Server", [
-        option("-h", "--host", string()),
-        option("-p", "--port", integer()),
-      ]),
-    });
-    ~~~~
-
 ### Advanced patterns
 
-Combinators can be nested and combined in powerful ways:
+The `merge()` combinator enables powerful modular designs by separating concerns
+into reusable option groups:
 
 ~~~~ typescript
+// Define reusable option groups
+const databaseOptions = object("Database", {
+  dbHost: option("--db-host", string()),
+  dbPort: option("--db-port", integer({ min: 1, max: 65535 })),
+  dbName: option("--db-name", string()),
+});
+
+const authOptions = object("Authentication", {
+  username: option("-u", "--user", string()),
+  password: optional(option("-p", "--password", string())),
+  token: optional(option("-t", "--token", string())),
+});
+
+const loggingOptions = object("Logging", {
+  logLevel: option("--log-level", choice(["debug", "info", "warn", "error"])),
+  logFile: optional(option("--log-file", string())),
+});
+
+// Combine groups differently for different modes
 const parser = or(
-  // Development mode: optional debug flag, multiple log levels
-  object("dev", {
-    dev: option("--dev"),
-    debug: optional(option("--debug")),
-    logLevel: multiple(option("--log", string()), { max: 3 }),
-  }),
-  // Production mode: required config, multiple workers
-  object("prod", {
-    config: option("-c", "--config", string()),
-    workers: multiple(option("-w", "--worker", integer({ min: 1 }))),
-    ssl: optional(object({
-      cert: option("--cert", string()),
-      key: option("--key", string()),
-    })),
-  }),
+  // Development: all options available
+  merge(
+    object("Dev", { dev: option("--dev") }),
+    databaseOptions,
+    authOptions,
+    loggingOptions
+  ),
+  // Production: database and auth required, enhanced logging
+  merge(
+    object("Prod", { config: option("-c", "--config", string()) }),
+    databaseOptions,
+    authOptions,
+    loggingOptions,
+    object("Production", {
+      workers: multiple(option("-w", "--worker", integer({ min: 1 }))),
+    })
+  ),
 );
 ~~~~
+
+This approach promotes:
+
+ -  *Reusability*: Option groups can be shared across different command modes
+ -  *Maintainability*: Changes to option groups automatically propagate
+ -  *Modularity*: Each concern is separated into its own focused parser
+ -  *Flexibility*: Different combinations for different use cases
 
 The `multiple()` combinator is especially powerful when combined with `object()`
 parsers, as it provides empty arrays as defaults when no matches are found,

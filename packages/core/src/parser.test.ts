@@ -2,6 +2,7 @@ import type { ErrorMessage } from "@optique/core/error";
 import {
   argument,
   constant,
+  merge,
   multiple,
   object,
   option,
@@ -1705,6 +1706,581 @@ describe("parse", () => {
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
+    }
+  });
+});
+
+describe("merge", () => {
+  it("should create a parser that combines multiple object parsers", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+      port: option("-p", "--port", integer()),
+    });
+
+    const parser2 = object({
+      host: option("-h", "--host", string()),
+      debug: option("-d", "--debug"),
+    });
+
+    const mergedParser = merge(parser1, parser2);
+
+    assert.ok(mergedParser.priority >= 10);
+    assert.ok("verbose" in mergedParser.initialState);
+    assert.ok("port" in mergedParser.initialState);
+    assert.ok("host" in mergedParser.initialState);
+    assert.ok("debug" in mergedParser.initialState);
+  });
+
+  it("should merge two object parsers successfully", () => {
+    const basicOptions = object({
+      verbose: option("-v", "--verbose"),
+      quiet: option("-q", "--quiet"),
+    });
+
+    const serverOptions = object({
+      port: option("-p", "--port", integer()),
+      host: option("-h", "--host", string()),
+    });
+
+    const parser = merge(basicOptions, serverOptions);
+
+    const result = parse(parser, ["-v", "-p", "8080", "-h", "localhost"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.quiet, false);
+      assert.equal(result.value.port, 8080);
+      assert.equal(result.value.host, "localhost");
+    }
+  });
+
+  it("should merge three object parsers", () => {
+    const group1 = object({
+      option1: option("-1", string()),
+    });
+
+    const group2 = object({
+      option2: option("-2", integer()),
+    });
+
+    const group3 = object({
+      option3: option("-3"),
+    });
+
+    const parser = merge(group1, group2, group3);
+
+    const result = parse(parser, ["-1", "test", "-2", "42", "-3"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.option1, "test");
+      assert.equal(result.value.option2, 42);
+      assert.equal(result.value.option3, true);
+    }
+  });
+
+  it("should merge four object parsers", () => {
+    const a = object({ a: option("-a") });
+    const b = object({ b: option("-b") });
+    const c = object({ c: option("-c") });
+    const d = object({ d: option("-d") });
+
+    const parser = merge(a, b, c, d);
+
+    const result = parse(parser, ["-a", "-b", "-c", "-d"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, true);
+      assert.equal(result.value.b, true);
+      assert.equal(result.value.c, true);
+      assert.equal(result.value.d, true);
+    }
+  });
+
+  it("should merge five object parsers", () => {
+    const a = object({ a: option("-a") });
+    const b = object({ b: option("-b") });
+    const c = object({ c: option("-c") });
+    const d = object({ d: option("-d") });
+    const e = object({ e: option("-e") });
+
+    const parser = merge(a, b, c, d, e);
+
+    const result = parse(parser, ["-a", "-b", "-c", "-d", "-e"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, true);
+      assert.equal(result.value.b, true);
+      assert.equal(result.value.c, true);
+      assert.equal(result.value.d, true);
+      assert.equal(result.value.e, true);
+    }
+  });
+
+  it("should handle empty initial states correctly", () => {
+    const parser1 = object({
+      flag1: option("-1"),
+    });
+
+    const parser2 = object({
+      flag2: option("-2"),
+    });
+
+    const mergedParser = merge(parser1, parser2);
+
+    const result = parse(mergedParser, ["-1"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.flag1, true);
+      assert.equal(result.value.flag2, false);
+    }
+  });
+
+  it("should propagate parser errors correctly", () => {
+    const parser1 = object({
+      port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+    });
+
+    const parser2 = object({
+      host: option("-h", "--host", string()),
+    });
+
+    const parser = merge(parser1, parser2);
+
+    const result = parse(parser, ["-p", "0", "-h", "localhost"]);
+    assert.ok(!result.success);
+  });
+
+  it("should handle value parser failures in merged parsers", () => {
+    const parser1 = object({
+      number: option("-n", integer({ min: 10 })),
+    });
+
+    const parser2 = object({
+      text: option("-t", string({ pattern: /^[A-Z]+$/ })),
+    });
+
+    const parser = merge(parser1, parser2);
+
+    const invalidNumberResult = parse(parser, ["-n", "5"]);
+    assert.ok(!invalidNumberResult.success);
+
+    const invalidTextResult = parse(parser, ["-t", "lowercase"]);
+    assert.ok(!invalidTextResult.success);
+  });
+
+  it("should handle parsers with different priorities", () => {
+    const lowPriority = object({
+      arg: argument(string()),
+    });
+
+    const highPriority = object({
+      option: option("-o", string()),
+    });
+
+    const parser = merge(lowPriority, highPriority);
+
+    assert.equal(parser.priority, Math.max(lowPriority.priority, highPriority.priority));
+
+    const result = parse(parser, ["-o", "value", "argument"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.option, "value");
+      assert.equal(result.value.arg, "argument");
+    }
+  });
+
+  it("should work with different value types", () => {
+    const stringOptions = object({
+      name: option("-n", "--name", string()),
+      title: option("-t", "--title", string()),
+    });
+
+    const numberOptions = object({
+      port: option("-p", "--port", integer()),
+      count: option("-c", "--count", integer()),
+    });
+
+    const booleanOptions = object({
+      verbose: option("-v", "--verbose"),
+      debug: option("-d", "--debug"),
+    });
+
+    const parser = merge(stringOptions, numberOptions, booleanOptions);
+
+    const result = parse(parser, [
+      "-n", "test",
+      "-p", "8080",
+      "-v",
+      "-c", "5",
+      "-t", "My Title",
+      "-d",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.name, "test");
+      assert.equal(result.value.title, "My Title");
+      assert.equal(result.value.port, 8080);
+      assert.equal(result.value.count, 5);
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.debug, true);
+    }
+  });
+
+  it("should handle mixed option and argument parsers", () => {
+    const options = object({
+      verbose: option("-v"),
+      output: option("-o", string()),
+    });
+
+    const args = object({
+      input: argument(string()),
+    });
+
+    const parser = merge(options, args);
+
+    const result = parse(parser, ["-v", "-o", "out.txt", "input.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.output, "out.txt");
+      assert.equal(result.value.input, "input.txt");
+    }
+  });
+
+  it("should handle overlapping field names by using last parser's state", () => {
+    const parser1 = object({
+      value: option("-1", string()),
+    });
+
+    const parser2 = object({
+      value: option("-2", integer()),
+    });
+
+    const parser = merge(parser1, parser2);
+
+    const result1 = parse(parser, ["-1", "hello"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.value, "hello");
+    }
+
+    const result2 = parse(parser, ["-2", "42"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.value, 42);
+    }
+  });
+
+  it("should handle parsing when no input matches", () => {
+    const parser1 = object({
+      flag1: option("-1"),
+    });
+
+    const parser2 = object({
+      flag2: option("-2"),
+    });
+
+    const parser = merge(parser1, parser2);
+
+    const context = {
+      buffer: ["-3"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(result.consumed, 0);
+      assertErrorIncludes(result.error, "No parser matched the input");
+    }
+  });
+
+  it("should complete successfully when all parsers complete", () => {
+    const parser1 = object({
+      flag1: option("-1"),
+    });
+
+    const parser2 = object({
+      port: option("-p", integer()),
+    });
+
+    const parser = merge(parser1, parser2);
+
+    // First test with actual parsing
+    const result = parse(parser, ["-1", "-p", "8080"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.flag1, true);
+      assert.equal(result.value.port, 8080);
+    }
+  });
+
+  it("should fail completion when any parser fails", () => {
+    const parser1 = object({
+      flag1: option("-1"),
+    });
+
+    const parser2 = object({
+      port: option("-p", integer({ min: 1 })),
+    });
+
+    const parser = merge(parser1, parser2);
+
+    // Test with actual invalid parsing
+    const result = parse(parser, ["-1", "-p", "0"]);
+    assert.ok(!result.success);
+  });
+
+  it("should work in or() combinations", () => {
+    const basicMode = merge(
+      object({ basic: constant("basic") }),
+      object({ flag: option("-f") })
+    );
+
+    const advancedMode = merge(
+      object({ advanced: constant("advanced") }),
+      object({ value: option("-v", integer()) })
+    );
+
+    const parser = or(basicMode, advancedMode);
+
+    const basicResult = parse(parser, ["-f"]);
+    assert.ok(basicResult.success);
+    if (basicResult.success) {
+      if ("basic" in basicResult.value) {
+        assert.equal(basicResult.value.basic, "basic");
+        assert.equal(basicResult.value.flag, true);
+      }
+    }
+
+    const advancedResult = parse(parser, ["-v", "42"]);
+    assert.ok(advancedResult.success);
+    if (advancedResult.success) {
+      if ("advanced" in advancedResult.value) {
+        assert.equal(advancedResult.value.advanced, "advanced");
+        assert.equal(advancedResult.value.value, 42);
+      }
+    }
+  });
+
+  it("should handle complex nested scenarios", () => {
+    const serverOptions = object({
+      port: option("-p", "--port", integer()),
+      host: option("-h", "--host", string()),
+    });
+
+    const logOptions = object({
+      verbose: option("-v", "--verbose"),
+      logFile: option("-l", "--log-file", string()),
+    });
+
+    const authOptions = object({
+      token: option("-t", "--token", string()),
+      user: option("-u", "--user", string()),
+    });
+
+    const parser = merge(serverOptions, logOptions, authOptions);
+
+    const result = parse(parser, [
+      "-p", "8080",
+      "-h", "localhost",
+      "-v",
+      "-l", "app.log",
+      "-t", "secret123",
+      "-u", "admin",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.port, 8080);
+      assert.equal(result.value.host, "localhost");
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.logFile, "app.log");
+      assert.equal(result.value.token, "secret123");
+      assert.equal(result.value.user, "admin");
+    }
+  });
+
+  it("should handle options terminator correctly", () => {
+    const options1 = object({
+      flag: option("-f"),
+    });
+
+    const options2 = object({
+      args: multiple(argument(string())),
+    });
+
+    const parser = merge(options1, options2);
+
+    const result = parse(parser, ["-f", "--", "-not-an-option"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.flag, true);
+      assert.deepEqual(result.value.args, ["-not-an-option"]);
+    }
+  });
+
+  it("should reproduce example.ts usage pattern", () => {
+    const group3 = object("Group 3", {
+      type: constant("group34"),
+      deny: option("-d", "--deny"),
+      test: option("-t", "--test", integer()),
+    });
+
+    const group4 = object("Group 4", {
+      baz: option("-z", "--baz"),
+      qux: option("-q", "--qux", string({ metavar: "QUX" })),
+    });
+
+    const parser = merge(group3, group4);
+
+    const result = parse(parser, ["-d", "-t", "42", "-z", "-q", "value"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.type, "group34");
+      assert.equal(result.value.deny, true);
+      assert.equal(result.value.test, 42);
+      assert.equal(result.value.baz, true);
+      assert.equal(result.value.qux, "value");
+    }
+  });
+
+  it("should handle state updates and transitions correctly", () => {
+    const parser1 = object({
+      opt1: option("-1", string()),
+    });
+
+    const parser2 = object({
+      opt2: option("-2", integer()),
+    });
+
+    const parser = merge(parser1, parser2);
+
+    // Test sequential parsing
+    const result = parse(parser, ["-1", "hello", "-2", "42"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.opt1, "hello");
+      assert.equal(result.value.opt2, 42);
+    }
+  });
+
+  it("should handle parsing failures with proper error propagation", () => {
+    const parser1 = object({
+      required: option("-r", string()),
+    });
+
+    const parser2 = object({
+      number: option("-n", integer()),
+    });
+
+    const parser = merge(parser1, parser2);
+
+    const context = {
+      buffer: ["--unknown"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(result.consumed, 0);
+      assertErrorIncludes(result.error, "No parser matched the input");
+    }
+  });
+
+  it("should handle empty parsers gracefully", () => {
+    const empty1 = object({});
+    const empty2 = object({});
+
+    const parser = merge(empty1, empty2);
+
+    // Empty parsers fail when there is no input that matches
+    const result = parse(parser, []);
+    assert.ok(!result.success);
+  });
+
+  it("should work with optional parsers in merged objects", () => {
+    const required = object({
+      name: option("-n", string()),
+    });
+
+    const optionalFields = object({
+      age: optional(option("-a", integer())),
+      email: optional(option("-e", string())),
+    });
+
+    const parser = merge(required, optionalFields);
+
+    const withOptionalResult = parse(parser, ["-n", "John", "-a", "30"]);
+    assert.ok(withOptionalResult.success);
+    if (withOptionalResult.success) {
+      assert.equal(withOptionalResult.value.name, "John");
+      assert.equal(withOptionalResult.value.age, 30);
+      assert.equal(withOptionalResult.value.email, undefined);
+    }
+
+    const withoutOptionalResult = parse(parser, ["-n", "Jane"]);
+    assert.ok(withoutOptionalResult.success);
+    if (withoutOptionalResult.success) {
+      assert.equal(withoutOptionalResult.value.name, "Jane");
+      assert.equal(withoutOptionalResult.value.age, undefined);
+      assert.equal(withoutOptionalResult.value.email, undefined);
+    }
+  });
+
+  it("should work with multiple parsers in merged objects", () => {
+    const single = object({
+      name: option("-n", string()),
+    });
+
+    const multipleFields = object({
+      tags: multiple(option("-t", string())),
+      files: multiple(argument(string())),
+    });
+
+    const parser = merge(single, multipleFields);
+
+    const result = parse(parser, [
+      "-n", "MyApp",
+      "-t", "dev",
+      "-t", "webapp",
+      "file1.txt",
+      "file2.txt",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.name, "MyApp");
+      assert.deepEqual(result.value.tags, ["dev", "webapp"]);
+      assert.deepEqual(result.value.files, ["file1.txt", "file2.txt"]);
+    }
+  });
+
+  it("should handle type safety correctly", () => {
+    const stringParser = object({
+      text: option("-t", string()),
+    });
+
+    const numberParser = object({
+      count: option("-c", integer()),
+    });
+
+    const booleanParser = object({
+      flag: option("-f"),
+    });
+
+    const parser = merge(stringParser, numberParser, booleanParser);
+
+    const result = parse(parser, ["-t", "hello", "-c", "42", "-f"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(typeof result.value.text, "string");
+      assert.equal(result.value.text, "hello");
+      assert.equal(typeof result.value.count, "number");
+      assert.equal(result.value.count, 42);
+      assert.equal(typeof result.value.flag, "boolean");
+      assert.equal(result.value.flag, true);
     }
   });
 });

@@ -764,6 +764,7 @@ export function object<
         // deno-lint-ignore no-explicit-any
         {} as any;
       for (const field in state) {
+        if (!(field in parsers)) continue;
         const valueResult = parsers[field].complete(state[field]);
         if (valueResult.success) result[field] = valueResult.value;
         else return { success: false, error: valueResult.error };
@@ -1181,6 +1182,270 @@ export function or(
         }
       }
       return { ...error, success: false };
+    },
+  };
+}
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TB extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+>(a: TA, b: TB): Parser<
+  & {
+    readonly [K in keyof TA["$valueType"][number]]:
+      TA["$valueType"][number][K] extends (infer U) ? U : never;
+  }
+  & {
+    readonly [K in keyof TB["$valueType"][number]]:
+      TB["$valueType"][number][K] extends (infer U2) ? U2 : never;
+  },
+  & { readonly [K in keyof TA]: unknown }
+  & { readonly [K in keyof TB]: unknown }
+>;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TB extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TC extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+>(a: TA, b: TB, c: TC): Parser<
+  & {
+    readonly [K in keyof TA["$valueType"][number]]:
+      TA["$valueType"][number][K] extends (infer U) ? U : never;
+  }
+  & {
+    readonly [K in keyof TB["$valueType"][number]]:
+      TB["$valueType"][number][K] extends (infer U2) ? U2 : never;
+  }
+  & {
+    readonly [K in keyof TC["$valueType"][number]]:
+      TC["$valueType"][number][K] extends (infer U3) ? U3 : never;
+  },
+  & { readonly [K in keyof TA]: unknown }
+  & { readonly [K in keyof TB]: unknown }
+  & { readonly [K in keyof TC]: unknown }
+>;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TB extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TC extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TD extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+>(a: TA, b: TB, c: TC, d: TD): Parser<
+  & {
+    readonly [K in keyof TA["$valueType"][number]]:
+      TA["$valueType"][number][K] extends (infer U) ? U : never;
+  }
+  & {
+    readonly [K in keyof TB["$valueType"][number]]:
+      TB["$valueType"][number][K] extends (infer U2) ? U2 : never;
+  }
+  & {
+    readonly [K in keyof TC["$valueType"][number]]:
+      TC["$valueType"][number][K] extends (infer U3) ? U3 : never;
+  }
+  & {
+    readonly [K in keyof TD["$valueType"][number]]:
+      TD["$valueType"][number][K] extends (infer U4) ? U4 : never;
+  },
+  & { readonly [K in keyof TA]: unknown }
+  & { readonly [K in keyof TB]: unknown }
+  & { readonly [K in keyof TC]: unknown }
+  & { readonly [K in keyof TD]: unknown }
+>;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @template TE The type of the fifth parser.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @param e The fifth {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TB extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TC extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TD extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+  TE extends Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >,
+>(a: TA, b: TB, c: TC, d: TD, e: TE): Parser<
+  & {
+    readonly [K in keyof TA["$valueType"][number]]:
+      TA["$valueType"][number][K] extends (infer U) ? U : never;
+  }
+  & {
+    readonly [K in keyof TB["$valueType"][number]]:
+      TB["$valueType"][number][K] extends (infer U2) ? U2 : never;
+  }
+  & {
+    readonly [K in keyof TC["$valueType"][number]]:
+      TC["$valueType"][number][K] extends (infer U3) ? U3 : never;
+  }
+  & {
+    readonly [K in keyof TD["$valueType"][number]]:
+      TD["$valueType"][number][K] extends (infer U4) ? U4 : never;
+  }
+  & {
+    readonly [K in keyof TE["$valueType"][number]]:
+      TE["$valueType"][number][K] extends (infer U5) ? U5 : never;
+  },
+  & { readonly [K in keyof TA]: unknown }
+  & { readonly [K in keyof TB]: unknown }
+  & { readonly [K in keyof TC]: unknown }
+  & { readonly [K in keyof TD]: unknown }
+  & { readonly [K in keyof TE]: unknown }
+>;
+
+export function merge(
+  ...parsers: Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >[]
+): Parser<
+  Record<string | symbol, unknown>,
+  Record<string | symbol, unknown>
+> {
+  const initialState: Record<string | symbol, unknown> = {};
+  for (const parser of parsers) {
+    for (const field in parser.initialState) {
+      initialState[field] = parser.initialState[field];
+    }
+  }
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: Math.max(...parsers.map((p) => p.priority)),
+    initialState,
+    parse(context) {
+      for (const parser of parsers) {
+        const result = parser.parse(context);
+        if (result.success) {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: result.next.buffer,
+              optionsTerminated: result.next.optionsTerminated,
+              state: {
+                ...context.state,
+                ...result.next.state,
+              },
+            },
+            consumed: result.consumed,
+          };
+        } else if (result.consumed < 1) continue;
+        else return result;
+      }
+      return {
+        success: false,
+        consumed: 0,
+        error: message`No parser matched the input.`,
+      };
+    },
+    complete(state) {
+      const object: Record<string | symbol, unknown> = {};
+      for (const parser of parsers) {
+        const result = parser.complete(state);
+        if (!result.success) return result;
+        for (const field in result.value) object[field] = result.value[field];
+      }
+      return { success: true, value: object };
     },
   };
 }
