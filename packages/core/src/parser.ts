@@ -7,6 +7,7 @@ import {
   text,
   values,
 } from "./message.ts";
+import type { OptionName, Usage } from "./usage.ts";
 import type { ValueParser, ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -37,6 +38,12 @@ export interface Parser<TValue, TState> {
    * the number, the higher the priority.
    */
   readonly priority: number;
+
+  /**
+   * The usage information for this parser, which describes how
+   * to use it in command-line interfaces.
+   */
+  usage: Usage;
 
   /**
    * The initial state for this parser.  This is used to initialize the
@@ -145,6 +152,7 @@ export function constant<const T>(value: T): Parser<T, T> {
     $valueType: [],
     $stateType: [],
     priority: 0,
+    usage: [],
     initialState: value,
     parse(context) {
       return { success: true, next: context, consumed: [] };
@@ -154,21 +162,6 @@ export function constant<const T>(value: T): Parser<T, T> {
     },
   };
 }
-
-/**
- * Represents the name of a command-line option.  There are four types of
- * option syntax:
- *
- * - GNU-style long options (`--option`)
- * - POSIX-style short options (`-o`) or Java-style options (`-option`)
- * - MS-DOS-style options (`/o`, `/option`)
- * - Plus-prefixed options (`+o`)
- */
-export type OptionName =
-  | `--${string}`
-  | `-${string}`
-  | `/${string}`
-  | `+${string}`;
 
 /**
  * Creates a parser for various styles of command-line options that take an
@@ -211,6 +204,13 @@ export function option<T>(
     $valueType: [],
     $stateType: [],
     priority: 10,
+    usage: [
+      {
+        type: "option",
+        names: optionNames,
+        metavar: valueParser == null ? undefined : valueParser.metavar,
+      },
+    ],
     initialState: valueParser == null ? { success: true, value: false } : {
       success: false,
       error: message`Missing option ${eOptionNames(optionNames)}.`,
@@ -404,6 +404,7 @@ export function argument<T>(
     $valueType: [],
     $stateType: [],
     priority: 5,
+    usage: [{ type: "argument", metavar: valueParser.metavar }],
     initialState: undefined,
     parse(context) {
       if (context.buffer.length < 1) {
@@ -503,6 +504,7 @@ export function optional<TValue, TState>(
     $valueType: [],
     $stateType: [],
     priority: parser.priority,
+    usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     parse(context) {
       const result = parser.parse({
@@ -557,6 +559,7 @@ export function withDefault<TValue, TState>(
     $valueType: [],
     $stateType: [],
     priority: parser.priority,
+    usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     parse(context) {
       const result = parser.parse({
@@ -635,6 +638,7 @@ export function multiple<TValue, TState>(
     $valueType: [],
     $stateType: [],
     priority: parser.priority,
+    usage: [{ type: "multiple", terms: parser.usage, min }],
     initialState: [],
     parse(context) {
       let added = context.state.length < 1;
@@ -765,10 +769,15 @@ export function object<
   const parsers = typeof labelOrParsers === "string"
     ? maybeParsers!
     : labelOrParsers;
+  const parserPairs = Object.entries(parsers);
+  parserPairs.sort(([_, parserA], [__, parserB]) =>
+    parserB.priority - parserA.priority
+  );
   return {
     $valueType: [],
     $stateType: [],
     priority: Math.max(...Object.values(parsers).map((p) => p.priority)),
+    usage: parserPairs.flatMap(([_, p]) => p.usage),
     initialState: Object.fromEntries(
       Object.entries(parsers).map(([key, parser]) => [
         key,
@@ -786,10 +795,6 @@ export function object<
           ? message`Unexpected option or argument: ${context.buffer[0]}.`
           : message`Expected an option or argument, but got end of input.`,
       };
-      const parserPairs = Object.entries(parsers);
-      parserPairs.sort(([_, parserA], [__, parserB]) =>
-        parserB.priority - parserA.priority
-      );
       for (const [field, parser] of parserPairs) {
         const result = parser.parse({
           ...context,
@@ -899,10 +904,12 @@ export function tuple<
   const parsers = typeof labelOrParsers === "string"
     ? maybeParsers!
     : labelOrParsers;
-
   return {
     $valueType: [],
     $stateType: [],
+    usage: parsers
+      .toSorted((a, b) => b.priority - a.priority)
+      .flatMap((p) => p.usage),
     priority: parsers.length > 0
       ? Math.max(...parsers.map((p) => p.priority))
       : 0,
@@ -1181,6 +1188,7 @@ export function or(
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
+    usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
     initialState: undefined,
     complete(
       state: undefined | [number, ParserResult<unknown>],
@@ -1467,6 +1475,7 @@ export function merge(
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
+    usage: parsers.flatMap((p) => p.usage),
     initialState,
     parse(context) {
       for (const parser of parsers) {
@@ -1534,6 +1543,7 @@ export function command<T, TState>(
     $valueType: [],
     $stateType: [],
     priority: 15, // Higher than options to match commands first
+    usage: [{ type: "command", name }, ...parser.usage],
     initialState: undefined,
     parse(context) {
       // Handle different states

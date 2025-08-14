@@ -67,6 +67,14 @@
       "import": "./dist/parser.js",
       "require": "./dist/parser.cjs"
     },
+    "./usage": {
+      "types": {
+        "import": "./dist/usage.d.ts",
+        "require": "./dist/usage.cts"
+      },
+      "import": "./dist/usage.js",
+      "require": "./dist/usage.cjs"
+    },
     "./valueparser": {
       "types": {
         "import": "./dist/valueparser.d.ts",

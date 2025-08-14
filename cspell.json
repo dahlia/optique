@@ -1,12 +1,14 @@
 {
   "words": [
+    "combinators",
     "metavar",
-    "valueparser",
+    "metavariable",
+    "metavariables",
+    "Optique",
     "subtag",
     "subtags",
-    "Optique",
-    "combinators",
-    "metavariable",
-    "metavariables"
+    "tsdown",
+    "unbundle",
+    "valueparser"
   ]
 }

@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./message": "./src/message.ts",
     "./parser": "./src/parser.ts",
+    "./usage": "./src/usage.ts",
     "./valueparser": "./src/valueparser.ts"
   },
   "exclude": [

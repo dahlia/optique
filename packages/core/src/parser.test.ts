@@ -3475,3 +3475,513 @@ describe("command", () => {
     }
   });
 });
+
+describe("Parser usage field", () => {
+  describe("constant parser", () => {
+    it("should have empty usage", () => {
+      const parser = constant(42);
+      assert.deepEqual(parser.usage, []);
+    });
+  });
+
+  describe("option parser", () => {
+    it("should have correct usage for boolean flag", () => {
+      const parser = option("-v", "--verbose");
+      const expected = [{
+        type: "option",
+        names: ["-v", "--verbose"],
+        metavar: undefined,
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should have correct usage for option with value", () => {
+      const parser = option("-p", "--port", integer());
+      const expected = [{
+        type: "option",
+        names: ["-p", "--port"],
+        metavar: "INTEGER",
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should have correct usage for single option name", () => {
+      const parser = option("--debug");
+      const expected = [{
+        type: "option",
+        names: ["--debug"],
+        metavar: undefined,
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should have correct usage for multiple option names", () => {
+      const parser = option("-o", "--output", "--out", string());
+      const expected = [{
+        type: "option",
+        names: ["-o", "--output", "--out"],
+        metavar: "STRING",
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+  });
+
+  describe("argument parser", () => {
+    it("should have correct usage", () => {
+      const parser = argument(string());
+      const expected = [{
+        type: "argument",
+        metavar: "STRING",
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should have correct usage with integer", () => {
+      const parser = argument(integer());
+      const expected = [{
+        type: "argument",
+        metavar: "INTEGER",
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+  });
+
+  describe("optional parser", () => {
+    it("should wrap inner parser usage in optional term", () => {
+      const innerParser = option("-v", "--verbose");
+      const parser = optional(innerParser);
+      const expected = [{
+        type: "optional",
+        terms: [{
+          type: "option",
+          names: ["-v", "--verbose"],
+          metavar: undefined,
+        }],
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should work with argument parser", () => {
+      const innerParser = argument(string());
+      const parser = optional(innerParser);
+      const expected = [{
+        type: "optional",
+        terms: [{
+          type: "argument",
+          metavar: "STRING",
+        }],
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should work with nested optional", () => {
+      const baseParser = option("-d", "--debug");
+      const innerOptional = optional(baseParser);
+      const outerOptional = optional(innerOptional);
+      const expected = [{
+        type: "optional",
+        terms: [{
+          type: "optional",
+          terms: [{
+            type: "option",
+            names: ["-d", "--debug"],
+            metavar: undefined,
+          }],
+        }],
+      }];
+      assert.deepEqual(outerOptional.usage, expected);
+    });
+  });
+
+  describe("withDefault parser", () => {
+    it("should wrap inner parser usage in optional term", () => {
+      const innerParser = option("-p", "--port", integer());
+      const parser = withDefault(innerParser, 3000);
+      const expected = [{
+        type: "optional",
+        terms: [{
+          type: "option",
+          names: ["-p", "--port"],
+          metavar: "INTEGER",
+        }],
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+  });
+
+  describe("multiple parser", () => {
+    it("should wrap inner parser usage in multiple term with min 0", () => {
+      const innerParser = argument(string());
+      const parser = multiple(innerParser);
+      const expected = [{
+        type: "multiple",
+        terms: [{
+          type: "argument",
+          metavar: "STRING",
+        }],
+        min: 0,
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should wrap inner parser usage in multiple term with custom min", () => {
+      const innerParser = argument(string());
+      const parser = multiple(innerParser, { min: 2 });
+      const expected = [{
+        type: "multiple",
+        terms: [{
+          type: "argument",
+          metavar: "STRING",
+        }],
+        min: 2,
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should work with option parser", () => {
+      const innerParser = option("-I", "--include", string());
+      const parser = multiple(innerParser, { min: 1 });
+      const expected = [{
+        type: "multiple",
+        terms: [{
+          type: "option",
+          names: ["-I", "--include"],
+          metavar: "STRING",
+        }],
+        min: 1,
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+  });
+
+  describe("object parser", () => {
+    it("should combine usage from all parsers", () => {
+      const parser = object({
+        verbose: option("-v", "--verbose"),
+        output: option("-o", "--output", string()),
+        port: argument(integer()),
+      });
+
+      // Usage should be flattened and include all terms
+      assert.equal(parser.usage.length, 3);
+
+      // Check that all expected terms are present
+      const usageTypes = parser.usage.map((u) => u.type);
+      assert.ok(usageTypes.includes("option"));
+      assert.ok(usageTypes.includes("argument"));
+
+      // Find the option terms
+      const optionTerms = parser.usage.filter((u) => u.type === "option");
+      assert.equal(optionTerms.length, 2);
+
+      const verboseOption = optionTerms.find((o) =>
+        o.type === "option" && o.names.includes("-v")
+      );
+      assert.ok(verboseOption);
+      assert.deepEqual(verboseOption?.names, ["-v", "--verbose"]);
+
+      const outputOption = optionTerms.find((o) =>
+        o.type === "option" && o.names.includes("-o")
+      );
+      assert.ok(outputOption);
+      assert.deepEqual(outputOption?.names, ["-o", "--output"]);
+      assert.equal(outputOption?.metavar, "STRING");
+
+      // Find the argument term
+      const argTerm = parser.usage.find((u) => u.type === "argument");
+      assert.ok(argTerm);
+      assert.equal(argTerm?.type, "argument");
+      if (argTerm?.type === "argument") {
+        assert.equal(argTerm.metavar, "INTEGER");
+      }
+    });
+
+    it("should handle empty object", () => {
+      const parser = object({});
+      assert.deepEqual(parser.usage, []);
+    });
+
+    it("should work with labeled object", () => {
+      const parser = object("main options", {
+        verbose: option("-v", "--verbose"),
+        output: option("-o", "--output", string()),
+      });
+
+      assert.equal(parser.usage.length, 2);
+      const optionTerms = parser.usage.filter((u) => u.type === "option");
+      assert.equal(optionTerms.length, 2);
+    });
+  });
+
+  describe("tuple parser", () => {
+    it("should combine usage from all parsers", () => {
+      const parser = tuple([
+        option("-v", "--verbose"),
+        argument(string()),
+        option("-o", "--output", string()),
+      ]);
+
+      assert.equal(parser.usage.length, 3);
+
+      const optionTerms = parser.usage.filter((u) => u.type === "option");
+      assert.equal(optionTerms.length, 2);
+
+      const argTerms = parser.usage.filter((u) => u.type === "argument");
+      assert.equal(argTerms.length, 1);
+    });
+
+    it("should handle empty tuple", () => {
+      const parser = tuple([]);
+      assert.deepEqual(parser.usage, []);
+    });
+
+    it("should work with labeled tuple", () => {
+      const parser = tuple("command line args", [
+        option("-v", "--verbose"),
+        argument(string()),
+      ]);
+
+      assert.equal(parser.usage.length, 2);
+    });
+  });
+
+  describe("or parser", () => {
+    it("should create exclusive usage term", () => {
+      const parserA = option("-v", "--verbose");
+      const parserB = option("-q", "--quiet");
+      const parser = or(parserA, parserB);
+
+      const expected = [{
+        type: "exclusive",
+        terms: [
+          [{
+            type: "option",
+            names: ["-v", "--verbose"],
+            metavar: undefined,
+          }],
+          [{
+            type: "option",
+            names: ["-q", "--quiet"],
+            metavar: undefined,
+          }],
+        ],
+      }];
+      assert.deepEqual(parser.usage, expected);
+    });
+
+    it("should work with three parsers", () => {
+      const parserA = option("-v", "--verbose");
+      const parserB = option("-q", "--quiet");
+      const parserC = argument(string());
+      const parser = or(parserA, parserB, parserC);
+
+      assert.equal(parser.usage.length, 1);
+      assert.equal(parser.usage[0].type, "exclusive");
+
+      if (parser.usage[0].type === "exclusive") {
+        assert.equal(parser.usage[0].terms.length, 3);
+        assert.deepEqual(parser.usage[0].terms[0], [{
+          type: "option",
+          names: ["-v", "--verbose"],
+          metavar: undefined,
+        }]);
+        assert.deepEqual(parser.usage[0].terms[1], [{
+          type: "option",
+          names: ["-q", "--quiet"],
+          metavar: undefined,
+        }]);
+        assert.deepEqual(parser.usage[0].terms[2], [{
+          type: "argument",
+          metavar: "STRING",
+        }]);
+      }
+    });
+
+    it("should work with complex parser combinations", () => {
+      const objectParser = object({
+        count: option("-c", "--count", integer()),
+        input: argument(string()),
+      });
+      const optionParser = option("-h", "--help");
+      const parser = or(objectParser, optionParser);
+
+      assert.equal(parser.usage.length, 1);
+      assert.equal(parser.usage[0].type, "exclusive");
+
+      if (parser.usage[0].type === "exclusive") {
+        assert.equal(parser.usage[0].terms.length, 2);
+        // First term should have the object parser's usage
+        assert.equal(parser.usage[0].terms[0].length, 2);
+        // Second term should have the option parser's usage
+        assert.equal(parser.usage[0].terms[1].length, 1);
+        assert.equal(parser.usage[0].terms[1][0].type, "option");
+      }
+    });
+  });
+
+  describe("merge parser", () => {
+    it("should combine usage from merged parsers", () => {
+      const parserA = object({
+        verbose: option("-v", "--verbose"),
+        input: argument(string()),
+      });
+      const parserB = object({
+        output: option("-o", "--output", string()),
+        count: option("-c", "--count", integer()),
+      });
+      const parser = merge(parserA, parserB);
+
+      assert.equal(parser.usage.length, 4);
+
+      const optionTerms = parser.usage.filter((u) => u.type === "option");
+      assert.equal(optionTerms.length, 3);
+
+      const argTerms = parser.usage.filter((u) => u.type === "argument");
+      assert.equal(argTerms.length, 1);
+    });
+
+    it("should work with three merged parsers", () => {
+      const parserA = object({ verbose: option("-v", "--verbose") });
+      const parserB = object({ quiet: option("-q", "--quiet") });
+      const parserC = object({ debug: option("-d", "--debug") });
+      const parser = merge(parserA, parserB, parserC);
+
+      assert.equal(parser.usage.length, 3);
+      const optionTerms = parser.usage.filter((u) => u.type === "option");
+      assert.equal(optionTerms.length, 3);
+    });
+  });
+
+  describe("command parser", () => {
+    it("should include command term and inner parser usage", () => {
+      const innerParser = object({
+        verbose: option("-v", "--verbose"),
+        input: argument(string()),
+      });
+      const parser = command("init", innerParser);
+
+      assert.equal(parser.usage.length, 3);
+      assert.equal(parser.usage[0].type, "command");
+
+      if (parser.usage[0].type === "command") {
+        assert.equal(parser.usage[0].name, "init");
+      }
+
+      // Rest should be from inner parser
+      const optionTerms = parser.usage.filter((u) => u.type === "option");
+      assert.equal(optionTerms.length, 1);
+
+      const argTerms = parser.usage.filter((u) => u.type === "argument");
+      assert.equal(argTerms.length, 1);
+    });
+
+    it("should work with simple inner parser", () => {
+      const innerParser = constant("done");
+      const parser = command("test", innerParser);
+
+      assert.equal(parser.usage.length, 1);
+      assert.equal(parser.usage[0].type, "command");
+
+      if (parser.usage[0].type === "command") {
+        assert.equal(parser.usage[0].name, "test");
+      }
+    });
+
+    it("should work with nested commands", () => {
+      const subCommand = command("subcommand", argument(string()));
+      const mainCommand = command("main", subCommand);
+
+      assert.equal(mainCommand.usage.length, 3);
+      assert.equal(mainCommand.usage[0].type, "command");
+      assert.equal(mainCommand.usage[1].type, "command");
+      assert.equal(mainCommand.usage[2].type, "argument");
+
+      if (mainCommand.usage[0].type === "command") {
+        assert.equal(mainCommand.usage[0].name, "main");
+      }
+      if (mainCommand.usage[1].type === "command") {
+        assert.equal(mainCommand.usage[1].name, "subcommand");
+      }
+    });
+  });
+});
+
+describe("Parser usage field integration", () => {
+  it("should work with complex real-world example", () => {
+    // Simulate a git-like CLI: git [--verbose] (commit [-m MSG] | add FILE...)
+    const commitCommand = command(
+      "commit",
+      object({
+        message: optional(option("-m", "--message", string())),
+      }),
+    );
+
+    const addCommand = command(
+      "add",
+      object({
+        files: multiple(argument(string()), { min: 1 }),
+      }),
+    );
+
+    const gitParser = object({
+      global: optional(option("--verbose")),
+      subcommand: or(commitCommand, addCommand),
+    });
+
+    // Check that usage is properly structured
+    assert.equal(gitParser.usage.length, 2); // exclusive subcommands + optional global option
+
+    // Find optional verbose option
+    const optionalTerms = gitParser.usage.filter((u) => u.type === "optional");
+    assert.equal(optionalTerms.length, 1);
+
+    // Find exclusive subcommands
+    const exclusiveTerms = gitParser.usage.filter((u) =>
+      u.type === "exclusive"
+    );
+    assert.equal(exclusiveTerms.length, 1);
+
+    if (exclusiveTerms[0].type === "exclusive") {
+      assert.equal(exclusiveTerms[0].terms.length, 2);
+      // Each subcommand should start with a command term
+      assert.ok(
+        exclusiveTerms[0].terms[0].some((term) =>
+          term.type === "command" && term.name === "commit"
+        ),
+      );
+      assert.ok(
+        exclusiveTerms[0].terms[1].some((term) =>
+          term.type === "command" && term.name === "add"
+        ),
+      );
+    }
+  });
+
+  it("should maintain usage consistency across parser combinations", () => {
+    const baseOption = option("-v", "--verbose");
+    const baseArg = argument(string());
+
+    // Test that wrapping parsers preserve inner usage correctly
+    const optionalWrapped = optional(baseOption);
+    const multipleWrapped = multiple(baseArg);
+    const defaultWrapped = withDefault(baseOption, false);
+
+    // Optional should wrap the original usage
+    assert.equal(optionalWrapped.usage[0].type, "optional");
+    if (optionalWrapped.usage[0].type === "optional") {
+      assert.deepEqual(optionalWrapped.usage[0].terms, baseOption.usage);
+    }
+
+    // Multiple should wrap the original usage
+    assert.equal(multipleWrapped.usage[0].type, "multiple");
+    if (multipleWrapped.usage[0].type === "multiple") {
+      assert.deepEqual(multipleWrapped.usage[0].terms, baseArg.usage);
+    }
+
+    // WithDefault should wrap like optional
+    assert.equal(defaultWrapped.usage[0].type, "optional");
+    if (defaultWrapped.usage[0].type === "optional") {
+      assert.deepEqual(defaultWrapped.usage[0].terms, baseOption.usage);
+    }
+  });
+});
