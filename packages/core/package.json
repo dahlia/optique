@@ -51,13 +51,13 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./error": {
+    "./message": {
       "types": {
-        "import": "./dist/error.d.ts",
-        "require": "./dist/error.cts"
+        "import": "./dist/message.d.ts",
+        "require": "./dist/message.cts"
       },
-      "import": "./dist/error.js",
-      "require": "./dist/error.cjs"
+      "import": "./dist/message.js",
+      "require": "./dist/message.cjs"
     },
     "./parser": {
       "types": {

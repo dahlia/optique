@@ -1,11 +1,11 @@
 /**
- * Represents a single term in an error message, which can be a text, an option
+ * Represents a single term in a message, which can be a text, an option
  * name, a list of option names, a metavariable, a value, or a list of
  * consecutive values.
  */
-export type ErrorMessageTerm =
+export type MessageTerm =
   /**
-   * A plain text term in the error message.
+   * A plain text term in the message.
    */
   | {
     /**
@@ -18,7 +18,7 @@ export type ErrorMessageTerm =
     text: string;
   }
   /**
-   * An option name term in the error message, which can be a single
+   * An option name term in the message, which can be a single
    * option name.  Although it is named option name, it can also
    * represent a subcommand.
    */
@@ -34,7 +34,7 @@ export type ErrorMessageTerm =
     optionName: string;
   }
   /**
-   * A list of option names term in the error message, which can be a
+   * A list of option names term in the message, which can be a
    * list of option names.
    */
   | {
@@ -50,7 +50,7 @@ export type ErrorMessageTerm =
     optionNames: readonly string[];
   }
   /**
-   * A metavariable term in the error message, which can be a single
+   * A metavariable term in the message, which can be a single
    * metavariable.
    */
   | {
@@ -60,12 +60,12 @@ export type ErrorMessageTerm =
     type: "metavar";
     /**
      * The metavariable name, which is a string that represents
-     * a variable in the error message.  For example, `"VALUE"` or `"ARG"`.
+     * a variable in the message.  For example, `"VALUE"` or `"ARG"`.
      */
     metavar: string;
   }
   /**
-   * A value term in the error message, which can be a single value.
+   * A value term in the message, which can be a single value.
    */
   | {
     /**
@@ -79,7 +79,7 @@ export type ErrorMessageTerm =
     value: string;
   }
   /**
-   * A list of values term in the error message, which can be a
+   * A list of values term in the message, which can be a
    * list of values.
    */
   | {
@@ -96,16 +96,16 @@ export type ErrorMessageTerm =
   };
 
 /**
- * Type representing an error message that can include styled/colored values.
- * This type is used to create structured error messages that can be
+ * Type representing a message that can include styled/colored values.
+ * This type is used to create structured messages that can be
  * displayed to the user with specific formatting.
  */
-export type ErrorMessage = readonly ErrorMessageTerm[];
+export type Message = readonly MessageTerm[];
 
 /**
- * Creates a structured error message with template strings and values.
+ * Creates a structured message with template strings and values.
  *
- * This function allows creating error messages where specific values can be
+ * This function allows creating messages where specific values can be
  * highlighted or styled differently when displayed to the user.
  *
  * @example
@@ -116,105 +116,105 @@ export type ErrorMessage = readonly ErrorMessageTerm[];
  *
  * @param message Template strings array (from template literal).
  * @param values Values to be interpolated into the template.
- * @returns A structured ErrorMessage object.
+ * @returns A structured Message object.
  */
 export function message(
   message: TemplateStringsArray,
-  ...values: readonly (ErrorMessageTerm | ErrorMessage | string)[]
-): ErrorMessage {
-  const errorMessage: ErrorMessageTerm[] = [];
+  ...values: readonly (MessageTerm | Message | string)[]
+): Message {
+  const messageTerms: MessageTerm[] = [];
   for (let i = 0; i < message.length; i++) {
     if (message[i] !== "") {
-      errorMessage.push({ type: "text", text: message[i] });
+      messageTerms.push({ type: "text", text: message[i] });
     }
     if (i >= values.length) continue;
     const value = values[i];
     if (typeof value === "string") {
-      errorMessage.push({ type: "value", value });
+      messageTerms.push({ type: "value", value });
     } else if (Array.isArray(value)) {
-      errorMessage.push(...value);
+      messageTerms.push(...value);
     } else if (typeof value === "object" && value != null && "type" in value) {
-      errorMessage.push(value);
+      messageTerms.push(value);
     } else {
       throw new TypeError(
-        `Invalid value type in error message: ${typeof value}.`,
+        `Invalid value type in message: ${typeof value}.`,
       );
     }
   }
-  return errorMessage;
+  return messageTerms;
 }
 
 /**
- * Creates an {@link ErrorMessageTerm} for plain text.  Usually used for
- * dynamically generated error messages.
- * @param text The plain text to be included in the error message.
- * @returns An {@link ErrorMessageTerm} representing the plain text.
+ * Creates a {@link MessageTerm} for plain text.  Usually used for
+ * dynamically generated messages.
+ * @param text The plain text to be included in the message.
+ * @returns A {@link MessageTerm} representing the plain text.
  */
-export function text(text: string): ErrorMessageTerm {
+export function text(text: string): MessageTerm {
   return { type: "text", text };
 }
 
 /**
- * Creates an {@link ErrorMessageTerm} for an option name.
+ * Creates a {@link MessageTerm} for an option name.
  * @param name The name of the option, which can be a short or long option name.
  *             For example, `"-f"` or `"--foo"`.
- * @returns An {@link ErrorMessageTerm} representing the option name.
+ * @returns A {@link MessageTerm} representing the option name.
  */
-export function optionName(name: string): ErrorMessageTerm {
+export function optionName(name: string): MessageTerm {
   return { type: "optionName", optionName: name };
 }
 
 /**
- * Creates an {@link ErrorMessageTerm} for a list of option names.
+ * Creates a {@link MessageTerm} for a list of option names.
  * @param names The list of option names, which can include both short and long
  *              option names. For example, `["--foo", "--bar"]`.
- * @returns An {@link ErrorMessageTerm} representing the list of option names.
+ * @returns A {@link MessageTerm} representing the list of option names.
  */
-export function optionNames(names: readonly string[]): ErrorMessageTerm {
+export function optionNames(names: readonly string[]): MessageTerm {
   return { type: "optionNames", optionNames: names };
 }
 
 /**
- * Creates an {@link ErrorMessageTerm} for a metavariable.
+ * Creates a {@link MessageTerm} for a metavariable.
  * @param metavar The metavariable name, which is a string that represents
- *                a variable in the error message. For example, `"VALUE"` or
+ *                a variable in the message. For example, `"VALUE"` or
  *                `"ARG"`.
- * @returns An {@link ErrorMessageTerm} representing the metavariable.
+ * @returns A {@link MessageTerm} representing the metavariable.
  */
-export function metavar(metavar: string): ErrorMessageTerm {
+export function metavar(metavar: string): MessageTerm {
   return { type: "metavar", metavar };
 }
 
 /**
- * Creates an {@link ErrorMessageTerm} for a single value.  However, you usually
+ * Creates a {@link MessageTerm} for a single value.  However, you usually
  * don't need to use this function directly, as {@link message} string template
- * will automatically create an {@link ErrorMessageTerm} for a value when
+ * will automatically create a {@link MessageTerm} for a value when
  * you use a string in a template literal.
  * @param value The value, which can be any string representation of a value.
  *              For example, `"42"` or `"hello"`.
- * @returns An {@link ErrorMessageTerm} representing the value.
+ * @returns A {@link MessageTerm} representing the value.
  */
-export function value(value: string): ErrorMessageTerm {
+export function value(value: string): MessageTerm {
   return { type: "value", value };
 }
 
 /**
- * Creates an {@link ErrorMessageTerm} for a list of consecutive values.
+ * Creates a {@link MessageTerm} for a list of consecutive values.
  * @param values The list of consecutive values, which can include multiple
  *               string representations of consecutive values.
  *               For example, `["42", "hello"]`.
- * @returns An {@link ErrorMessageTerm} representing the list of values.
+ * @returns A {@link MessageTerm} representing the list of values.
  */
-export function values(values: readonly string[]): ErrorMessageTerm {
+export function values(values: readonly string[]): MessageTerm {
   return { type: "values", values };
 }
 
 /**
- * Options for the {@link formatErrorMessage} function.
+ * Options for the {@link formatMessage} function.
  */
-export interface ErrorMessageFormatOptions {
+export interface MessageFormatOptions {
   /**
-   * Whether to use colors in the formatted error message.  If `true`,
+   * Whether to use colors in the formatted message.  If `true`,
    * the formatted message will include ANSI escape codes for colors.
    * If `false`, the message will be plain text without colors.
    * @default `false`
@@ -222,7 +222,7 @@ export interface ErrorMessageFormatOptions {
   readonly colors?: boolean;
 
   /**
-   * Whether to use quotes around values in the formatted error message.
+   * Whether to use quotes around values in the formatted message.
    * If `true`, values will be wrapped in quotes (e.g., `"value"`).
    * If `false`, values will be displayed without quotes.
    * @default `true`
@@ -231,23 +231,23 @@ export interface ErrorMessageFormatOptions {
 }
 
 /**
- * Formats an {@link ErrorMessage} into a human-readable string for
+ * Formats a {@link Message} into a human-readable string for
  * the terminal.
- * @param error The error message to format, which is an array of
- *              {@link ErrorMessageTerm} objects.
+ * @param msg The message to format, which is an array of
+ *              {@link MessageTerm} objects.
  * @param options Optional formatting options to customize the output.
- * @returns A formatted string representation of the error message.
+ * @returns A formatted string representation of the message.
  */
-export function formatErrorMessage(
-  error: ErrorMessage,
-  options: ErrorMessageFormatOptions = {},
+export function formatMessage(
+  msg: Message,
+  options: MessageFormatOptions = {},
 ): string {
   // Apply defaults
   const useColors = options.colors ?? false;
   const useQuotes = options.quotes ?? true;
 
   let output = "";
-  for (const term of error) {
+  for (const term of msg) {
     if (term.type === "text") {
       output += term.text;
     } else if (term.type === "optionName") {
@@ -286,7 +286,7 @@ export function formatErrorMessage(
         : values;
     } else {
       throw new TypeError(
-        `Invalid ErrorMessageTerm type: ${term["type"]}.`,
+        `Invalid MessageTerm type: ${term["type"]}.`,
       );
     }
   }

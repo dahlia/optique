@@ -64,7 +64,7 @@ Example
 -------
 
 ~~~~ typescript
-import { formatErrorMessage } from "@optique/core/error";
+import { formatMessage } from "@optique/core/message";
 import {
   argument,
   merge,
@@ -132,7 +132,7 @@ if (result.success) {
 } else {
   console.error(
     "Error:",
-    formatErrorMessage(result.error, { colors: true, quotes: false })
+    formatMessage(result.error, { colors: true, quotes: false })
   );
 }
 ~~~~

@@ -1,4 +1,4 @@
-import { type ErrorMessage, formatErrorMessage } from "@optique/core/error";
+import { formatMessage, type Message } from "@optique/core/message";
 import {
   choice,
   float,
@@ -11,8 +11,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 // Helper function to check error content
-function assertErrorContains(error: ErrorMessage, expectedText: string): void {
-  const formatted = formatErrorMessage(error);
+function assertErrorContains(error: Message, expectedText: string): void {
+  const formatted = formatMessage(error);
   assert.ok(
     formatted.includes(expectedText),
     `Expected error to contain "${expectedText}", but got: "${formatted}"`,

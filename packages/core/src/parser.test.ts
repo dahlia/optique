@@ -1,4 +1,4 @@
-import type { ErrorMessage } from "@optique/core/error";
+import type { Message } from "@optique/core/message";
 import {
   argument,
   command,
@@ -17,10 +17,10 @@ import {
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatErrorMessage } from "./error.ts";
+import { formatMessage } from "./message.ts";
 
-function assertErrorIncludes(error: ErrorMessage, text: string): void {
-  const formatted = formatErrorMessage(error);
+function assertErrorIncludes(error: Message, text: string): void {
+  const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
 }
 
@@ -702,7 +702,7 @@ describe("argument", () => {
     const parser = argument(string({ metavar: "FILE" }));
     const invalidState = {
       success: false as const,
-      error: [{ type: "text", text: "Missing argument" }] as ErrorMessage,
+      error: [{ type: "text", text: "Missing argument" }] as Message,
     };
 
     const result = parser.complete(invalidState);
@@ -836,7 +836,7 @@ describe("optional", () => {
 
     const failedState = {
       success: false as const,
-      error: [{ type: "text", text: "Port must be >= 1" }] as ErrorMessage,
+      error: [{ type: "text", text: "Port must be >= 1" }] as Message,
     };
     const completeResult = optionalParser.complete([failedState]);
     assert.ok(!completeResult.success);
@@ -1252,7 +1252,7 @@ describe("withDefault", () => {
 
     const failedState = {
       success: false as const,
-      error: [{ type: "text", text: "Port must be >= 1" }] as ErrorMessage,
+      error: [{ type: "text", text: "Port must be >= 1" }] as Message,
     };
     const completeResult = defaultParser.complete([failedState]);
     assert.ok(!completeResult.success);
@@ -1598,7 +1598,7 @@ describe("multiple", () => {
       { success: true as const, value: 42 },
       {
         success: false as const,
-        error: [{ type: "text", text: "Invalid number" }] as ErrorMessage,
+        error: [{ type: "text", text: "Invalid number" }] as Message,
       },
       { success: true as const, value: 7 },
     ];

@@ -1,6 +1,6 @@
 import {
-  type ErrorMessage,
-  formatErrorMessage,
+  formatMessage,
+  type Message,
   message,
   metavar,
   optionName,
@@ -8,108 +8,108 @@ import {
   text,
   value,
   values,
-} from "./error.ts";
+} from "./message.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 describe("message template function", () => {
-  it("should create error message with text only", () => {
-    const error = message`This is a simple error`;
+  it("should create message with text only", () => {
+    const msg = message`This is a simple message`;
 
-    assert.ok(Array.isArray(error));
-    assert.equal(error.length, 1);
-    assert.equal(error[0].type, "text");
-    assert.equal(error[0].text, "This is a simple error");
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 1);
+    assert.equal(msg[0].type, "text");
+    assert.equal(msg[0].text, "This is a simple message");
   });
 
-  it("should create error message with interpolated strings", () => {
+  it("should create message with interpolated strings", () => {
     const val = "testValue";
-    const error = message`Expected valid input, got ${val}`;
+    const msg = message`Expected valid input, got ${val}`;
 
-    assert.ok(Array.isArray(error));
-    assert.equal(error.length, 2);
-    assert.equal(error[0].type, "text");
-    assert.equal(error[0].text, "Expected valid input, got ");
-    assert.equal(error[1].type, "value");
-    assert.equal(error[1].value, "testValue");
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 2);
+    assert.equal(msg[0].type, "text");
+    assert.equal(msg[0].text, "Expected valid input, got ");
+    assert.equal(msg[1].type, "value");
+    assert.equal(msg[1].value, "testValue");
   });
 
-  it("should create error message with multiple interpolated values", () => {
+  it("should create message with multiple interpolated values", () => {
     const min = "10";
     const max = "100";
     const actual = "150";
-    const error = message`Value ${actual} is not between ${min} and ${max}`;
+    const msg = message`Value ${actual} is not between ${min} and ${max}`;
 
-    assert.ok(Array.isArray(error));
-    assert.equal(error.length, 6); // no trailing empty text
-    assert.equal(error[0].type, "text");
-    assert.equal(error[0].text, "Value ");
-    assert.equal(error[1].type, "value");
-    assert.equal(error[1].value, "150");
-    assert.equal(error[2].type, "text");
-    assert.equal(error[2].text, " is not between ");
-    assert.equal(error[3].type, "value");
-    assert.equal(error[3].value, "10");
-    assert.equal(error[4].type, "text");
-    assert.equal(error[4].text, " and ");
-    assert.equal(error[5].type, "value");
-    assert.equal(error[5].value, "100");
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 6); // no trailing empty text
+    assert.equal(msg[0].type, "text");
+    assert.equal(msg[0].text, "Value ");
+    assert.equal(msg[1].type, "value");
+    assert.equal(msg[1].value, "150");
+    assert.equal(msg[2].type, "text");
+    assert.equal(msg[2].text, " is not between ");
+    assert.equal(msg[3].type, "value");
+    assert.equal(msg[3].value, "10");
+    assert.equal(msg[4].type, "text");
+    assert.equal(msg[4].text, " and ");
+    assert.equal(msg[5].type, "value");
+    assert.equal(msg[5].value, "100");
   });
 
-  it("should handle ErrorMessageTerm objects in interpolation", () => {
+  it("should handle MessageTerm objects in interpolation", () => {
     const optName = optionName("--port");
-    const error = message`Option ${optName} is required`;
+    const msg = message`Option ${optName} is required`;
 
-    assert.ok(Array.isArray(error));
-    assert.equal(error.length, 3);
-    assert.equal(error[0].type, "text");
-    assert.equal(error[0].text, "Option ");
-    assert.equal(error[1].type, "optionName");
-    assert.equal(error[1].optionName, "--port");
-    assert.equal(error[2].type, "text");
-    assert.equal(error[2].text, " is required");
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 3);
+    assert.equal(msg[0].type, "text");
+    assert.equal(msg[0].text, "Option ");
+    assert.equal(msg[1].type, "optionName");
+    assert.equal(msg[1].optionName, "--port");
+    assert.equal(msg[2].type, "text");
+    assert.equal(msg[2].text, " is required");
   });
 
-  it("should handle nested ErrorMessage arrays", () => {
-    const innerError = message`invalid value`;
-    const error = message`Parsing failed: ${innerError}`;
+  it("should handle nested Message arrays", () => {
+    const innerMessage = message`invalid value`;
+    const msg = message`Parsing failed: ${innerMessage}`;
 
-    assert.ok(Array.isArray(error));
-    assert.equal(error.length, 2);
-    assert.equal(error[0].type, "text");
-    assert.equal(error[0].text, "Parsing failed: ");
-    assert.equal(error[1].type, "text");
-    assert.equal(error[1].text, "invalid value");
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 2);
+    assert.equal(msg[0].type, "text");
+    assert.equal(msg[0].text, "Parsing failed: ");
+    assert.equal(msg[1].type, "text");
+    assert.equal(msg[1].text, "invalid value");
   });
 
-  it("should create error message with text ending (dot case)", () => {
+  it("should create message with text ending (dot case)", () => {
     const expected = "42";
     const actual = "invalid";
-    const error = message`Expected ${expected}, got ${actual}.`;
+    const msg = message`Expected ${expected}, got ${actual}.`;
 
-    assert.ok(Array.isArray(error));
-    assert.equal(error.length, 5); // text, value, text, value, text
-    assert.equal(error[0].type, "text");
-    assert.equal(error[0].text, "Expected ");
-    assert.equal(error[1].type, "value");
-    assert.equal(error[1].value, expected);
-    assert.equal(error[2].type, "text");
-    assert.equal(error[2].text, ", got ");
-    assert.equal(error[3].type, "value");
-    assert.equal(error[3].value, actual);
-    assert.equal(error[4].type, "text");
-    assert.equal(error[4].text, ".");
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 5); // text, value, text, value, text
+    assert.equal(msg[0].type, "text");
+    assert.equal(msg[0].text, "Expected ");
+    assert.equal(msg[1].type, "value");
+    assert.equal(msg[1].value, expected);
+    assert.equal(msg[2].type, "text");
+    assert.equal(msg[2].text, ", got ");
+    assert.equal(msg[3].type, "value");
+    assert.equal(msg[3].value, actual);
+    assert.equal(msg[4].type, "text");
+    assert.equal(msg[4].text, ".");
   });
 
-  it("should create error message with range format", () => {
+  it("should create message with range format", () => {
     const min = "1";
     const max = "100";
     const value = "150";
-    const error = message`Value ${value} is out of range [${min}, ${max}]`;
+    const msg = message`Value ${value} is out of range [${min}, ${max}]`;
 
-    assert.ok(Array.isArray(error));
-    assert.equal(error.length, 7); // text, value, text, value, text, value, text
-    const formatted = formatErrorMessage(error);
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 7); // text, value, text, value, text, value, text
+    const formatted = formatMessage(msg);
     assert.ok(formatted.includes("Value"));
     assert.ok(formatted.includes("150"));
     assert.ok(formatted.includes("out of range"));
@@ -118,7 +118,7 @@ describe("message template function", () => {
   });
 });
 
-describe("error term constructors", () => {
+describe("message term constructors", () => {
   it("should create text term", () => {
     const term = text("Hello world");
     assert.equal(term.type, "text");
@@ -156,19 +156,19 @@ describe("error term constructors", () => {
   });
 });
 
-describe("formatErrorMessage", () => {
+describe("formatMessage", () => {
   it("should format simple text message", () => {
-    const error: ErrorMessage = [{ type: "text", text: "Simple error" }];
-    const formatted = formatErrorMessage(error);
-    assert.equal(formatted, "Simple error");
+    const msg: Message = [{ type: "text", text: "Simple message" }];
+    const formatted = formatMessage(msg);
+    assert.equal(formatted, "Simple message");
   });
 
   it("should format option name without colors", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Unknown option " },
       { type: "optionName", optionName: "--invalid" },
     ];
-    const formatted = formatErrorMessage(error, {
+    const formatted = formatMessage(msg, {
       colors: false,
       quotes: true,
     });
@@ -176,38 +176,38 @@ describe("formatErrorMessage", () => {
   });
 
   it("should format option name with colors", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Unknown option " },
       { type: "optionName", optionName: "--invalid" },
     ];
-    const formatted = formatErrorMessage(error, { colors: true, quotes: true });
+    const formatted = formatMessage(msg, { colors: true, quotes: true });
     assert.equal(formatted, "Unknown option \x1b[3m`--invalid`\x1b[0m");
   });
 
   it("should format option names without quotes", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Use one of " },
       { type: "optionNames", optionNames: ["--help", "--version"] },
     ];
-    const formatted = formatErrorMessage(error, { quotes: false });
+    const formatted = formatMessage(msg, { quotes: false });
     assert.equal(formatted, "Use one of --help/--version");
   });
 
   it("should format option names with quotes", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Use one of " },
       { type: "optionNames", optionNames: ["--help", "--version"] },
     ];
-    const formatted = formatErrorMessage(error, { quotes: true });
+    const formatted = formatMessage(msg, { quotes: true });
     assert.equal(formatted, "Use one of `--help`/`--version`");
   });
 
   it("should format metavar without colors", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Expected " },
       { type: "metavar", metavar: "FILE" },
     ];
-    const formatted = formatErrorMessage(error, {
+    const formatted = formatMessage(msg, {
       colors: false,
       quotes: true,
     });
@@ -215,20 +215,20 @@ describe("formatErrorMessage", () => {
   });
 
   it("should format metavar with colors", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Expected " },
       { type: "metavar", metavar: "FILE" },
     ];
-    const formatted = formatErrorMessage(error, { colors: true, quotes: true });
+    const formatted = formatMessage(msg, { colors: true, quotes: true });
     assert.equal(formatted, "Expected \x1b[1m`FILE`\x1b[0m");
   });
 
   it("should format single value without colors", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Invalid value " },
       { type: "value", value: "invalid" },
     ];
-    const formatted = formatErrorMessage(error, {
+    const formatted = formatMessage(msg, {
       colors: false,
       quotes: true,
     });
@@ -236,43 +236,43 @@ describe("formatErrorMessage", () => {
   });
 
   it("should format single value with colors", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Invalid value " },
       { type: "value", value: "invalid" },
     ];
-    const formatted = formatErrorMessage(error, { colors: true, quotes: true });
+    const formatted = formatMessage(msg, { colors: true, quotes: true });
     assert.equal(formatted, 'Invalid value \x1b[32m"invalid"\x1b[0m');
   });
 
   it("should format multiple values", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Expected one of " },
       { type: "values", values: ["red", "green", "blue"] },
     ];
-    const formatted = formatErrorMessage(error, { quotes: true });
+    const formatted = formatMessage(msg, { quotes: true });
     assert.equal(formatted, 'Expected one of "red" "green" "blue"');
   });
 
   it("should format values without quotes", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Got " },
       { type: "values", values: ["foo", "bar"] },
     ];
-    const formatted = formatErrorMessage(error, { quotes: false });
+    const formatted = formatMessage(msg, { quotes: false });
     assert.equal(formatted, "Got foo bar");
   });
 
   it("should handle default options", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Error: " },
       { type: "value", value: "test" },
     ];
-    const formatted = formatErrorMessage(error);
+    const formatted = formatMessage(msg);
     assert.equal(formatted, 'Error: "test"');
   });
 
   it("should handle complex mixed message", () => {
-    const error: ErrorMessage = [
+    const msg: Message = [
       { type: "text", text: "Option " },
       { type: "optionName", optionName: "--port" },
       { type: "text", text: " expects " },
@@ -280,21 +280,21 @@ describe("formatErrorMessage", () => {
       { type: "text", text: ", got " },
       { type: "value", value: "invalid" },
     ];
-    const formatted = formatErrorMessage(error, { quotes: true });
+    const formatted = formatMessage(msg, { quotes: true });
     assert.equal(formatted, 'Option `--port` expects `NUMBER`, got "invalid"');
   });
 });
 
 describe("integration tests", () => {
-  it("should create and format complete error message", () => {
+  it("should create and format complete message", () => {
     const option = "--timeout";
     const expected = "NUMBER";
     const actual = "not-a-number";
 
-    const error = message`Option ${optionName(option)} expects ${
+    const msg = message`Option ${optionName(option)} expects ${
       metavar(expected)
     }, got ${actual}`;
-    const formatted = formatErrorMessage(error, { quotes: true });
+    const formatted = formatMessage(msg, { quotes: true });
 
     assert.equal(
       formatted,
@@ -307,9 +307,8 @@ describe("integration tests", () => {
     const max = "100";
     const actual = "150";
 
-    const error =
-      message`Value must be between ${min} and ${max}, got ${actual}`;
-    const formatted = formatErrorMessage(error);
+    const msg = message`Value must be between ${min} and ${max}, got ${actual}`;
+    const formatted = formatMessage(msg);
 
     assert.equal(formatted, 'Value must be between "10" and "100", got "150"');
   });
@@ -318,8 +317,8 @@ describe("integration tests", () => {
     const choices = ["red", "green", "blue"];
     const invalid = "purple";
 
-    const error = message`Expected one of ${values(choices)}, got ${invalid}`;
-    const formatted = formatErrorMessage(error, { quotes: true });
+    const msg = message`Expected one of ${values(choices)}, got ${invalid}`;
+    const formatted = formatMessage(msg, { quotes: true });
 
     assert.equal(
       formatted,

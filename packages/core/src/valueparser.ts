@@ -1,4 +1,4 @@
-import { type ErrorMessage, message, text, values } from "./error.ts";
+import { type Message, message, text } from "./message.ts";
 
 /**
  * Interface for parsing CLI option values and arguments.
@@ -48,7 +48,7 @@ export type ValueParserResult<T> =
     readonly success: false;
 
     /** The error message describing why the parsing failed. */
-    readonly error: ErrorMessage;
+    readonly error: Message;
   };
 
 /**

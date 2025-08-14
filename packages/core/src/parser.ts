@@ -1,12 +1,12 @@
 import {
-  type ErrorMessage,
+  type Message,
   message,
   metavar,
   optionName as eOptionName,
   optionNames as eOptionNames,
   text,
   values,
-} from "./error.ts";
+} from "./message.ts";
 import type { ValueParser, ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -132,7 +132,7 @@ export type ParserResult<TState> =
     /**
      * The error message describing why the parsing failed.
      */
-    readonly error: ErrorMessage;
+    readonly error: Message;
   };
 
 /**
@@ -780,7 +780,7 @@ export function object<
         : never;
     },
     parse(context) {
-      let error: { consumed: number; error: ErrorMessage } = {
+      let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length > 0
           ? message`Unexpected option or argument: ${context.buffer[0]}.`
@@ -919,7 +919,7 @@ export function tuple<
       // Similar to object(), try parsers in priority order but maintain tuple semantics
       while (matchedParsers.size < parsers.length) {
         let foundMatch = false;
-        let error: { consumed: number; error: ErrorMessage } = {
+        let error: { consumed: number; error: Message } = {
           consumed: 0,
           error: message`No remaining parsers could match the input.`,
         };
@@ -1195,7 +1195,7 @@ export function or(
     parse(
       context: ParserContext<[number, ParserResult<unknown>]>,
     ): ParserResult<[number, ParserResult<unknown>]> {
-      let error: { consumed: number; error: ErrorMessage } = {
+      let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: message`No parser matched.`,
       };
@@ -1660,7 +1660,7 @@ export type Result<T> =
     /**
      * The error message describing why the parsing failed.
      */
-    error: ErrorMessage;
+    error: Message;
   };
 
 /**
