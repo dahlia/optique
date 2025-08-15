@@ -205,11 +205,16 @@ export function option<T>(
     $stateType: [],
     priority: 10,
     usage: [
-      {
-        type: "option",
-        names: optionNames,
-        metavar: valueParser == null ? undefined : valueParser.metavar,
-      },
+      valueParser == null
+        ? {
+          type: "optional",
+          terms: [{ type: "option", names: optionNames }],
+        }
+        : {
+          type: "option",
+          names: optionNames,
+          metavar: valueParser.metavar,
+        },
     ],
     initialState: valueParser == null ? { success: true, value: false } : {
       success: false,

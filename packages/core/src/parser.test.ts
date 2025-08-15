@@ -3488,9 +3488,11 @@ describe("Parser usage field", () => {
     it("should have correct usage for boolean flag", () => {
       const parser = option("-v", "--verbose");
       const expected = [{
-        type: "option",
-        names: ["-v", "--verbose"],
-        metavar: undefined,
+        type: "optional",
+        terms: [{
+          type: "option",
+          names: ["-v", "--verbose"],
+        }],
       }];
       assert.deepEqual(parser.usage, expected);
     });
@@ -3508,9 +3510,11 @@ describe("Parser usage field", () => {
     it("should have correct usage for single option name", () => {
       const parser = option("--debug");
       const expected = [{
-        type: "option",
-        names: ["--debug"],
-        metavar: undefined,
+        type: "optional",
+        terms: [{
+          type: "option",
+          names: ["--debug"],
+        }],
       }];
       assert.deepEqual(parser.usage, expected);
     });
@@ -3553,9 +3557,11 @@ describe("Parser usage field", () => {
       const expected = [{
         type: "optional",
         terms: [{
-          type: "option",
-          names: ["-v", "--verbose"],
-          metavar: undefined,
+          type: "optional",
+          terms: [{
+            type: "option",
+            names: ["-v", "--verbose"],
+          }],
         }],
       }];
       assert.deepEqual(parser.usage, expected);
@@ -3583,9 +3589,11 @@ describe("Parser usage field", () => {
         terms: [{
           type: "optional",
           terms: [{
-            type: "option",
-            names: ["-d", "--debug"],
-            metavar: undefined,
+            type: "optional",
+            terms: [{
+              type: "option",
+              names: ["-d", "--debug"],
+            }],
           }],
         }],
       }];
@@ -3667,25 +3675,27 @@ describe("Parser usage field", () => {
 
       // Check that all expected terms are present
       const usageTypes = parser.usage.map((u) => u.type);
-      assert.ok(usageTypes.includes("option"));
+      assert.ok(usageTypes.includes("optional")); // verbose flag is now optional
+      assert.ok(usageTypes.includes("option")); // output option with value
       assert.ok(usageTypes.includes("argument"));
 
-      // Find the option terms
-      const optionTerms = parser.usage.filter((u) => u.type === "option");
-      assert.equal(optionTerms.length, 2);
+      // Find the optional term (verbose flag)
+      const optionalTerm = parser.usage.find((u) => u.type === "optional");
+      assert.ok(optionalTerm);
+      assert.equal(optionalTerm.terms.length, 1);
+      const verboseOption = optionalTerm.terms[0];
+      assert.equal(verboseOption.type, "option");
+      assert.deepEqual(verboseOption.names, ["-v", "--verbose"]);
 
-      const verboseOption = optionTerms.find((o) =>
-        o.type === "option" && o.names.includes("-v")
-      );
-      assert.ok(verboseOption);
-      assert.deepEqual(verboseOption?.names, ["-v", "--verbose"]);
-
-      const outputOption = optionTerms.find((o) =>
-        o.type === "option" && o.names.includes("-o")
+      // Find the option term (output option with value)
+      const outputOption = parser.usage.find((u) =>
+        u.type === "option" && "names" in u && u.names.includes("-o")
       );
       assert.ok(outputOption);
-      assert.deepEqual(outputOption?.names, ["-o", "--output"]);
-      assert.equal(outputOption?.metavar, "STRING");
+      if (outputOption?.type === "option") {
+        assert.deepEqual(outputOption.names, ["-o", "--output"]);
+        assert.equal(outputOption.metavar, "STRING");
+      }
 
       // Find the argument term
       const argTerm = parser.usage.find((u) => u.type === "argument");
@@ -3708,8 +3718,10 @@ describe("Parser usage field", () => {
       });
 
       assert.equal(parser.usage.length, 2);
+      const optionalTerms = parser.usage.filter((u) => u.type === "optional");
       const optionTerms = parser.usage.filter((u) => u.type === "option");
-      assert.equal(optionTerms.length, 2);
+      assert.equal(optionalTerms.length, 1); // verbose flag is optional
+      assert.equal(optionTerms.length, 1); // output option with value
     });
   });
 
@@ -3723,8 +3735,10 @@ describe("Parser usage field", () => {
 
       assert.equal(parser.usage.length, 3);
 
+      const optionalTerms = parser.usage.filter((u) => u.type === "optional");
       const optionTerms = parser.usage.filter((u) => u.type === "option");
-      assert.equal(optionTerms.length, 2);
+      assert.equal(optionalTerms.length, 1); // verbose flag is optional
+      assert.equal(optionTerms.length, 1); // output option with value
 
       const argTerms = parser.usage.filter((u) => u.type === "argument");
       assert.equal(argTerms.length, 1);
@@ -3755,14 +3769,18 @@ describe("Parser usage field", () => {
         type: "exclusive",
         terms: [
           [{
-            type: "option",
-            names: ["-v", "--verbose"],
-            metavar: undefined,
+            type: "optional",
+            terms: [{
+              type: "option",
+              names: ["-v", "--verbose"],
+            }],
           }],
           [{
-            type: "option",
-            names: ["-q", "--quiet"],
-            metavar: undefined,
+            type: "optional",
+            terms: [{
+              type: "option",
+              names: ["-q", "--quiet"],
+            }],
           }],
         ],
       }];
@@ -3781,14 +3799,18 @@ describe("Parser usage field", () => {
       if (parser.usage[0].type === "exclusive") {
         assert.equal(parser.usage[0].terms.length, 3);
         assert.deepEqual(parser.usage[0].terms[0], [{
-          type: "option",
-          names: ["-v", "--verbose"],
-          metavar: undefined,
+          type: "optional",
+          terms: [{
+            type: "option",
+            names: ["-v", "--verbose"],
+          }],
         }]);
         assert.deepEqual(parser.usage[0].terms[1], [{
-          type: "option",
-          names: ["-q", "--quiet"],
-          metavar: undefined,
+          type: "optional",
+          terms: [{
+            type: "option",
+            names: ["-q", "--quiet"],
+          }],
         }]);
         assert.deepEqual(parser.usage[0].terms[2], [{
           type: "argument",
@@ -3812,9 +3834,9 @@ describe("Parser usage field", () => {
         assert.equal(parser.usage[0].terms.length, 2);
         // First term should have the object parser's usage
         assert.equal(parser.usage[0].terms[0].length, 2);
-        // Second term should have the option parser's usage
+        // Second term should have the option parser's usage (now optional)
         assert.equal(parser.usage[0].terms[1].length, 1);
-        assert.equal(parser.usage[0].terms[1][0].type, "option");
+        assert.equal(parser.usage[0].terms[1][0].type, "optional");
       }
     });
   });
@@ -3833,8 +3855,10 @@ describe("Parser usage field", () => {
 
       assert.equal(parser.usage.length, 4);
 
+      const optionalTerms = parser.usage.filter((u) => u.type === "optional");
       const optionTerms = parser.usage.filter((u) => u.type === "option");
-      assert.equal(optionTerms.length, 3);
+      assert.equal(optionalTerms.length, 1); // verbose flag is optional
+      assert.equal(optionTerms.length, 2); // output and count options with values
 
       const argTerms = parser.usage.filter((u) => u.type === "argument");
       assert.equal(argTerms.length, 1);
@@ -3847,8 +3871,8 @@ describe("Parser usage field", () => {
       const parser = merge(parserA, parserB, parserC);
 
       assert.equal(parser.usage.length, 3);
-      const optionTerms = parser.usage.filter((u) => u.type === "option");
-      assert.equal(optionTerms.length, 3);
+      const optionalTerms = parser.usage.filter((u) => u.type === "optional");
+      assert.equal(optionalTerms.length, 3); // all are boolean flags, now optional
     });
   });
 
@@ -3868,10 +3892,9 @@ describe("Parser usage field", () => {
       }
 
       // Rest should be from inner parser
-      const optionTerms = parser.usage.filter((u) => u.type === "option");
-      assert.equal(optionTerms.length, 1);
-
+      const optionalTerms = parser.usage.filter((u) => u.type === "optional");
       const argTerms = parser.usage.filter((u) => u.type === "argument");
+      assert.equal(optionalTerms.length, 1); // verbose flag is now optional
       assert.equal(argTerms.length, 1);
     });
 
