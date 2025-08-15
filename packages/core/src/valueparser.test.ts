@@ -1,4 +1,3 @@
-import { type Message } from "@optique/core/message";
 import {
   choice,
   float,
