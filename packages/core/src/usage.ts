@@ -144,6 +144,14 @@ export interface UsageFormatOptions {
    * @default `false`
    */
   readonly colors?: boolean;
+
+  /**
+   * The maximum width of the formatted output.  If specified, the output
+   * will be wrapped to fit within this width, breaking lines as necessary.
+   * If not specified, the output will not be wrapped.
+   * @default `undefined`
+   */
+  readonly maxWidth?: number;
 }
 
 /**
@@ -164,8 +172,15 @@ export function formatUsage(
   options: UsageFormatOptions = {},
 ): string {
   let output = "";
-  for (const { text } of formatUsageTerms(usage, options)) {
+  let lineWidth = 0;
+  for (const { text, width } of formatUsageTerms(usage, options)) {
+    if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
+      output += "\n";
+      lineWidth = 0;
+      if (text === " ") continue;
+    }
     output += text;
+    lineWidth += width;
   }
   return output;
 }
