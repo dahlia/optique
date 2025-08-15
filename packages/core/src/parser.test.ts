@@ -463,9 +463,7 @@ describe("tuple", () => {
     const result = parse(parser, ["-n", "Alice", "-v"]);
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value.length, 2);
-      assert.equal(result.value[0], "Alice");
-      assert.equal(result.value[1], true);
+      assert.deepEqual(result.value, ["Alice", true]);
     }
   });
 
@@ -478,8 +476,7 @@ describe("tuple", () => {
     const result = parse(parser, ["-n", "Bob", "-v"]);
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value[0], "Bob");
-      assert.equal(result.value[1], true);
+      assert.deepEqual(result.value, ["Bob", true]);
     }
   });
 
@@ -503,17 +500,13 @@ describe("tuple", () => {
     const result1 = parse(parser, ["-n", "Alice", "-a", "30", "-v"]);
     assert.ok(result1.success);
     if (result1.success) {
-      assert.equal(result1.value[0], "Alice");
-      assert.equal(result1.value[1], 30);
-      assert.equal(result1.value[2], true);
+      assert.deepEqual(result1.value, ["Alice", 30, true]);
     }
 
     const result2 = parse(parser, ["-n", "Bob", "-v"]);
     assert.ok(result2.success);
     if (result2.success) {
-      assert.equal(result2.value[0], "Bob");
-      assert.equal(result2.value[1], undefined);
-      assert.equal(result2.value[2], true);
+      assert.deepEqual(result2.value, ["Bob", undefined, true]);
     }
   });
 
@@ -527,9 +520,7 @@ describe("tuple", () => {
     const result = parse(parser, ["input.txt", "-v", "-o", "output.txt"]);
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value[0], "input.txt");
-      assert.equal(result.value[1], true);
-      assert.equal(result.value[2], "output.txt");
+      assert.deepEqual(result.value, ["input.txt", true, "output.txt"]);
     }
   });
 
@@ -543,9 +534,7 @@ describe("tuple", () => {
     const result = parse(parser, ["file1.txt", "file2.txt", "-v"]);
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value[0], "file1.txt");
-      assert.equal(result.value[1], "file2.txt");
-      assert.equal(result.value[2], true);
+      assert.deepEqual(result.value, ["file1.txt", "file2.txt", true]);
     }
   });
 
@@ -559,9 +548,7 @@ describe("tuple", () => {
     const result = parse(parser, ["input.txt", "-t", "json", "output.txt"]);
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value[0], "input.txt");
-      assert.equal(result.value[1], "json");
-      assert.equal(result.value[2], "output.txt");
+      assert.deepEqual(result.value, ["input.txt", "json", "output.txt"]);
     }
   });
 
@@ -596,11 +583,13 @@ describe("tuple", () => {
     ]);
     assert.ok(result.success);
     if (result.success) {
-      assert.equal(result.value[0], "convert");
-      assert.equal(result.value[1], "input.md");
-      assert.equal(result.value[2], "json");
-      assert.equal(result.value[3], true);
-      assert.equal(result.value[4], "output.json");
+      assert.deepEqual(result.value, [
+        "convert",
+        "input.md",
+        "json",
+        true,
+        "output.json",
+      ]);
     }
   });
 });
@@ -1812,8 +1801,7 @@ describe("multiple", () => {
     if (stringResult.success) {
       assert.equal(stringResult.value.length, 2);
       assert.equal(typeof stringResult.value[0], "string");
-      assert.equal(stringResult.value[0], "hello");
-      assert.equal(stringResult.value[1], "world");
+      assert.deepEqual(stringResult.value, ["hello", "world"]);
     }
 
     const integerResult = parse(integerMultiple, ["-i", "42", "-i", "100"]);
@@ -1821,8 +1809,7 @@ describe("multiple", () => {
     if (integerResult.success) {
       assert.equal(integerResult.value.length, 2);
       assert.equal(typeof integerResult.value[0], "number");
-      assert.equal(integerResult.value[0], 42);
-      assert.equal(integerResult.value[1], 100);
+      assert.deepEqual(integerResult.value, [42, 100]);
     }
 
     const booleanResult = parse(booleanMultiple, ["-b", "-b"]);
@@ -1830,8 +1817,7 @@ describe("multiple", () => {
     if (booleanResult.success) {
       assert.equal(booleanResult.value.length, 2);
       assert.equal(typeof booleanResult.value[0], "boolean");
-      assert.equal(booleanResult.value[0], true);
-      assert.equal(booleanResult.value[1], true);
+      assert.deepEqual(booleanResult.value, [true, true]);
     }
   });
 });

@@ -16,7 +16,8 @@
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
       "mcp__github__get_file_contents",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

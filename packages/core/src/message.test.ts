@@ -17,9 +17,12 @@ describe("message template function", () => {
     const msg = message`This is a simple message`;
 
     assert.ok(Array.isArray(msg));
-    assert.equal(msg.length, 1);
-    assert.equal(msg[0].type, "text");
-    assert.equal(msg[0].text, "This is a simple message");
+    assert.deepEqual(
+      msg,
+      [
+        { type: "text", text: "This is a simple message" },
+      ] as const,
+    );
   });
 
   it("should create message with interpolated strings", () => {
@@ -27,11 +30,13 @@ describe("message template function", () => {
     const msg = message`Expected valid input, got ${val}`;
 
     assert.ok(Array.isArray(msg));
-    assert.equal(msg.length, 2);
-    assert.equal(msg[0].type, "text");
-    assert.equal(msg[0].text, "Expected valid input, got ");
-    assert.equal(msg[1].type, "value");
-    assert.equal(msg[1].value, "testValue");
+    assert.deepEqual(
+      msg,
+      [
+        { type: "text", text: "Expected valid input, got " },
+        { type: "value", value: "testValue" },
+      ] as const,
+    );
   });
 
   it("should create message with multiple interpolated values", () => {
@@ -41,19 +46,17 @@ describe("message template function", () => {
     const msg = message`Value ${actual} is not between ${min} and ${max}`;
 
     assert.ok(Array.isArray(msg));
-    assert.equal(msg.length, 6); // no trailing empty text
-    assert.equal(msg[0].type, "text");
-    assert.equal(msg[0].text, "Value ");
-    assert.equal(msg[1].type, "value");
-    assert.equal(msg[1].value, "150");
-    assert.equal(msg[2].type, "text");
-    assert.equal(msg[2].text, " is not between ");
-    assert.equal(msg[3].type, "value");
-    assert.equal(msg[3].value, "10");
-    assert.equal(msg[4].type, "text");
-    assert.equal(msg[4].text, " and ");
-    assert.equal(msg[5].type, "value");
-    assert.equal(msg[5].value, "100");
+    assert.deepEqual(
+      msg,
+      [
+        { type: "text", text: "Value " },
+        { type: "value", value: "150" },
+        { type: "text", text: " is not between " },
+        { type: "value", value: "10" },
+        { type: "text", text: " and " },
+        { type: "value", value: "100" },
+      ] as const,
+    );
   });
 
   it("should handle MessageTerm objects in interpolation", () => {
@@ -61,13 +64,14 @@ describe("message template function", () => {
     const msg = message`Option ${optName} is required`;
 
     assert.ok(Array.isArray(msg));
-    assert.equal(msg.length, 3);
-    assert.equal(msg[0].type, "text");
-    assert.equal(msg[0].text, "Option ");
-    assert.equal(msg[1].type, "optionName");
-    assert.equal(msg[1].optionName, "--port");
-    assert.equal(msg[2].type, "text");
-    assert.equal(msg[2].text, " is required");
+    assert.deepEqual(
+      msg,
+      [
+        { type: "text", text: "Option " },
+        { type: "optionName", optionName: "--port" },
+        { type: "text", text: " is required" },
+      ] as const,
+    );
   });
 
   it("should handle nested Message arrays", () => {
@@ -75,11 +79,13 @@ describe("message template function", () => {
     const msg = message`Parsing failed: ${innerMessage}`;
 
     assert.ok(Array.isArray(msg));
-    assert.equal(msg.length, 2);
-    assert.equal(msg[0].type, "text");
-    assert.equal(msg[0].text, "Parsing failed: ");
-    assert.equal(msg[1].type, "text");
-    assert.equal(msg[1].text, "invalid value");
+    assert.deepEqual(
+      msg,
+      [
+        { type: "text", text: "Parsing failed: " },
+        { type: "text", text: "invalid value" },
+      ] as const,
+    );
   });
 
   it("should create message with text ending (dot case)", () => {
@@ -88,17 +94,16 @@ describe("message template function", () => {
     const msg = message`Expected ${expected}, got ${actual}.`;
 
     assert.ok(Array.isArray(msg));
-    assert.equal(msg.length, 5); // text, value, text, value, text
-    assert.equal(msg[0].type, "text");
-    assert.equal(msg[0].text, "Expected ");
-    assert.equal(msg[1].type, "value");
-    assert.equal(msg[1].value, expected);
-    assert.equal(msg[2].type, "text");
-    assert.equal(msg[2].text, ", got ");
-    assert.equal(msg[3].type, "value");
-    assert.equal(msg[3].value, actual);
-    assert.equal(msg[4].type, "text");
-    assert.equal(msg[4].text, ".");
+    assert.deepEqual(
+      msg,
+      [
+        { type: "text", text: "Expected " },
+        { type: "value", value: expected },
+        { type: "text", text: ", got " },
+        { type: "value", value: actual },
+        { type: "text", text: "." },
+      ] as const,
+    );
   });
 
   it("should create message with range format", () => {
@@ -108,13 +113,18 @@ describe("message template function", () => {
     const msg = message`Value ${value} is out of range [${min}, ${max}]`;
 
     assert.ok(Array.isArray(msg));
-    assert.equal(msg.length, 7); // text, value, text, value, text, value, text
-    const formatted = formatMessage(msg);
-    assert.ok(formatted.includes("Value"));
-    assert.ok(formatted.includes("150"));
-    assert.ok(formatted.includes("out of range"));
-    assert.ok(formatted.includes("1"));
-    assert.ok(formatted.includes("100"));
+    assert.deepEqual(
+      msg,
+      [
+        { type: "text", text: "Value " },
+        { type: "value", value: "150" },
+        { type: "text", text: " is out of range [" },
+        { type: "value", value: "1" },
+        { type: "text", text: ", " },
+        { type: "value", value: "100" },
+        { type: "text", text: "]" },
+      ] as const,
+    );
   });
 });
 

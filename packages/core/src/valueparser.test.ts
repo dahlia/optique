@@ -1,4 +1,4 @@
-import { formatMessage, type Message } from "@optique/core/message";
+import { type Message } from "@optique/core/message";
 import {
   choice,
   float,
@@ -9,15 +9,6 @@ import {
 } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-
-// Helper function to check error content
-function assertErrorContains(error: Message, expectedText: string): void {
-  const formatted = formatMessage(error);
-  assert.ok(
-    formatted.includes(expectedText),
-    `Expected error to contain "${expectedText}", but got: "${formatted}"`,
-  );
-}
 
 describe("integer", () => {
   describe("number parser", () => {
@@ -288,7 +279,14 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assertErrorContains(result.error, "invalid");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected a valid integer, but got " },
+            { type: "value", value: "invalid" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -298,9 +296,19 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "10");
-        assertErrorContains(result.error, "5");
+        assert.deepEqual(
+          result.error,
+          [
+            {
+              type: "text",
+              text: "Expected a value greater than or equal to ",
+            },
+            { type: "text", text: "10" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "5" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -310,9 +318,16 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "100");
-        assertErrorContains(result.error, "150");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected a value less than or equal to " },
+            { type: "text", text: "100" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "150" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -322,8 +337,14 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "invalid");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected a valid integer, but got " },
+            { type: "value", value: "invalid" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -333,15 +354,34 @@ describe("integer", () => {
       const result1 = parser.parse("-5");
       assert.ok(!result1.success);
       if (!result1.success) {
-        assertErrorContains(result1.error, "0");
-        assertErrorContains(result1.error, "-5");
+        assert.deepEqual(
+          result1.error,
+          [
+            {
+              type: "text",
+              text: "Expected a value greater than or equal to ",
+            },
+            { type: "text", text: "0" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "-5" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
 
       const result2 = parser.parse("150");
       assert.ok(!result2.success);
       if (!result2.success) {
-        assertErrorContains(result2.error, "100");
-        assertErrorContains(result2.error, "150");
+        assert.deepEqual(
+          result2.error,
+          [
+            { type: "text", text: "Expected a value less than or equal to " },
+            { type: "text", text: "100" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "150" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
   });
@@ -508,10 +548,16 @@ describe("choice", () => {
       const result1 = parser.parse("maybe");
       assert.ok(!result1.success);
       if (!result1.success) {
-        assert.equal(typeof result1.error, "object");
-        assertErrorContains(result1.error, "yes");
-        assertErrorContains(result1.error, "no");
-        assertErrorContains(result1.error, "maybe");
+        assert.deepEqual(
+          result1.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "yes, no" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "maybe" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
 
       const result2 = parser.parse("YES");
@@ -753,11 +799,16 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "alpha");
-        assertErrorContains(result.error, "beta");
-        assertErrorContains(result.error, "gamma");
-        assertErrorContains(result.error, "delta");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "alpha, beta, gamma" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "delta" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -767,9 +818,16 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "only");
-        assertErrorContains(result.error, "other");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "only" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "other" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -779,8 +837,16 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "anything");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "anything" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -790,10 +856,16 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "YES");
-        assertErrorContains(result.error, "NO");
-        assertErrorContains(result.error, "maybe");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "YES, NO" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "maybe" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -805,12 +877,16 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        // Should show original choices, not lowercased versions
-        assertErrorContains(result.error, "High");
-        assertErrorContains(result.error, "Medium");
-        assertErrorContains(result.error, "Low");
-        assertErrorContains(result.error, "none");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "High, Medium, Low" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "none" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
   });
@@ -1425,8 +1501,14 @@ describe("float", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "invalid");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected a valid number, but got " },
+            { type: "value", value: "invalid" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -1436,9 +1518,19 @@ describe("float", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "0");
-        assertErrorContains(result.error, "-5.5");
+        assert.deepEqual(
+          result.error,
+          [
+            {
+              type: "text",
+              text: "Expected a value greater than or equal to ",
+            },
+            { type: "text", text: "0" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "-5.5" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -1448,9 +1540,16 @@ describe("float", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "100");
-        assertErrorContains(result.error, "150.5");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected a value less than or equal to " },
+            { type: "text", text: "100" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "150.5" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
   });
@@ -1637,10 +1736,16 @@ describe("url", () => {
       const result3 = parser.parse("ftp://example.com");
       assert.ok(!result3.success);
       if (!result3.success) {
-        assert.equal(typeof result3.error, "object");
-        assertErrorContains(result3.error, "ftp:");
-        assertErrorContains(result3.error, "http:");
-        assertErrorContains(result3.error, "https:");
+        assert.deepEqual(
+          result3.error,
+          [
+            { type: "text", text: "URL protocol " },
+            { type: "value", value: "ftp:" },
+            { type: "text", text: " is not allowed. Allowed protocols: " },
+            { type: "value", value: "http:, https:" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -1788,8 +1893,14 @@ describe("url", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "not-a-url");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Invalid URL: " },
+            { type: "value", value: "not-a-url" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -1799,9 +1910,16 @@ describe("url", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "http:");
-        assertErrorContains(result.error, "https:");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "URL protocol " },
+            { type: "value", value: "http:" },
+            { type: "text", text: " is not allowed. Allowed protocols: " },
+            { type: "value", value: "https:" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
   });
@@ -2122,8 +2240,14 @@ describe("locale", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "x-private-only");
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Invalid locale: " },
+            { type: "value", value: "x-private-only" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -2155,8 +2279,14 @@ describe("locale", () => {
           `Should reject malformed locale ${malformed}`,
         );
         if (!result.success) {
-          assert.equal(typeof result.error, "object");
-          assertErrorContains(result.error, malformed);
+          assert.deepEqual(
+            result.error,
+            [
+              { type: "text", text: "Invalid locale: " },
+              { type: "value", value: malformed },
+              { type: "text", text: "." },
+            ] as const,
+          );
         }
       }
     });
@@ -2381,17 +2511,32 @@ describe("uuid", () => {
       const result1 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
       assert.ok(!result1.success);
       if (!result1.success) {
-        assert.equal(typeof result1.error, "object");
-        assertErrorContains(result1.error, '"4"');
-        assertErrorContains(result1.error, 'got version "1"');
+        assert.deepEqual(
+          result1.error,
+          [
+            { type: "text", text: "Expected UUID version " },
+            { type: "value", value: "4" },
+            { type: "text", text: ", but got version " },
+            { type: "value", value: "1" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
 
       // UUID v5 (name-based with SHA-1)
       const result2 = parser.parse("6ba7b815-9dad-51d1-80b4-00c04fd430c8");
       assert.ok(!result2.success);
       if (!result2.success) {
-        assertErrorContains(result2.error, '"4"');
-        assertErrorContains(result2.error, 'got version "5"');
+        assert.deepEqual(
+          result2.error,
+          [
+            { type: "text", text: "Expected UUID version " },
+            { type: "value", value: "4" },
+            { type: "text", text: ", but got version " },
+            { type: "value", value: "5" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -2414,8 +2559,20 @@ describe("uuid", () => {
       const result4 = parser.parse("6ba7b813-9dad-31d1-80b4-00c04fd430c8");
       assert.ok(!result4.success);
       if (!result4.success) {
-        assertErrorContains(result4.error, ', or "5"');
-        assertErrorContains(result4.error, 'got version "3"');
+        assert.deepEqual(
+          result4.error,
+          [
+            { type: "text", text: "Expected UUID version " },
+            { type: "value", value: "1" },
+            { type: "text", text: ", " },
+            { type: "value", value: "4" },
+            { type: "text", text: ", or " },
+            { type: "value", value: "5" },
+            { type: "text", text: ", but got version " },
+            { type: "value", value: "3" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -2493,11 +2650,15 @@ describe("uuid", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, "not-a-uuid");
-        assertErrorContains(
+        assert.deepEqual(
           result.error,
-          "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+          [
+            { type: "text", text: "Expected a valid UUID in format " },
+            { type: "value", value: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "not-a-uuid" },
+            { type: "text", text: "." },
+          ] as const,
         );
       }
     });
@@ -2508,9 +2669,16 @@ describe("uuid", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, '"4"');
-        assertErrorContains(result.error, 'got version "5"');
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected UUID version " },
+            { type: "value", value: "4" },
+            { type: "text", text: ", but got version " },
+            { type: "value", value: "5" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
 
@@ -2520,9 +2688,18 @@ describe("uuid", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(typeof result.error, "object");
-        assertErrorContains(result.error, ', or "4"');
-        assertErrorContains(result.error, 'got version "5"');
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected UUID version " },
+            { type: "value", value: "1" },
+            { type: "text", text: ", or " },
+            { type: "value", value: "4" },
+            { type: "text", text: ", but got version " },
+            { type: "value", value: "5" },
+            { type: "text", text: "." },
+          ] as const,
+        );
       }
     });
   });
