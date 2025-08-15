@@ -14,16 +14,16 @@ describe("formatUsage", () => {
       const usage: Usage = [
         { type: "argument", metavar: "FILE" },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "FILE");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
     });
 
     it("should format argument with colors", () => {
       const usage: Usage = [
         { type: "argument", metavar: "FILE" },
       ];
-      const result = formatUsage(usage, { colors: true });
-      assert.equal(result, "\x1b[4mFILE\x1b[0m");
+      const result = formatUsage("test", usage, { colors: true });
+      assert.equal(result, "\x1b[1mtest\x1b[0m \x1b[4mFILE\x1b[0m");
     });
 
     it("should format multiple arguments", () => {
@@ -31,8 +31,8 @@ describe("formatUsage", () => {
         { type: "argument", metavar: "INPUT" },
         { type: "argument", metavar: "OUTPUT" },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "INPUT OUTPUT");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test INPUT OUTPUT");
     });
   });
 
@@ -44,8 +44,8 @@ describe("formatUsage", () => {
           names: ["--verbose", "-v"],
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "--verbose/-v");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test --verbose/-v");
     });
 
     it("should format option with colors", () => {
@@ -55,10 +55,10 @@ describe("formatUsage", () => {
           names: ["--verbose", "-v"],
         },
       ];
-      const result = formatUsage(usage, { colors: true });
+      const result = formatUsage("test", usage, { colors: true });
       assert.equal(
         result,
-        "\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-v\x1b[0m",
+        "\x1b[1mtest\x1b[0m \x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-v\x1b[0m",
       );
     });
 
@@ -70,8 +70,8 @@ describe("formatUsage", () => {
           metavar: "FILE",
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "--output/-o FILE");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test --output/-o FILE");
     });
 
     it("should format option with metavar and colors", () => {
@@ -82,10 +82,10 @@ describe("formatUsage", () => {
           metavar: "FILE",
         },
       ];
-      const result = formatUsage(usage, { colors: true });
+      const result = formatUsage("test", usage, { colors: true });
       assert.equal(
         result,
-        "\x1b[3m--output\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-o\x1b[0m \x1b[4m\x1b[2mFILE\x1b[0m",
+        "\x1b[1mtest\x1b[0m \x1b[3m--output\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-o\x1b[0m \x1b[4m\x1b[2mFILE\x1b[0m",
       );
     });
 
@@ -96,8 +96,8 @@ describe("formatUsage", () => {
           names: ["--verbose", "-v"],
         },
       ];
-      const result = formatUsage(usage, { onlyShortestOptions: true });
-      assert.equal(result, "-v");
+      const result = formatUsage("test", usage, { onlyShortestOptions: true });
+      assert.equal(result, "test -v");
     });
 
     it("should format option with onlyShortestOptions and colors", () => {
@@ -107,11 +107,11 @@ describe("formatUsage", () => {
           names: ["--verbose", "-v"],
         },
       ];
-      const result = formatUsage(usage, {
+      const result = formatUsage("test", usage, {
         onlyShortestOptions: true,
         colors: true,
       });
-      assert.equal(result, "\x1b[3m-v\x1b[0m");
+      assert.equal(result, "\x1b[1mtest\x1b[0m \x1b[3m-v\x1b[0m");
     });
 
     it("should pick shortest option name when onlyShortestOptions is true", () => {
@@ -121,8 +121,8 @@ describe("formatUsage", () => {
           names: ["--very-long-option", "-s", "--short"],
         },
       ];
-      const result = formatUsage(usage, { onlyShortestOptions: true });
-      assert.equal(result, "-s");
+      const result = formatUsage("test", usage, { onlyShortestOptions: true });
+      assert.equal(result, "test -s");
     });
   });
 
@@ -131,16 +131,16 @@ describe("formatUsage", () => {
       const usage: Usage = [
         { type: "command", name: "init" },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "init");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test init");
     });
 
     it("should format command with colors", () => {
       const usage: Usage = [
         { type: "command", name: "init" },
       ];
-      const result = formatUsage(usage, { colors: true });
-      assert.equal(result, "\x1b[1minit\x1b[0m");
+      const result = formatUsage("test", usage, { colors: true });
+      assert.equal(result, "\x1b[1mtest\x1b[0m \x1b[1minit\x1b[0m");
     });
 
     it("should format multiple commands", () => {
@@ -148,8 +148,8 @@ describe("formatUsage", () => {
         { type: "command", name: "git" },
         { type: "command", name: "commit" },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "git commit");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test git commit");
     });
   });
 
@@ -161,8 +161,8 @@ describe("formatUsage", () => {
           terms: [{ type: "argument", metavar: "FILE" }],
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "[FILE]");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test [FILE]");
     });
 
     it("should format optional argument with colors", () => {
@@ -172,8 +172,11 @@ describe("formatUsage", () => {
           terms: [{ type: "argument", metavar: "FILE" }],
         },
       ];
-      const result = formatUsage(usage, { colors: true });
-      assert.equal(result, "\x1b[2m[\x1b[0m\x1b[4mFILE\x1b[0m\x1b[2m]\x1b[0m");
+      const result = formatUsage("test", usage, { colors: true });
+      assert.equal(
+        result,
+        "\x1b[1mtest\x1b[0m \x1b[2m[\x1b[0m\x1b[4mFILE\x1b[0m\x1b[2m]\x1b[0m",
+      );
     });
 
     it("should format optional option", () => {
@@ -186,8 +189,8 @@ describe("formatUsage", () => {
           }],
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "[--verbose/-v]");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test [--verbose/-v]");
     });
 
     it("should format nested optional", () => {
@@ -200,8 +203,8 @@ describe("formatUsage", () => {
           }],
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "[[FILE]]");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test [[FILE]]");
     });
   });
 
@@ -216,8 +219,8 @@ describe("formatUsage", () => {
           ],
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "(--verbose/-v | --quiet/-q)");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test (--verbose/-v | --quiet/-q)");
     });
 
     it("should format exclusive options with colors", () => {
@@ -230,10 +233,10 @@ describe("formatUsage", () => {
           ],
         },
       ];
-      const result = formatUsage(usage, { colors: true });
+      const result = formatUsage("test", usage, { colors: true });
       assert.equal(
         result,
-        "\x1b[2m(\x1b[0m\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-v\x1b[0m | \x1b[3m--quiet\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-q\x1b[0m\x1b[2m)\x1b[0m",
+        "\x1b[1mtest\x1b[0m \x1b[2m(\x1b[0m\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-v\x1b[0m | \x1b[3m--quiet\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-q\x1b[0m\x1b[2m)\x1b[0m",
       );
     });
 
@@ -247,8 +250,8 @@ describe("formatUsage", () => {
           ],
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "(FILE | DIR)");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test (FILE | DIR)");
     });
 
     it("should format mixed exclusive terms", () => {
@@ -262,8 +265,8 @@ describe("formatUsage", () => {
           ],
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "(--file/-f PATH | INPUT | stdin)");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test (--file/-f PATH | INPUT | stdin)");
     });
   });
 
@@ -276,8 +279,8 @@ describe("formatUsage", () => {
           min: 0,
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "[FILE...]");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test [FILE...]");
     });
 
     it("should format multiple with min 0 and colors", () => {
@@ -288,10 +291,10 @@ describe("formatUsage", () => {
           min: 0,
         },
       ];
-      const result = formatUsage(usage, { colors: true });
+      const result = formatUsage("test", usage, { colors: true });
       assert.equal(
         result,
-        "\x1b[2m[\x1b[0m\x1b[4mFILE\x1b[0m\x1b[2m...\x1b[0m\x1b[2m]\x1b[0m",
+        "\x1b[1mtest\x1b[0m \x1b[2m[\x1b[0m\x1b[4mFILE\x1b[0m\x1b[2m...\x1b[0m\x1b[2m]\x1b[0m",
       );
     });
 
@@ -303,8 +306,8 @@ describe("formatUsage", () => {
           min: 1,
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "FILE...");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE...");
     });
 
     it("should format multiple with min 1 and colors", () => {
@@ -315,8 +318,11 @@ describe("formatUsage", () => {
           min: 1,
         },
       ];
-      const result = formatUsage(usage, { colors: true });
-      assert.equal(result, "\x1b[4mFILE\x1b[0m\x1b[2m...\x1b[0m");
+      const result = formatUsage("test", usage, { colors: true });
+      assert.equal(
+        result,
+        "\x1b[1mtest\x1b[0m \x1b[4mFILE\x1b[0m\x1b[2m...\x1b[0m",
+      );
     });
 
     it("should format multiple with min 2", () => {
@@ -327,8 +333,8 @@ describe("formatUsage", () => {
           min: 2,
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "FILE FILE...");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE FILE...");
     });
 
     it("should format multiple with min 3", () => {
@@ -343,10 +349,10 @@ describe("formatUsage", () => {
           min: 3,
         },
       ];
-      const result = formatUsage(usage);
+      const result = formatUsage("test", usage);
       assert.equal(
         result,
-        "--include/-I PATTERN --include/-I PATTERN --include/-I PATTERN...",
+        "test --include/-I PATTERN --include/-I PATTERN --include/-I PATTERN...",
       );
     });
 
@@ -358,8 +364,8 @@ describe("formatUsage", () => {
           min: 0,
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "[--verbose/-v...]");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test [--verbose/-v...]");
     });
   });
 
@@ -374,8 +380,8 @@ describe("formatUsage", () => {
         { type: "argument", metavar: "SOURCE" },
         { type: "argument", metavar: "DEST" },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "cp [--recursive/-r] SOURCE DEST");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test cp [--recursive/-r] SOURCE DEST");
     });
 
     it("should format git-like command", () => {
@@ -406,8 +412,11 @@ describe("formatUsage", () => {
           ],
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "git (commit [--message/-m MSG] | add FILE...)");
+      const result = formatUsage("test", usage);
+      assert.equal(
+        result,
+        "test git (commit [--message/-m MSG] | add FILE...)",
+      );
     });
 
     it("should format complex nested structure", () => {
@@ -432,16 +441,19 @@ describe("formatUsage", () => {
           min: 0,
         },
       ];
-      const result = formatUsage(usage);
-      assert.equal(result, "tool [(--verbose/-v | --quiet/-q)] [[FILE]...]");
+      const result = formatUsage("test", usage);
+      assert.equal(
+        result,
+        "test tool [(--verbose/-v | --quiet/-q)] [[FILE]...]",
+      );
     });
   });
 
   describe("empty usage", () => {
     it("should format empty usage", () => {
       const usage: Usage = [];
-      const result = formatUsage(usage);
-      assert.equal(result, "");
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test ");
     });
   });
 
@@ -478,7 +490,7 @@ describe("formatUsage", () => {
       const usage: Usage = [invalidTerm];
 
       assert.throws(
-        () => formatUsage(usage),
+        () => formatUsage("test", usage),
         /Unknown usage term type: unknown/,
       );
     });
@@ -524,8 +536,8 @@ describe("UsageFormatOptions", () => {
   it("should work with empty options", () => {
     const options: UsageFormatOptions = {};
     const usage: Usage = [{ type: "argument", metavar: "FILE" }];
-    const result = formatUsage(usage, options);
-    assert.equal(result, "FILE");
+    const result = formatUsage("test", usage, options);
+    assert.equal(result, "test FILE");
   });
 });
 
@@ -536,8 +548,8 @@ describe("maxWidth option", () => {
       { type: "option", names: ["--verbose", "-v"] },
       { type: "argument", metavar: "FILE" },
     ];
-    const result = formatUsage(usage, { maxWidth: 10 });
-    assert.equal(result, "command \n--verbose/\n-v FILE");
+    const result = formatUsage("test", usage, { maxWidth: 10 });
+    assert.equal(result, "test \ncommand \n--verbose/\n-v FILE");
   });
 
   it("should not wrap when content fits within maxWidth", () => {
@@ -545,8 +557,8 @@ describe("maxWidth option", () => {
       { type: "command", name: "cmd" },
       { type: "argument", metavar: "FILE" },
     ];
-    const result = formatUsage(usage, { maxWidth: 20 });
-    assert.equal(result, "cmd FILE");
+    const result = formatUsage("test", usage, { maxWidth: 20 });
+    assert.equal(result, "test cmd FILE");
   });
 
   it("should wrap at exact maxWidth boundary", () => {
@@ -554,13 +566,13 @@ describe("maxWidth option", () => {
       { type: "command", name: "command" },
       { type: "argument", metavar: "FILE" },
     ];
-    // "command FILE" is 12 characters
-    const result = formatUsage(usage, { maxWidth: 12 });
-    assert.equal(result, "command FILE");
+    // "test command FILE" is 17 characters
+    const result = formatUsage("test", usage, { maxWidth: 20 });
+    assert.equal(result, "test command FILE");
 
-    // Force wrap at 11 characters
-    const resultWrapped = formatUsage(usage, { maxWidth: 11 });
-    assert.equal(resultWrapped, "command \nFILE");
+    // Force wrap at 12 characters (test command = 12 chars exactly)
+    const resultWrapped = formatUsage("test", usage, { maxWidth: 12 });
+    assert.equal(resultWrapped, "test command\nFILE");
   });
 
   it("should handle very small maxWidth", () => {
@@ -568,8 +580,8 @@ describe("maxWidth option", () => {
       { type: "command", name: "cmd" },
       { type: "argument", metavar: "FILE" },
     ];
-    const result = formatUsage(usage, { maxWidth: 1 });
-    assert.equal(result, "\ncmd\n\nFILE");
+    const result = formatUsage("test", usage, { maxWidth: 1 });
+    assert.equal(result, "test \ncmd\n\nFILE");
   });
 
   it("should wrap multiple terms correctly", () => {
@@ -579,8 +591,8 @@ describe("maxWidth option", () => {
       { type: "option", names: ["--verbose", "-v"] },
       { type: "argument", metavar: "INPUT" },
     ];
-    const result = formatUsage(usage, { maxWidth: 15 });
-    assert.equal(result, "tool --output/\n-o PATH \n--verbose/-v \nINPUT");
+    const result = formatUsage("test", usage, { maxWidth: 15 });
+    assert.equal(result, "test tool \n--output/-o \nPATH --verbose/\n-v INPUT");
   });
 
   it("should wrap optional terms", () => {
@@ -594,8 +606,8 @@ describe("maxWidth option", () => {
         ],
       },
     ];
-    const result = formatUsage(usage, { maxWidth: 10 });
-    assert.equal(result, "cmd [\n--verbose/\n-v FILE]");
+    const result = formatUsage("test", usage, { maxWidth: 10 });
+    assert.equal(result, "test cmd [\n--verbose/\n-v FILE]");
   });
 
   it("should wrap exclusive terms", () => {
@@ -610,8 +622,11 @@ describe("maxWidth option", () => {
         ],
       },
     ];
-    const result = formatUsage(usage, { maxWidth: 15 });
-    assert.equal(result, "tool (--verbose\n/-v | --quiet/\n-q | CONFIG)");
+    const result = formatUsage("test", usage, { maxWidth: 15 });
+    assert.equal(
+      result,
+      "test tool (\n--verbose/-v | \n--quiet/-q | \nCONFIG)",
+    );
   });
 
   it("should wrap multiple terms with nested structure", () => {
@@ -642,8 +657,11 @@ describe("maxWidth option", () => {
         ],
       },
     ];
-    const result = formatUsage(usage, { maxWidth: 20 });
-    assert.equal(result, "git (commit [\n--message/-m MSG] | \nadd FILE...)");
+    const result = formatUsage("test", usage, { maxWidth: 20 });
+    assert.equal(
+      result,
+      "test git (commit [\n--message/-m MSG] | \nadd FILE...)",
+    );
   });
 
   it("should wrap multiple occurrence terms", () => {
@@ -659,17 +677,17 @@ describe("maxWidth option", () => {
         min: 2,
       },
     ];
-    const result = formatUsage(usage, { maxWidth: 20 });
+    const result = formatUsage("test", usage, { maxWidth: 20 });
     assert.equal(
       result,
-      "tool --include/-I \nPATTERN --include/-I\nPATTERN...",
+      "test tool --include/\n-I PATTERN --include\n/-I PATTERN...",
     );
   });
 
   it("should handle empty usage with maxWidth", () => {
     const usage: Usage = [];
-    const result = formatUsage(usage, { maxWidth: 10 });
-    assert.equal(result, "");
+    const result = formatUsage("test", usage, { maxWidth: 10 });
+    assert.equal(result, "test ");
   });
 
   it("should handle single character terms with maxWidth", () => {
@@ -678,8 +696,8 @@ describe("maxWidth option", () => {
       { type: "command", name: "b" },
       { type: "command", name: "c" },
     ];
-    const result = formatUsage(usage, { maxWidth: 3 });
-    assert.equal(result, "a b\nc");
+    const result = formatUsage("test", usage, { maxWidth: 3 });
+    assert.equal(result, "test \na b\nc");
   });
 
   it("should handle maxWidth of 0", () => {
@@ -687,8 +705,8 @@ describe("maxWidth option", () => {
       { type: "command", name: "cmd" },
       { type: "argument", metavar: "FILE" },
     ];
-    const result = formatUsage(usage, { maxWidth: 0 });
-    assert.equal(result, "\ncmd\n\nFILE");
+    const result = formatUsage("test", usage, { maxWidth: 0 });
+    assert.equal(result, "test \ncmd\n\nFILE");
   });
 
   it("should handle very long single term that exceeds maxWidth", () => {
@@ -699,9 +717,12 @@ describe("maxWidth option", () => {
         metavar: "VERY_LONG_METAVAR",
       },
     ];
-    const result = formatUsage(usage, { maxWidth: 10 });
+    const result = formatUsage("test", usage, { maxWidth: 10 });
     // Single term should not be broken, just placed on its own line
-    assert.equal(result, "\n--very-very-long-option-name\n\nVERY_LONG_METAVAR");
+    assert.equal(
+      result,
+      "test \n--very-very-long-option-name\n\nVERY_LONG_METAVAR",
+    );
   });
 
   it("should not wrap when undefined maxWidth", () => {
@@ -710,8 +731,8 @@ describe("maxWidth option", () => {
       { type: "option", names: ["--verbose", "-v"] },
       { type: "argument", metavar: "FILE" },
     ];
-    const result = formatUsage(usage, { maxWidth: undefined });
-    assert.equal(result, "command --verbose/-v FILE");
+    const result = formatUsage("test", usage, { maxWidth: undefined });
+    assert.equal(result, "test command --verbose/-v FILE");
   });
 
   it("should combine maxWidth with colors option", () => {
@@ -720,10 +741,10 @@ describe("maxWidth option", () => {
       { type: "option", names: ["--verbose", "-v"] },
       { type: "argument", metavar: "FILE" },
     ];
-    const result = formatUsage(usage, { maxWidth: 10, colors: true });
+    const result = formatUsage("test", usage, { maxWidth: 10, colors: true });
     assert.equal(
       result,
-      "\x1b[1mcmd\x1b[0m \n\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\n\x1b[3m-v\x1b[0m \x1b[4mFILE\x1b[0m",
+      "\x1b[1mtest\x1b[0m \x1b[1mcmd\x1b[0m \n\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\n\x1b[3m-v\x1b[0m \x1b[4mFILE\x1b[0m",
     );
   });
 
@@ -733,11 +754,11 @@ describe("maxWidth option", () => {
       { type: "option", names: ["--verbose", "-v"] },
       { type: "argument", metavar: "FILE" },
     ];
-    const result = formatUsage(usage, {
+    const result = formatUsage("test", usage, {
       maxWidth: 10,
       onlyShortestOptions: true,
     });
-    assert.equal(result, "command -v\nFILE");
+    assert.equal(result, "test \ncommand -v\nFILE");
   });
 
   it("should combine maxWidth with both colors and onlyShortestOptions", () => {
@@ -746,14 +767,14 @@ describe("maxWidth option", () => {
       { type: "option", names: ["--verbose", "-v"] },
       { type: "argument", metavar: "FILE" },
     ];
-    const result = formatUsage(usage, {
+    const result = formatUsage("test", usage, {
       maxWidth: 8,
       colors: true,
       onlyShortestOptions: true,
     });
     assert.equal(
       result,
-      "\x1b[1mcmd\x1b[0m \x1b[3m-v\x1b[0m \n\x1b[4mFILE\x1b[0m",
+      "\x1b[1mtest\x1b[0m \x1b[1mcmd\x1b[0m\n\x1b[3m-v\x1b[0m \x1b[4mFILE\x1b[0m",
     );
   });
 
@@ -766,11 +787,150 @@ describe("maxWidth option", () => {
         metavar: "PATH",
       },
     ];
-    const result = formatUsage(usage, {
+    const result = formatUsage("test", usage, {
       maxWidth: 12,
       colors: true,
       onlyShortestOptions: true,
     });
-    assert.equal(result, "\x1b[1mtool\x1b[0m \x1b[3m-o\x1b[0m");
+    assert.equal(
+      result,
+      "\x1b[1mtest\x1b[0m \x1b[1mtool\x1b[0m \x1b[3m-o\x1b[0m",
+    );
+  });
+});
+
+describe("programName parameter", () => {
+  it("should include program name in output", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "FILE" },
+    ];
+    const result = formatUsage("myapp", usage);
+    assert.equal(result, "myapp FILE");
+  });
+
+  it("should work with different program names", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--verbose", "-v"] },
+    ];
+    const result1 = formatUsage("tool1", usage);
+    const result2 = formatUsage("another-tool", usage);
+
+    assert.equal(result1, "tool1 --verbose/-v");
+    assert.equal(result2, "another-tool --verbose/-v");
+  });
+
+  it("should handle empty program name", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "FILE" },
+    ];
+    const result = formatUsage("", usage);
+    assert.equal(result, " FILE");
+  });
+
+  it("should handle program name with spaces", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "FILE" },
+    ];
+    const result = formatUsage("my program", usage);
+    assert.equal(result, "my program FILE");
+  });
+});
+
+describe("expandCommands option", () => {
+  it("should expand commands when expandCommands is true", () => {
+    const usage: Usage = [
+      { type: "command", name: "git" },
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "add" }, {
+            type: "argument",
+            metavar: "FILE",
+          }],
+          [{ type: "command", name: "commit" }, {
+            type: "option",
+            names: ["--message", "-m"],
+          }],
+        ],
+      },
+    ];
+    const result = formatUsage("test", usage, { expandCommands: true });
+    const lines = result.split("\n");
+
+    assert.equal(lines.length, 2);
+    assert.equal(lines[0], "test git add FILE");
+    assert.equal(lines[1], "test git commit --message/-m");
+  });
+
+  it("should not expand when expandCommands is false", () => {
+    const usage: Usage = [
+      { type: "command", name: "git" },
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "add" }, {
+            type: "argument",
+            metavar: "FILE",
+          }],
+          [{ type: "command", name: "commit" }, {
+            type: "option",
+            names: ["--message", "-m"],
+          }],
+        ],
+      },
+    ];
+    const result = formatUsage("test", usage, { expandCommands: false });
+
+    assert.equal(result, "test git (add FILE | commit --message/-m)");
+  });
+
+  it("should not expand when expandCommands is undefined", () => {
+    const usage: Usage = [
+      { type: "command", name: "git" },
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "add" }, {
+            type: "argument",
+            metavar: "FILE",
+          }],
+          [{ type: "command", name: "commit" }, {
+            type: "option",
+            names: ["--message", "-m"],
+          }],
+        ],
+      },
+    ];
+    const result = formatUsage("test", usage);
+
+    assert.equal(result, "test git (add FILE | commit --message/-m)");
+  });
+
+  it("should work with expandCommands and colors", () => {
+    const usage: Usage = [
+      { type: "command", name: "tool" },
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "start" }],
+          [{ type: "command", name: "stop" }],
+        ],
+      },
+    ];
+    const result = formatUsage("test", usage, {
+      expandCommands: true,
+      colors: true,
+    });
+    const lines = result.split("\n");
+
+    assert.equal(lines.length, 2);
+    assert.equal(
+      lines[0],
+      "\x1b[1mtest\x1b[0m \x1b[1mtool\x1b[0m \x1b[1mstart\x1b[0m",
+    );
+    assert.equal(
+      lines[1],
+      "\x1b[1mtest\x1b[0m \x1b[1mtool\x1b[0m \x1b[1mstop\x1b[0m",
+    );
   });
 });

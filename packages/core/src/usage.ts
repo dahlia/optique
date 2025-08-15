@@ -130,6 +130,15 @@ export type Usage = readonly UsageTerm[];
  */
 export interface UsageFormatOptions {
   /**
+   * When `true`, expands commands in the usage description
+   * to multiple lines, showing each command on a new line.
+   * This is useful for commands with many subcommands, making it easier
+   * to read and understand the available commands.
+   * @default `false`
+   */
+  readonly expandCommands?: boolean;
+
+  /**
    * When `true`, only shows the shortest option name for each option
    * instead of showing all aliases separated by `/`.
    * For example, `--verbose/-v` becomes just `-v`.
@@ -161,6 +170,9 @@ export interface UsageFormatOptions {
  * This function converts a structured {@link Usage} description into a
  * formatted string that follows common CLI conventions. It supports various
  * formatting options including colors and compact option display.
+ * @param programName The name of the program or command for which the usage
+ *                    description is being formatted. This is typically the
+ *                    name of the executable or script that the user will run.
  * @param usage The usage description to format, consisting of an array
  *              of usage terms representing the command-line structure.
  * @param options Optional formatting options to customize the output.
@@ -168,11 +180,34 @@ export interface UsageFormatOptions {
  * @returns A formatted string representation of the usage description.
  */
 export function formatUsage(
+  programName: string,
   usage: Usage,
   options: UsageFormatOptions = {},
 ): string {
-  let output = "";
-  let lineWidth = 0;
+  if (options.expandCommands) {
+    const lastTerm = usage.at(-1)!;
+    if (
+      usage.length > 0 &&
+      usage.slice(0, -1).every((t) => t.type === "command") &&
+      lastTerm.type === "exclusive" && lastTerm.terms.every((t) =>
+        t.length > 0 && t[0].type === "command"
+      )
+    ) {
+      const lines = [];
+      for (let command of lastTerm.terms) {
+        if (usage.length > 1) {
+          command = [...usage.slice(0, -1), ...command];
+        }
+        lines.push(formatUsage(programName, command, options));
+      }
+      return lines.join("\n");
+    }
+  }
+
+  let output = options.colors
+    ? `\x1b[1m${programName}\x1b[0m ` // Bold
+    : `${programName} `;
+  let lineWidth = programName.length + 1;
   for (const { text, width } of formatUsageTerms(usage, options)) {
     if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
       output += "\n";
