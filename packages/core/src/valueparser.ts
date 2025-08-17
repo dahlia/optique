@@ -4,7 +4,7 @@ import { type Message, message, text } from "./message.ts";
  * Interface for parsing CLI option values and arguments.
  *
  * A `ValueParser` is responsible for converting string input (typically from
- * CLI arguments or option values) into strongly-typed values of type `T`.
+ * CLI arguments or option values) into strongly-typed values of type {@link T}.
  *
  * @template T The type of value this parser produces.
  */
@@ -17,7 +17,7 @@ export interface ValueParser<T> {
   readonly metavar: string;
 
   /**
-   * Parses a string input into a value of type T.
+   * Parses a string input into a value of type {@link T}.
    *
    * @param input The string input to parse
    *              (e.g., the `value` part of `--option=value`).
@@ -25,6 +25,16 @@ export interface ValueParser<T> {
    *          message.
    */
   parse(input: string): ValueParserResult<T>;
+
+  /**
+   * Formats a value of type {@link T} into a string representation.
+   * This is useful for displaying the value in help messages or
+   * documentation.
+   *
+   * @param value The value to format.
+   * @returns A string representation of the value.
+   */
+  format(value: T): string;
 }
 
 /**
@@ -92,6 +102,21 @@ export interface ChoiceOptions {
 }
 
 /**
+ * A predicate function that checks if an object is a {@link ValueParser}.
+ * @param object The object to check.
+ * @return `true` if the object is a {@link ValueParser}, `false` otherwise.
+ */
+export function isValueParser<T>(object: unknown): object is ValueParser<T> {
+  return typeof object === "object" && object != null &&
+    "metavar" in object &&
+    typeof (object as ValueParser<T>).metavar === "string" &&
+    "parse" in object &&
+    typeof (object as ValueParser<T>).parse === "function" &&
+    "format" in object &&
+    typeof (object as ValueParser<T>).format === "function";
+}
+
+/**
  * Creates a {@link ValueParser} that accepts one of multiple
  * string values, so-called enumerated values.
  *
@@ -127,6 +152,9 @@ export function choice<const T extends string>(
       }
       return { success: true, value: values[index] };
     },
+    format(value: T): string {
+      return value;
+    },
   };
 }
 
@@ -152,6 +180,9 @@ export function string(options: StringOptions = {}): ValueParser<string> {
         };
       }
       return { success: true, value: input };
+    },
+    format(value: string): string {
+      return value;
     },
   };
 }
@@ -306,6 +337,9 @@ export function integer(
         }
         return { success: true, value };
       },
+      format(value: bigint): string {
+        return value.toString();
+      },
     };
   }
   return {
@@ -334,6 +368,9 @@ export function integer(
         };
       }
       return { success: true, value };
+    },
+    format(value: number): string {
+      return value.toString();
     },
   };
 }
@@ -442,6 +479,9 @@ export function float(options: FloatOptions = {}): ValueParser<number> {
       }
       return { success: true, value };
     },
+    format(value: number): string {
+      return value.toString();
+    },
   };
 }
 
@@ -502,6 +542,9 @@ export function url(options: UrlOptions = {}): ValueParser<URL> {
       }
       return { success: true, value: url };
     },
+    format(value: URL): string {
+      return value.href;
+    },
   };
 }
 
@@ -545,6 +588,9 @@ export function locale(options: LocaleOptions = {}): ValueParser<Intl.Locale> {
         throw e;
       }
       return { success: true, value: locale };
+    },
+    format(value: Intl.Locale): string {
+      return value.baseName;
     },
   };
 }
@@ -636,6 +682,9 @@ export function uuid(options: UuidOptions = {}): ValueParser<Uuid> {
       }
 
       return { success: true, value: input as Uuid };
+    },
+    format(value: Uuid): string {
+      return value;
     },
   };
 }

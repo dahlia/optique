@@ -1,9 +1,11 @@
 import {
   formatUsage,
+  formatUsageTerm,
   type OptionName,
   type Usage,
   type UsageFormatOptions,
   type UsageTerm,
+  type UsageTermFormatOptions,
 } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -932,5 +934,593 @@ describe("expandCommands option", () => {
       lines[1],
       "\x1b[1mtest\x1b[0m \x1b[1mtool\x1b[0m \x1b[1mstop\x1b[0m",
     );
+  });
+});
+
+describe("formatUsageTerm", () => {
+  describe("argument terms", () => {
+    it("should format a simple argument term", () => {
+      const term: UsageTerm = { type: "argument", metavar: "FILE" };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "FILE");
+    });
+
+    it("should format argument term with colors", () => {
+      const term: UsageTerm = { type: "argument", metavar: "FILE" };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(result, "\x1b[4mFILE\x1b[0m");
+    });
+
+    it("should format argument term with long metavar", () => {
+      const term: UsageTerm = {
+        type: "argument",
+        metavar: "VERY_LONG_INPUT_FILE",
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "VERY_LONG_INPUT_FILE");
+    });
+  });
+
+  describe("option terms", () => {
+    it("should format option term with single name", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose"],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "--verbose");
+    });
+
+    it("should format option term with multiple names", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "--verbose/-v");
+    });
+
+    it("should format option term with custom options separator", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+      };
+      const result = formatUsageTerm(term, { optionsSeparator: "|" });
+      assert.equal(result, "--verbose|-v");
+    });
+
+    it("should format option term with three names", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v", "-V"],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "--verbose/-v/-V");
+    });
+
+    it("should format option term with metavar", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--output", "-o"],
+        metavar: "FILE",
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "--output/-o FILE");
+    });
+
+    it("should format option term with colors", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+      };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(
+        result,
+        "\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-v\x1b[0m",
+      );
+    });
+
+    it("should format option term with colors and custom separator", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+      };
+      const result = formatUsageTerm(term, {
+        colors: true,
+        optionsSeparator: "|",
+      });
+      assert.equal(
+        result,
+        "\x1b[3m--verbose\x1b[0m\x1b[2m|\x1b[0m\x1b[3m-v\x1b[0m",
+      );
+    });
+
+    it("should format option term with metavar and colors", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--output", "-o"],
+        metavar: "FILE",
+      };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(
+        result,
+        "\x1b[3m--output\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-o\x1b[0m \x1b[4m\x1b[2mFILE\x1b[0m",
+      );
+    });
+
+    it("should format option term with onlyShortestOptions", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+      };
+      const result = formatUsageTerm(term, { onlyShortestOptions: true });
+      assert.equal(result, "-v");
+    });
+
+    it("should format option term with onlyShortestOptions and colors", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+      };
+      const result = formatUsageTerm(term, {
+        onlyShortestOptions: true,
+        colors: true,
+      });
+      assert.equal(result, "\x1b[3m-v\x1b[0m");
+    });
+
+    it("should pick shortest name when onlyShortestOptions is true", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--very-long-option", "-s", "--short"],
+      };
+      const result = formatUsageTerm(term, { onlyShortestOptions: true });
+      assert.equal(result, "-s");
+    });
+
+    it("should handle equal length names when onlyShortestOptions is true", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--first", "--other"],
+      };
+      const result = formatUsageTerm(term, { onlyShortestOptions: true });
+      assert.equal(result, "--first"); // First one wins on ties
+    });
+  });
+
+  describe("command terms", () => {
+    it("should format a command term", () => {
+      const term: UsageTerm = { type: "command", name: "init" };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "init");
+    });
+
+    it("should format command term with colors", () => {
+      const term: UsageTerm = { type: "command", name: "init" };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(result, "\x1b[1minit\x1b[0m");
+    });
+
+    it("should format command term with hyphenated name", () => {
+      const term: UsageTerm = { type: "command", name: "some-command" };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "some-command");
+    });
+  });
+
+  describe("optional terms", () => {
+    it("should format optional argument", () => {
+      const term: UsageTerm = {
+        type: "optional",
+        terms: [{ type: "argument", metavar: "FILE" }],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "[FILE]");
+    });
+
+    it("should format optional option", () => {
+      const term: UsageTerm = {
+        type: "optional",
+        terms: [{ type: "option", names: ["--verbose", "-v"] }],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "[--verbose/-v]");
+    });
+
+    it("should format optional with multiple terms", () => {
+      const term: UsageTerm = {
+        type: "optional",
+        terms: [
+          { type: "option", names: ["--output", "-o"], metavar: "FILE" },
+          { type: "argument", metavar: "INPUT" },
+        ],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "[--output/-o FILE INPUT]");
+    });
+
+    it("should format optional with colors", () => {
+      const term: UsageTerm = {
+        type: "optional",
+        terms: [{ type: "argument", metavar: "FILE" }],
+      };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(result, "\x1b[2m[\x1b[0m\x1b[4mFILE\x1b[0m\x1b[2m]\x1b[0m");
+    });
+
+    it("should format nested optional", () => {
+      const term: UsageTerm = {
+        type: "optional",
+        terms: [{
+          type: "optional",
+          terms: [{ type: "argument", metavar: "FILE" }],
+        }],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "[[FILE]]");
+    });
+  });
+
+  describe("exclusive terms", () => {
+    it("should format exclusive with two options", () => {
+      const term: UsageTerm = {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--verbose", "-v"] }],
+          [{ type: "option", names: ["--quiet", "-q"] }],
+        ],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "(--verbose/-v | --quiet/-q)");
+    });
+
+    it("should format exclusive with three options", () => {
+      const term: UsageTerm = {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--verbose", "-v"] }],
+          [{ type: "option", names: ["--quiet", "-q"] }],
+          [{ type: "option", names: ["--debug", "-d"] }],
+        ],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "(--verbose/-v | --quiet/-q | --debug/-d)");
+    });
+
+    it("should format exclusive with mixed term types", () => {
+      const term: UsageTerm = {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--file", "-f"], metavar: "PATH" }],
+          [{ type: "argument", metavar: "INPUT" }],
+          [{ type: "command", name: "stdin" }],
+        ],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "(--file/-f PATH | INPUT | stdin)");
+    });
+
+    it("should format exclusive with colors", () => {
+      const term: UsageTerm = {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--verbose", "-v"] }],
+          [{ type: "option", names: ["--quiet", "-q"] }],
+        ],
+      };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(
+        result,
+        "\x1b[2m(\x1b[0m\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-v\x1b[0m | \x1b[3m--quiet\x1b[0m\x1b[2m/\x1b[0m\x1b[3m-q\x1b[0m\x1b[2m)\x1b[0m",
+      );
+    });
+
+    it("should format exclusive with multiple terms per branch", () => {
+      const term: UsageTerm = {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "command", name: "add" },
+            { type: "argument", metavar: "FILE" },
+          ],
+          [
+            { type: "command", name: "remove" },
+            { type: "argument", metavar: "FILE" },
+          ],
+        ],
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "(add FILE | remove FILE)");
+    });
+  });
+
+  describe("multiple terms", () => {
+    it("should format multiple with min 0", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 0,
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "[FILE...]");
+    });
+
+    it("should format multiple with min 1", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 1,
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "FILE...");
+    });
+
+    it("should format multiple with min 2", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 2,
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "FILE FILE...");
+    });
+
+    it("should format multiple with min 3", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [{
+          type: "option",
+          names: ["--include", "-I"],
+          metavar: "PATTERN",
+        }],
+        min: 3,
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(
+        result,
+        "--include/-I PATTERN --include/-I PATTERN --include/-I PATTERN...",
+      );
+    });
+
+    it("should format multiple with colors and min 0", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 0,
+      };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(
+        result,
+        "\x1b[2m[\x1b[0m\x1b[4mFILE\x1b[0m\x1b[2m...\x1b[0m\x1b[2m]\x1b[0m",
+      );
+    });
+
+    it("should format multiple with colors and min 1", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 1,
+      };
+      const result = formatUsageTerm(term, { colors: true });
+      assert.equal(result, "\x1b[4mFILE\x1b[0m\x1b[2m...\x1b[0m");
+    });
+
+    it("should format multiple options", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [{ type: "option", names: ["--verbose", "-v"] }],
+        min: 0,
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "[--verbose/-v...]");
+    });
+
+    it("should format multiple with complex terms", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [
+          { type: "option", names: ["--include", "-I"], metavar: "PATH" },
+          { type: "argument", metavar: "FILE" },
+        ],
+        min: 1,
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "--include/-I PATH FILE...");
+    });
+  });
+
+  describe("maxWidth option", () => {
+    it("should wrap argument term when exceeding maxWidth", () => {
+      const term: UsageTerm = {
+        type: "argument",
+        metavar: "VERY_LONG_FILENAME",
+      };
+      const result = formatUsageTerm(term, { maxWidth: 10 });
+      assert.equal(result, "\nVERY_LONG_FILENAME");
+    });
+
+    it("should wrap option term when exceeding maxWidth", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--very-long-option", "-v"],
+        metavar: "LONG_VALUE",
+      };
+      const result = formatUsageTerm(term, { maxWidth: 15 });
+      assert.equal(result, "\n--very-long-option\n/-v LONG_VALUE");
+    });
+
+    it("should wrap optional term when exceeding maxWidth", () => {
+      const term: UsageTerm = {
+        type: "optional",
+        terms: [
+          { type: "option", names: ["--verbose", "-v"] },
+          { type: "argument", metavar: "FILE" },
+        ],
+      };
+      const result = formatUsageTerm(term, { maxWidth: 10 });
+      assert.equal(result, "[--verbose\n/-v FILE]");
+    });
+
+    it("should wrap exclusive term when exceeding maxWidth", () => {
+      const term: UsageTerm = {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--verbose", "-v"] }],
+          [{ type: "option", names: ["--quiet", "-q"] }],
+          [{ type: "argument", metavar: "CONFIG" }],
+        ],
+      };
+      const result = formatUsageTerm(term, { maxWidth: 15 });
+      assert.equal(result, "(--verbose/-v |\n--quiet/-q | \nCONFIG)");
+    });
+
+    it("should wrap multiple term when exceeding maxWidth", () => {
+      const term: UsageTerm = {
+        type: "multiple",
+        terms: [{
+          type: "option",
+          names: ["--include", "-I"],
+          metavar: "PATTERN",
+        }],
+        min: 2,
+      };
+      const result = formatUsageTerm(term, { maxWidth: 20 });
+      assert.equal(result, "--include/-I PATTERN\n--include/-I PATTERN\n...");
+    });
+
+    it("should not wrap when content fits within maxWidth", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+      };
+      const result = formatUsageTerm(term, { maxWidth: 20 });
+      assert.equal(result, "--verbose/-v");
+    });
+
+    it("should handle maxWidth of 0", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+      };
+      const result = formatUsageTerm(term, { maxWidth: 0 });
+      assert.equal(result, "\n--verbose\n/\n-v");
+    });
+  });
+
+  describe("option combinations", () => {
+    it("should combine colors with custom options separator", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v", "-V"],
+      };
+      const result = formatUsageTerm(term, {
+        colors: true,
+        optionsSeparator: " | ",
+      });
+      assert.equal(
+        result,
+        "\x1b[3m--verbose\x1b[0m\x1b[2m | \x1b[0m\x1b[3m-v\x1b[0m\x1b[2m | \x1b[0m\x1b[3m-V\x1b[0m",
+      );
+    });
+
+    it("should combine onlyShortestOptions with colors", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--very-long-option", "-s"],
+      };
+      const result = formatUsageTerm(term, {
+        onlyShortestOptions: true,
+        colors: true,
+      });
+      assert.equal(result, "\x1b[3m-s\x1b[0m");
+    });
+
+    it("should combine maxWidth with colors", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose", "-v"],
+        metavar: "LEVEL",
+      };
+      const result = formatUsageTerm(term, {
+        maxWidth: 10,
+        colors: true,
+      });
+      assert.equal(
+        result,
+        "\x1b[3m--verbose\x1b[0m\x1b[2m/\x1b[0m\n\x1b[3m-v\x1b[0m \x1b[4m\x1b[2mLEVEL\x1b[0m",
+      );
+    });
+
+    it("should combine all options together", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--very-long-verbose-option", "-v"],
+      };
+      const result = formatUsageTerm(term, {
+        onlyShortestOptions: true,
+        colors: true,
+        maxWidth: 20,
+        optionsSeparator: " or ",
+      });
+      assert.equal(result, "\x1b[3m-v\x1b[0m");
+    });
+  });
+
+  describe("empty options", () => {
+    it("should work with empty options object", () => {
+      const term: UsageTerm = { type: "argument", metavar: "FILE" };
+      const result = formatUsageTerm(term, {});
+      assert.equal(result, "FILE");
+    });
+
+    it("should work with no options parameter", () => {
+      const term: UsageTerm = { type: "command", name: "init" };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "init");
+    });
+  });
+
+  describe("error handling", () => {
+    it("should throw on unknown usage term type", () => {
+      const invalidTerm = { type: "unknown" } as unknown as UsageTerm;
+
+      assert.throws(
+        () => formatUsageTerm(invalidTerm),
+        /Unknown usage term type: unknown/,
+      );
+    });
+  });
+
+  describe("UsageTermFormatOptions interface", () => {
+    it("should accept all UsageFormatOptions", () => {
+      const options: UsageTermFormatOptions = {
+        onlyShortestOptions: true,
+        colors: true,
+        maxWidth: 80,
+      };
+      assert.equal(options.onlyShortestOptions, true);
+      assert.equal(options.colors, true);
+      assert.equal(options.maxWidth, 80);
+    });
+
+    it("should accept optionsSeparator option", () => {
+      const options: UsageTermFormatOptions = {
+        optionsSeparator: " | ",
+      };
+      assert.equal(options.optionsSeparator, " | ");
+    });
+
+    it("should accept all options together", () => {
+      const options: UsageTermFormatOptions = {
+        onlyShortestOptions: true,
+        colors: true,
+        maxWidth: 80,
+        optionsSeparator: " | ",
+      };
+      assert.equal(options.onlyShortestOptions, true);
+      assert.equal(options.colors, true);
+      assert.equal(options.maxWidth, 80);
+      assert.equal(options.optionsSeparator, " | ");
+    });
   });
 });

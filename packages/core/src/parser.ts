@@ -1,3 +1,10 @@
+import type {
+  DocEntry,
+  DocFragment,
+  DocFragments,
+  DocPage,
+  DocSection,
+} from "./doc.ts";
 import {
   type Message,
   message,
@@ -7,8 +14,12 @@ import {
   text,
   values,
 } from "./message.ts";
-import type { OptionName, Usage } from "./usage.ts";
-import type { ValueParser, ValueParserResult } from "./valueparser.ts";
+import type { OptionName, Usage, UsageTerm } from "./usage.ts";
+import {
+  isValueParser,
+  type ValueParser,
+  type ValueParserResult,
+} from "./valueparser.ts";
 
 /**
  * Parser interface for command-line argument parsing.
@@ -43,7 +54,7 @@ export interface Parser<TValue, TState> {
    * The usage information for this parser, which describes how
    * to use it in command-line interfaces.
    */
-  usage: Usage;
+  readonly usage: Usage;
 
   /**
    * The initial state for this parser.  This is used to initialize the
@@ -73,6 +84,19 @@ export interface Parser<TValue, TState> {
    *          it should return an error message.
    */
   complete(state: TState): ValueParserResult<TValue>;
+
+  /**
+   * Generates a documentation fragment for this parser, which can be used
+   * to describe the parser's usage, description, and default value.
+   * @param state The current state of the parser, which may contain
+   *              accumulated data or context needed to produce
+   *              the documentation.
+   * @param defaultValue An optional default value that can be used
+   *                     to provide a default value in the documentation.
+   * @returns {@link DocFragments} object containing documentation
+   *          fragments for this parser.
+   */
+  getDocFragments(state: TState, defaultValue?: TValue): DocFragments;
 }
 
 /**
@@ -160,7 +184,20 @@ export function constant<const T>(value: T): Parser<T, T> {
     complete(state) {
       return { success: true, value: state };
     },
+    getDocFragments(_state, _defaultValue?) {
+      return { fragments: [] };
+    },
   };
+}
+
+/**
+ * Options for the {@link option} parser.
+ */
+export interface OptionOptions {
+  /**
+   * The description of the option, which can be used for help messages.
+   */
+  readonly description?: Message;
 }
 
 /**
@@ -176,7 +213,22 @@ export function constant<const T>(value: T): Parser<T, T> {
  */
 export function option<T>(
   ...args: readonly [...readonly OptionName[], ValueParser<T>]
-): Parser<T, ValueParserResult<T>>;
+): Parser<T, ValueParserResult<T> | undefined>;
+
+/**
+ * Creates a parser for various styles of command-line options that take an
+ * argument value, such as `--option=value`, `-o value`, or `/option:value`.
+ * @template T The type of value this parser produces.
+ * @param args The {@link OptionName}s to parse, followed by
+ *             a {@link ValueParser} that defines how to parse the value of
+ *             the option, and an optional {@link OptionOptions} object
+ *             that allows you to specify a description or other metadata.
+ * @returns A {@link Parser} that can parse the specified options and their
+ *          values.
+ */
+export function option<T>(
+  ...args: readonly [...readonly OptionName[], ValueParser<T>, OptionOptions]
+): Parser<T, ValueParserResult<T> | undefined>;
 
 /**
  * Creates a parser for various styles of command-line options that do not
@@ -187,19 +239,50 @@ export function option<T>(
  */
 export function option(
   ...optionNames: readonly OptionName[]
-): Parser<boolean, ValueParserResult<boolean>>;
+): Parser<boolean, ValueParserResult<boolean> | undefined>;
+
+/**
+ * Creates a parser for various styles of command-line options that take an
+ * argument value, such as `--option=value`, `-o value`, or `/option:value`.
+ * @template T The type of value this parser produces.
+ * @param args The {@link OptionName}s to parse, followed by
+ *             an optional {@link OptionOptions} object that allows you to
+ *             specify a description or other metadata.
+ * @returns A {@link Parser} that can parse the specified options and their
+ *          values.
+ */
+export function option<T>(
+  ...args: readonly [...readonly OptionName[], OptionOptions]
+): Parser<T, ValueParserResult<T> | undefined>;
 
 export function option<T>(
   ...args:
+    | readonly [...readonly OptionName[], ValueParser<T>, OptionOptions]
     | readonly [...readonly OptionName[], ValueParser<T>]
+    | readonly [...readonly OptionName[], OptionOptions]
     | readonly OptionName[]
-): Parser<T | boolean, ValueParserResult<T | boolean>> {
-  const valueParser = typeof args[args.length - 1] === "string"
-    ? undefined
-    : args[args.length - 1] as ValueParser<T>;
-  const optionNames = valueParser == null
-    ? args as OptionName[]
-    : args.slice(0, args.length - 1) as OptionName[];
+): Parser<T | boolean, ValueParserResult<T | boolean> | undefined> {
+  const lastArg = args.at(-1);
+  const secondLastArg = args.at(-2);
+  let valueParser: ValueParser<T> | undefined;
+  let optionNames: OptionName[];
+  let options: OptionOptions = {};
+  if (isValueParser(lastArg)) {
+    valueParser = lastArg;
+    optionNames = args.slice(0, -1) as OptionName[];
+  } else if (typeof lastArg === "object" && lastArg != null) {
+    options = lastArg;
+    if (isValueParser(secondLastArg)) {
+      valueParser = secondLastArg;
+      optionNames = args.slice(0, -2) as OptionName[];
+    } else {
+      valueParser = undefined;
+      optionNames = args.slice(0, -1) as OptionName[];
+    }
+  } else {
+    optionNames = args as OptionName[];
+    valueParser = undefined;
+  }
   return {
     $valueType: [],
     $stateType: [],
@@ -377,11 +460,32 @@ export function option<T>(
       };
     },
     complete(state) {
+      if (state == null) {
+        return valueParser == null ? { success: true, value: false } : {
+          success: false,
+          error: message`Missing option ${eOptionNames(optionNames)}.`,
+        };
+      }
       if (state.success) return state;
       return {
         success: false,
         error: message`${eOptionNames(optionNames)}: ${state.error}`,
       };
+    },
+    getDocFragments(_state, defaultValue?) {
+      const fragments: readonly DocFragment[] = [{
+        type: "entry",
+        term: {
+          type: "option",
+          names: optionNames,
+          metavar: valueParser?.metavar,
+        },
+        description: options.description,
+        default: defaultValue != null && valueParser != null
+          ? valueParser.format(defaultValue as T)
+          : undefined,
+      }];
+      return { fragments, description: options.description };
     },
     [Symbol.for("Deno.customInspect")]() {
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
@@ -392,24 +496,38 @@ export function option<T>(
 }
 
 /**
+ * Options for the {@link argument} parser.
+ */
+export interface ArgumentOptions {
+  /**
+   * The description of the argument, which can be used for help messages.
+   */
+  readonly description?: Message;
+}
+
+/**
  * Creates a parser that expects a single argument value.
  * This parser is typically used for positional arguments
  * that are not options or flags.
  * @template T The type of the value produced by the parser.
  * @param valueParser The {@link ValueParser} that defines how to parse
  *                    the argument value.
+ * @param options Optional configuration for the argument parser,
+ *                allowing you to specify a description or other metadata.
  * @returns A {@link Parser} that expects a single argument value and produces
  *          the parsed value of type {@link T}.
  */
 export function argument<T>(
   valueParser: ValueParser<T>,
+  options: ArgumentOptions = {},
 ): Parser<T, ValueParserResult<T> | undefined> {
   const optionPattern = /^--?[a-z0-9-]+$/i;
+  const term: UsageTerm = { type: "argument", metavar: valueParser.metavar };
   return {
     $valueType: [],
     $stateType: [],
     priority: 5,
-    usage: [{ type: "argument", metavar: valueParser.metavar }],
+    usage: [term],
     initialState: undefined,
     parse(context) {
       if (context.buffer.length < 1) {
@@ -483,6 +601,17 @@ export function argument<T>(
         error: message`${metavar(valueParser.metavar)}: ${state.error}`,
       };
     },
+    getDocFragments(_state, defaultValue?: T) {
+      const fragments: readonly DocFragment[] = [{
+        type: "entry",
+        term,
+        description: options.description,
+        default: defaultValue == null
+          ? undefined
+          : valueParser.format(defaultValue),
+      }];
+      return { fragments, description: options.description };
+    },
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
     },
@@ -538,6 +667,12 @@ export function optional<TValue, TState>(
         };
       }
       return parser.complete(state[0]);
+    },
+    getDocFragments(state, defaultValue?: TValue) {
+      return parser.getDocFragments(
+        typeof state === "undefined" ? parser.initialState : state[0],
+        defaultValue,
+      );
     },
   };
 }
@@ -595,6 +730,16 @@ export function withDefault<TValue, TState>(
         };
       }
       return parser.complete(state[0]);
+    },
+    getDocFragments(state, upperDefaultValue?) {
+      return parser.getDocFragments(
+        typeof state === "undefined" ? parser.initialState : state[0],
+        upperDefaultValue == null
+          ? typeof defaultValue === "function"
+            ? (defaultValue as () => TValue)()
+            : defaultValue
+          : upperDefaultValue,
+      );
     },
   };
 }
@@ -702,6 +847,14 @@ export function multiple<TValue, TState>(
       }
       return { success: true, value: result };
     },
+    getDocFragments(state, defaultValue?) {
+      return parser.getDocFragments(
+        state.at(-1) ?? parser.initialState,
+        defaultValue != null && defaultValue.length > 0
+          ? defaultValue[0]
+          : undefined,
+      );
+    },
   };
 }
 
@@ -768,7 +921,7 @@ export function object<
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
 > {
-  const _label: string | undefined = typeof labelOrParsers === "string"
+  const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
   const parsers = typeof labelOrParsers === "string"
@@ -837,6 +990,24 @@ export function object<
       }
       return { success: true, value: result };
     },
+    getDocFragments(state, defaultValue?) {
+      const fragments = parserPairs.flatMap(([field, p]) =>
+        p.getDocFragments(state[field], defaultValue?.[field]).fragments
+      );
+      const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
+      const sections: DocSection[] = [];
+      for (const fragment of fragments) {
+        if (fragment.type !== "section") continue;
+        if (fragment.title == null) {
+          entries.push(...fragment.entries);
+        } else {
+          sections.push(fragment);
+        }
+      }
+      const section: DocSection = { title: label, entries };
+      sections.push(section);
+      return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
+    },
   };
 }
 
@@ -903,7 +1074,7 @@ export function tuple<
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
 > {
-  const _label: string | undefined = typeof labelOrParsers === "string"
+  const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
   const parsers = typeof labelOrParsers === "string"
@@ -1039,12 +1210,30 @@ export function tuple<
 
       return { success: true, value: result };
     },
+    getDocFragments(state, defaultValue?) {
+      const fragments = parsers.flatMap((p, i) =>
+        p.getDocFragments(state[i], defaultValue?.[i]).fragments
+      );
+      const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
+      const sections: DocSection[] = [];
+      for (const fragment of fragments) {
+        if (fragment.type !== "section") continue;
+        if (fragment.title == null) {
+          entries.push(...fragment.entries);
+        } else {
+          sections.push(fragment);
+        }
+      }
+      const section: DocSection = { title: label, entries };
+      sections.push(section);
+      return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
+    },
     [Symbol.for("Deno.customInspect")]() {
       const parsersStr = parsers.length === 1
         ? `[1 parser]`
         : `[${parsers.length} parsers]`;
-      return _label
-        ? `tuple(${JSON.stringify(_label)}, ${parsersStr})`
+      return label
+        ? `tuple(${JSON.stringify(label)}, ${parsersStr})`
         : `tuple(${parsersStr})`;
     },
   } satisfies
@@ -1251,6 +1440,42 @@ export function or(
         }
       }
       return { ...error, success: false };
+    },
+    getDocFragments(state, _defaultValue?) {
+      let description: Message | undefined;
+      let fragments: readonly DocFragment[];
+      if (state == null) {
+        fragments = parsers.flatMap((p) =>
+          p.getDocFragments(p.initialState, undefined).fragments
+        );
+      } else {
+        const [index, parserResult] = state;
+        const docFragments = parsers[index].getDocFragments(
+          parserResult.success
+            ? parserResult.next.state
+            : parsers[index].initialState,
+          undefined,
+        );
+        description = docFragments.description;
+        fragments = docFragments.fragments;
+      }
+      const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+      const sections: DocSection[] = [];
+      for (const fragment of fragments) {
+        if (fragment.type !== "section") continue;
+        if (fragment.title == null) {
+          entries.push(...fragment.entries);
+        } else {
+          sections.push(fragment);
+        }
+      }
+      return {
+        description,
+        fragments: [
+          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
+          { type: "section", entries },
+        ],
+      };
     },
   };
 }
@@ -1517,14 +1742,45 @@ export function merge(
       }
       return { success: true, value: object };
     },
+    getDocFragments(state, _defaultValue?) {
+      const fragments = parsers.flatMap((p) =>
+        p.getDocFragments(state, undefined).fragments
+      );
+      const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+      const sections: DocSection[] = [];
+      for (const fragment of fragments) {
+        if (fragment.type !== "section") continue;
+        if (fragment.title == null) {
+          entries.push(...fragment.entries);
+        } else {
+          sections.push(fragment);
+        }
+      }
+      return {
+        fragments: [
+          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
+          { type: "section", entries },
+        ],
+      };
+    },
   };
+}
+
+/**
+ * Options for the {@link command} parser.
+ */
+export interface CommandOptions {
+  /**
+   * A description of the command, used for documentation.
+   */
+  readonly description?: Message;
 }
 
 /**
  * The state type for the {@link command} parser.
  * @template TState The type of the inner parser's state.
  */
-export type CommandState<TState> =
+type CommandState<TState> =
   | undefined // Command not yet matched
   | ["matched", string] // Command matched but inner parser not started
   | ["parsing", TState]; // Command matched and inner parser active
@@ -1535,14 +1791,17 @@ export type CommandState<TState> =
  * This is useful for building CLI tools with subcommands like git, npm, etc.
  * @template T The type of the value returned by the inner parser.
  * @template TState The type of the state used by the inner parser.
- * @param name The subcommand name to match (e.g., "show", "edit").
+ * @param name The subcommand name to match (e.g., `"show"`, `"edit"`).
  * @param parser The {@link Parser} to apply after the command is matched.
+ * @param options Optional configuration for the command parser, such as
+ *                a description for documentation.
  * @returns A {@link Parser} that matches the command name and delegates
  *          to the inner parser for the remaining arguments.
  */
 export function command<T, TState>(
   name: string,
   parser: Parser<T, TState>,
+  options: CommandOptions = {},
 ): Parser<T, CommandState<TState>> {
   return {
     $valueType: [],
@@ -1616,7 +1875,7 @@ export function command<T, TState>(
       };
     },
     complete(state) {
-      if (state === undefined) {
+      if (typeof state === "undefined") {
         return {
           success: false,
           error: message`Command ${eOptionName(name)} was not matched.`,
@@ -1632,6 +1891,28 @@ export function command<T, TState>(
       return {
         success: false,
         error: message`Invalid command state during completion.`,
+      };
+    },
+    getDocFragments(state, defaultValue?) {
+      if (typeof state === "undefined") {
+        return {
+          description: options.description,
+          fragments: [
+            {
+              type: "entry",
+              term: { type: "command", name },
+              description: options.description,
+            },
+          ],
+        };
+      }
+      const innerFragments = parser.getDocFragments(
+        state[0] === "parsing" ? state[1] : parser.initialState,
+        defaultValue,
+      );
+      return {
+        ...innerFragments,
+        description: innerFragments.description ?? options.description,
       };
     },
     [Symbol.for("Deno.customInspect")]() {
@@ -1712,4 +1993,87 @@ export function parse<T>(
   return endResult.success
     ? { success: true, value: endResult.value }
     : { success: false, error: endResult.error };
+}
+
+/**
+ * Generates a documentation page for a parser based on its current state after
+ * attempting to parse the provided arguments. This function is useful for
+ * creating help documentation that reflects the current parsing context.
+ *
+ * The function works by:
+ * 1. Attempting to parse the provided arguments to determine the current state
+ * 2. Generating documentation fragments from the parser's current state
+ * 3. Organizing fragments into entries and sections
+ * 4. Resolving command usage terms based on parsed arguments
+ *
+ * @param parser The parser to generate documentation for
+ * @param args Optional array of command-line arguments that have been parsed
+ *             so far. Defaults to an empty array. This is used to determine
+ *             the current parsing context and generate contextual documentation.
+ * @returns A {@link DocPage} containing usage information, sections, and
+ *          optional description, or `undefined` if no documentation can be
+ *          generated.
+ *
+ * @example
+ * ```typescript
+ * const parser = object({
+ *   verbose: option("-v", "--verbose"),
+ *   port: option("-p", "--port", integer())
+ * });
+ *
+ * // Get documentation for the root parser
+ * const rootDoc = getDocPage(parser);
+ *
+ * // Get documentation after parsing some arguments
+ * const contextDoc = getDocPage(parser, ["-v"]);
+ * ```
+ */
+export function getDocPage(
+  parser: Parser<unknown, unknown>,
+  args: readonly string[] = [],
+): DocPage | undefined {
+  let context: ParserContext<unknown> = {
+    buffer: args,
+    optionsTerminated: false,
+    state: parser.initialState,
+  };
+  do {
+    const result = parser.parse(context);
+    if (!result.success) break;
+    context = result.next;
+  } while (context.buffer.length > 0);
+  const { description, fragments } = parser.getDocFragments(
+    context.state,
+    undefined,
+  );
+  const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+  const sections: DocSection[] = [];
+  for (const fragment of fragments) {
+    if (fragment.type !== "section") continue;
+    if (fragment.title == null) {
+      entries.push(...fragment.entries);
+    } else {
+      sections.push(fragment);
+    }
+  }
+  if (entries.length > 0) {
+    sections.push({ entries });
+  }
+  const usage = [...parser.usage];
+  let i = 0;
+  for (const arg of args) {
+    const term = usage[i];
+    if (term.type === "exclusive") {
+      for (const termGroup of term.terms) {
+        const firstTerm = termGroup[0];
+        if (firstTerm?.type !== "command" || firstTerm.name !== arg) continue;
+        usage.splice(i, 1, ...termGroup);
+        break;
+      }
+    }
+    i++;
+  }
+  return description == null
+    ? { usage, sections }
+    : { usage, sections, description };
 }

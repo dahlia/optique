@@ -1,8 +1,9 @@
-import type { Message } from "@optique/core/message";
+import { formatMessage, type Message, message } from "@optique/core/message";
 import {
   argument,
   command,
   constant,
+  getDocPage,
   type InferValue,
   merge,
   multiple,
@@ -14,10 +15,10 @@ import {
   tuple,
   withDefault,
 } from "@optique/core/parser";
+import type { DocEntry, DocFragment } from "@optique/core/doc";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatMessage } from "./message.ts";
 
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
@@ -69,6 +70,56 @@ describe("constant", () => {
     assert.equal(booleanParser.initialState, true);
     assert.deepEqual(objectParser.initialState, { key: "value" });
   });
+
+  describe("getDocFragments", () => {
+    it("should return empty array as constants have no documentation", () => {
+      const parser = constant("test");
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.deepEqual(fragments, { fragments: [] });
+    });
+
+    it("should return empty array with different state values", () => {
+      const parser1 = constant(42);
+      const parser2 = constant("test");
+
+      const fragments1 = parser1.getDocFragments(parser1.initialState);
+      const fragments2 = parser2.getDocFragments(parser2.initialState);
+
+      assert.deepEqual(fragments1, { fragments: [] });
+      assert.deepEqual(fragments2, { fragments: [] });
+    });
+
+    it("should return empty array with default value parameter", () => {
+      const parser = constant("hello");
+
+      const fragments1 = parser.getDocFragments(parser.initialState);
+      const fragments2 = parser.getDocFragments(
+        parser.initialState,
+        parser.initialState,
+      );
+
+      assert.deepEqual(fragments1, { fragments: [] });
+      assert.deepEqual(fragments2, { fragments: [] });
+    });
+
+    it("should return empty array for different constant types", () => {
+      const stringParser = constant("string");
+      const numberParser = constant(123);
+      const booleanParser = constant(true);
+      const objectParser = constant({ key: "value" });
+
+      assert.deepEqual(stringParser.getDocFragments("string"), {
+        fragments: [],
+      });
+      assert.deepEqual(numberParser.getDocFragments(123), { fragments: [] });
+      assert.deepEqual(booleanParser.getDocFragments(true), { fragments: [] });
+      assert.deepEqual(objectParser.getDocFragments({ key: "value" }), {
+        fragments: [],
+      });
+    });
+  });
 });
 
 describe("option", () => {
@@ -84,9 +135,12 @@ describe("option", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.ok(result.next.state.success);
-        if (result.next.state.success) {
-          assert.equal(result.next.state.value, true);
+        assert.ok(result.next.state);
+        if (result.next.state) {
+          assert.ok(result.next.state.success);
+          if (result.next.state.success) {
+            assert.equal(result.next.state.value, true);
+          }
         }
         assert.deepEqual(result.next.buffer, []);
         assert.deepEqual(result.consumed, ["-v"]);
@@ -104,9 +158,12 @@ describe("option", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.ok(result.next.state.success);
-        if (result.next.state.success) {
-          assert.equal(result.next.state.value, true);
+        assert.ok(result.next.state);
+        if (result.next.state) {
+          assert.ok(result.next.state.success);
+          if (result.next.state.success) {
+            assert.equal(result.next.state.value, true);
+          }
         }
         assert.deepEqual(result.next.buffer, []);
       }
@@ -122,7 +179,7 @@ describe("option", () => {
       };
       const result1 = parser.parse(context1);
       assert.ok(result1.success);
-      if (result1.success && result1.next.state.success) {
+      if (result1.success && result1.next.state && result1.next.state.success) {
         assert.equal(result1.next.state.value, true);
       }
 
@@ -133,7 +190,7 @@ describe("option", () => {
       };
       const result2 = parser.parse(context2);
       assert.ok(result2.success);
-      if (result2.success && result2.next.state.success) {
+      if (result2.success && result2.next.state && result2.next.state.success) {
         assert.equal(result2.next.state.value, true);
       }
     });
@@ -165,9 +222,12 @@ describe("option", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.ok(result.next.state.success);
-        if (result.next.state.success) {
-          assert.equal(result.next.state.value, true);
+        assert.ok(result.next.state);
+        if (result.next.state) {
+          assert.ok(result.next.state.success);
+          if (result.next.state.success) {
+            assert.equal(result.next.state.value, true);
+          }
         }
         assert.deepEqual(result.next.buffer, ["-d"]);
         assert.deepEqual(result.consumed, ["-v"]);
@@ -236,9 +296,12 @@ describe("option", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.ok(result.next.state.success);
-        if (result.next.state.success) {
-          assert.equal(result.next.state.value, 8080);
+        assert.ok(result.next.state);
+        if (result.next.state) {
+          assert.ok(result.next.state.success);
+          if (result.next.state.success) {
+            assert.equal(result.next.state.value, 8080);
+          }
         }
         assert.deepEqual(result.next.buffer, []);
         assert.deepEqual(result.consumed, ["--port", "8080"]);
@@ -256,9 +319,12 @@ describe("option", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.ok(result.next.state.success);
-        if (result.next.state.success) {
-          assert.equal(result.next.state.value, 8080);
+        assert.ok(result.next.state);
+        if (result.next.state) {
+          assert.ok(result.next.state.success);
+          if (result.next.state.success) {
+            assert.equal(result.next.state.value, 8080);
+          }
         }
         assert.deepEqual(result.next.buffer, []);
         assert.deepEqual(result.consumed, ["--port=8080"]);
@@ -276,9 +342,12 @@ describe("option", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.ok(result.next.state.success);
-        if (result.next.state.success) {
-          assert.equal(result.next.state.value, 8080);
+        assert.ok(result.next.state);
+        if (result.next.state) {
+          assert.ok(result.next.state.success);
+          if (result.next.state.success) {
+            assert.equal(result.next.state.value, 8080);
+          }
         }
       }
     });
@@ -326,9 +395,12 @@ describe("option", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.ok(result.next.state.success);
-        if (result.next.state.success) {
-          assert.equal(result.next.state.value, "Alice");
+        assert.ok(result.next.state);
+        if (result.next.state) {
+          assert.ok(result.next.state.success);
+          if (result.next.state.success) {
+            assert.equal(result.next.state.value, "Alice");
+          }
         }
       }
     });
@@ -344,7 +416,10 @@ describe("option", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.ok(!result.next.state.success);
+        assert.ok(result.next.state);
+        if (result.next.state) {
+          assert.ok(!result.next.state.success);
+        }
       }
     });
   });
@@ -363,6 +438,104 @@ describe("option", () => {
       assert.equal(result.consumed, 0);
       assertErrorIncludes(result.error, "No matched option");
     }
+  });
+
+  describe("getDocFragments", () => {
+    it("should return documentation fragment for boolean flag option", () => {
+      const parser = option("-v", "--verbose");
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.deepEqual(fragments.fragments[0].term.names, [
+            "-v",
+            "--verbose",
+          ]);
+          assert.equal(fragments.fragments[0].term.metavar, undefined);
+        }
+        assert.equal(fragments.fragments[0].description, undefined);
+        assert.equal(fragments.fragments[0].default, undefined);
+      }
+    });
+
+    it("should return documentation fragment for option with value parser", () => {
+      const parser = option("--port", integer());
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.deepEqual(fragments.fragments[0].term.names, ["--port"]);
+          assert.equal(fragments.fragments[0].term.metavar, "INTEGER");
+        }
+        assert.equal(fragments.fragments[0].description, undefined);
+        assert.equal(fragments.fragments[0].default, undefined);
+      }
+    });
+
+    it("should include description when provided", () => {
+      const description = message`Enable verbose output`;
+      const parser = option("-v", "--verbose", { description });
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].description, description);
+      }
+    });
+
+    it("should include default value when provided", () => {
+      const parser = option("--port", integer());
+      const fragments = parser.getDocFragments(parser.initialState, 8080);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, "8080");
+      }
+    });
+
+    it("should not include default value for boolean flags", () => {
+      const parser = option("-v", "--verbose");
+      const fragments = parser.getDocFragments(parser.initialState, true);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, undefined);
+      }
+    });
+
+    it("should work with string value parser and default", () => {
+      const parser = option("--name", string());
+      const fragments = parser.getDocFragments(parser.initialState, "John");
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, "John");
+      }
+    });
+
+    it("should work with custom metavar in value parser", () => {
+      const parser = option("--file", string({ metavar: "PATH" }));
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.equal(fragments.fragments[0].term.metavar, "PATH");
+        }
+      }
+    });
   });
 });
 
@@ -439,6 +612,130 @@ describe("object", () => {
     if (!result.success) {
       assertErrorIncludes(result.error, "Expected an option");
     }
+  });
+
+  describe("getDocFragments", () => {
+    it("should return fragments from all child parsers without label", () => {
+      const parser = object({
+        verbose: option("-v", "--verbose"),
+        port: option("-p", "--port", integer()),
+        file: argument(string({ metavar: "FILE" })),
+      });
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      // Should have a section containing all entries
+      assert.ok(fragments.fragments.length > 0);
+      assert.ok(fragments.fragments.some((f) => f.type === "section"));
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+      assert.equal(mainSection.entries.length, 3);
+    });
+
+    it("should return labeled section when label is provided", () => {
+      const parser = object("Configuration", {
+        verbose: option("-v", "--verbose"),
+        port: option("-p", "--port", integer()),
+      });
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const labeledSection = sections.find((s) => s.title === "Configuration");
+      assert.ok(labeledSection);
+      assert.equal(labeledSection.entries.length, 2);
+    });
+
+    it("should pass default values to child parsers", () => {
+      const parser = object({
+        verbose: option("-v", "--verbose"),
+        port: option("-p", "--port", integer()),
+      });
+
+      const defaultValues = { verbose: true, port: 8080 };
+      const fragments = parser.getDocFragments(
+        parser.initialState,
+        defaultValues,
+      );
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const portEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--port")
+      );
+      assert.ok(portEntry);
+      assert.equal(portEntry.default, "8080");
+
+      // Boolean flags should not have default values shown
+      const verboseEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--verbose")
+      );
+      assert.ok(verboseEntry);
+      assert.equal(verboseEntry.default, undefined);
+    });
+
+    it("should handle nested sections properly", () => {
+      const nestedParser = object("Nested", {
+        flag: option("-f"),
+      });
+
+      const parser = object({
+        simple: option("-s"),
+        nested: nestedParser,
+      });
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      // Should have sections for both the main object and the nested one
+      assert.ok(sections.length >= 1);
+    });
+
+    it("should work with empty object", () => {
+      const parser = object({});
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+      assert.equal(mainSection.entries.length, 0);
+    });
+
+    it("should preserve child parser options and descriptions", () => {
+      const description = message`Enable verbose output`;
+      const parser = object({
+        verbose: option("-v", "--verbose", { description }),
+        port: option("-p", "--port", integer()),
+      });
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const verboseEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--verbose")
+      );
+      assert.ok(verboseEntry);
+      assert.deepEqual(verboseEntry.description, description);
+    });
   });
 });
 
@@ -592,6 +889,156 @@ describe("tuple", () => {
       ]);
     }
   });
+
+  describe("getDocFragments", () => {
+    it("should return fragments from all child parsers", () => {
+      const parser = tuple([
+        option("-v", "--verbose"),
+        option("-p", "--port", integer()),
+        argument(string({ metavar: "FILE" })),
+      ]);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      // Should have a section containing all entries
+      assert.ok(fragments.fragments.length > 0);
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+      assert.equal(mainSection.entries.length, 3);
+    });
+
+    it("should return labeled section when label is provided", () => {
+      const parser = tuple("Command Args", [
+        option("-v", "--verbose"),
+        argument(string({ metavar: "FILE" })),
+      ]);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const labeledSection = sections.find((s) => s.title === "Command Args");
+      assert.ok(labeledSection);
+      assert.equal(labeledSection.entries.length, 2);
+    });
+
+    it("should pass default values to child parsers", () => {
+      const parser = tuple([
+        option("-v", "--verbose"),
+        option("-p", "--port", integer()),
+        argument(string({ metavar: "FILE" })),
+      ]);
+
+      const defaultValues = [true, 8080, "input.txt"];
+      const fragments = parser.getDocFragments(
+        parser.initialState,
+        defaultValues,
+      );
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const portEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--port")
+      );
+      const fileEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "argument"
+      );
+
+      assert.ok(portEntry);
+      assert.ok(fileEntry);
+      assert.equal(portEntry.default, "8080");
+      assert.equal(fileEntry.default, "input.txt");
+    });
+
+    it("should handle empty tuple", () => {
+      const parser = tuple([]);
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+      assert.equal(mainSection.entries.length, 0);
+    });
+
+    it("should handle nested sections properly", () => {
+      const nestedParser = object("Nested Options", {
+        flag: option("-f"),
+      });
+
+      const parser = tuple([
+        option("-v", "--verbose"),
+        nestedParser,
+      ]);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      // Should have sections for both the main tuple and the nested object
+      assert.ok(sections.length >= 1);
+    });
+
+    it("should preserve child parser options and descriptions", () => {
+      const description = message`Enable verbose output`;
+      const parser = tuple([
+        option("-v", "--verbose", { description }),
+        option("-p", "--port", integer()),
+      ]);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const verboseEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--verbose")
+      );
+      assert.ok(verboseEntry);
+      assert.deepEqual(verboseEntry.description, description);
+    });
+
+    it("should work with mixed parser types", () => {
+      const parser = tuple([
+        argument(string({ metavar: "COMMAND" })),
+        option("-f", "--format", string()),
+        argument(string({ metavar: "INPUT" })),
+        option("-v", "--verbose"),
+        argument(string({ metavar: "OUTPUT" })),
+      ]);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+      assert.equal(mainSection.entries.length, 5);
+
+      // Check that we have both options and arguments
+      const hasOptions = mainSection.entries.some((e: DocEntry) =>
+        e.term.type === "option"
+      );
+      const hasArguments = mainSection.entries.some((e: DocEntry) =>
+        e.term.type === "argument"
+      );
+      assert.ok(hasOptions && hasArguments);
+    });
+  });
 });
 
 describe("argument", () => {
@@ -722,6 +1169,76 @@ describe("argument", () => {
 
     const invalidPortResult = parse(portParser, ["80"]);
     assert.ok(!invalidPortResult.success);
+  });
+
+  describe("getDocFragments", () => {
+    it("should return documentation fragment for argument", () => {
+      const parser = argument(string({ metavar: "FILE" }));
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "argument");
+        if (fragments.fragments[0].term.type === "argument") {
+          assert.equal(fragments.fragments[0].term.metavar, "FILE");
+        }
+        assert.equal(fragments.fragments[0].description, undefined);
+        assert.equal(fragments.fragments[0].default, undefined);
+      }
+    });
+
+    it("should include description when provided", () => {
+      const description = message`Input file to process`;
+      const parser = argument(string({ metavar: "FILE" }), { description });
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].description, description);
+      }
+    });
+
+    it("should include default value when provided", () => {
+      const parser = argument(string({ metavar: "FILE" }));
+      const fragments = parser.getDocFragments(
+        parser.initialState,
+        "input.txt",
+      );
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, "input.txt");
+      }
+    });
+
+    it("should work with integer argument", () => {
+      const parser = argument(integer({ metavar: "PORT" }));
+      const fragments = parser.getDocFragments(parser.initialState, 8080);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "argument");
+        if (fragments.fragments[0].term.type === "argument") {
+          assert.equal(fragments.fragments[0].term.metavar, "PORT");
+        }
+        assert.equal(fragments.fragments[0].default, "8080");
+      }
+    });
+
+    it("should work without default value", () => {
+      const parser = argument(string({ metavar: "FILE" }));
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, undefined);
+      }
+    });
   });
 });
 
@@ -941,9 +1458,12 @@ describe("optional", () => {
       assert.ok(Array.isArray(parseResult.next.state));
       if (Array.isArray(parseResult.next.state)) {
         assert.equal(parseResult.next.state.length, 1);
-        assert.ok(parseResult.next.state[0].success);
-        if (parseResult.next.state[0].success) {
-          assert.equal(parseResult.next.state[0].value, "test");
+        assert.ok(parseResult.next.state[0]);
+        if (parseResult.next.state[0]) {
+          assert.ok(parseResult.next.state[0].success);
+          if (parseResult.next.state[0].success) {
+            assert.equal(parseResult.next.state[0].value, "test");
+          }
         }
       }
     }
@@ -1036,6 +1556,74 @@ describe("optional", () => {
       assert.equal(missingOptionalResult.value.port, undefined);
       assert.equal(missingOptionalResult.value.debug, undefined);
     }
+  });
+
+  describe("getDocFragments", () => {
+    it("should delegate to wrapped parser", () => {
+      const baseParser = option("-v", "--verbose");
+      const optionalParser = optional(baseParser);
+
+      // Test with undefined state
+      const fragments1 = optionalParser.getDocFragments(undefined);
+      const baseFragments = baseParser.getDocFragments(baseParser.initialState);
+      assert.deepEqual(fragments1, baseFragments);
+    });
+
+    it("should delegate with wrapped state when defined", () => {
+      const baseParser = option("-p", "--port", integer());
+      const optionalParser = optional(baseParser);
+
+      // Test with wrapped state
+      const wrappedState = [{ success: true as const, value: 8080 }] as [
+        { success: true; value: number },
+      ];
+      const fragments = optionalParser.getDocFragments(wrappedState, 8080);
+
+      // Should delegate to base parser with unwrapped state and default value
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.deepEqual(fragments.fragments[0].term.names, ["-p", "--port"]);
+        }
+        assert.equal(fragments.fragments[0].default, "8080");
+      }
+    });
+
+    it("should work with argument parsers", () => {
+      const baseParser = argument(string({ metavar: "FILE" }));
+      const optionalParser = optional(baseParser);
+
+      const fragments = optionalParser.getDocFragments(
+        undefined,
+        "default.txt",
+      );
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "argument");
+        if (fragments.fragments[0].term.type === "argument") {
+          assert.equal(fragments.fragments[0].term.metavar, "FILE");
+        }
+        assert.equal(fragments.fragments[0].default, "default.txt");
+      }
+    });
+
+    it("should preserve description from wrapped parser", () => {
+      const description = message`Enable verbose output`;
+      const baseParser = option("-v", "--verbose", { description });
+      const optionalParser = optional(baseParser);
+
+      const fragments = optionalParser.getDocFragments(undefined);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].description, description);
+      }
+    });
   });
 });
 
@@ -1270,9 +1858,12 @@ describe("withDefault", () => {
       assert.ok(Array.isArray(parseResult.next.state));
       if (Array.isArray(parseResult.next.state)) {
         assert.equal(parseResult.next.state.length, 1);
-        assert.ok(parseResult.next.state[0].success);
-        if (parseResult.next.state[0].success) {
-          assert.equal(parseResult.next.state[0].value, "test");
+        assert.ok(parseResult.next.state[0]);
+        if (parseResult.next.state[0]) {
+          assert.ok(parseResult.next.state[0].success);
+          if (parseResult.next.state[0].success) {
+            assert.equal(parseResult.next.state[0].value, "test");
+          }
         }
       }
     }
@@ -1324,6 +1915,111 @@ describe("withDefault", () => {
       assert.equal(defaultResult.value.port, 8080);
       assert.equal(defaultResult.value.debug, false);
     }
+  });
+
+  describe("getDocFragments", () => {
+    it("should delegate to wrapped parser", () => {
+      const baseParser = option("-v", "--verbose");
+      const defaultParser = withDefault(baseParser, false);
+
+      // Test with undefined state
+      const fragments1 = defaultParser.getDocFragments(undefined);
+      const baseFragments = baseParser.getDocFragments(baseParser.initialState);
+      assert.deepEqual(fragments1, baseFragments);
+    });
+
+    it("should delegate with wrapped state when defined", () => {
+      const baseParser = option("-p", "--port", integer());
+      const defaultParser = withDefault(baseParser, 3000);
+
+      // Test with wrapped state
+      const wrappedState = [{ success: true as const, value: 8080 }] as [
+        { success: true; value: number },
+      ];
+      const fragments = defaultParser.getDocFragments(wrappedState, 8080);
+
+      // Should delegate to base parser with unwrapped state and default value
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.deepEqual(fragments.fragments[0].term.names, ["-p", "--port"]);
+        }
+        assert.equal(fragments.fragments[0].default, "8080");
+      }
+    });
+
+    it("should show default value when upper default is not provided", () => {
+      const baseParser = option("-p", "--port", integer());
+      const defaultParser = withDefault(baseParser, 3000);
+
+      const fragments = defaultParser.getDocFragments(undefined);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, "3000");
+      }
+    });
+
+    it("should prefer upper default value when provided", () => {
+      const baseParser = option("-p", "--port", integer());
+      const defaultParser = withDefault(baseParser, 3000);
+
+      const fragments = defaultParser.getDocFragments(undefined, 8080);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, "8080");
+      }
+    });
+
+    it("should work with function-based default values", () => {
+      const baseParser = option("-p", "--port", integer());
+      const defaultFunc = () => 3000;
+      const defaultParser = withDefault(baseParser, defaultFunc);
+
+      const fragments = defaultParser.getDocFragments(undefined);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, "3000");
+      }
+    });
+
+    it("should preserve description from wrapped parser", () => {
+      const description = message`Server port number`;
+      const baseParser = option("-p", "--port", integer(), { description });
+      const defaultParser = withDefault(baseParser, 3000);
+
+      const fragments = defaultParser.getDocFragments(undefined);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].description, description);
+      }
+    });
+
+    it("should work with argument parsers", () => {
+      const baseParser = argument(string({ metavar: "FILE" }));
+      const defaultParser = withDefault(baseParser, "input.txt");
+
+      const fragments = defaultParser.getDocFragments(undefined);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "argument");
+        if (fragments.fragments[0].term.type === "argument") {
+          assert.equal(fragments.fragments[0].term.metavar, "FILE");
+        }
+        assert.equal(fragments.fragments[0].default, "input.txt");
+      }
+    });
   });
 });
 
@@ -1820,6 +2516,110 @@ describe("multiple", () => {
       assert.deepEqual(booleanResult.value, [true, true]);
     }
   });
+
+  describe("getDocFragments", () => {
+    it("should delegate to wrapped parser", () => {
+      const baseParser = option("-l", "--locale", string());
+      const multipleParser = multiple(baseParser);
+
+      // Should delegate to base parser with the last state
+      const fragments = multipleParser.getDocFragments([]);
+      const baseFragments = baseParser.getDocFragments(baseParser.initialState);
+      assert.deepEqual(fragments, baseFragments);
+    });
+
+    it("should delegate with latest state when state array has items", () => {
+      const baseParser = option("-l", "--locale", string());
+      const multipleParser = multiple(baseParser);
+
+      const states = [
+        { success: true as const, value: "en" },
+        { success: true as const, value: "fr" },
+      ];
+      const fragments = multipleParser.getDocFragments(states, ["en", "fr"]);
+
+      // Should delegate to base parser with latest state and first default value
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.deepEqual(fragments.fragments[0].term.names, [
+            "-l",
+            "--locale",
+          ]);
+        }
+        assert.equal(fragments.fragments[0].default, "en");
+      }
+    });
+
+    it("should use undefined as default when default array is empty", () => {
+      const baseParser = option("-l", "--locale", string());
+      const multipleParser = multiple(baseParser);
+
+      const states = [{ success: true as const, value: "en" }];
+      const fragments = multipleParser.getDocFragments(states, []);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, undefined);
+      }
+    });
+
+    it("should work with argument parsers", () => {
+      const baseParser = argument(string({ metavar: "FILE" }));
+      const multipleParser = multiple(baseParser);
+
+      const fragments = multipleParser.getDocFragments([], [
+        "file1.txt",
+        "file2.txt",
+      ]);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "argument");
+        if (fragments.fragments[0].term.type === "argument") {
+          assert.equal(fragments.fragments[0].term.metavar, "FILE");
+        }
+        assert.equal(fragments.fragments[0].default, "file1.txt");
+      }
+    });
+
+    it("should preserve description from wrapped parser", () => {
+      const description = message`Supported locales`;
+      const baseParser = option("-l", "--locale", string(), { description });
+      const multipleParser = multiple(baseParser);
+
+      const fragments = multipleParser.getDocFragments([]);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].description, description);
+      }
+    });
+
+    it("should work with empty state array", () => {
+      const baseParser = option("-v", "--verbose");
+      const multipleParser = multiple(baseParser);
+
+      const fragments = multipleParser.getDocFragments([]);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.deepEqual(fragments.fragments[0].term.names, [
+            "-v",
+            "--verbose",
+          ]);
+        }
+      }
+    });
+  });
 });
 
 describe("or", () => {
@@ -1909,6 +2709,147 @@ describe("or", () => {
 
     const resultC = parse(orParser, ["-c"]);
     assert.ok(resultC.success);
+  });
+
+  describe("getDocFragments", () => {
+    it("should return fragments from all parsers when state is undefined", () => {
+      const parser1 = option("-a", "--apple");
+      const parser2 = option("-b", "--banana");
+      const orParser = or(parser1, parser2);
+
+      const fragments = orParser.getDocFragments(undefined);
+
+      // Should return sections with entries from all parsers
+      assert.ok(fragments.fragments.length > 0);
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      assert.ok(sections.length > 0);
+
+      // Check that entries from multiple parsers are included
+      const allEntries = sections.flatMap((s) => s.entries);
+      assert.ok(allEntries.length >= 2);
+    });
+
+    it("should return fragments from matched parser when state is defined", () => {
+      const parser1 = option("-a", "--apple");
+      const parser2 = option("-b", "--banana");
+      const orParser = or(parser1, parser2);
+
+      // Simulate state where first parser (index 0) matched
+      const state = [0, {
+        success: true,
+        next: { state: { success: true, value: true } },
+        consumed: ["-a"],
+      }] as const;
+      const fragments = orParser.getDocFragments(
+        state as unknown as Parameters<typeof orParser.getDocFragments>[0],
+      );
+
+      // Should return fragments from the matched parser
+      assert.ok(fragments.fragments.length > 0);
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      assert.ok(sections.length > 0);
+    });
+
+    it("should work with different parser types", () => {
+      const parser1 = option("-v", "--verbose");
+      const parser2 = argument(string({ metavar: "FILE" }));
+      const orParser = or(parser1, parser2);
+
+      const fragments = orParser.getDocFragments(undefined);
+
+      assert.ok(fragments.fragments.length > 0);
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      assert.ok(sections.length > 0);
+
+      const allEntries = sections.flatMap((s) => s.entries);
+      // Should have entries from both option and argument parsers
+      const hasOption = allEntries.some((e: DocEntry) =>
+        e.term.type === "option"
+      );
+      const hasArgument = allEntries.some((e: DocEntry) =>
+        e.term.type === "argument"
+      );
+      assert.ok(hasOption && hasArgument);
+    });
+
+    it("should preserve descriptions from child parsers", () => {
+      const description1 = message`Enable verbose mode`;
+      const description2 = message`Run in quiet mode`;
+      const parser1 = option("-v", "--verbose", { description: description1 });
+      const parser2 = option("-q", "--quiet", { description: description2 });
+      const orParser = or(parser1, parser2);
+
+      const fragments = orParser.getDocFragments(undefined);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+
+      const verboseEntry = allEntries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--verbose")
+      );
+      const quietEntry = allEntries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--quiet")
+      );
+
+      assert.ok(verboseEntry);
+      assert.ok(quietEntry);
+      assert.deepEqual(verboseEntry.description, description1);
+      assert.deepEqual(quietEntry.description, description2);
+    });
+
+    it("should work with three or more parsers", () => {
+      const parser1 = option("-a");
+      const parser2 = option("-b");
+      const parser3 = option("-c");
+      const orParser = or(parser1, parser2, parser3);
+
+      const fragments = orParser.getDocFragments(undefined);
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const allEntries = sections.flatMap((s) => s.entries);
+
+      // Should have entries from all three parsers
+      assert.ok(allEntries.length >= 3);
+      assert.ok(
+        allEntries.some((e: DocEntry) =>
+          e.term.type === "option" && e.term.names?.includes("-a")
+        ),
+      );
+      assert.ok(
+        allEntries.some((e: DocEntry) =>
+          e.term.type === "option" && e.term.names?.includes("-b")
+        ),
+      );
+      assert.ok(
+        allEntries.some((e: DocEntry) =>
+          e.term.type === "option" && e.term.names?.includes("-c")
+        ),
+      );
+    });
+
+    it("should handle nested sections properly", () => {
+      const nestedParser1 = object("Group A", { flag: option("-a") });
+      const nestedParser2 = object("Group B", { flag: option("-b") });
+      const orParser = or(nestedParser1, nestedParser2);
+
+      const fragments = orParser.getDocFragments(undefined);
+
+      // Should have sections from nested parsers
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      assert.ok(sections.length > 0);
+    });
   });
 });
 
@@ -2574,6 +3515,144 @@ describe("merge", () => {
       assert.equal(typeof result.value.flag, "boolean");
       assert.equal(result.value.flag, true);
     }
+  });
+
+  describe("getDocFragments", () => {
+    it("should delegate to constituent parsers and organize fragments", () => {
+      const parser1 = object({
+        flag: option("-f", "--flag"),
+      });
+      const parser2 = object({
+        value: option("-v", "--value", string()),
+      });
+      const parser = merge(parser1, parser2);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      const section = fragments.fragments[0];
+      assert.equal(section.type, "section");
+      assert.equal(section.title, undefined);
+      assert.equal(section.entries.length, 2);
+
+      // Check that both parsers' entries are included
+      const flagEntry = section.entries.find((e) =>
+        e.term.type === "option" && e.term.names.includes("-f")
+      );
+      const valueEntry = section.entries.find((e) =>
+        e.term.type === "option" && e.term.names.includes("-v")
+      );
+      assert.ok(flagEntry);
+      assert.ok(valueEntry);
+    });
+
+    it("should handle parsers with titled sections", () => {
+      const parser1 = object({
+        flag: option("-f", "--flag", { description: message`A flag option` }),
+      });
+      const parser2 = object({
+        value: option("-v", "--value", string(), {
+          description: message`A value option`,
+        }),
+      });
+      const parser = merge(parser1, parser2);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      const section = fragments.fragments[0];
+      assert.equal(section.type, "section");
+      assert.equal(section.title, undefined);
+      assert.equal(section.entries.length, 2);
+    });
+
+    it("should merge entries from sections without titles", () => {
+      const parser1 = object({
+        flag1: option("-1", "--flag1"),
+        flag2: option("-2", "--flag2"),
+      });
+      const parser2 = object({
+        value1: option("-v", "--value1", string()),
+        value2: option("-w", "--value2", string()),
+      });
+      const parser = merge(parser1, parser2);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      const section = fragments.fragments[0];
+      assert.equal(section.type, "section");
+      assert.equal(section.title, undefined);
+      assert.equal(section.entries.length, 4);
+    });
+
+    it("should handle complex state with proper initial state", () => {
+      const parser1 = object({
+        flag: option("-f", "--flag"),
+      });
+      const parser2 = object({
+        value: option("-v", "--value", string()),
+      });
+      const parser = merge(parser1, parser2);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      const section = fragments.fragments[0];
+      assert.equal(section.type, "section");
+      assert.equal(section.title, undefined);
+      assert.equal(section.entries.length, 2);
+    });
+
+    it("should handle simple case with two parsers", () => {
+      const parser1 = object({ flag1: option("-1") });
+      const parser2 = object({ flag2: option("-2") });
+      const parser = merge(parser1, parser2);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      const section = fragments.fragments[0];
+      assert.equal(section.type, "section");
+      assert.equal(section.title, undefined);
+      assert.equal(section.entries.length, 2);
+    });
+
+    it("should handle parsers with mixed documentation patterns", () => {
+      const simpleParser = object({
+        simple: option("-s", "--simple"),
+      });
+      const detailedParser = object({
+        detailed: option("-d", "--detailed", string(), {
+          description: message`A detailed option with description`,
+        }),
+      });
+      const argumentParser = object({
+        arg: argument(string()),
+      });
+      const parser = merge(simpleParser, detailedParser, argumentParser);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      const section = fragments.fragments[0];
+      assert.equal(section.type, "section");
+      assert.equal(section.title, undefined);
+      assert.equal(section.entries.length, 3);
+
+      // Check that all different types of entries are present
+      const simpleEntry = section.entries.find((e) =>
+        e.term.type === "option" && e.term.names.includes("-s")
+      );
+      const detailedEntry = section.entries.find((e) =>
+        e.term.type === "option" && e.term.names.includes("-d")
+      );
+      const argEntry = section.entries.find((e) => e.term.type === "argument");
+
+      assert.ok(simpleEntry);
+      assert.ok(detailedEntry);
+      assert.ok(argEntry);
+    });
   });
 });
 
@@ -3460,6 +4539,86 @@ describe("command", () => {
       assert.equal(result.value, "empty");
     }
   });
+
+  describe("getDocFragments", () => {
+    it("should return documentation fragment for command when not matched", () => {
+      const parser = command("show", argument(string()));
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "command");
+        if (fragments.fragments[0].term.type === "command") {
+          assert.equal(fragments.fragments[0].term.name, "show");
+        }
+        assert.equal(fragments.fragments[0].description, undefined);
+      }
+    });
+
+    it("should include description when provided", () => {
+      const description = message`Show item details`;
+      const parser = command("show", argument(string()), { description });
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].description, description);
+      }
+    });
+
+    it("should delegate to inner parser when command is matched", () => {
+      const innerParser = object({
+        verbose: option("-v", "--verbose"),
+        file: argument(string({ metavar: "FILE" })),
+      });
+      const parser = command("show", innerParser);
+
+      // Simulate matched state
+      const matchedState: ["matched", string] = ["matched", "show"];
+      const fragments = parser.getDocFragments(matchedState);
+
+      // Should delegate to inner parser and return its fragments
+      assert.ok(fragments.fragments.length > 0);
+      // The exact number and content depends on the inner parser implementation
+      // but we know it should contain fragments from the inner parser
+    });
+
+    it("should delegate to inner parser when parsing", () => {
+      const innerParser = object({
+        verbose: option("-v", "--verbose"),
+        file: argument(string({ metavar: "FILE" })),
+      });
+      const parser = command("show", innerParser);
+
+      // Simulate parsing state
+      const parsingState = [
+        "parsing" as const,
+        innerParser.initialState,
+      ];
+      const fragments = parser.getDocFragments(
+        parsingState as Parameters<typeof parser.getDocFragments>[0],
+      );
+
+      // Should delegate to inner parser
+      assert.ok(fragments.fragments.length > 0);
+    });
+
+    it("should work with simple command", () => {
+      const parser = command("version", constant("1.0.0"));
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "command");
+        if (fragments.fragments[0].term.type === "command") {
+          assert.equal(fragments.fragments[0].term.name, "version");
+        }
+      }
+    });
+  });
 });
 
 describe("Parser usage field", () => {
@@ -3992,5 +5151,422 @@ describe("Parser usage field integration", () => {
     if (defaultWrapped.usage[0].type === "optional") {
       assert.deepEqual(defaultWrapped.usage[0].terms, baseOption.usage);
     }
+  });
+});
+
+describe("nested command help", () => {
+  it("should show correct help for nested subcommands", () => {
+    const parser = command(
+      "nest",
+      or(
+        command(
+          "foo",
+          object("Foo Options", {
+            type: constant("foo"),
+            allow: option("-a", "--allow", {
+              description: message`Allow something in foo.`,
+            }),
+            value: option("-v", "--value", integer(), {
+              description: message`Set a foo value.`,
+            }),
+            arg: argument(string({ metavar: "ARG" }), {
+              description: message`A foo argument.`,
+            }),
+          }),
+          { description: message`Foo subcommand description.` },
+        ),
+        command(
+          "bar",
+          object("Bar Options", {
+            type: constant("bar"),
+            foo: option("-f", "--foo", {
+              description: message`Foo option in bar.`,
+            }),
+            bar: option("-b", "--bar", string({ metavar: "VALUE" }), {
+              description: message`Bar option in bar.`,
+            }),
+          }),
+          { description: message`Bar subcommand description.` },
+        ),
+      ),
+      { description: message`Nested command description.` },
+    );
+
+    // Test help for "nest" shows subcommands
+    const nestDocFragments = parser.getDocFragments(
+      ["matched", "nest"],
+      undefined,
+    );
+    assert.equal(
+      formatMessage(nestDocFragments.description!),
+      "Nested command description.",
+    );
+    const nestEntries = nestDocFragments.fragments
+      .flatMap((f) => f.type === "section" ? f.entries : [])
+      .filter((e) => e.term.type === "command");
+    assert.equal(nestEntries.length, 2);
+    assert.ok(
+      nestEntries.some((e) =>
+        e.term.type === "command" && e.term.name === "foo"
+      ),
+    );
+    assert.ok(
+      nestEntries.some((e) =>
+        e.term.type === "command" && e.term.name === "bar"
+      ),
+    );
+
+    // Test help for "nest foo" shows foo options
+    const fooDocFragments = parser.getDocFragments(
+      ["parsing", [0, {
+        success: true,
+        next: {
+          buffer: [],
+          optionsTerminated: false,
+          state: ["matched", "foo"],
+        },
+        consumed: ["foo"],
+      }]],
+      undefined,
+    );
+    assert.equal(
+      formatMessage(fooDocFragments.description!),
+      "Foo subcommand description.",
+    );
+    const fooEntries = fooDocFragments.fragments
+      .flatMap((f) => f.type === "section" ? f.entries : []);
+    assert.ok(fooEntries.some((e) =>
+      e.term.type === "option" &&
+      e.term.names.includes("-a") &&
+      e.description &&
+      formatMessage(e.description).includes("Allow something in foo")
+    ));
+
+    // Test help for "nest bar" shows bar options
+    const barDocFragments = parser.getDocFragments(
+      ["parsing", [1, {
+        success: true,
+        next: {
+          buffer: [],
+          optionsTerminated: false,
+          state: ["matched", "bar"],
+        },
+        consumed: ["bar"],
+      }]],
+      undefined,
+    );
+    assert.equal(
+      formatMessage(barDocFragments.description!),
+      "Bar subcommand description.",
+    );
+    const barEntries = barDocFragments.fragments
+      .flatMap((f) => f.type === "section" ? f.entries : []);
+    assert.ok(barEntries.some((e) =>
+      e.term.type === "option" &&
+      e.term.names.includes("-f") &&
+      e.description &&
+      formatMessage(e.description).includes("Foo option in bar")
+    ));
+  });
+});
+
+describe("getDocPage", () => {
+  it("should return documentation page for simple parser", () => {
+    const parser = option("-v", "--verbose");
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    assert.ok(Array.isArray(docPage.usage));
+    assert.ok(Array.isArray(docPage.sections));
+    assert.equal(docPage.usage.length, 1);
+    assert.equal(docPage.usage[0].type, "optional");
+  });
+
+  it("should return documentation page for object parser", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      port: option("-p", "--port", integer()),
+      file: argument(string({ metavar: "FILE" })),
+    });
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    assert.ok(Array.isArray(docPage.usage));
+    assert.ok(Array.isArray(docPage.sections));
+    assert.ok(docPage.sections.length > 0);
+
+    // Should have entries for all parsers
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 3);
+
+    // Check for option entries
+    const optionEntries = allEntries.filter((e) => e.term.type === "option");
+    assert.equal(optionEntries.length, 2);
+
+    // Check for argument entry
+    const argumentEntries = allEntries.filter((e) =>
+      e.term.type === "argument"
+    );
+    assert.equal(argumentEntries.length, 1);
+    assert.equal(argumentEntries[0].term.metavar, "FILE");
+  });
+
+  it("should return documentation page with description when parser has description", () => {
+    const parser = object("Test Parser", {
+      verbose: option("-v", "--verbose", {
+        description: message`Enable verbose output`,
+      }),
+    });
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    assert.ok(docPage.sections.length > 0);
+
+    // Should have section with title
+    const labeledSection = docPage.sections.find((s) =>
+      s.title === "Test Parser"
+    );
+    assert.ok(labeledSection);
+    assert.equal(labeledSection.entries.length, 1);
+
+    const entry = labeledSection.entries[0];
+    assert.equal(entry.term.type, "option");
+    if (entry.term.type === "option") {
+      assert.deepEqual(entry.term.names, ["-v", "--verbose"]);
+    }
+    assert.deepEqual(entry.description, message`Enable verbose output`);
+  });
+
+  it("should handle empty arguments array", () => {
+    const parser = option("-v", "--verbose");
+
+    const docPage = getDocPage(parser, []);
+
+    assert.ok(docPage);
+    assert.ok(Array.isArray(docPage.usage));
+    assert.ok(Array.isArray(docPage.sections));
+  });
+
+  it("should return contextual documentation based on parsed arguments", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      port: option("-p", "--port", integer()),
+    });
+
+    // Documentation with no arguments
+    const emptyDoc = getDocPage(parser, []);
+    assert.ok(emptyDoc);
+
+    // Documentation after parsing some arguments
+    const contextDoc = getDocPage(parser, ["-v"]);
+    assert.ok(contextDoc);
+
+    // Both should have the same structure but potentially different state
+    assert.equal(emptyDoc.sections.length, contextDoc.sections.length);
+  });
+
+  it("should work with command parsers", () => {
+    const subParser = object({
+      file: argument(string({ metavar: "FILE" })),
+      verbose: option("-v", "--verbose"),
+    });
+
+    const parser = or(
+      command("add", subParser, { description: message`Add a new item` }),
+      command(
+        "remove",
+        object({
+          id: argument(string({ metavar: "ID" })),
+        }),
+        { description: message`Remove an item` },
+      ),
+    );
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage && docPage.usage.length > 0);
+    assert.ok(docPage.sections.length > 0);
+  });
+
+  it("should handle command context correctly", () => {
+    const subParser = object({
+      file: argument(string({ metavar: "FILE" })),
+      verbose: option("-v", "--verbose"),
+    });
+
+    const parser = command("process", subParser, {
+      description: message`Process files`,
+    });
+
+    // Documentation without command
+    const rootDoc = getDocPage(parser);
+    assert.ok(rootDoc);
+
+    // Documentation after command is matched
+    const commandDoc = getDocPage(parser, ["process"]);
+    assert.ok(commandDoc);
+
+    // Usage should be updated to reflect command context
+    assert.ok(rootDoc.usage && rootDoc.usage.length > 0);
+    assert.ok(commandDoc.usage && commandDoc.usage.length > 0);
+  });
+
+  it("should handle exclusive (or) parsers correctly", () => {
+    const parser = or(
+      option("-v", "--verbose"),
+      option("-q", "--quiet"),
+      option("-d", "--debug"),
+    );
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage && docPage.usage.length > 0);
+    if (docPage.usage) {
+      assert.equal(docPage.usage[0].type, "exclusive");
+      if (docPage.usage[0].type === "exclusive") {
+        assert.equal(docPage.usage[0].terms.length, 3);
+      }
+    }
+  });
+
+  it("should handle multiple parser correctly", () => {
+    const parser = object({
+      files: multiple(argument(string({ metavar: "FILE" }))),
+      verbose: option("-v", "--verbose"),
+    });
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+
+    // Should have entries for both multiple files and verbose option
+    assert.ok(allEntries.length >= 2);
+
+    const fileEntry = allEntries.find((e) =>
+      e.term.type === "argument" && e.term.metavar === "FILE"
+    );
+    assert.ok(fileEntry);
+  });
+
+  it("should handle optional parser correctly", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      output: optional(option("-o", "--output", string({ metavar: "FILE" }))),
+    });
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+
+    // Should have entries for both verbose and optional output
+    assert.ok(allEntries.length >= 2);
+
+    const outputEntry = allEntries.find((e) =>
+      e.term.type === "option" &&
+      e.term.names && e.term.names.includes("--output")
+    );
+    assert.ok(outputEntry);
+  });
+
+  it("should handle withDefault parser correctly", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      port: withDefault(option("-p", "--port", integer()), 8080),
+    });
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+
+    const portEntry = allEntries.find((e) =>
+      e.term.type === "option" &&
+      e.term.names && e.term.names.includes("--port")
+    );
+    assert.ok(portEntry);
+    assert.equal(portEntry.default, "8080");
+  });
+
+  it("should handle tuple parser correctly", () => {
+    const parser = tuple([
+      argument(string({ metavar: "INPUT" })),
+      option("-v", "--verbose"),
+      argument(string({ metavar: "OUTPUT" })),
+    ]);
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    const allEntries = docPage.sections.flatMap((s) => s.entries);
+
+    // Should have entries for all tuple elements
+    assert.ok(allEntries.length >= 3);
+
+    const inputEntry = allEntries.find((e) =>
+      e.term.type === "argument" && e.term.metavar === "INPUT"
+    );
+    const outputEntry = allEntries.find((e) =>
+      e.term.type === "argument" && e.term.metavar === "OUTPUT"
+    );
+    const verboseEntry = allEntries.find((e) =>
+      e.term.type === "option" &&
+      e.term.names && e.term.names.includes("--verbose")
+    );
+
+    assert.ok(inputEntry);
+    assert.ok(outputEntry);
+    assert.ok(verboseEntry);
+  });
+
+  it("should work with constant parser", () => {
+    const parser = constant("test-value");
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    // Constant parsers typically don't contribute to documentation
+    assert.ok(Array.isArray(docPage.usage));
+    assert.ok(Array.isArray(docPage.sections));
+  });
+
+  it("should handle parser that fails to parse arguments", () => {
+    const parser = option("-v", "--verbose");
+
+    // Try to get documentation with invalid arguments
+    const docPage = getDocPage(parser, ["--invalid-option"]);
+
+    assert.ok(docPage);
+    // Should still return documentation even if parsing fails
+    assert.ok(Array.isArray(docPage.usage));
+    assert.ok(Array.isArray(docPage.sections));
+  });
+
+  it("should handle complex nested parser structures", () => {
+    const parser = object("CLI Tool", {
+      verbose: option("-v", "--verbose", {
+        description: message`Enable verbose output`,
+      }),
+      config: option("-c", "--config", string({ metavar: "FILE" }), {
+        description: message`Configuration file`,
+      }),
+      file: argument(string({ metavar: "INPUT" })),
+    });
+
+    const docPage = getDocPage(parser);
+
+    assert.ok(docPage);
+    assert.ok(docPage.sections.length > 0);
+
+    // Should have sections from the structure
+    const cliSection = docPage.sections.find((s) => s.title === "CLI Tool");
+    assert.ok(cliSection);
+    assert.ok(cliSection.entries.length >= 3);
   });
 });

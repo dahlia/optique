@@ -229,15 +229,54 @@ function* formatUsageTerms(
     if (i > 0) {
       yield { text: " ", width: 1 };
     }
-    yield* formatUsageTerm(t, options);
+    yield* formatUsageTermInternal(t, options);
     i++;
   }
 }
 
-function* formatUsageTerm(
+/**
+ * Options for formatting a single {@link UsageTerm}.
+ */
+export interface UsageTermFormatOptions extends UsageFormatOptions {
+  /**
+   * A string that separates multiple option names in the formatted output.
+   * @default `"/"`
+   */
+  readonly optionsSeparator?: string;
+}
+
+/**
+ * Formats a single {@link UsageTerm} into a string representation
+ * suitable for command-line help text.
+ * @param term The usage term to format, which can be an argument,
+ *             option, command, optional term, exclusive term, or multiple term.
+ * @param options Optional formatting options to customize the output.
+ *                See {@link UsageTermFormatOptions} for available options.
+ * @returns A formatted string representation of the usage term.
+ */
+export function formatUsageTerm(
   term: UsageTerm,
-  options: UsageFormatOptions,
+  options: UsageTermFormatOptions = {},
+): string {
+  let lineWidth = 0;
+  let output = "";
+  for (const { text, width } of formatUsageTermInternal(term, options)) {
+    if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
+      output += "\n";
+      lineWidth = 0;
+      if (text === " ") continue;
+    }
+    output += text;
+    lineWidth += width;
+  }
+  return output;
+}
+
+function* formatUsageTermInternal(
+  term: UsageTerm,
+  options: UsageTermFormatOptions,
 ): Generator<{ text: string; width: number }> {
+  const optionsSeparator = options.optionsSeparator ?? "/";
   if (term.type === "argument") {
     yield {
       text: options?.colors
@@ -261,8 +300,10 @@ function* formatUsageTerm(
       for (const optionName of term.names) {
         if (i > 0) {
           yield {
-            text: options?.colors ? `\x1b[2m/\x1b[0m` : "/", // Dim
-            width: 1,
+            text: options?.colors
+              ? `\x1b[2m${optionsSeparator}\x1b[0m`
+              : optionsSeparator, // Dim
+            width: optionsSeparator.length,
           };
         }
         yield {

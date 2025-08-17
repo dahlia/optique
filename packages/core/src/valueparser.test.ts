@@ -2,12 +2,108 @@ import {
   choice,
   float,
   integer,
+  isValueParser,
   locale,
   url,
   uuid,
 } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+
+describe("isValueParser", () => {
+  it("should return true for valid ValueParser objects", () => {
+    const parser = integer({});
+    assert.ok(isValueParser(parser));
+  });
+
+  it("should return true for different types of value parsers", () => {
+    const stringParser = {
+      metavar: "STRING",
+      parse: () => ({ success: true, value: "test" }),
+      format: (v: string) => v,
+    };
+    const numberParser = {
+      metavar: "NUMBER",
+      parse: () => ({ success: true, value: 42 }),
+      format: (v: number) => v.toString(),
+    };
+
+    assert.ok(isValueParser(stringParser));
+    assert.ok(isValueParser(numberParser));
+  });
+
+  it("should return false for objects missing metavar property", () => {
+    const invalidParser = {
+      parse: () => ({ success: true, value: "test" }),
+      format: (v: string) => v,
+    };
+    assert.ok(!isValueParser(invalidParser));
+  });
+
+  it("should return false for objects missing parse property", () => {
+    const invalidParser = { metavar: "STRING", format: (v: string) => v };
+    assert.ok(!isValueParser(invalidParser));
+  });
+
+  it("should return false for objects missing format property", () => {
+    const invalidParser = {
+      metavar: "STRING",
+      parse: () => ({ success: true, value: "test" }),
+    };
+    assert.ok(!isValueParser(invalidParser));
+  });
+
+  it("should return false for objects with wrong property types", () => {
+    const invalidParser1 = {
+      metavar: 123,
+      parse: () => ({ success: true, value: "test" }),
+      format: (v: string) => v,
+    };
+    const invalidParser2 = {
+      metavar: "STRING",
+      parse: "not-a-function",
+      format: (v: string) => v,
+    };
+    const invalidParser3 = {
+      metavar: "STRING",
+      parse: () => ({ success: true, value: "test" }),
+      format: "not-a-function",
+    };
+
+    assert.ok(!isValueParser(invalidParser1));
+    assert.ok(!isValueParser(invalidParser2));
+    assert.ok(!isValueParser(invalidParser3));
+  });
+
+  it("should return false for primitive values", () => {
+    assert.ok(!isValueParser(null));
+    assert.ok(!isValueParser(undefined));
+    assert.ok(!isValueParser("string"));
+    assert.ok(!isValueParser(42));
+    assert.ok(!isValueParser(true));
+    assert.ok(!isValueParser([]));
+  });
+
+  it("should return false for empty objects", () => {
+    assert.ok(!isValueParser({}));
+  });
+
+  it("should work with built-in value parsers", () => {
+    const integerParser = integer({});
+    const choiceParser = choice(["a", "b"]);
+    const floatParser = float({});
+    const urlParser = url({});
+    const localeParser = locale({});
+    const uuidParser = uuid({});
+
+    assert.ok(isValueParser(integerParser));
+    assert.ok(isValueParser(choiceParser));
+    assert.ok(isValueParser(floatParser));
+    assert.ok(isValueParser(urlParser));
+    assert.ok(isValueParser(localeParser));
+    assert.ok(isValueParser(uuidParser));
+  });
+});
 
 describe("integer", () => {
   describe("number parser", () => {

@@ -51,6 +51,14 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./doc": {
+      "types": {
+        "import": "./dist/doc.d.ts",
+        "require": "./dist/doc.cts"
+      },
+      "import": "./dist/doc.js",
+      "require": "./dist/doc.cjs"
+    },
     "./message": {
       "types": {
         "import": "./dist/message.d.ts",

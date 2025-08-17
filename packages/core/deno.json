@@ -4,6 +4,7 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
+    "./doc": "./src/doc.ts",
     "./message": "./src/message.ts",
     "./parser": "./src/parser.ts",
     "./usage": "./src/usage.ts",
