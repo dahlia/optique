@@ -59,6 +59,14 @@
       "import": "./dist/doc.js",
       "require": "./dist/doc.cjs"
     },
+    "./facade": {
+      "types": {
+        "import": "./dist/facade.d.ts",
+        "require": "./dist/facade.cts"
+      },
+      "import": "./dist/facade.js",
+      "require": "./dist/facade.cjs"
+    },
     "./message": {
       "types": {
         "import": "./dist/message.d.ts",

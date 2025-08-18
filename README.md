@@ -64,6 +64,7 @@ Example
 -------
 
 ~~~~ typescript
+import { run } from "@optique/core/facade";
 import { formatMessage } from "@optique/core/message";
 import {
   argument,
@@ -73,10 +74,10 @@ import {
   option,
   optional,
   or,
-  parse,
   withDefault
 } from "@optique/core/parser";
 import { choice, integer, locale, string, url } from "@optique/core/valueparser";
+import process from "node:process";
 
 // Define a sophisticated CLI with grouped and reusable option sets
 const networkOptions = object("Network", {
@@ -113,27 +114,24 @@ const parser = or(
   }),
 );
 
-const result = parse(parser, process.argv.slice(2));
+const result = run(parser, "myapp", process.argv.slice(2), {
+  colors: true,
+  help: "both",
+  onError: process.exit,
+});
 
-if (result.success) {
-  // TypeScript automatically infers the complex union type with optional fields
-  if ("port" in result.value) {
-    const server = result.value;
-    console.log(`Starting server on ${server.host}:${server.port}`);
-    console.log(`Supported locales: ${server.locales.join(", ") || "default"}`);
-    if (server.verbose) console.log("Verbose mode enabled");
-    if (server.logFile) console.log(`Logging to: ${server.logFile}`);
-  } else {
-    const client = result.value;
-    console.log(`Connecting to ${client.connect}`);
-    console.log(`Processing ${client.files.length} files`);
-    console.log(`Timeout: ${client.timeout}ms`);
-  }
+// TypeScript automatically infers the complex union type with optional fields
+if ("port" in result) {
+  const server = result;
+  console.log(`Starting server on ${server.host}:${server.port}`);
+  console.log(`Supported locales: ${server.locales.join(", ") || "default"}`);
+  if (server.verbose) console.log("Verbose mode enabled");
+  if (server.logFile) console.log(`Logging to: ${server.logFile}`);
 } else {
-  console.error(
-    "Error:",
-    formatMessage(result.error, { colors: true, quotes: false })
-  );
+  const client = result;
+  console.log(`Connecting to ${client.connect}`);
+  console.log(`Processing ${client.files.length} files`);
+  console.log(`Timeout: ${client.timeout}ms`);
 }
 ~~~~
 
@@ -319,8 +317,10 @@ allowing for clean optional repeated arguments.
 For a quick introduction to subcommands, here's a simple `git`-like interface:
 
 ~~~~ typescript
-import { argument, command, constant, object, option, or, parse } from "@optique/core/parser";
+import { run } from "@optique/core/facade";
+import { argument, command, constant, object, option, or } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
+import process from "node:process";
 
 const parser = or(
   command("add", object({
@@ -335,10 +335,13 @@ const parser = or(
   })),
 );
 
-const result = parse(parser, ["commit", "-m", "Fix parser bug"]);
-// result.value.type === "commit"
-// result.value.message === "Fix parser bug"
-// result.value.amend === false
+const result = run(parser, "git", ["commit", "-m", "Fix parser bug"], {
+  help: "both",
+  onError: process.exit,
+});
+// result.type === "commit"
+// result.message === "Fix parser bug"
+// result.amend === false
 ~~~~
 
 ### Subcommands
@@ -347,17 +350,19 @@ The `command()` combinator enables building git-like CLI interfaces with
 subcommands. Each subcommand can have its own set of options and arguments:
 
 ~~~~ typescript
+import { run } from "@optique/core/facade";
 import {
   argument,
   command,
   constant,
+  multiple,
   object,
   option,
   optional,
   or,
-  parse,
 } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
+import process from "node:process";
 
 const parser = or(
   command("show", object({
@@ -380,27 +385,29 @@ const parser = or(
   })),
 );
 
-const result = parse(parser, process.argv.slice(2));
+const result = run(parser, "myapp", process.argv.slice(2), {
+  colors: true,
+  help: "both",
+  onError: process.exit,
+});
 
-if (result.success) {
-  // TypeScript infers a union type with discriminated subcommands
-  switch (result.value.type) {
-    case "show":
-      console.log(`Showing item: ${result.value.id}`);
-      if (result.value.progress) console.log("Progress enabled");
-      if (result.value.verbose) console.log("Verbose mode enabled");
-      break;
-    case "edit":
-      console.log(`Editing item: ${result.value.id}`);
-      if (result.value.editor) console.log(`Using editor: ${result.value.editor}`);
-      if (result.value.backup) console.log("Backup enabled");
-      break;
-    case "delete":
-      console.log(`Deleting items: ${result.value.items.join(", ")}`);
-      if (result.value.force) console.log("Force delete enabled");
-      if (result.value.recursive) console.log("Recursive delete enabled");
-      break;
-  }
+// TypeScript infers a union type with discriminated subcommands
+switch (result.type) {
+  case "show":
+    console.log(`Showing item: ${result.id}`);
+    if (result.progress) console.log("Progress enabled");
+    if (result.verbose) console.log("Verbose mode enabled");
+    break;
+  case "edit":
+    console.log(`Editing item: ${result.id}`);
+    if (result.editor) console.log(`Using editor: ${result.editor}`);
+    if (result.backup) console.log("Backup enabled");
+    break;
+  case "delete":
+    console.log(`Deleting items: ${result.items.join(", ")}`);
+    if (result.force) console.log("Force delete enabled");
+    if (result.recursive) console.log("Recursive delete enabled");
+    break;
 }
 ~~~~
 

@@ -14,7 +14,12 @@ import {
   text,
   values,
 } from "./message.ts";
-import type { OptionName, Usage, UsageTerm } from "./usage.ts";
+import {
+  normalizeUsage,
+  type OptionName,
+  type Usage,
+  type UsageTerm,
+} from "./usage.ts";
 import {
   isValueParser,
   type ValueParser,
@@ -244,16 +249,15 @@ export function option(
 /**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-o value`, or `/option:value`.
- * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
  *             an optional {@link OptionOptions} object that allows you to
  *             specify a description or other metadata.
  * @returns A {@link Parser} that can parse the specified options and their
  *          values.
  */
-export function option<T>(
+export function option(
   ...args: readonly [...readonly OptionName[], OptionOptions]
-): Parser<T, ValueParserResult<T> | undefined>;
+): Parser<boolean, ValueParserResult<boolean> | undefined>;
 
 export function option<T>(
   ...args:
@@ -490,9 +494,7 @@ export function option<T>(
     [Symbol.for("Deno.customInspect")]() {
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
-  } satisfies
-    & Parser<T | boolean, ValueParserResult<T | boolean>>
-    & Record<symbol, unknown>;
+  } satisfies Parser<T | boolean, ValueParserResult<T | boolean>>;
 }
 
 /**
@@ -615,9 +617,7 @@ export function argument<T>(
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
     },
-  } satisfies
-    & Parser<T, ValueParserResult<T> | undefined>
-    & Record<symbol, unknown>;
+  } satisfies Parser<T, ValueParserResult<T> | undefined>;
 }
 
 /**
@@ -1236,12 +1236,10 @@ export function tuple<
         ? `tuple(${JSON.stringify(label)}, ${parsersStr})`
         : `tuple(${parsersStr})`;
     },
-  } satisfies
-    & Parser<
-      { readonly [K in keyof T]: unknown },
-      { readonly [K in keyof T]: unknown }
-    >
-    & Record<symbol, unknown>;
+  } satisfies Parser<
+    { readonly [K in keyof T]: unknown },
+    { readonly [K in keyof T]: unknown }
+  >;
 }
 
 /**
@@ -1388,7 +1386,7 @@ export function or(
       state: undefined | [number, ParserResult<unknown>],
     ): ValueParserResult<unknown> {
       if (state == null) {
-        return { success: false, error: message`No parser matched.` };
+        return { success: false, error: message`No parser matched.` }; // FIXME
       }
       const [i, result] = state;
       if (result.success) return parsers[i].complete(result.next.state);
@@ -1399,7 +1397,11 @@ export function or(
     ): ParserResult<[number, ParserResult<unknown>]> {
       let error: { consumed: number; error: Message } = {
         consumed: 0,
-        error: message`No parser matched.`,
+        error: context.buffer.length < 1
+          ? message`No parser matched.`
+          : message`Unexpected option or subcommand: ${
+            eOptionName(context.buffer[0])
+          }.`,
       };
       const orderedParsers = parsers.map((p, i) =>
         [p, i] as [Parser<unknown, unknown>, number]
@@ -1695,6 +1697,7 @@ export function merge(
   Record<string | symbol, unknown>,
   Record<string | symbol, unknown>
 > {
+  parsers = parsers.toSorted((a, b) => b.priority - a.priority);
   const initialState: Record<string | symbol, unknown> = {};
   for (const parser of parsers) {
     for (const field in parser.initialState) {
@@ -1918,9 +1921,7 @@ export function command<T, TState>(
     [Symbol.for("Deno.customInspect")]() {
       return `command(${JSON.stringify(name)})`;
     },
-  } satisfies
-    & Parser<T, CommandState<TState>>
-    & Record<symbol, unknown>;
+  } satisfies Parser<T, CommandState<TState>>;
 }
 
 /**
@@ -2059,11 +2060,11 @@ export function getDocPage(
   if (entries.length > 0) {
     sections.push({ entries });
   }
-  const usage = [...parser.usage];
+  const usage = [...normalizeUsage(parser.usage)];
   let i = 0;
   for (const arg of args) {
     const term = usage[i];
-    if (term.type === "exclusive") {
+    if (usage.length > i && term.type === "exclusive") {
       for (const termGroup of term.terms) {
         const firstTerm = termGroup[0];
         if (firstTerm?.type !== "command" || firstTerm.name !== arg) continue;

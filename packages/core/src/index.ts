@@ -1,3 +1,5 @@
+export * from "./doc.ts";
+export * from "./facade.ts";
 export * from "./message.ts";
 export * from "./parser.ts";
 export * from "./usage.ts";

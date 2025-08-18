@@ -184,13 +184,20 @@ export function formatUsage(
   usage: Usage,
   options: UsageFormatOptions = {},
 ): string {
+  usage = normalizeUsage(usage);
   if (options.expandCommands) {
     const lastTerm = usage.at(-1)!;
     if (
       usage.length > 0 &&
       usage.slice(0, -1).every((t) => t.type === "command") &&
       lastTerm.type === "exclusive" && lastTerm.terms.every((t) =>
-        t.length > 0 && t[0].type === "command"
+        t.length > 0 &&
+        (t[0].type === "command" || t[0].type === "option" ||
+          t[0].type === "argument" ||
+          t[0].type === "optional" && t[0].terms.length === 1 &&
+            (t[0].terms[0].type === "command" ||
+              t[0].terms[0].type === "option" ||
+              t[0].terms[0].type === "argument"))
       )
     ) {
       const lines = [];
@@ -218,6 +225,75 @@ export function formatUsage(
     lineWidth += width;
   }
   return output;
+}
+
+/**
+ * Normalizes a usage description by flattening nested exclusive terms,
+ * sorting terms for better readability, and ensuring consistent structure
+ * throughout the usage tree.
+ *
+ * This function performs two main operations:
+ *
+ * 1. *Flattening*: Recursively processes all usage terms and merges any
+ *    nested exclusive terms into their parent exclusive term to avoid
+ *    redundant nesting. For example, an exclusive term containing another
+ *    exclusive term will have its nested terms flattened into the parent.
+ *
+ * 2. *Sorting*: Reorders terms to improve readability by placing:
+ *    - Commands (subcommands) first
+ *    - Options and other terms in the middle
+ *    - Positional arguments last (including optional/multiple wrappers around
+ *      arguments)
+ *
+ * The sorting logic also recognizes when optional or multiple terms contain
+ * positional arguments and treats them as arguments for sorting purposes.
+ *
+ * @param usage The usage description to normalize.
+ * @returns A normalized usage description with flattened exclusive terms
+ *          and terms sorted for optimal readability.
+ */
+export function normalizeUsage(usage: Usage): Usage {
+  const terms = usage.map(normalizeUsageTerm);
+  terms.sort((a, b) => {
+    const aCmd = a.type === "command";
+    const bCmd = b.type === "command";
+    const aArg = a.type === "argument" ||
+      (a.type === "optional" || a.type === "multiple") &&
+        a.terms.at(-1)?.type === "argument";
+    const bArg = b.type === "argument" ||
+      (b.type === "optional" || b.type === "multiple") &&
+        b.terms.at(-1)?.type === "argument";
+    // Sort commands first and arguments last:
+    return aCmd === bCmd ? aArg === bArg ? 0 : aArg ? 1 : -1 : aCmd ? -1 : 1;
+  });
+  return terms;
+}
+
+function normalizeUsageTerm(term: UsageTerm): UsageTerm {
+  if (term.type === "optional") {
+    return { type: "optional", terms: normalizeUsage(term.terms) };
+  } else if (term.type === "multiple") {
+    return {
+      type: "multiple",
+      terms: normalizeUsage(term.terms),
+      min: term.min,
+    };
+  } else if (term.type === "exclusive") {
+    const terms: Usage[] = [];
+    for (const usage of term.terms) {
+      const normalized = normalizeUsage(usage);
+      if (normalized.length === 1 && normalized[0].type === "exclusive") {
+        for (const subUsage of normalized[0].terms) {
+          terms.push(subUsage);
+        }
+      } else {
+        terms.push(normalized);
+      }
+    }
+    return { type: "exclusive", terms };
+  } else {
+    return term;
+  }
 }
 
 function* formatUsageTerms(

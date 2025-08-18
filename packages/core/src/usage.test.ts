@@ -1,6 +1,7 @@
 import {
   formatUsage,
   formatUsageTerm,
+  normalizeUsage,
   type OptionName,
   type Usage,
   type UsageFormatOptions,
@@ -1521,6 +1522,629 @@ describe("formatUsageTerm", () => {
       assert.equal(options.colors, true);
       assert.equal(options.maxWidth, 80);
       assert.equal(options.optionsSeparator, " | ");
+    });
+  });
+});
+
+describe("normalizeUsage", () => {
+  describe("basic term types", () => {
+    it("should not modify argument terms", () => {
+      const usage: Usage = [
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, usage);
+    });
+
+    it("should not modify option terms", () => {
+      const usage: Usage = [
+        { type: "option", names: ["--verbose", "-v"] },
+      ];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, usage);
+    });
+
+    it("should not modify command terms", () => {
+      const usage: Usage = [
+        { type: "command", name: "init" },
+      ];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, usage);
+    });
+  });
+
+  describe("optional terms", () => {
+    it("should normalize nested optional terms", () => {
+      const usage: Usage = [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should normalize optional terms with exclusive children", () => {
+      const usage: Usage = [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "exclusive",
+              terms: [
+                [{ type: "option", names: ["--verbose", "-v"] }],
+                [{ type: "option", names: ["--quiet", "-q"] }],
+              ],
+            },
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "exclusive",
+              terms: [
+                [{ type: "option", names: ["--verbose", "-v"] }],
+                [{ type: "option", names: ["--quiet", "-q"] }],
+              ],
+            },
+          ],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+  });
+
+  describe("multiple terms", () => {
+    it("should normalize multiple terms with nested structure", () => {
+      const usage: Usage = [
+        {
+          type: "multiple",
+          terms: [
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
+          min: 0,
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "multiple",
+          terms: [
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
+          min: 0,
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should preserve min value in multiple terms", () => {
+      const usage: Usage = [
+        {
+          type: "multiple",
+          terms: [{ type: "argument", metavar: "FILE" }],
+          min: 2,
+        },
+      ];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, usage);
+    });
+  });
+
+  describe("exclusive terms flattening", () => {
+    it("should flatten nested exclusive terms", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--verbose", "-v"] }],
+            [{
+              type: "exclusive",
+              terms: [
+                [{ type: "option", names: ["--quiet", "-q"] }],
+                [{ type: "option", names: ["--debug", "-d"] }],
+              ],
+            }],
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--verbose", "-v"] }],
+            [{ type: "option", names: ["--quiet", "-q"] }],
+            [{ type: "option", names: ["--debug", "-d"] }],
+          ],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should flatten multiple levels of nested exclusive terms", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--first", "-f"] }],
+            [{
+              type: "exclusive",
+              terms: [
+                [{ type: "option", names: ["--second", "-s"] }],
+                [{
+                  type: "exclusive",
+                  terms: [
+                    [{ type: "option", names: ["--third", "-t"] }],
+                    [{ type: "option", names: ["--fourth", "-4"] }],
+                  ],
+                }],
+              ],
+            }],
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--first", "-f"] }],
+            [{ type: "option", names: ["--second", "-s"] }],
+            [{ type: "option", names: ["--third", "-t"] }],
+            [{ type: "option", names: ["--fourth", "-4"] }],
+          ],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should not flatten exclusive terms that are not direct children", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [
+              { type: "command", name: "add" },
+              {
+                type: "exclusive",
+                terms: [
+                  [{ type: "option", names: ["--force", "-f"] }],
+                  [{ type: "option", names: ["--interactive", "-i"] }],
+                ],
+              },
+            ],
+            [{ type: "command", name: "remove" }],
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [
+              { type: "command", name: "add" },
+              {
+                type: "exclusive",
+                terms: [
+                  [{ type: "option", names: ["--force", "-f"] }],
+                  [{ type: "option", names: ["--interactive", "-i"] }],
+                ],
+              },
+            ],
+            [{ type: "command", name: "remove" }],
+          ],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should handle exclusive terms with mixed content types", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--file", "-f"], metavar: "PATH" }],
+            [{
+              type: "exclusive",
+              terms: [
+                [{ type: "argument", metavar: "INPUT" }],
+                [{ type: "command", name: "stdin" }],
+              ],
+            }],
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--file", "-f"], metavar: "PATH" }],
+            [{ type: "argument", metavar: "INPUT" }],
+            [{ type: "command", name: "stdin" }],
+          ],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+  });
+
+  describe("complex nested structures", () => {
+    it("should normalize deeply nested structure with all term types", () => {
+      const usage: Usage = [
+        { type: "command", name: "tool" },
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "multiple",
+              terms: [
+                {
+                  type: "exclusive",
+                  terms: [
+                    [{ type: "option", names: ["--verbose", "-v"] }],
+                    [{
+                      type: "exclusive",
+                      terms: [
+                        [{ type: "option", names: ["--quiet", "-q"] }],
+                        [{ type: "option", names: ["--debug", "-d"] }],
+                      ],
+                    }],
+                  ],
+                },
+              ],
+              min: 1,
+            },
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        { type: "command", name: "tool" },
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "multiple",
+              terms: [
+                {
+                  type: "exclusive",
+                  terms: [
+                    [{ type: "option", names: ["--verbose", "-v"] }],
+                    [{ type: "option", names: ["--quiet", "-q"] }],
+                    [{ type: "option", names: ["--debug", "-d"] }],
+                  ],
+                },
+              ],
+              min: 1,
+            },
+          ],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should handle multiple exclusive flattening in different parts", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--option1", "-1"] }],
+            [{
+              type: "exclusive",
+              terms: [
+                [{ type: "option", names: ["--option2", "-2"] }],
+                [{ type: "option", names: ["--option3", "-3"] }],
+              ],
+            }],
+          ],
+        },
+        { type: "argument", metavar: "FILE" },
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "exclusive",
+              terms: [
+                [{ type: "command", name: "start" }],
+                [{
+                  type: "exclusive",
+                  terms: [
+                    [{ type: "command", name: "stop" }],
+                    [{ type: "command", name: "restart" }],
+                  ],
+                }],
+              ],
+            },
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--option1", "-1"] }],
+            [{ type: "option", names: ["--option2", "-2"] }],
+            [{ type: "option", names: ["--option3", "-3"] }],
+          ],
+        },
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "exclusive",
+              terms: [
+                [{ type: "command", name: "start" }],
+                [{ type: "command", name: "stop" }],
+                [{ type: "command", name: "restart" }],
+              ],
+            },
+          ],
+        },
+        { type: "argument", metavar: "FILE" },
+      ];
+      assert.deepEqual(result, expected);
+    });
+  });
+
+  describe("empty and edge cases", () => {
+    it("should handle empty usage", () => {
+      const usage: Usage = [];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, []);
+    });
+
+    it("should handle exclusive with single term", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--verbose", "-v"] }],
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, usage);
+    });
+
+    it("should handle exclusive with empty terms array", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, usage);
+    });
+
+    it("should handle optional with empty terms", () => {
+      const usage: Usage = [
+        {
+          type: "optional",
+          terms: [],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, usage);
+    });
+
+    it("should handle multiple with empty terms", () => {
+      const usage: Usage = [
+        {
+          type: "multiple",
+          terms: [],
+          min: 0,
+        },
+      ];
+      const result = normalizeUsage(usage);
+      assert.deepEqual(result, usage);
+    });
+  });
+
+  describe("immutability", () => {
+    it("should not modify the original usage object", () => {
+      const original: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "option", names: ["--verbose", "-v"] }],
+            [{
+              type: "exclusive",
+              terms: [
+                [{ type: "option", names: ["--quiet", "-q"] }],
+                [{ type: "option", names: ["--debug", "-d"] }],
+              ],
+            }],
+          ],
+        },
+      ];
+      const originalCopy = JSON.parse(JSON.stringify(original));
+
+      normalizeUsage(original);
+
+      assert.deepEqual(original, originalCopy);
+    });
+  });
+
+  describe("sorting behavior", () => {
+    it("should place commands first", () => {
+      const usage: Usage = [
+        { type: "argument", metavar: "FILE" },
+        { type: "option", names: ["--verbose", "-v"] },
+        { type: "command", name: "start" },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        { type: "command", name: "start" },
+        { type: "option", names: ["--verbose", "-v"] },
+        { type: "argument", metavar: "FILE" },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should place arguments last", () => {
+      const usage: Usage = [
+        { type: "argument", metavar: "INPUT" },
+        { type: "option", names: ["--quiet", "-q"] },
+        { type: "argument", metavar: "OUTPUT" },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        { type: "option", names: ["--quiet", "-q"] },
+        { type: "argument", metavar: "INPUT" },
+        { type: "argument", metavar: "OUTPUT" },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should treat optional arguments as arguments for sorting", () => {
+      const usage: Usage = [
+        {
+          type: "optional",
+          terms: [{ type: "argument", metavar: "FILE" }],
+        },
+        { type: "option", names: ["--verbose", "-v"] },
+        { type: "command", name: "init" },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        { type: "command", name: "init" },
+        { type: "option", names: ["--verbose", "-v"] },
+        {
+          type: "optional",
+          terms: [{ type: "argument", metavar: "FILE" }],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should treat multiple arguments as arguments for sorting", () => {
+      const usage: Usage = [
+        {
+          type: "multiple",
+          terms: [{ type: "argument", metavar: "FILES" }],
+          min: 1,
+        },
+        { type: "option", names: ["--recursive", "-r"] },
+        { type: "command", name: "copy" },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        { type: "command", name: "copy" },
+        { type: "option", names: ["--recursive", "-r"] },
+        {
+          type: "multiple",
+          terms: [{ type: "argument", metavar: "FILES" }],
+          min: 1,
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should handle mixed optional/multiple that don't end with arguments", () => {
+      const usage: Usage = [
+        {
+          type: "optional",
+          terms: [{ type: "option", names: ["--force", "-f"] }],
+        },
+        { type: "argument", metavar: "FILE" },
+        {
+          type: "multiple",
+          terms: [{
+            type: "option",
+            names: ["--include", "-I"],
+            metavar: "PATTERN",
+          }],
+          min: 0,
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "optional",
+          terms: [{ type: "option", names: ["--force", "-f"] }],
+        },
+        {
+          type: "multiple",
+          terms: [{
+            type: "option",
+            names: ["--include", "-I"],
+            metavar: "PATTERN",
+          }],
+          min: 0,
+        },
+        { type: "argument", metavar: "FILE" },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should sort commands, options, and arguments correctly", () => {
+      const usage: Usage = [
+        { type: "argument", metavar: "SOURCE" },
+        { type: "option", names: ["--dry-run", "-n"] },
+        { type: "command", name: "move" },
+        { type: "argument", metavar: "DEST" },
+        { type: "option", names: ["--verbose", "-v"] },
+        { type: "command", name: "copy" },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        { type: "command", name: "move" },
+        { type: "command", name: "copy" },
+        { type: "option", names: ["--dry-run", "-n"] },
+        { type: "option", names: ["--verbose", "-v"] },
+        { type: "argument", metavar: "SOURCE" },
+        { type: "argument", metavar: "DEST" },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should preserve order within same category", () => {
+      const usage: Usage = [
+        { type: "command", name: "second" },
+        { type: "command", name: "first" },
+        { type: "option", names: ["--beta", "-b"] },
+        { type: "option", names: ["--alpha", "-a"] },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        { type: "command", name: "second" },
+        { type: "command", name: "first" },
+        { type: "option", names: ["--beta", "-b"] },
+        { type: "option", names: ["--alpha", "-a"] },
+      ];
+      assert.deepEqual(result, expected);
     });
   });
 });

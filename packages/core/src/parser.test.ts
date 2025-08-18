@@ -2667,7 +2667,7 @@ describe("or", () => {
     const result = parse(orParser, ["-c"]);
     assert.ok(!result.success);
     if (!result.success) {
-      assertErrorIncludes(result.error, "No parser matched");
+      assertErrorIncludes(result.error, "Unexpected option or subcommand");
     }
   });
 
@@ -4285,7 +4285,7 @@ describe("command", () => {
     const result = parse(parser, ["delete", "item123"]);
     assert.ok(!result.success);
     if (!result.success) {
-      assertErrorIncludes(result.error, "No parser matched");
+      assertErrorIncludes(result.error, "Unexpected option or subcommand");
     }
   });
 
