@@ -467,4 +467,4 @@ $ myapp --debug --config app.json server --port 8080 --daemon
 $ myapp client --connect http://localhost:8080 --timeout 5000
 ~~~~
 
-<!-- cSpell: ignore optparse -->
+<!-- cSpell: ignore optparse myapp -->
