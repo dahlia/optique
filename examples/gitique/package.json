@@ -1,0 +1,44 @@
+{
+  "name": "gitique",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A simple Git CLI implementation using Optique and es-git",
+  "main": "dist/index.js",
+  "bin": {
+    "gitique": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "start": "pnpm build && node dist/index.js",
+    "prepack": "tsdown",
+    "prepublish": "tsdown"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.2.0"
+  },
+  "dependencies": {
+    "@optique/core": "workspace:",
+    "@optique/run": "workspace:",
+    "es-git": "^0.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "keywords": [
+    "git",
+    "cli",
+    "optique",
+    "es-git",
+    "example"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Hong Minhee",
+    "email": "hong@minhee.org",
+    "url": "https://hongminhee.org/"
+  }
+}

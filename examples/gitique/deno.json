@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "es-git": "npm:es-git@^0.4.0"
+  },
+  "tasks": {
+    "start": "deno run --allow-read --allow-write --allow-env --allow-sys --allow-ffi src/index.ts"
+  }
+}

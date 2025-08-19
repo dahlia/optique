@@ -1,4 +1,6 @@
 /example.ts
+/examples/*/dist/
+/examples/*/node_modules/
 /node_modules/
 /packages/*/dist/
 /packages/*/node_modules/

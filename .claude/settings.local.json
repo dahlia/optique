@@ -18,7 +18,17 @@
       "mcp__github__get_file_contents",
       "Bash(pnpm build:*)",
       "Bash(grep:*)",
-      "Bash(pnpm test:*)"
+      "Bash(pnpm test:*)",
+      "Bash(mkdir:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm run dev:*)",
+      "Bash(pnpx tsx:*)",
+      "Bash(pnpm view:*)",
+      "Bash(bun run dev:*)",
+      "Bash(bun run:*)",
+      "Bash(pnpm start:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(node:*)"
     ],
     "deny": []
   }

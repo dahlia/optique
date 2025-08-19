@@ -1,6 +1,7 @@
 {
   "workspace": [
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "imports": {
     "@std/fs": "jsr:@std/fs@^1.0.19",

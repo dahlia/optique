@@ -12,6 +12,8 @@
     "valueparser",
     "Minhee",
     "getopt",
-    "optparse"
+    "optparse",
+    "gitique",
+    "oneline"
   ]
 }
