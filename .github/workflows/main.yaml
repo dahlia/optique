@@ -1,0 +1,108 @@
+name: main
+on: [push, pull_request]
+
+jobs:
+  test-node:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: latest
+        run_install: true
+    - uses: actions/setup-node@v4
+      with:
+        node-version: latest
+    - run: pnpm run -r test
+
+  test-deno:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
+    - run: deno task test --coverage --junit-path=junit.xml
+    - if: ${{ !cancelled() }}
+      uses: codecov/test-results-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: junit.xml
+    - uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage/lcov.info
+
+  test-bun:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: latest
+        run_install: true
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+    - run: pnpm run -r test:bun
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
+    - run: deno task check
+
+  publish:
+    if: github.event_name == 'push'
+    needs: [test-node, test-deno, test-bun, check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+    - uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
+    - uses: pnpm/action-setup@v4
+      with:
+        version: latest
+        run_install: true
+    - run: |
+        set -ex
+        if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+          deno task check-versions
+          [[ "$(jq -r '.version' packages/core/deno.json)" == "$GITHUB_REF_NAME" ]]
+        else
+          jq \
+            --arg build "$GITHUB_RUN_NUMBER" \
+            --arg commit "${GITHUB_SHA::8}" \
+            '.version = .version + "-dev." + $build + "+" + $commit' \
+            packages/core/deno.json > /tmp/deno.json
+          mv /tmp/deno.json packages/core/deno.json
+          deno task check-versions --fix
+        fi
+    - run: |
+        set -ex
+        deno publish --allow-dirty
+        pnpm config set //registry.npmjs.org/:_authToken "$NPM_AUTH_TOKEN"
+        if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+          pnpm publish \
+            --recursive \
+            --no-git-checks \
+            --access public \
+            --force
+        else
+          pnpm publish \
+            --recursive \
+            --no-git-checks \
+            --access public \
+            --force \
+            --tag dev
+        fi
+      env:
+        NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+        NPM_CONFIG_PROVENANCE: "true"
