@@ -46,6 +46,7 @@ Optique is built around several key concepts:
      -  `option()` for command-line flags and their arguments
      -  `argument()` for positional arguments
      -  `command()` for subcommands
+     -  `constant()` for literal values (essential for discriminated unions)
 
  -   *Modifying combinators* transform and combine parsers:
      -  `optional()` makes parsers optional
@@ -187,6 +188,13 @@ Optique provides several types of parsers and combinators for building sophistic
 
     ~~~~ typescript
     command("add", object({ file: argument(string()) }))
+    ~~~~
+
+ -  **`constant()`**: Produces a constant value without consuming input, essential for discriminated unions
+
+    ~~~~ typescript
+    constant("add")  // Always returns "add"
+    constant(42)     // Always returns 42
     ~~~~
 
 ### Modifying combinators
@@ -421,10 +429,15 @@ This example demonstrates:
  -  *Subcommand routing*: `command("show", ...)` matches the first argument
     and applies the inner parser to remaining arguments
  -  *Type discrimination*: Using `constant()` with unique values enables
-    TypeScript to discriminate between subcommand types
+    TypeScript to discriminate between subcommand types in the result union
  -  *Per-subcommand options*: Each subcommand can have its own unique set
     of options and arguments
  -  *Complex arguments*: The `delete` command shows multiple required arguments
+
+The `constant()` parser is crucial here—it adds a literal value to each
+subcommand's result object without consuming any input.  This creates
+a discriminated union type that TypeScript can use for type narrowing in
+`switch` statements or type guards.
 
 Example usage:
 
