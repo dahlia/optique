@@ -1,0 +1,16 @@
+{
+  "devDependencies": {
+    "@optique/core": "workspace:",
+    "@optique/run": "workspace:",
+    "@shikijs/vitepress-twoslash": "^3.10.0",
+    "@types/node": "catalog:",
+    "markdown-it-deflist": "^3.0.0",
+    "typescript": "catalog:",
+    "vitepress": "^1.6.3"
+  },
+  "scripts": {
+    "dev": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && vitepress dev",
+    "build": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && vitepress build",
+    "preview": "vitepress preview"
+  }
+}

@@ -29,7 +29,9 @@
       "Bash(pnpm start:*)",
       "WebFetch(domain:github.com)",
       "Bash(node:*)",
-      "mcp__github__get_issue"
+      "mcp__github__get_issue",
+      "WebFetch(domain:www.typescriptlang.org)",
+      "WebFetch(domain:twoslash.netlify.app)"
     ],
     "deny": []
   }

@@ -1,6 +1,7 @@
 packages:
 - packages/*
 - examples/*
+- docs
 
 catalog:
   "@types/node": ^20.19.9

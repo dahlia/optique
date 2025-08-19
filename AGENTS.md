@@ -114,3 +114,131 @@ The library emphasizes compile-time type safety with automatic type inference
 for parser results.  When working with parsers, the TypeScript compiler will
 infer complex union types and optional fields based on the combinator
 composition.
+
+
+Markdown style guide
+--------------------
+
+When creating or editing Markdown documentation files in this project,
+follow these style conventions to maintain consistency with existing
+documentation:
+
+### Headings
+
+ -  **Setext-style headings**: Use underline-style for main title and sections:
+
+    ~~~~
+    Document Title
+    ==============
+
+    Section Name
+    ------------
+    ~~~~
+
+ -  **ATX-style headings**: Use only for subsections within a section:
+
+    ~~~~
+    ### Subsection Name
+    ~~~~
+
+ -  **Heading case**: Use sentence case (capitalize only the first word and
+    proper nouns) rather than Title Case:
+
+    ~~~~
+    Development commands    ← Correct
+    Development Commands    ← Incorrect
+    ~~~~
+
+### Text formatting
+
+ -  **Bold** (`**text**`): Use for package names (*@optique/core*,
+    *@optique/run*), important terms, and emphasis
+ -  **Italics** (`*text*`): Use for emphasis, special terminology, and
+    to distinguish concepts
+ -  **Inline code** (`` `code` ``): Use for code spans, function names,
+    filenames, and command-line options
+
+### Lists
+
+ -  Use ` -  ` (space-hyphen-two spaces) for unordered list items
+ -  Indent nested items with 4 spaces
+ -  Align continuation text with the item content:
+
+    ~~~~
+     -  **First item**: Description text that continues
+        on the next line with proper alignment
+     -  **Second item**: Another item
+    ~~~~
+
+### Code blocks
+
+ -  Use four tildes (`~~~~`) for code fences instead of backticks
+ -  Always specify the language identifier:
+
+    ~~~~~
+    ~~~~ typescript
+    const example = "Hello, world!";
+    ~~~~
+    ~~~~~
+
+ -  For shell commands, use `bash`:
+
+    ~~~~~
+    ~~~~ bash
+    deno test
+    ~~~~
+    ~~~~~
+
+### Links
+
+ -  Use reference-style links placed at the **end of each section**
+    (not at document end)
+ -  Format reference links with consistent spacing:
+
+    ~~~~
+    See the [optparse-applicative] library for inspiration.
+
+    [optparse-applicative]: https://github.com/pcapriotti/optparse-applicative
+    ~~~~
+
+### GitHub alerts
+
+Use GitHub-style alert blocks for important information:
+
+ -  **Note**: `> [!NOTE]`
+ -  **Tip**: `> [!TIP]`
+ -  **Caution**: `> [!CAUTION]`
+
+Continue alert content on subsequent lines with `>`:
+
+~~~~
+> [!TIP]
+> *Building CLI apps?* Consider *@optique/run* for automatic `process.argv`
+> handling and `process.exit()` integration.
+~~~~
+
+### Tables
+
+Use pipe tables with proper alignment markers:
+
+~~~~
+| Feature         | @optique/core | @optique/run |
+|-----------------|---------------|--------------|
+| Argument source | Manual        | Automatic    |
+~~~~
+
+### Spacing and line length
+
+ -  Wrap lines at approximately 80 characters for readability
+ -  Use one blank line between sections and major elements
+ -  Use two blank lines only after the document title
+ -  Place one blank line before and after code blocks
+ -  End sections with reference links (if any) followed by a blank line
+
+### File organization
+
+ -  Start with a clear document title using Setext-style heading
+ -  Organize content in logical sections with descriptive names
+ -  Place examples and code samples close to relevant explanations
+ -  End each section with its reference-style links before moving to
+    the next section

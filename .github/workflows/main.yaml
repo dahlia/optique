@@ -106,3 +106,62 @@ jobs:
       env:
         NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
         NPM_CONFIG_PROVENANCE: "true"
+
+  public-docs:
+    if: github.event_name == 'push'
+    needs: [publish]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      pages: write
+      deployments: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: latest
+        run_install: true
+    - uses: actions/setup-node@v4
+      with:
+        node-version: latest
+    - run: |
+        set -ex
+        if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
+          EXTRA_NAV_TEXT=Unstable \
+          EXTRA_NAV_LINK="$UNSTABLE_DOCS_URL" \
+          SITEMAP_HOSTNAME="$STABLE_DOCS_URL" \
+          JSR_REF_VERSION=stable \
+          pnpm build
+        else
+          EXTRA_NAV_TEXT=Stable \
+          EXTRA_NAV_LINK="$STABLE_DOCS_URL" \
+          SITEMAP_HOSTNAME="$UNSTABLE_DOCS_URL" \
+          JSR_REF_VERSION=unstable \
+          pnpm build
+        fi
+      env:
+        STABLE_DOCS_URL: ${{ vars.STABLE_DOCS_URL }}
+        UNSTABLE_DOCS_URL: ${{ vars.UNSTABLE_DOCS_URL }}
+        SITEMAP_HOSTNAME: ${{ vars.SITEMAP_HOSTNAME }}
+        PLAUSIBLE_DOMAIN: ${{ vars.PLAUSIBLE_DOMAIN }}
+      working-directory: docs
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: docs/.vitepress/dist
+    - id: deployment
+      if: github.ref_type == 'tag'
+      uses: actions/deploy-pages@v4
+    - if: github.ref_type == 'branch'
+      uses: cloudflare/wrangler-action@v3
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        gitHubToken: ${{ github.token }}
+        command: >-
+          pages deploy .vitepress/dist
+          --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME }}
+        packageManager: pnpm
+        workingDirectory: ${{ github.workspace }}/docs/
