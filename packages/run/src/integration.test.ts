@@ -1,7 +1,7 @@
 import { message } from "@optique/core/message";
 import { argument, command, object, option, or } from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { run } from "@optique/run/run";
 import assert from "node:assert/strict";
 import process from "node:process";
 import { describe, it } from "node:test";

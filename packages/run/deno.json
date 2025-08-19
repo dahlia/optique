@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./run": "./src/run.ts",
+    "./valueparser": "./src/valueparser.ts"
   },
   "exclude": [
     "dist/",
@@ -11,7 +13,7 @@
   ],
   "tasks": {
     "build": "pnpm build",
-    "test": "deno test",
+    "test": "deno test --allow-read --allow-write",
     "test:node": {
       "dependencies": [
         "build"

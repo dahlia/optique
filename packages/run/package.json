@@ -50,6 +50,22 @@
       },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./run": {
+      "types": {
+        "import": "./dist/run.d.ts",
+        "require": "./dist/run.cts"
+      },
+      "import": "./dist/run.js",
+      "require": "./dist/run.cjs"
+    },
+    "./valueparser": {
+      "types": {
+        "import": "./dist/valueparser.d.ts",
+        "require": "./dist/valueparser.cts"
+      },
+      "import": "./dist/valueparser.js",
+      "require": "./dist/valueparser.cjs"
     }
   },
   "sideEffects": false,
