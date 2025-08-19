@@ -51,6 +51,7 @@ Optique is built around several key concepts:
  -   *Modifying combinators* transform and combine parsers:
      -  `optional()` makes parsers optional
      -  `withDefault()` provides default values for optional parsers
+     -  `map()` transforms parsed values using mapping functions
      -  `multiple()` allows repetition
      -  `or()` creates alternatives
      -  `merge()` combines object parsers
@@ -217,6 +218,20 @@ Optique provides several types of parsers and combinators for building sophistic
       name: option("-n", "--name", string()),
       port: withDefault(option("-p", "--port", integer()), 8080), // 8080 if not provided
       host: withDefault(option("-h", "--host", string()), "localhost"),
+    });
+    ~~~~
+
+ -  **`map()`**: Transforms the parsed value using a mapping function while
+    preserving the original parsing logic
+
+    ~~~~ typescript
+    const parser = object({
+      // Transform boolean flag to its inverse
+      disallow: map(option("--allow"), b => !b),
+      // Transform string to uppercase
+      upperName: map(option("-n", "--name", string()), s => s.toUpperCase()),
+      // Transform number to formatted string
+      portDesc: map(option("-p", "--port", integer()), n => `port: ${n}`),
     });
     ~~~~
 

@@ -745,6 +745,66 @@ export function withDefault<TValue, TState>(
 }
 
 /**
+ * Creates a parser that transforms the result value of another parser using
+ * a mapping function. This enables value transformation while preserving
+ * the original parser's parsing logic and state management.
+ *
+ * The `map()` function is useful for:
+ * - Converting parsed values to different types
+ * - Applying transformations like string formatting or boolean inversion
+ * - Computing derived values from parsed input
+ * - Creating reusable transformations that can be applied to any parser
+ *
+ * @template T The type of the value produced by the original parser.
+ * @template U The type of the value produced by the mapping function.
+ * @template TState The type of the state used by the original parser.
+ * @param parser The {@link Parser} whose result will be transformed.
+ * @param transform A function that transforms the parsed value from type T to type U.
+ * @returns A {@link Parser} that produces the transformed value of type U
+ *          while preserving the original parser's state type and parsing behavior.
+ *
+ * @example
+ * ```typescript
+ * // Transform boolean flag to its inverse
+ * const parser = object({
+ *   disallow: map(option("--allow"), b => !b)
+ * });
+ *
+ * // Transform string to uppercase
+ * const upperParser = map(argument(string()), s => s.toUpperCase());
+ *
+ * // Transform number to formatted string
+ * const prefixedParser = map(option("-n", integer()), n => `value: ${n}`);
+ * ```
+ */
+export function map<T, U, TState>(
+  parser: Parser<T, TState>,
+  transform: (value: T) => U,
+): Parser<U, TState> {
+  return {
+    $valueType: [] as readonly U[],
+    $stateType: parser.$stateType,
+    priority: parser.priority,
+    usage: parser.usage,
+    initialState: parser.initialState,
+    parse: parser.parse.bind(parser),
+    complete(state: TState) {
+      const result = parser.complete(state);
+      if (result.success) {
+        return { success: true, value: transform(result.value) };
+      }
+      return result;
+    },
+    getDocFragments(state: TState, _defaultValue?: U) {
+      // Since we can't reverse the transformation, we delegate to the original parser
+      // with the original default value (if available). This is acceptable since
+      // documentation typically shows the input format, not the transformed output.
+      return parser.getDocFragments(state, undefined);
+    },
+  };
+}
+
+/**
  * Options for the {@link multiple} parser.
  */
 export interface MultipleOptions {

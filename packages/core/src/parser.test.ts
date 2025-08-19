@@ -5,6 +5,7 @@ import {
   constant,
   getDocPage,
   type InferValue,
+  map,
   merge,
   multiple,
   object,
@@ -2020,6 +2021,329 @@ describe("withDefault", () => {
         assert.equal(fragments.fragments[0].default, "input.txt");
       }
     });
+  });
+});
+
+describe("map", () => {
+  it("should create a parser with same priority and properties as wrapped parser", () => {
+    const baseParser = option("-v", "--verbose");
+    const mappedParser = map(baseParser, (b) => !b);
+
+    assert.equal(mappedParser.priority, baseParser.priority);
+    assert.deepEqual(mappedParser.usage, baseParser.usage);
+    assert.equal(mappedParser.initialState, baseParser.initialState);
+  });
+
+  it("should transform boolean values correctly", () => {
+    const baseParser = option("-v", "--verbose");
+    const mappedParser = map(baseParser, (b) => !b);
+
+    const context = {
+      buffer: ["-v"] as readonly string[],
+      state: mappedParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = mappedParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = mappedParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        // Original would be true, mapped should be false
+        assert.equal(completeResult.value, false);
+      }
+    }
+  });
+
+  it("should transform string values correctly", () => {
+    const baseParser = option("-n", "--name", string());
+    const mappedParser = map(baseParser, (s) => s.toUpperCase());
+
+    const context = {
+      buffer: ["-n", "alice"] as readonly string[],
+      state: mappedParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = mappedParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = mappedParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, "ALICE");
+      }
+    }
+  });
+
+  it("should transform number values correctly", () => {
+    const baseParser = option("-p", "--port", integer());
+    const mappedParser = map(baseParser, (n) => `port: ${n}`);
+
+    const context = {
+      buffer: ["-p", "8080"] as readonly string[],
+      state: mappedParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = mappedParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = mappedParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, "port: 8080");
+      }
+    }
+  });
+
+  it("should work with argument parsers", () => {
+    const baseParser = argument(string({ metavar: "FILE" }));
+    const mappedParser = map(baseParser, (filename) => filename + ".backup");
+
+    const context = {
+      buffer: ["input.txt"] as readonly string[],
+      state: mappedParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = mappedParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = mappedParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, "input.txt.backup");
+      }
+    }
+  });
+
+  it("should work with constant parsers", () => {
+    const baseParser = constant("hello");
+    const mappedParser = map(baseParser, (s) => s.toUpperCase());
+
+    const context = {
+      buffer: [] as readonly string[],
+      state: mappedParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = mappedParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = mappedParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, "HELLO");
+      }
+    }
+  });
+
+  it("should propagate parsing errors from wrapped parser", () => {
+    const baseParser = option("-p", "--port", integer({ min: 1 }));
+    const mappedParser = map(baseParser, (n) => `port: ${n}`);
+
+    const context = {
+      buffer: ["--help"] as readonly string[],
+      state: mappedParser.initialState,
+      optionsTerminated: false,
+    };
+
+    const parseResult = mappedParser.parse(context);
+    assert.ok(!parseResult.success);
+    if (!parseResult.success) {
+      assert.equal(parseResult.consumed, 0);
+      assertErrorIncludes(parseResult.error, "No matched option");
+    }
+  });
+
+  it("should propagate completion errors from wrapped parser", () => {
+    const baseParser = option("-p", "--port", integer({ min: 1000 }));
+    const mappedParser = map(baseParser, (n) => `port: ${n}`);
+
+    // Create a failed state to simulate validation failure
+    const failedState = {
+      success: false as const,
+      error: [{ type: "text", text: "Port must be >= 1000" }] as Message,
+    };
+
+    const completeResult = mappedParser.complete(failedState);
+    assert.ok(!completeResult.success);
+    if (!completeResult.success) {
+      assertErrorIncludes(completeResult.error, "Port must be >= 1000");
+    }
+  });
+
+  it("should work in object combinations - main use case", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      disallow: map(option("--allow"), (b) => !b),
+      upperName: map(option("-n", "--name", string()), (s) => s.toUpperCase()),
+      portDescription: map(
+        option("-p", "--port", integer()),
+        (n) => `port: ${n}`,
+      ),
+    });
+
+    const result = parse(parser, [
+      "-v",
+      "--allow",
+      "-n",
+      "alice",
+      "-p",
+      "8080",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.disallow, false); // inverted from --allow true
+      assert.equal(result.value.upperName, "ALICE");
+      assert.equal(result.value.portDescription, "port: 8080");
+    }
+  });
+
+  it("should work with optional parsers in object context", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      name: map(
+        optional(option("-n", "--name", string())),
+        (s) => s ? s.toUpperCase() : "ANONYMOUS",
+      ),
+    });
+
+    // Test with value present
+    const resultWithValue = parse(parser, ["-v", "-n", "alice"]);
+    assert.ok(resultWithValue.success);
+    if (resultWithValue.success) {
+      assert.equal(resultWithValue.value.name, "ALICE");
+      assert.equal(resultWithValue.value.verbose, true);
+    }
+
+    // Test with optional value absent but required verbose present
+    const resultWithoutValue = parse(parser, ["-v"]);
+    assert.ok(resultWithoutValue.success);
+    if (resultWithoutValue.success) {
+      assert.equal(resultWithoutValue.value.name, "ANONYMOUS");
+      assert.equal(resultWithoutValue.value.verbose, true);
+    }
+  });
+
+  it("should work with multiple parsers in object context", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      files: map(
+        multiple(option("-f", "--file", string())),
+        (files) => files.map((f) => f.toUpperCase()),
+      ),
+    });
+
+    const result = parse(parser, ["-v", "-f", "a.txt", "-f", "b.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value.files, ["A.TXT", "B.TXT"]);
+      assert.equal(result.value.verbose, true);
+    }
+
+    // Test with no files - multiple() returns empty array by default
+    const emptyResult = parse(parser, ["-v"]);
+    assert.ok(emptyResult.success);
+    if (emptyResult.success) {
+      assert.deepEqual(emptyResult.value.files, []);
+      assert.equal(emptyResult.value.verbose, true);
+    }
+  });
+
+  it("should work with withDefault parsers in object context", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      port: map(
+        withDefault(option("-p", "--port", integer()), 8080),
+        (n) => `port: ${n}`,
+      ),
+    });
+
+    // Test with value provided
+    const resultWithValue = parse(parser, ["-v", "-p", "3000"]);
+    assert.ok(resultWithValue.success);
+    if (resultWithValue.success) {
+      assert.equal(resultWithValue.value.port, "port: 3000");
+      assert.equal(resultWithValue.value.verbose, true);
+    }
+
+    // Test with default value
+    const resultWithDefault = parse(parser, ["-v"]);
+    assert.ok(resultWithDefault.success);
+    if (resultWithDefault.success) {
+      assert.equal(resultWithDefault.value.port, "port: 8080");
+      assert.equal(resultWithDefault.value.verbose, true);
+    }
+  });
+
+  it("should support complex transformations", () => {
+    const baseParser = option("-c", "--config", string());
+    const mappedParser = map(baseParser, (config) => ({
+      filename: config,
+      exists: config.endsWith(".json"),
+      size: config.length,
+    }));
+
+    const result = parse(mappedParser, ["-c", "app.json"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.filename, "app.json");
+      assert.equal(result.value.exists, true);
+      assert.equal(result.value.size, 8);
+    }
+  });
+
+  it("should support type conversion", () => {
+    const baseParser = option("-n", "--number", integer());
+    const mappedParser = map(baseParser, (n) => n.toString());
+
+    const result = parse(mappedParser, ["-n", "42"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "42");
+      assert.equal(typeof result.value, "string");
+    }
+  });
+
+  it("should delegate getDocFragments to wrapped parser", () => {
+    const baseParser = option("-v", "--verbose");
+    const mappedParser = map(baseParser, (b) => !b);
+
+    const fragments = mappedParser.getDocFragments(mappedParser.initialState);
+    const baseFragments = baseParser.getDocFragments(baseParser.initialState);
+    assert.deepEqual(fragments, baseFragments);
+  });
+
+  it("should preserve description from wrapped parser", () => {
+    const description = message`Enable verbose output`;
+    const baseParser = option("-v", "--verbose", { description });
+    const mappedParser = map(baseParser, (b) => !b);
+
+    const fragments = mappedParser.getDocFragments(mappedParser.initialState);
+
+    assert.equal(fragments.fragments.length, 1);
+    assert.equal(fragments.fragments[0].type, "entry");
+    if (fragments.fragments[0].type === "entry") {
+      assert.deepEqual(fragments.fragments[0].description, description);
+    }
+  });
+
+  it("should support chaining multiple maps", () => {
+    const baseParser = option("-n", "--name", string());
+    const mappedParser = map(
+      map(baseParser, (s) => s.toLowerCase()),
+      (s) => s.split("").reverse().join(""),
+    );
+
+    const result = parse(mappedParser, ["-n", "ALICE"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "ecila"); // "ALICE" -> "alice" -> "ecila"
+    }
   });
 });
 

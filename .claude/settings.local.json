@@ -28,7 +28,8 @@
       "Bash(bun run:*)",
       "Bash(pnpm start:*)",
       "WebFetch(domain:github.com)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "mcp__github__get_issue"
     ],
     "deny": []
   }

@@ -12,6 +12,8 @@ Haskell's [optparse-applicative] and TypeScript's [Zod].  It provides a
 functional approach to building command-line interfaces using composable
 parsers with full type safety.
 
+This project is hosted on GitHub at [dahlia/optique](https://github.com/dahlia/optique).
+
 The project is structured as a Deno/pnpm monorepo with multi-runtime support:
 
  -  **Monorepo structure**: pnpm workspace with packages under `packages/`
