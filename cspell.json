@@ -9,6 +9,9 @@
     "subtags",
     "tsdown",
     "unbundle",
-    "valueparser"
+    "valueparser",
+    "Minhee",
+    "getopt",
+    "optparse"
   ]
 }

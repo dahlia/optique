@@ -24,6 +24,11 @@ are first-class values that can be combined, transformed, and reused.
 This compositional design makes it easy to express complex argument structures
 while maintaining complete type safety throughout your application.
 
+> [!TIP]
+> *Building CLI apps?* Consider *@optique/run* for automatic `process.argv`
+> handling and `process.exit()` integration. This core package is perfect for
+> libraries, web apps, or when you need full control over argument parsing.
+
 [optparse-applicative]: https://github.com/pcapriotti/optparse-applicative
 [Zod]: https://zod.dev/
 

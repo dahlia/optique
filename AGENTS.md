@@ -16,6 +16,7 @@ The project is structured as a Deno/pnpm monorepo with multi-runtime support:
 
  -  **Monorepo structure**: pnpm workspace with packages under `packages/`
  -  **Core library**: `packages/core/` contains the main parser implementation
+ -  **CLI integration**: `packages/run/` provides process-integrated wrapper for CLI apps
  -  **Multi-runtime**: Supports Deno, Node.js, and Bun
  -  **Package management**: Uses pnpm for Node.js development and dependency management
  -  **Build tool**: Uses `tsdown` for TypeScript compilation and distribution
@@ -46,9 +47,11 @@ Development commands
 
  -  `deno test` — Run tests in Deno (primary test environment)
  -  `deno task test` — Run tests with environment variables support
+ -  `pnpm run -r test` — Run tests across all packages using pnpm
  -  `cd packages/core && deno test` — Run core package tests only
- -  `cd packages/core && pnpm test` — Run tests in Node.js using pnpm
- -  `cd packages/core && pnpm run test-all` — Run tests across all runtimes
+ -  `cd packages/core && pnpm test` — Run core tests in Node.js using pnpm
+ -  `cd packages/run && deno test` — Run run package tests only
+ -  `cd packages/run && pnpm test` — Run run tests in Node.js using pnpm
 
 ### Building and linting
 
@@ -63,8 +66,10 @@ Development commands
 
 ### Building the library
 
- -  `cd packages/core && tsdown` — Build distribution files
- -  `cd packages/core && pnpm build` — Build using pnpm (runs tsdown)
+ -  `cd packages/core && tsdown` — Build core distribution files
+ -  `cd packages/core && pnpm build` — Build core using pnpm (runs tsdown)
+ -  `cd packages/run && tsdown` — Build run distribution files
+ -  `cd packages/run && pnpm build` — Build run using pnpm (runs tsdown)
  -  `pnpm install` — Install Node.js dependencies across workspace
 
 
@@ -86,11 +91,18 @@ The test architecture includes:
 Development workflow
 --------------------
 
- 1. Make changes to source files in `packages/core/src/`
- 2. Run `deno test` to verify functionality (or `cd packages/core && pnpm test` for Node.js)
+ 1. Make changes to source files in `packages/core/src/` or `packages/run/src/`
+ 2. Run tests to verify functionality:
+    - `deno test` — Run all tests in Deno
+    - `pnpm run -r test` — Run all package tests in Node.js
+    - Or test specific packages: `cd packages/{core,run} && {deno,pnpm} test`
  3. Run `deno task check` before committing to ensure all validation passes
  4. The project uses git hooks that run the check task on pre-commit
  5. For Node.js development, use `pnpm install` to manage dependencies
+
+Package development:
+- **@optique/core**: Pure parsing library, works in any JavaScript environment
+- **@optique/run**: CLI integration wrapper, requires Node.js/Bun/Deno process APIs
 
 
 Type safety focus

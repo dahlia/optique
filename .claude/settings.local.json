@@ -17,7 +17,8 @@
       "mcp__context7__get-library-docs",
       "mcp__github__get_file_contents",
       "Bash(pnpm build:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(pnpm test:*)"
     ],
     "deny": []
   }
