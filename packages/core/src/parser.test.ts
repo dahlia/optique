@@ -2,6 +2,7 @@ import { formatMessage, type Message, message } from "@optique/core/message";
 import {
   argument,
   command,
+  concat,
   constant,
   getDocPage,
   type InferValue,
@@ -5395,6 +5396,260 @@ describe("Parser usage field", () => {
         assert.equal(mainCommand.usage[1].name, "subcommand");
       }
     });
+  });
+});
+
+describe("concat", () => {
+  it("should create a parser that combines two tuple parsers", () => {
+    const parserA = tuple([
+      option("-a", "--arg-a"),
+      argument(string()),
+    ]);
+
+    const parserB = tuple([
+      option("-b", "--arg-b"),
+      argument(integer()),
+    ]);
+
+    const parser = concat(parserA, parserB);
+
+    const result = parse(parser, ["-a", "hello", "-b", "42"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [true, "hello", true, 42]);
+    }
+  });
+
+  it("should combine two tuple parsers with type inference", () => {
+    const parserA = tuple([
+      option("-v", "--verbose"),
+      argument(string()),
+    ]);
+
+    const parserB = tuple([
+      option("-p", "--port", integer()),
+    ]);
+
+    const combined = concat(parserA, parserB);
+
+    const result = parse(combined, ["-v", "app", "-p", "8080"]);
+    assert.ok(result.success);
+    if (result.success) {
+      // Result should be [boolean, string, number]
+      assert.equal(typeof result.value[0], "boolean");
+      assert.equal(typeof result.value[1], "string");
+      assert.equal(typeof result.value[2], "number");
+      assert.deepEqual(result.value, [true, "app", 8080]);
+    }
+  });
+
+  it("should concatenate three tuple parsers", () => {
+    const a = tuple([option("-a")]);
+    const b = tuple([argument(string())]);
+    const c = tuple([option("-c", integer())]);
+
+    const parser = concat(a, b, c);
+
+    const result = parse(parser, ["-a", "hello", "-c", "42"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [true, "hello", 42]);
+    }
+  });
+
+  it("should concatenate four tuple parsers", () => {
+    const a = tuple([option("-a")]);
+    const b = tuple([option("-b")]);
+    const c = tuple([option("-c")]);
+    const d = tuple([option("-d")]);
+
+    const parser = concat(a, b, c, d);
+
+    const result = parse(parser, ["-a", "-b", "-c", "-d"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [true, true, true, true]);
+    }
+  });
+
+  it("should concatenate five tuple parsers", () => {
+    const a = tuple([option("-a")]);
+    const b = tuple([option("-b")]);
+    const c = tuple([option("-c")]);
+    const d = tuple([option("-d")]);
+    const e = tuple([option("-e")]);
+
+    const parser = concat(a, b, c, d, e);
+
+    const result = parse(parser, ["-a", "-b", "-c", "-d", "-e"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [true, true, true, true, true]);
+    }
+  });
+
+  it("should handle empty tuples", () => {
+    const emptyA = tuple([]);
+    const parserB = tuple([option("-b")]);
+
+    const parser = concat(emptyA, parserB);
+
+    const result = parse(parser, ["-b"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [true]);
+    }
+  });
+
+  it("should propagate parsing failures", () => {
+    const parserA = tuple([option("-a")]);
+    const parserB = tuple([argument(integer())]);
+
+    const parser = concat(parserA, parserB);
+
+    // Should fail because argument expects an integer
+    const result = parse(parser, ["-a", "not-a-number"]);
+    assert.ok(!result.success);
+  });
+
+  it("should fail if the first parser fails", () => {
+    const parserA = tuple([argument(string())]);
+    const parserB = tuple([option("-b")]);
+
+    const parser = concat(parserA, parserB);
+
+    // Should fail because first parser expects an argument but gets option
+    const result = parse(parser, ["-b"]);
+    assert.ok(!result.success);
+  });
+
+  it("should work with optional parsers", () => {
+    const parserA = tuple([
+      option("-a"),
+      optional(argument(string())),
+    ]);
+
+    const parserB = tuple([
+      option("-b"),
+    ]);
+
+    const parser = concat(parserA, parserB);
+
+    const result1 = parse(parser, ["-a", "value", "-b"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.deepEqual(result1.value, [true, "value", true]);
+    }
+
+    const result2 = parse(parser, ["-a", "-b"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.deepEqual(result2.value, [true, undefined, true]);
+    }
+  });
+
+  it("should combine usage from concatenated parsers", () => {
+    const parserA = tuple([
+      option("-a", "--alpha"),
+      argument(string()),
+    ]);
+
+    const parserB = tuple([
+      option("-b", "--beta", integer()),
+    ]);
+
+    const parser = concat(parserA, parserB);
+
+    // Should have usage from both parsers
+    assert.ok(parser.usage.length >= 3); // At least 3 usage terms
+    
+    const hasOptionA = parser.usage.some(u => 
+      u.type === "option" && u.names.some(n => n.name === "a")
+    );
+    const hasOptionB = parser.usage.some(u => 
+      u.type === "option" && u.names.some(n => n.name === "b")
+    );
+    const hasArgument = parser.usage.some(u => u.type === "argument");
+    
+    assert.ok(hasOptionA);
+    assert.ok(hasOptionB);
+    assert.ok(hasArgument);
+  });
+
+  it("should handle complex real-world example", () => {
+    // git add <file> -v
+    const addCommand = tuple([
+      argument(string()),
+      option("-v", "--verbose"),
+    ]);
+
+    // commit -m <message> --amend
+    const commitOptions = tuple([
+      option("-m", "--message", string()),
+      optional(option("--amend")),
+    ]);
+
+    const combined = concat(addCommand, commitOptions);
+
+    const result = parse(combined, [
+      "file.txt", "-v", "-m", "commit message", "--amend"
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, [
+        "file.txt", true, "commit message", true
+      ]);
+    }
+  });
+
+  it("should maintain priority correctly", () => {
+    const highPriorityParser = tuple([command("cmd", constant("cmd"))]);
+    const lowPriorityParser = tuple([option("-o")]);
+
+    const parser = concat(highPriorityParser, lowPriorityParser);
+
+    // Priority should be max of constituent parser priorities
+    assert.ok(parser.priority >= highPriorityParser.priority);
+    assert.ok(parser.priority >= lowPriorityParser.priority);
+  });
+
+  it("should handle getDocFragments correctly", () => {
+    const parserA = tuple([
+      option("-a", "--alpha", { description: message`Alpha option` }),
+    ]);
+
+    const parserB = tuple([
+      argument(string(), { description: message`Input file` }),
+    ]);
+
+    const parser = concat(parserA, parserB);
+    const fragments = parser.getDocFragments([false], [false]);
+
+    assert.ok(fragments.fragments.length > 0);
+    
+    // Should include documentation from both parsers
+    const allEntries = fragments.fragments.flatMap(f => 
+      f.type === "section" ? f.entries : []
+    );
+    
+    const hasAlphaOption = allEntries.some(e => 
+      e.type === "entry" && e.syntax.some(s => 
+        s.type === "option" && s.names.some(n => n.name === "alpha")
+      )
+    );
+    
+    const hasArgument = allEntries.some(e => 
+      e.type === "entry" && e.syntax.some(s => s.type === "argument")
+    );
+    
+    assert.ok(hasAlphaOption);
+    assert.ok(hasArgument);
+  });
+
+  it("should throw error with no parsers", () => {
+    assert.throws(() => {
+      concat();
+    }, /concat\(\) requires at least one parser/);
   });
 });
 

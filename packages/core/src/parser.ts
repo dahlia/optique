@@ -1830,6 +1830,193 @@ export function merge(
 }
 
 /**
+ * Concatenates two {@link tuple} parsers into a single {@link tuple} parser.
+ * This allows combining multiple tuple parsers so that the unified parser
+ * produces a single tuple containing all the values from the individual
+ * parsers in sequence.
+ * @template TA The type of the first tuple parser.
+ * @template TB The type of the second tuple parser.
+ * @param a The first {@link tuple} parser to concatenate.
+ * @param b The second {@link tuple} parser to concatenate.
+ * @return A new {@link tuple} parser that combines the values and states
+ *         of the two parsers into a single flattened tuple.
+ */
+export function concat<
+  TA extends Parser<readonly unknown[], readonly unknown[]>,
+  TB extends Parser<readonly unknown[], readonly unknown[]>,
+>(a: TA, b: TB): Parser<
+  [...TA["$valueType"][number], ...TB["$valueType"][number]],
+  [TA["$stateType"][number], TB["$stateType"][number]]
+>;
+
+/**
+ * Concatenates three {@link tuple} parsers into a single {@link tuple} parser.
+ * This allows combining multiple tuple parsers so that the unified parser
+ * produces a single tuple containing all the values from the individual
+ * parsers in sequence.
+ * @template TA The type of the first tuple parser.
+ * @template TB The type of the second tuple parser.
+ * @template TC The type of the third tuple parser.
+ * @param a The first {@link tuple} parser to concatenate.
+ * @param b The second {@link tuple} parser to concatenate.
+ * @param c The third {@link tuple} parser to concatenate.
+ * @return A new {@link tuple} parser that combines the values and states
+ *         of the three parsers into a single flattened tuple.
+ */
+export function concat<
+  TA extends Parser<readonly unknown[], readonly unknown[]>,
+  TB extends Parser<readonly unknown[], readonly unknown[]>,
+  TC extends Parser<readonly unknown[], readonly unknown[]>,
+>(a: TA, b: TB, c: TC): Parser<
+  [...TA["$valueType"][number], ...TB["$valueType"][number], ...TC["$valueType"][number]],
+  [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number]]
+>;
+
+/**
+ * Concatenates four {@link tuple} parsers into a single {@link tuple} parser.
+ * This allows combining multiple tuple parsers so that the unified parser
+ * produces a single tuple containing all the values from the individual
+ * parsers in sequence.
+ * @template TA The type of the first tuple parser.
+ * @template TB The type of the second tuple parser.
+ * @template TC The type of the third tuple parser.
+ * @template TD The type of the fourth tuple parser.
+ * @param a The first {@link tuple} parser to concatenate.
+ * @param b The second {@link tuple} parser to concatenate.
+ * @param c The third {@link tuple} parser to concatenate.
+ * @param d The fourth {@link tuple} parser to concatenate.
+ * @return A new {@link tuple} parser that combines the values and states
+ *         of the four parsers into a single flattened tuple.
+ */
+export function concat<
+  TA extends Parser<readonly unknown[], readonly unknown[]>,
+  TB extends Parser<readonly unknown[], readonly unknown[]>,
+  TC extends Parser<readonly unknown[], readonly unknown[]>,
+  TD extends Parser<readonly unknown[], readonly unknown[]>,
+>(a: TA, b: TB, c: TC, d: TD): Parser<
+  [...TA["$valueType"][number], ...TB["$valueType"][number], ...TC["$valueType"][number], ...TD["$valueType"][number]],
+  [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number], TD["$stateType"][number]]
+>;
+
+/**
+ * Concatenates five {@link tuple} parsers into a single {@link tuple} parser.
+ * This allows combining multiple tuple parsers so that the unified parser
+ * produces a single tuple containing all the values from the individual
+ * parsers in sequence.
+ * @template TA The type of the first tuple parser.
+ * @template TB The type of the second tuple parser.
+ * @template TC The type of the third tuple parser.
+ * @template TD The type of the fourth tuple parser.
+ * @template TE The type of the fifth tuple parser.
+ * @param a The first {@link tuple} parser to concatenate.
+ * @param b The second {@link tuple} parser to concatenate.
+ * @param c The third {@link tuple} parser to concatenate.
+ * @param d The fourth {@link tuple} parser to concatenate.
+ * @param e The fifth {@link tuple} parser to concatenate.
+ * @return A new {@link tuple} parser that combines the values and states
+ *         of the five parsers into a single flattened tuple.
+ */
+export function concat<
+  TA extends Parser<readonly unknown[], readonly unknown[]>,
+  TB extends Parser<readonly unknown[], readonly unknown[]>,
+  TC extends Parser<readonly unknown[], readonly unknown[]>,
+  TD extends Parser<readonly unknown[], readonly unknown[]>,
+  TE extends Parser<readonly unknown[], readonly unknown[]>,
+>(a: TA, b: TB, c: TC, d: TD, e: TE): Parser<
+  [...TA["$valueType"][number], ...TB["$valueType"][number], ...TC["$valueType"][number], ...TD["$valueType"][number], ...TE["$valueType"][number]],
+  [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number], TD["$stateType"][number], TE["$stateType"][number]]
+>;
+
+export function concat(
+  ...parsers: Parser<readonly unknown[], readonly unknown[]>[]
+): Parser<readonly unknown[], readonly unknown[]> {
+  if (parsers.length === 0) {
+    throw new Error("concat() requires at least one parser");
+  }
+  
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: Math.max(...parsers.map((p) => p.priority)),
+    usage: parsers.flatMap((p) => p.usage),
+    initialState: parsers.map((parser) => parser.initialState) as readonly unknown[],
+    parse(context) {
+      let currentContext = context;
+      
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        const result = parser.parse({
+          ...currentContext,
+          state: (currentContext.state as readonly unknown[])[i],
+        });
+        
+        if (!result.success) {
+          return result;
+        }
+        
+        currentContext = {
+          ...result.next,
+          state: (currentContext.state as readonly unknown[]).map((s, idx) => 
+            idx === i ? result.next.state : s
+          ) as readonly unknown[],
+        };
+      }
+      
+      return {
+        success: true,
+        next: currentContext,
+        consumed: context.buffer.slice(0, context.buffer.length - currentContext.buffer.length),
+      };
+    },
+    complete(state) {
+      const allResults: unknown[] = [];
+      const stateArray = state as readonly unknown[];
+      
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        const result = parser.complete(stateArray[i]);
+        
+        if (!result.success) {
+          return result;
+        }
+        
+        // Each parser returns a tuple, so we spread its elements
+        const tupleValue = result.value as readonly unknown[];
+        allResults.push(...tupleValue);
+      }
+      
+      return { success: true, value: allResults as readonly unknown[] };
+    },
+    getDocFragments(state, defaultValue?) {
+      const stateArray = state as readonly unknown[];
+      const defaultArray = defaultValue as readonly unknown[] | undefined;
+      
+      const fragments = parsers.flatMap((p, i) =>
+        p.getDocFragments(stateArray[i], defaultArray?.[i]).fragments
+      );
+      const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+      const sections: DocSection[] = [];
+      
+      for (const fragment of fragments) {
+        if (fragment.type !== "section") continue;
+        if (fragment.title == null) {
+          entries.push(...fragment.entries);
+        } else {
+          sections.push(fragment);
+        }
+      }
+      
+      return {
+        fragments: [
+          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
+          { type: "section", entries },
+        ],
+      };
+    },
+  };
+}
+
+/**
  * Options for the {@link command} parser.
  */
 export interface CommandOptions {
