@@ -1951,7 +1951,7 @@ export function concat(
         // Apply parser to current context
         const result = parser.parse({
           ...currentContext,
-          state: currentStateArray[i],
+          state: currentStateArray[i] as readonly unknown[],
         });
         
         if (!result.success) {
@@ -1979,7 +1979,7 @@ export function concat(
       
       for (let i = 0; i < parsers.length; i++) {
         const parser = parsers[i];
-        const result = parser.complete(stateArray[i]);
+        const result = parser.complete(stateArray[i] as readonly unknown[]);
         
         if (!result.success) {
           return result;
@@ -1998,7 +1998,8 @@ export function concat(
       
       const fragments = parsers.flatMap((p, i) => {
         const parserState = i < stateArray.length ? stateArray[i] : p.initialState;
-        return p.getDocFragments(parserState, defaultArray?.[i]).fragments;
+        const defaultVal = defaultArray?.[i] as readonly unknown[] | undefined;
+        return p.getDocFragments(parserState as readonly unknown[], defaultVal).fragments;
       });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];
