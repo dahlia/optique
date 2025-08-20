@@ -84,6 +84,10 @@ export default defineConfig({
       { icon: "npm", link: "https://npmjs.com/package/@optique/core" },
       { icon: "github", link: "https://github.com/dahlia/optique" },
     ],
+
+    editLink: {
+      pattern: "https://github.com/dahlia/optique/edit/main/docs/:path",
+    },
   },
 
   head: [
