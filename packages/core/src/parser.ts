@@ -1845,7 +1845,7 @@ export function concat<
   TA extends Parser<readonly unknown[], readonly unknown[]>,
   TB extends Parser<readonly unknown[], readonly unknown[]>,
 >(a: TA, b: TB): Parser<
-  [...TA["$valueType"][number], ...TB["$valueType"][number]],
+  [...TA["$valueType"], ...TB["$valueType"]],
   [TA["$stateType"][number], TB["$stateType"][number]]
 >;
 
@@ -1868,7 +1868,7 @@ export function concat<
   TB extends Parser<readonly unknown[], readonly unknown[]>,
   TC extends Parser<readonly unknown[], readonly unknown[]>,
 >(a: TA, b: TB, c: TC): Parser<
-  [...TA["$valueType"][number], ...TB["$valueType"][number], ...TC["$valueType"][number]],
+  [...TA["$valueType"], ...TB["$valueType"], ...TC["$valueType"]],
   [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number]]
 >;
 
@@ -1894,7 +1894,7 @@ export function concat<
   TC extends Parser<readonly unknown[], readonly unknown[]>,
   TD extends Parser<readonly unknown[], readonly unknown[]>,
 >(a: TA, b: TB, c: TC, d: TD): Parser<
-  [...TA["$valueType"][number], ...TB["$valueType"][number], ...TC["$valueType"][number], ...TD["$valueType"][number]],
+  [...TA["$valueType"], ...TB["$valueType"], ...TC["$valueType"], ...TD["$valueType"]],
   [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number], TD["$stateType"][number]]
 >;
 
@@ -1923,7 +1923,7 @@ export function concat<
   TD extends Parser<readonly unknown[], readonly unknown[]>,
   TE extends Parser<readonly unknown[], readonly unknown[]>,
 >(a: TA, b: TB, c: TC, d: TD, e: TE): Parser<
-  [...TA["$valueType"][number], ...TB["$valueType"][number], ...TC["$valueType"][number], ...TD["$valueType"][number], ...TE["$valueType"][number]],
+  [...TA["$valueType"], ...TB["$valueType"], ...TC["$valueType"], ...TD["$valueType"], ...TE["$valueType"]],
   [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number], TD["$stateType"][number], TE["$stateType"][number]]
 >;
 
