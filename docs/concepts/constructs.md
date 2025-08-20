@@ -1,7 +1,7 @@
 ---
 description: >-
   Construct combinators compose multiple parsers into complex structures
-  using object(), tuple(), or(), and merge() to build sophisticated CLI
+  using object(), tuple(), or(), merge(), and concat() to build sophisticated CLI
   interfaces with full type inference.
 ---
 
@@ -426,6 +426,109 @@ type Options = InferValue<typeof allOptions>;
 
 
 // Type automatically inferred as above.
+~~~~
+
+<!-- cSpell: ignore myapp -->
+
+
+`concat()` parser
+-----------------
+
+The `concat()` parser combines multiple `tuple()` parsers into a single unified
+parser that produces a flattened tuple containing all values from the individual
+parsers in sequence. This enables compositional construction of sequential
+argument patterns by combining simpler tuple parsers.
+
+~~~~ typescript twoslash
+import { concat, tuple, option, argument } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+
+// Define reusable tuple components
+const fileOptions = tuple([
+  option("-f", "--file", string()),
+  argument(string({ metavar: "INPUT" }))
+]);
+
+const outputOptions = tuple([
+  option("-o", "--output", string()),
+  optional(option("-v", "--verbose"))
+]);
+
+// Combine tuple parsers sequentially
+const processCommand = concat(fileOptions, outputOptions);
+
+// Usage: myapp --file config.json input.txt --output result.json --verbose
+// Result: [string, string, string, boolean | undefined]
+~~~~
+
+### Sequential parsing
+
+The `concat()` parser applies each tuple parser in sequence, with each parser
+processing the remaining input after the previous parser completes:
+
+~~~~ typescript twoslash
+import { concat, tuple, option, argument } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+// ---cut-before---
+const setupPhase = tuple([
+  option("--host", string()),
+  option("--port", integer())
+]);
+
+const actionPhase = tuple([
+  argument(string({ metavar: "COMMAND" })),
+  option("-v", "--verbose")
+]);
+
+const fullCommand = concat(setupPhase, actionPhase);
+
+// Parse: ["--host", "localhost", "--port", "8080", "start", "--verbose"]
+// Result: ["localhost", 8080, "start", true]
+~~~~
+
+### Type concatenation
+
+The `concat()` parser flattens tuple types by concatenating them in order:
+
+~~~~ typescript twoslash
+import { type InferValue, concat, tuple, option, argument } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+// ---cut-before---
+const partA = tuple([
+  option("-a", string()),    // string
+  argument(integer())        // number
+]);
+
+const partB = tuple([
+  option("-b"),             // boolean
+  argument(string())        // string
+]);
+
+const combined = concat(partA, partB);
+
+type CombinedType = InferValue<typeof combined>;
+//   ^?
+
+
+
+
+// Type automatically inferred as [string, number, boolean, string]
+~~~~
+
+### Multiple parser support
+
+Like `merge()`, `concat()` supports combining 2-5 tuple parsers in a single call:
+
+~~~~ typescript twoslash
+import { concat, tuple, option } from "@optique/core/parser";
+// ---cut-before---
+const step1 = tuple([option("--init")]);
+const step2 = tuple([option("--configure")]);
+const step3 = tuple([option("--build")]);
+const step4 = tuple([option("--deploy")]);
+
+const pipeline = concat(step1, step2, step3, step4);
+// Result type: [boolean, boolean, boolean, boolean]
 ~~~~
 
 <!-- cSpell: ignore myapp -->
