@@ -1941,22 +1941,27 @@ export function concat(
     usage: parsers.flatMap((p) => p.usage),
     initialState: parsers.map((parser) => parser.initialState) as readonly unknown[],
     parse(context) {
+      // Apply each tuple parser sequentially to the remaining input
       let currentContext = context;
       
       for (let i = 0; i < parsers.length; i++) {
         const parser = parsers[i];
+        const currentStateArray = currentContext.state as readonly unknown[];
+        
+        // Apply parser to current context
         const result = parser.parse({
           ...currentContext,
-          state: (currentContext.state as readonly unknown[])[i],
+          state: currentStateArray[i],
         });
         
         if (!result.success) {
           return result;
         }
         
+        // Move to the next parser with the updated context
         currentContext = {
           ...result.next,
-          state: (currentContext.state as readonly unknown[]).map((s, idx) => 
+          state: currentStateArray.map((s, idx) => 
             idx === i ? result.next.state : s
           ) as readonly unknown[],
         };
@@ -1988,12 +1993,13 @@ export function concat(
       return { success: true, value: allResults as readonly unknown[] };
     },
     getDocFragments(state, defaultValue?) {
-      const stateArray = state as readonly unknown[];
+      const stateArray = (state || []) as readonly unknown[];
       const defaultArray = defaultValue as readonly unknown[] | undefined;
       
-      const fragments = parsers.flatMap((p, i) =>
-        p.getDocFragments(stateArray[i], defaultArray?.[i]).fragments
-      );
+      const fragments = parsers.flatMap((p, i) => {
+        const parserState = i < stateArray.length ? stateArray[i] : p.initialState;
+        return p.getDocFragments(parserState, defaultArray?.[i]).fragments;
+      });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];
       
