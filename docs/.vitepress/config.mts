@@ -75,13 +75,7 @@ export default defineConfig({
 
     sidebar: [
       ...TOP_NAV,
-      // {
-      //   text: "Examples",
-      //   items: [
-      //     { text: "Markdown Examples", link: "/markdown-examples" },
-      //     { text: "Runtime API Examples", link: "/api-examples" },
-      //   ],
-      // },
+      { text: "Changelog", link: "/changelog" },
     ],
 
     socialLinks: [
@@ -122,7 +116,11 @@ export default defineConfig({
   vite: {
     plugins: [
       groupIconVitePlugin(),
-      llmstxt({}),
+      llmstxt({
+        ignoreFiles: [
+          "changelog.md",
+        ],
+      }),
     ],
   },
 
