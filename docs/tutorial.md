@@ -13,7 +13,9 @@ interfaces both powerful and predictable. Unlike traditional CLI parsers that
 rely on configuration objects, Optique uses composable functions that
 automatically infer TypeScript types.
 
-## What makes Optique different?
+
+What makes Optique different?
+-----------------------------
 
 Most CLI parsing libraries ask you to describe your command-line interface
 using configuration objects or imperative APIs. You define options, set up
@@ -35,20 +37,29 @@ This approach has several key advantages:
  -  *Expressiveness*: Complex CLI patterns become simple to express
  -  *Compile-time verification*: Many errors are caught before your code runs
 
-## The philosophy behind parser combinators
+
+The philosophy behind parser combinators
+----------------------------------------
 
 Parser combinators might seem unfamiliar if you're used to traditional CLI
 libraries, but the concept is powerful and elegant. Think of each combinator
 as a building block:
 
- -  An `option()` parser handles a single command-line option
- -  An `argument()` parser handles a positional argument
- -  An `object()` combinator groups multiple parsers into a structured result
- -  An `or()` combinator creates alternatives between different parsers
+ -  An [`option()`](./concepts/primitives.md#option-parser) parser handles
+    a single command-line option
+ -  An [`argument()`](./concepts/primitives.md#argument-parser) parser handles
+    a positional argument
+ -  An [`object()`](./concepts/constructs.md#object-parser) combinator groups
+    multiple parsers into a structured result
+ -  An [`or()`](./concepts/constructs.md#or-parser) combinator creates
+    alternatives between different parsers
 
 These building blocks compose naturally. You can take any parser and make it
-optional with `optional()`, or repeatable with `multiple()`. You can combine
-unrelated parsers with `merge()`, or create complex alternatives with `or()`.
+optional with [`optional()`](./concepts/modifiers.md#optional-parser),
+or repeatable with [`multiple()`](./concepts/modifiers.md#multiple-parser).
+You can combine unrelated parsers with
+[`merge()`](./concepts/constructs.md#merge-parser), or create complex
+alternatives with `or()`.
 The type system tracks these combinations automatically, ensuring that your
 parsed data always matches what your code expects.
 
@@ -103,8 +114,9 @@ console.log(`Hello, ${result}!`);
 
 This simple example demonstrates several important concepts:
 
-Value parsers
-:   The `string()` function is a *value parser*—it knows how to convert
+[Value parsers](./concepts/valueparsers.md)
+:   The [`string()`](./concepts/valueparsers.md#string-parser) function is
+    a [*value parser*](./concepts/valueparsers.md)—it knows how to convert
     a raw command-line argument (which is always a string) into a typed
     value. Optique provides many built-in value parsers for common data types.
 
@@ -171,10 +183,11 @@ console.log(`Processing file: ${result}`);
 // Output: Processing file: input.txt
 ~~~~
 
-The `argument()` function creates a parser that consumes the next positional
-argument from the command line. The `path()` value parser is perfect for file
-and directory paths, and we'll explore its validation capabilities later in
-the tutorial.
+The [`argument()`](./concepts/primitives.md#argument-parser) function creates
+a parser that consumes the next positional argument from the command line.
+The [`path()`](./concepts/valueparsers.md#path-parser) value parser is perfect
+for file and directory paths, and we'll explore its validation capabilities
+later in the tutorial.
 
 The `metavar: "FILE"` parameter is used in help text generation. Instead of
 showing a generic placeholder, help messages will display `FILE` to indicate
@@ -183,7 +196,8 @@ what kind of argument is expected.
 ### Combining options and arguments
 
 Real CLI programs usually need both options and arguments working together.
-This is where Optique's compositional nature shines—the `object()` combinator
+This is where Optique's compositional nature shines—the
+[`object()`](./concepts/constructs.md#object-parser) combinator
 lets us group multiple parsers into a single, structured result.
 
 The `object()` combinator is one of the most important tools in Optique. It
@@ -253,11 +267,11 @@ type system ensures everything fits together correctly.
 Value parsers and validation
 ----------------------------
 
-Value parsers are the foundation of type-safe CLI parsing. While command-line
-arguments are always strings, your application needs them as numbers, URLs,
-file paths, or other typed values. Value parsers handle this conversion and
-provide validation at parse time, catching errors before they can cause problems
-in your application logic.
+[Value parsers](./concepts/valueparsers.md) are the foundation of type-safe CLI
+parsing. While command-line arguments are always strings, your application needs
+them as numbers, URLs, file paths, or other typed values. Value parsers handle
+this conversion and provide validation at parse time, catching errors before
+they can cause problems in your application logic.
 
 The philosophy behind Optique's value parsers is “fail fast, fail clearly.”
 Instead of letting invalid data flow through your application and cause
@@ -342,7 +356,8 @@ The validation options work together naturally:
 ### Constraining choices
 
 Many CLI options should only accept specific values. Log levels, output formats,
-and operation modes are common examples. The `choice()` parser creates
+and operation modes are common examples.
+The [`choice()`](./concepts/valueparsers.md#choice-parser) parser creates
 type-safe enumerations that catch invalid values at parse time and provide
 excellent autocomplete support in TypeScript.
 
@@ -433,10 +448,11 @@ with its different protocols, or `git` with its various commands. These tools
 need to parse completely different sets of options depending on which mode
 the user selects.
 
-The `or()` combinator models this pattern perfectly. It tries alternatives
-in order, and the first one that successfully parses determines both the
-result value and its type. This creates what TypeScript calls a *discriminated
-union*—a type where each alternative can be distinguished from the others:
+The [`or()`](./concepts/constructs.md#or-parser) combinator models this pattern
+perfectly. It tries alternatives in order, and the first one that successfully
+parses determines both the result value and its type. This creates what
+TypeScript calls a “discriminated union”—a type where each alternative can
+be distinguished from the others:
 
 ~~~~ typescript twoslash
 import { type InferValue, constant, object, option, or } from "@optique/core/parser";
@@ -477,9 +493,10 @@ console.log(`Running in ${"port" in config ? 'server' : 'client'} mode`);
 ### Discriminated unions with `constant()`
 
 The previous example creates a union type, but TypeScript can't yet distinguish
-between the alternatives. This is where the `constant()` parser becomes
+between the alternatives. This is where
+the [`constant()`](./concepts/primitives.md#constant-parser) parser becomes
 essential. It adds a literal value to the parse result without consuming any
-input, creating what's called a *discriminator* or *tag* field.
+input, creating what's called a “discriminator” or “tag” field.
 
 Discriminated unions are one of TypeScript's most powerful features for
 modeling data that can be one of several alternatives. The `constant()` parser
@@ -539,7 +556,8 @@ some should have sensible defaults, and some should be transformable based on
 other values. Optique provides several combinators to handle these patterns
 elegantly.
 
-The distinction between `optional()` and `withDefault()` is important:
+The distinction between [`optional()`](./concepts/modifiers.md#optional-parser)
+and [`withDefault()`](./concepts/modifiers.md#withdefault-parser) is important:
 `optional()` creates nullable types that you must handle explicitly, while
 `withDefault()` always provides a value, eliminating null checks. Choose
 `optional()` when the absence of a value is meaningful, and `withDefault()`
@@ -610,7 +628,8 @@ application expects.
 Command-line interfaces often need to accept multiple values for the same
 option. Consider `gcc -I include1 -I include2 -I include3` or
 `curl -H "Accept: application/json" -H "Authorization: Bearer token"`. The
-`multiple()` combinator handles these patterns naturally.
+[`multiple()`](./concepts/modifiers.md#multiple-parser) combinator handles
+these patterns naturally.
 
 What makes `multiple()` special is how it handles the common case gracefully.
 When no matches are found, it returns an empty array rather than failing to
@@ -708,7 +727,8 @@ commands focused and easy to understand. Think of `git add`, `docker run`, or
 `npm install`—each subcommand is essentially a mini-program with its own
 options and behavior.
 
-The `command()` combinator makes subcommands natural to express in Optique.
+The [`command()`](./concepts/primitives.md#command-parser) combinator makes
+subcommands natural to express in Optique.
 Unlike some CLI libraries that require complex routing logic, Optique treats
 subcommands as just another form of parser composition. This means you can
 combine subcommands with all the other patterns you've learned—they can
@@ -887,11 +907,12 @@ configuration, and authentication settings tend to appear in multiple places.
 Rather than duplicating this logic, Optique provides powerful tools for
 creating reusable, composable option groups.
 
-The `merge()` combinator is the key to building modular CLI applications. It
-allows you to define option groups once and reuse them across different
-commands, while maintaining complete type safety. This approach promotes
-consistency across your CLI—users learn the database options once and can
-apply that knowledge to any command that needs database access.
+The [`merge()`](./concepts/constructs.md#merge-parser) combinator is the key to
+building modular CLI applications. It allows you to define option groups once
+and reuse them across different commands, while maintaining complete type safety.
+This approach promotes consistency across your CLI—users learn the database
+options once and can apply that knowledge to any command that needs database
+access.
 
 ### Reusable option groups with `merge()`
 
@@ -1158,11 +1179,15 @@ Production CLI applications
 Throughout this tutorial, we've been using *@optique/run* which provides a
 batteries-included experience for building CLI applications. This is the
 recommended approach for most use cases, as it handles all the common concerns
-automatically: reading from `process.argv`, detecting terminal capabilities,
-displaying help text, and exiting with appropriate status codes.
+automatically: reading from [`process.argv`] (or [`Deno.args`] on Deno),
+detecting terminal capabilities, displaying help text, and exiting with
+appropriate status codes.
 
 However, it's worth understanding the difference between *@optique/run* and
 *@optique/core*, and when you might choose one over the other.
+
+[`process.argv`]: https://nodejs.org/api/process.html#processargv
+[`Deno.args`]: https://docs.deno.com/api/deno/~/Deno.args
 
 ### *@optique/run* vs. *@optique/core*
 
@@ -1172,14 +1197,15 @@ convenience and control:
 Use *@optique/run* when:
 
  -  Building standalone CLI applications
- -  You want automatic `process.argv` handling and error display
+ -  You want automatic [`process.argv`] (or [`Deno.args`] on Deno) handling and
+    error display
  -  You need terminal capability detection (colors, width)
  -  You prefer convention over configuration
 
 Use *@optique/core* when:
 
  -  Building libraries that need to parse CLI-like arguments
- -  Working in web applications or environments without `node:process`
+ -  Working in web applications or environments without [`node:process`]
  -  You need full control over error handling and result processing
  -  You want to integrate parsing into larger application logic
 
@@ -1253,6 +1279,8 @@ if (config.port) {
 
 The *@optique/run* version is much more concise and handles all error cases
 automatically.
+
+[`node:process`]: https://nodejs.org/api/process.html
 
 ### Configuration options
 
@@ -1452,12 +1480,23 @@ Conclusion
 Congratulations! You've learned how to build type-safe, composable CLI
 applications with Optique. Here's what we covered:
 
- -  *Basic parsers*: `option()`, `argument()`, `command()` for CLI fundamentals
- -  *Value parsers*: `string()`, `integer()`, `path()`, `url()`, `choice()`
+ -  *Primitive parsers*: [`option()`](./concepts/primitives.md#option-parser),
+    [`argument()`](./concepts/primitives.md#argument-parser),
+    [`command()`](./concepts/primitives.md#command-parser) for CLI fundamentals
+ -  *Value parsers*: [`string()`](./concepts/valueparsers.md#string-parser),
+    [`integer()`](./concepts/valueparsers.md#integer-parser),
+    [`path()`](./concepts/valueparsers.md#path-parser),
+    [`url()`](./concepts/valueparsers.md#url-parser),
+    [`choice()`](./concepts/valueparsers.md#choice-parser)
     with rich validation
- -  *Combinators*: `object()`, `or()`, `optional()`, `multiple()`, `merge()`
+ -  *Combinators*: [`object()`](./concepts/constructs.md#object-parser),
+    [`or()`](./concepts/constructs.md#or-parser),
+    [`optional()`](./concepts/modifiers.md#optional-parser),
+    [`multiple()`](./concepts/modifiers.md#multiple-parser),
+    [`merge()`](./concepts/constructs.md#merge-parser)
     for composition
- -  *Type discrimination*: `constant()` for discriminated unions and type narrowing
+ -  *Type discrimination*: [`constant()`](./concepts/primitives.md#constant-parser)
+    for discriminated unions and type narrowing
  -  *Advanced patterns*: Nested subcommands, reusable option groups, complex CLIs
  -  *Process integration*: *@optique/run* for production-ready CLI applications
 
@@ -1469,3 +1508,5 @@ applications with Optique. Here's what we covered:
  -  *Error messages*: Clear, helpful error messages for users
  -  *Flexibility*: Works in any JavaScript environment
     (Node.js, Bun, Deno, browsers)
+
+<!-- cSpell: ignore myapp mydb -->

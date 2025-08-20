@@ -28,6 +28,17 @@ if (process.env.PLAUSIBLE_DOMAIN) {
   ];
 }
 
+const CONCEPTS = {
+  text: "Concepts",
+  items: [
+    { text: "Primitive parsers", link: "/concepts/primitives" },
+    { text: "Value parsers", link: "/concepts/valueparsers" },
+    { text: "Modifying combinators", link: "/concepts/modifiers" },
+    { text: "Construct combinators", link: "/concepts/constructs" },
+    { text: "Messages", link: "/concepts/messages" },
+  ],
+};
+
 const REFERENCES = {
   text: "References",
   items: [
@@ -39,6 +50,7 @@ const REFERENCES = {
 const TOP_NAV = [
   { text: "Installation", link: "/install" },
   { text: "Tutorial", link: "/tutorial" },
+  CONCEPTS,
   REFERENCES,
 ];
 

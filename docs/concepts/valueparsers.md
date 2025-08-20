@@ -1,0 +1,988 @@
+---
+description: >-
+  Value parsers convert string arguments into strongly-typed values with
+  validation, supporting built-in types like integers, URLs, and UUIDs,
+  plus custom parser creation.
+---
+
+Value parsers
+=============
+
+Value parsers are the specialized components responsible for converting raw
+string input from command-line arguments into strongly-typed values.
+While command-line arguments are always strings, your application needs them as
+numbers, URLs, file paths, or other typed values. Value parsers handle this
+critical transformation and provide validation at parse time.
+
+The philosophy behind Optique's value parsers is “fail fast, fail clearly.”
+Rather than letting invalid data flow through your application and cause
+mysterious errors later, value parsers validate input immediately when parsing
+occurs. When validation fails, they provide clear, actionable error messages
+that help users understand what went wrong and how to fix it.
+
+Every value parser implements the `ValueParser<T>` interface, which defines how
+to parse strings into values of type `T` and how to format those values back
+into strings for help text. This consistent interface makes value parsers
+composable and allows you to create custom parsers that integrate seamlessly
+with Optique's type system.
+
+
+`string()` parser
+-----------------
+
+The `string()` parser is the most basic value parser—it accepts any string
+input and performs optional pattern validation. While all command-line arguments
+start as strings, the `string()` parser provides a way to explicitly document
+that you want string values and optionally validate their format.
+
+~~~~ typescript twoslash
+import { string } from "@optique/core/valueparser";
+
+// Basic string parser
+const name = string();
+
+// String with custom metavar for help text
+const hostname = string({ metavar: "HOST" });
+
+// String with pattern validation
+const identifier = string({
+  metavar: "ID",
+  pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/
+});
+~~~~
+
+### Pattern validation
+
+The optional `pattern` parameter accepts a regular expression that the input
+must match:
+
+~~~~ typescript twoslash
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+// Email-like pattern
+const email = string({
+  pattern: /^[^@]+@[^@]+\.[^@]+$/,
+  metavar: "EMAIL"
+});
+
+// Semantic version pattern
+const version = string({
+  pattern: /^\d+\.\d+\.\d+$/,
+  metavar: "VERSION"
+});
+~~~~
+
+When pattern validation fails, the parser provides a clear error message
+indicating what pattern was expected:
+
+~~~~ bash
+$ myapp --version 1.2
+Error: Expected a string matching pattern ^\d+\.\d+\.\d+$, but got 1.2.
+~~~~
+
+The `string()` parser uses `"STRING"` as its default metavar, which appears in
+help text to indicate what kind of input is expected.
+
+
+`integer()` parser
+------------------
+
+The `integer()` parser converts string input to numeric values with validation.
+It supports both regular JavaScript numbers (safe up to
+`Number.MAX_SAFE_INTEGER`) and arbitrary-precision `bigint` values for very
+large integers.
+
+### Number mode (default)
+
+By default, `integer()` returns JavaScript numbers and validates that input
+contains only digits:
+
+~~~~ typescript twoslash
+import { integer } from "@optique/core/valueparser";
+
+// Basic integer
+const count = integer();
+
+// Integer with bounds checking
+const port = integer({ min: 1, max: 65535 });
+
+// Integer with custom metavar
+const timeout = integer({ min: 0, metavar: "SECONDS" });
+~~~~
+
+### Bigint mode
+
+For very large integers that exceed JavaScript's safe integer range,
+specify `type: "bigint"`:
+
+~~~~ typescript twoslash
+import { integer } from "@optique/core/valueparser";
+// ---cut-before---
+// BigInt integer with bounds
+const largeNumber = integer({
+  type: "bigint",
+  min: 0n,
+  max: 999999999999999999999n
+});
+~~~~
+
+### Validation and error messages
+
+The `integer()` parser provides detailed validation:
+
+ -  *Format validation*: Ensures input contains only digits
+ -  *Range validation*: Enforces minimum and maximum bounds
+ -  *Overflow protection*: Prevents values outside safe ranges
+
+~~~~ bash
+$ myapp --port "abc"
+Error: Expected a valid integer, but got abc.
+
+$ myapp --port "99999"
+Error: Expected a value less than or equal to 65,535, but got 99999.
+~~~~
+
+The parser uses `"INTEGER"` as its default metavar.
+
+
+`float()` parser
+----------------
+
+The `float()` parser handles floating-point numbers with comprehensive
+validation options. It recognizes standard decimal notation, scientific
+notation, and optionally special values like `NaN` and `Infinity`.
+
+~~~~ typescript twoslash
+import { float } from "@optique/core/valueparser";
+
+// Basic float
+const rate = float();
+
+// Float with bounds
+const percentage = float({ min: 0.0, max: 100.0 });
+
+// Float allowing special values
+const scientific = float({
+  allowNaN: true,
+  allowInfinity: true,
+  metavar: "NUMBER"
+});
+~~~~
+
+#### Supported formats
+
+The `float()` parser recognizes multiple numeric formats:
+
+ -  *Integers*: `42`, `-17`
+ -  *Decimals*: `3.14`, `-2.5`, `.5`, `42.`
+ -  *Scientific notation*: `1.23e10`, `5.67E-4`, `1e+5`
+ -  *Special values*: `NaN`, `Infinity`, `-Infinity` (when allowed)
+
+#### Special values
+
+By default, `NaN` and `Infinity` are not allowed, which prevents accidental
+acceptance of these values. Enable them explicitly when they're meaningful
+for your use case:
+
+~~~~ typescript twoslash
+import { float } from "@optique/core/valueparser";
+// ---cut-before---
+// Mathematics application that handles infinite limits
+const limit = float({
+  allowInfinity: true,
+  metavar: "LIMIT"
+});
+
+// Statistical application that handles missing data
+const value = float({
+  allowNaN: true,
+  allowInfinity: true,
+  metavar: "VALUE"
+});
+~~~~
+
+The parser uses `"NUMBER"` as its default metavar and provides clear error
+messages for invalid formats and out-of-range values.
+
+
+`choice()` parser
+-----------------
+
+The `choice()` parser creates type-safe enumerations by restricting input to
+one of several predefined string values. This is perfect for options like log
+levels, output formats, or operation modes where only specific values make sense.
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+
+// Log level choice
+const logLevel = choice(["debug", "info", "warn", "error"]);
+
+// Output format choice
+const format = choice(["json", "yaml", "xml", "csv"]);
+
+// Case-insensitive choice
+const protocol = choice(["http", "https", "ftp"], {
+  caseInsensitive: true
+});
+~~~~
+
+### Type-safe string literals
+
+The `choice()` parser creates exact string literal types rather than generic
+`string` types, providing excellent TypeScript integration:
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+// ---cut-before---
+const level = choice(["debug", "info", "warn", "error"]);
+//    ^?
+~~~~
+
+### Case sensitivity
+
+By default, matching is case-sensitive. Set `caseInsensitive: true` to accept variations:
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+// ---cut-before---
+const format = choice(["JSON", "XML"], {
+  caseInsensitive: true,
+  metavar: "FORMAT"
+});
+
+// Accepts: "json", "JSON", "Json", "xml", "XML", "Xml"
+~~~~
+
+### Error messages
+
+When invalid choices are provided, the parser lists all valid options:
+
+~~~~ bash
+$ myapp --format "txt"
+Error: Expected one of json, yaml, xml, csv, but got txt.
+~~~~
+
+The parser uses `"TYPE"` as its default metavar.
+
+
+`url()` parser
+--------------
+
+The `url()` parser validates that input is a well-formed URL and optionally
+restricts the allowed protocols. The parsed result is a JavaScript [`URL`]
+object with all the benefits of the native URL API.
+
+~~~~ typescript twoslash
+import { url } from "@optique/core/valueparser";
+
+// Basic URL parser
+const endpoint = url();
+
+// URL with protocol restrictions
+const apiUrl = url({
+  allowedProtocols: ["https:"],
+  metavar: "HTTPS_URL"
+});
+
+// URL allowing multiple protocols
+const downloadUrl = url({
+  allowedProtocols: ["http:", "https:", "ftp:"],
+  metavar: "URL"
+});
+~~~~
+
+[`URL`]: https://developer.mozilla.org/en-US/docs/Web/API/URL
+
+### Protocol validation
+
+The `allowedProtocols` option restricts which URL schemes are acceptable.
+Protocol names must include the trailing colon:
+
+~~~~ typescript twoslash
+import { url } from "@optique/core/valueparser";
+// ---cut-before---
+// Only secure protocols
+const secureUrl = url({
+  allowedProtocols: ["https:", "wss:"]
+});
+
+// Web protocols only
+const webUrl = url({
+  allowedProtocols: ["http:", "https:"]
+});
+~~~~
+
+### URL object benefits
+
+The parser returns native [`URL`] objects, providing immediate access to URL
+components:
+
+~~~~ typescript twoslash
+import { parse, url, argument } from "@optique/core";
+const apiUrl = argument(url());
+// ---cut-before---
+const result = parse(apiUrl, ["https://api.example.com:8080/v1/users"]);
+if (result.success) {
+  const url = result.value;
+  console.log(`Host: ${url.hostname}`);     // "api.example.com"
+  console.log(`Port: ${url.port}`);        // "8080"
+  console.log(`Path: ${url.pathname}`);    // "/v1/users"
+  console.log(`Protocol: ${url.protocol}`); // "https:"
+}
+~~~~
+
+### Validation errors
+
+The parser provides specific error messages for different validation failures:
+
+~~~~ bash
+$ myapp --url "not-a-url"
+Error: Invalid URL: not-a-url.
+
+$ myapp --url "ftp://example.com"  # when only HTTPS allowed
+Error: URL protocol ftp: is not allowed. Allowed protocols: https:.
+~~~~
+
+The parser uses `"URL"` as its default metavar.
+
+
+`locale()` parser
+-----------------
+
+The `locale()` parser validates locale identifiers according to the Unicode
+Locale Identifier standard ([BCP 47]). It returns [`Intl.Locale`] objects that
+provide rich locale information and integrate with JavaScript's
+internationalization APIs.
+
+~~~~ typescript twoslash
+import { locale } from "@optique/core/valueparser";
+
+// Basic locale parser
+const userLocale = locale();
+
+// Locale with custom metavar
+const displayLocale = locale({ metavar: "LANG" });
+~~~~
+
+[BCP 47]: https://www.rfc-editor.org/info/bcp47
+[`Intl.Locale`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Locale
+
+### Locale validation
+
+The parser uses the native [`Intl.Locale`] constructor for validation,
+ensuring compliance with international standards:
+
+~~~~ typescript
+// Valid locales
+const validLocales = [
+  "en",              // Language only
+  "en-US",           // Language and region
+  "zh-Hans-CN",      // Language, script, and region
+  "de-DE-u-co-phonebk" // With Unicode extension
+];
+
+// Invalid locales will be rejected
+const invalidLocales = [
+  "invalid-locale",
+  "en_US",           // Underscore instead of hyphen
+  "toolong-language-tag-name"
+];
+~~~~
+
+### Locale object benefits
+
+The parser returns [`Intl.Locale`] objects with rich locale information:
+
+~~~~ typescript twoslash
+import { parse, locale, argument } from "@optique/core";
+const userLocale = argument(locale());
+// ---cut-before---
+const result = parse(userLocale, ["zh-Hans-CN"]);
+if (result.success) {
+  const locale = result.value;
+  console.log(`Language: ${locale.language}`); // "zh"
+  console.log(`Script: ${locale.script}`);     // "Hans"
+  console.log(`Region: ${locale.region}`);     // "CN"
+  console.log(`Base name: ${locale.baseName}`); // "zh-Hans-CN"
+}
+~~~~
+
+The parser uses `"LOCALE"` as its default metavar and provides clear error messages for invalid locale identifiers.
+
+
+`uuid()` parser
+---------------
+
+The `uuid()` parser validates [UUID] (Universally Unique Identifier) strings
+according to the standard format and optionally restricts to specific UUID
+versions. It returns a branded `Uuid` string type for additional type safety.
+
+~~~~ typescript twoslash
+import { uuid } from "@optique/core/valueparser";
+
+// Basic UUID parser
+const id = uuid();
+
+// UUID with version restrictions
+const uuidV4 = uuid({
+  allowedVersions: [4],
+  metavar: "UUID_V4"
+});
+
+// UUID allowing multiple versions
+const trackingId = uuid({
+  allowedVersions: [1, 4, 5]
+});
+~~~~
+
+[UUID]: https://en.wikipedia.org/wiki/Universally_unique_identifier
+
+### UUID format validation
+
+The parser validates the standard UUID format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+where each `x` is a hexadecimal digit:
+
+~~~~
+# Valid UUID formats
+550e8400-e29b-41d4-a716-446655440000  # Version 1
+123e4567-e89b-12d3-a456-426614174000  # Version 1
+6ba7b810-9dad-11d1-80b4-00c04fd430c8  # Version 1
+6ba7b811-9dad-11d1-80b4-00c04fd430c8  # Version 1
+
+# Invalid formats
+550e8400-e29b-41d4-a716-44665544000   # Too short
+550e8400-e29b-41d4-a716-446655440000x  # Extra character
+550e8400e29b41d4a716446655440000       # Missing hyphens
+~~~~
+
+### Version validation
+
+When `allowedVersions` is specified, the parser checks the version digit
+(character 14) and validates it matches one of the allowed versions:
+
+~~~~ typescript twoslash
+import { uuid } from "@optique/core/valueparser";
+// ---cut-before---
+const uuidV4Only = uuid({ allowedVersions: [4] });
+
+// This will pass validation (version 4 UUID)
+const validV4 = "550e8400-e29b-41d4-a716-446655440000";
+
+// This will fail validation (version 1 UUID)
+const invalidV1 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+~~~~
+
+### UUID type safety
+
+The parser returns a branded `Uuid` type rather than a plain string, providing additional compile-time safety:
+
+~~~~ typescript twoslash
+// @errors: 2345
+import { argument, parse, uuid } from "@optique/core";
+const uuidParser = argument(uuid())
+// ---cut-before---
+type Uuid = `${string}-${string}-${string}-${string}-${string}`;
+
+// The branded type prevents accidental usage of regular strings as UUIDs
+function processUuid(id: Uuid) {
+  // Implementation here
+}
+
+const result = parse(uuidParser, ["550e8400-e29b-41d4-a716-446655440000"]);
+if (result.success) {
+  processUuid(result.value); // ✓ Type-safe
+}
+
+// This would cause a TypeScript error:
+processUuid("not-a-uuid");  // ✗ Type error
+~~~~
+
+The parser uses `"UUID"` as its default metavar and provides specific error
+messages for format violations and version mismatches.
+
+
+`path()` parser
+---------------
+
+The `path()` parser validates file system paths with comprehensive options for
+existence checking, type validation, and file extension filtering. Unlike other
+built-in value parsers, `path()` is provided by the *@optique/run* package since
+it uses Node.js file system APIs.
+
+~~~~ typescript twoslash
+import { path } from "@optique/run/valueparser";
+
+// Basic path parser (any path, no validation)
+const configPath = path({ metavar: "CONFIG" });
+
+// File must exist
+const inputFile = path({ metavar: "FILE", mustExist: true, type: "file" });
+
+// Directory must exist
+const outputDir = path({ metavar: "DIR", mustExist: true, type: "directory" });
+
+// Config files with specific extensions
+const configFile = path({
+  metavar: "CONFIG",
+  mustExist: true,
+  type: "file",
+  extensions: [".json", ".yaml", ".yml"]
+});
+~~~~
+
+### Path validation options
+
+The `path()` parser accepts comprehensive configuration options:
+
+~~~~ typescript twoslash
+interface PathOptions {
+  metavar?: string;           // Custom metavar (default: "PATH")
+  mustExist?: boolean;        // Path must exist on filesystem (default: false)
+  type?: "file" | "directory" | "either";  // Expected path type (default: "either")
+  allowCreate?: boolean;      // Allow creating new files (default: false)
+  extensions?: string[];      // Allowed file extensions (e.g., [".json", ".txt"])
+}
+~~~~
+
+### Existence validation
+
+When `mustExist: true`, the parser verifies that the path exists on the file
+system:
+
+~~~~ typescript twoslash
+import { path } from "@optique/run/valueparser";
+
+// Must exist (file or directory)
+const existingPath = path({ mustExist: true });
+
+// Must be an existing file
+const existingFile = path({
+  mustExist: true,
+  type: "file",
+  metavar: "INPUT_FILE"
+});
+
+// Must be an existing directory
+const existingDir = path({
+  mustExist: true,
+  type: "directory",
+  metavar: "OUTPUT_DIR"
+});
+~~~~
+
+### File creation validation
+
+With `allowCreate: true`, the parser validates that the parent directory exists
+for new files:
+
+~~~~ typescript twoslash
+import { path } from "@optique/run/valueparser";
+
+// Allow creating new files (parent directory must exist)
+const newFile = path({
+  allowCreate: true,
+  type: "file",
+  metavar: "LOG_FILE"
+});
+
+// Combination: file can be new or existing
+const flexibleFile = path({
+  type: "file",
+  allowCreate: true,
+  extensions: [".log", ".txt"]
+});
+~~~~
+
+### Extension filtering
+
+Restrict file paths to specific extensions using the `extensions` option:
+
+~~~~ typescript twoslash
+import { path } from "@optique/run/valueparser";
+
+// Configuration files only
+const configFile = path({
+  mustExist: true,
+  type: "file",
+  extensions: [".json", ".yaml", ".yml", ".toml"],
+  metavar: "CONFIG_FILE"
+});
+
+// Image files only
+const imageFile = path({
+  mustExist: true,
+  type: "file",
+  extensions: [".jpg", ".jpeg", ".png", ".gif", ".webp"],
+  metavar: "IMAGE_FILE"
+});
+
+// Script files (existing or new)
+const scriptFile = path({
+  allowCreate: true,
+  type: "file",
+  extensions: [".js", ".ts", ".py", ".sh"],
+  metavar: "SCRIPT"
+});
+~~~~
+
+### Error messages
+
+The `path()` parser provides specific error messages for different validation
+failures:
+
+~~~~ bash
+$ myapp --config "nonexistent.json"
+Error: Path nonexistent.json does not exist.
+
+$ myapp --input "directory_not_file"
+Error: Expected a file, but directory_not_file is not a file.
+
+$ myapp --config "config.txt"
+Error: Expected file with extension .json, .yaml, .yml, got .txt.
+
+$ myapp --output "new_file/in/nonexistent/dir.txt"
+Error: Parent directory new_file/in/nonexistent does not exist.
+~~~~
+
+
+Creating custom value parsers
+-----------------------------
+
+When the built-in value parsers don't meet your needs, you can create custom
+value parsers by implementing the `ValueParser<T>` interface. Custom parsers
+integrate seamlessly with Optique's type system and provide the same error
+handling and help text generation as built-in parsers.
+
+### ValueParser interface
+
+The `ValueParser<T>` interface defines three required properties:
+
+~~~~ typescript twoslash
+import type { ValueParserResult } from "@optique/core/valueparser";
+// ---cut-before---
+interface ValueParser<T> {
+  readonly metavar: string;
+  parse(input: string): ValueParserResult<T>;
+  format(value: T): string;
+}
+~~~~
+
+`metavar`
+:   The placeholder text shown in help messages (usually uppercase)
+
+`parse()`
+:   Converts string input to typed value or returns error
+
+`format()`
+:   Converts typed value back to string for display
+
+### Basic custom parser
+
+Here's a simple custom parser for IPv4 addresses:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+
+interface IPv4Address {
+  octets: [number, number, number, number];
+  toString(): string;
+}
+
+function ipv4(): ValueParser<IPv4Address> {
+  return {
+    metavar: "IP_ADDRESS",
+
+    parse(input: string): ValueParserResult<IPv4Address> {
+      const parts = input.split('.');
+      if (parts.length !== 4) {
+        return {
+          success: false,
+          error: message`Expected IPv4 address in format a.b.c.d, but got ${input}.`
+        };
+      }
+
+      const octets: number[] = [];
+      for (const part of parts) {
+        const num = parseInt(part, 10);
+        if (isNaN(num) || num < 0 || num > 255) {
+          return {
+            success: false,
+            error: message`Invalid IPv4 octet: ${part}. Must be 0-255.`
+          };
+        }
+        octets.push(num);
+      }
+
+      return {
+        success: true,
+        value: {
+          octets: octets as [number, number, number, number],
+          toString() {
+            return octets.join('.');
+          }
+        }
+      };
+    },
+
+    format(value: IPv4Address): string {
+      return value.toString();
+    }
+  };
+}
+~~~~
+
+### Parser with options
+
+More sophisticated parsers can accept configuration options:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+
+interface DateParserOptions {
+  metavar?: string;
+  format?: 'iso' | 'us' | 'eu';
+  allowFuture?: boolean;
+}
+
+function date(options: DateParserOptions = {}): ValueParser<Date> {
+  const { metavar = "DATE", format = 'iso', allowFuture = true } = options;
+
+  return {
+    metavar,
+
+    parse(input: string): ValueParserResult<Date> {
+      let date: Date;
+
+      // Parse according to format
+      switch (format) {
+        case 'iso':
+          date = new Date(input);
+          break;
+        case 'us':
+          // MM/DD/YYYY format
+          const usMatch = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (!usMatch) {
+            return {
+              success: false,
+              error: message`Expected US date format MM/DD/YYYY, but got ${input}.`
+            };
+          }
+          date = new Date(parseInt(usMatch[3]), parseInt(usMatch[1]) - 1, parseInt(usMatch[2]));
+          break;
+        case 'eu':
+          // DD/MM/YYYY format
+          const euMatch = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (!euMatch) {
+            return {
+              success: false,
+              error: message`Expected EU date format DD/MM/YYYY, but got ${input}.`
+            };
+          }
+          date = new Date(parseInt(euMatch[3]), parseInt(euMatch[2]) - 1, parseInt(euMatch[1]));
+          break;
+      }
+
+      // Validate parsed date
+      if (isNaN(date.getTime())) {
+        return {
+          success: false,
+          error: message`Invalid date: ${input}.`
+        };
+      }
+
+      // Check future constraint
+      if (!allowFuture && date > new Date()) {
+        return {
+          success: false,
+          error: message`Future dates not allowed, but got ${input}.`
+        };
+      }
+
+      return { success: true, value: date };
+    },
+
+    format(value: Date): string {
+      switch (format) {
+        case 'iso':
+          return value.toISOString().split('T')[0];
+        case 'us':
+          return `${value.getMonth() + 1}/${value.getDate()}/${value.getFullYear()}`;
+        case 'eu':
+          return `${value.getDate()}/${value.getMonth() + 1}/${value.getFullYear()}`;
+      }
+    }
+  };
+}
+
+// Usage
+const birthDate = date({
+  format: 'us',
+  allowFuture: false,
+  metavar: "BIRTH_DATE"
+});
+~~~~
+
+### Integration with parsers
+
+Custom value parsers work seamlessly with Optique's parser combinators:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+
+interface IPv4Address {
+  octets: [number, number, number, number];
+  toString(): string;
+}
+
+function ipv4(): ValueParser<IPv4Address> {
+  return {
+    metavar: "IP_ADDRESS",
+    parse(input: string): ValueParserResult<IPv4Address> {
+      return { success: false, error: message`` };
+    },
+    format(value: IPv4Address): string {
+      return value.toString();
+    }
+  };
+}
+
+interface DateParserOptions {
+  metavar?: string;
+  format?: 'iso' | 'us' | 'eu';
+  allowFuture?: boolean;
+}
+
+function date(options: DateParserOptions = {}): ValueParser<Date> {
+  const { metavar = "DATE", format = 'iso', allowFuture = true } = options;
+  return {
+    metavar,
+    parse(input: string): ValueParserResult<Date> {
+      return { success: false, error: message`` };
+    },
+    format(value: Date): string {
+      return "";
+    }
+  };
+}
+// ---cut-before---
+import { argument, object, option, parse } from "@optique/core/parser";
+import { integer } from "@optique/core/valueparser";
+
+const serverConfig = object({
+  address: option("--bind", ipv4()),
+  startDate: argument(date({ format: 'iso' })),
+  port: option("-p", "--port", integer({ min: 1, max: 65535 }))
+});
+
+// Full type safety with custom types
+const config = parse(serverConfig, [
+  "--bind", "192.168.1.100",
+  "--port", "8080",
+  "2023-12-25"
+]);
+
+if (config.success) {
+  console.log(`Binding to ${config.value.address.toString()}:${config.value.port}`);
+  console.log(`Start date: ${config.value.startDate.toDateString()}`);
+}
+~~~~
+
+### Validation best practices
+
+When creating custom value parsers, follow these best practices:
+
+#### Clear error messages
+
+Provide specific, actionable error messages that help users understand what
+went wrong:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+function _(input: string) {
+// ---cut-before---
+// Good: Specific and helpful
+return {
+  success: false,
+  error: message`Expected IPv4 address in format a.b.c.d, but got ${input}.`
+};
+
+// Bad: Vague and unhelpful
+return {
+  success: false,
+  error: message`Invalid input.`
+};
+// ---cut-after---
+}
+~~~~
+
+#### Comprehensive validation
+
+Validate all aspects of your input format:
+
+~~~~ typescript twoslash
+// @noErrors: 2391 2389
+import { message } from "@optique/core/message";
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+function parseValue<T>(i: string): T;
+const formatError = message``;
+const boundsError = message``;
+const semanticError = message``;
+function correctFormat(input: string): boolean;
+function withinBounds(input: string): boolean;
+function semanticallyValid(input: string): boolean;
+function parser<T>(): ValueParser<T> {
+return {
+metavar: "",
+format() { return ""; },
+// ---cut-before---
+parse(input: string): ValueParserResult<T> {
+  // 1. Format validation
+  if (!correctFormat(input)) {
+    return { success: false, error: formatError };
+  }
+
+  // 2. Range/constraint validation
+  if (!withinBounds(input)) {
+    return { success: false, error: boundsError };
+  }
+
+  // 3. Semantic validation
+  if (!semanticallyValid(input)) {
+    return { success: false, error: semanticError };
+  }
+
+  return { success: true, value: parseValue(input) };
+}
+// ---cut-after---
+}
+}
+~~~~
+
+#### Consistent metavar naming
+
+Use descriptive, uppercase metavar names that clearly indicate the expected
+input:
+
+~~~~ typescript
+// Good metavar examples
+metavar: "EMAIL"
+metavar: "FILE"
+metavar: "PORT"
+metavar: "UUID"
+
+// Poor metavar examples
+metavar: "input"
+metavar: "value"
+metavar: "thing"
+~~~~
+
+Custom value parsers extend Optique's type safety and validation capabilities to
+handle domain-specific data types while maintaining consistency with
+the built-in parsers and providing excellent integration with TypeScript's
+type system.
+
+<!-- cSpell: ignore myapp phonebk toolong -->
