@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="1280"
+   height="640"
+   viewBox="0 0 338.66666 169.33333"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   sodipodi:docname="og.svg"
+   inkscape:export-filename="og.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     inkscape:zoom="1.2899551"
+     inkscape:cx="638.78192"
+     inkscape:cy="313.1892"
+     inkscape:window-width="3072"
+     inkscape:window-height="1659"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"
+     inkscape:export-bgcolor="#ffffffff" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       id="g1"
+       transform="matrix(0.36193813,0,0,0.36193813,165.18077,59.363188)">
+      <path
+         style="fill:#c9b3e0;fill-opacity:1;stroke-width:0.264583"
+         d="M -12.964583,63.886692 176.23285,67.631578 172.16234,80.69792 -12.964583,96.410095 Z"
+         inkscape:label="ray-0"
+         id="path1" />
+      <path
+         style="fill:#5e3b8c;fill-opacity:1;stroke-width:0.264583"
+         d="M 210.01373,-35.189579 130.64311,175.01169 219.21746,132.90407 Z"
+         inkscape:label="dim-left"
+         id="path2" />
+      <path
+         style="fill:#8364a7;fill-opacity:1;stroke-width:0.264583"
+         d="m 210.01373,-35.189579 9.20373,168.093649 91.9936,18.33259 z"
+         inkscape:label="dim-right"
+         id="path3" />
+      <path
+         style="fill:#6e4e98;fill-opacity:1;stroke-width:0.264583"
+         d="m 219.21746,132.90407 -88.57435,42.10762 180.56795,-23.77503 z"
+         inkscape:label="dim-bottom"
+         id="path4" />
+      <path
+         style="fill:#ad95c5;fill-opacity:1;stroke-width:0.264583"
+         d="M 202.28413,62.828359 391.15592,-11.092149 432.51233,11.37709 Z"
+         inkscape:label="ray-1"
+         id="path5" />
+      <path
+         style="fill:#744f9e;fill-opacity:1;stroke-width:0.264583"
+         d="M 204.88926,75.202709 410.36874,62.177087 447.1662,96.043726 Z"
+         inkscape:label="ray-2"
+         id="path6" />
+      <path
+         style="fill:#48286e;fill-opacity:1;stroke-width:0.264583"
+         d="m 203.5867,90.1822 214.92309,40.37949 29.95895,41.35641 z"
+         inkscape:label="ray-3"
+         id="path7" />
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-weight:300;font-size:19.7556px;line-height:1.5;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans Light';text-align:center;letter-spacing:0px;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:#5e3b8c;fill-opacity:1;fill-rule:evenodd;stroke-width:0.249502"
+       x="51.395493"
+       y="42.868092"
+       id="text1"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:19.7556px;font-family:'Inter Display';-inkscape-font-specification:'Inter Display Bold';fill:#7c3af7;fill-opacity:1;stroke-width:0.249502"
+         x="51.395493"
+         y="42.868092">Optique</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:16.9333px;line-height:1.5;font-family:'Inter Display';-inkscape-font-specification:'Inter Display Bold';text-align:start;letter-spacing:0px;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#3c3c43;fill-opacity:1;fill-rule:evenodd;stroke-width:0.249502"
+       x="14.466598"
+       y="72.707466"
+       id="text2"><tspan
+         sodipodi:role="line"
+         id="tspan2"
+         style="font-size:16.9333px;text-align:start;text-anchor:start;fill:#3c3c43;fill-opacity:1;stroke-width:0.249502"
+         x="14.466598"
+         y="72.707466">Type-safe combinatorial</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:16.9333px;text-align:start;text-anchor:start;fill:#3c3c43;fill-opacity:1;stroke-width:0.249502"
+         x="14.466598"
+         y="98.107414"
+         id="tspan3">CLI parser for TypeScript</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:9.87778px;line-height:1.5;font-family:'Inter Display';-inkscape-font-specification:'Inter Display Bold';text-align:start;letter-spacing:0px;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#3c3c43;fill-opacity:1;fill-rule:evenodd;stroke-width:0.249502"
+       x="15.383286"
+       y="122.24586"
+       id="text4"><tspan
+         sodipodi:role="line"
+         id="tspan4"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:9.87778px;font-family:'Inter Display';-inkscape-font-specification:'Inter Display';fill:#67676c;fill-opacity:1;stroke-width:0.249502"
+         x="15.383286"
+         y="122.24586">Express CLI constraints in code structure,</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:9.87778px;font-family:'Inter Display';-inkscape-font-specification:'Inter Display';fill:#67676c;fill-opacity:1;stroke-width:0.249502"
+         x="15.383286"
+         y="137.06253"
+         id="tspan5">not validation logic</tspan></text>
+  </g>
+</svg>
