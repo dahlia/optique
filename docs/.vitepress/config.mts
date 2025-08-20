@@ -7,6 +7,7 @@ import {
   groupIconMdPlugin,
   groupIconVitePlugin,
 } from "vitepress-plugin-group-icons";
+import llmstxt from "vitepress-plugin-llms";
 
 let extraNav: { text: string; link: string }[] = [];
 if (process.env.EXTRA_NAV_TEXT && process.env.EXTRA_NAV_LINK) {
@@ -121,6 +122,7 @@ export default defineConfig({
   vite: {
     plugins: [
       groupIconVitePlugin(),
+      llmstxt({}),
     ],
   },
 
