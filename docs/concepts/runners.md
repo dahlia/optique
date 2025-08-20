@@ -214,6 +214,61 @@ const config = run(parser, {
 Use this approach for standalone CLI applications where you want maximum
 convenience and standard CLI behavior.
 
+### Configuration options
+
+*@optique/run*'s `run()` function provides several configuration options
+for fine-tuning behavior:
+
+~~~~ typescript twoslash
+import { run } from "@optique/run";
+import { object, option } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  name: option("-n", "--name", string()),
+  debug: option("--debug")
+});
+
+const config = run(parser, {
+  programName: "my-tool",     // Override detected program name
+  args: ["custom", "args"],   // Override process.argv
+  colors: true,               // Force colored output
+  maxWidth: 100,              // Set output width
+  help: "both",               // Enable --help and help command
+  aboveError: "usage",        // Show usage on errors
+  errorExitCode: 2            // Exit code for errors
+});
+~~~~
+
+### Help system options
+
+Enable built-in help functionality with different modes:
+
+~~~~ typescript twoslash
+// @noErrors: 1117
+import { run } from "@optique/run";
+import { object, option } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({ name: option("-n", "--name", string()) });
+
+const result = run(parser, {
+  help: "option",    // Adds --help option only
+  help: "command",   // Adds help subcommand only
+  help: "both",      // Adds both --help and help command
+  help: "none",      // No help (default)
+});
+~~~~
+
+### Error handling behavior
+
+The *@optique/run* `run()` function automatically:
+
+ -  Prints usage information and error messages to stderr
+ -  Exits with code `0` for help requests
+ -  Exits with code `1` (or custom) for parse errors
+ -  Never returns on errors (always calls `process.exit()`)
+
 
 Type inference with `InferValue<T>`
 -----------------------------------
@@ -273,6 +328,20 @@ When to use each approach
 -------------------------
 
 Choose your execution strategy based on your application's needs:
+
+### Use *@optique/run* when:
+
+ -  Building CLI applications for Node.js, Bun, or Deno
+ -  You want automatic `process.argv` parsing and `process.exit()` handling
+ -  You need automatic terminal capability detection (colors, width)
+ -  You prefer a simple, batteries-included approach
+
+### Use *@optique/core* instead when:
+
+ -  Building web applications or libraries
+ -  You need full control over argument sources and error handling
+ -  Working in environments without `process` (browsers, web workers)
+ -  Building reusable parser components
 
 ### Use `parse()` when:
 
