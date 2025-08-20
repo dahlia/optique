@@ -3,6 +3,10 @@ import deflist from "markdown-it-deflist";
 import process from "node:process";
 import { ModuleKind, ModuleResolutionKind, ScriptTarget } from "typescript";
 import { defineConfig } from "vitepress";
+import {
+  groupIconMdPlugin,
+  groupIconVitePlugin,
+} from "vitepress-plugin-group-icons";
 
 let extraNav: { text: string; link: string }[] = [];
 if (process.env.EXTRA_NAV_TEXT && process.env.EXTRA_NAV_LINK) {
@@ -106,11 +110,18 @@ export default defineConfig({
     ],
     config(md) {
       md.use(deflist);
+      md.use(groupIconMdPlugin);
     },
   },
 
   sitemap: {
     hostname: process.env.SITEMAP_HOSTNAME,
+  },
+
+  vite: {
+    plugins: [
+      groupIconVitePlugin(),
+    ],
   },
 
   async transformHead(context) {
