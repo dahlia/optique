@@ -10,6 +10,9 @@ hero:
     text: Install
     link: /install
   - theme: alt
+    text: Why
+    link: /why
+  - theme: alt
     text: Tutorial
     link: /tutorial
   - theme: alt

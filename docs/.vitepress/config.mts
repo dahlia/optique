@@ -49,6 +49,7 @@ const REFERENCES = {
 };
 
 const TOP_NAV = [
+  { text: "Why Optique?", link: "/why" },
   { text: "Installation", link: "/install" },
   { text: "Tutorial", link: "/tutorial" },
   CONCEPTS,
