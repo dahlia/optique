@@ -1845,7 +1845,11 @@ export function concat<
   TA extends Parser<readonly unknown[], readonly unknown[]>,
   TB extends Parser<readonly unknown[], readonly unknown[]>,
 >(a: TA, b: TB): Parser<
-  [...TA["$valueType"], ...TB["$valueType"]],
+  readonly [...{
+    readonly [K in keyof TA["$valueType"]]: TA["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TB["$valueType"]]: TB["$valueType"][K]
+  }],
   [TA["$stateType"][number], TB["$stateType"][number]]
 >;
 
@@ -1868,7 +1872,13 @@ export function concat<
   TB extends Parser<readonly unknown[], readonly unknown[]>,
   TC extends Parser<readonly unknown[], readonly unknown[]>,
 >(a: TA, b: TB, c: TC): Parser<
-  [...TA["$valueType"], ...TB["$valueType"], ...TC["$valueType"]],
+  readonly [...{
+    readonly [K in keyof TA["$valueType"]]: TA["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TB["$valueType"]]: TB["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TC["$valueType"]]: TC["$valueType"][K]
+  }],
   [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number]]
 >;
 
@@ -1894,7 +1904,15 @@ export function concat<
   TC extends Parser<readonly unknown[], readonly unknown[]>,
   TD extends Parser<readonly unknown[], readonly unknown[]>,
 >(a: TA, b: TB, c: TC, d: TD): Parser<
-  [...TA["$valueType"], ...TB["$valueType"], ...TC["$valueType"], ...TD["$valueType"]],
+  readonly [...{
+    readonly [K in keyof TA["$valueType"]]: TA["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TB["$valueType"]]: TB["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TC["$valueType"]]: TC["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TD["$valueType"]]: TD["$valueType"][K]
+  }],
   [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number], TD["$stateType"][number]]
 >;
 
@@ -1923,7 +1941,17 @@ export function concat<
   TD extends Parser<readonly unknown[], readonly unknown[]>,
   TE extends Parser<readonly unknown[], readonly unknown[]>,
 >(a: TA, b: TB, c: TC, d: TD, e: TE): Parser<
-  [...TA["$valueType"], ...TB["$valueType"], ...TC["$valueType"], ...TD["$valueType"], ...TE["$valueType"]],
+  readonly [...{
+    readonly [K in keyof TA["$valueType"]]: TA["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TB["$valueType"]]: TB["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TC["$valueType"]]: TC["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TD["$valueType"]]: TD["$valueType"][K]
+  }, ...{
+    readonly [K in keyof TE["$valueType"]]: TE["$valueType"][K]
+  }],
   [TA["$stateType"][number], TB["$stateType"][number], TC["$stateType"][number], TD["$stateType"][number], TE["$stateType"][number]]
 >;
 
