@@ -5,6 +5,9 @@ hero:
   name: Optique
   text: Type-safe combinatorial CLI parser for TypeScript
   tagline: Express CLI constraints in code structure,<br>not validation logic
+  image:
+    src: /optique.svg
+    alt: Optique logo
   actions:
   - theme: brand
     text: Install

@@ -67,6 +67,7 @@ export default defineConfig({
   description: "Type-safe combinatorial CLI parser for TypeScript",
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
+    logo: "/optique.svg",
     nav: [
       { text: "Home", link: "/" },
       ...TOP_NAV,

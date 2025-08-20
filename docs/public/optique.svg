@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="1744"
+   height="794.46149"
+   viewBox="0 0 1744 794.46149"
+   sodipodi:docname="file.svg"
+   inkscape:version="1.4.2 (ebf0e940, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg">
+<defs>
+<inkscape:perspective
+     sodipodi:type="inkscape:persp3d"
+     inkscape:vp_x="0 : 1024 : 1"
+     inkscape:vp_y="0 : 1000 : 0"
+     inkscape:vp_z="2047.9999 : 1024 : 1"
+     inkscape:persp3d-origin="1024 : 682.66667 : 1" />
+</defs>
+<sodipodi:namedview
+   pagecolor="#ffffff"
+   bordercolor="#000000"
+   borderopacity="0.25"
+   inkscape:showpageshadow="2"
+   inkscape:pageopacity="0.0"
+   inkscape:pagecheckerboard="0"
+   inkscape:deskcolor="#d1d1d1"
+   inkscape:zoom="0.85588709"
+   inkscape:cx="727.31556"
+   inkscape:cy="272.81636"
+   inkscape:window-width="3008"
+   inkscape:window-height="1578"
+   inkscape:window-x="1710"
+   inkscape:window-y="25"
+   inkscape:window-maximized="0"
+   inkscape:current-layer="layer4" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<g inkscape:groupmode="layer" id="ray-left" inkscape:label=" ray-left" transform="translate(0,-640)">
+<path style="fill:#c9b3e0;fill-opacity:1" d="M 0,1014.4615 715.07692,1028.6154 699.6923,1078 0,1137.3846 Z" inkscape:label="ray-0" />
+</g>
+<g inkscape:groupmode="layer" id="prism" inkscape:label="prism" transform="translate(0,-640)">
+<path style="fill:#5e3b8c;fill-opacity:1" d="M 842.75269,640 542.76923,1434.4615 877.53846,1275.3146 Z" inkscape:label="dim-left" />
+<path style="fill:#8364a7;fill-opacity:1" d="m 842.75269,640 34.78577,635.3146 347.69234,69.2885 z" inkscape:label="dim-right" />
+<path style="fill:#6e4e98;fill-opacity:1" d="m 877.53846,1275.3146 -334.76923,159.1469 682.46157,-89.8584 z" inkscape:label="dim-bottom" />
+</g>
+<g inkscape:groupmode="layer" id="ray-right" inkscape:label="ray-right" transform="translate(0,-640)">
+<path style="fill:#ad95c5;fill-opacity:1" d="m 813.53847,1010.4615 713.84613,-279.3846 156.3077,84.92311 z" inkscape:label="ray-1" />
+<path style="fill:#744f9e;fill-opacity:1" d="M 823.38462,1057.2307 1600,1008 l 139.077,127.9999 z" inkscape:label="ray-2" />
+<path style="fill:#48286e;fill-opacity:1" d="M 818.46154,1113.8461 1630.7693,1266.4615 1744,1422.7692 Z" inkscape:label="ray-3" />
+</g>
+</svg>

@@ -1,3 +1,5 @@
+<img src="docs/public/optique.svg" width="128" height="58" align="right">
+
 Optique: Type-safe combinatorial CLI parser for TypeScript
 ==========================================================
 
