@@ -1013,6 +1013,7 @@ export function object<
           ? message`Unexpected option or argument: ${context.buffer[0]}.`
           : message`Expected an option or argument, but got end of input.`,
       };
+
       for (const [field, parser] of parserPairs) {
         const result = parser.parse({
           ...context,
@@ -1036,6 +1037,27 @@ export function object<
           error = result;
         }
       }
+
+      // If buffer is empty and no parser consumed input, check if all parsers can complete
+      if (context.buffer.length === 0) {
+        let allCanComplete = true;
+        for (const [field, parser] of parserPairs) {
+          const completeResult = parser.complete(context.state[field]);
+          if (!completeResult.success) {
+            allCanComplete = false;
+            break;
+          }
+        }
+
+        if (allCanComplete) {
+          return {
+            success: true,
+            next: context,
+            consumed: [],
+          };
+        }
+      }
+
       return { ...error, success: false };
     },
     complete(state) {
