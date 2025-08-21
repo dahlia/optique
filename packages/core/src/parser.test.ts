@@ -602,7 +602,7 @@ describe("object", () => {
     }
   });
 
-  it("should handle empty arguments gracefully", () => {
+  it("should handle empty arguments gracefully when required options are present", () => {
     const parser = object({
       verbose: option("-v"),
       port: option("-p", integer()),
@@ -612,6 +612,48 @@ describe("object", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "Expected an option");
+    }
+  });
+
+  it("should succeed with empty input when only Boolean flags are present", () => {
+    const parser = object({
+      watch: option("--watch"),
+    });
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.watch, false);
+    }
+  });
+
+  it("should succeed with empty input when multiple Boolean flags are present", () => {
+    const parser = object({
+      watch: option("--watch"),
+      verbose: option("--verbose"),
+      debug: option("--debug"),
+    });
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.watch, false);
+      assert.equal(result.value.verbose, false);
+      assert.equal(result.value.debug, false);
+    }
+  });
+
+  it("should parse Boolean flags correctly when provided", () => {
+    const parser = object({
+      watch: option("--watch"),
+      verbose: option("--verbose"),
+    });
+
+    const result = parse(parser, ["--watch"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.watch, true);
+      assert.equal(result.value.verbose, false);
     }
   });
 
@@ -3750,9 +3792,9 @@ describe("merge", () => {
 
     const parser = merge(empty1, empty2);
 
-    // Empty parsers fail when there is no input that matches
+    // Empty parsers succeed when there is no input since all parsers can complete
     const result = parse(parser, []);
-    assert.ok(!result.success);
+    assert.ok(result.success);
   });
 
   it("should work with optional parsers in merged objects", () => {
