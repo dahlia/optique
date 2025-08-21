@@ -4,7 +4,7 @@ Optique changelog
 Version 0.1.1
 -------------
 
-To be released.
+Released on August 21, 2025.
 
  -  Fixed a bug where `object()` parsers containing only Boolean flags would
     fail when no arguments were provided, instead of defaulting the flags to
