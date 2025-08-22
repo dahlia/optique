@@ -1852,6 +1852,307 @@ export function merge(
 }
 
 /**
+ * Concatenates two {@link tuple} parsers into a single parser that produces
+ * a flattened tuple containing the values from both parsers in order.
+ *
+ * This is similar to {@link merge} for object parsers, but operates on tuple
+ * parsers and preserves the sequential, positional nature of tuples by
+ * flattening the results into a single tuple array.
+ *
+ * @example
+ * ```typescript
+ * const basicTuple = tuple([
+ *   option("-v", "--verbose"),
+ *   option("-p", "--port", integer()),
+ * ]);
+ *
+ * const serverTuple = tuple([
+ *   option("-h", "--host", string()),
+ *   option("-d", "--debug"),
+ * ]);
+ *
+ * const combined = concat(basicTuple, serverTuple);
+ * // Type: Parser<[boolean, number, string, boolean], [BasicState, ServerState]>
+ *
+ * const result = parse(combined, ["-v", "-p", "8080", "-h", "localhost", "-d"]);
+ * // result.value: [true, 8080, "localhost", true]
+ * ```
+ *
+ * @template TA The value type of the first tuple parser.
+ * @template TB The value type of the second tuple parser.
+ * @template TStateA The state type of the first tuple parser.
+ * @template TStateB The state type of the second tuple parser.
+ * @param a The first {@link tuple} parser to concatenate.
+ * @param b The second {@link tuple} parser to concatenate.
+ * @return A new {@link tuple} parser that combines the values of both parsers
+ *         into a single flattened tuple.
+ * @since 0.2.0
+ */
+export function concat<
+  TA extends readonly unknown[],
+  TB extends readonly unknown[],
+  TStateA,
+  TStateB,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+): Parser<[...TA, ...TB], [TStateA, TStateB]>;
+
+/**
+ * Concatenates three {@link tuple} parsers into a single parser that produces
+ * a flattened tuple containing the values from all parsers in order.
+ *
+ * @template TA The value type of the first tuple parser.
+ * @template TB The value type of the second tuple parser.
+ * @template TC The value type of the third tuple parser.
+ * @template TStateA The state type of the first tuple parser.
+ * @template TStateB The state type of the second tuple parser.
+ * @template TStateC The state type of the third tuple parser.
+ * @param a The first {@link tuple} parser to concatenate.
+ * @param b The second {@link tuple} parser to concatenate.
+ * @param c The third {@link tuple} parser to concatenate.
+ * @return A new {@link tuple} parser that combines the values of all parsers
+ *         into a single flattened tuple.
+ * @since 0.2.0
+ */
+export function concat<
+  TA extends readonly unknown[],
+  TB extends readonly unknown[],
+  TC extends readonly unknown[],
+  TStateA,
+  TStateB,
+  TStateC,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+): Parser<[...TA, ...TB, ...TC], [TStateA, TStateB, TStateC]>;
+
+/**
+ * Concatenates four {@link tuple} parsers into a single parser that produces
+ * a flattened tuple containing the values from all parsers in order.
+ *
+ * @template TA The value type of the first tuple parser.
+ * @template TB The value type of the second tuple parser.
+ * @template TC The value type of the third tuple parser.
+ * @template TD The value type of the fourth tuple parser.
+ * @template TStateA The state type of the first tuple parser.
+ * @template TStateB The state type of the second tuple parser.
+ * @template TStateC The state type of the third tuple parser.
+ * @template TStateD The state type of the fourth tuple parser.
+ * @param a The first {@link tuple} parser to concatenate.
+ * @param b The second {@link tuple} parser to concatenate.
+ * @param c The third {@link tuple} parser to concatenate.
+ * @param d The fourth {@link tuple} parser to concatenate.
+ * @return A new {@link tuple} parser that combines the values of all parsers
+ *         into a single flattened tuple.
+ * @since 0.2.0
+ */
+export function concat<
+  TA extends readonly unknown[],
+  TB extends readonly unknown[],
+  TC extends readonly unknown[],
+  TD extends readonly unknown[],
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+): Parser<[...TA, ...TB, ...TC, ...TD], [TStateA, TStateB, TStateC, TStateD]>;
+
+/**
+ * Concatenates five {@link tuple} parsers into a single parser that produces
+ * a flattened tuple containing the values from all parsers in order.
+ *
+ * @template TA The value type of the first tuple parser.
+ * @template TB The value type of the second tuple parser.
+ * @template TC The value type of the third tuple parser.
+ * @template TD The value type of the fourth tuple parser.
+ * @template TE The value type of the fifth tuple parser.
+ * @template TStateA The state type of the first tuple parser.
+ * @template TStateB The state type of the second tuple parser.
+ * @template TStateC The state type of the third tuple parser.
+ * @template TStateD The state type of the fourth tuple parser.
+ * @template TStateE The state type of the fifth tuple parser.
+ * @param a The first {@link tuple} parser to concatenate.
+ * @param b The second {@link tuple} parser to concatenate.
+ * @param c The third {@link tuple} parser to concatenate.
+ * @param d The fourth {@link tuple} parser to concatenate.
+ * @param e The fifth {@link tuple} parser to concatenate.
+ * @return A new {@link tuple} parser that combines the values of all parsers
+ *         into a single flattened tuple.
+ * @since 0.2.0
+ */
+export function concat<
+  TA extends readonly unknown[],
+  TB extends readonly unknown[],
+  TC extends readonly unknown[],
+  TD extends readonly unknown[],
+  TE extends readonly unknown[],
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+  e: Parser<TE, TStateE>,
+): Parser<
+  [...TA, ...TB, ...TC, ...TD, ...TE],
+  [TStateA, TStateB, TStateC, TStateD, TStateE]
+>;
+
+export function concat(
+  ...parsers: Parser<readonly unknown[], unknown>[]
+): Parser<readonly unknown[], readonly unknown[]> {
+  const initialState = parsers.map((parser) => parser.initialState);
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: parsers.length > 0
+      ? Math.max(...parsers.map((p) => p.priority))
+      : 0,
+    usage: parsers.flatMap((p) => p.usage),
+    initialState,
+    parse(context) {
+      let currentContext = context;
+      const allConsumed: string[] = [];
+      const matchedParsers = new Set<number>();
+
+      // Use the exact same logic as tuple() to avoid infinite loops
+      while (matchedParsers.size < parsers.length) {
+        let foundMatch = false;
+        let error: { consumed: number; error: Message } = {
+          consumed: 0,
+          error: message`No remaining parsers could match the input.`,
+        };
+
+        // Create priority-ordered list of remaining parsers
+        const remainingParsers = parsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([_, index]) => !matchedParsers.has(index))
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+
+        for (const [parser, index] of remainingParsers) {
+          const result = parser.parse({
+            ...currentContext,
+            state: currentContext.state[index],
+          });
+
+          if (result.success && result.consumed.length > 0) {
+            // Parser succeeded and consumed input - take this match
+            currentContext = {
+              ...currentContext,
+              buffer: result.next.buffer,
+              optionsTerminated: result.next.optionsTerminated,
+              state: currentContext.state.map((s, idx) =>
+                idx === index ? result.next.state : s
+              ),
+            };
+
+            allConsumed.push(...result.consumed);
+            matchedParsers.add(index);
+            foundMatch = true;
+            break; // Take the first (highest priority) match that consumes input
+          } else if (!result.success && error.consumed < result.consumed) {
+            error = result;
+          }
+        }
+
+        // If no consuming parser matched, try non-consuming ones (like optional)
+        // or mark failing optional parsers as matched
+        if (!foundMatch) {
+          for (const [parser, index] of remainingParsers) {
+            const result = parser.parse({
+              ...currentContext,
+              state: currentContext.state[index],
+            });
+
+            if (result.success && result.consumed.length < 1) {
+              // Parser succeeded without consuming input (like optional)
+              currentContext = {
+                ...currentContext,
+                state: currentContext.state.map((s, idx) =>
+                  idx === index ? result.next.state : s
+                ),
+              };
+
+              matchedParsers.add(index);
+              foundMatch = true;
+              break;
+            } else if (!result.success && result.consumed < 1) {
+              // Parser failed without consuming input - this could be
+              // an optional parser that doesn't match.
+              // Check if we can safely skip it.
+              // For now, mark it as matched to continue processing
+              matchedParsers.add(index);
+              foundMatch = true;
+              break;
+            }
+          }
+        }
+
+        if (!foundMatch) {
+          return { ...error, success: false };
+        }
+      }
+
+      return {
+        success: true,
+        next: currentContext,
+        consumed: allConsumed,
+      };
+    },
+    complete(state) {
+      const results: unknown[] = [];
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        const parserState = state[i];
+        const result = parser.complete(parserState);
+        if (!result.success) return result;
+
+        // Flatten the tuple results
+        if (Array.isArray(result.value)) {
+          results.push(...result.value);
+        } else {
+          results.push(result.value);
+        }
+      }
+      return { success: true, value: results };
+    },
+    getDocFragments(state, _defaultValue?) {
+      const fragments = parsers.flatMap((p, index) =>
+        p.getDocFragments(state[index], undefined).fragments
+      );
+      const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+      const sections: DocSection[] = [];
+      for (const fragment of fragments) {
+        if (fragment.type !== "section") continue;
+        if (fragment.title == null) {
+          entries.push(...fragment.entries);
+        } else {
+          sections.push(fragment);
+        }
+      }
+      const result: DocFragment[] = [
+        ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
+      ];
+      if (entries.length > 0) {
+        result.push({ type: "section", entries });
+      }
+      return { fragments: result };
+    },
+  };
+}
+
+/**
  * Options for the {@link command} parser.
  */
 export interface CommandOptions {
@@ -2070,7 +2371,21 @@ export function parse<T>(
     if (!result.success) {
       return { success: false, error: result.error };
     }
+    const previousBuffer = context.buffer;
     context = result.next;
+
+    // If no progress was made (buffer completely unchanged), this indicates
+    // a potential infinite loop where the parser succeeds but doesn't consume input
+    if (
+      context.buffer.length > 0 &&
+      context.buffer.length === previousBuffer.length &&
+      context.buffer[0] === previousBuffer[0]
+    ) {
+      return {
+        success: false,
+        error: message`Unexpected option or argument: ${context.buffer[0]}.`,
+      };
+    }
   } while (context.buffer.length > 0);
   const endResult = parser.complete(context.state);
   return endResult.success

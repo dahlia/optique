@@ -2,6 +2,7 @@ import { formatMessage, type Message, message } from "@optique/core/message";
 import {
   argument,
   command,
+  concat,
   constant,
   getDocPage,
   type InferValue,
@@ -5934,5 +5935,613 @@ describe("getDocPage", () => {
     const cliSection = docPage.sections.find((s) => s.title === "CLI Tool");
     assert.ok(cliSection);
     assert.ok(cliSection.entries.length >= 3);
+  });
+});
+
+describe("concat", () => {
+  it("should create a parser that combines multiple tuple parsers", () => {
+    const parser1 = tuple([
+      option("-v", "--verbose"),
+      option("-p", "--port", integer()),
+    ]);
+
+    const parser2 = tuple([
+      option("-h", "--host", string()),
+      option("-d", "--debug"),
+    ]);
+
+    const concatParser = concat(parser1, parser2);
+
+    assert.ok(concatParser.priority >= 10);
+    assert.ok(Array.isArray(concatParser.initialState));
+    assert.equal(concatParser.initialState.length, 2);
+    assert.ok(Array.isArray(concatParser.initialState[0]));
+    assert.ok(Array.isArray(concatParser.initialState[1]));
+  });
+
+  it("should concat two tuple parsers successfully", () => {
+    const basicOptions = tuple([
+      option("-v", "--verbose"),
+      option("-q", "--quiet"),
+    ]);
+
+    const serverOptions = tuple([
+      option("-p", "--port", integer()),
+      option("-h", "--host", string()),
+    ]);
+
+    const parser = concat(basicOptions, serverOptions);
+
+    const result = parse(parser, ["-v", "-p", "8080", "-h", "localhost"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 4);
+      assert.equal(result.value[0], true); // verbose
+      assert.equal(result.value[1], false); // quiet
+      assert.equal(result.value[2], 8080); // port
+      assert.equal(result.value[3], "localhost"); // host
+    }
+  });
+
+  it("should concat three tuple parsers", () => {
+    const group1 = tuple([
+      option("-1", string()),
+    ]);
+
+    const group2 = tuple([
+      option("-2", integer()),
+    ]);
+
+    const group3 = tuple([
+      option("-3"),
+    ]);
+
+    const parser = concat(group1, group2, group3);
+
+    const result = parse(parser, ["-1", "test", "-2", "42", "-3"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 3);
+      assert.equal(result.value[0], "test");
+      assert.equal(result.value[1], 42);
+      assert.equal(result.value[2], true);
+    }
+  });
+
+  it("should concat four tuple parsers", () => {
+    const a = tuple([option("-a")]);
+    const b = tuple([option("-b")]);
+    const c = tuple([option("-c")]);
+    const d = tuple([option("-d")]);
+
+    const parser = concat(a, b, c, d);
+
+    const result = parse(parser, ["-a", "-b", "-c", "-d"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 4);
+      assert.equal(result.value[0], true);
+      assert.equal(result.value[1], true);
+      assert.equal(result.value[2], true);
+      assert.equal(result.value[3], true);
+    }
+  });
+
+  it("should concat five tuple parsers", () => {
+    const a = tuple([option("-a")]);
+    const b = tuple([option("-b")]);
+    const c = tuple([option("-c")]);
+    const d = tuple([option("-d")]);
+    const e = tuple([option("-e")]);
+
+    const parser = concat(a, b, c, d, e);
+
+    const result = parse(parser, ["-a", "-b", "-c", "-d", "-e"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 5);
+      assert.equal(result.value[0], true);
+      assert.equal(result.value[1], true);
+      assert.equal(result.value[2], true);
+      assert.equal(result.value[3], true);
+      assert.equal(result.value[4], true);
+    }
+  });
+
+  it("should handle empty tuples correctly", () => {
+    const empty1 = tuple([]);
+    const empty2 = tuple([]);
+    const nonEmpty = tuple([option("-v", "--verbose")]);
+
+    const parser = concat(empty1, empty2, nonEmpty);
+
+    const result = parse(parser, ["-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 1);
+      assert.equal(result.value[0], true);
+    }
+  });
+
+  it("should handle tuples with different lengths", () => {
+    const short = tuple([option("-s")]);
+    const long = tuple([
+      option("-a", string()),
+      option("-b", integer()),
+      option("-c"),
+    ]);
+
+    const parser = concat(short, long);
+
+    const result = parse(parser, ["-s", "-a", "test", "-b", "42", "-c"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 4);
+      assert.equal(result.value[0], true); // -s
+      assert.equal(result.value[1], "test"); // -a
+      assert.equal(result.value[2], 42); // -b
+      assert.equal(result.value[3], true); // -c
+    }
+  });
+
+  it("should work with optional parsers", () => {
+    const required = tuple([
+      option("-n", "--name", string()),
+    ]);
+
+    const optionalFields = tuple([
+      optional(option("-a", "--age", integer())),
+      optional(option("-e", "--email", string())),
+    ]);
+
+    const parser = concat(required, optionalFields);
+
+    const withOptionalResult = parse(parser, ["-n", "John", "-a", "30"]);
+    assert.ok(withOptionalResult.success);
+    if (withOptionalResult.success) {
+      assert.equal(withOptionalResult.value.length, 3);
+      assert.equal(withOptionalResult.value[0], "John");
+      assert.equal(withOptionalResult.value[1], 30);
+      assert.equal(withOptionalResult.value[2], undefined);
+    }
+
+    const withoutOptionalResult = parse(parser, ["-n", "Jane"]);
+    assert.ok(withoutOptionalResult.success);
+    if (withoutOptionalResult.success) {
+      assert.equal(withoutOptionalResult.value.length, 3);
+      assert.equal(withoutOptionalResult.value[0], "Jane");
+      assert.equal(withoutOptionalResult.value[1], undefined);
+      assert.equal(withoutOptionalResult.value[2], undefined);
+    }
+  });
+
+  it("should work with multiple parsers", () => {
+    const single = tuple([
+      option("-n", "--name", string()),
+    ]);
+
+    const multipleFields = tuple([
+      multiple(option("-t", "--tag", string())),
+      argument(string()),
+    ]);
+
+    const parser = concat(single, multipleFields);
+
+    const result = parse(parser, [
+      "-n",
+      "MyApp",
+      "-t",
+      "dev",
+      "-t",
+      "webapp",
+      "input.txt",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 3);
+      assert.equal(result.value[0], "MyApp");
+      assert.deepEqual(result.value[1], ["dev", "webapp"]);
+      assert.equal(result.value[2], "input.txt");
+    }
+  });
+
+  it("should work with mixed argument and option tuples", () => {
+    const args = tuple([
+      argument(string()),
+      argument(string()),
+    ]);
+
+    const options = tuple([
+      option("-v", "--verbose"),
+      option("-o", "--output", string()),
+    ]);
+
+    const parser = concat(args, options);
+
+    const result = parse(parser, [
+      "input.txt",
+      "output.txt",
+      "-v",
+      "-o",
+      "result.txt",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 4);
+      assert.equal(result.value[0], "input.txt");
+      assert.equal(result.value[1], "output.txt");
+      assert.equal(result.value[2], true);
+      assert.equal(result.value[3], "result.txt");
+    }
+  });
+
+  it("should handle parser priorities correctly", () => {
+    const lowPriority = tuple([
+      argument(string()),
+    ]);
+
+    const highPriority = tuple([
+      option("-o", string()),
+    ]);
+
+    const parser = concat(lowPriority, highPriority);
+
+    assert.equal(
+      parser.priority,
+      Math.max(lowPriority.priority, highPriority.priority),
+    );
+
+    const result = parse(parser, ["-o", "value", "argument"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 2);
+      assert.equal(result.value[0], "argument");
+      assert.equal(result.value[1], "value");
+    }
+  });
+
+  it("should propagate parser errors correctly", () => {
+    const parser1 = tuple([
+      option("-p", "--port", integer({ min: 1, max: 65535 })),
+    ]);
+
+    const parser2 = tuple([
+      option("-h", "--host", string()),
+    ]);
+
+    const parser = concat(parser1, parser2);
+
+    const result = parse(parser, ["-p", "0", "-h", "localhost"]);
+    assert.ok(!result.success);
+  });
+
+  it("should handle value parser failures", () => {
+    const parser1 = tuple([
+      option("-n", integer({ min: 10 })),
+    ]);
+
+    const parser2 = tuple([
+      option("-t", string({ pattern: /^[A-Z]+$/ })),
+    ]);
+
+    const parser = concat(parser1, parser2);
+
+    const invalidNumberResult = parse(parser, ["-n", "5"]);
+    assert.ok(!invalidNumberResult.success);
+
+    const invalidTextResult = parse(parser, ["-t", "lowercase"]);
+    assert.ok(!invalidTextResult.success);
+  });
+
+  it("should work with different value types", () => {
+    const stringTuple = tuple([
+      option("-n", "--name", string()),
+      option("-t", "--title", string()),
+    ]);
+
+    const numberTuple = tuple([
+      option("-p", "--port", integer()),
+      option("-c", "--count", integer()),
+    ]);
+
+    const booleanTuple = tuple([
+      option("-v", "--verbose"),
+      option("-d", "--debug"),
+    ]);
+
+    const parser = concat(stringTuple, numberTuple, booleanTuple);
+
+    const result = parse(parser, [
+      "-n",
+      "test",
+      "-p",
+      "8080",
+      "-v",
+      "-c",
+      "5",
+      "-t",
+      "My Title",
+      "-d",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 6);
+      assert.equal(result.value[0], "test"); // name
+      assert.equal(result.value[1], "My Title"); // title
+      assert.equal(result.value[2], 8080); // port
+      assert.equal(result.value[3], 5); // count
+      assert.equal(result.value[4], true); // verbose
+      assert.equal(result.value[5], true); // debug
+    }
+  });
+
+  it("should handle parsing when no parser can consume input", () => {
+    const parser1 = tuple([
+      option("-1"),
+    ]);
+
+    const parser2 = tuple([
+      option("-2"),
+    ]);
+
+    const parser = concat(parser1, parser2);
+
+    // Test case where invalid option is provided - should fail
+    const result1 = parse(parser, ["-3"]);
+    assert.ok(!result1.success);
+
+    // Test case where valid empty input is provided - should succeed with defaults
+    const result2 = parse(parser, []);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.length, 2);
+      assert.equal(result2.value[0], false); // option "-1" defaults to false
+      assert.equal(result2.value[1], false); // option "-2" defaults to false
+    }
+
+    // Test case where one parser consumes input
+    const result3 = parse(parser, ["-1"]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.length, 2);
+      assert.equal(result3.value[0], true); // option "-1" is true
+      assert.equal(result3.value[1], false); // option "-2" defaults to false
+    }
+  });
+
+  it("should work in or() combinations", () => {
+    const basicMode = concat(
+      tuple([constant("basic")]),
+      tuple([option("-f")]),
+    );
+
+    const advancedMode = concat(
+      tuple([constant("advanced")]),
+      tuple([option("-v", integer())]),
+    );
+
+    const parser = or(basicMode, advancedMode);
+
+    const basicResult = parse(parser, ["-f"]);
+    assert.ok(basicResult.success);
+    if (basicResult.success) {
+      assert.equal(basicResult.value.length, 2);
+      assert.equal(basicResult.value[0], "basic");
+      assert.equal(basicResult.value[1], true);
+    }
+
+    const advancedResult = parse(parser, ["-v", "42"]);
+    assert.ok(advancedResult.success);
+    if (advancedResult.success) {
+      assert.equal(advancedResult.value.length, 2);
+      assert.equal(advancedResult.value[0], "advanced");
+      assert.equal(advancedResult.value[1], 42);
+    }
+  });
+
+  it("should handle complex real-world scenario", () => {
+    const authTuple = tuple([
+      option("-u", "--user", string()),
+      option("-p", "--pass", string()),
+    ]);
+
+    const serverTuple = tuple([
+      option("--host", string()),
+      option("--port", integer()),
+    ]);
+
+    const flagsTuple = tuple([
+      option("-v", "--verbose"),
+      option("--ssl"),
+    ]);
+
+    const parser = concat(authTuple, serverTuple, flagsTuple);
+
+    const result = parse(parser, [
+      "-u",
+      "admin",
+      "-p",
+      "secret123",
+      "--host",
+      "localhost",
+      "--port",
+      "8080",
+      "-v",
+      "--ssl",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 6);
+      assert.equal(result.value[0], "admin");
+      assert.equal(result.value[1], "secret123");
+      assert.equal(result.value[2], "localhost");
+      assert.equal(result.value[3], 8080);
+      assert.equal(result.value[4], true);
+      assert.equal(result.value[5], true);
+    }
+  });
+
+  it("should handle options terminator correctly", () => {
+    const options = tuple([
+      option("-f"),
+    ]);
+
+    const args = tuple([
+      multiple(argument(string())),
+    ]);
+
+    const parser = concat(options, args);
+
+    const result = parse(parser, ["-f", "--", "-not-an-option"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 2);
+      assert.equal(result.value[0], true);
+      assert.deepEqual(result.value[1], ["-not-an-option"]);
+    }
+  });
+
+  it("should handle state updates and transitions correctly", () => {
+    const parser1 = tuple([
+      option("-1", string()),
+    ]);
+
+    const parser2 = tuple([
+      option("-2", integer()),
+    ]);
+
+    const parser = concat(parser1, parser2);
+
+    // Test sequential parsing
+    const result = parse(parser, ["-1", "hello", "-2", "42"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 2);
+      assert.equal(result.value[0], "hello");
+      assert.equal(result.value[1], 42);
+    }
+  });
+
+  it("should handle value parser failures during completion", () => {
+    const parser1 = tuple([
+      option("-p", "--port", integer({ min: 1, max: 65535 })),
+    ]);
+
+    const parser2 = tuple([
+      option("-h", "--host", string()),
+    ]);
+
+    const parser = concat(parser1, parser2);
+
+    // Test with invalid port value
+    const result = parse(parser, ["-p", "0", "-h", "localhost"]);
+    assert.ok(!result.success); // Should fail during completion due to port validation
+  });
+
+  it("should handle empty parsers gracefully", () => {
+    const empty1 = tuple([]);
+    const empty2 = tuple([]);
+
+    const parser = concat(empty1, empty2);
+
+    // Empty parsers succeed when there is no input
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 0);
+    }
+  });
+
+  it("should work with labeled tuples", () => {
+    const userInfo = tuple("User Info", [
+      option("-n", "--name", string()),
+      option("-a", "--age", integer()),
+    ]);
+
+    const preferences = tuple("Preferences", [
+      option("-t", "--theme", string()),
+      option("-l", "--lang", string()),
+    ]);
+
+    const parser = concat(userInfo, preferences);
+
+    const result = parse(parser, [
+      "-n",
+      "Alice",
+      "-a",
+      "30",
+      "-t",
+      "dark",
+      "-l",
+      "en",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.length, 4);
+      assert.equal(result.value[0], "Alice");
+      assert.equal(result.value[1], 30);
+      assert.equal(result.value[2], "dark");
+      assert.equal(result.value[3], "en");
+    }
+  });
+
+  describe("getDocFragments", () => {
+    it("should delegate to constituent parsers and organize fragments", () => {
+      const parser1 = tuple([
+        option("-f", "--flag"),
+      ]);
+      const parser2 = tuple([
+        option("-v", "--value", string()),
+      ]);
+      const parser = concat(parser1, parser2);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      const section = fragments.fragments[0];
+      assert.equal(section.type, "section");
+      assert.equal(section.title, undefined);
+      assert.equal(section.entries.length, 2);
+
+      // Check that both parsers' entries are included
+      const flagEntry = section.entries.find((e) =>
+        e.term.type === "option" && e.term.names.includes("-f")
+      );
+      const valueEntry = section.entries.find((e) =>
+        e.term.type === "option" && e.term.names.includes("-v")
+      );
+      assert.ok(flagEntry);
+      assert.ok(valueEntry);
+    });
+
+    it("should handle labeled tuples in documentation", () => {
+      const parser1 = tuple("Group 1", [
+        option("-1", "--one"),
+      ]);
+      const parser2 = tuple("Group 2", [
+        option("-2", "--two"),
+      ]);
+      const parser = concat(parser1, parser2);
+
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 2);
+
+      const group1Section = fragments.fragments.find((f) =>
+        f.type === "section" && f.title === "Group 1"
+      );
+      const group2Section = fragments.fragments.find((f) =>
+        f.type === "section" && f.title === "Group 2"
+      );
+
+      assert.ok(group1Section);
+      assert.ok(group2Section);
+      if (group1Section.type === "section") {
+        assert.equal(group1Section.entries.length, 1);
+      }
+      if (group2Section.type === "section") {
+        assert.equal(group2Section.entries.length, 1);
+      }
+    });
   });
 });

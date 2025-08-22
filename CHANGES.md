@@ -6,6 +6,20 @@ Version 0.2.0
 
 To be released.
 
+### @optique/core
+
+ -  Added `concat()` function for concatenating multiple `tuple()` parsers into
+    a single flattened tuple, similar to how `merge()` works for `object()`
+    parsers. [[#1]]
+
+ -  Fixed an infinite loop issue in the main parsing loop that could occur when
+    parsers succeeded but didn't consume input.
+
+ -  Fixed bundled short options (e.g., `-vdf` for `-v -d -f`) not being parsed
+    correctly in some cases.
+
+[#1]: https://github.com/dahlia/optique/issues/1
+
 
 Version 0.1.1
 -------------

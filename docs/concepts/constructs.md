@@ -428,4 +428,141 @@ type Options = InferValue<typeof allOptions>;
 // Type automatically inferred as above.
 ~~~~
 
+
+`concat()` parser
+-----------------
+
+*This API is available since Optique 0.2.0.*
+
+The `concat()` parser combines multiple `tuple()` parsers into a single unified
+parser, enabling modular tuple design through reusable tuple groups. This is
+the tuple equivalent of `merge()` for objects, providing compositional
+flexibility for sequential, positional argument structures.
+
+~~~~ typescript twoslash
+import { concat, tuple, option, parse } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+
+// Define reusable tuple groups
+const basicFlags = tuple([
+  option("-v", "--verbose"),
+  option("-q", "--quiet"),
+] as const);
+
+const serverConfig = tuple([
+  option("-p", "--port", integer({ min: 1, max: 65535 })),
+  option("-h", "--host", string()),
+] as const);
+
+const logConfig = tuple([
+  option("--log-level", string()),
+  option("--log-file", string()),
+] as const);
+
+// Combine tuples for different application modes
+const webServer = concat(basicFlags, serverConfig);
+const fullServer = concat(basicFlags, serverConfig, logConfig);
+
+const result = parse(fullServer, [
+  "-v", "-p", "8080", "-h", "localhost",
+  "--log-level", "info", "--log-file", "app.log"
+]);
+
+if (result.success) {
+  const [verbose, quiet, port, host, logLevel, logFile] = result.value;
+  console.log(`Server: ${host}:${port}, verbose: ${verbose}`);
+  console.log(`Logging: ${logLevel} to ${logFile}`);
+}
+~~~~
+
+### Type concatenation
+
+The `concat()` parser intelligently flattens the types of all concatenated
+tuple parsers into a single tuple type:
+
+~~~~ typescript twoslash
+import { type InferValue, concat, tuple, option } from "@optique/core/parser";
+import { integer, string } from "@optique/core/valueparser";
+// ---cut-before---
+const userInfo = tuple([
+  option("-n", "--name", string()),
+  option("-a", "--age", integer()),
+] as const);
+
+const preferences = tuple([
+  option("-t", "--theme", string()),
+  option("-v", "--verbose"),
+] as const);
+
+const combined = concat(userInfo, preferences);
+
+type CombinedType = InferValue<typeof combined>;
+//   ^?
+
+
+// Type automatically inferred as above.
+~~~~
+
+### Usage patterns
+
+Concatenation is useful when you need:
+
+ -  Modular tuple construction from reusable components
+ -  Sequential argument processing with clear grouping
+ -  Building complex CLIs from simpler tuple building blocks
+ -  Maintaining positional semantics across grouped options
+
+~~~~ typescript twoslash
+import { concat, tuple, option, argument, parse } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+// ---cut-before---
+// Build authentication tuple
+const authTuple = tuple([
+  option("-u", "--user", string()),
+  option("-p", "--pass", string()),
+] as const);
+
+// Build connection tuple
+const connectionTuple = tuple([
+  option("--host", string()),
+  option("--port", integer()),
+  option("--ssl"),
+] as const);
+
+// Build command arguments tuple
+const commandTuple = tuple([
+  argument(string()), // command name
+  argument(string()), // target file
+] as const);
+
+// Combine all for a database client
+const dbClient = concat(authTuple, connectionTuple, commandTuple);
+
+// Usage: myapp -u admin -p secret --host db.example.com --port 5432 --ssl backup users.sql
+const config = parse(dbClient, [
+  "-u", "admin", "-p", "secret",
+  "--host", "db.example.com", "--port", "5432", "--ssl",
+  "backup", "users.sql"
+]);
+
+if (config.success) {
+  const [user, pass, host, port, ssl, command, file] = config.value;
+  console.log(`Connecting as ${user} to ${host}:${port}`);
+  console.log(`Running ${command} on ${file}`);
+}
+~~~~
+
+### Relationship to `merge()`
+
+While `merge()` combines object parsers by merging their properties, `concat()`
+combines tuple parsers by flattening their positional elements:
+
+| Combinator | Input parsers      | Result type                       |
+| ---------- | ------------------ | --------------------------------- |
+| `merge()`  | `object()` parsers | Merged object with all properties |
+| `concat()` | `tuple()` parsers  | Flattened tuple with all elements |
+
+Both provide compositional design patterns but serve different structural needs
+in CLI applications.
+
 <!-- cSpell: ignore myapp -->
