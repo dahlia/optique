@@ -4,7 +4,7 @@ Optique changelog
 Version 0.2.0
 -------------
 
-To be released.
+Released on August 22, 2025.
 
 ### @optique/core
 
@@ -25,6 +25,8 @@ Version 0.1.1
 -------------
 
 Released on August 21, 2025.
+
+### @optique/core
 
  -  Fixed a bug where `object()` parsers containing only Boolean flags would
     fail when no arguments were provided, instead of defaulting the flags to
