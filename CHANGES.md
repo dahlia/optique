@@ -6,6 +6,12 @@ Version 0.3.0
 
 To be released.
 
+### @optique/core
+
+ -  Extended `or()` combinator to support up to 10 parsers (previously limited
+    to 5), enabling more complex command-line interfaces with larger numbers
+    of mutually exclusive subcommands or options.
+
 
 Version 0.2.0
 -------------

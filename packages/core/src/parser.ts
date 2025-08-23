@@ -1455,6 +1455,356 @@ export function or<
   | [4, ParserResult<TStateE>]
 >;
 
+/**
+ * Creates a parser that combines six mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
+ */
+export function or<
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+  e: Parser<TE, TStateE>,
+  f: Parser<TF, TStateF>,
+): Parser<
+  TA | TB | TC | TD | TE | TF,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+>;
+
+/**
+ * Creates a parser that combines seven mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
+ */
+export function or<
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+  e: Parser<TE, TStateE>,
+  f: Parser<TF, TStateF>,
+  g: Parser<TG, TStateG>,
+): Parser<
+  TA | TB | TC | TD | TE | TF | TG,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+>;
+
+/**
+ * Creates a parser that combines eight mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TH The type of the value returned by the eighth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @template TStateH The type of the state used by the eighth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @param h The eighth {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
+ */
+export function or<
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TH,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+  TStateH,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+  e: Parser<TE, TStateE>,
+  f: Parser<TF, TStateF>,
+  g: Parser<TG, TStateG>,
+  h: Parser<TH, TStateH>,
+): Parser<
+  TA | TB | TC | TD | TE | TF | TG | TH,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+  | [7, ParserResult<TStateH>]
+>;
+
+/**
+ * Creates a parser that combines nine mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TH The type of the value returned by the eighth parser.
+ * @template TI The type of the value returned by the ninth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @template TStateH The type of the state used by the eighth parser.
+ * @template TStateI The type of the state used by the ninth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @param h The eighth {@link Parser} to try.
+ * @param i The ninth {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
+ */
+export function or<
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TH,
+  TI,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+  TStateH,
+  TStateI,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+  e: Parser<TE, TStateE>,
+  f: Parser<TF, TStateF>,
+  g: Parser<TG, TStateG>,
+  h: Parser<TH, TStateH>,
+  i: Parser<TI, TStateI>,
+): Parser<
+  TA | TB | TC | TD | TE | TF | TG | TH | TI,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+  | [7, ParserResult<TStateH>]
+  | [8, ParserResult<TStateI>]
+>;
+
+/**
+ * Creates a parser that combines ten mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TH The type of the value returned by the eighth parser.
+ * @template TI The type of the value returned by the ninth parser.
+ * @template TJ The type of the value returned by the tenth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @template TStateH The type of the state used by the eighth parser.
+ * @template TStateI The type of the state used by the ninth parser.
+ * @template TStateJ The type of the state used by the tenth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @param h The eighth {@link Parser} to try.
+ * @param i The ninth {@link Parser} to try.
+ * @param j The tenth {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
+ */
+export function or<
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TH,
+  TI,
+  TJ,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+  TStateH,
+  TStateI,
+  TStateJ,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+  e: Parser<TE, TStateE>,
+  f: Parser<TF, TStateF>,
+  g: Parser<TG, TStateG>,
+  h: Parser<TH, TStateH>,
+  i: Parser<TI, TStateI>,
+  j: Parser<TJ, TStateJ>,
+): Parser<
+  TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+  | [7, ParserResult<TStateH>]
+  | [8, ParserResult<TStateI>]
+  | [9, ParserResult<TStateJ>]
+>;
+
 export function or(
   ...parsers: Parser<unknown, unknown>[]
 ): Parser<unknown, undefined | [number, ParserResult<unknown>]> {
