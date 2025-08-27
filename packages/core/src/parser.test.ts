@@ -4,6 +4,7 @@ import {
   command,
   concat,
   constant,
+  flag,
   getDocPage,
   type InferValue,
   map,
@@ -537,6 +538,295 @@ describe("option", () => {
           assert.equal(fragments.fragments[0].term.metavar, "PATH");
         }
       }
+    });
+  });
+});
+
+describe("flag", () => {
+  describe("basic functionality", () => {
+    it("should parse single short flag", () => {
+      const parser = flag("-f");
+      const context = {
+        buffer: ["-f"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.ok(result.next.state);
+        assert.ok(result.next.state.success);
+        assert.equal(result.next.state.value, true);
+        assert.deepEqual(result.next.buffer, []);
+        assert.deepEqual(result.consumed, ["-f"]);
+      }
+    });
+
+    it("should parse long flag", () => {
+      const parser = flag("--force");
+      const context = {
+        buffer: ["--force"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.ok(result.next.state);
+        assert.ok(result.next.state.success);
+        assert.equal(result.next.state.value, true);
+      }
+    });
+
+    it("should parse flag with multiple names", () => {
+      const parser = flag("-f", "--force");
+
+      // Test with short form
+      let context = {
+        buffer: ["-f"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+      };
+      let result = parser.parse(context);
+      assert.ok(result.success);
+
+      // Test with long form
+      context = {
+        buffer: ["--force"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+      };
+      result = parser.parse(context);
+      assert.ok(result.success);
+    });
+  });
+
+  describe("complete function", () => {
+    it("should fail when flag is not provided", () => {
+      const parser = flag("-f", "--force");
+      const result = parser.complete(undefined);
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "Required flag");
+        assertErrorIncludes(result.error, "-f");
+        assertErrorIncludes(result.error, "--force");
+      }
+    });
+
+    it("should succeed when flag was parsed", () => {
+      const parser = flag("-f");
+      const result = parser.complete({ success: true, value: true });
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, true);
+      }
+    });
+
+    it("should propagate parse errors", () => {
+      const parser = flag("-f");
+      const state = {
+        success: false as const,
+        error: message`Some parse error`,
+      };
+      const result = parser.complete(state);
+
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "Some parse error");
+      }
+    });
+  });
+
+  describe("error handling", () => {
+    it("should fail when flag receives a value with = syntax", () => {
+      const parser = flag("--force");
+      const context = {
+        buffer: ["--force=true"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(result.consumed, 1);
+        assertErrorIncludes(result.error, "does not accept a value");
+        assertErrorIncludes(result.error, "true");
+      }
+    });
+
+    it("should fail when flag is used multiple times", () => {
+      const parser = flag("-f");
+      const context = {
+        buffer: ["-f"] as readonly string[],
+        state: { success: true as const, value: true as const },
+        optionsTerminated: false,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(result.consumed, 1);
+        assertErrorIncludes(result.error, "cannot be used multiple times");
+      }
+    });
+
+    it("should handle bundled short options", () => {
+      const parser = flag("-f");
+      const context = {
+        buffer: ["-fd"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.ok(result.next.state);
+        assert.ok(result.next.state.success);
+        assert.equal(result.next.state.value, true);
+        assert.deepEqual(result.next.buffer, ["-d"]);
+        assert.deepEqual(result.consumed, ["-f"]);
+      }
+    });
+
+    it("should fail when options are terminated", () => {
+      const parser = flag("-f");
+      const context = {
+        buffer: ["-f"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: true,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(result.consumed, 0);
+        assertErrorIncludes(result.error, "No more options can be parsed");
+      }
+    });
+
+    it("should handle options terminator --", () => {
+      const parser = flag("-f");
+      const context = {
+        buffer: ["--"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.next.optionsTerminated, true);
+        assert.deepEqual(result.next.buffer, []);
+        assert.deepEqual(result.consumed, ["--"]);
+      }
+    });
+  });
+
+  describe("integration with parse", () => {
+    it("should succeed when flag is provided", () => {
+      const parser = flag("-f", "--force");
+
+      const result = parse(parser, ["-f"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, true);
+      }
+    });
+
+    it("should fail when flag is not provided", () => {
+      const parser = flag("-f", "--force");
+
+      const result = parse(parser, []);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "Expected an option");
+      }
+    });
+
+    it("should work with object parser", () => {
+      const parser = object({
+        force: flag("-f", "--force"),
+        verbose: option("-v", "--verbose"),
+      });
+
+      // With flag
+      let result = parse(parser, ["-f", "-v"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.force, true);
+        assert.equal(result.value.verbose, true);
+      }
+
+      // Without flag
+      result = parse(parser, ["-v"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "Required flag");
+      }
+    });
+
+    it("should work with optional wrapper in object", () => {
+      const parser = object({
+        force: optional(flag("-f")),
+        name: argument(string()),
+      });
+
+      // With flag
+      let result = parse(parser, ["-f", "test"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.force, true);
+        assert.equal(result.value.name, "test");
+      }
+
+      // Without flag
+      result = parse(parser, ["test"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.force, undefined);
+        assert.equal(result.value.name, "test");
+      }
+    });
+  });
+
+  describe("documentation", () => {
+    it("should generate documentation fragment", () => {
+      const parser = flag("-f", "--force", {
+        description: message`Force operation`,
+      });
+      const fragments = parser.getDocFragments(parser.initialState);
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.deepEqual(fragments.fragments[0].term.names, [
+            "-f",
+            "--force",
+          ]);
+          assert.equal(fragments.fragments[0].term.metavar, undefined);
+        }
+        assert.ok(fragments.fragments[0].description);
+        assertErrorIncludes(
+          fragments.fragments[0].description!,
+          "Force operation",
+        );
+      }
+    });
+
+    it("should have correct usage", () => {
+      const parser = flag("-f", "--force");
+      assert.deepEqual(parser.usage, [{
+        type: "option",
+        names: ["-f", "--force"],
+      }]);
     });
   });
 });

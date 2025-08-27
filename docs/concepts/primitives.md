@@ -162,6 +162,113 @@ const parser = option("-v", "--verbose", {
 > with semantic components like option names and metavariables.
 
 
+`flag()` parser
+---------------
+
+*This API is available since Optique 0.3.0.*
+
+The `flag()` parser creates required Boolean flags that must be explicitly
+provided on the command line. Unlike `option()` which defaults to `false` when
+absent, `flag()` fails parsing entirely when not provided. This makes it ideal
+for scenarios where a flag's presence fundamentally changes the CLI's behavior
+or when implementing dependent options.
+
+~~~~ typescript twoslash
+import { flag } from "@optique/core/parser";
+
+// A flag that must be explicitly provided
+const force = flag("-f", "--force");
+
+// Multiple names are supported
+const confirm = flag("-y", "--yes", "--confirm");
+~~~~
+
+### Key differences from `option()`
+
+While both `flag()` and `option()` can create Boolean flags, they differ in
+how they handle absence:
+
+~~~~ typescript twoslash
+import { flag, option, parse } from "@optique/core/parser";
+
+const optionParser = option("-v", "--verbose");
+const flagParser = flag("-f", "--force");
+
+// option() succeeds with false when not provided
+const optionResult = parse(optionParser, []);
+// => { success: true, value: false }
+
+// flag() fails when not provided
+const flagResult = parse(flagParser, []);
+// => { success: false, error: "Expected an option, but got end of input." }
+~~~~
+
+### Use cases for `flag()`
+
+The `flag()` parser is particularly useful for:
+
+Required confirmation flags
+:   Operations that need explicit user confirmation
+
+    ~~~~ typescript twoslash
+    import { argument, flag, object } from "@optique/core/parser";
+    import { string } from "@optique/core/valueparser";
+    // ---cut-before---
+    const deleteParser = object({
+      confirm: flag("--yes-i-am-sure"),  // User must explicitly confirm
+      target: argument(string()),
+    });
+    ~~~~
+
+Dependent options
+:   When a flag's presence enables additional options
+
+    ~~~~ typescript twoslash
+    import { flag, object, option, withDefault } from "@optique/core/parser";
+
+    // When --advanced is not provided, parser fails and defaults are used
+    const parser = withDefault(
+      object({
+        advanced: flag("--advanced"),
+        maxThreads: option("--threads"),  // Only meaningful with --advanced
+        cacheSize: option("--cache")      // Only meaningful with --advanced
+      }),
+      { advanced: false, maxThreads: false, cacheSize: false }
+    );
+    ~~~~
+
+Mode selection
+:   When different flags trigger different parsing modes
+
+    ~~~~ typescript twoslash
+    import { flag, object, optional } from "@optique/core/parser";
+    // ---cut-before---
+    const parser = object({
+      interactive: optional(flag("-i", "--interactive")),
+      batch: optional(flag("-b", "--batch")),
+      daemon: optional(flag("-d", "--daemon"))
+    });
+
+    // At most one mode can be selected, enforced by application logic
+    ~~~~
+
+### Flag descriptions
+
+Like other parsers, `flag()` supports descriptions for help text:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import { flag } from "@optique/core/parser";
+// ---cut-before---
+const parser = flag("-f", "--force", {
+  description: message`Skip all confirmation prompts`
+});
+~~~~
+
+The `flag()` parser has the same priority (10) as `option()` to ensure
+consistent option handling.
+
+
 `argument()` parser
 -------------------
 
@@ -346,7 +453,7 @@ applied when multiple parsers are available. This ensures that more specific
 parsers (like commands) are tried before more general ones (like arguments):
 
  -  *Priority 15*: `command()` parsers
- -  *Priority 10*: `option()` parsers
+ -  *Priority 10*: `option()` and `flag()` parsers
  -  *Priority 5*: `argument()` parsers
  -  *Priority 0*: `constant()` parsers
 

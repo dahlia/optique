@@ -8,6 +8,11 @@ To be released.
 
 ### @optique/core
 
+ -  Added `flag()` parser for creating required Boolean flags that must be
+    explicitly provided. Unlike `option()` which defaults to `false` when
+    not present, `flag()` fails parsing when not provided, making it useful
+    for dependent options and conditional parsing scenarios.
+
  -  Extended `or()` combinator to support up to 10 parsers (previously limited
     to 5), enabling more complex command-line interfaces with larger numbers
     of mutually exclusive subcommands or options.

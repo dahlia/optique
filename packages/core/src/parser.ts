@@ -498,6 +498,212 @@ export function option<T>(
 }
 
 /**
+ * Options for the {@link flag} parser.
+ */
+export interface FlagOptions {
+  /**
+   * The description of the flag, which can be used for help messages.
+   */
+  readonly description?: Message;
+}
+
+/**
+ * Creates a parser for command-line flags that must be explicitly provided.
+ * Unlike {@link option}, this parser fails if the flag is not present, making
+ * it suitable for required boolean flags that don't have a meaningful default.
+ *
+ * The key difference from {@link option} is:
+ * - {@link option} without a value parser: Returns `false` when not present
+ * - {@link flag}: Fails parsing when not present, only produces `true`
+ *
+ * This is useful for dependent options where the presence of a flag changes
+ * the shape of the result type.
+ *
+ * @param args The {@link OptionName}s to parse, followed by an optional
+ *             {@link FlagOptions} object that allows you to specify
+ *             a description or other metadata.
+ * @returns A {@link Parser} that produces `true` when the flag is present
+ *          and fails when it is not present.
+ *
+ * @example
+ * ```typescript
+ * // Basic flag usage
+ * const parser = flag("-f", "--force");
+ * // Succeeds with true: parse(parser, ["-f"])
+ * // Fails: parse(parser, [])
+ *
+ * // With description
+ * const verboseFlag = flag("-v", "--verbose", {
+ *   description: "Enable verbose output"
+ * });
+ * ```
+ */
+export function flag(
+  ...args:
+    | readonly [...readonly OptionName[], FlagOptions]
+    | readonly OptionName[]
+): Parser<true, ValueParserResult<true> | undefined> {
+  const lastArg = args.at(-1);
+  let optionNames: OptionName[];
+  let options: FlagOptions = {};
+
+  if (
+    typeof lastArg === "object" && lastArg != null && !Array.isArray(lastArg)
+  ) {
+    options = lastArg as FlagOptions;
+    optionNames = args.slice(0, -1) as OptionName[];
+  } else {
+    optionNames = args as OptionName[];
+  }
+
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: 10,
+    usage: [{
+      type: "option",
+      names: optionNames,
+    }],
+    initialState: undefined,
+    parse(context) {
+      if (context.optionsTerminated) {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`No more options can be parsed.`,
+        };
+      } else if (context.buffer.length < 1) {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`Expected an option, but got end of input.`,
+        };
+      }
+
+      // When the input contains `--` it is a signal to stop parsing
+      // options and treat the rest as positional arguments.
+      if (context.buffer[0] === "--") {
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.state,
+            optionsTerminated: true,
+          },
+          consumed: context.buffer.slice(0, 1),
+        };
+      }
+
+      // When the input is split by spaces, the first element is the option name
+      if ((optionNames as string[]).includes(context.buffer[0])) {
+        if (context.state?.success) {
+          return {
+            success: false,
+            consumed: 1,
+            error: message`${
+              eOptionName(context.buffer[0])
+            } cannot be used multiple times.`,
+          };
+        }
+        return {
+          success: true,
+          next: {
+            ...context,
+            state: { success: true, value: true },
+            buffer: context.buffer.slice(1),
+          },
+          consumed: context.buffer.slice(0, 1),
+        };
+      }
+
+      // Check for joined format (e.g., --flag=value) which should fail for flags
+      const prefixes = optionNames
+        .filter((name) => name.startsWith("--") || name.startsWith("/"))
+        .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
+      for (const prefix of prefixes) {
+        if (context.buffer[0].startsWith(prefix)) {
+          const value = context.buffer[0].slice(prefix.length);
+          return {
+            success: false,
+            consumed: 1,
+            error: message`Flag ${
+              eOptionName(prefix.slice(0, -1))
+            } does not accept a value, but got: ${value}.`,
+          };
+        }
+      }
+
+      // When the input contains bundled options, e.g., `-abc`
+      const shortOptions = optionNames.filter(
+        (name) => name.match(/^-[^-]$/),
+      );
+      for (const shortOption of shortOptions) {
+        if (!context.buffer[0].startsWith(shortOption)) continue;
+        if (context.state?.success) {
+          return {
+            success: false,
+            consumed: 1,
+            error: message`${
+              eOptionName(shortOption)
+            } cannot be used multiple times.`,
+          };
+        }
+        return {
+          success: true,
+          next: {
+            ...context,
+            state: { success: true, value: true },
+            buffer: [
+              `-${context.buffer[0].slice(2)}`,
+              ...context.buffer.slice(1),
+            ],
+          },
+          consumed: [context.buffer[0].slice(0, 2)],
+        };
+      }
+
+      return {
+        success: false,
+        consumed: 0,
+        error: message`No matched option for ${
+          eOptionName(context.buffer[0])
+        }.`,
+      };
+    },
+    complete(state) {
+      if (state == null) {
+        return {
+          success: false,
+          error: message`Required flag ${
+            eOptionNames(optionNames)
+          } is missing.`,
+        };
+      }
+      if (state.success) return { success: true, value: true };
+      return {
+        success: false,
+        error: message`${eOptionNames(optionNames)}: ${state.error}`,
+      };
+    },
+    getDocFragments(_state, _defaultValue?) {
+      const fragments: readonly DocFragment[] = [{
+        type: "entry",
+        term: {
+          type: "option",
+          names: optionNames,
+        },
+        description: options.description,
+      }];
+      return { fragments, description: options.description };
+    },
+    [Symbol.for("Deno.customInspect")]() {
+      return `flag(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
+    },
+  } satisfies Parser<true, ValueParserResult<true> | undefined>;
+}
+
+/**
  * Options for the {@link argument} parser.
  */
 export interface ArgumentOptions {
