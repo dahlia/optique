@@ -17,6 +17,12 @@ To be released.
     to 5), enabling more complex command-line interfaces with larger numbers
     of mutually exclusive subcommands or options.
 
+ -  Enhanced `withDefault()` to support union types when the default value
+    is a different type from the parser result. The result type is now
+    `T | TDefault` instead of requiring the default to match the parser type.
+    This enables patterns like conditional CLI structures with dependent
+    options where different default structures are needed based on flag states.
+
 
 Version 0.2.0
 -------------

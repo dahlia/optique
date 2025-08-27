@@ -124,9 +124,10 @@ if (config.success) {
 ----------------------
 
 The `withDefault()` modifier provides a default value when the wrapped parser
-fails to match, eliminating the need for undefined checks. Unlike `optional()`,
-which returns `T | undefined`, `withDefault()` always returns `T` by supplying
-a fallback value.
+fails to match. The result type is a union of the parser's result type and the
+default value's type (`T | TDefault`). This allows for flexible default values
+that can be different types from what the parser produces, enabling patterns
+like conditional option structures.
 
 ~~~~ typescript twoslash
 import { object, option } from "@optique/core/parser";
@@ -152,6 +153,47 @@ const parser = object({
 
 
 });
+~~~~
+
+### Union type patterns
+
+When the default value is a different type from the parser result, `withDefault()`
+creates a union type. This is particularly useful for conditional CLI structures:
+
+~~~~ typescript twoslash
+import {
+  type InferValue,
+  flag,
+  object,
+  option,
+  withDefault,
+} from "@optique/core/parser";
+import { run } from "@optique/run";
+
+// Parser that produces complex object when flag is present
+const complexParser = object({
+  flag: flag("-f", "--flag"),
+  dependentOption: option("-d", "--dependent", { /* ... */ })
+});
+
+// Default value with different structure
+const conditionalParser = withDefault(
+  complexParser,
+  { flag: false as const }
+);
+
+// Result is a union type that handles both cases
+type Result = InferValue<typeof conditionalParser>;
+//   ^?
+
+
+
+
+
+
+
+
+const result: Result = run(conditionalParser);
 ~~~~
 
 ### Static vs dynamic defaults
@@ -188,7 +230,8 @@ Dynamic defaults are useful when:
 The `withDefault()` modifier is ideal when:
 
  -  You want to provide sensible defaults for optional parameters
- -  You prefer simplified code without undefined checks
+ -  You need different default types than the parser produces (union types)
+ -  You're building conditional CLI structures with dependent options
  -  The default value is meaningful and commonly used
 
 ~~~~ typescript twoslash
@@ -214,7 +257,7 @@ const serverConfig = object({
   port: withDefault(option("-p", "--port", integer({ min: 1, max: 65535 })), 3000),
   logLevel: withDefault(
     option("--log-level", choice(["debug", "info", "warn", "error"])),
-    "info",
+    "info" as const,
   ),
   maxConnections: withDefault(option("--max-conn", integer({ min: 1 })), 100)
 });
@@ -229,6 +272,49 @@ if (config.success) {
     logLevel: config.value.logLevel,   // Always "info" if not specified
     maxConnections: config.value.maxConnections // Always 100 if not specified
   });
+}
+~~~~
+
+### Dependent options with union types
+
+A powerful pattern uses `withDefault()` with different types to create conditional
+CLI structures where options depend on flags:
+
+~~~~ typescript twoslash
+import { flag, object, option, withDefault, parse } from "@optique/core/parser";
+
+// Define conditional configuration
+const parser = withDefault(
+  object({
+    flag: flag("-f", "--flag"),
+    dependentFlag: option("-d", "--dependent-flag"),
+    dependentFlag2: option("-d2", "--dependent-flag-2"),
+  }),
+  { flag: false as const } as const,
+);
+
+// Result type is automatically inferred as a union
+type Config =
+  | { readonly flag: false }
+  | {
+      readonly flag: true;
+      readonly dependentFlag: boolean;
+      readonly dependentFlag2?: boolean;
+    };
+
+// Usage handles both cases cleanly
+const result = parse(parser, []);
+if (result.success) {
+  if (result.value.flag) {
+    // TypeScript knows dependent flags are available
+    console.log(`Dependent flag: ${result.value.dependentFlag}`);
+    if (result.value.dependentFlag2) {
+      console.log(`Second dependent flag: ${result.value.dependentFlag2}`);
+    }
+  } else {
+    // TypeScript knows this is the simple case
+    console.log("Flag is disabled");
+  }
 }
 ~~~~
 

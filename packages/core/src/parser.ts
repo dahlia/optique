@@ -890,17 +890,18 @@ export function optional<TValue, TState>(
  * a specified default value.
  * @template TValue The type of the value returned by the wrapped parser.
  * @template TState The type of the state used by the wrapped parser.
+ * @template TDefault The type of the default value.
  * @param parser The {@link Parser} to wrap with default behavior.
  * @param defaultValue The default value to return when the wrapped parser
  *                     doesn't match or consume input. Can be a value of type
- *                     {@link TValue} or a function that returns such a value.
+ *                     {@link TDefault} or a function that returns such a value.
  * @returns A {@link Parser} that produces either the result of the wrapped parser
- *          or the default value if the wrapped parser fails to match.
+ *          or the default value if the wrapped parser fails to match (union type {@link TValue} | {@link TDefault}).
  */
-export function withDefault<TValue, TState>(
+export function withDefault<TValue, TState, TDefault = TValue>(
   parser: Parser<TValue, TState>,
-  defaultValue: TValue | (() => TValue),
-): Parser<TValue, [TState] | undefined> {
+  defaultValue: TDefault | (() => TDefault),
+): Parser<TValue | TDefault, [TState] | undefined> {
   return {
     $valueType: [],
     $stateType: [],
@@ -931,20 +932,20 @@ export function withDefault<TValue, TState>(
         return {
           success: true,
           value: typeof defaultValue === "function"
-            ? (defaultValue as () => TValue)()
+            ? (defaultValue as () => TDefault)()
             : defaultValue,
         };
       }
       return parser.complete(state[0]);
     },
-    getDocFragments(state, upperDefaultValue?) {
+    getDocFragments(state, upperDefaultValue?: TValue | TDefault) {
       return parser.getDocFragments(
         typeof state === "undefined" ? parser.initialState : state[0],
-        upperDefaultValue == null
-          ? typeof defaultValue === "function"
-            ? (defaultValue as () => TValue)()
-            : defaultValue
-          : upperDefaultValue,
+        upperDefaultValue != null
+          ? upperDefaultValue as TValue
+          : typeof defaultValue === "function"
+          ? (defaultValue as () => TDefault)() as unknown as TValue
+          : defaultValue as unknown as TValue,
       );
     },
   };
