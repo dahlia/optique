@@ -23,6 +23,21 @@ To be released.
     This enables patterns like conditional CLI structures with dependent
     options where different default structures are needed based on flag states.
 
+ -  Modified `object()` parser to use greedy parsing behavior. The parser now
+    attempts to consume all matching fields in a single parse call, rather than
+    returning after the first successful field match. This enables dependent
+    options patterns where multiple related options need to be parsed together
+    (e.g., `--flag --dependent-option`). While this change maintains backward
+    compatibility for most use cases, it may affect performance and parsing
+    order in complex scenarios.
+
+ -  Enhanced `merge()` combinator type constraints to accept any parser that
+    produces object-like values, not just `object()` parsers. This enables
+    combining `withDefault()`, `map()`, and other parsers that generate objects
+    with `merge()`. The combinator also now properly supports parsers with
+    different state management strategies using specialized state handling to
+    preserve the expected state format for each parser type.
+
 
 Version 0.2.0
 -------------

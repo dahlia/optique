@@ -347,10 +347,12 @@ const flexibleConfig = or(
 `merge()` parser
 ----------------
 
-The `merge()` parser combines multiple `object()` parsers into a single unified
-parser, enabling modular CLI design through reusable option groups. This is
-essential for building maintainable applications where related options can be
-shared across different commands or modes.
+The `merge()` parser combines multiple object-generating parsers into a single
+unified parser, enabling modular CLI design through reusable option groups.
+While originally designed for `object()` parsers, it now accepts any parser
+that produces object-like values, including `withDefault()`, `map()`, and other
+transformative parsers. This is essential for building maintainable applications
+where related options can be shared across different commands or modes.
 
 ~~~~ typescript twoslash
 import { constant, merge, object, option, optional, or } from "@optique/core/parser";
@@ -394,9 +396,109 @@ const prodMode = merge(
 const applicationConfig = or(devMode, prodMode);
 ~~~~
 
-### Type merging
+### Advanced parser combinations
 
-The `merge()` parser intelligently combines the types of all merged parsers:
+*This feature is available since Optique 0.3.0.*
+
+The `merge()` parser can now combine various types of object-generating parsers,
+not just `object()` parsers. This enables sophisticated patterns like dependent
+options and conditional configurations:
+
+~~~~ typescript twoslash
+import {
+  type InferValue,
+  flag,
+  merge,
+  object,
+  option,
+  withDefault,
+  map,
+} from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+// Dependent options pattern: options that are only available when a flag is set
+const dependentOptions = withDefault(
+  object({
+    feature: flag("-f", "--feature"),
+    config: option("-c", "--config", string()),
+    level: option("-l", "--level", integer())
+  }),
+  { feature: false as const } as const
+);
+
+// Transform parser results
+const transformedConfig = map(
+  object({
+    host: option("--host", string()),
+    port: option("--port", integer())
+  }),
+  ({ host, port }) => ({ endpoint: `${host}:${port}` })
+);
+
+// Combine different parser types
+const advancedParser = merge(
+  dependentOptions,           // withDefault() parser
+  transformedConfig,          // map() result
+  object({                    // traditional object() parser
+    verbose: option("-v", "--verbose")
+  })
+);
+
+type Result = InferValue<typeof advancedParser>;
+//   ^?
+
+
+
+
+
+
+
+
+
+
+
+
+
+const result: Result = run(advancedParser);
+~~~~
+
+### Dependent options pattern
+
+A common use case is creating options that are only relevant when certain
+conditions are met:
+
+~~~~ typescript twoslash
+import { flag, merge, object, option, withDefault } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+// ---cut-before---
+const serverMode = withDefault(
+  object({
+    server: flag("-s", "--server"),
+    port: option("-p", "--port", integer()),
+    host: option("-h", "--host", string()),
+    workers: option("-w", "--workers", integer())
+  }),
+  { server: false as const } as const
+);
+
+const globalOptions = object({
+  verbose: option("-v", "--verbose"),
+  config: option("-c", "--config", string())
+});
+
+const appConfig = merge(serverMode, globalOptions);
+
+// Usage examples:
+// myapp -v -c config.json              → server mode disabled
+// myapp -s -p 8080 -h localhost -v     → server mode with port and host
+// myapp -s -p 3000 -w 4 -c prod.json   → full server configuration
+~~~~
+
+### Type inference and merging
+
+The `merge()` parser intelligently combines the types of all merged parsers,
+regardless of their original parser type:
 
 ~~~~ typescript twoslash
 import { type InferValue, merge, object, option } from "@optique/core/parser";
@@ -426,6 +528,61 @@ type Options = InferValue<typeof allOptions>;
 
 
 // Type automatically inferred as above.
+~~~~
+
+When combining different parser types, the merge result maintains full type
+safety while accounting for the unique characteristics of each parser:
+
+~~~~ typescript twoslash
+import { type InferValue, flag, merge, object, option, withDefault, map } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+// ---cut-before---
+const conditionalFeatures = withDefault(
+  object({
+    experimental: flag("--experimental"),
+    debugLevel: option("--debug-level", integer())
+  }),
+  { experimental: false as const } as const
+);
+
+const transformedSettings = map(
+  object({
+    theme: option("--theme", string()),
+    lang: option("--language", string())
+  }),
+  ({ theme, lang }) => ({
+    locale: `${lang}_${theme.toUpperCase()}`,
+    settings: { theme, lang }
+  })
+);
+
+const complexConfig = merge(
+  conditionalFeatures,
+  transformedSettings,
+  object({
+    version: option("--version", string())
+  })
+);
+
+type ComplexConfig = InferValue<typeof complexConfig>;
+//   ^?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Type automatically inferred with conditional fields and transformations.
 ~~~~
 
 

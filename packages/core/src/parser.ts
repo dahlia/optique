@@ -1221,35 +1221,65 @@ export function object<
           : message`Expected an option or argument, but got end of input.`,
       };
 
-      for (const [field, parser] of parserPairs) {
-        const result = parser.parse({
-          ...context,
-          state: context.state[field],
-        });
-        if (result.success && result.consumed.length > 0) {
-          return {
-            success: true,
-            next: {
-              ...context,
+      // Try greedy parsing: attempt to consume as many fields as possible
+      let currentContext = context;
+      let anySuccess = false;
+      const allConsumed: string[] = [];
+
+      // Keep trying to parse fields until no more can be matched
+      let madeProgress = true;
+      while (madeProgress && currentContext.buffer.length > 0) {
+        madeProgress = false;
+
+        for (const [field, parser] of parserPairs) {
+          const result = parser.parse({
+            ...currentContext,
+            state: (currentContext.state &&
+                typeof currentContext.state === "object" &&
+                field in currentContext.state)
+              ? currentContext.state[field]
+              : parser.initialState,
+          });
+
+          if (result.success && result.consumed.length > 0) {
+            currentContext = {
+              ...currentContext,
               buffer: result.next.buffer,
               optionsTerminated: result.next.optionsTerminated,
               state: {
-                ...context.state,
+                ...currentContext.state,
                 [field]: result.next.state,
               },
-            },
-            consumed: result.consumed,
-          };
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+            };
+            allConsumed.push(...result.consumed);
+            anySuccess = true;
+            madeProgress = true;
+            break; // Restart the field loop with updated context
+          } else if (!result.success && error.consumed < result.consumed) {
+            error = result;
+          }
         }
+      }
+
+      // If we consumed any input, return success
+      if (anySuccess) {
+        return {
+          success: true,
+          next: currentContext,
+          consumed: allConsumed,
+        };
       }
 
       // If buffer is empty and no parser consumed input, check if all parsers can complete
       if (context.buffer.length === 0) {
         let allCanComplete = true;
         for (const [field, parser] of parserPairs) {
-          const completeResult = parser.complete(context.state[field]);
+          const fieldState =
+            (context.state && typeof context.state === "object" &&
+                field in context.state)
+              ? context.state[field]
+              : parser.initialState;
+          const completeResult = parser.complete(fieldState);
           if (!completeResult.success) {
             allCanComplete = false;
             break;
@@ -2122,6 +2152,21 @@ export function or(
 }
 
 /**
+ * Helper type to check if all members of a union are object-like.
+ * This allows merge() to work with parsers like withDefault() that produce union types.
+ */
+type AllObjectLike<T> = T extends Record<string | symbol, unknown> ? T : never;
+
+/**
+ * Helper type to extract object-like types from parser value types,
+ * including union types where all members are objects.
+ */
+type ExtractObjectTypes<P> = P extends Parser<infer V, unknown>
+  ? [AllObjectLike<V>] extends [never] ? never
+  : V
+  : never;
+
+/**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
  * It is useful for combining multiple {@link object} parsers so that
  * the unified parser produces a single object containing all the values
@@ -2135,26 +2180,18 @@ export function or(
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<
-    Record<string | symbol, unknown>,
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+>(
+  a: TA,
+  b: TB,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>,
     Record<string | symbol, unknown>
-  >,
-  TB extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
->(a: TA, b: TB): Parser<
-  & {
-    readonly [K in keyof TA["$valueType"][number]]:
-      TA["$valueType"][number][K] extends (infer U) ? U : never;
-  }
-  & {
-    readonly [K in keyof TB["$valueType"][number]]:
-      TB["$valueType"][number][K] extends (infer U2) ? U2 : never;
-  },
-  & { readonly [K in keyof TA]: unknown }
-  & { readonly [K in keyof TB]: unknown }
->;
+  >;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -2172,35 +2209,22 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<
-    Record<string | symbol, unknown>,
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+>(
+  a: TA,
+  b: TB,
+  c: TC,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>,
     Record<string | symbol, unknown>
-  >,
-  TB extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
-  TC extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
->(a: TA, b: TB, c: TC): Parser<
-  & {
-    readonly [K in keyof TA["$valueType"][number]]:
-      TA["$valueType"][number][K] extends (infer U) ? U : never;
-  }
-  & {
-    readonly [K in keyof TB["$valueType"][number]]:
-      TB["$valueType"][number][K] extends (infer U2) ? U2 : never;
-  }
-  & {
-    readonly [K in keyof TC["$valueType"][number]]:
-      TC["$valueType"][number][K] extends (infer U3) ? U3 : never;
-  },
-  & { readonly [K in keyof TA]: unknown }
-  & { readonly [K in keyof TB]: unknown }
-  & { readonly [K in keyof TC]: unknown }
->;
+  >;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -2220,44 +2244,26 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<
-    Record<string | symbol, unknown>,
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+>(
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>,
     Record<string | symbol, unknown>
-  >,
-  TB extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
-  TC extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
-  TD extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
->(a: TA, b: TB, c: TC, d: TD): Parser<
-  & {
-    readonly [K in keyof TA["$valueType"][number]]:
-      TA["$valueType"][number][K] extends (infer U) ? U : never;
-  }
-  & {
-    readonly [K in keyof TB["$valueType"][number]]:
-      TB["$valueType"][number][K] extends (infer U2) ? U2 : never;
-  }
-  & {
-    readonly [K in keyof TC["$valueType"][number]]:
-      TC["$valueType"][number][K] extends (infer U3) ? U3 : never;
-  }
-  & {
-    readonly [K in keyof TD["$valueType"][number]]:
-      TD["$valueType"][number][K] extends (infer U4) ? U4 : never;
-  },
-  & { readonly [K in keyof TA]: unknown }
-  & { readonly [K in keyof TB]: unknown }
-  & { readonly [K in keyof TC]: unknown }
-  & { readonly [K in keyof TD]: unknown }
->;
+  >;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -2279,53 +2285,30 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<
-    Record<string | symbol, unknown>,
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+  TE extends Parser<unknown, unknown>,
+>(
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+  e: TE,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : ExtractObjectTypes<TE> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>
+    & ExtractObjectTypes<TE>,
     Record<string | symbol, unknown>
-  >,
-  TB extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
-  TC extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
-  TD extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
-  TE extends Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >,
->(a: TA, b: TB, c: TC, d: TD, e: TE): Parser<
-  & {
-    readonly [K in keyof TA["$valueType"][number]]:
-      TA["$valueType"][number][K] extends (infer U) ? U : never;
-  }
-  & {
-    readonly [K in keyof TB["$valueType"][number]]:
-      TB["$valueType"][number][K] extends (infer U2) ? U2 : never;
-  }
-  & {
-    readonly [K in keyof TC["$valueType"][number]]:
-      TC["$valueType"][number][K] extends (infer U3) ? U3 : never;
-  }
-  & {
-    readonly [K in keyof TD["$valueType"][number]]:
-      TD["$valueType"][number][K] extends (infer U4) ? U4 : never;
-  }
-  & {
-    readonly [K in keyof TE["$valueType"][number]]:
-      TE["$valueType"][number][K] extends (infer U5) ? U5 : never;
-  },
-  & { readonly [K in keyof TA]: unknown }
-  & { readonly [K in keyof TB]: unknown }
-  & { readonly [K in keyof TC]: unknown }
-  & { readonly [K in keyof TD]: unknown }
-  & { readonly [K in keyof TE]: unknown }
->;
+  >;
 
 export function merge(
   ...parsers: Parser<
@@ -2339,8 +2322,10 @@ export function merge(
   parsers = parsers.toSorted((a, b) => b.priority - a.priority);
   const initialState: Record<string | symbol, unknown> = {};
   for (const parser of parsers) {
-    for (const field in parser.initialState) {
-      initialState[field] = parser.initialState[field];
+    if (parser.initialState && typeof parser.initialState === "object") {
+      for (const field in parser.initialState) {
+        initialState[field] = parser.initialState[field];
+      }
     }
   }
   return {
@@ -2350,19 +2335,62 @@ export function merge(
     usage: parsers.flatMap((p) => p.usage),
     initialState,
     parse(context) {
-      for (const parser of parsers) {
-        const result = parser.parse(context);
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        // Extract the appropriate state for this parser
+        let parserState: unknown;
+        if (parser.initialState === undefined) {
+          // For parsers with undefined initialState, they might still have state in the merged context
+          // We need to pass undefined only if no relevant state exists
+          parserState = undefined;
+        } else if (
+          parser.initialState && typeof parser.initialState === "object"
+        ) {
+          // For object parsers, extract matching fields from context state
+          if (context.state && typeof context.state === "object") {
+            const extractedState: Record<string | symbol, unknown> = {};
+            for (const field in parser.initialState) {
+              extractedState[field] = field in context.state
+                ? context.state[field]
+                : parser.initialState[field];
+            }
+            parserState = extractedState;
+          } else {
+            parserState = parser.initialState;
+          }
+        } else {
+          parserState = parser.initialState;
+        }
+
+        const result = parser.parse({
+          ...context,
+          state: parserState as Parameters<typeof parser.parse>[0]["state"],
+        });
         if (result.success) {
+          // Handle state merging based on parser type
+          let newState: Record<string | symbol, unknown>;
+          if (parser.initialState === undefined) {
+            // For parsers with undefined initialState (like withDefault()),
+            // store their state separately to avoid conflicts with object merging
+            newState = {
+              ...context.state,
+              [`__parser_${i}`]: result.next.state,
+            };
+          } else {
+            // For regular object parsers, use the original merging approach
+            newState = {
+              ...context.state,
+              ...result.next.state,
+            };
+          }
+
           return {
             success: true,
             next: {
               ...context,
               buffer: result.next.buffer,
               optionsTerminated: result.next.optionsTerminated,
-              state: {
-                ...context.state,
-                ...result.next.state,
-              },
+              state: newState,
             },
             consumed: result.consumed,
           };
@@ -2377,8 +2405,42 @@ export function merge(
     },
     complete(state) {
       const object: Record<string | symbol, unknown> = {};
-      for (const parser of parsers) {
-        const result = parser.complete(state);
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        // Each parser should get its appropriate state for completion
+        let parserState: unknown;
+        if (parser.initialState === undefined) {
+          // For parsers with undefined initialState (like withDefault()),
+          // check if they have accumulated state during parsing
+          const key = `__parser_${i}`;
+          if (state && typeof state === "object" && key in state) {
+            parserState = state[key];
+          } else {
+            parserState = undefined;
+          }
+        } else if (
+          parser.initialState && typeof parser.initialState === "object"
+        ) {
+          // For object() parsers, extract their portion of the state
+          if (state && typeof state === "object") {
+            const extractedState: Record<string | symbol, unknown> = {};
+            for (const field in parser.initialState) {
+              extractedState[field] = field in state
+                ? state[field]
+                : parser.initialState[field];
+            }
+            parserState = extractedState;
+          } else {
+            parserState = parser.initialState;
+          }
+        } else {
+          parserState = parser.initialState;
+        }
+
+        // Type assertion is safe here because we're matching each parser with its expected state type
+        const result = parser.complete(
+          parserState as Parameters<typeof parser.complete>[0],
+        );
         if (!result.success) return result;
         for (const field in result.value) object[field] = result.value[field];
       }
