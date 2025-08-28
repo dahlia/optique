@@ -1,3 +1,4 @@
+/.claude/settings.local.json
 /.playwright-mcp/
 /example.ts
 /examples/*/dist/
