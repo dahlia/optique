@@ -989,6 +989,8 @@ const config = run(parser, {
 
 
 
+
+
   args: [
     "--host", "0.0.0.0",
     "--port", "8080",
@@ -1236,7 +1238,7 @@ const config = run(parser, "myapp", process.argv.slice(2), {
 
 
   onError: process.exit,
-  onHelp: process.exit,
+  help: { onShow: process.exit },
 });
 
 console.log(`Processing ${config.input} -> ${config.output}`);
@@ -1299,10 +1301,7 @@ const parser = object({
 const config = run(parser, {
   programName: "my-tool", // Override detected program name (default: process.argv[1])
   help: "both",           // Enable --help option AND help subcommand
-},
-// ^?
-
-
+ // ^?
 
 
 
