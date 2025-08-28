@@ -647,8 +647,26 @@ export function run<
           commandContext = parsedValue.commands as readonly string[];
         }
 
+        let helpGeneratorParser: Parser<unknown, unknown>;
+        const helpAsCommand = help === "command" || help === "both";
+        const versionAsCommand = version === "command" || version === "both";
+
+        if (helpAsCommand && versionAsCommand) {
+          helpGeneratorParser = longestMatch(
+            parser,
+            helpCommand,
+            versionCommand,
+          );
+        } else if (helpAsCommand) {
+          helpGeneratorParser = longestMatch(parser, helpCommand);
+        } else if (versionAsCommand) {
+          helpGeneratorParser = longestMatch(parser, versionCommand);
+        } else {
+          helpGeneratorParser = parser;
+        }
+
         const doc = getDocPage(
-          commandContext.length < 1 ? augmentedParser : parser,
+          commandContext.length < 1 ? helpGeneratorParser : parser,
           commandContext,
         );
         if (doc != null) {
