@@ -133,6 +133,258 @@ describe("run", () => {
     });
   });
 
+  describe("version functionality", () => {
+    it("should show version with --version option when version is enabled", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionShown = false;
+      let versionOutput = "";
+
+      const result = run(parser, "test", ["--version"], {
+        version: {
+          mode: "option",
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
+          },
+        },
+        stdout: (text) => {
+          versionOutput = text;
+        },
+      });
+
+      assert.equal(result, "version-shown");
+      assert.ok(versionShown);
+      assert.equal(versionOutput, "1.0.0");
+    });
+
+    it("should show version with version command when version mode is 'command'", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionShown = false;
+      let versionOutput = "";
+
+      const result = run(parser, "test", ["version"], {
+        version: {
+          mode: "command",
+          value: "2.1.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
+          },
+        },
+        stdout: (text) => {
+          versionOutput = text;
+        },
+        stderr: () => {},
+      });
+
+      assert.equal(result, "version-shown");
+      assert.ok(versionShown);
+      assert.equal(versionOutput, "2.1.0");
+    });
+
+    it("should support both --version and version command when mode is 'both'", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionOutput = "";
+
+      // Test --version option
+      const result1 = run(parser, "test", ["--version"], {
+        version: {
+          mode: "both",
+          value: "3.0.0",
+          onShow: () => "version-shown",
+        },
+        stdout: (text) => {
+          versionOutput = text;
+        },
+      });
+
+      assert.equal(result1, "version-shown");
+      assert.equal(versionOutput, "3.0.0");
+
+      // Test version command
+      versionOutput = "";
+      const result2 = run(parser, "test", ["version"], {
+        version: {
+          mode: "both",
+          value: "3.0.0",
+          onShow: () => "version-shown",
+        },
+        stdout: (text) => {
+          versionOutput = text;
+        },
+        stderr: () => {},
+      });
+
+      assert.equal(result2, "version-shown");
+      assert.equal(versionOutput, "3.0.0");
+    });
+
+    it("should not provide version when version is not configured (default)", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      assert.throws(() => {
+        run(parser, "test", ["--version"]);
+      }, RunError);
+    });
+
+    it("should pass exit code 0 to onShow callback", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let receivedExitCode: number | undefined;
+
+      run(parser, "test", ["--version"], {
+        version: {
+          mode: "option",
+          value: "1.0.0",
+          onShow: (exitCode) => {
+            receivedExitCode = exitCode;
+            return "version-shown";
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.equal(receivedExitCode, 0);
+    });
+
+    it("should prioritize version over help when both --version and --help are provided", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionShown = false;
+      let helpShown = false;
+      let versionOutput = "";
+
+      const result = run(parser, "test", ["--version", "--help"], {
+        help: {
+          mode: "both",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
+        },
+        version: {
+          mode: "option",
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
+          },
+        },
+        stdout: (text) => {
+          versionOutput = text;
+        },
+      });
+
+      assert.equal(result, "version-shown");
+      assert.ok(versionShown);
+      assert.ok(!helpShown);
+      assert.equal(versionOutput, "1.0.0");
+    });
+
+    it("should handle version command with help option available", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionShown = false;
+      let versionOutput = "";
+
+      const result = run(parser, "test", ["version"], {
+        help: {
+          mode: "both",
+          onShow: () => "help-shown",
+        },
+        version: {
+          mode: "command",
+          value: "2.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
+          },
+        },
+        stdout: (text) => {
+          versionOutput = text;
+        },
+        stderr: () => {},
+      });
+
+      assert.equal(result, "version-shown");
+      assert.ok(versionShown);
+      assert.equal(versionOutput, "2.0.0");
+    });
+
+    it("should handle help command with version option available", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let helpShown = false;
+      let helpOutput = "";
+
+      const result = run(parser, "test", ["help"], {
+        help: {
+          mode: "command",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
+        },
+        version: {
+          mode: "both",
+          value: "3.0.0",
+          onShow: () => "version-shown",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+        stderr: () => {},
+      });
+
+      assert.equal(result, "help-shown");
+      assert.ok(helpShown);
+      assert.ok(helpOutput.includes("Usage: test"));
+    });
+
+    it("should work with onShow callback without exit code parameter", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionCalled = false;
+
+      const result = run(parser, "test", ["--version"], {
+        version: {
+          mode: "option",
+          value: "1.0.0",
+          onShow: () => {
+            versionCalled = true;
+            return "version-shown";
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(versionCalled);
+      assert.equal(result, "version-shown");
+    });
+  });
+
   describe("error handling", () => {
     it("should throw RunError by default on parse failure", () => {
       const parser = object({

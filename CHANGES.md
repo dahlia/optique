@@ -82,6 +82,26 @@ To be released.
     });
     ~~~~
 
+ -  Added `version` functionality to the `run()` function, supporting both
+    `--version` option and `version` command modes:
+
+    ~~~~ typescript
+    run(parser, args, {
+      version: {
+        mode: "option",         // "command" | "option" | "both"
+        value: "1.0.0",         // Version string to display
+        onShow: process.exit,   // Optional callback
+      }
+    });
+    ~~~~
+
+    The `version` configuration follows the same pattern as `help`, with
+    three modes:
+
+     -  `"option"`: Only `--version` flag is available
+     -  `"command"`: Only `version` subcommand is available
+     -  `"both"`: Both `--version` and `version` subcommand work
+
 ### @optique/run
 
  -  The `run()` function now provides context-aware help behavior,
@@ -106,6 +126,26 @@ To be released.
 
     The help option now only accepts `"command" | "option" | "both"`. To
     disable help functionality, simply omit the `help` option entirely.
+
+ -  Added `version` functionality with a flexible API that supports both
+    simple string and detailed object configurations:
+
+    ~~~~ typescript
+    // Simple version configuration (uses default "option" mode)
+    run(parser, { version: "1.0.0" });
+
+    // Advanced version configuration
+    run(parser, {
+      version: {
+        value: "1.0.0",
+        mode: "both"  // "command" | "option" | "both"
+      }
+    });
+    ~~~~
+
+    The version functionality automatically calls `process.exit(0)` when
+    version information is requested, making it suitable for CLI applications
+    that need to display version and exit.
 
 
 Version 0.2.0

@@ -48,5 +48,8 @@ const listCommand = command(
 
 const parser = or(addCommand, removeCommand, editCommand, listCommand);
 
-const result = run(parser, { help: "both" });
+const result = run(parser, {
+  help: "both",
+  version: { mode: "both", value: "1.0.0" },
+});
 console.log(result);

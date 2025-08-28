@@ -48,6 +48,21 @@ export interface RunOptions {
   readonly help?: "command" | "option" | "both";
 
   /**
+   * Version configuration. Determines how version is made available:
+   *
+   * - `string`: Version value with default `"option"` mode (--version only)
+   * - `object`: Advanced configuration with version value and mode
+   *   - `value`: The version string to display
+   *   - `mode`: "command" | "option" | "both" (default: "option")
+   *
+   * When not provided, version functionality is disabled.
+   */
+  readonly version?: string | {
+    readonly value: string;
+    readonly mode?: "command" | "option" | "both";
+  };
+
+  /**
    * What to display above error messages:
    *
    * - `"usage"`: Show usage line before error message
@@ -125,6 +140,7 @@ export function run<T extends Parser<unknown, unknown>>(
     colors = process.stdout.isTTY,
     maxWidth = process.stdout.columns,
     help,
+    version,
     aboveError = "usage",
     errorExitCode = 1,
   } = options;
@@ -137,10 +153,22 @@ export function run<T extends Parser<unknown, unknown>>(
     }
     : undefined;
 
+  // Convert version configuration for the base run function
+  const versionConfig = version
+    ? {
+      mode: typeof version === "string"
+        ? "option" as const
+        : (version.mode ?? "option"),
+      value: typeof version === "string" ? version : version.value,
+      onShow: () => process.exit(0) as never,
+    }
+    : undefined;
+
   return runBase<T, never, never>(parser, programName, args, {
     colors,
     maxWidth,
     help: helpConfig,
+    version: versionConfig,
     aboveError,
     onError() {
       return process.exit(errorExitCode) as never;

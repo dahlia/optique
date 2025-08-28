@@ -107,6 +107,11 @@ const config = run(
       mode: "both",               // Enable --help and help command
       onShow: process.exit,       // Exit after showing help
     },
+    version: {                    // Version functionality
+      mode: "option",             // Enable --version flag
+      value: "1.0.0",             // Version string to display
+      onShow: process.exit,       // Exit after showing version
+    },
     colors: process.stdout.isTTY, // Auto-detect color support
     onError: process.exit,        // Exit with error code
   }
@@ -126,8 +131,9 @@ console.log(`Starting ${config.name} on port ${config.port}`);
 This approach automatically handles:
 
  -  *Help generation*: Creates formatted help text from parser structure
+ -  *Version display*: Shows version information via `--version` or `version` command
  -  *Error formatting*: Shows clear error messages with usage information
- -  *Option parsing*: Recognizes `--help` flags and `help` subcommands
+ -  *Option parsing*: Recognizes `--help`/`--version` flags and `help`/`version` subcommands
  -  *Usage display*: Shows command syntax when errors occur
 
 The `RunOptions` interface provides extensive customization:
@@ -144,6 +150,10 @@ const result = run(parser, "myapp", ["--name", "test"], {
   maxWidth: 80,          // Wrap text at 80 columns
   help: {                // New grouped API
     mode: "option",      // Only --help option, no help command
+  },
+  version: {             // Version functionality
+    mode: "both",        // Both --version option and version command
+    value: "2.1.0",      // Version string to display
   },
   aboveError: "help",    // Show full help before error messages
   stderr: (text) => {    // Custom error output handler
@@ -196,6 +206,7 @@ The function automatically:
  -  *Auto-detects colors* from `process.stdout.isTTY`
  -  *Auto-detects width* from `process.stdout.columns`
  -  *Exits on help* with code 0
+ -  *Exits on version* with code 0
  -  *Exits on error* with code 1
 
 You can still customize behavior when needed:
@@ -210,6 +221,7 @@ const parser = object({ name: option("-n", "--name", string()) });
 const config = run(parser, {
   programName: "custom-name",  // Override detected program name
   help: "both",               // Enable both --help and help command
+  version: "1.2.0",           // Simple version string (uses default "option" mode)
   colors: true,               // Force colors even for non-TTY
   errorExitCode: 2,           // Exit with code 2 on errors
 });
@@ -239,6 +251,10 @@ const config = run(parser, {
   colors: true,               // Force colored output
   maxWidth: 100,              // Set output width
   help: "both",               // Enable both --help and help command
+  version: {                  // Advanced version configuration
+    value: "2.0.0",           // Version string
+    mode: "command"           // Only version command, no --version option
+  },
   aboveError: "usage",        // Show usage on errors
   errorExitCode: 2            // Exit code for errors
 });
@@ -272,12 +288,55 @@ const result3 = run(parser, {
 const result4 = run(parser, {});
 ~~~~
 
+### Version system options
+
+Enable built-in version functionality with flexible configuration:
+
+~~~~ typescript twoslash
+import { run } from "@optique/run";
+import { object, option } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({ name: option("-n", "--name", string()) });
+
+// Simple string-based API (uses default "option" mode)
+const result1 = run(parser, {
+  version: "1.0.0",  // Adds --version option only
+});
+
+// Advanced object-based API with mode selection
+const result2 = run(parser, {
+  version: {
+    value: "1.0.0",
+    mode: "option",   // Adds --version option only
+  }
+});
+
+const result3 = run(parser, {
+  version: {
+    value: "1.0.0", 
+    mode: "command",  // Adds version subcommand only
+  }
+});
+
+const result4 = run(parser, {
+  version: {
+    value: "1.0.0",
+    mode: "both",     // Adds both --version and version command
+  }
+});
+
+// No version (default) - simply omit the version option
+const result5 = run(parser, {});
+~~~~
+
 ### Error handling behavior
 
 The *@optique/run* `run()` function automatically:
 
  -  Prints usage information and error messages to stderr
  -  Exits with code `0` for help requests
+ -  Exits with code `0` for version requests
  -  Exits with code `1` (or custom) for parse errors
  -  Never returns on errors (always calls `process.exit()`)
 
