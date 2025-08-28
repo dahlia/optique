@@ -722,4 +722,278 @@ combines tuple parsers by flattening their positional elements:
 Both provide compositional design patterns but serve different structural needs
 in CLI applications.
 
+
+`longestMatch()` parser
+-----------------------
+
+*This API is available since Optique 0.3.0.*
+
+The `longestMatch()` parser combines multiple mutually exclusive parsers by
+selecting the parser that consumes the most input tokens. Unlike `or()` which
+returns the first successful match, `longestMatch()` tries all parsers and
+selects the one with the longest match. This enables context-aware parsing
+where more specific patterns take precedence over general ones.
+
+~~~~ typescript twoslash
+import {
+  type InferValue,
+  argument,
+  constant,
+  flag,
+  longestMatch,
+  object,
+} from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+
+const globalHelp = object({
+  type: constant("global"),
+  help: flag("--help"),
+});
+
+const contextualHelp = object({
+  type: constant("contextual"),
+  command: argument(string({ metavar: "COMMAND" })),
+  help: flag("--help"),
+});
+
+const parser = longestMatch(globalHelp, contextualHelp);
+
+type Result = InferValue<typeof parser>;
+//   ^?
+
+
+
+
+
+
+
+
+
+
+// Usage examples:
+// myapp --help              → globalHelp (1 token: --help)
+// myapp list --help         → contextualHelp (2 tokens: list --help)
+~~~~
+
+### Longest match selection
+
+The key behavior of `longestMatch()` is selecting the parser that consumes
+the most tokens from the input:
+
+~~~~ typescript twoslash
+import { constant, longestMatch, object, flag, argument, parse } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+const shortPattern = object({
+  type: constant("short"),
+  help: flag("--help"),
+});
+
+const longPattern = object({
+  type: constant("long"),
+  command: argument(string()),
+  help: flag("--help"),
+});
+
+const parser = longestMatch(shortPattern, longPattern);
+
+// Short pattern matches: consumes 1 token (--help)
+const shortResult = parse(parser, ["--help"]);
+if (shortResult.success) {
+  console.log(shortResult.value.type); // "short"
+}
+
+// Long pattern matches: consumes 2 tokens (list --help)
+const longResult = parse(parser, ["list", "--help"]);
+if (longResult.success) {
+  console.log(longResult.value.type); // "long"
+}
+~~~~
+
+### Context-aware help systems
+
+The most common use case for `longestMatch()` is implementing context-aware
+help systems where `command --help` shows help for that specific command:
+
+~~~~ typescript twoslash
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  longestMatch,
+  multiple,
+  object,
+  option,
+  optional,
+  or,
+} from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+// Define your application commands
+const addCommand = command(
+  "add",
+  object({
+    action: constant("add"),
+    key: argument(string({ metavar: "KEY" })),
+    value: argument(string({ metavar: "VALUE" })),
+  }),
+);
+
+const listCommand = command(
+  "list",
+  object({
+    action: constant("list"),
+    pattern: optional(
+      option("-p", "--pattern", string({ metavar: "PATTERN" })),
+    ),
+  }),
+);
+
+// Normal command parsing
+const normalParser = object({
+  help: constant(false),
+  result: or(addCommand, listCommand),
+});
+
+// Context-aware help parsing
+const contextualHelpParser = object({
+  help: constant(true),
+  commands: multiple(argument(string({ metavar: "COMMAND" }))),
+  flag: flag("--help"),
+});
+
+// Combine with longestMatch for intelligent help selection
+const parser = longestMatch(normalParser, contextualHelpParser);
+
+// Normal usage works as expected:
+// myapp add key1 value1     → normalParser (3 tokens)
+// myapp list -p "*.txt"     → normalParser (3 tokens)
+
+// Context-aware help automatically activates:
+// myapp list --help         → contextualHelpParser (2 tokens: ["list"])
+// myapp add --help          → contextualHelpParser (2 tokens: ["add"])
+~~~~
+
+### Type inference and unions
+
+Like `or()`, `longestMatch()` creates discriminated union types when used with
+parsers that produce different shaped objects:
+
+~~~~ typescript twoslash
+import { type InferValue, constant, longestMatch, object, option, parse } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+// ---cut-before---
+const stringMode = object({
+  mode: constant("string" as const),
+  value: option("-s", "--string", string()),
+});
+
+const numberMode = object({
+  mode: constant("number" as const),
+  value: option("-n", "--number", integer()),
+});
+
+const parser = longestMatch(stringMode, numberMode);
+
+type Config = InferValue<typeof parser>;
+//   ^?
+
+
+
+
+
+
+
+
+
+
+// Type-safe pattern matching
+const result = parse(parser, ["-s", "hello"]);
+if (result.success) {
+  switch (result.value.mode) {
+    case "string":
+      // TypeScript knows this is string config
+      console.log(`String value: ${result.value.value}`);
+      break;
+    case "number":
+      // TypeScript knows this is number config
+      console.log(`Number value: ${result.value.value}`);
+      break;
+  }
+}
+~~~~
+
+### Usage patterns and best practices
+
+Use `longestMatch()` when you need:
+
+ -  *Context-aware behavior*: Different parsing based on how much input is
+    consumed
+ -  *Precedence by specificity*: More specific patterns should win over
+    general ones
+ -  *Greedy matching*: Always prefer the parser that consumes the most tokens
+ -  *Help system integration*: Context-sensitive help that shows relevant
+    information
+
+~~~~ typescript twoslash
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  longestMatch,
+  multiple,
+  object,
+  option,
+  optional,
+  or,
+} from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+// Example: Git-like CLI with context-aware help
+const gitAdd = command("add", object({
+  action: constant("add"),
+  files: multiple(argument(string())),
+  all: optional(option("-A", "--all")),
+}));
+
+const gitCommit = command("commit", object({
+  action: constant("commit"),
+  message: option("-m", "--message", string()),
+}));
+
+const normalCommands = object({
+  help: constant(false),
+  command: or(gitAdd, gitCommit),
+});
+
+const helpParser = object({
+  help: constant(true),
+  commands: multiple(argument(string())),
+  helpFlag: flag("--help"),
+});
+
+const cli = longestMatch(normalCommands, helpParser);
+
+// Usage patterns:
+// git add file.txt --all      → normalCommands (gitAdd)
+// git commit -m "message"     → normalCommands (gitCommit)
+// git add --help              → helpParser (commands: ["add"])
+// git commit --help           → helpParser (commands: ["commit"])
+// git --help                  → helpParser (commands: [])
+~~~~
+
+### Relationship to other combinators
+
+| Combinator       | Selection strategy     | Use case                         |
+| ---------------- | ---------------------- | -------------------------------- |
+| `or()`           | First successful match | Mutually exclusive alternatives  |
+| `longestMatch()` | Most tokens consumed   | Context-aware and greedy parsing |
+| `merge()`        | Combines all parsers   | Composing complementary parsers  |
+
+The `longestMatch()` combinator bridges the gap between simple alternatives
+(`or()`) and complex composition (`merge()`) by providing intelligent selection
+based on input consumption.
+
 <!-- cSpell: ignore myapp -->

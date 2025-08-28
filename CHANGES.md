@@ -50,6 +50,33 @@ To be released.
      -  Changed the type of `Parser.getDocFragments()`'s first parameter
         from `TState` to `DocState<TState>`.
 
+ -  Added `longestMatch()` combinator that selects the parser which consumes
+    the most input tokens. Unlike `or()` which returns the first successful
+    match, `longestMatch()` tries all provided parsers and chooses the one
+    with the longest match. This enables context-aware parsing where more
+    specific patterns take precedence over general ones, making it ideal for
+    implementing sophisticated help systems where `command --help` shows
+    command-specific help rather than global help. The combinator supports
+    function overloads for 2–5 parsers plus a variadic version, with full
+    type inference for discriminated union results.
+
+ -  Modified `run()` function in `@optique/core/facade` to use `longestMatch()`
+    instead of `or()` for help parsing. This enables context-aware help behavior
+    where `subcommand --help` shows help specific to that command instead of
+    global help. For example, `myapp list --help` now displays help for
+    the `list` command rather than the global application help.
+    This change affects all help modes (`"command"`, `"option"`, and
+    `"both"`). Applications using the `run()` function will automatically
+    benefit from improved help UX without code changes.
+
+### @optique/run
+
+ -  The `run()` function now provides context-aware help behavior,
+    automatically inheriting the improvements from `@optique/core/facade`.
+    Applications using `@optique/run` will see the same enhanced help system
+    where `subcommand --help` shows command-specific help instead of global
+    help.
+
 
 Version 0.2.0
 -------------

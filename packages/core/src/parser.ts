@@ -2211,6 +2211,258 @@ export function or(
 }
 
 /**
+ * Creates a parser that combines two mutually exclusive parsers into one,
+ * selecting the parser that consumes the most tokens.
+ * The resulting parser will try both parsers and return the result
+ * of the parser that consumed more input tokens.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @returns A {@link Parser} that tries to parse using both parsers
+ *          and returns the result of the parser that consumed more tokens.
+ * @since 0.3.0
+ */
+export function longestMatch<TA, TB, TStateA, TStateB>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+): Parser<
+  TA | TB,
+  undefined | [0, ParserResult<TStateA>] | [1, ParserResult<TStateB>]
+>;
+
+/**
+ * Creates a parser that combines three mutually exclusive parsers into one,
+ * selecting the parser that consumes the most tokens.
+ * The resulting parser will try all parsers and return the result
+ * of the parser that consumed the most input tokens.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @returns A {@link Parser} that tries to parse using all parsers
+ *          and returns the result of the parser that consumed the most tokens.
+ * @since 0.3.0
+ */
+export function longestMatch<TA, TB, TC, TStateA, TStateB, TStateC>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+): Parser<
+  TA | TB | TC,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+>;
+
+/**
+ * Creates a parser that combines four mutually exclusive parsers into one,
+ * selecting the parser that consumes the most tokens.
+ * The resulting parser will try all parsers and return the result
+ * of the parser that consumed the most input tokens.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @returns A {@link Parser} that tries to parse using all parsers
+ *          and returns the result of the parser that consumed the most tokens.
+ * @since 0.3.0
+ */
+export function longestMatch<
+  TA,
+  TB,
+  TC,
+  TD,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+): Parser<
+  TA | TB | TC | TD,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+>;
+
+/**
+ * Creates a parser that combines five mutually exclusive parsers into one,
+ * selecting the parser that consumes the most tokens.
+ * The resulting parser will try all parsers and return the result
+ * of the parser that consumed the most input tokens.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @returns A {@link Parser} that tries to parse using all parsers
+ *          and returns the result of the parser that consumed the most tokens.
+ * @since 0.3.0
+ */
+export function longestMatch<
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+>(
+  a: Parser<TA, TStateA>,
+  b: Parser<TB, TStateB>,
+  c: Parser<TC, TStateC>,
+  d: Parser<TD, TStateD>,
+  e: Parser<TE, TStateE>,
+): Parser<
+  TA | TB | TC | TD | TE,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+>;
+
+export function longestMatch(
+  ...parsers: Parser<unknown, unknown>[]
+): Parser<unknown, undefined | [number, ParserResult<unknown>]> {
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: Math.max(...parsers.map((p) => p.priority)),
+    usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    initialState: undefined,
+    complete(
+      state: undefined | [number, ParserResult<unknown>],
+    ): ValueParserResult<unknown> {
+      if (state == null) {
+        return { success: false, error: message`No parser matched.` };
+      }
+      const [i, result] = state;
+      if (result.success) return parsers[i].complete(result.next.state);
+      return { success: false, error: result.error };
+    },
+    parse(
+      context: ParserContext<[number, ParserResult<unknown>]>,
+    ): ParserResult<[number, ParserResult<unknown>]> {
+      let bestMatch: {
+        index: number;
+        result: ParserResult<unknown>;
+        consumed: number;
+      } | null = null;
+      let error: { consumed: number; error: Message } = {
+        consumed: 0,
+        error: context.buffer.length < 1
+          ? message`No parser matched.`
+          : message`Unexpected option or subcommand: ${
+            eOptionName(context.buffer[0])
+          }.`,
+      };
+
+      // Try all parsers and find the one with longest match
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        const result = parser.parse({
+          ...context,
+          state: context.state == null || context.state[0] !== i ||
+              !context.state[1].success
+            ? parser.initialState
+            : context.state[1].next.state,
+        });
+
+        if (result.success) {
+          const consumed = context.buffer.length - result.next.buffer.length;
+          if (bestMatch === null || consumed > bestMatch.consumed) {
+            bestMatch = { index: i, result, consumed };
+          }
+        } else if (error.consumed < result.consumed) {
+          error = result;
+        }
+      }
+
+      if (bestMatch && bestMatch.result.success) {
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: bestMatch.result.next.buffer,
+            optionsTerminated: bestMatch.result.next.optionsTerminated,
+            state: [bestMatch.index, bestMatch.result],
+          },
+          consumed: bestMatch.result.consumed,
+        };
+      }
+
+      return { ...error, success: false };
+    },
+    getDocFragments(
+      state: DocState<undefined | [number, ParserResult<unknown>]>,
+      _defaultValue?,
+    ) {
+      let description: Message | undefined;
+      let fragments: readonly DocFragment[];
+
+      if (state.kind === "unavailable" || state.state == null) {
+        // When state is unavailable or null, show all parser options
+        fragments = parsers.flatMap((p) =>
+          p.getDocFragments({ kind: "unavailable" }).fragments
+        );
+      } else {
+        const [i, result] = state.state;
+        if (result.success) {
+          const docResult = parsers[i].getDocFragments(
+            { kind: "available", state: result.next.state },
+          );
+          description = docResult.description;
+          fragments = docResult.fragments;
+        } else {
+          fragments = parsers.flatMap((p) =>
+            p.getDocFragments({ kind: "unavailable" }).fragments
+          );
+        }
+      }
+
+      return { description, fragments };
+    },
+  };
+}
+
+/**
  * Helper type to check if all members of a union are object-like.
  * This allows merge() to work with parsers like withDefault() that produce union types.
  */

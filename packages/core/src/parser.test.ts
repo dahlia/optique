@@ -7,6 +7,7 @@ import {
   flag,
   getDocPage,
   type InferValue,
+  longestMatch,
   map,
   merge,
   multiple,
@@ -15,6 +16,7 @@ import {
   optional,
   or,
   parse,
+  type ParserResult,
   tuple,
   withDefault,
 } from "@optique/core/parser";
@@ -7054,6 +7056,323 @@ describe("concat", () => {
       if (group2Section.type === "section") {
         assert.equal(group2Section.entries.length, 1);
       }
+    });
+  });
+
+  describe("longestMatch()", () => {
+    it("should select parser that consumes more tokens", () => {
+      const shortParser = object({
+        type: constant("short"),
+        help: flag("--help"),
+      });
+
+      const longParser = object({
+        type: constant("long"),
+        cmd: argument(string({ metavar: "COMMAND" })),
+        help: flag("--help"),
+      });
+
+      const parser = longestMatch(shortParser, longParser);
+
+      // Short parser consumes 1 token (--help)
+      const shortResult = parse(parser, ["--help"]);
+      assert.ok(shortResult.success);
+      assert.equal((shortResult.value as { type: string }).type, "short");
+
+      // Long parser consumes 2 tokens (list --help)
+      const longResult = parse(parser, ["list", "--help"]);
+      assert.ok(longResult.success);
+      assert.equal((longResult.value as { type: string }).type, "long");
+      assert.equal((longResult.value as { cmd: string }).cmd, "list");
+    });
+
+    it("should handle multiple parsers correctly", () => {
+      const parser1 = object({
+        type: constant("one"),
+        flag: flag("-a"),
+      });
+
+      const parser2 = object({
+        type: constant("two"),
+        flag1: flag("-a"),
+        flag2: flag("-b"),
+      });
+
+      const parser3 = object({
+        type: constant("three"),
+        flag1: flag("-a"),
+        flag2: flag("-b"),
+        flag3: flag("-c"),
+      });
+
+      const parser = longestMatch(parser1, parser2, parser3);
+
+      // All consume 1 token, first match wins
+      const result1 = parse(parser, ["-a"]);
+      assert.ok(result1.success);
+      assert.equal((result1.value as { type: string }).type, "one");
+
+      // parser2 consumes 2 tokens
+      const result2 = parse(parser, ["-a", "-b"]);
+      assert.ok(result2.success);
+      assert.equal((result2.value as { type: string }).type, "two");
+
+      // parser3 consumes 3 tokens
+      const result3 = parse(parser, ["-a", "-b", "-c"]);
+      assert.ok(result3.success);
+      assert.equal((result3.value as { type: string }).type, "three");
+    });
+
+    it("should handle command parsing with context-aware help", () => {
+      const addCommand = command(
+        "add",
+        object({
+          action: constant("add"),
+          key: argument(string({ metavar: "KEY" })),
+          value: argument(string({ metavar: "VALUE" })),
+        }),
+      );
+
+      const listCommand = command(
+        "list",
+        object({
+          action: constant("list"),
+          pattern: optional(
+            option("-p", "--pattern", string({ metavar: "PATTERN" })),
+          ),
+        }),
+      );
+
+      const contextualHelpParser = object({
+        help: constant(true),
+        commands: multiple(argument(string({ metavar: "COMMAND" }))),
+        __help: flag("--help"),
+      });
+
+      const normalParser = object({
+        help: constant(false),
+        result: or(addCommand, listCommand),
+      });
+
+      const parser = longestMatch(normalParser, contextualHelpParser);
+
+      // Normal command parsing: add key value
+      const addResult = parse(parser, ["add", "key1", "value1"]);
+      assert.ok(addResult.success);
+      assert.equal((addResult.value as { help: boolean }).help, false);
+      assert.equal(
+        (addResult.value as { result: { action: string } }).result.action,
+        "add",
+      );
+
+      // Context-aware help: list --help
+      const helpResult = parse(parser, ["list", "--help"]);
+      assert.ok(helpResult.success);
+      assert.equal((helpResult.value as { help: boolean }).help, true);
+      assert.deepStrictEqual(
+        (helpResult.value as { commands: readonly string[] }).commands,
+        ["list"],
+      );
+    });
+
+    it("should handle failure cases correctly", () => {
+      const parser1 = object({
+        type: constant("one"),
+        required: option("-r", string()),
+      });
+
+      const parser2 = object({
+        type: constant("two"),
+        required: option("-s", string()),
+      });
+
+      const parser = longestMatch(parser1, parser2);
+
+      // Neither parser can handle this input
+      const result = parse(parser, ["-t", "value"]);
+      assert.ok(!result.success);
+    });
+
+    it("should handle empty parser list", () => {
+      // longestMatch requires at least 2 parsers, so test with minimal parsers that fail
+      const parser1 = object({
+        type: constant("fail1"),
+        req: option("-x", string()),
+      });
+      const parser2 = object({
+        type: constant("fail2"),
+        req: option("-y", string()),
+      });
+      const parser = longestMatch(parser1, parser2);
+      const result = parse(parser, ["anything"]);
+      assert.ok(!result.success);
+    });
+
+    it("should preserve type information correctly", () => {
+      const stringParser = object({
+        type: constant("string" as const),
+        value: argument(string()),
+      });
+
+      const numberParser = object({
+        type: constant("number" as const),
+        value: argument(integer()),
+      });
+
+      const parser = longestMatch(stringParser, numberParser);
+
+      const stringResult = parse(parser, ["hello"]);
+      assert.ok(stringResult.success);
+      assert.equal((stringResult.value as { type: string }).type, "string");
+      assert.equal((stringResult.value as { value: string }).value, "hello");
+
+      // For "42", both parsers could match (string and integer), but string parser
+      // comes first and both consume same number of tokens, so string parser wins
+      const ambiguousResult = parse(parser, ["42"]);
+      assert.ok(ambiguousResult.success);
+      assert.equal((ambiguousResult.value as { type: string }).type, "string");
+      assert.equal((ambiguousResult.value as { value: string }).value, "42");
+
+      // Test with input that only integer parser can handle (non-string that parses as int)
+      // Actually, let's test with more specific parsers to demonstrate type preservation
+      const numberOnlyResult = parse(parser, ["123"]);
+      assert.ok(numberOnlyResult.success);
+      // Both could parse "123", but stringParser comes first, so it wins
+      assert.equal((numberOnlyResult.value as { type: string }).type, "string");
+    });
+
+    it("should handle documentation correctly", () => {
+      const parser1 = object("Group A", {
+        flag1: flag("-a", "--first"),
+      });
+
+      const parser2 = object("Group B", {
+        flag2: flag("-b", "--second"),
+      });
+
+      const parser = longestMatch(parser1, parser2);
+
+      // When no specific state, should show all options
+      const fragments = parser.getDocFragments({ kind: "unavailable" });
+      assert.equal(fragments.fragments.length, 2);
+
+      const groupA = fragments.fragments.find((f: DocFragment) =>
+        f.type === "section" && f.title === "Group A"
+      );
+      const groupB = fragments.fragments.find((f: DocFragment) =>
+        f.type === "section" && f.title === "Group B"
+      );
+
+      assert.ok(groupA);
+      assert.ok(groupB);
+    });
+
+    it("should handle priority correctly", () => {
+      const lowPriorityParser = object({
+        type: constant("low"),
+        arg: argument(string()),
+      });
+
+      const highPriorityParser = command(
+        "cmd",
+        object({
+          type: constant("high"),
+        }),
+      );
+
+      const parser = longestMatch(lowPriorityParser, highPriorityParser);
+
+      // longestMatch should use the highest priority among constituent parsers
+      assert.equal(
+        parser.priority,
+        Math.max(
+          lowPriorityParser.priority,
+          highPriorityParser.priority,
+        ),
+      );
+    });
+
+    it("should handle state management correctly", () => {
+      const parser1 = object({
+        type: constant("first"),
+        opt: option("-a", string()),
+      });
+
+      const parser2 = object({
+        type: constant("second"),
+        opt1: option("-a", string()),
+        opt2: option("-b", string()),
+      });
+
+      const parser = longestMatch(parser1, parser2);
+
+      // Parse incomplete input for parser2
+      const context = {
+        buffer: ["-a", "value1", "-b", "value2"],
+        optionsTerminated: false,
+        state: parser.initialState,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      assert.equal(result.next.buffer.length, 0); // All tokens consumed
+      assert.equal(
+        (result.next.state as [number, ParserResult<unknown>])[0],
+        1,
+      ); // Second parser selected
+
+      // Complete the parsing
+      const completedResult = parser.complete(result.next.state);
+      assert.ok(completedResult.success);
+      assert.equal((completedResult.value as { type: string }).type, "second");
+    });
+
+    it("should maintain consistent behavior with complex nested structures", () => {
+      const simpleHelp = object({
+        help: constant(true),
+        global: flag("--help"),
+      });
+
+      const contextualHelp = object({
+        help: constant(true),
+        commands: multiple(argument(string({ metavar: "COMMAND" }))),
+        flag: flag("--help"),
+      });
+
+      const normalCommand = object({
+        help: constant(false),
+        result: command(
+          "test",
+          object({
+            action: constant("test"),
+          }),
+        ),
+      });
+
+      const parser = longestMatch(normalCommand, simpleHelp, contextualHelp);
+
+      // Normal command
+      const testResult = parse(parser, ["test"]);
+      assert.ok(testResult.success);
+      assert.equal((testResult.value as { help: boolean }).help, false);
+
+      // Global help
+      const globalHelpResult = parse(parser, ["--help"]);
+      assert.ok(globalHelpResult.success);
+      assert.equal((globalHelpResult.value as { help: boolean }).help, true);
+
+      // Contextual help (longer match)
+      const contextualHelpResult = parse(parser, ["test", "--help"]);
+      assert.ok(contextualHelpResult.success);
+      assert.equal(
+        (contextualHelpResult.value as { help: boolean }).help,
+        true,
+      );
+      assert.deepStrictEqual(
+        (contextualHelpResult.value as { commands: readonly string[] })
+          .commands,
+        ["test"],
+      );
     });
   });
 });

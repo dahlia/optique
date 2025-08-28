@@ -4,12 +4,14 @@ import {
   argument,
   command,
   constant,
+  flag,
   getDocPage,
   type InferValue,
+  longestMatch,
+  merge,
   multiple,
   object,
   option,
-  or,
   parse,
   type Parser,
 } from "./parser.ts";
@@ -145,6 +147,11 @@ export function run<
     stderr = console.error,
     stdout = console.log,
   } = options;
+  const contextualHelpParser = object({
+    help: constant(true),
+    commands: multiple(argument(string({ metavar: "COMMAND" }))),
+    __help: flag("--help"),
+  });
   const helpCommand = command(
     "help",
     multiple(argument(string({ metavar: "COMMAND" }))),
@@ -156,30 +163,82 @@ export function run<
     description: message`Show help information.`,
   });
   const augmentedParser = help === "none"
-    ? object({ help: constant(false), result: parser })
-    : or(
+    ? parser
+    : help === "command"
+    ? longestMatch(
+      object({
+        help: constant(true),
+        commands: helpCommand,
+      }),
+      object({ help: constant(false), result: parser }),
+    )
+    : help === "option"
+    ? longestMatch(
+      object({ help: constant(false), result: parser }),
+      contextualHelpParser,
+      merge(
+        object({
+          help: constant(true),
+          commands: constant([]),
+        }),
+        helpOption,
+      ),
+    )
+    : longestMatch(
       object({ help: constant(false), result: parser }),
       object({
         help: constant(true),
-        command: help === "both"
-          ? or(
-            helpCommand,
-            helpOption,
-          )
-          : help === "command"
-          ? helpCommand
-          : helpOption,
+        commands: helpCommand,
       }),
+      contextualHelpParser,
+      merge(
+        object({
+          help: constant(true),
+          commands: constant([]),
+        }),
+        helpOption,
+      ),
     );
   const result = parse(augmentedParser, args);
   if (result.success) {
-    if (!result.value.help) return result.value.result;
+    const value = result.value;
+    if (help === "none") {
+      return value;
+    }
+
+    // Type guard to check if value has help property
+    if (typeof value === "object" && value != null && "help" in value) {
+      const helpValue = value as {
+        help: boolean;
+        result?: unknown;
+        commands?: unknown;
+      };
+      if (!helpValue.help) {
+        return helpValue.result;
+      }
+    } else {
+      // This shouldn't happen with proper parser setup, but handle gracefully
+      return value;
+    }
+
+    // Handle help request
+    let commandContext: readonly string[] = [];
+
+    const helpValue = value as { help: boolean; commands?: unknown };
+    if (Array.isArray(helpValue.commands)) {
+      // From contextualHelpParser: ["list"] from "list --help"
+      commandContext = helpValue.commands;
+    } else if (
+      typeof helpValue.commands === "object" && helpValue.commands != null &&
+      "length" in helpValue.commands
+    ) {
+      // From helpCommand: array from "help list"
+      commandContext = helpValue.commands as readonly string[];
+    }
+
     const doc = getDocPage(
-      typeof result.value.command === "boolean" ||
-        result.value.command.length < 1
-        ? augmentedParser
-        : parser,
-      typeof result.value.command === "boolean" ? [] : result.value.command,
+      commandContext.length < 1 ? augmentedParser : parser,
+      commandContext,
     );
     if (doc != null) {
       stdout(formatDocPage(programName, doc, {
