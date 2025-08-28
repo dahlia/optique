@@ -1299,6 +1299,7 @@ const parser = object({
 const config = run(parser, {
   programName: "my-tool", // Override detected program name (default: process.argv[1])
   help: "both",           // Enable --help option AND help subcommand
+},
 // ^?
 
 

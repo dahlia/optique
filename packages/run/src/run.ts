@@ -37,16 +37,15 @@ export interface RunOptions {
   readonly maxWidth?: number;
 
   /**
-   * Determines how help functionality is made available:
+   * Help configuration. Determines how help is made available:
    *
    * - `"command"`: Only the `help` subcommand is available
    * - `"option"`: Only the `--help` option is available
    * - `"both"`: Both `help` subcommand and `--help` option are available
-   * - `"none"`: No help functionality is provided
    *
-   * @default `"none"`
+   * When not provided, help functionality is disabled.
    */
-  readonly help?: "command" | "option" | "both" | "none";
+  readonly help?: "command" | "option" | "both";
 
   /**
    * What to display above error messages:
@@ -125,16 +124,24 @@ export function run<T extends Parser<unknown, unknown>>(
     args = process.argv.slice(2),
     colors = process.stdout.isTTY,
     maxWidth = process.stdout.columns,
-    help = "none",
+    help,
     aboveError = "usage",
     errorExitCode = 1,
   } = options;
+
+  // Convert help configuration for the base run function
+  const helpConfig = help
+    ? {
+      mode: help,
+      onShow: () => process.exit(0) as never,
+    }
+    : undefined;
+
   return runBase<T, never, never>(parser, programName, args, {
     colors,
     maxWidth,
-    help,
+    help: helpConfig,
     aboveError,
-    onHelp: process.exit,
     onError() {
       return process.exit(errorExitCode) as never;
     },

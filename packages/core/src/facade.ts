@@ -39,27 +39,31 @@ export interface RunOptions<THelp, TError> {
   readonly maxWidth?: number;
 
   /**
-   * Determines how help is made available:
-   *
-   * - `"command"`: Only the `help` subcommand is available
-   * - `"option"`: Only the `--help` option is available
-   * - `"both"`: Both `help` subcommand and `--help` option are available
-   * - `"none"`: No help functionality is provided
-   *
-   * @default `"none"`
+   * Help configuration. When provided, enables help functionality.
    */
-  readonly help?: "command" | "option" | "both" | "none";
+  readonly help?: {
+    /**
+     * Determines how help is made available:
+     *
+     * - `"command"`: Only the `help` subcommand is available
+     * - `"option"`: Only the `--help` option is available
+     * - `"both"`: Both `help` subcommand and `--help` option are available
+     *
+     * @default `"option"`
+     */
+    readonly mode?: "command" | "option" | "both";
 
-  /**
-   * Callback function invoked when help is requested. The function can
-   * optionally receive an exit code parameter.
-   *
-   * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
-   * on Deno to this option.
-   *
-   * @default Returns `void` when help is shown.
-   */
-  readonly onHelp?: (() => THelp) | ((exitCode: number) => THelp);
+    /**
+     * Callback function invoked when help is requested. The function can
+     * optionally receive an exit code parameter.
+     *
+     * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
+     * on Deno to this option.
+     *
+     * @default Returns `void` when help is shown.
+     */
+    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+  };
 
   /**
    * What to display above error messages:
@@ -135,11 +139,13 @@ export function run<
   args: readonly string[],
   options: RunOptions<THelp, TError> = {},
 ): InferValue<TParser> {
+  // Extract help configuration
+  const helpMode = options.help?.mode ?? "option";
+  const onHelp = options.help?.onShow ?? (() => ({} as THelp));
+
   let {
     colors,
     maxWidth,
-    help = "none",
-    onHelp = () => {},
     aboveError = "usage",
     onError = () => {
       throw new RunError("Failed to parse command line arguments.");
@@ -147,6 +153,9 @@ export function run<
     stderr = console.error,
     stdout = console.log,
   } = options;
+
+  // Determine if help is enabled
+  const help = options.help ? helpMode : "none";
   const contextualHelpParser = object({
     help: constant(true),
     commands: multiple(argument(string({ metavar: "COMMAND" }))),

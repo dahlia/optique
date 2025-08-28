@@ -85,7 +85,7 @@ describe("run", () => {
       const result = run(parser, {
         args: ["test-value"],
         programName: "test",
-        help: "none",
+        // help omitted = no help functionality
       });
 
       assert.deepEqual(result, { name: "test-value" });

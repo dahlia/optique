@@ -52,10 +52,12 @@ describe("run", () => {
       let helpOutput = "";
 
       const result = run(parser, "test", ["--help"], {
-        help: "both", // Explicitly enable help
-        onHelp: () => {
-          helpShown = true;
-          return "help-shown";
+        help: {
+          mode: "both",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
         },
         stdout: (text) => {
           helpOutput = text;
@@ -67,8 +69,8 @@ describe("run", () => {
       assert.ok(helpOutput.includes("Usage: test"));
     });
 
-    it("should not provide help when help is 'none' (default)", () => {
-      // Test that help: "none" is the default behavior
+    it("should not provide help when help is not configured (default)", () => {
+      // Test that help is disabled by default
       const parser = object({
         name: argument(string()),
       });
@@ -78,7 +80,7 @@ describe("run", () => {
       }, RunError);
     });
 
-    it("should only show help option when help is 'option'", () => {
+    it("should only show help option when help mode is 'option'", () => {
       const parser = object({
         name: argument(string()),
       });
@@ -86,10 +88,12 @@ describe("run", () => {
       let helpShown = false;
 
       const result = run(parser, "test", ["--help"], {
-        help: "option",
-        onHelp: () => {
-          helpShown = true;
-          return "help-shown";
+        help: {
+          mode: "option",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
         },
         stdout: () => {},
       });
@@ -98,7 +102,7 @@ describe("run", () => {
       assert.ok(helpShown);
     });
 
-    it("should only show help command when help is 'command'", () => {
+    it("should only show help command when help mode is 'command'", () => {
       // Use a command parser - help will work when the command doesn't match
       const parser = command(
         "serve",
@@ -113,10 +117,12 @@ describe("run", () => {
       let helpShown = false;
 
       const result = run(parser, "test", ["help"], {
-        help: "command",
-        onHelp: () => {
-          helpShown = true;
-          return "help-shown";
+        help: {
+          mode: "command",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
         },
         stdout: () => {},
         stderr: () => {}, // suppress error output
@@ -124,18 +130,6 @@ describe("run", () => {
 
       assert.equal(result, "help-shown");
       assert.ok(helpShown);
-    });
-
-    it("should not provide help when help is explicitly set to 'none'", () => {
-      const parser = object({
-        name: argument(string()),
-      });
-
-      assert.throws(() => {
-        run(parser, "test", ["--help"], {
-          help: "none",
-        });
-      }, RunError);
     });
   });
 
@@ -258,8 +252,10 @@ describe("run", () => {
       let capturedOutput = "";
 
       run(parser, "test", ["--help"], {
-        help: "both", // Enable help
-        onHelp: () => "help-shown",
+        help: {
+          mode: "both",
+          onShow: () => "help-shown",
+        },
         stdout: (text) => {
           capturedOutput = text;
         },
@@ -295,9 +291,11 @@ describe("run", () => {
       let helpOutput = "";
 
       run(parser, "test", ["--help"], {
-        help: "both", // Enable help
+        help: {
+          mode: "both",
+          onShow: () => "help-shown",
+        },
         colors: true,
-        onHelp: () => "help-shown",
         stdout: (text) => {
           helpOutput = text;
         },
@@ -317,9 +315,11 @@ describe("run", () => {
       let helpOutput = "";
 
       run(parser, "test", ["--help"], {
-        help: "both", // Enable help
+        help: {
+          mode: "both",
+          onShow: () => "help-shown",
+        },
         maxWidth: 20,
-        onHelp: () => "help-shown",
         stdout: (text) => {
           helpOutput = text;
         },
@@ -331,7 +331,7 @@ describe("run", () => {
   });
 
   describe("callback functions", () => {
-    it("should pass exit code 0 to onHelp callback", () => {
+    it("should pass exit code 0 to onShow callback", () => {
       const parser = object({
         name: argument(string()),
       });
@@ -339,10 +339,12 @@ describe("run", () => {
       let receivedExitCode: number | undefined;
 
       run(parser, "test", ["--help"], {
-        help: "both", // Enable help
-        onHelp: (exitCode) => {
-          receivedExitCode = exitCode;
-          return "help-shown";
+        help: {
+          mode: "both",
+          onShow: (exitCode) => {
+            receivedExitCode = exitCode;
+            return "help-shown";
+          },
         },
         stdout: () => {},
       });
@@ -350,7 +352,7 @@ describe("run", () => {
       assert.equal(receivedExitCode, 0);
     });
 
-    it("should work with onHelp callback without exit code parameter", () => {
+    it("should work with onShow callback without exit code parameter", () => {
       const parser = object({
         name: argument(string()),
       });
@@ -358,10 +360,12 @@ describe("run", () => {
       let helpCalled = false;
 
       const result = run(parser, "test", ["--help"], {
-        help: "both", // Enable help
-        onHelp: () => {
-          helpCalled = true;
-          return "help-shown";
+        help: {
+          mode: "both",
+          onShow: () => {
+            helpCalled = true;
+            return "help-shown";
+          },
         },
         stdout: () => {},
       });

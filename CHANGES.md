@@ -69,6 +69,19 @@ To be released.
     `"both"`). Applications using the `run()` function will automatically
     benefit from improved help UX without code changes.
 
+ -  Refactored `run()` function help API to group related options together for
+    better type safety. The new API prevents invalid combinations and provides
+    a cleaner interface:
+
+    ~~~~ typescript
+    run(parser, args, {
+      help: {
+        mode: "both",           // "command" | "option" | "both"
+        onShow: process.exit,   // Optional callback
+      }
+    });
+    ~~~~
+
 ### @optique/run
 
  -  The `run()` function now provides context-aware help behavior,
@@ -76,6 +89,23 @@ To be released.
     Applications using `@optique/run` will see the same enhanced help system
     where `subcommand --help` shows command-specific help instead of global
     help.
+
+ -  Simplified help API by removing the `"none"` option.
+    Since disabling help can be achieved by simply omitting the `help` option,
+    the explicit `"none"` value is no longer needed:
+
+    ~~~~ typescript
+    // Old API
+    run(parser, { help: "none" }); // Explicitly disable help
+    run(parser, { help: "both" }); // Enable help
+
+    // New API
+    run(parser, {}); // Help disabled (omit the option)
+    run(parser, { help: "both" }); // Enable help: "command" | "option" | "both"
+    ~~~~
+
+    The help option now only accepts `"command" | "option" | "both"`. To
+    disable help functionality, simply omit the `help` option entirely.
 
 
 Version 0.2.0

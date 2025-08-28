@@ -103,9 +103,11 @@ const config = run(
   "myserver",                     // program name
   process.argv.slice(2),          // arguments
   {
-    help: "both",                 // Enable --help and help command
+    help: {                       // New grouped API
+      mode: "both",               // Enable --help and help command
+      onShow: process.exit,       // Exit after showing help
+    },
     colors: process.stdout.isTTY, // Auto-detect color support
-    onHelp: process.exit,         // Exit after showing help
     onError: process.exit,        // Exit with error code
   }
 );
@@ -140,7 +142,9 @@ const parser = object({ name: option("-n", "--name", string()) });
 const result = run(parser, "myapp", ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
-  help: "option",        // Only --help option, no help command
+  help: {                // New grouped API
+    mode: "option",      // Only --help option, no help command
+  },
   aboveError: "help",    // Show full help before error messages
   stderr: (text) => {    // Custom error output handler
     console.error(`ERROR: ${text}`);
@@ -205,7 +209,7 @@ const parser = object({ name: option("-n", "--name", string()) });
 
 const config = run(parser, {
   programName: "custom-name",  // Override detected program name
-  help: "both",               // Enable --help and help command
+  help: "both",               // Enable both --help and help command
   colors: true,               // Force colors even for non-TTY
   errorExitCode: 2,           // Exit with code 2 on errors
 });
@@ -234,7 +238,7 @@ const config = run(parser, {
   args: ["custom", "args"],   // Override process.argv
   colors: true,               // Force colored output
   maxWidth: 100,              // Set output width
-  help: "both",               // Enable --help and help command
+  help: "both",               // Enable both --help and help command
   aboveError: "usage",        // Show usage on errors
   errorExitCode: 2            // Exit code for errors
 });
@@ -245,19 +249,27 @@ const config = run(parser, {
 Enable built-in help functionality with different modes:
 
 ~~~~ typescript twoslash
-// @noErrors: 1117
 import { run } from "@optique/run";
 import { object, option } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
 
 const parser = object({ name: option("-n", "--name", string()) });
 
-const result = run(parser, {
-  help: "option",    // Adds --help option only
-  help: "command",   // Adds help subcommand only
-  help: "both",      // Adds both --help and help command
-  help: "none",      // No help (default)
+// Simple string-based API
+const result1 = run(parser, {
+  help: "option",  // Adds --help option only
 });
+
+const result2 = run(parser, {
+  help: "command", // Adds help subcommand only
+});
+
+const result3 = run(parser, {
+  help: "both",    // Adds both --help and help command
+});
+
+// No help (default) - simply omit the help option
+const result4 = run(parser, {});
 ~~~~
 
 ### Error handling behavior
