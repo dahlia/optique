@@ -27,6 +27,17 @@ import {
 } from "./valueparser.ts";
 
 /**
+ * Represents the state passed to getDocFragments.
+ * Can be either the actual parser state or an explicit indicator
+ * that no state is available.
+ * @template TState The type of the actual state when available.
+ * @since 0.3.0
+ */
+export type DocState<TState> =
+  | { readonly kind: "available"; readonly state: TState }
+  | { readonly kind: "unavailable" };
+
+/**
  * Parser interface for command-line argument parsing.
  * @template TValue The type of the value returned by the parser.
  * @template TState The type of the state used during parsing.
@@ -93,15 +104,14 @@ export interface Parser<TValue, TState> {
   /**
    * Generates a documentation fragment for this parser, which can be used
    * to describe the parser's usage, description, and default value.
-   * @param state The current state of the parser, which may contain
-   *              accumulated data or context needed to produce
-   *              the documentation.
+   * @param state The current state of the parser, wrapped in a DocState
+   *              to indicate whether the actual state is available or not.
    * @param defaultValue An optional default value that can be used
    *                     to provide a default value in the documentation.
    * @returns {@link DocFragments} object containing documentation
    *          fragments for this parser.
    */
-  getDocFragments(state: TState, defaultValue?: TValue): DocFragments;
+  getDocFragments(state: DocState<TState>, defaultValue?: TValue): DocFragments;
 }
 
 /**
@@ -189,7 +199,7 @@ export function constant<const T>(value: T): Parser<T, T> {
     complete(state) {
       return { success: true, value: state };
     },
-    getDocFragments(_state, _defaultValue?) {
+    getDocFragments(_state: DocState<T>, _defaultValue?) {
       return { fragments: [] };
     },
   };
@@ -476,7 +486,10 @@ export function option<T>(
         error: message`${eOptionNames(optionNames)}: ${state.error}`,
       };
     },
-    getDocFragments(_state, defaultValue?) {
+    getDocFragments(
+      _state: DocState<ValueParserResult<T | boolean> | undefined>,
+      defaultValue?,
+    ) {
       const fragments: readonly DocFragment[] = [{
         type: "entry",
         term: {
@@ -686,7 +699,10 @@ export function flag(
         error: message`${eOptionNames(optionNames)}: ${state.error}`,
       };
     },
-    getDocFragments(_state, _defaultValue?) {
+    getDocFragments(
+      _state: DocState<ValueParserResult<true> | undefined>,
+      _defaultValue?,
+    ) {
       const fragments: readonly DocFragment[] = [{
         type: "entry",
         term: {
@@ -809,7 +825,10 @@ export function argument<T>(
         error: message`${metavar(valueParser.metavar)}: ${state.error}`,
       };
     },
-    getDocFragments(_state, defaultValue?: T) {
+    getDocFragments(
+      _state: DocState<ValueParserResult<T> | undefined>,
+      defaultValue?: T,
+    ) {
       const fragments: readonly DocFragment[] = [{
         type: "entry",
         term,
@@ -874,11 +893,16 @@ export function optional<TValue, TState>(
       }
       return parser.complete(state[0]);
     },
-    getDocFragments(state, defaultValue?: TValue) {
-      return parser.getDocFragments(
-        typeof state === "undefined" ? parser.initialState : state[0],
-        defaultValue,
-      );
+    getDocFragments(
+      state: DocState<[TState] | undefined>,
+      defaultValue?: TValue,
+    ) {
+      const innerState: DocState<TState> = state.kind === "unavailable"
+        ? { kind: "unavailable" }
+        : state.state === undefined
+        ? { kind: "unavailable" }
+        : { kind: "available", state: state.state[0] };
+      return parser.getDocFragments(innerState, defaultValue);
     },
   };
 }
@@ -938,9 +962,17 @@ export function withDefault<TValue, TState, TDefault = TValue>(
       }
       return parser.complete(state[0]);
     },
-    getDocFragments(state, upperDefaultValue?: TValue | TDefault) {
+    getDocFragments(
+      state: DocState<[TState] | undefined>,
+      upperDefaultValue?: TValue | TDefault,
+    ) {
+      const innerState: DocState<TState> = state.kind === "unavailable"
+        ? { kind: "unavailable" }
+        : state.state === undefined
+        ? { kind: "unavailable" }
+        : { kind: "available", state: state.state[0] };
       return parser.getDocFragments(
-        typeof state === "undefined" ? parser.initialState : state[0],
+        innerState,
         upperDefaultValue != null
           ? upperDefaultValue as TValue
           : typeof defaultValue === "function"
@@ -1002,7 +1034,7 @@ export function map<T, U, TState>(
       }
       return result;
     },
-    getDocFragments(state: TState, _defaultValue?: U) {
+    getDocFragments(state: DocState<TState>, _defaultValue?: U) {
       // Since we can't reverse the transformation, we delegate to the original parser
       // with the original default value (if available). This is acceptable since
       // documentation typically shows the input format, not the transformed output.
@@ -1114,9 +1146,14 @@ export function multiple<TValue, TState>(
       }
       return { success: true, value: result };
     },
-    getDocFragments(state, defaultValue?) {
+    getDocFragments(state: DocState<readonly TState[]>, defaultValue?) {
+      const innerState: DocState<TState> = state.kind === "unavailable"
+        ? { kind: "unavailable" }
+        : state.state.length > 0
+        ? { kind: "available", state: state.state.at(-1)! }
+        : { kind: "unavailable" };
       return parser.getDocFragments(
-        state.at(-1) ?? parser.initialState,
+        innerState,
         defaultValue != null && defaultValue.length > 0
           ? defaultValue[0]
           : undefined,
@@ -1309,10 +1346,16 @@ export function object<
       }
       return { success: true, value: result };
     },
-    getDocFragments(state, defaultValue?) {
-      const fragments = parserPairs.flatMap(([field, p]) =>
-        p.getDocFragments(state[field], defaultValue?.[field]).fragments
-      );
+    getDocFragments(
+      state: DocState<{ readonly [K in keyof T]: unknown }>,
+      defaultValue?,
+    ) {
+      const fragments = parserPairs.flatMap(([field, p]) => {
+        const fieldState: DocState<unknown> = state.kind === "unavailable"
+          ? { kind: "unavailable" }
+          : { kind: "available", state: state.state[field] };
+        return p.getDocFragments(fieldState, defaultValue?.[field]).fragments;
+      });
       const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
       const sections: DocSection[] = [];
       for (const fragment of fragments) {
@@ -1529,10 +1572,19 @@ export function tuple<
 
       return { success: true, value: result };
     },
-    getDocFragments(state, defaultValue?) {
-      const fragments = parsers.flatMap((p, i) =>
-        p.getDocFragments(state[i], defaultValue?.[i]).fragments
-      );
+    getDocFragments(
+      state: DocState<{ readonly [K in keyof T]: unknown }>,
+      defaultValue?,
+    ) {
+      const fragments = parsers.flatMap((p, i) => {
+        const indexState: DocState<unknown> = state.kind === "unavailable"
+          ? { kind: "unavailable" }
+          : {
+            kind: "available",
+            state: (state.state as readonly unknown[])[i],
+          };
+        return p.getDocFragments(indexState, defaultValue?.[i]).fragments;
+      });
       const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
       const sections: DocSection[] = [];
       for (const fragment of fragments) {
@@ -2112,19 +2164,26 @@ export function or(
       }
       return { ...error, success: false };
     },
-    getDocFragments(state, _defaultValue?) {
+    getDocFragments(
+      state: DocState<undefined | [number, ParserResult<unknown>]>,
+      _defaultValue?,
+    ) {
       let description: Message | undefined;
       let fragments: readonly DocFragment[];
-      if (state == null) {
+
+      if (state.kind === "unavailable" || state.state == null) {
+        // When state is unavailable or null, show all parser options
         fragments = parsers.flatMap((p) =>
-          p.getDocFragments(p.initialState, undefined).fragments
+          p.getDocFragments({ kind: "unavailable" }, undefined).fragments
         );
       } else {
-        const [index, parserResult] = state;
+        // When state is available and has a value, show only the selected parser
+        const [index, parserResult] = state.state;
+        const innerState: DocState<unknown> = parserResult.success
+          ? { kind: "available", state: parserResult.next.state }
+          : { kind: "unavailable" };
         const docFragments = parsers[index].getDocFragments(
-          parserResult.success
-            ? parserResult.next.state
-            : parsers[index].initialState,
+          innerState,
           undefined,
         );
         description = docFragments.description;
@@ -2446,10 +2505,21 @@ export function merge(
       }
       return { success: true, value: object };
     },
-    getDocFragments(state, _defaultValue?) {
-      const fragments = parsers.flatMap((p) =>
-        p.getDocFragments(state, undefined).fragments
-      );
+    getDocFragments(
+      state: DocState<Record<string | symbol, unknown>>,
+      _defaultValue?,
+    ) {
+      const fragments = parsers.flatMap((p) => {
+        // If parser has undefined initialState, indicate state unavailable;
+        // otherwise pass the available state
+        const parserState = p.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : state.kind === "unavailable"
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: state.state };
+        return p.getDocFragments(parserState, undefined)
+          .fragments;
+      });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];
       for (const fragment of fragments) {
@@ -2746,10 +2816,13 @@ export function concat(
       }
       return { success: true, value: results };
     },
-    getDocFragments(state, _defaultValue?) {
-      const fragments = parsers.flatMap((p, index) =>
-        p.getDocFragments(state[index], undefined).fragments
-      );
+    getDocFragments(state: DocState<readonly unknown[]>, _defaultValue?) {
+      const fragments = parsers.flatMap((p, index) => {
+        const indexState: DocState<unknown> = state.kind === "unavailable"
+          ? { kind: "unavailable" }
+          : { kind: "available", state: state.state[index] };
+        return p.getDocFragments(indexState, undefined).fragments;
+      });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];
       for (const fragment of fragments) {
@@ -2898,8 +2971,8 @@ export function command<T, TState>(
         error: message`Invalid command state during completion.`,
       };
     },
-    getDocFragments(state, defaultValue?) {
-      if (typeof state === "undefined") {
+    getDocFragments(state: DocState<CommandState<TState>>, defaultValue?) {
+      if (state.kind === "unavailable" || typeof state.state === "undefined") {
         return {
           description: options.description,
           fragments: [
@@ -2911,10 +2984,10 @@ export function command<T, TState>(
           ],
         };
       }
-      const innerFragments = parser.getDocFragments(
-        state[0] === "parsing" ? state[1] : parser.initialState,
-        defaultValue,
-      );
+      const innerState: DocState<TState> = state.state[0] === "parsing"
+        ? { kind: "available", state: state.state[1] }
+        : { kind: "unavailable" };
+      const innerFragments = parser.getDocFragments(innerState, defaultValue);
       return {
         ...innerFragments,
         description: innerFragments.description ?? options.description,
@@ -3060,7 +3133,7 @@ export function getDocPage(
     context = result.next;
   } while (context.buffer.length > 0);
   const { description, fragments } = parser.getDocFragments(
-    context.state,
+    { kind: "available", state: context.state },
     undefined,
   );
   const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");

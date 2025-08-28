@@ -35,22 +35,60 @@ Quick example
 -------------
 
 ~~~~ typescript
-import { object, option, argument } from "@optique/core/parser";
+import { object, option, optional, or, merge, constant } from "@optique/core/parser";
 import { string, integer } from "@optique/core/valueparser";
 import { run } from "@optique/run";
-import process from "node:process";
 
-const parser = object({
-  name: argument(string()),
-  age: option("-a", "--age", integer()),
+// Reusable parser components
+const commonOptions = object({
   verbose: option("-v", "--verbose"),
+  config: optional(option("-c", "--config", string())),
 });
 
-const config = run(parser, { help: "both" });
+// Mutually exclusive deployment strategies
+const localDeploy = object({
+  mode: constant("local" as const),
+  path: option("--path", string()),
+  port: option("--port", integer({ min: 1000 })),
+});
 
-console.log(`Hello ${config.name}!`);
-if (config.age) console.log(`You are ${config.age} years old.`);
-if (config.verbose) console.log("Verbose mode enabled.");
+const cloudDeploy = object({
+  mode: constant("cloud" as const),
+  provider: option("--provider", string()),
+  region: option("--region", string()),
+  apiKey: option("--api-key", string()),
+});
+
+// Compose parsers with type-safe constraints
+const parser = merge(
+  commonOptions,
+  or(localDeploy, cloudDeploy)
+);
+
+const config = run(parser, { help: "both" });
+// config: {
+//   readonly verbose: boolean;
+//   readonly config: string | undefined;
+// } & (
+//   | {
+//       readonly mode: "local";
+//       readonly path: string;
+//       readonly port: number;
+//   }
+//   | {
+//       readonly mode: "cloud";
+//       readonly provider: string;
+//       readonly region: string;
+//       readonly apiKey: string;
+//   }
+// )
+
+// TypeScript knows exactly what's available based on the mode
+if (config.mode === "local") {
+  console.log(`Deploying to ${config.path} on port ${config.port}`);
+} else {
+  console.log(`Deploying to ${config.provider} in ${config.region}`);
+}
 ~~~~
 
 

@@ -38,6 +38,18 @@ To be released.
     different state management strategies using specialized state handling to
     preserve the expected state format for each parser type.
 
+ -  Modified `Parser.getDocFragments()` method signature to use
+    `DocState<TState>` discriminated union instead of direct state values.
+    The new signature is `getDocFragments(state: DocState<TState>, ...args)`.
+    This change improves type safety by explicitly modeling when parser state
+    is available versus unavailable, fixing crashes in help generation when
+    using `merge()` with `or()` combinations. This only affects advanced users
+    who directly call `getDocFragments()` or implement custom parsers.
+
+     -  Added `DocState` type.
+     -  Changed the type of `Parser.getDocFragments()`'s first parameter
+        from `TState` to `DocState<TState>`.
+
 
 Version 0.2.0
 -------------

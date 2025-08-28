@@ -78,7 +78,10 @@ describe("constant", () => {
     it("should return empty array as constants have no documentation", () => {
       const parser = constant("test");
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.deepEqual(fragments, { fragments: [] });
     });
@@ -87,8 +90,14 @@ describe("constant", () => {
       const parser1 = constant(42);
       const parser2 = constant("test");
 
-      const fragments1 = parser1.getDocFragments(parser1.initialState);
-      const fragments2 = parser2.getDocFragments(parser2.initialState);
+      const fragments1 = parser1.getDocFragments({
+        kind: "available",
+        state: parser1.initialState,
+      });
+      const fragments2 = parser2.getDocFragments({
+        kind: "available",
+        state: parser2.initialState,
+      });
 
       assert.deepEqual(fragments1, { fragments: [] });
       assert.deepEqual(fragments2, { fragments: [] });
@@ -97,9 +106,12 @@ describe("constant", () => {
     it("should return empty array with default value parameter", () => {
       const parser = constant("hello");
 
-      const fragments1 = parser.getDocFragments(parser.initialState);
+      const fragments1 = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
       const fragments2 = parser.getDocFragments(
-        parser.initialState,
+        { kind: "available", state: parser.initialState },
         parser.initialState,
       );
 
@@ -113,14 +125,29 @@ describe("constant", () => {
       const booleanParser = constant(true);
       const objectParser = constant({ key: "value" });
 
-      assert.deepEqual(stringParser.getDocFragments("string"), {
-        fragments: [],
-      });
-      assert.deepEqual(numberParser.getDocFragments(123), { fragments: [] });
-      assert.deepEqual(booleanParser.getDocFragments(true), { fragments: [] });
-      assert.deepEqual(objectParser.getDocFragments({ key: "value" }), {
-        fragments: [],
-      });
+      assert.deepEqual(
+        stringParser.getDocFragments({ kind: "available", state: "string" }),
+        {
+          fragments: [],
+        },
+      );
+      assert.deepEqual(
+        numberParser.getDocFragments({ kind: "available", state: 123 }),
+        { fragments: [] },
+      );
+      assert.deepEqual(
+        booleanParser.getDocFragments({ kind: "available", state: true }),
+        { fragments: [] },
+      );
+      assert.deepEqual(
+        objectParser.getDocFragments({
+          kind: "available",
+          state: { key: "value" },
+        }),
+        {
+          fragments: [],
+        },
+      );
     });
   });
 });
@@ -446,7 +473,10 @@ describe("option", () => {
   describe("getDocFragments", () => {
     it("should return documentation fragment for boolean flag option", () => {
       const parser = option("-v", "--verbose");
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -466,7 +496,10 @@ describe("option", () => {
 
     it("should return documentation fragment for option with value parser", () => {
       const parser = option("--port", integer());
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -484,7 +517,10 @@ describe("option", () => {
     it("should include description when provided", () => {
       const description = message`Enable verbose output`;
       const parser = option("-v", "--verbose", { description });
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -495,7 +531,12 @@ describe("option", () => {
 
     it("should include default value when provided", () => {
       const parser = option("--port", integer());
-      const fragments = parser.getDocFragments(parser.initialState, 8080);
+      const fragments = parser.getDocFragments(
+        parser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: parser.initialState },
+        8080,
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -506,7 +547,12 @@ describe("option", () => {
 
     it("should not include default value for boolean flags", () => {
       const parser = option("-v", "--verbose");
-      const fragments = parser.getDocFragments(parser.initialState, true);
+      const fragments = parser.getDocFragments(
+        parser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: parser.initialState },
+        true,
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -517,7 +563,12 @@ describe("option", () => {
 
     it("should work with string value parser and default", () => {
       const parser = option("--name", string());
-      const fragments = parser.getDocFragments(parser.initialState, "John");
+      const fragments = parser.getDocFragments(
+        parser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: parser.initialState },
+        "John",
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -528,7 +579,10 @@ describe("option", () => {
 
     it("should work with custom metavar in value parser", () => {
       const parser = option("--file", string({ metavar: "PATH" }));
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -800,7 +854,10 @@ describe("flag", () => {
       const parser = flag("-f", "--force", {
         description: message`Force operation`,
       });
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -956,7 +1013,10 @@ describe("object", () => {
         file: argument(string({ metavar: "FILE" })),
       });
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       // Should have a section containing all entries
       assert.ok(fragments.fragments.length > 0);
@@ -976,7 +1036,10 @@ describe("object", () => {
         port: option("-p", "--port", integer()),
       });
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -994,7 +1057,7 @@ describe("object", () => {
 
       const defaultValues = { verbose: true, port: 8080 };
       const fragments = parser.getDocFragments(
-        parser.initialState,
+        { kind: "available", state: parser.initialState },
         defaultValues,
       );
 
@@ -1028,7 +1091,10 @@ describe("object", () => {
         nested: nestedParser,
       });
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -1039,7 +1105,10 @@ describe("object", () => {
 
     it("should work with empty object", () => {
       const parser = object({});
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -1056,7 +1125,10 @@ describe("object", () => {
         port: option("-p", "--port", integer()),
       });
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -1232,7 +1304,10 @@ describe("tuple", () => {
         argument(string({ metavar: "FILE" })),
       ]);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       // Should have a section containing all entries
       assert.ok(fragments.fragments.length > 0);
@@ -1250,7 +1325,10 @@ describe("tuple", () => {
         argument(string({ metavar: "FILE" })),
       ]);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -1269,7 +1347,9 @@ describe("tuple", () => {
 
       const defaultValues = [true, 8080, "input.txt"];
       const fragments = parser.getDocFragments(
-        parser.initialState,
+        parser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: parser.initialState },
         defaultValues,
       );
 
@@ -1294,7 +1374,10 @@ describe("tuple", () => {
 
     it("should handle empty tuple", () => {
       const parser = tuple([]);
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -1314,7 +1397,10 @@ describe("tuple", () => {
         nestedParser,
       ]);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -1330,7 +1416,10 @@ describe("tuple", () => {
         option("-p", "--port", integer()),
       ]);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -1354,7 +1443,10 @@ describe("tuple", () => {
         argument(string({ metavar: "OUTPUT" })),
       ]);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -1508,7 +1600,10 @@ describe("argument", () => {
   describe("getDocFragments", () => {
     it("should return documentation fragment for argument", () => {
       const parser = argument(string({ metavar: "FILE" }));
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -1525,7 +1620,10 @@ describe("argument", () => {
     it("should include description when provided", () => {
       const description = message`Input file to process`;
       const parser = argument(string({ metavar: "FILE" }), { description });
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -1537,7 +1635,9 @@ describe("argument", () => {
     it("should include default value when provided", () => {
       const parser = argument(string({ metavar: "FILE" }));
       const fragments = parser.getDocFragments(
-        parser.initialState,
+        parser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: parser.initialState },
         "input.txt",
       );
 
@@ -1550,7 +1650,12 @@ describe("argument", () => {
 
     it("should work with integer argument", () => {
       const parser = argument(integer({ metavar: "PORT" }));
-      const fragments = parser.getDocFragments(parser.initialState, 8080);
+      const fragments = parser.getDocFragments(
+        parser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: parser.initialState },
+        8080,
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -1565,7 +1670,10 @@ describe("argument", () => {
 
     it("should work without default value", () => {
       const parser = argument(string({ metavar: "FILE" }));
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -1898,8 +2006,14 @@ describe("optional", () => {
       const optionalParser = optional(baseParser);
 
       // Test with undefined state
-      const fragments1 = optionalParser.getDocFragments(undefined);
-      const baseFragments = baseParser.getDocFragments(baseParser.initialState);
+      const fragments1 = optionalParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+      const baseFragments = baseParser.getDocFragments(
+        baseParser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: baseParser.initialState },
+      );
       assert.deepEqual(fragments1, baseFragments);
     });
 
@@ -1911,7 +2025,10 @@ describe("optional", () => {
       const wrappedState = [{ success: true as const, value: 8080 }] as [
         { success: true; value: number },
       ];
-      const fragments = optionalParser.getDocFragments(wrappedState, 8080);
+      const fragments = optionalParser.getDocFragments(
+        { kind: "available" as const, state: wrappedState },
+        8080,
+      );
 
       // Should delegate to base parser with unwrapped state and default value
       assert.equal(fragments.fragments.length, 1);
@@ -1930,7 +2047,7 @@ describe("optional", () => {
       const optionalParser = optional(baseParser);
 
       const fragments = optionalParser.getDocFragments(
-        undefined,
+        { kind: "unavailable" as const },
         "default.txt",
       );
 
@@ -1950,7 +2067,9 @@ describe("optional", () => {
       const baseParser = option("-v", "--verbose", { description });
       const optionalParser = optional(baseParser);
 
-      const fragments = optionalParser.getDocFragments(undefined);
+      const fragments = optionalParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -2257,8 +2376,14 @@ describe("withDefault", () => {
       const defaultParser = withDefault(baseParser, false);
 
       // Test with undefined state
-      const fragments1 = defaultParser.getDocFragments(undefined);
-      const baseFragments = baseParser.getDocFragments(baseParser.initialState);
+      const fragments1 = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+      const baseFragments = baseParser.getDocFragments(
+        baseParser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: baseParser.initialState },
+      );
       assert.deepEqual(fragments1, baseFragments);
     });
 
@@ -2270,7 +2395,10 @@ describe("withDefault", () => {
       const wrappedState = [{ success: true as const, value: 8080 }] as [
         { success: true; value: number },
       ];
-      const fragments = defaultParser.getDocFragments(wrappedState, 8080);
+      const fragments = defaultParser.getDocFragments(
+        { kind: "available" as const, state: wrappedState },
+        8080,
+      );
 
       // Should delegate to base parser with unwrapped state and default value
       assert.equal(fragments.fragments.length, 1);
@@ -2288,7 +2416,9 @@ describe("withDefault", () => {
       const baseParser = option("-p", "--port", integer());
       const defaultParser = withDefault(baseParser, 3000);
 
-      const fragments = defaultParser.getDocFragments(undefined);
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -2301,7 +2431,10 @@ describe("withDefault", () => {
       const baseParser = option("-p", "--port", integer());
       const defaultParser = withDefault(baseParser, 3000);
 
-      const fragments = defaultParser.getDocFragments(undefined, 8080);
+      const fragments = defaultParser.getDocFragments(
+        { kind: "unavailable" as const },
+        8080,
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -2315,7 +2448,9 @@ describe("withDefault", () => {
       const defaultFunc = () => 3000;
       const defaultParser = withDefault(baseParser, defaultFunc);
 
-      const fragments = defaultParser.getDocFragments(undefined);
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -2329,7 +2464,9 @@ describe("withDefault", () => {
       const baseParser = option("-p", "--port", integer(), { description });
       const defaultParser = withDefault(baseParser, 3000);
 
-      const fragments = defaultParser.getDocFragments(undefined);
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -2342,7 +2479,9 @@ describe("withDefault", () => {
       const baseParser = argument(string({ metavar: "FILE" }));
       const defaultParser = withDefault(baseParser, "input.txt");
 
-      const fragments = defaultParser.getDocFragments(undefined);
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -2646,8 +2785,16 @@ describe("map", () => {
     const baseParser = option("-v", "--verbose");
     const mappedParser = map(baseParser, (b) => !b);
 
-    const fragments = mappedParser.getDocFragments(mappedParser.initialState);
-    const baseFragments = baseParser.getDocFragments(baseParser.initialState);
+    const fragments = mappedParser.getDocFragments(
+      mappedParser.initialState === undefined
+        ? { kind: "unavailable" as const }
+        : { kind: "available" as const, state: mappedParser.initialState },
+    );
+    const baseFragments = baseParser.getDocFragments(
+      baseParser.initialState === undefined
+        ? { kind: "unavailable" as const }
+        : { kind: "available" as const, state: baseParser.initialState },
+    );
     assert.deepEqual(fragments, baseFragments);
   });
 
@@ -2656,7 +2803,11 @@ describe("map", () => {
     const baseParser = option("-v", "--verbose", { description });
     const mappedParser = map(baseParser, (b) => !b);
 
-    const fragments = mappedParser.getDocFragments(mappedParser.initialState);
+    const fragments = mappedParser.getDocFragments(
+      mappedParser.initialState === undefined
+        ? { kind: "unavailable" as const }
+        : { kind: "available" as const, state: mappedParser.initialState },
+    );
 
     assert.equal(fragments.fragments.length, 1);
     assert.equal(fragments.fragments[0].type, "entry");
@@ -3180,8 +3331,14 @@ describe("multiple", () => {
       const multipleParser = multiple(baseParser);
 
       // Should delegate to base parser with the last state
-      const fragments = multipleParser.getDocFragments([]);
-      const baseFragments = baseParser.getDocFragments(baseParser.initialState);
+      const fragments = multipleParser.getDocFragments(
+        { kind: "available" as const, state: [] },
+      );
+      const baseFragments = baseParser.getDocFragments(
+        baseParser.initialState === undefined
+          ? { kind: "unavailable" as const }
+          : { kind: "available" as const, state: baseParser.initialState },
+      );
       assert.deepEqual(fragments, baseFragments);
     });
 
@@ -3193,7 +3350,10 @@ describe("multiple", () => {
         { success: true as const, value: "en" },
         { success: true as const, value: "fr" },
       ];
-      const fragments = multipleParser.getDocFragments(states, ["en", "fr"]);
+      const fragments = multipleParser.getDocFragments(
+        { kind: "available" as const, state: states },
+        ["en", "fr"],
+      );
 
       // Should delegate to base parser with latest state and first default value
       assert.equal(fragments.fragments.length, 1);
@@ -3215,7 +3375,10 @@ describe("multiple", () => {
       const multipleParser = multiple(baseParser);
 
       const states = [{ success: true as const, value: "en" }];
-      const fragments = multipleParser.getDocFragments(states, []);
+      const fragments = multipleParser.getDocFragments(
+        { kind: "available" as const, state: states },
+        [],
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -3228,10 +3391,13 @@ describe("multiple", () => {
       const baseParser = argument(string({ metavar: "FILE" }));
       const multipleParser = multiple(baseParser);
 
-      const fragments = multipleParser.getDocFragments([], [
-        "file1.txt",
-        "file2.txt",
-      ]);
+      const fragments = multipleParser.getDocFragments(
+        { kind: "available" as const, state: [] },
+        [
+          "file1.txt",
+          "file2.txt",
+        ],
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -3249,7 +3415,9 @@ describe("multiple", () => {
       const baseParser = option("-l", "--locale", string(), { description });
       const multipleParser = multiple(baseParser);
 
-      const fragments = multipleParser.getDocFragments([]);
+      const fragments = multipleParser.getDocFragments(
+        { kind: "available" as const, state: [] },
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -3262,7 +3430,9 @@ describe("multiple", () => {
       const baseParser = option("-v", "--verbose");
       const multipleParser = multiple(baseParser);
 
-      const fragments = multipleParser.getDocFragments([]);
+      const fragments = multipleParser.getDocFragments(
+        { kind: "available" as const, state: [] },
+      );
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -3374,7 +3544,9 @@ describe("or", () => {
       const parser2 = option("-b", "--banana");
       const orParser = or(parser1, parser2);
 
-      const fragments = orParser.getDocFragments(undefined);
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       // Should return sections with entries from all parsers
       assert.ok(fragments.fragments.length > 0);
@@ -3416,7 +3588,9 @@ describe("or", () => {
       const parser2 = argument(string({ metavar: "FILE" }));
       const orParser = or(parser1, parser2);
 
-      const fragments = orParser.getDocFragments(undefined);
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       assert.ok(fragments.fragments.length > 0);
       const sections = fragments.fragments.filter((f) =>
@@ -3442,7 +3616,9 @@ describe("or", () => {
       const parser2 = option("-q", "--quiet", { description: description2 });
       const orParser = or(parser1, parser2);
 
-      const fragments = orParser.getDocFragments(undefined);
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -3468,7 +3644,9 @@ describe("or", () => {
       const parser3 = option("-c");
       const orParser = or(parser1, parser2, parser3);
 
-      const fragments = orParser.getDocFragments(undefined);
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       const sections = fragments.fragments.filter((f) =>
         f.type === "section"
@@ -3499,7 +3677,9 @@ describe("or", () => {
       const nestedParser2 = object("Group B", { flag: option("-b") });
       const orParser = or(nestedParser1, nestedParser2);
 
-      const fragments = orParser.getDocFragments(undefined);
+      const fragments = orParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
 
       // Should have sections from nested parsers
       const sections = fragments.fragments.filter((f) =>
@@ -4184,7 +4364,10 @@ describe("merge", () => {
       });
       const parser = merge(parser1, parser2);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       const section = fragments.fragments[0];
@@ -4214,7 +4397,10 @@ describe("merge", () => {
       });
       const parser = merge(parser1, parser2);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       const section = fragments.fragments[0];
@@ -4234,7 +4420,10 @@ describe("merge", () => {
       });
       const parser = merge(parser1, parser2);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       const section = fragments.fragments[0];
@@ -4252,7 +4441,10 @@ describe("merge", () => {
       });
       const parser = merge(parser1, parser2);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       const section = fragments.fragments[0];
@@ -4266,7 +4458,10 @@ describe("merge", () => {
       const parser2 = object({ flag2: option("-2") });
       const parser = merge(parser1, parser2);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       const section = fragments.fragments[0];
@@ -4289,7 +4484,10 @@ describe("merge", () => {
       });
       const parser = merge(simpleParser, detailedParser, argumentParser);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       const section = fragments.fragments[0];
@@ -5200,7 +5398,10 @@ describe("command", () => {
   describe("getDocFragments", () => {
     it("should return documentation fragment for command when not matched", () => {
       const parser = command("show", argument(string()));
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -5216,7 +5417,10 @@ describe("command", () => {
     it("should include description when provided", () => {
       const description = message`Show item details`;
       const parser = command("show", argument(string()), { description });
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -5234,7 +5438,10 @@ describe("command", () => {
 
       // Simulate matched state
       const matchedState: ["matched", string] = ["matched", "show"];
-      const fragments = parser.getDocFragments(matchedState);
+      const fragments = parser.getDocFragments({
+        kind: "available" as const,
+        state: matchedState,
+      });
 
       // Should delegate to inner parser and return its fragments
       assert.ok(fragments.fragments.length > 0);
@@ -5250,12 +5457,12 @@ describe("command", () => {
       const parser = command("show", innerParser);
 
       // Simulate parsing state
-      const parsingState = [
+      const parsingState: ["parsing", typeof innerParser.initialState] = [
         "parsing" as const,
         innerParser.initialState,
       ];
       const fragments = parser.getDocFragments(
-        parsingState as Parameters<typeof parser.getDocFragments>[0],
+        { kind: "available" as const, state: parsingState },
       );
 
       // Should delegate to inner parser
@@ -5264,7 +5471,10 @@ describe("command", () => {
 
     it("should work with simple command", () => {
       const parser = command("version", constant("1.0.0"));
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -5851,7 +6061,7 @@ describe("nested command help", () => {
 
     // Test help for "nest" shows subcommands
     const nestDocFragments = parser.getDocFragments(
-      ["matched", "nest"],
+      { kind: "available" as const, state: ["matched", "nest"] },
       undefined,
     );
     assert.equal(
@@ -5875,15 +6085,18 @@ describe("nested command help", () => {
 
     // Test help for "nest foo" shows foo options
     const fooDocFragments = parser.getDocFragments(
-      ["parsing", [0, {
-        success: true,
-        next: {
-          buffer: [],
-          optionsTerminated: false,
-          state: ["matched", "foo"],
-        },
-        consumed: ["foo"],
-      }]],
+      {
+        kind: "available" as const,
+        state: ["parsing", [0, {
+          success: true,
+          next: {
+            buffer: [],
+            optionsTerminated: false,
+            state: ["matched", "foo"],
+          },
+          consumed: ["foo"],
+        }]],
+      },
       undefined,
     );
     assert.equal(
@@ -5901,15 +6114,18 @@ describe("nested command help", () => {
 
     // Test help for "nest bar" shows bar options
     const barDocFragments = parser.getDocFragments(
-      ["parsing", [1, {
-        success: true,
-        next: {
-          buffer: [],
-          optionsTerminated: false,
-          state: ["matched", "bar"],
-        },
-        consumed: ["bar"],
-      }]],
+      {
+        kind: "available" as const,
+        state: ["parsing", [1, {
+          success: true,
+          next: {
+            buffer: [],
+            optionsTerminated: false,
+            state: ["matched", "bar"],
+          },
+          consumed: ["bar"],
+        }]],
+      },
       undefined,
     );
     assert.equal(
@@ -6785,7 +7001,10 @@ describe("concat", () => {
       ]);
       const parser = concat(parser1, parser2);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 1);
       const section = fragments.fragments[0];
@@ -6813,7 +7032,10 @@ describe("concat", () => {
       ]);
       const parser = concat(parser1, parser2);
 
-      const fragments = parser.getDocFragments(parser.initialState);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
 
       assert.equal(fragments.fragments.length, 2);
 
