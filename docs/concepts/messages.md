@@ -180,3 +180,120 @@ function createFileError(filename: string, action: string) {
 const configError = createFileError("config.json", "read");
 const validationError = message`${errorMessages.invalidFormat("JSON")} in configuration`;
 ~~~~
+
+
+Terminal output
+---------------
+
+Once you've created structured messages, you can output them to the terminal
+using the print functions provided by `@optique/run/print`.
+
+The `print()` function displays messages to stdout with automatic formatting:
+
+~~~~ typescript twoslash
+import { print } from "@optique/run";
+import { message, optionName } from "@optique/core/message";
+
+const configFile = "app.config.json";
+const port = 3000;
+
+// Simple informational output
+print(message`Starting application...`);
+
+// Output with embedded values
+print(message`Configuration loaded from ${configFile}.`);
+print(message`Server listening on port ${String(port)}.`);
+
+// Output with CLI elements
+print(message`Use ${optionName("--verbose")} for detailed logging.`);
+~~~~
+
+By default, `print()` automatically detects whether your terminal supports
+colors and adjusts the formatting accordingly. Values are highlighted,
+option names are styled consistently, and the output width adapts to your
+terminal size.
+
+
+Error handling
+--------------
+
+The `printError()` function is specifically designed for error messages,
+outputting to stderr with an `Error: ` prefix:
+
+~~~~ typescript twoslash
+import { printError } from "@optique/run";
+import { message, optionName } from "@optique/core/message";
+
+const filename = "missing.txt";
+const invalidValue = "not-a-number";
+
+// Simple error message
+printError(message`File ${filename} not found.`);
+
+// Error with CLI context
+printError(message`Invalid value ${invalidValue} for ${optionName("--port")}.`);
+
+// Critical error that exits the process
+printError(message`Cannot connect to database.`, { exitCode: 1 });
+~~~~
+
+When you provide an `exitCode`, the function will terminate the process after
+displaying the error. This is useful for fatal errors that should stop
+execution immediately.
+
+
+Custom printers
+---------------
+
+For specialized output needs, you can create custom printers with predefined
+formatting options:
+
+~~~~ typescript twoslash
+import { createPrinter } from "@optique/run";
+import { message, metavar, optionName } from "@optique/core/message";
+
+// Create a printer for debugging output
+const debugPrint = createPrinter({
+  stream: "stderr",
+  colors: true,    // Force colors even in non-TTY
+  quotes: false,   // Disable quote marks around values
+});
+
+// Create a printer for plain text logs
+const logPrint = createPrinter({
+  colors: false,   // Disable all colors
+  quotes: true,    // Ensure values are clearly marked
+  maxWidth: 80,    // Wrap long lines at 80 characters
+});
+
+// Use custom printers
+debugPrint(message`Debugging ${metavar("MODULE")} initialization.`);
+logPrint(message`Processing file ${metavar("FILENAME")}.`);
+~~~~
+
+
+Output customization
+--------------------
+
+All output functions accept formatting options to override automatic detection:
+
+~~~~ typescript twoslash
+import { print, printError } from "@optique/run";
+import { message, optionName } from "@optique/core/message";
+
+// Force specific formatting
+print(message`Status: ${optionName("--quiet")} mode enabled`, {
+  colors: false,    // Disable colors
+  quotes: true,     // Force quote marks
+  maxWidth: 60,     // Wrap at 60 characters
+});
+
+// Output to different stream
+print(message`Debug information.`, { stream: "stderr" });
+
+// Error without automatic exit
+printError(message`Warning: deprecated ${optionName("--old-flag")}.`);
+~~~~
+
+The formatting options give you fine-grained control while maintaining
+the structured nature of your messages across different output contexts.

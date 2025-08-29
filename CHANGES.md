@@ -147,6 +147,22 @@ To be released.
     version information is requested, making it suitable for CLI applications
     that need to display version and exit.
 
+ -  Added structured message output functions for CLI applications with
+    automatic terminal detection and consistent formatting:
+
+     -  Added `print()` function for general output to stdout.
+     -  Added `printError()` function for error output to stderr with automatic
+        `Error: ` prefix and optional process exit.
+     -  Added `createPrinter()` function for custom output scenarios with
+        predefined formatting options.
+     -  Added `PrintOptions` and `PrintErrorOptions` interfaces for type-safe
+        configuration.
+     -  Added `Printer` type for custom printer functions.
+
+    All output functions automatically detect terminal capabilities (colors,
+    width) and format structured messages consistently across different
+    environments.
+
 
 Version 0.2.0
 -------------
