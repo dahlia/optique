@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { run } from "@optique/run";
+import { printError, run } from "@optique/run";
 import { or } from "@optique/core/parser";
-import process from "node:process";
+import { message } from "@optique/core/message";
 import { addCommand, executeAdd } from "./commands/add.ts";
 import { commitCommand, executeCommit } from "./commands/commit.ts";
 import { executeLog, logCommand } from "./commands/log.ts";
@@ -52,15 +52,14 @@ async function main() {
       default: {
         // TypeScript will ensure this is never reached if all cases are covered
         const _exhaustive: never = result;
-        console.error("Unknown command");
-        process.exit(1);
+        printError(message`Unknown command.`, { exitCode: 1 });
       }
     }
   } catch (error) {
-    console.error(
-      `Error: ${error instanceof Error ? error.message : String(error)}`,
+    printError(
+      message`${error instanceof Error ? error.message : String(error)}.`,
+      { exitCode: 1 },
     );
-    process.exit(1);
   }
 }
 

@@ -1,16 +1,17 @@
 import { message, metavar, optionName, values } from "@optique/core/message";
 import { createPrinter, print, printError } from "./print.ts";
-import type { PrintOptions, PrintErrorOptions } from "./print.ts";
+import type { PrintErrorOptions, PrintOptions } from "./print.ts";
 import assert from "node:assert/strict";
+import process from "node:process";
 import { describe, it } from "node:test";
 
 // Simple mock function that works in both Deno and Node.js
 function createMockFn(): {
-  fn: (...args: any[]) => any;
-  calls: { arguments: any[] }[];
+  fn: (...args: unknown[]) => void;
+  calls: { arguments: unknown[] }[];
 } {
-  const calls: { arguments: any[] }[] = [];
-  const fn = (...args: any[]) => {
+  const calls: { arguments: unknown[] }[] = [];
+  const fn = (...args: unknown[]) => {
     calls.push({ arguments: args });
   };
   return { fn, calls };
@@ -22,7 +23,7 @@ describe("print module", () => {
       // Mock console.log
       const logMock = createMockFn();
       const originalLog = console.log;
-      console.log = logMock.fn as any;
+      console.log = logMock.fn as typeof console.log;
 
       // Mock TTY detection
       const originalIsTTY = process.stdout.isTTY;
@@ -33,7 +34,7 @@ describe("print module", () => {
         print(msg);
 
         assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0];
+        const output = logMock.calls[0].arguments[0] as string;
         assert.ok(typeof output === "string");
         assert.ok(output.includes("Hello"));
         assert.ok(output.includes("world"));
@@ -47,14 +48,14 @@ describe("print module", () => {
     it("should respect custom formatting options", () => {
       const logMock = createMockFn();
       const originalLog = console.log;
-      console.log = logMock.fn as any;
+      console.log = logMock.fn as typeof console.log;
 
       try {
         const msg = message`Using ${optionName("--verbose")} option`;
         print(msg, { colors: false, quotes: false });
 
         assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0];
+        const output = logMock.calls[0].arguments[0] as string;
         // Should not contain color codes when colors: false
         assert.ok(!output.includes("\x1b["));
         // Should not contain backticks when quotes: false
@@ -67,14 +68,14 @@ describe("print module", () => {
     it("should write to stderr when stream option is specified", () => {
       const errorMock = createMockFn();
       const originalError = console.error;
-      console.error = errorMock.fn as any;
+      console.error = errorMock.fn as typeof console.error;
 
       try {
         const msg = message`Debug info`;
         print(msg, { stream: "stderr" });
 
         assert.strictEqual(errorMock.calls.length, 1);
-        const output = errorMock.calls[0].arguments[0];
+        const output = errorMock.calls[0].arguments[0] as string;
         assert.ok(output.includes("Debug info"));
       } finally {
         console.error = originalError;
@@ -86,7 +87,7 @@ describe("print module", () => {
     it("should write to stderr with Error prefix", () => {
       const errorMock = createMockFn();
       const originalError = console.error;
-      console.error = errorMock.fn as any;
+      console.error = errorMock.fn as typeof console.error;
 
       // Mock TTY detection for stderr
       const originalIsTTY = process.stderr.isTTY;
@@ -97,7 +98,7 @@ describe("print module", () => {
         printError(msg);
 
         assert.strictEqual(errorMock.calls.length, 1);
-        const output = errorMock.calls[0].arguments[0];
+        const output = errorMock.calls[0].arguments[0] as string;
         assert.ok(output.startsWith("Error: "));
         assert.ok(output.includes("File"));
         assert.ok(output.includes("config.json"));
@@ -110,7 +111,7 @@ describe("print module", () => {
     it("should use quotes in non-TTY environments by default", () => {
       const errorMock = createMockFn();
       const originalError = console.error;
-      console.error = errorMock.fn as any;
+      console.error = errorMock.fn as typeof console.error;
 
       // Mock non-TTY environment
       const originalIsTTY = process.stderr.isTTY;
@@ -121,7 +122,7 @@ describe("print module", () => {
         printError(msg);
 
         assert.strictEqual(errorMock.calls.length, 1);
-        const output = errorMock.calls[0].arguments[0];
+        const output = errorMock.calls[0].arguments[0] as string;
         // Should contain backticks in non-TTY environment
         assert.ok(output.includes("`--port`"));
       } finally {
@@ -133,11 +134,11 @@ describe("print module", () => {
     it("should exit with specified exit code", () => {
       const exitMock = createMockFn();
       const originalExit = process.exit;
-      process.exit = exitMock.fn as any;
+      process.exit = exitMock.fn as typeof process.exit;
 
       const errorMock = createMockFn();
       const originalError = console.error;
-      console.error = errorMock.fn as any;
+      console.error = errorMock.fn as typeof console.error;
 
       try {
         const msg = message`Critical error`;
@@ -155,11 +156,11 @@ describe("print module", () => {
     it("should not exit when no exit code is specified", () => {
       const exitMock = createMockFn();
       const originalExit = process.exit;
-      process.exit = exitMock.fn as any;
+      process.exit = exitMock.fn as typeof process.exit;
 
       const errorMock = createMockFn();
       const originalError = console.error;
-      console.error = errorMock.fn as any;
+      console.error = errorMock.fn as typeof console.error;
 
       try {
         const msg = message`Warning message`;
@@ -178,7 +179,7 @@ describe("print module", () => {
     it("should create a printer with default options", () => {
       const logMock = createMockFn();
       const originalLog = console.log;
-      console.log = logMock.fn as any;
+      console.log = logMock.fn as typeof console.log;
 
       const originalIsTTY = process.stdout.isTTY;
       process.stdout.isTTY = true;
@@ -190,7 +191,7 @@ describe("print module", () => {
         printer(msg);
 
         assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0];
+        const output = logMock.calls[0].arguments[0] as string;
         assert.ok(output.includes("Created printer"));
       } finally {
         console.log = originalLog;
@@ -201,7 +202,7 @@ describe("print module", () => {
     it("should create a printer with custom options", () => {
       const errorMock = createMockFn();
       const originalError = console.error;
-      console.error = errorMock.fn as any;
+      console.error = errorMock.fn as typeof console.error;
 
       try {
         const printer = createPrinter({
@@ -214,7 +215,7 @@ describe("print module", () => {
         printer(msg);
 
         assert.strictEqual(errorMock.calls.length, 1);
-        const output = errorMock.calls[0].arguments[0];
+        const output = errorMock.calls[0].arguments[0] as string;
         // Should not contain color codes
         assert.ok(!output.includes("\x1b["));
         // Should contain backticks for metavar
@@ -227,7 +228,7 @@ describe("print module", () => {
     it("should handle complex messages with multiple components", () => {
       const logMock = createMockFn();
       const originalLog = console.log;
-      console.log = logMock.fn as any;
+      console.log = logMock.fn as typeof console.log;
 
       try {
         const printer = createPrinter({ colors: false, quotes: false });
@@ -239,7 +240,7 @@ describe("print module", () => {
         printer(msg);
 
         assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0];
+        const output = logMock.calls[0].arguments[0] as string;
         assert.ok(output.includes("Choose from"));
         assert.ok(output.includes("red"));
         assert.ok(output.includes("green"));
@@ -253,7 +254,7 @@ describe("print module", () => {
     it("should respect maxWidth option", () => {
       const logMock = createMockFn();
       const originalLog = console.log;
-      console.log = logMock.fn as any;
+      console.log = logMock.fn as typeof console.log;
 
       try {
         const printer = createPrinter({ maxWidth: 20 });
@@ -263,7 +264,7 @@ describe("print module", () => {
         printer(longMsg);
 
         assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0];
+        const output = logMock.calls[0].arguments[0] as string;
         // Should contain newlines due to wrapping
         assert.ok(output.includes("\n"));
       } finally {
@@ -276,7 +277,7 @@ describe("print module", () => {
     it("should handle composed messages correctly", () => {
       const logMock = createMockFn();
       const originalLog = console.log;
-      console.log = logMock.fn as any;
+      console.log = logMock.fn as typeof console.log;
 
       try {
         const baseError = message`File ${"test.txt"} not found`;
@@ -285,7 +286,7 @@ describe("print module", () => {
         print(contextualError, { colors: false });
 
         assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0];
+        const output = logMock.calls[0].arguments[0] as string;
         assert.ok(output.includes("Operation failed:"));
         assert.ok(output.includes("File"));
         assert.ok(output.includes("test.txt"));
@@ -314,11 +315,11 @@ describe("print module", () => {
 
       // Both should be usable with their respective functions
       print(message`Test message`, printOpts);
-      
+
       // Mock to prevent actual exit
       const originalExit = process.exit;
-      process.exit = (() => {}) as any;
-      
+      process.exit = (() => {}) as typeof process.exit;
+
       try {
         printError(message`Test error`, printErrorOpts);
       } finally {
@@ -329,15 +330,17 @@ describe("print module", () => {
     it("should return never type when exitCode is provided", () => {
       // Mock to prevent actual exit
       const originalExit = process.exit;
-      process.exit = (() => {}) as any;
-      
+      process.exit = (() => {}) as typeof process.exit;
+
       try {
         // This should have return type 'never' when exitCode is provided
-        const result1: never = printError(message`Fatal error`, { exitCode: 1 });
-        
+        const _result1: never = printError(message`Fatal error`, {
+          exitCode: 1,
+        });
+
         // This should have return type 'void' when exitCode is not provided
-        const result2: void = printError(message`Warning`);
-        
+        const _result2: void = printError(message`Warning`);
+
         // TypeScript should enforce these types at compile time
         assert.ok(true, "Types are enforced at compile time");
       } finally {

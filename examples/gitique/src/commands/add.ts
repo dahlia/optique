@@ -9,7 +9,7 @@ import {
 } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
-import process from "node:process";
+import { print, printError } from "@optique/run";
 import { addAllFiles, addFile, getRepository } from "../utils/git.ts";
 import {
   formatAddedFile,
@@ -64,13 +64,17 @@ export async function executeAdd(config: AddConfig): Promise<void> {
     if (config.all) {
       // Add all files (equivalent to `git add .`)
       if (config.verbose) {
-        console.log("Adding all files to the index...");
+        print(message`Adding all files to the index...`);
       }
 
       addAllFiles(repo);
 
       if (config.verbose) {
-        console.log(formatSuccess("Successfully added all files to the index"));
+        print(
+          message`${
+            formatSuccess("Successfully added all files to the index")
+          }`,
+        );
       }
     } else if (config.files.length > 0) {
       // Add specific files
@@ -79,26 +83,29 @@ export async function executeAdd(config: AddConfig): Promise<void> {
           addFile(repo, file);
 
           if (config.verbose) {
-            console.log(formatAddedFile(file));
+            print(message`${formatAddedFile(file)}`);
           }
         } catch (error) {
-          console.error(formatError(
-            `Failed to add '${file}': ${
-              error instanceof Error ? error.message : String(error)
+          printError(
+            message`${
+              formatError(
+                `Failed to add '${file}': ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              )
             }`,
-          ));
-
-          if (!config.force) {
-            process.exit(1);
-          }
+            config.force ? undefined : { exitCode: 1 },
+          );
         }
       }
 
       if (config.verbose) {
-        console.log(
-          formatSuccess(
-            `Successfully added ${config.files.length} file(s) to the index`,
-          ),
+        print(
+          message`${
+            formatSuccess(
+              `Successfully added ${config.files.length} file(s) to the index`,
+            )
+          }`,
         );
       }
     } else {
@@ -108,9 +115,11 @@ export async function executeAdd(config: AddConfig): Promise<void> {
       );
     }
   } catch (error) {
-    console.error(
-      formatError(error instanceof Error ? error.message : String(error)),
+    printError(
+      message`${
+        formatError(error instanceof Error ? error.message : String(error))
+      }`,
+      { exitCode: 1 },
     );
-    process.exit(1);
   }
 }

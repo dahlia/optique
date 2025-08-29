@@ -92,7 +92,8 @@ inference.
 ~~~~ typescript twoslash
 import { option } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { run, print } from "@optique/run";
+import { message } from "@optique/core/message";
 
 // Create a parser for --name option
 const nameParser = option("--name", string());
@@ -108,7 +109,7 @@ const result = run(nameParser, {
   args: ["--name", "Alice"]
 });
 
-console.log(`Hello, ${result}!`);
+print(message`Hello, ${result}!`);
 // Output: Hello, Alice!
 ~~~~
 
@@ -163,8 +164,9 @@ Let's create a file processor that demonstrates this pattern:
 
 ~~~~ typescript twoslash
 import { argument } from "@optique/core/parser";
-import { run } from "@optique/run";
+import { run, print } from "@optique/run";
 import { path } from "@optique/run/valueparser";
+import { message } from "@optique/core/message";
 
 // Create a parser for a required file argument
 const fileParser = argument(path({ metavar: "FILE" }));
@@ -179,7 +181,7 @@ const result = run(fileParser, {
   args: ["input.txt"]
 });
 
-console.log(`Processing file: ${result}`);
+print(message`Processing file: ${result}`);
 // Output: Processing file: input.txt
 ~~~~
 
@@ -209,8 +211,9 @@ are optional and what types they contain.
 ~~~~ typescript twoslash
 import { type InferValue, argument, object, option } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { run, print } from "@optique/run";
 import { path } from "@optique/run/valueparser";
+import { message } from "@optique/core/message";
 
 const parser = object({
   file: argument(path({ metavar: "FILE" })),
@@ -236,9 +239,9 @@ const config: Config = run(parser, {
   ]
 });
 
-console.log(`Converting ${config.file} to ${config.output}`);
+print(message`Converting ${config.file} to ${config.output}.`);
 if (config.verbose) {
-  console.log("Verbose mode enabled");
+  print(message`Verbose mode enabled.`);
 }
 ~~~~
 
@@ -366,9 +369,10 @@ literal types rather than generic `string` types. This means TypeScript can
 help you handle all possible cases and catch typos at compile time:
 
 ~~~~ typescript twoslash
-import { run } from "@optique/run";
+import { run, print } from "@optique/run";
 import { object, option } from "@optique/core/parser";
 import { choice, integer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 const parser = object({
   logLevel: option("--log-level", choice(["debug", "info", "warn", "error"])),
@@ -396,7 +400,7 @@ if (config.logLevel === "debug") {
 //         ^?
 
 
-  console.log("Debug logging enabled");
+  print(message`Debug logging enabled.`);
 }
 
 switch (config.format) {
@@ -457,7 +461,8 @@ be distinguished from the others:
 ~~~~ typescript twoslash
 import { type InferValue, constant, object, option, or } from "@optique/core/parser";
 import { integer, string, url } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { run, print } from "@optique/run";
+import { message } from "@optique/core/message";
 
 const parser = or(
   object({
@@ -487,7 +492,7 @@ const config: Config = run(parser, {
 });
 
 // TypeScript can't narrow the type yet - we need the discriminator
-console.log(`Running in ${"port" in config ? 'server' : 'client'} mode`);
+print(message`Running in ${"port" in config ? 'server' : 'client'} mode.`);
 ~~~~
 
 ### Discriminated unions with `constant()`
@@ -507,7 +512,8 @@ pattern matching and exhaustive case analysis:
 // @errors: 2339
 import { constant, object, option, or } from "@optique/core/parser";
 import { integer, string, url } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { run, print } from "@optique/run";
+import { message } from "@optique/core/message";
 
 const parser = or(
   object({
@@ -529,12 +535,12 @@ const config = run(parser, {
 
 // Now TypeScript can narrow the type based on the discriminator!
 if (config.mode === "server") {
-  console.log(`Server running on ${config.host}:${config.port}`);
+  print(message`Server running on ${config.host}:${config.port.toString()}.`);
   // TypeScript error if we try to access client-only properties
-  console.log(config.url);
+  print(message`${config.url.toString()}`);
 } else {
-  console.log(`Connecting to ${config.url}`);
-  console.log(`Timeout: ${config.timeout}ms`);
+  print(message`Connecting to ${config.url.toString()}.`);
+  print(message`Timeout: ${config.timeout.toString()}ms.`);
 }
 ~~~~
 
@@ -566,7 +572,8 @@ when you want to simplify your application logic:
 ~~~~ typescript twoslash
 import { map, object, option, optional, withDefault } from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
-import { path, run } from "@optique/run";
+import { path, run, print } from "@optique/run";
+import { message } from "@optique/core/message";
 
 const parser = object({
   // Optional returns T | undefined
@@ -609,12 +616,12 @@ const config = run(parser, {
 
 // Optional properties need checking
 if (config.config) {
-  console.log(`Using config: ${config.config}`);
+  print(message`Using config: ${config.config}.`);
 }
 
 // Default values are always available
-console.log(`Starting ${config.upperName} on ${config.host}:${config.port}`);
-console.log(config.portDescription);
+print(message`Starting ${config.upperName} on ${config.host}:${config.port.toString()}.`);
+print(message`${config.portDescription}`);
 ~~~~
 
 *Value transformation with `map()`*: The `map()` combinator deserves special
@@ -640,7 +647,8 @@ normally:
 ~~~~ typescript twoslash
 import { argument, multiple, object, option } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
-import { path, run } from "@optique/run";
+import { path, run, print } from "@optique/run";
+import { message } from "@optique/core/message";
 
 const parser = object({
   // Multiple files with constraints
@@ -679,7 +687,7 @@ const config = run(parser, {
   ]
 });
 
-console.log(`Processing ${config.files.length} files:`);
+print(message`Processing ${config.files.length.toString()} files:`);
 //                               ^?
 
 
@@ -687,20 +695,20 @@ config.files.forEach((file, index) => {
 //     ^?
 
 
-  console.log(`  ${index + 1}. ${file}`);
+  print(message`  ${(index + 1).toString()}. ${file}`);
 });
 
 if (config.headers.length > 0) {
 //         ^?
 
 
-  console.log("Custom headers:");
+  print(message`Custom headers:`);
   config.headers.forEach(header => {
-    console.log(`  ${header}`);
+    print(message`  ${header}`);
   });
 }
 
-console.log(`Tags: ${config.tags.join(", ")}`);
+print(message`Tags: ${config.tags.join(", ")}.`);
 //                          ^?
 
 ~~~~
@@ -1241,9 +1249,9 @@ const config = run(parser, "myapp", process.argv.slice(2), {
   help: { onShow: process.exit },
 });
 
-console.log(`Processing ${config.input} -> ${config.output}`);
+console.log(`Processing ${config.input} -> ${config.output}.`);
 if (config.port) {
-  console.log(`Server will run on port ${config.port}`);
+  console.log(`Server will run on port ${config.port}.`);
 }
 ~~~~
 
@@ -1253,7 +1261,8 @@ tutorial:
 ~~~~ typescript twoslash
 import { argument, object, option, optional } from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
-import { path, run } from "@optique/run";
+import { path, run, print } from "@optique/run";
+import { message } from "@optique/core/message";
 
 const parser = object({
   input: argument(path({ mustExist: true, metavar: "FILE" })),
@@ -1273,9 +1282,9 @@ const config = run(parser);
 
 
 
-console.log(`Processing ${config.input} -> ${config.output}`);
+print(message`Processing ${config.input} -> ${config.output}.`);
 if (config.port) {
-  console.log(`Server will run on port ${config.port}`);
+  print(message`Server will run on port ${config.port.toString()}.`);
 }
 ~~~~
 

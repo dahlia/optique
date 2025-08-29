@@ -8,7 +8,7 @@ import {
 } from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
-import process from "node:process";
+import { print, printError } from "@optique/run";
 import { getCommitHistory, getRepository } from "../utils/git.ts";
 import {
   formatCommitDetailed,
@@ -131,7 +131,7 @@ export async function executeLog(config: LogConfig): Promise<void> {
     const commits = getCommitHistory(repo, config.maxCount);
 
     if (commits.length === 0) {
-      console.log("No commits found in the repository.");
+      print(message`No commits found in the repository.`);
       return;
     }
 
@@ -139,22 +139,24 @@ export async function executeLog(config: LogConfig): Promise<void> {
     const filteredCommits = filterCommits(commits, config);
 
     if (filteredCommits.length === 0) {
-      console.log("No commits match the specified criteria.");
+      print(message`No commits match the specified criteria.`);
       return;
     }
 
     // Display commits in the requested format
     for (const { oid, commit } of filteredCommits) {
       if (config.oneline) {
-        console.log(formatCommitOneline(oid, commit));
+        print(message`${formatCommitOneline(oid, commit)}`);
       } else {
-        console.log(formatCommitDetailed(oid, commit));
+        print(message`${formatCommitDetailed(oid, commit)}`);
       }
     }
   } catch (error) {
-    console.error(
-      formatError(error instanceof Error ? error.message : String(error)),
+    printError(
+      message`${
+        formatError(error instanceof Error ? error.message : String(error))
+      }`,
+      { exitCode: 1 },
     );
-    process.exit(1);
   }
 }

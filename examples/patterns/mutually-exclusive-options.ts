@@ -7,7 +7,8 @@ import {
   withDefault,
 } from "@optique/core/parser";
 import { integer, string, url } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { message } from "@optique/core/message";
+import { print, run } from "@optique/run";
 
 const parser = or(
   object({
@@ -32,5 +33,5 @@ const parser = or(
   }),
 );
 
-const mode = run(parser);
-console.log(mode);
+const result = run(parser);
+print(message`${JSON.stringify(result, null, 2)}`);

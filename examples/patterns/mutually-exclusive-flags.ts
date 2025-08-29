@@ -1,5 +1,6 @@
 import { map, option, or, withDefault } from "@optique/core/parser";
-import { run } from "@optique/run";
+import { message } from "@optique/core/message";
+import { print, run } from "@optique/run";
 
 const modeParser = withDefault(
   or(
@@ -10,5 +11,5 @@ const modeParser = withDefault(
   "default" as const,
 );
 
-const mode = run(modeParser);
-console.log(mode);
+const result = run(modeParser);
+print(message`Mode selected: ${result}.`);

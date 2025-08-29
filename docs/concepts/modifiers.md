@@ -70,14 +70,14 @@ const parser = object({
 const config = parse(parser, ["--name", "Alice", "--verbose"]);
 
 if (config.success) {
-  console.log(`Name: ${config.value.name}`);        // Safe: always present
-  console.log(`Verbose: ${config.value.verbose}`);  // Safe: always present
+  console.log(`Name: ${config.value.name}.`);        // Safe: always present
+  console.log(`Verbose: ${config.value.verbose}.`);  // Safe: always present
 
   // Must check for undefined
   if (config.value.email) {
-    console.log(`Email: ${config.value.email}`);    // Safe: checked first
+    console.log(`Email: ${config.value.email}.`);    // Safe: checked first
   } else {
-    console.log("No email provided");
+    console.log("No email provided.");
   }
 }
 ~~~~
@@ -107,14 +107,14 @@ const config = parse(backupConfig, ["-c", "src", "dest"]);
 if (config.success) {
   const { source, destination, compression, encrypt } = config.value;
 
-  console.log(`Backing up ${source} to ${destination}`);
+  console.log(`Backing up ${source} to ${destination}.`);
 
   if (compression) {
-    console.log(`Using ${compression} compression`);
+    console.log(`Using ${compression} compression.`);
   }
 
   if (encrypt) {
-    console.log(`Encrypting with key from ${encrypt}`);
+    console.log(`Encrypting with key from ${encrypt}.`);
   }
 }
 ~~~~
@@ -307,13 +307,13 @@ const result = parse(parser, []);
 if (result.success) {
   if (result.value.flag) {
     // TypeScript knows dependent flags are available
-    console.log(`Dependent flag: ${result.value.dependentFlag}`);
+    console.log(`Dependent flag: ${result.value.dependentFlag}.`);
     if (result.value.dependentFlag2) {
-      console.log(`Second dependent flag: ${result.value.dependentFlag2}`);
+      console.log(`Second dependent flag: ${result.value.dependentFlag2}.`);
     }
   } else {
     // TypeScript knows this is the simple case
-    console.log("Flag is disabled");
+    console.log("Flag is disabled.");
   }
 }
 ~~~~
@@ -465,7 +465,7 @@ const config = parse(parser, ["-H", "Accept: text/plain"]);
 
 // Safe to use without checking - arrays are always present
 if (config.success) {
-  config.value.headers.forEach(header => console.log(`Header: ${header}`));
-  console.log(`Found ${config.value.excludes.length} exclusions`);
+  config.value.headers.forEach(header => console.log(`Header: ${header}.`));
+  console.log(`Found ${config.value.excludes.length} exclusions.`);
 }
 ~~~~

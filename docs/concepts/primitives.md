@@ -67,10 +67,10 @@ const parser = or(
 const result = parse(parser, ["add", "--file", "example.txt"]);
 if (result.success && result.value.type === "add") {
   // TypeScript knows this is the "add" command result
-  console.log(`Adding file: ${result.value.file}`);
+  console.log(`Adding file: ${result.value.file}.`);
 } else if (result.success && result.value.type === "remove") {
   // TypeScript knows this is the "remove" command result
-  console.log(`Force remove: ${result.value.force}`);
+  console.log(`Force remove: ${result.value.force}.`);
 }
 ~~~~
 

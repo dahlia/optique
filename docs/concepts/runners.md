@@ -46,9 +46,9 @@ const result = parse(parser, ["--name", "server", "--port", "8080"]);
 
 
 if (result.success) {
-  console.log(`Starting ${result.value.name} on port ${result.value.port}`);
+  console.log(`Starting ${result.value.name} on port ${result.value.port}.`);
 } else {
-  console.error(`Parse error: ${formatMessage(result.error)}`);
+  console.error(`Parse error: ${formatMessage(result.error)}.`);
   process.exit(1);
 }
 ~~~~
@@ -125,7 +125,7 @@ config // Its result type is:
 
 
 
-console.log(`Starting ${config.name} on port ${config.port}`);
+console.log(`Starting ${config.name} on port ${config.port}.`);
 ~~~~
 
 This approach automatically handles:
@@ -176,9 +176,10 @@ with zero configuration required. It automatically handles argument extraction,
 terminal detection, and process exit.
 
 ~~~~ typescript twoslash
-import { run } from "@optique/run";
+import { run, print } from "@optique/run";
 import { object, option } from "@optique/core/parser";
 import { string, integer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 const parser = object({
   name: option("-n", "--name", string()),
@@ -196,7 +197,7 @@ const config = run(parser);
 
 
 // If we reach this point, parsing succeeded
-console.log(`Starting ${config.name} on port ${config.port}`);
+print(message`Starting ${config.name} on port ${config.port.toString()}.`);
 ~~~~
 
 The function automatically:
@@ -380,10 +381,10 @@ type Config = InferValue<typeof parser>;
 function handleConfig(config: Config) {
   if (config.type === "start") {
     // TypeScript knows this is the start command
-    console.log(`Starting on port ${config.port || "default"}`);
+    console.log(`Starting on port ${config.port || "default"}.`);
   } else {
     // TypeScript knows this is the stop command
-    console.log(`Stopping ${config.force ? "forcefully" : "gracefully"}`);
+    console.log(`Stopping ${config.force ? "forcefully" : "gracefully"}.`);
   }
 }
 ~~~~

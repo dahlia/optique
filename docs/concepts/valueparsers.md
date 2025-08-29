@@ -886,8 +886,8 @@ const config = parse(serverConfig, [
 ]);
 
 if (config.success) {
-  console.log(`Binding to ${config.value.address.toString()}:${config.value.port}`);
-  console.log(`Start date: ${config.value.startDate.toDateString()}`);
+  console.log(`Binding to ${config.value.address.toString()}:${config.value.port}.`);
+  console.log(`Start date: ${config.value.startDate.toDateString()}.`);
 }
 ~~~~
 

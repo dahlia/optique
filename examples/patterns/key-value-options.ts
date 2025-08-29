@@ -10,7 +10,7 @@ import {
   type ValueParser,
   type ValueParserResult,
 } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { print, run } from "@optique/run";
 
 /**
  * Custom value parser for key-value pairs with configurable separator
@@ -57,11 +57,11 @@ const config = run(parser);
 if ("env" in config) {
   const envObject = Object.fromEntries(config.env);
   const labelObject = Object.fromEntries(config.labels);
-  console.log("Environment:", envObject);
-  console.log("Labels:", labelObject);
+  print(message`Environment: ${JSON.stringify(envObject, null, 2)}`);
+  print(message`Labels: ${JSON.stringify(labelObject, null, 2)}`);
 } else {
   const setObject = Object.fromEntries(config.set);
   const valuesObject = Object.fromEntries(config.values);
-  console.log("Set:", setObject);
-  console.log("Values:", valuesObject);
+  print(message`Set: ${JSON.stringify(setObject, null, 2)}`);
+  print(message`Values: ${JSON.stringify(valuesObject, null, 2)}`);
 }

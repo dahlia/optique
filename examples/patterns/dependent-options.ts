@@ -1,5 +1,6 @@
 import { flag, merge, object, option, withDefault } from "@optique/core/parser";
-import { run } from "@optique/run";
+import { message } from "@optique/core/message";
+import { print, run } from "@optique/run";
 
 const unionParser = withDefault(
   object({
@@ -28,5 +29,5 @@ type Result =
   )
   & { readonly normalFlag: boolean };
 
-const mode: Result = run(parser);
-console.log(mode);
+const result: Result = run(parser);
+print(message`${JSON.stringify(result, null, 2)}`);

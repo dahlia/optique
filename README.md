@@ -37,7 +37,7 @@ Quick example
 ~~~~ typescript
 import { object, option, optional, or, merge, constant } from "@optique/core/parser";
 import { string, integer } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { run, print } from "@optique/run";
 
 // Reusable parser components
 const commonOptions = object({
@@ -85,9 +85,9 @@ const config = run(parser, { help: "both" });
 
 // TypeScript knows exactly what's available based on the mode
 if (config.mode === "local") {
-  console.log(`Deploying to ${config.path} on port ${config.port}`);
+  print(`Deploying to ${config.path} on port ${config.port}.`);
 } else {
-  console.log(`Deploying to ${config.provider} in ${config.region}`);
+  print(`Deploying to ${config.provider} in ${config.region}.`);
 }
 ~~~~
 

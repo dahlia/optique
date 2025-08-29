@@ -8,7 +8,8 @@ import {
   or,
 } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { message } from "@optique/core/message";
+import { print, run } from "@optique/run";
 
 const addCommand = command(
   "add",
@@ -52,4 +53,4 @@ const result = run(parser, {
   help: "both",
   version: { mode: "both", value: "1.0.0" },
 });
-console.log(result);
+print(message`${JSON.stringify(result, null, 2)}`);

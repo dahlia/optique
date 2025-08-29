@@ -8,7 +8,7 @@ import {
 } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
-import process from "node:process";
+import { print, printError } from "@optique/run";
 import {
   addAllFiles,
   createCommit,
@@ -97,7 +97,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
 
     // Stage all files if --all option is used
     if (config.all) {
-      console.log("Staging all modified and deleted files...");
+      print(message`Staging all modified and deleted files...`);
       await addAllFiles(repo);
     }
 
@@ -122,21 +122,25 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     );
 
     // Output success message
-    console.log(formatCommitCreated(commitOid, commitMessage));
+    print(message`${formatCommitCreated(commitOid, commitMessage)}`);
 
     // Show commit details
     const commit = repo.getCommit(commitOid);
     const author = commit.author();
-    console.log(`Author: ${author.name} <${author.email}>`);
-    console.log(`Date: ${new Date().toISOString()}`);
+    print(message`Author: ${author.name} <${author.email}>`);
+    print(message`Date: ${new Date().toISOString()}`);
 
     if (config.all) {
-      console.log(formatSuccess("Changes automatically staged and committed"));
+      print(
+        message`${formatSuccess("Changes automatically staged and committed")}`,
+      );
     }
   } catch (error) {
-    console.error(
-      formatError(error instanceof Error ? error.message : String(error)),
+    printError(
+      message`${
+        formatError(error instanceof Error ? error.message : String(error))
+      }`,
+      { exitCode: 1 },
     );
-    process.exit(1);
   }
 }

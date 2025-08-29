@@ -263,12 +263,12 @@ const result = run(parser);
 // Compiler ensures exhaustive handling
 switch (result.command) {
   case "add":
-    console.log(`Adding ${result.files.length} files`);
-    if (result.all) console.log("Adding all files");
+    print(message`Adding ${result.files.length.toString()} files.`);
+    if (result.all) print(message`Adding all files.`);
     break;
   case "commit":
-    console.log(`Committing: ${result.message}`);
-    if (result.author) console.log(`Author: ${result.author}`);
+    print(message`Committing: ${result.message}.`);
+    if (result.author) print(message`Author: ${result.author}.`);
     break;
   default:
     const _exhaustive: never = result; // Compilation error if missing cases

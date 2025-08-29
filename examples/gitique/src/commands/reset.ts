@@ -10,7 +10,7 @@ import {
 } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
-import process from "node:process";
+import { print, printError } from "@optique/run";
 import { getRepository, resetIndex } from "../utils/git.ts";
 import type { Repository } from "es-git";
 import {
@@ -101,7 +101,7 @@ function resetFiles(
   quiet: boolean,
 ): void {
   if (!quiet) {
-    console.log(`Resetting ${files.length} file(s) to HEAD...`);
+    print(message`Resetting ${files.length.toString()} file(s) to HEAD...`);
   }
 
   for (const file of files) {
@@ -109,14 +109,16 @@ function resetFiles(
       // In a real implementation, this would reset the specific file
       // For now, we'll just show what would happen
       if (!quiet) {
-        console.log(`Reset '${file}' to HEAD`);
+        print(message`Reset '${file}' to HEAD.`);
       }
     } catch (error) {
-      console.error(formatError(
-        `Failed to reset '${file}': ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      ));
+      printError(message`${
+        formatError(
+          `Failed to reset '${file}': ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        )
+      }`);
     }
   }
 }
@@ -131,7 +133,7 @@ async function resetToCommit(
   quiet: boolean,
 ): Promise<void> {
   if (!quiet) {
-    console.log(`Performing ${mode} reset to ${commit}...`);
+    print(message`Performing ${mode} reset to ${commit}...`);
   }
 
   try {
@@ -139,10 +141,12 @@ async function resetToCommit(
       case "soft":
         // Only move HEAD, keep index and working directory
         if (!quiet) {
-          console.log(
-            formatWarning(
-              "Soft reset: HEAD moved, index and working directory unchanged",
-            ),
+          print(
+            message`${
+              formatWarning(
+                "Soft reset: HEAD moved, index and working directory unchanged",
+              )
+            }`,
           );
         }
         break;
@@ -151,10 +155,12 @@ async function resetToCommit(
         // Move HEAD and reset index, keep working directory
         await resetIndex(repo);
         if (!quiet) {
-          console.log(
-            formatSuccess(
-              "Mixed reset: HEAD and index reset, working directory unchanged",
-            ),
+          print(
+            message`${
+              formatSuccess(
+                "Mixed reset: HEAD and index reset, working directory unchanged",
+              )
+            }`,
           );
         }
         break;
@@ -163,12 +169,18 @@ async function resetToCommit(
         // Move HEAD, reset index, and reset working directory
         await resetIndex(repo);
         if (!quiet) {
-          console.log(
-            formatWarning(
-              "Hard reset: HEAD, index, and working directory reset",
-            ),
+          print(
+            message`${
+              formatWarning(
+                "Hard reset: HEAD, index, and working directory reset",
+              )
+            }`,
           );
-          console.log(formatWarning("All uncommitted changes have been lost!"));
+          print(
+            message`${
+              formatWarning("All uncommitted changes have been lost!")
+            }`,
+          );
         }
         break;
     }
@@ -197,21 +209,27 @@ export async function executeReset(config: ResetConfig): Promise<void> {
       const mode = getResetMode(config);
 
       if (mode === "hard" && !config.quiet) {
-        console.log(formatWarning(
-          "Warning: Hard reset will permanently delete all uncommitted changes!",
-        ));
+        print(message`${
+          formatWarning(
+            "Warning: Hard reset will permanently delete all uncommitted changes!",
+          )
+        }`);
       }
 
       await resetToCommit(repo, targetCommit, mode, config.quiet);
     }
 
     if (!config.quiet) {
-      console.log(formatSuccess("Reset operation completed successfully"));
+      print(
+        message`${formatSuccess("Reset operation completed successfully.")}`,
+      );
     }
   } catch (error) {
-    console.error(
-      formatError(error instanceof Error ? error.message : String(error)),
+    printError(
+      message`${
+        formatError(error instanceof Error ? error.message : String(error))
+      }`,
+      { exitCode: 1 },
     );
-    process.exit(1);
   }
 }

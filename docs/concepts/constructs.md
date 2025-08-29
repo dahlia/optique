@@ -180,7 +180,7 @@ const rangeParser = tuple([
 const config = parse(rangeParser, ["10", "20"]);
 if (config.success) {
   const [start, end] = config.value;
-  console.log(`Processing range ${start} to ${end}`);
+  console.log(`Processing range ${start} to ${end}.`);
 }
 ~~~~
 
@@ -267,11 +267,11 @@ if (config.success) {
   switch (config.value.mode) {
     case "server":
       // TypeScript knows this is server config
-      console.log(`Server running on ${config.value.host}:${config.value.port}`);
+      console.log(`Server running on ${config.value.host}:${config.value.port}.`);
       break;
     case "client":
       // TypeScript knows this is client config
-      console.log(`Connecting to ${config.value.connect} with timeout ${config.value.timeout}`);
+      console.log(`Connecting to ${config.value.connect} with timeout ${config.value.timeout}.`);
       break;
   }
 }
@@ -627,8 +627,8 @@ const result = parse(fullServer, [
 
 if (result.success) {
   const [verbose, quiet, port, host, logLevel, logFile] = result.value;
-  console.log(`Server: ${host}:${port}, verbose: ${verbose}`);
-  console.log(`Logging: ${logLevel} to ${logFile}`);
+  console.log(`Server: ${host}:${port}, verbose: ${verbose}.`);
+  console.log(`Logging: ${logLevel} to ${logFile}.`);
 }
 ~~~~
 
@@ -704,8 +704,8 @@ const config = parse(dbClient, [
 
 if (config.success) {
   const [user, pass, host, port, ssl, command, file] = config.value;
-  console.log(`Connecting as ${user} to ${host}:${port}`);
-  console.log(`Running ${command} on ${file}`);
+  console.log(`Connecting as ${user} to ${host}:${port}.`);
+  console.log(`Running ${command} on ${file}.`);
 }
 ~~~~
 
@@ -914,11 +914,11 @@ if (result.success) {
   switch (result.value.mode) {
     case "string":
       // TypeScript knows this is string config
-      console.log(`String value: ${result.value.value}`);
+      console.log(`String value: ${result.value.value}.`);
       break;
     case "number":
       // TypeScript knows this is number config
-      console.log(`Number value: ${result.value.value}`);
+      console.log(`Number value: ${result.value.value}.`);
       break;
   }
 }
