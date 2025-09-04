@@ -2,6 +2,7 @@
   "devDependencies": {
     "@optique/core": "workspace:",
     "@optique/run": "workspace:",
+    "@optique/temporal": "workspace:",
     "@shikijs/vitepress-twoslash": "^3.10.0",
     "@types/node": "catalog:",
     "markdown-it-deflist": "^3.0.0",

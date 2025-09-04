@@ -10,6 +10,9 @@
     "tsdown": "npm:tsdown@^0.13.0",
     "typescript": "npm:typescript@^5.8.3"
   },
+  "unstable": [
+    "temporal"
+  ],
   "exclude": [
     ".github/",
     "docs"

@@ -6,6 +6,33 @@ Version 0.4.0
 
 To be released.
 
+### @optique/temporal
+
+The *@optique/temporal* package was introduced in this release, providing
+parsers for JavaScript Temporal types. This package depends on
+the *@js-temporal/polyfill* package for environments that do not yet
+support Temporal natively.
+
+ -  Added `TimeZone` type.
+ -  Added `instant()` value parser.
+ -  Added `InstantOptions` interface.
+ -  Added `duration()` value parser.
+ -  Added `DurationOptions` interface.
+ -  added `zonedDateTime()` value parser.
+ -  Added `ZonedDateTimeOptions` interface.
+ -  Added `plainDate()` value parser.
+ -  Added `PlainDateOptions` interface.
+ -  Added `plainTime()` value parser.
+ -  Added `PlainTimeOptions` interface.
+ -  Added `plainDateTime()` value parser.
+ -  Added `PlainDateTimeOptions` interface.
+ -  Added `plainYearMonth()` value parser.
+ -  Added `PlainYearMonthOptions` interface.
+ -  Added `plainMonthDay()` value parser.
+ -  Added `PlainMonthDayOptions` interface.
+ -  Added `timeZone()` value parser.
+ -  Added `TimeZoneOptions` interface.
+
 
 Version 0.3.0
 -------------
