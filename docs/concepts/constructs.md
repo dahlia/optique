@@ -112,11 +112,6 @@ type Connection = InferValue<typeof connectionTuple>;
 // Type automatically inferred as above.
 ~~~~
 
-> [!IMPORTANT]
-> You need to use `as const` to ensure the tuple is treated as a fixed-length
-> array for type inference. Without `as const`, TypeScript will infer it as a
-> variable-length array, losing the tuple type.
-
 ### Sequential parsing
 
 The `tuple()` parser processes its component parsers in priority order

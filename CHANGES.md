@@ -8,6 +8,11 @@ To be released.
 
 ### @optique/core
 
+ -  Improved type inference for `tuple()` parser by using `const` type
+    parameter. The generic type parameter now preserves tuple literal types
+    more accurately, providing better type safety and inference when working
+    with tuple parsers.
+
  -  Extended `merge()` combinator to support up to 10 parsers (previously
     limited to 5), allowing more complex CLI configurations with larger numbers
     of parsers to be combined into a single object structure.

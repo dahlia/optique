@@ -1385,7 +1385,7 @@ export function object<
  *          corresponding parser.
  */
 export function tuple<
-  T extends readonly Parser<unknown, unknown>[],
+  const T extends readonly Parser<unknown, unknown>[],
 >(
   parsers: T,
 ): Parser<
@@ -1412,7 +1412,7 @@ export function tuple<
  *          corresponding parser.
  */
 export function tuple<
-  T extends readonly Parser<unknown, unknown>[],
+  const T extends readonly Parser<unknown, unknown>[],
 >(
   label: string,
   parsers: T,
@@ -1428,7 +1428,7 @@ export function tuple<
 >;
 
 export function tuple<
-  T extends readonly Parser<unknown, unknown>[],
+  const T extends readonly Parser<unknown, unknown>[],
 >(
   labelOrParsers: string | T,
   maybeParsers?: T,

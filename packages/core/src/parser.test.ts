@@ -1347,7 +1347,7 @@ describe("tuple", () => {
         argument(string({ metavar: "FILE" })),
       ]);
 
-      const defaultValues = [true, 8080, "input.txt"];
+      const defaultValues = [true, 8080, "input.txt"] as const;
       const fragments = parser.getDocFragments(
         parser.initialState === undefined
           ? { kind: "unavailable" as const }
