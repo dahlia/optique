@@ -148,6 +148,7 @@ const parser = object({ name: option("-n", "--name", string()) });
 const result = run(parser, "myapp", ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
+  showDefault: true,     // Show default values in help text
   help: {                // New grouped API
     mode: "option",      // Only --help option, no help command
   },
@@ -251,6 +252,7 @@ const config = run(parser, {
   args: ["custom", "args"],   // Override process.argv
   colors: true,               // Force colored output
   maxWidth: 100,              // Set output width
+  showDefault: true,          // Show default values in help text
   help: "both",               // Enable both --help and help command
   version: {                  // Advanced version configuration
     value: "2.0.0",           // Version string
@@ -330,6 +332,38 @@ const result4 = run(parser, {
 // No version (default) - simply omit the version option
 const result5 = run(parser, {});
 ~~~~
+
+### Default value display
+
+Both runner functions support displaying default values in help text when
+options or arguments are created with `withDefault()`:
+
+~~~~ typescript twoslash
+import { run } from "@optique/run";
+import { object, option, withDefault } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+
+const parser = object({
+  name: option("-n", "--name", string()),
+  port: withDefault(option("-p", "--port", integer()), 3000),
+  format: withDefault(option("-f", "--format", string()), "json"),
+});
+
+const config = run(parser, {
+  showDefault: true,  // Shows: --port [3000], --format [json]
+});
+
+// Custom formatting
+const config2 = run(parser, {
+  showDefault: { 
+    prefix: " (default: ", 
+    suffix: ")" 
+  }  // Shows: --port (default: 3000), --format (default: json)
+});
+~~~~
+
+Default values are automatically dimmed when colors are enabled, making them
+visually distinct from the main help text.
 
 ### Error handling behavior
 

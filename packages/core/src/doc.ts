@@ -79,6 +79,27 @@ export interface DocFragments {
 }
 
 /**
+ * Configuration for customizing default value display formatting.
+ *
+ * @since 0.4.0
+ */
+export interface ShowDefaultOptions {
+  /**
+   * Text to display before the default value.
+   *
+   * @default `" ["`
+   */
+  readonly prefix?: string;
+
+  /**
+   * Text to display after the default value.
+   *
+   * @default `"]"`
+   */
+  readonly suffix?: string;
+}
+
+/**
  * Options for formatting a documentation page.
  */
 export interface DocPageFormatOptions {
@@ -104,6 +125,31 @@ export interface DocPageFormatOptions {
    * Maximum width of the entire formatted output.
    */
   maxWidth?: number;
+
+  /**
+   * Whether and how to display default values for options and arguments.
+   *
+   * - `boolean`: When `true`, displays defaults using format `[value]`
+   * - `ShowDefaultOptions`: Custom formatting with configurable prefix and suffix
+   *
+   * Default values are automatically dimmed when `colors` is enabled.
+   *
+   * @default `false`
+   * @since 0.4.0
+   *
+   * @example
+   * ```typescript
+   * // Basic usage - shows "[3000]"
+   * { showDefault: true }
+   *
+   * // Custom format - shows "(default: 3000)"
+   * { showDefault: { prefix: " (default: ", suffix: ")" } }
+   *
+   * // Custom format - shows " - defaults to 3000"
+   * { showDefault: { prefix: " - defaults to ", suffix: "" } }
+   * ```
+   */
+  showDefault?: boolean | ShowDefaultOptions;
 }
 
 /**
@@ -190,17 +236,37 @@ export function formatDocPage(
           ? undefined
           : options.maxWidth - termIndent,
       });
+
+      let description = entry.description == null
+        ? ""
+        : formatMessage(entry.description, {
+          colors: options.colors,
+          quotes: !options.colors,
+          maxWidth: options.maxWidth == null
+            ? undefined
+            : options.maxWidth - termIndent - termWidth - 2,
+        });
+
+      // Append default value if showDefault is enabled and default exists
+      if (options.showDefault && entry.default != null) {
+        const prefix = typeof options.showDefault === "object"
+          ? options.showDefault.prefix ?? " ["
+          : " [";
+        const suffix = typeof options.showDefault === "object"
+          ? options.showDefault.suffix ?? "]"
+          : "]";
+        const defaultText = `${prefix}${entry.default}${suffix}`;
+        const formattedDefault = options.colors
+          ? `\x1b[2m${defaultText}\x1b[0m`
+          : defaultText;
+        description += formattedDefault;
+      }
+
       output += `${" ".repeat(termIndent)}${
         ansiAwareRightPad(term, termWidth)
       }  ${
-        entry.description == null ? "" : indentLines(
-          formatMessage(entry.description, {
-            colors: options.colors,
-            quotes: !options.colors,
-            maxWidth: options.maxWidth == null
-              ? undefined
-              : options.maxWidth - termIndent - termWidth - 2,
-          }),
+        description === "" ? "" : indentLines(
+          description,
           termIndent + termWidth + 2,
         )
       }\n`;

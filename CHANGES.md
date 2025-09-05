@@ -93,8 +93,52 @@ To be released.
     The public API remains unchanged - existing `run()` usage continues to work
     identically while benefiting from more robust edge case handling.  [[#13]]
 
+ -  Added `showDefault` option to display default values in help text. When
+    enabled, options and arguments created with `withDefault()` will display
+    their default values in the help output:
+
+    ~~~~ typescript
+    const parser = object({
+      port: withDefault(option("--port", integer()), 3000),
+      format: withDefault(option("--format", string()), "json"),
+    });
+
+    // Basic usage shows: --port [3000], --format [json]
+    formatDocPage("myapp", doc, { showDefault: true });
+
+    // Custom formatting
+    formatDocPage("myapp", doc, {
+      showDefault: { prefix: " (default: ", suffix: ")" }
+    });
+    // Shows: --port (default: 3000), --format (default: json)
+    ~~~~
+
+    The feature is opt-in and backward compatible. Default values are
+    automatically dimmed when colors are enabled. A new `ShowDefaultOptions`
+    interface provides type-safe customization of the display format.  [[#14]]
+
 [#12]: https://github.com/dahlia/optique/issues/12
 [#13]: https://github.com/dahlia/optique/issues/13
+[#14]: https://github.com/dahlia/optique/issues/14
+
+### @optique/run
+
+ -  Added `showDefault` option to the `RunOptions` interface. This option works
+    identically to the same option in `@optique/core/facade`, allowing users
+    to display default values in help text when using the process-integrated
+    `run()` function:
+
+    ~~~~ typescript
+    import { run } from "@optique/run";
+
+    const result = run(parser, {
+      showDefault: true,  // Shows default values in help
+      colors: true,       // With dim styling
+    });
+    ~~~~
+
+    This ensures feature parity between the low-level facade API and the
+    high-level run package.  [[#14]]
 
 ### @optique/temporal
 

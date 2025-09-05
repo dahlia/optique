@@ -83,7 +83,7 @@ describe("formatDocPage", () => {
     assert.equal(result, expected);
   });
 
-  it("should format entries with default values", () => {
+  it("should format entries with default values when showDefault is false", () => {
     const page: DocPage = {
       sections: [{
         entries: [{
@@ -96,6 +96,80 @@ describe("formatDocPage", () => {
 
     const result = formatDocPage("myapp", page);
     const expected = "\n  -p, --port                  Port number\n";
+    assert.equal(result, expected);
+  });
+
+  it("should show default values when showDefault is true", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-p", "--port"] },
+          description: [{ type: "text", text: "Port number" }],
+          default: "8080",
+        }, {
+          term: { type: "option", names: ["-h", "--host"] },
+          default: "localhost",
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showDefault: true });
+    const expected =
+      "\n  -p, --port                  Port number [8080]\n  -h, --host                   [localhost]\n";
+    assert.equal(result, expected);
+  });
+
+  it("should show default values with custom prefix and suffix", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-f", "--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          default: "json",
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, {
+      showDefault: { prefix: " (default: ", suffix: ")" },
+    });
+    const expected =
+      "\n  -f, --format                Output format (default: json)\n";
+    assert.equal(result, expected);
+  });
+
+  it("should dim default values when colors are enabled", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-p", "--port"] },
+          description: [{ type: "text", text: "Port number" }],
+          default: "8080",
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, {
+      showDefault: true,
+      colors: true,
+    });
+    const expected =
+      "\n  \u001b[3m-p\u001b[0m\u001b[2m, \u001b[0m\u001b[3m--port\u001b[0m                  Port number\u001b[2m [8080]\u001b[0m\n";
+    assert.equal(result, expected);
+  });
+
+  it("should not show defaults when entry.default is undefined", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-v", "--verbose"] },
+          description: [{ type: "text", text: "Enable verbose output" }],
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showDefault: true });
+    const expected = "\n  -v, --verbose               Enable verbose output\n";
     assert.equal(result, expected);
   });
 

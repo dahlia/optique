@@ -1,5 +1,6 @@
 import { run as runBase } from "@optique/core/facade";
 import type { InferValue, Parser } from "@optique/core/parser";
+import type { ShowDefaultOptions } from "@optique/core/doc";
 import path from "node:path";
 import process from "node:process";
 
@@ -35,6 +36,19 @@ export interface RunOptions {
    * @default `process.stdout.columns` (auto-detect terminal width)
    */
   readonly maxWidth?: number;
+
+  /**
+   * Whether and how to display default values for options and arguments.
+   *
+   * - `boolean`: When `true`, displays defaults using format `[value]`
+   * - `ShowDefaultOptions`: Custom formatting with configurable prefix and suffix
+   *
+   * Default values are automatically dimmed when `colors` is enabled.
+   *
+   * @default `false`
+   * @since 0.4.0
+   */
+  readonly showDefault?: boolean | ShowDefaultOptions;
 
   /**
    * Help configuration. Determines how help is made available:
@@ -139,6 +153,7 @@ export function run<T extends Parser<unknown, unknown>>(
     args = process.argv.slice(2),
     colors = process.stdout.isTTY,
     maxWidth = process.stdout.columns,
+    showDefault,
     help,
     version,
     aboveError = "usage",
@@ -167,6 +182,7 @@ export function run<T extends Parser<unknown, unknown>>(
   return runBase<T, never, never>(parser, programName, args, {
     colors,
     maxWidth,
+    showDefault,
     help: helpConfig,
     version: versionConfig,
     aboveError,

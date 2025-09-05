@@ -1,4 +1,4 @@
-import { formatDocPage } from "./doc.ts";
+import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import { formatMessage, type Message, message } from "./message.ts";
 import {
   argument,
@@ -448,6 +448,19 @@ export interface RunOptions<THelp, TError> {
   readonly maxWidth?: number;
 
   /**
+   * Whether and how to display default values for options and arguments.
+   *
+   * - `boolean`: When `true`, displays defaults using format `[value]`
+   * - `ShowDefaultOptions`: Custom formatting with configurable prefix and suffix
+   *
+   * Default values are automatically dimmed when `colors` is enabled.
+   *
+   * @default `false`
+   * @since 0.4.0
+   */
+  readonly showDefault?: boolean | ShowDefaultOptions;
+
+  /**
    * Help configuration. When provided, enables help functionality.
    */
   readonly help?: {
@@ -592,6 +605,7 @@ export function run<
   let {
     colors,
     maxWidth,
+    showDefault,
     aboveError = "usage",
     onError = () => {
       throw new RunError("Failed to parse command line arguments.");
@@ -691,6 +705,7 @@ export function run<
         stdout(formatDocPage(programName, doc, {
           colors,
           maxWidth,
+          showDefault,
         }));
       }
       try {
@@ -712,6 +727,7 @@ export function run<
       stderr(formatDocPage(programName, doc, {
         colors,
         maxWidth,
+        showDefault,
       }));
     }
   }
