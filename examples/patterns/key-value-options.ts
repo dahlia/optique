@@ -4,13 +4,13 @@
  * Demonstrates how to parse key=value pairs commonly used in CLI tools
  * like Docker (-e KEY=VALUE) or Kubernetes (--set key=value).
  */
-import { multiple, object, option, or } from "@optique/core/parser";
+import { map, multiple, object, option, or } from "@optique/core/parser";
 import { message, text } from "@optique/core/message";
 import {
   type ValueParser,
   type ValueParserResult,
 } from "@optique/core/valueparser";
-import { print, run } from "@optique/run";
+import { run } from "@optique/run";
 
 /**
  * Custom value parser for key-value pairs with configurable separator
@@ -40,14 +40,26 @@ function keyValue(separator = "="): ValueParser<[string, string]> {
 
 // Docker-style environment variables
 const dockerParser = object({
-  env: multiple(option("-e", "--env", keyValue())),
-  labels: multiple(option("-l", "--label", keyValue(":"))),
+  env: map(
+    multiple(option("-e", "--env", keyValue())),
+    (pairs) => Object.fromEntries(pairs),
+  ),
+  labels: map(
+    multiple(option("-l", "--label", keyValue(":"))),
+    (pairs) => Object.fromEntries(pairs),
+  ),
 });
 
 // Kubernetes-style configuration
 const k8sParser = object({
-  set: multiple(option("--set", keyValue())),
-  values: multiple(option("--values", keyValue(":"))),
+  set: map(
+    multiple(option("--set", keyValue())),
+    (pairs) => Object.fromEntries(pairs),
+  ),
+  values: map(
+    multiple(option("--values", keyValue(":"))),
+    (pairs) => Object.fromEntries(pairs),
+  ),
 });
 
 const parser = or(dockerParser, k8sParser);
@@ -55,13 +67,11 @@ const parser = or(dockerParser, k8sParser);
 const config = run(parser);
 
 if ("env" in config) {
-  const envObject = Object.fromEntries(config.env);
-  const labelObject = Object.fromEntries(config.labels);
-  print(message`Environment: ${JSON.stringify(envObject, null, 2)}`);
-  print(message`Labels: ${JSON.stringify(labelObject, null, 2)}`);
+  // config.env and config.labels are now Record<string, string>
+  console.log("Environment:", config.env);
+  console.log("Labels:", config.labels);
 } else {
-  const setObject = Object.fromEntries(config.set);
-  const valuesObject = Object.fromEntries(config.values);
-  print(message`Set: ${JSON.stringify(setObject, null, 2)}`);
-  print(message`Values: ${JSON.stringify(valuesObject, null, 2)}`);
+  // config.set and config.values are now Record<string, string>
+  console.log("Set:", config.set);
+  console.log("Values:", config.values);
 }
