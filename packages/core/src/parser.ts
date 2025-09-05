@@ -2471,7 +2471,9 @@ export function longestMatch(
  * Helper type to check if all members of a union are object-like.
  * This allows merge() to work with parsers like withDefault() that produce union types.
  */
-type AllObjectLike<T> = T extends Record<string | symbol, unknown> ? T : never;
+type AllObjectLike<T> = T extends readonly unknown[] ? never
+  : T extends Record<string | symbol, unknown> ? T
+  : never;
 
 /**
  * Helper type to extract object-like types from parser value types,
@@ -2499,15 +2501,13 @@ export function merge<
   TA extends Parser<unknown, unknown>,
   TB extends Parser<unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+): Parser<
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -2530,15 +2530,13 @@ export function merge<
   TB extends Parser<unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+): Parser<
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -2560,18 +2558,15 @@ export function merge<
   TB extends Parser<unknown, unknown>,
   TC extends Parser<unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+): Parser<
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -2718,24 +2713,19 @@ export function merge<
   TD extends Parser<unknown, unknown>,
   TE extends Parser<unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+): Parser<
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -4191,6 +4181,101 @@ export function parse<T>(
   return endResult.success
     ? { success: true, value: endResult.value }
     : { success: false, error: endResult.error };
+}
+
+/**
+ * Wraps a parser with a group label for documentation purposes.
+ *
+ * The `group()` function is a documentation-only wrapper that applies a label
+ * to any parser for help text organization. This allows you to use clean code
+ * structure with combinators like {@link merge} while maintaining well-organized
+ * help text through group labeling.
+ *
+ * The wrapped parser has identical parsing behavior but generates documentation
+ * fragments wrapped in a labeled section. This is particularly useful when
+ * combining parsers using {@link merge}—you can wrap the merged result with
+ * `group()` to add a section header in help output.
+ *
+ * @example
+ * ```typescript
+ * const apiOptions = merge(
+ *   object({ endpoint: option("--endpoint", string()) }),
+ *   object({ timeout: option("--timeout", integer()) })
+ * );
+ *
+ * const groupedApiOptions = group("API Options", apiOptions);
+ * // Now produces a labeled "API Options" section in help text
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Can be used with any parser, not just merge()
+ * const verboseGroup = group("Verbosity", object({
+ *   verbose: option("-v", "--verbose"),
+ *   quiet: option("-q", "--quiet")
+ * }));
+ * ```
+ *
+ * @template TValue The value type of the wrapped parser.
+ * @template TState The state type of the wrapped parser.
+ * @param label A descriptive label for this parser group, used for
+ *              documentation and help text organization.
+ * @param parser The parser to wrap with a group label.
+ * @returns A new parser that behaves identically to the input parser
+ *          but generates documentation within a labeled section.
+ * @since 0.4.0
+ */
+export function group<TValue, TState>(
+  label: string,
+  parser: Parser<TValue, TState>,
+): Parser<TValue, TState> {
+  return {
+    $valueType: parser.$valueType,
+    $stateType: parser.$stateType,
+    priority: parser.priority,
+    usage: parser.usage,
+    initialState: parser.initialState,
+    parse: (context) => parser.parse(context),
+    complete: (state) => parser.complete(state),
+    getDocFragments: (state, defaultValue) => {
+      const { description, fragments } = parser.getDocFragments(
+        state,
+        defaultValue,
+      );
+
+      // Collect all entries and titled sections
+      const allEntries: DocEntry[] = [];
+      const titledSections: DocSection[] = [];
+
+      for (const fragment of fragments) {
+        if (fragment.type === "entry") {
+          allEntries.push(fragment);
+        } else if (fragment.type === "section") {
+          if (fragment.title) {
+            // Preserve sections with titles (nested groups)
+            titledSections.push(fragment);
+          } else {
+            // Merge entries from sections without titles into our labeled section
+            allEntries.push(...fragment.entries);
+          }
+        }
+      }
+
+      // Create our labeled section with all collected entries
+      const labeledSection: DocSection = { title: label, entries: allEntries };
+
+      return {
+        description,
+        fragments: [
+          ...titledSections.map<DocFragment>((s) => ({
+            ...s,
+            type: "section",
+          })),
+          { type: "section", ...labeledSection },
+        ],
+      };
+    },
+  };
 }
 
 /**

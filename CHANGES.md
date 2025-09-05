@@ -34,6 +34,50 @@ To be released.
     `object()` calls. The label appears as a section header in help text,
     making it easier to group related options from multiple parsers.  [[#12]]
 
+ -  Added `group()` combinator for organizing any parser under a labeled section
+    in help text. This wrapper function applies a group label to any parser for
+    documentation purposes without affecting parsing behavior:
+
+    ~~~~ typescript
+    // Group mutually exclusive options
+    const outputFormat = group(
+      "Output Format",
+      or(
+        map(flag("--json"), () => "json"),
+        map(flag("--yaml"), () => "yaml"),
+        map(flag("--xml"), () => "xml"),
+      ),
+    );
+    ~~~~
+
+    Unlike `merge()` and `object()` which have built-in label support, `group()`
+    can be used with any parser type (`or()`, `flag()`, `multiple()`, etc.) that
+    doesn't natively support labeling. This enables clean code organization while
+    maintaining well-structured help text.  [[#12]]
+
+ -  Improved type safety for `merge()` combinator by enforcing stricter
+    parameter constraints. The function now rejects parsers that return
+    non-object values (arrays, primitives, etc.) at compile time,
+    producing clear “No overload matches this call” errors instead of
+    allowing invalid combinations that would fail at runtime:
+
+    ~~~~ typescript
+    // These now produce compile-time errors (previously allowed):
+    merge(
+      object({ port: option("--port", integer()) }),  // ✅ Returns object
+      multiple(argument(string())),                   // ❌ Returns array
+    );
+
+    merge(
+      object({ verbose: flag("--verbose") }),         // ✅ Returns object
+      flag("--debug"),                                // ❌ Returns boolean
+    );
+    ~~~~
+
+    This prevents a class of runtime errors where `merge()` would receive
+    incompatible parser types. Existing code using `merge()` with only
+    object-producing parsers (the intended usage) continues to work unchanged.
+
 [#12]: https://github.com/dahlia/optique/issues/12
 
 ### @optique/temporal

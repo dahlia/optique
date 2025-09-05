@@ -6,6 +6,7 @@ import {
   constant,
   flag,
   getDocPage,
+  group,
   type InferValue,
   longestMatch,
   map,
@@ -7558,5 +7559,318 @@ describe("concat", () => {
         ["test"],
       );
     });
+  });
+});
+
+describe("group", () => {
+  it("should wrap a parser with identical parsing behavior", () => {
+    const baseParser = object({
+      verbose: flag("-v", "--verbose"),
+      port: option("-p", "--port", integer()),
+    });
+
+    const groupedParser = group("Server Options", baseParser);
+
+    // Should have same parsing behavior
+    const result1 = parse(baseParser, ["-v", "-p", "8080"]);
+    const result2 = parse(groupedParser, ["-v", "-p", "8080"]);
+
+    assert.ok(result1.success);
+    assert.ok(result2.success);
+    assert.deepStrictEqual(result1.value, result2.value);
+  });
+
+  it("should preserve parser metadata", () => {
+    const baseParser = object({
+      verbose: flag("-v", "--verbose"),
+    });
+
+    const groupedParser = group("Options", baseParser);
+
+    assert.equal(groupedParser.priority, baseParser.priority);
+    assert.deepStrictEqual(groupedParser.usage, baseParser.usage);
+    assert.deepStrictEqual(groupedParser.initialState, baseParser.initialState);
+  });
+
+  it("should wrap documentation in a labeled section", () => {
+    const baseParser = object({
+      verbose: flag("-v", "--verbose"),
+      port: option("-p", "--port", integer()),
+    });
+
+    const groupedParser = group("Server Configuration", baseParser);
+
+    const docs = groupedParser.getDocFragments(
+      { kind: "available", state: groupedParser.initialState },
+      undefined,
+    );
+
+    assert.ok(docs.fragments.length > 0);
+
+    // Should have at least one labeled section
+    const labeledSections = docs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+
+    assert.ok(labeledSections.length > 0);
+    assert.ok(labeledSections.some((s) => s.title === "Server Configuration"));
+  });
+
+  it("should work with or() parser - realistic use case", () => {
+    const outputFormat = or(
+      map(flag("--json"), () => "json" as const),
+      map(flag("--yaml"), () => "yaml" as const),
+      map(flag("--xml"), () => "xml" as const),
+    );
+
+    const groupedFormat = group("Output Format", outputFormat);
+
+    // Test parsing behavior
+    const result = parse(groupedFormat, ["--json"]);
+    assert.ok(result.success);
+    assert.equal(result.value, "json");
+
+    // Test documentation contains the group label
+    const docs = groupedFormat.getDocFragments(
+      { kind: "available", state: groupedFormat.initialState },
+      undefined,
+    );
+
+    const labeledSections = docs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+
+    assert.ok(labeledSections.some((s) => s.title === "Output Format"));
+  });
+
+  it("should work with single flag() parser", () => {
+    const debugOption = flag("--debug");
+    const groupedDebug = group("Debug Options", debugOption);
+
+    // Test parsing behavior
+    const result = parse(groupedDebug, ["--debug"]);
+    assert.ok(result.success);
+    assert.equal(result.value, true);
+
+    // Test documentation contains the group label
+    const docs = groupedDebug.getDocFragments(
+      { kind: "available", state: groupedDebug.initialState },
+      undefined,
+    );
+
+    const labeledSections = docs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+
+    assert.ok(labeledSections.some((s) => s.title === "Debug Options"));
+  });
+
+  it("should work with multiple() parser", () => {
+    const filesParser = multiple(argument(string({ metavar: "FILE" })));
+    const groupedFiles = group("Input Files", filesParser);
+
+    // Test parsing behavior
+    const result = parse(groupedFiles, ["file1.txt", "file2.txt", "file3.txt"]);
+    assert.ok(result.success);
+    assert.deepStrictEqual(result.value, [
+      "file1.txt",
+      "file2.txt",
+      "file3.txt",
+    ]);
+
+    // Test documentation contains the group label
+    const docs = groupedFiles.getDocFragments(
+      { kind: "available", state: groupedFiles.initialState },
+      undefined,
+    );
+
+    const labeledSections = docs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+
+    assert.ok(labeledSections.some((s) => s.title === "Input Files"));
+  });
+
+  it("should handle nested groups", () => {
+    const innerParser = group(
+      "Inner Group",
+      object({
+        debug: flag("--debug"),
+      }),
+    );
+
+    const outerParser = group("Outer Group", innerParser);
+
+    const result = parse(outerParser, ["--debug"]);
+    assert.ok(result.success);
+    assert.deepStrictEqual(result.value, { debug: true });
+
+    // Should have nested section structure
+    const docs = outerParser.getDocFragments(
+      { kind: "available", state: outerParser.initialState },
+      undefined,
+    );
+
+    const labeledSections = docs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+
+    assert.ok(labeledSections.some((s) => s.title === "Outer Group"));
+    assert.ok(labeledSections.some((s) => s.title === "Inner Group"));
+  });
+
+  it("should preserve type information", () => {
+    const baseParser = object({
+      count: option("-c", "--count", integer()),
+      name: option("-n", "--name", string()),
+    });
+
+    const groupedParser = group("Test Options", baseParser);
+
+    // Type should be inferred correctly
+    type ParsedType = InferValue<typeof groupedParser>;
+    const result = parse(groupedParser, ["-c", "42", "-n", "test"]);
+
+    assert.ok(result.success);
+    const value: ParsedType = result.value;
+    assert.equal(value.count, 42);
+    assert.equal(value.name, "test");
+  });
+
+  it("should work with optional() parser in object context", () => {
+    // optional() is typically used within object parsers
+    const appOptions = object({
+      verbose: optional(flag("--verbose")),
+    });
+    const groupedOptions = group("Verbosity Control", appOptions);
+
+    // Test parsing behavior - with flag
+    const result1 = parse(groupedOptions, ["--verbose"]);
+    assert.ok(result1.success);
+    assert.deepStrictEqual(result1.value, { verbose: true });
+
+    // Test parsing behavior - without flag
+    const result2 = parse(groupedOptions, []);
+    assert.ok(result2.success);
+    assert.deepStrictEqual(result2.value, { verbose: undefined });
+
+    // Test documentation
+    const docs = groupedOptions.getDocFragments(
+      { kind: "available", state: groupedOptions.initialState },
+      undefined,
+    );
+
+    const labeledSections = docs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+
+    assert.ok(labeledSections.some((s) => s.title === "Verbosity Control"));
+  });
+
+  it("should work with withDefault() parser in object context", () => {
+    // withDefault() is typically used within object parsers
+    const serverOptions = object({
+      port: withDefault(option("--port", integer()), 3000),
+    });
+    const groupedServer = group("Server Configuration", serverOptions);
+
+    // Test parsing behavior - with option
+    const result1 = parse(groupedServer, ["--port", "8080"]);
+    assert.ok(result1.success);
+    assert.deepStrictEqual(result1.value, { port: 8080 });
+
+    // Test parsing behavior - without option (uses default)
+    const result2 = parse(groupedServer, []);
+    assert.ok(result2.success);
+    assert.deepStrictEqual(result2.value, { port: 3000 });
+
+    // Test documentation
+    const docs = groupedServer.getDocFragments(
+      { kind: "available", state: groupedServer.initialState },
+      undefined,
+    );
+
+    const labeledSections = docs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+
+    assert.ok(labeledSections.some((s) => s.title === "Server Configuration"));
+  });
+
+  it("should demonstrate realistic CLI grouping scenario", () => {
+    // This shows how group() would be used in a real CLI app
+    const logLevel = or(
+      map(flag("--debug"), () => "debug" as const),
+      map(flag("--verbose"), () => "verbose" as const),
+      map(flag("--quiet"), () => "quiet" as const),
+    );
+
+    const inputSource = multiple(
+      argument(string({ metavar: "FILE" })),
+      { min: 1 },
+    );
+
+    const outputOptions = optional(
+      option("--output", string({ metavar: "PATH" })),
+    );
+
+    // Group them with meaningful labels
+    const groupedLogLevel = group("Logging Options", logLevel);
+    const groupedInputSource = group("Input Files", inputSource);
+    const groupedOutputOptions = group("Output Options", outputOptions);
+
+    // These would typically be combined in an object() parser in a real app
+    const logResult = parse(groupedLogLevel, ["--debug"]);
+    assert.ok(logResult.success);
+    assert.equal(logResult.value, "debug");
+
+    const inputResult = parse(groupedInputSource, ["file1.txt", "file2.txt"]);
+    assert.ok(inputResult.success);
+    assert.deepStrictEqual(inputResult.value, ["file1.txt", "file2.txt"]);
+
+    const outputResult = parse(groupedOutputOptions, [
+      "--output",
+      "result.txt",
+    ]);
+    assert.ok(outputResult.success);
+    assert.equal(outputResult.value, "result.txt");
+
+    // Test that each has proper documentation grouping
+    const logDocs = groupedLogLevel.getDocFragments(
+      { kind: "available", state: groupedLogLevel.initialState },
+      undefined,
+    );
+    const logSections = logDocs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+    assert.ok(logSections.some((s) => s.title === "Logging Options"));
+
+    const inputDocs = groupedInputSource.getDocFragments(
+      { kind: "available", state: groupedInputSource.initialState },
+      undefined,
+    );
+    const inputSections = inputDocs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+    assert.ok(inputSections.some((s) => s.title === "Input Files"));
+
+    const outputDocs = groupedOutputOptions.getDocFragments(
+      { kind: "available", state: groupedOutputOptions.initialState },
+      undefined,
+    );
+    const outputSections = outputDocs.fragments.filter(
+      (f): f is DocFragment & { type: "section"; title: string } =>
+        f.type === "section" && "title" in f && typeof f.title === "string",
+    );
+    assert.ok(outputSections.some((s) => s.title === "Output Options"));
   });
 });

@@ -253,7 +253,9 @@ export function run<
           help: constant(false),
           version: constant(true),
         }),
-        versionOption,
+        object({
+          versionFlag: versionOption,
+        }),
       ),
     )
     : help === "none" && version === "both"
@@ -273,7 +275,9 @@ export function run<
           help: constant(false),
           version: constant(true),
         }),
-        versionOption,
+        object({
+          versionFlag: versionOption,
+        }),
       ),
     )
     : help === "command" && version === "none"
@@ -324,7 +328,9 @@ export function run<
           help: constant(false),
           version: constant(true),
         }),
-        versionOption,
+        object({
+          versionFlag: versionOption,
+        }),
       ),
     )
     : help === "command" && version === "both"
@@ -349,7 +355,9 @@ export function run<
           help: constant(false),
           version: constant(true),
         }),
-        versionOption,
+        object({
+          versionFlag: versionOption,
+        }),
       ),
     )
     : help === "option" && version === "none"
@@ -366,7 +374,9 @@ export function run<
           version: constant(false),
           commands: constant([]),
         }),
-        helpOption,
+        object({
+          helpFlag: helpOption,
+        }),
       ),
     )
     : help === "option" && version === "command"
@@ -388,7 +398,9 @@ export function run<
           version: constant(false),
           commands: constant([]),
         }),
-        helpOption,
+        object({
+          helpFlag: helpOption,
+        }),
       ),
     )
     : help === "option" && version === "option"
@@ -398,7 +410,9 @@ export function run<
           help: constant(false),
           version: constant(true),
         }),
-        versionOption,
+        object({
+          versionFlag: versionOption,
+        }),
       ),
       object({
         help: constant(false),
@@ -412,7 +426,9 @@ export function run<
           version: constant(false),
           commands: constant([]),
         }),
-        helpOption,
+        object({
+          helpFlag: helpOption,
+        }),
       ),
     )
     : help === "option" && version === "both"
@@ -422,7 +438,9 @@ export function run<
           help: constant(false),
           version: constant(true),
         }),
-        versionOption,
+        object({
+          versionFlag: versionOption,
+        }),
       ),
       object({
         help: constant(false),
@@ -441,7 +459,9 @@ export function run<
           version: constant(false),
           commands: constant([]),
         }),
-        helpOption,
+        object({
+          helpFlag: helpOption,
+        }),
       ),
     )
     : help === "both" && version === "none"
@@ -463,7 +483,9 @@ export function run<
           version: constant(false),
           commands: constant([]),
         }),
-        helpOption,
+        object({
+          helpFlag: helpOption,
+        }),
       ),
     )
     : help === "both" && version === "command"
@@ -490,7 +512,9 @@ export function run<
           version: constant(false),
           commands: constant([]),
         }),
-        helpOption,
+        object({
+          helpFlag: helpOption,
+        }),
       ),
     )
     : help === "both" && version === "option"
@@ -500,7 +524,9 @@ export function run<
           help: constant(false),
           version: constant(true),
         }),
-        versionOption,
+        object({
+          versionFlag: versionOption,
+        }),
       ),
       object({
         help: constant(true),
@@ -519,7 +545,9 @@ export function run<
           version: constant(false),
           commands: constant([]),
         }),
-        helpOption,
+        object({
+          helpFlag: helpOption,
+        }),
       ),
     )
     : longestMatch(
@@ -528,7 +556,9 @@ export function run<
           help: constant(false),
           version: constant(true),
         }),
-        versionOption,
+        object({
+          versionFlag: versionOption,
+        }),
       ),
       object({
         help: constant(false),
@@ -553,7 +583,9 @@ export function run<
             version: constant(false),
             commands: constant([]),
           }),
-          helpOption,
+          object({
+            helpFlag: helpOption,
+          }),
         ),
       ),
     );

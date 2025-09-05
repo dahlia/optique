@@ -1032,4 +1032,258 @@ The `longestMatch()` combinator bridges the gap between simple alternatives
 (`or()`) and complex composition (`merge()`) by providing intelligent selection
 based on input consumption.
 
+
+`group()` parser
+----------------
+
+*This API is available since Optique 0.4.0.*
+
+The `group()` parser is a documentation-only wrapper that applies a group label
+to any parser for help text organization. This allows you to maintain clean code
+structure with combinators like `or()`, `flag()`, or `multiple()` while
+providing well-organized help output through group labeling.
+
+Unlike `merge()` and `object()` which have built-in label support, many parsers
+don't natively support labeling. The `group()` parser fills this gap by wrapping
+any parser with a labeled section that appears in help documentation.
+
+~~~~ typescript twoslash
+import { group, map, or, flag, multiple, argument } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+
+// Group mutually exclusive output format options
+const outputFormat = group(
+  "Output Format",
+  or(
+    map(flag("--json"), () => "json" as const),
+    map(flag("--yaml"), () => "yaml" as const),
+    map(flag("--xml"), () => "xml" as const),
+  ),
+);
+
+// Group multiple file inputs
+const inputFiles = group(
+  "Input Files",
+  multiple(argument(string({ metavar: "FILE" })), { min: 1 }),
+);
+
+// The labels "Output Format" and "Input Files" will appear as
+// section headers in help text, organizing related options
+~~~~
+
+### Documentation-only wrapper
+
+The `group()` parser has identical parsing behavior to its wrapped parser.
+All parsing operations, state management, and type information are preserved
+unchanged:
+
+~~~~ typescript twoslash
+import { type InferValue, group, or, map, flag, parse } from "@optique/core/parser";
+
+const formatParser = or(
+  map(flag("--json"), () => "json" as const),
+  map(flag("--yaml"), () => "yaml" as const),
+);
+
+const groupedParser = group("Format Options", formatParser);
+
+// Type inference is preserved
+type FormatType = InferValue<typeof groupedParser>;
+//   ^?
+
+
+// Parsing behavior is identical
+const result1 = parse(formatParser, ["--json"]);
+const result2 = parse(groupedParser, ["--json"]);
+
+if (result1.success && result2.success) {
+  // Both produce the same result
+  console.assert(result1.value === result2.value); // "json"
+}
+~~~~
+
+### Realistic usage patterns
+
+The `group()` parser is most useful with parsers that don't have built-in
+labeling support:
+
+~~~~ typescript twoslash
+import {
+  group,
+  or,
+  map,
+  flag,
+  multiple,
+  argument,
+  optional,
+  withDefault,
+  object,
+  option,
+} from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+// ---cut-before---
+// Logging level selection (mutually exclusive)
+const loggingOptions = group(
+  "Logging Options",
+  or(
+    map(flag("--debug"), () => "debug" as const),
+    map(flag("--verbose"), () => "verbose" as const),
+    map(flag("--quiet"), () => "quiet" as const),
+  ),
+);
+
+// Multiple input files
+const inputSources = group(
+  "Input Sources",
+  multiple(argument(string({ metavar: "FILE" })), { min: 1 }),
+);
+
+// Optional output configuration
+const outputConfig = group(
+  "Output Configuration",
+  optional(option("--output", string({ metavar: "PATH" }))),
+);
+
+// Single debug flag
+const debugMode = group(
+  "Debug Mode",
+  flag("--debug-mode"),
+);
+
+// Default server configuration
+const serverSettings = group(
+  "Server Configuration",
+  withDefault(
+    object({
+      port: option("--port", integer()),
+      host: option("--host", string()),
+    }),
+    { port: 3000, host: "localhost" },
+  ),
+);
+~~~~
+
+### Help text organization
+
+The primary benefit of `group()` is organizing help output into logical sections:
+
+~~~~ ansi
+Usage: [1mmyapp[0m [2m([0m[3m--debug[0m | [3m--verbose[0m | [3m--quiet[0m[2m)[0m [2m[[0m[3m--output[0m [4m[2mPATH[0m[2m][0m [3m--debug-mode[0m [2m[[0m[3m--port[0m [4m[2mINTEGER[0m [3m--host[0m [4m[2mSTRING[0m[2m][0m [4mFILE[0m[2m...[0m
+
+Logging Options:
+  [3m--debug[0m
+  [3m--verbose[0m
+  [3m--quiet[0m
+
+Output Configuration:
+  [3m--output[0m [4m[2mPATH[0m
+
+Debug Mode:
+  [3m--debug-mode[0m
+
+Server Configuration:
+  [3m--port[0m [4m[2mINTEGER[0m
+  [3m--host[0m [4m[2mSTRING[0m
+
+Input Sources:
+  [4mFILE[0m
+
+
+~~~~
+
+Without `group()`, these options would appear as a flat list without clear
+organization, making it harder for users to understand the relationship between
+related options.
+
+### Nested groups
+
+The `group()` parser supports nesting, allowing you to create hierarchical
+documentation structures:
+
+~~~~ typescript twoslash
+import { group, object, flag, option } from "@optique/core/parser";
+import { integer } from "@optique/core/valueparser";
+// ---cut-before---
+const debugOptions = object({
+  verbose: flag("--verbose"),
+  trace: flag("--trace"),
+});
+
+const serverOptions = object({
+  port: option("--port", integer()),
+  workers: option("--workers", integer()),
+});
+
+// First level grouping
+const innerDebugGroup = group("Debug Options", debugOptions);
+const innerServerGroup = group("Server Options", serverOptions);
+
+// Second level grouping
+const applicationConfig = group("Application Configuration", object({
+  debug: innerDebugGroup,
+  server: innerServerGroup,
+}));
+
+// This creates a nested structure in help documentation
+~~~~
+
+### Best practices
+
+Use `group()` when you need:
+
+ -  *Section organization*: Grouping related options under meaningful headers
+ -  *Parser flexibility*: Labeling parsers that don't have built-in label support
+ -  *Help text clarity*: Making complex CLIs more user-friendly
+ -  *Clean code structure*: Maintaining modular parser composition
+
+~~~~ typescript twoslash
+import {
+  group,
+  or,
+  map,
+  flag,
+  object,
+  option,
+  multiple,
+  argument,
+  withDefault,
+} from "@optique/core/parser";
+import { string, integer, choice } from "@optique/core/valueparser";
+// ---cut-before---
+// Example: File processing tool with organized help
+const processingMode = group(
+  "Processing Mode",
+  or(
+    map(flag("--compress"), () => "compress" as const),
+    map(flag("--extract"), () => "extract" as const),
+    map(flag("--list"), () => "list" as const),
+  ),
+);
+
+const compressionSettings = group(
+  "Compression Settings",
+  object({
+    level: withDefault(
+      option("--level", integer({ min: 1, max: 9 })),
+      6,
+    ),
+    algorithm: withDefault(
+      option("--algorithm", choice(["gzip", "bzip2", "xz"])),
+      "gzip",
+    ),
+  }),
+);
+
+const inputOutput = group(
+  "Input/Output",
+  object({
+    input: multiple(argument(string({ metavar: "INPUT_FILE" })), { min: 1 }),
+    output: option("-o", "--output", string({ metavar: "OUTPUT_FILE" })),
+  }),
+);
+
+// Each group appears as a distinct section in help text,
+// making the CLI interface much more approachable
+~~~~
+
 <!-- cSpell: ignore myapp -->
