@@ -89,6 +89,8 @@ export default defineConfig({
     editLink: {
       pattern: "https://github.com/dahlia/optique/edit/main/docs/:path",
     },
+
+    outline: "deep",
   },
 
   head: [
