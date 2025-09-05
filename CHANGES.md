@@ -78,7 +78,23 @@ To be released.
     incompatible parser types. Existing code using `merge()` with only
     object-producing parsers (the intended usage) continues to work unchanged.
 
+ -  Improved help and version handling in `run()` function with better edge case
+    support and more consistent behavior. The implementation was refactored from
+    a complex conditional parser generator into modular helper functions,
+    improving maintainability and test coverage:
+
+     -  Enhanced last-option-wins pattern: `--version --help` shows help,
+        `--help --version` shows version
+     -  Added support for options terminator (`--`) to prevent help/version
+        flags after `--` from being interpreted as options
+     -  Improved handling of multiple identical flags
+        (e.g., `--version --version`)
+
+    The public API remains unchanged - existing `run()` usage continues to work
+    identically while benefiting from more robust edge case handling.  [[#13]]
+
 [#12]: https://github.com/dahlia/optique/issues/12
+[#13]: https://github.com/dahlia/optique/issues/13
 
 ### @optique/temporal
 

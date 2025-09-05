@@ -1,5 +1,5 @@
 import { formatDocPage } from "./doc.ts";
-import { formatMessage, message } from "./message.ts";
+import { formatMessage, type Message, message } from "./message.ts";
 import {
   argument,
   command,
@@ -8,15 +8,424 @@ import {
   getDocPage,
   type InferValue,
   longestMatch,
-  merge,
   multiple,
   object,
-  option,
+  optional,
   parse,
   type Parser,
 } from "./parser.ts";
 import { formatUsage } from "./usage.ts";
 import { string } from "./valueparser.ts";
+
+/**
+ * Helper types for parser generation
+ */
+interface HelpParsers {
+  readonly helpCommand: Parser<readonly string[], unknown> | null;
+  readonly helpOption: Parser<boolean, unknown> | null;
+  readonly contextualHelpParser:
+    | Parser<{
+      help: true;
+      version: false;
+      commands: readonly string[];
+      __help: true;
+    }, unknown>
+    | null;
+}
+
+interface VersionParsers {
+  readonly versionCommand: Parser<Record<PropertyKey, never>, unknown> | null;
+  readonly versionOption: Parser<boolean, unknown> | null;
+}
+
+/**
+ * Creates help parsers based on the specified mode.
+ */
+function createHelpParser(mode: "command" | "option" | "both"): HelpParsers {
+  const helpCommand = command(
+    "help",
+    multiple(argument(string({ metavar: "COMMAND" }))),
+    {
+      description: message`Show help information.`,
+    },
+  );
+
+  const helpOption = flag("--help", {
+    description: message`Show help information.`,
+  });
+
+  const _contextualHelpParser = object({
+    help: constant(true),
+    version: constant(false),
+    commands: multiple(argument(string({
+      metavar: "COMMAND",
+      pattern: /^[^-].*$/, // Reject strings starting with -
+    }))),
+    __help: flag("--help"),
+  });
+
+  switch (mode) {
+    case "command":
+      return { helpCommand, helpOption: null, contextualHelpParser: null };
+    case "option":
+      return { helpCommand: null, helpOption, contextualHelpParser: null }; // Remove contextual parser for now
+    case "both":
+      return { helpCommand, helpOption, contextualHelpParser: null }; // Remove contextual parser for now
+  }
+}
+
+/**
+ * Creates version parsers based on the specified mode.
+ */
+function createVersionParser(
+  mode: "command" | "option" | "both",
+): VersionParsers {
+  const versionCommand = command(
+    "version",
+    object({}),
+    {
+      description: message`Show version information.`,
+    },
+  );
+
+  const versionOption = flag("--version", {
+    description: message`Show version information.`,
+  });
+
+  switch (mode) {
+    case "command":
+      return { versionCommand, versionOption: null };
+    case "option":
+      return { versionCommand: null, versionOption };
+    case "both":
+      return { versionCommand, versionOption };
+  }
+}
+
+/**
+ * Result classification types for cleaner control flow.
+ */
+type ParsedResult =
+  | { readonly type: "success"; readonly value: unknown }
+  | { readonly type: "help"; readonly commands: readonly string[] }
+  | { readonly type: "version" }
+  | { readonly type: "error"; readonly error: Message };
+
+/**
+ * Systematically combines the original parser with help and version parsers.
+ */
+function combineWithHelpVersion(
+  originalParser: Parser<unknown, unknown>,
+  helpParsers: HelpParsers,
+  versionParsers: VersionParsers,
+): Parser<unknown, unknown> {
+  const parsers: Parser<unknown, unknown>[] = [];
+
+  // Add options FIRST - they are more specific and should have priority
+
+  // Add help option (standalone) - accepts any mix of options and arguments
+  if (helpParsers.helpOption) {
+    // Create a lenient help parser that accepts help flag anywhere
+    // and ignores all other options/arguments
+    const lenientHelpParser: Parser<unknown, unknown> = {
+      $valueType: [],
+      $stateType: [],
+      priority: 200, // Very high priority
+      usage: helpParsers.helpOption.usage,
+      initialState: null,
+
+      parse(context) {
+        const { buffer, optionsTerminated } = context;
+
+        // If options are terminated (after --), don't match
+        if (optionsTerminated) {
+          return {
+            success: false,
+            error: message`Options terminated`,
+            consumed: 0,
+          };
+        }
+
+        let helpFound = false;
+        let helpIndex = -1;
+        let helpCount = 0;
+
+        // Look for --help and --version to implement last-option-wins
+        let versionIndex = -1;
+        for (let i = 0; i < buffer.length; i++) {
+          if (buffer[i] === "--") break; // Stop at options terminator
+          if (buffer[i] === "--help") {
+            helpFound = true;
+            helpIndex = i;
+            helpCount++;
+          }
+          if (buffer[i] === "--version") {
+            versionIndex = i;
+          }
+        }
+
+        // If both --help and --version are present, but version comes last, don't match
+        if (helpFound && versionIndex > helpIndex) {
+          return {
+            success: false,
+            error: message`Version option wins`,
+            consumed: 0,
+          };
+        }
+
+        // Multiple --help is OK - just show help
+
+        if (helpFound) {
+          // Consume all remaining arguments and return success
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: [],
+              state: {
+                help: true,
+                version: false,
+                commands: [],
+                helpFlag: true,
+              },
+            },
+            consumed: buffer.slice(0),
+          };
+        }
+
+        // --help not found
+        return {
+          success: false,
+          error: message`Flag --help not found`,
+          consumed: 0,
+        };
+      },
+
+      complete(state) {
+        return { success: true, value: state };
+      },
+
+      getDocFragments(state) {
+        return helpParsers.helpOption?.getDocFragments(state) ??
+          { fragments: [] };
+      },
+    };
+
+    parsers.push(lenientHelpParser);
+  }
+
+  // Add version option (standalone) - accepts any mix of options and arguments
+  if (versionParsers.versionOption) {
+    // Create a lenient version parser that accepts version flag anywhere
+    // and ignores all other options/arguments
+    const lenientVersionParser: Parser<unknown, unknown> = {
+      $valueType: [],
+      $stateType: [],
+      priority: 200, // Very high priority
+      usage: versionParsers.versionOption.usage,
+      initialState: null,
+
+      parse(context) {
+        const { buffer, optionsTerminated } = context;
+
+        // If options are terminated (after --), don't match
+        if (optionsTerminated) {
+          return {
+            success: false,
+            error: message`Options terminated`,
+            consumed: 0,
+          };
+        }
+
+        let versionFound = false;
+        let versionIndex = -1;
+        let versionCount = 0;
+
+        // Look for --version and --help to implement last-option-wins
+        let helpIndex = -1;
+        for (let i = 0; i < buffer.length; i++) {
+          if (buffer[i] === "--") break; // Stop at options terminator
+          if (buffer[i] === "--version") {
+            versionFound = true;
+            versionIndex = i;
+            versionCount++;
+          }
+          if (buffer[i] === "--help") {
+            helpIndex = i;
+          }
+        }
+
+        // If both --version and --help are present, but help comes last, don't match
+        if (versionFound && helpIndex > versionIndex) {
+          return {
+            success: false,
+            error: message`Help option wins`,
+            consumed: 0,
+          };
+        }
+
+        // Multiple --version is OK - just show version
+
+        if (versionFound) {
+          // Consume all remaining arguments and return success
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: [],
+              state: { help: false, version: true, versionFlag: true },
+            },
+            consumed: buffer.slice(0),
+          };
+        }
+
+        // --version not found
+        return {
+          success: false,
+          error: message`Flag --version not found`,
+          consumed: 0,
+        };
+      },
+
+      complete(state) {
+        return { success: true, value: state };
+      },
+
+      getDocFragments(state) {
+        return versionParsers.versionOption?.getDocFragments(state) ??
+          { fragments: [] };
+      },
+    };
+
+    parsers.push(lenientVersionParser);
+  }
+
+  // Add version command with optional help flag (enables version --help)
+  if (versionParsers.versionCommand) {
+    parsers.push(object({
+      help: constant(false),
+      version: constant(true),
+      result: versionParsers.versionCommand,
+      helpFlag: helpParsers.helpOption
+        ? optional(helpParsers.helpOption)
+        : constant(false),
+    }));
+  }
+
+  // Add help command
+  if (helpParsers.helpCommand) {
+    parsers.push(object({
+      help: constant(true),
+      version: constant(false),
+      commands: helpParsers.helpCommand,
+    }));
+  }
+
+  // Add contextual help parser
+  if (helpParsers.contextualHelpParser) {
+    parsers.push(helpParsers.contextualHelpParser);
+  }
+
+  // Add main parser LAST - it's the most general
+  parsers.push(object({
+    help: constant(false),
+    version: constant(false),
+    result: originalParser,
+  }));
+  if (parsers.length === 1) {
+    return parsers[0];
+  } else if (parsers.length === 2) {
+    return longestMatch(parsers[0], parsers[1]);
+  } else {
+    // Use variadic longestMatch for all parsers
+    // Our lenient help/version parsers will win because they consume all input
+    return (longestMatch as (
+      ...parsers: Parser<unknown, unknown>[]
+    ) => Parser<unknown, unknown>)(...parsers);
+  }
+}
+
+/**
+ * Classifies the parsing result into a discriminated union for cleaner handling.
+ */
+function classifyResult(
+  result: ReturnType<typeof parse>,
+  args: readonly string[],
+): ParsedResult {
+  if (!result.success) {
+    return { type: "error", error: result.error };
+  }
+
+  const value = result.value;
+  if (
+    typeof value === "object" && value != null && "help" in value &&
+    "version" in value
+  ) {
+    const parsedValue = value as {
+      help: boolean;
+      version: boolean;
+      commands?: readonly string[];
+      result?: unknown;
+      helpFlag?: boolean;
+      versionFlag?: boolean;
+    };
+
+    const hasVersionOption = args.includes("--version");
+    const hasVersionCommand = args.length > 0 && args[0] === "version";
+    const hasHelpOption = args.includes("--help");
+    const hasHelpCommand = args.length > 0 && args[0] === "help";
+
+    // Standard CLI behavior:
+    // 1. `command --help` should show help for that command
+    // 2. `--help --version` or `--version --help` should cause error (conflicting options)
+    // 3. `--version` alone should show version
+    // 4. `--help` alone should show help
+
+    // Check for conflicting options: both --version and --help flags
+    if (
+      hasVersionOption && hasHelpOption && !hasVersionCommand && !hasHelpCommand
+    ) {
+      // Both version and help options provided - this should be an error
+      // Let the parser handle this naturally by not providing special handling
+      // This will result in a parse error
+    }
+
+    // If we have both version command and help flag, help takes precedence (show help for version)
+    if (hasVersionCommand && hasHelpOption && parsedValue.helpFlag) {
+      return { type: "help", commands: ["version"] };
+    }
+
+    // If we have help command or help option, show help
+    if (parsedValue.help && (hasHelpOption || hasHelpCommand)) {
+      let commandContext: readonly string[] = [];
+
+      if (Array.isArray(parsedValue.commands)) {
+        commandContext = parsedValue.commands;
+      } else if (
+        typeof parsedValue.commands === "object" &&
+        parsedValue.commands != null &&
+        "length" in parsedValue.commands
+      ) {
+        commandContext = parsedValue.commands as readonly string[];
+      }
+
+      return { type: "help", commands: commandContext };
+    }
+
+    // If version is present and help is not requested, show version
+    if (
+      (hasVersionOption || hasVersionCommand) &&
+      (parsedValue.version || parsedValue.versionFlag)
+    ) {
+      return { type: "version" };
+    }
+
+    // Neither help nor version requested, return the actual result
+    return { type: "success", value: parsedValue.result ?? value };
+  }
+
+  return { type: "success", value };
+}
 
 /**
  * Configuration options for the {@link run} function.
@@ -191,536 +600,111 @@ export function run<
     stdout = console.log,
   } = options;
 
-  // Determine if help is enabled
+  // Create help and version parsers using the new helper functions
   const help = options.help ? helpMode : "none";
-  const contextualHelpParser = object({
-    help: constant(true),
-    version: constant(false),
-    commands: multiple(argument(string({
-      metavar: "COMMAND",
-      pattern: /^[^-].*$/, // Reject strings starting with -
-    }))),
-    __help: flag("--help"),
-  });
-  const helpCommand = command(
-    "help",
-    multiple(argument(string({ metavar: "COMMAND" }))),
-    {
-      description: message`Show help information.`,
-    },
-  );
-  const helpOption = option("--help", {
-    description: message`Show help information.`,
-  });
-
-  // Determine if version is enabled
   const version = options.version ? versionMode : "none";
-  const versionCommand = command(
-    "version",
-    object({}),
-    {
-      description: message`Show version information.`,
-    },
-  );
-  const versionOption = option("--version", {
-    description: message`Show version information.`,
-  });
+
+  const helpParsers = help === "none"
+    ? { helpCommand: null, helpOption: null, contextualHelpParser: null }
+    : createHelpParser(help);
+
+  const versionParsers = version === "none"
+    ? { versionCommand: null, versionOption: null }
+    : createVersionParser(version);
   // Build augmented parser with help and version functionality
   const augmentedParser = help === "none" && version === "none"
     ? parser
-    : help === "none" && version === "command"
-    ? longestMatch(
-      object({
-        help: constant(false),
-        version: constant(true),
-        result: versionCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-    )
-    : help === "none" && version === "option"
-    ? longestMatch(
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      merge(
-        object({
-          help: constant(false),
-          version: constant(true),
-        }),
-        object({
-          versionFlag: versionOption,
-        }),
-      ),
-    )
-    : help === "none" && version === "both"
-    ? longestMatch(
-      object({
-        help: constant(false),
-        version: constant(true),
-        result: versionCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      merge(
-        object({
-          help: constant(false),
-          version: constant(true),
-        }),
-        object({
-          versionFlag: versionOption,
-        }),
-      ),
-    )
-    : help === "command" && version === "none"
-    ? longestMatch(
-      object({
-        help: constant(true),
-        version: constant(false),
-        commands: helpCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-    )
-    : help === "command" && version === "command"
-    ? longestMatch(
-      object({
-        help: constant(true),
-        version: constant(false),
-        commands: helpCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(true),
-        result: versionCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-    )
-    : help === "command" && version === "option"
-    ? longestMatch(
-      object({
-        help: constant(true),
-        version: constant(false),
-        commands: helpCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      merge(
-        object({
-          help: constant(false),
-          version: constant(true),
-        }),
-        object({
-          versionFlag: versionOption,
-        }),
-      ),
-    )
-    : help === "command" && version === "both"
-    ? longestMatch(
-      object({
-        help: constant(true),
-        version: constant(false),
-        commands: helpCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(true),
-        result: versionCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      merge(
-        object({
-          help: constant(false),
-          version: constant(true),
-        }),
-        object({
-          versionFlag: versionOption,
-        }),
-      ),
-    )
-    : help === "option" && version === "none"
-    ? longestMatch(
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      contextualHelpParser,
-      merge(
-        object({
-          help: constant(true),
-          version: constant(false),
-          commands: constant([]),
-        }),
-        object({
-          helpFlag: helpOption,
-        }),
-      ),
-    )
-    : help === "option" && version === "command"
-    ? longestMatch(
-      object({
-        help: constant(false),
-        version: constant(true),
-        result: versionCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      contextualHelpParser,
-      merge(
-        object({
-          help: constant(true),
-          version: constant(false),
-          commands: constant([]),
-        }),
-        object({
-          helpFlag: helpOption,
-        }),
-      ),
-    )
-    : help === "option" && version === "option"
-    ? longestMatch(
-      merge(
-        object({
-          help: constant(false),
-          version: constant(true),
-        }),
-        object({
-          versionFlag: versionOption,
-        }),
-      ),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      contextualHelpParser,
-      merge(
-        object({
-          help: constant(true),
-          version: constant(false),
-          commands: constant([]),
-        }),
-        object({
-          helpFlag: helpOption,
-        }),
-      ),
-    )
-    : help === "option" && version === "both"
-    ? longestMatch(
-      merge(
-        object({
-          help: constant(false),
-          version: constant(true),
-        }),
-        object({
-          versionFlag: versionOption,
-        }),
-      ),
-      object({
-        help: constant(false),
-        version: constant(true),
-        result: versionCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      contextualHelpParser,
-      merge(
-        object({
-          help: constant(true),
-          version: constant(false),
-          commands: constant([]),
-        }),
-        object({
-          helpFlag: helpOption,
-        }),
-      ),
-    )
-    : help === "both" && version === "none"
-    ? longestMatch(
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      object({
-        help: constant(true),
-        version: constant(false),
-        commands: helpCommand,
-      }),
-      contextualHelpParser,
-      merge(
-        object({
-          help: constant(true),
-          version: constant(false),
-          commands: constant([]),
-        }),
-        object({
-          helpFlag: helpOption,
-        }),
-      ),
-    )
-    : help === "both" && version === "command"
-    ? longestMatch(
-      object({
-        help: constant(true),
-        version: constant(false),
-        commands: helpCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(true),
-        result: versionCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      contextualHelpParser,
-      merge(
-        object({
-          help: constant(true),
-          version: constant(false),
-          commands: constant([]),
-        }),
-        object({
-          helpFlag: helpOption,
-        }),
-      ),
-    )
-    : help === "both" && version === "option"
-    ? longestMatch(
-      merge(
-        object({
-          help: constant(false),
-          version: constant(true),
-        }),
-        object({
-          versionFlag: versionOption,
-        }),
-      ),
-      object({
-        help: constant(true),
-        version: constant(false),
-        commands: helpCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      contextualHelpParser,
-      merge(
-        object({
-          help: constant(true),
-          version: constant(false),
-          commands: constant([]),
-        }),
-        object({
-          helpFlag: helpOption,
-        }),
-      ),
-    )
-    : longestMatch(
-      merge(
-        object({
-          help: constant(false),
-          version: constant(true),
-        }),
-        object({
-          versionFlag: versionOption,
-        }),
-      ),
-      object({
-        help: constant(false),
-        version: constant(true),
-        result: versionCommand,
-      }),
-      object({
-        help: constant(true),
-        version: constant(false),
-        commands: helpCommand,
-      }),
-      object({
-        help: constant(false),
-        version: constant(false),
-        result: parser,
-      }),
-      longestMatch(
-        contextualHelpParser,
-        merge(
-          object({
-            help: constant(true),
-            version: constant(false),
-            commands: constant([]),
-          }),
-          object({
-            helpFlag: helpOption,
-          }),
-        ),
-      ),
-    );
-  let result = parse(augmentedParser, args);
+    : combineWithHelpVersion(parser, helpParsers, versionParsers);
+  const result = parse(augmentedParser, args);
+  const classified = classifyResult(result, args);
 
-  // Special handling: if version/help parsers succeeded without actual input,
-  // treat it as a failure and retry with original parser
-  if (
-    result.success && typeof result.value === "object" &&
-    result.value != null &&
-    "help" in result.value && "version" in result.value
-  ) {
-    const parsedValue = result.value as {
-      help: boolean;
-      version: boolean;
-      result?: unknown;
-    };
+  switch (classified.type) {
+    case "success":
+      return classified.value;
 
-    const hasVersionInput = args.includes("--version") ||
-      (args.length > 0 && args[0] === "version");
-    const hasHelpInput = args.includes("--help") ||
-      (args.length > 0 && args[0] === "help");
-
-    // If version/help flags are set but no actual input was provided, use original parser
-    if (
-      (parsedValue.version && !hasVersionInput) ||
-      (parsedValue.help && !hasHelpInput && !parsedValue.result)
-    ) {
-      result = parse(parser, args);
-    }
-  }
-
-  if (result.success) {
-    const value = result.value;
-    if (help === "none" && version === "none") {
-      return value;
-    }
-
-    // Type guard to check if value has help and version properties
-    if (
-      typeof value === "object" && value != null &&
-      "help" in value && "version" in value
-    ) {
-      const parsedValue = value as {
-        help: boolean;
-        version: boolean;
-        result?: unknown;
-        commands?: unknown;
-      };
-
-      // Check if version was requested first (version has precedence)
-      if (parsedValue.version) {
-        // Only show version if explicitly requested via --version or version command
-        const hasVersionOption = args.includes("--version");
-        const hasVersionCommand = args.length > 0 && args[0] === "version";
-
-        if (hasVersionOption || hasVersionCommand) {
-          stdout(versionValue);
-          try {
-            return onVersion(0);
-          } catch {
-            return (onVersion as (() => THelp))();
-          }
-        }
+    case "version":
+      stdout(versionValue);
+      try {
+        return onVersion(0);
+      } catch {
+        return (onVersion as (() => THelp))();
       }
 
-      // Check if help was requested
-      if (parsedValue.help) {
-        // Special case: if both --version and --help are present in args,
-        // prioritize version over help
-        if (version !== "none" && args.includes("--version")) {
-          stdout(versionValue);
-          try {
-            return onVersion(0);
-          } catch {
-            return (onVersion as (() => THelp))();
-          }
-        }
-        // Handle help request
-        let commandContext: readonly string[] = [];
+    case "help": {
+      // Handle help request - determine which parser to use for help generation
+      let helpGeneratorParser: Parser<unknown, unknown>;
+      const helpAsCommand = help === "command" || help === "both";
+      const versionAsCommand = version === "command" || version === "both";
 
-        if (Array.isArray(parsedValue.commands)) {
-          // From contextualHelpParser: ["list"] from "list --help"
-          commandContext = parsedValue.commands;
-        } else if (
-          typeof parsedValue.commands === "object" &&
-          parsedValue.commands != null &&
-          "length" in parsedValue.commands
-        ) {
-          // From helpCommand: array from "help list"
-          commandContext = parsedValue.commands as readonly string[];
-        }
-
-        let helpGeneratorParser: Parser<unknown, unknown>;
-        const helpAsCommand = help === "command" || help === "both";
-        const versionAsCommand = version === "command" || version === "both";
-
-        if (helpAsCommand && versionAsCommand) {
+      if (helpAsCommand && versionAsCommand) {
+        // We need to recreate the parsers here since we didn't store them
+        const tempHelpParsers = createHelpParser(help);
+        const tempVersionParsers = createVersionParser(version);
+        if (tempHelpParsers.helpCommand && tempVersionParsers.versionCommand) {
           helpGeneratorParser = longestMatch(
             parser,
-            helpCommand,
-            versionCommand,
+            tempHelpParsers.helpCommand,
+            tempVersionParsers.versionCommand,
           );
-        } else if (helpAsCommand) {
-          helpGeneratorParser = longestMatch(parser, helpCommand);
-        } else if (versionAsCommand) {
-          helpGeneratorParser = longestMatch(parser, versionCommand);
+        } else if (tempHelpParsers.helpCommand) {
+          helpGeneratorParser = longestMatch(
+            parser,
+            tempHelpParsers.helpCommand,
+          );
+        } else if (tempVersionParsers.versionCommand) {
+          helpGeneratorParser = longestMatch(
+            parser,
+            tempVersionParsers.versionCommand,
+          );
         } else {
           helpGeneratorParser = parser;
         }
-
-        const doc = getDocPage(
-          commandContext.length < 1 ? helpGeneratorParser : parser,
-          commandContext,
-        );
-        if (doc != null) {
-          stdout(formatDocPage(programName, doc, {
-            colors,
-            maxWidth,
-          }));
+      } else if (helpAsCommand) {
+        const tempHelpParsers = createHelpParser(help);
+        if (tempHelpParsers.helpCommand) {
+          helpGeneratorParser = longestMatch(
+            parser,
+            tempHelpParsers.helpCommand,
+          );
+        } else {
+          helpGeneratorParser = parser;
         }
-        try {
-          return onHelp(0);
-        } catch {
-          return (onHelp as (() => THelp))();
+      } else if (versionAsCommand) {
+        const tempVersionParsers = createVersionParser(version);
+        if (tempVersionParsers.versionCommand) {
+          helpGeneratorParser = longestMatch(
+            parser,
+            tempVersionParsers.versionCommand,
+          );
+        } else {
+          helpGeneratorParser = parser;
         }
+      } else {
+        helpGeneratorParser = parser;
       }
 
-      // Neither help nor version requested, return the result
-      return parsedValue.result ?? value;
-    } else {
-      // This shouldn't happen with proper parser setup, but handle gracefully
-      return value;
+      const doc = getDocPage(
+        helpGeneratorParser,
+        classified.commands,
+      );
+      if (doc != null) {
+        stdout(formatDocPage(programName, doc, {
+          colors,
+          maxWidth,
+        }));
+      }
+      try {
+        return onHelp(0);
+      } catch {
+        return (onHelp as (() => THelp))();
+      }
     }
+
+    case "error":
+      // Fall through to error handling
+      break;
   }
+  // Error handling
   if (aboveError === "help") {
     const doc = getDocPage(args.length < 1 ? augmentedParser : parser, args);
     if (doc == null) aboveError = "usage";
@@ -745,7 +729,12 @@ export function run<
       }`,
     );
   }
-  stderr(`Error: ${formatMessage(result.error, { colors, quotes: !colors })}`);
+  // classified.error is now typed as Message
+  const errorMessage = formatMessage(classified.error, {
+    colors,
+    quotes: !colors,
+  });
+  stderr(`Error: ${errorMessage}`);
   return onError(1);
 }
 
