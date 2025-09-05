@@ -1,9 +1,8 @@
 @optique/run
 ============
 
-> [!CAUTION]
-> Optique is currently in early development and may change significantly.
-> Expect breaking changes as we refine the API and features.
+> [!WARNING]
+> The API is stabilizing, but may change before the 1.0 release.
 
 Process-integrated CLI parser for Node.js, Bun, and Deno that provides a
 batteries-included interface for *@optique/core* with automatic `process.argv`

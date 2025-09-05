@@ -1,9 +1,8 @@
 @optique/temporal
 ================
 
-> [!CAUTION]
-> Optique is currently in early development and may change significantly.
-> Expect breaking changes as we refine the API and features.
+> [!WARNING]
+> The API is stabilizing, but may change before the 1.0 release.
 
 Value parsers for [`Temporal`] date/time types. This package provides
 `ValueParser` functions that can be used with *@optique/core* to parse

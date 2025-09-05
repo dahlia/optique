@@ -1,9 +1,8 @@
 @optique/core
 =============
 
-> [!CAUTION]
-> Optique is currently in early development and may change significantly.
-> Expect breaking changes as we refine the API and features.
+> [!WARNING]
+> The API is stabilizing, but may change before the 1.0 release.
 
 The core package of Optique which provides the shared types and parser
 combinators. It is designed to be used in universal JavaScript runtimes,
