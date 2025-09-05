@@ -1452,3 +1452,134 @@ describe("RunError", () => {
     assert.ok(error instanceof RunError);
   });
 });
+
+describe("Documentation augmentation (brief, description, footer)", () => {
+  it("should display brief in help output", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    let output = "";
+    const result = run(parser, "test", ["--help"], {
+      help: { mode: "option", onShow: () => "help" as const },
+      stdout: (text) => {
+        output = text;
+      },
+      brief: message`This is a test program`,
+    });
+
+    assert.equal(result, "help");
+    assert.ok(output.includes("This is a test program"));
+  });
+
+  it("should display description in help output", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    let output = "";
+    const result = run(parser, "test", ["--help"], {
+      help: { mode: "option", onShow: () => "help" as const },
+      stdout: (text) => {
+        output = text;
+      },
+      description:
+        message`This program does something amazing with the provided name parameter.`,
+    });
+
+    assert.equal(result, "help");
+    assert.ok(output.includes("This program does something amazing"));
+  });
+
+  it("should display footer in help output", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    let output = "";
+    const result = run(parser, "test", ["--help"], {
+      help: { mode: "option", onShow: () => "help" as const },
+      stdout: (text) => {
+        output = text;
+      },
+      footer: message`For more information, visit https://example.com`,
+    });
+
+    assert.equal(result, "help");
+    assert.ok(
+      output.includes("For more information, visit https://example.com"),
+    );
+  });
+
+  it("should display all documentation fields together", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    let output = "";
+    const result = run(parser, "test", ["--help"], {
+      help: { mode: "option", onShow: () => "help" as const },
+      stdout: (text) => {
+        output = text;
+      },
+      brief: message`Test Program`,
+      description: message`A comprehensive testing utility.`,
+      footer: message`Copyright (c) 2024 Test Corp.`,
+    });
+
+    assert.equal(result, "help");
+    assert.ok(output.includes("Test Program"));
+    assert.ok(output.includes("A comprehensive testing utility"));
+    assert.ok(output.includes("Copyright (c) 2024 Test Corp"));
+  });
+
+  it("should display documentation fields in error help", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    let errorOutput = "";
+    try {
+      run(parser, "test", [], {
+        aboveError: "help",
+        stderr: (text) => {
+          errorOutput += text;
+        },
+        brief: message`Error Test Program`,
+        description: message`This should appear in error help.`,
+        footer: message`Error footer message`,
+        onError: () => {
+          throw new RunError("Parse failed");
+        },
+      });
+    } catch (error) {
+      assert.ok(error instanceof RunError);
+    }
+
+    assert.ok(errorOutput.includes("Error Test Program"));
+    assert.ok(errorOutput.includes("This should appear in error help"));
+    assert.ok(errorOutput.includes("Error footer message"));
+  });
+
+  it("should prefer provided options over parser-generated docs", () => {
+    const parser = command("test", object({}), {
+      description: message`Original description`,
+    });
+
+    let output = "";
+    const result = run(parser, "test", ["--help"], {
+      help: { mode: "option", onShow: () => "help" as const },
+      stdout: (text) => {
+        output = text;
+      },
+      brief: message`Override brief`,
+      description: message`Override description`,
+      footer: message`Override footer`,
+    });
+
+    assert.equal(result, "help");
+    assert.ok(output.includes("Override brief"));
+    assert.ok(output.includes("Override description"));
+    assert.ok(output.includes("Override footer"));
+  });
+});

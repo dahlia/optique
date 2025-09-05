@@ -151,4 +151,88 @@ describe("run", () => {
       assert.deepEqual(result, { name: "Alice" });
     });
   });
+
+  describe("documentation fields", () => {
+    it("should accept brief option", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      // Test that brief option is properly typed and accepted
+      const result = run(parser, {
+        programName: "test",
+        args: ["Alice"],
+        brief: message`This is a test program`,
+      });
+
+      assert.deepEqual(result, { name: "Alice" });
+    });
+
+    it("should accept description option", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      // Test that description option is properly typed and accepted
+      const result = run(parser, {
+        programName: "test",
+        args: ["Alice"],
+        description: message`This program does something amazing.`,
+      });
+
+      assert.deepEqual(result, { name: "Alice" });
+    });
+
+    it("should accept footer option", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      // Test that footer option is properly typed and accepted
+      const result = run(parser, {
+        programName: "test",
+        args: ["Bob"],
+        footer: message`For more information, visit https://example.com`,
+      });
+
+      assert.deepEqual(result, { name: "Bob" });
+    });
+
+    it("should accept all documentation fields together", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+        name: argument(string()),
+      });
+
+      // Test that all documentation options work together
+      const result = run(parser, {
+        programName: "test",
+        args: ["--verbose", "Charlie"],
+        brief: message`Test Program`,
+        description: message`A comprehensive testing utility.`,
+        footer: message`Copyright (c) 2024 Test Corp.`,
+      });
+
+      assert.deepEqual(result, { verbose: true, name: "Charlie" });
+    });
+
+    it("should properly type Message parameters", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      // This test verifies that the TypeScript types are working correctly
+      // by ensuring these calls compile without errors
+      const options = {
+        programName: "test",
+        args: ["David"],
+        brief: message`Brief text`,
+        description: message`Description with ${"value"} interpolation`,
+        footer: message`Footer text`,
+      };
+
+      const result = run(parser, options);
+      assert.deepEqual(result, { name: "David" });
+    });
+  });
 });

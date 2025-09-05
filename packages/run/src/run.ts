@@ -1,6 +1,7 @@
 import { run as runBase } from "@optique/core/facade";
 import type { InferValue, Parser } from "@optique/core/parser";
 import type { ShowDefaultOptions } from "@optique/core/doc";
+import type { Message } from "@optique/core/message";
 import path from "node:path";
 import process from "node:process";
 
@@ -93,6 +94,27 @@ export interface RunOptions {
    * @default `1`
    */
   readonly errorExitCode?: number;
+
+  /**
+   * Brief description shown at the top of help text.
+   *
+   * @since 0.4.0
+   */
+  readonly brief?: Message;
+
+  /**
+   * Detailed description shown after the usage line.
+   *
+   * @since 0.4.0
+   */
+  readonly description?: Message;
+
+  /**
+   * Footer text shown at the bottom of help text.
+   *
+   * @since 0.4.0
+   */
+  readonly footer?: Message;
 }
 
 /**
@@ -158,6 +180,9 @@ export function run<T extends Parser<unknown, unknown>>(
     version,
     aboveError = "usage",
     errorExitCode = 1,
+    brief,
+    description,
+    footer,
   } = options;
 
   // Convert help configuration for the base run function
@@ -186,6 +211,9 @@ export function run<T extends Parser<unknown, unknown>>(
     help: helpConfig,
     version: versionConfig,
     aboveError,
+    brief,
+    description,
+    footer,
     onError() {
       return process.exit(errorExitCode) as never;
     },

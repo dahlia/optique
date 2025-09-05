@@ -142,6 +142,7 @@ The `RunOptions` interface provides extensive customization:
 import { run } from "@optique/core/facade";
 import { object, option } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 const parser = object({ name: option("-n", "--name", string()) });
 
@@ -149,6 +150,9 @@ const result = run(parser, "myapp", ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
   showDefault: true,     // Show default values in help text
+  brief: message`A powerful CLI tool`,                    // Brief description at top
+  description: message`This tool processes data efficiently.`, // Detailed description
+  footer: message`Visit https://example.com for more info`,   // Footer at bottom
   help: {                // New grouped API
     mode: "option",      // Only --help option, no help command
   },
@@ -217,11 +221,15 @@ You can still customize behavior when needed:
 import { run } from "@optique/run";
 import { object, option } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 const parser = object({ name: option("-n", "--name", string()) });
 
 const config = run(parser, {
   programName: "custom-name",  // Override detected program name
+  brief: message`Custom CLI Tool`,                       // Brief description
+  description: message`A tool for processing files.`,   // Detailed description
+  footer: message`Report bugs at github.com/user/repo`, // Footer information
   help: "both",               // Enable both --help and help command
   version: "1.2.0",           // Simple version string (uses default "option" mode)
   colors: true,               // Force colors even for non-TTY
@@ -241,6 +249,7 @@ for fine-tuning behavior:
 import { run } from "@optique/run";
 import { object, option } from "@optique/core/parser";
 import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 const parser = object({
   name: option("-n", "--name", string()),
@@ -253,6 +262,9 @@ const config = run(parser, {
   colors: true,               // Force colored output
   maxWidth: 100,              // Set output width
   showDefault: true,          // Show default values in help text
+  brief: message`My CLI Tool`,                    // Brief description
+  description: message`Processes files efficiently`, // Detailed description
+  footer: message`Visit example.com for help`,    // Footer information
   help: "both",               // Enable both --help and help command
   version: {                  // Advanced version configuration
     value: "2.0.0",           // Version string
@@ -317,7 +329,7 @@ const result2 = run(parser, {
 
 const result3 = run(parser, {
   version: {
-    value: "1.0.0", 
+    value: "1.0.0",
     mode: "command",  // Adds version subcommand only
   }
 });
@@ -355,15 +367,76 @@ const config = run(parser, {
 
 // Custom formatting
 const config2 = run(parser, {
-  showDefault: { 
-    prefix: " (default: ", 
-    suffix: ")" 
+  showDefault: {
+    prefix: " (default: ",
+    suffix: ")"
   }  // Shows: --port (default: 3000), --format (default: json)
 });
 ~~~~
 
 Default values are automatically dimmed when colors are enabled, making them
 visually distinct from the main help text.
+
+### Rich documentation support
+
+Both runner functions support adding rich documentation to help text through
+the `brief`, `description`, and `footer` options. These fields allow you to
+provide comprehensive documentation without modifying parser definitions:
+
+~~~~ typescript twoslash
+import { run } from "@optique/run";
+import { object, option } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+const parser = object("Options", {
+  input: option("-i", "--input", string()),
+  output: option("-o", "--output", string()),
+});
+
+const config = run(parser, {
+  brief: message`A powerful file processing tool`,
+  description: message`This utility processes files with various transformations.
+
+Supports multiple input formats including JSON, YAML, and plain text. Output can be customized with different formatting options.`,
+  footer: message`Examples:
+  myapp -i data.json -o result.txt
+  myapp --input config.yaml --output processed.json
+
+For more information, visit: https://example.com/docs
+Report bugs at: https://github.com/user/myapp/issues`,
+  help: "option",
+  version: "1.0.0",
+});
+~~~~
+
+The documentation fields appear in the following order in help output:
+
+~~~~ ansi
+A powerful file processing tool
+Usage: [1mmyapp[0m [3m-i[0m[2m/[0m[3m--input[0m [4m[2mSTRING[0m [3m-o[0m[2m/[0m[3m--output[0m [4m[2mSTRING[0m
+
+This utility processes files with various transformations.
+
+Supports multiple input formats including JSON, YAML, and plain text. Output can be 
+customized with different formatting options.
+
+Options:
+  [3m-i[0m[2m, [0m[3m--input[0m [4m[2mSTRING[0m          
+  [3m-o[0m[2m, [0m[3m--output[0m [4m[2mSTRING[0m         
+
+Examples:
+  myapp -i data.json -o result.txt
+  myapp --input config.yaml --output processed.json
+
+For more information, visit: https://example.com/docs
+
+Report bugs at: https://github.com/user/myapp/issues
+~~~~
+
+These same fields also appear when errors are displayed with `aboveError: "help"`,
+providing context even when parsing fails. The user-provided documentation takes
+precedence over any documentation generated from parser structure.
 
 ### Error handling behavior
 

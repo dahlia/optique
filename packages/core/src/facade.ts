@@ -552,6 +552,27 @@ export interface RunOptions<THelp, TError> {
    * @default `console.log`
    */
   readonly stdout?: (text: string) => void;
+
+  /**
+   * Brief description shown at the top of help text.
+   *
+   * @since 0.4.0
+   */
+  readonly brief?: Message;
+
+  /**
+   * Detailed description shown after the usage line.
+   *
+   * @since 0.4.0
+   */
+  readonly description?: Message;
+
+  /**
+   * Footer text shown at the bottom of help text.
+   *
+   * @since 0.4.0
+   */
+  readonly footer?: Message;
 }
 
 /**
@@ -612,6 +633,9 @@ export function run<
     },
     stderr = console.error,
     stdout = console.log,
+    brief,
+    description,
+    footer,
   } = options;
 
   // Create help and version parsers using the new helper functions
@@ -702,7 +726,14 @@ export function run<
         classified.commands,
       );
       if (doc != null) {
-        stdout(formatDocPage(programName, doc, {
+        // Augment the doc page with provided options
+        const augmentedDoc = {
+          ...doc,
+          brief: brief ?? doc.brief,
+          description: description ?? doc.description,
+          footer: footer ?? doc.footer,
+        };
+        stdout(formatDocPage(programName, augmentedDoc, {
           colors,
           maxWidth,
           showDefault,
@@ -724,7 +755,14 @@ export function run<
     const doc = getDocPage(args.length < 1 ? augmentedParser : parser, args);
     if (doc == null) aboveError = "usage";
     else {
-      stderr(formatDocPage(programName, doc, {
+      // Augment the doc page with provided options
+      const augmentedDoc = {
+        ...doc,
+        brief: brief ?? doc.brief,
+        description: description ?? doc.description,
+        footer: footer ?? doc.footer,
+      };
+      stderr(formatDocPage(programName, augmentedDoc, {
         colors,
         maxWidth,
         showDefault,
