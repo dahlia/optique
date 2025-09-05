@@ -6,6 +6,12 @@ Version 0.4.0
 
 To be released.
 
+### @optique/core
+
+ -  Extended `merge()` combinator to support up to 10 parsers (previously
+    limited to 5), allowing more complex CLI configurations with larger numbers
+    of parsers to be combined into a single object structure.
+
 ### @optique/temporal
 
 The *@optique/temporal* package was introduced in this release, providing
