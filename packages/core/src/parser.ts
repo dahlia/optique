@@ -2510,6 +2510,37 @@ export function merge<
   >;
 
 /**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+>(
+  label: string,
+  a: TA,
+  b: TB,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>,
+    Record<string | symbol, unknown>
+  >;
+
+/**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
  * It is useful for combining multiple {@link object} parsers so that
  * the unified parser produces a single object containing all the values
@@ -2529,6 +2560,43 @@ export function merge<
   TB extends Parser<unknown, unknown>,
   TC extends Parser<unknown, unknown>,
 >(
+  a: TA,
+  b: TB,
+  c: TC,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>,
+    Record<string | symbol, unknown>
+  >;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+>(
+  label: string,
   a: TA,
   b: TB,
   c: TC,
@@ -2582,6 +2650,49 @@ export function merge<
   >;
 
 /**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+>(
+  label: string,
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>,
+    Record<string | symbol, unknown>
+  >;
+
+/**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
  * It is useful for combining multiple {@link object} parsers so that
  * the unified parser produces a single object containing all the values
@@ -2607,6 +2718,55 @@ export function merge<
   TD extends Parser<unknown, unknown>,
   TE extends Parser<unknown, unknown>,
 >(
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+  e: TE,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : ExtractObjectTypes<TE> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>
+    & ExtractObjectTypes<TE>,
+    Record<string | symbol, unknown>
+  >;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @template TE The type of the fifth parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @param e The fifth {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+  TE extends Parser<unknown, unknown>,
+>(
+  label: string,
   a: TA,
   b: TB,
   c: TC,
@@ -2679,6 +2839,62 @@ export function merge<
   >;
 
 /**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @template TE The type of the fifth parser.
+ * @template TF The type of the sixth parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @param e The fifth {@link object} parser to merge.
+ * @param f The sixth {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the parsers into a single object.
+ * @since 0.4.0
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+  TE extends Parser<unknown, unknown>,
+  TF extends Parser<unknown, unknown>,
+>(
+  label: string,
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+  e: TE,
+  f: TF,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : ExtractObjectTypes<TE> extends never ? never
+  : ExtractObjectTypes<TF> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>
+    & ExtractObjectTypes<TE>
+    & ExtractObjectTypes<TF>,
+    Record<string | symbol, unknown>
+  >;
+
+/**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
  * It is useful for combining multiple {@link object} parsers so that
  * the unified parser produces a single object containing all the values
@@ -2711,6 +2927,68 @@ export function merge<
   TF extends Parser<unknown, unknown>,
   TG extends Parser<unknown, unknown>,
 >(
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+  e: TE,
+  f: TF,
+  g: TG,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : ExtractObjectTypes<TE> extends never ? never
+  : ExtractObjectTypes<TF> extends never ? never
+  : ExtractObjectTypes<TG> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>
+    & ExtractObjectTypes<TE>
+    & ExtractObjectTypes<TF>
+    & ExtractObjectTypes<TG>,
+    Record<string | symbol, unknown>
+  >;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @template TE The type of the fifth parser.
+ * @template TF The type of the sixth parser.
+ * @template TG The type of the seventh parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @param e The fifth {@link object} parser to merge.
+ * @param f The sixth {@link object} parser to merge.
+ * @param g The seventh {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the parsers into a single object.
+ * @since 0.4.0
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+  TE extends Parser<unknown, unknown>,
+  TF extends Parser<unknown, unknown>,
+  TG extends Parser<unknown, unknown>,
+>(
+  label: string,
   a: TA,
   b: TB,
   c: TC,
@@ -2801,6 +3079,74 @@ export function merge<
   >;
 
 /**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @template TE The type of the fifth parser.
+ * @template TF The type of the sixth parser.
+ * @template TG The type of the seventh parser.
+ * @template TH The type of the eighth parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @param e The fifth {@link object} parser to merge.
+ * @param f The sixth {@link object} parser to merge.
+ * @param g The seventh {@link object} parser to merge.
+ * @param h The eighth {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the parsers into a single object.
+ * @since 0.4.0
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+  TE extends Parser<unknown, unknown>,
+  TF extends Parser<unknown, unknown>,
+  TG extends Parser<unknown, unknown>,
+  TH extends Parser<unknown, unknown>,
+>(
+  label: string,
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+  e: TE,
+  f: TF,
+  g: TG,
+  h: TH,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : ExtractObjectTypes<TE> extends never ? never
+  : ExtractObjectTypes<TF> extends never ? never
+  : ExtractObjectTypes<TG> extends never ? never
+  : ExtractObjectTypes<TH> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>
+    & ExtractObjectTypes<TE>
+    & ExtractObjectTypes<TF>
+    & ExtractObjectTypes<TG>
+    & ExtractObjectTypes<TH>,
+    Record<string | symbol, unknown>
+  >;
+
+/**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
  * It is useful for combining multiple {@link object} parsers so that
  * the unified parser produces a single object containing all the values
@@ -2839,6 +3185,80 @@ export function merge<
   TH extends Parser<unknown, unknown>,
   TI extends Parser<unknown, unknown>,
 >(
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+  e: TE,
+  f: TF,
+  g: TG,
+  h: TH,
+  i: TI,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : ExtractObjectTypes<TE> extends never ? never
+  : ExtractObjectTypes<TF> extends never ? never
+  : ExtractObjectTypes<TG> extends never ? never
+  : ExtractObjectTypes<TH> extends never ? never
+  : ExtractObjectTypes<TI> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>
+    & ExtractObjectTypes<TE>
+    & ExtractObjectTypes<TF>
+    & ExtractObjectTypes<TG>
+    & ExtractObjectTypes<TH>
+    & ExtractObjectTypes<TI>,
+    Record<string | symbol, unknown>
+  >;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @template TE The type of the fifth parser.
+ * @template TF The type of the sixth parser.
+ * @template TG The type of the seventh parser.
+ * @template TH The type of the eighth parser.
+ * @template TI The type of the ninth parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @param e The fifth {@link object} parser to merge.
+ * @param f The sixth {@link object} parser to merge.
+ * @param g The seventh {@link object} parser to merge.
+ * @param h The eighth {@link object} parser to merge.
+ * @param i The ninth {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the parsers into a single object.
+ * @since 0.4.0
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+  TE extends Parser<unknown, unknown>,
+  TF extends Parser<unknown, unknown>,
+  TG extends Parser<unknown, unknown>,
+  TH extends Parser<unknown, unknown>,
+  TI extends Parser<unknown, unknown>,
+>(
+  label: string,
   a: TA,
   b: TB,
   c: TC,
@@ -2946,8 +3366,94 @@ export function merge<
     Record<string | symbol, unknown>
   >;
 
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser
+ * with a label for documentation and help text organization.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @template TD The type of the fourth parser.
+ * @template TE The type of the fifth parser.
+ * @template TF The type of the sixth parser.
+ * @template TG The type of the seventh parser.
+ * @template TH The type of the eighth parser.
+ * @template TI The type of the ninth parser.
+ * @template TJ The type of the tenth parser.
+ * @param label A descriptive label for this merged group, used for
+ *              documentation and help messages.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param c The third {@link object} parser to merge.
+ * @param d The fourth {@link object} parser to merge.
+ * @param e The fifth {@link object} parser to merge.
+ * @param f The sixth {@link object} parser to merge.
+ * @param g The seventh {@link object} parser to merge.
+ * @param h The eighth {@link object} parser to merge.
+ * @param i The ninth {@link object} parser to merge.
+ * @param j The tenth {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the parsers into a single object.
+ * @since 0.4.0
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+  TC extends Parser<unknown, unknown>,
+  TD extends Parser<unknown, unknown>,
+  TE extends Parser<unknown, unknown>,
+  TF extends Parser<unknown, unknown>,
+  TG extends Parser<unknown, unknown>,
+  TH extends Parser<unknown, unknown>,
+  TI extends Parser<unknown, unknown>,
+  TJ extends Parser<unknown, unknown>,
+>(
+  label: string,
+  a: TA,
+  b: TB,
+  c: TC,
+  d: TD,
+  e: TE,
+  f: TF,
+  g: TG,
+  h: TH,
+  i: TI,
+  j: TJ,
+): ExtractObjectTypes<TA> extends never ? never
+  : ExtractObjectTypes<TB> extends never ? never
+  : ExtractObjectTypes<TC> extends never ? never
+  : ExtractObjectTypes<TD> extends never ? never
+  : ExtractObjectTypes<TE> extends never ? never
+  : ExtractObjectTypes<TF> extends never ? never
+  : ExtractObjectTypes<TG> extends never ? never
+  : ExtractObjectTypes<TH> extends never ? never
+  : ExtractObjectTypes<TI> extends never ? never
+  : ExtractObjectTypes<TJ> extends never ? never
+  : Parser<
+    & ExtractObjectTypes<TA>
+    & ExtractObjectTypes<TB>
+    & ExtractObjectTypes<TC>
+    & ExtractObjectTypes<TD>
+    & ExtractObjectTypes<TE>
+    & ExtractObjectTypes<TF>
+    & ExtractObjectTypes<TG>
+    & ExtractObjectTypes<TH>
+    & ExtractObjectTypes<TI>
+    & ExtractObjectTypes<TJ>,
+    Record<string | symbol, unknown>
+  >;
+
 export function merge(
-  ...parsers: Parser<
+  ...args: [
+    string,
+    ...Parser<
+      Record<string | symbol, unknown>,
+      Record<string | symbol, unknown>
+    >[],
+  ] | Parser<
     Record<string | symbol, unknown>,
     Record<string | symbol, unknown>
   >[]
@@ -2955,6 +3461,18 @@ export function merge(
   Record<string | symbol, unknown>,
   Record<string | symbol, unknown>
 > {
+  // Check if first argument is a label
+  const label = typeof args[0] === "string" ? args[0] : undefined;
+  let parsers = typeof args[0] === "string"
+    ? args.slice(1) as Parser<
+      Record<string | symbol, unknown>,
+      Record<string | symbol, unknown>
+    >[]
+    : args as Parser<
+      Record<string | symbol, unknown>,
+      Record<string | symbol, unknown>
+    >[];
+
   parsers = parsers.toSorted((a, b) => b.priority - a.priority);
   const initialState: Record<string | symbol, unknown> = {};
   for (const parser of parsers) {
@@ -3107,6 +3625,19 @@ export function merge(
           sections.push(fragment);
         }
       }
+
+      // If label is provided, wrap all content in a labeled section
+      if (label) {
+        const labeledSection: DocSection = { title: label, entries };
+        sections.push(labeledSection);
+        return {
+          fragments: sections.map<DocFragment>((s) => ({
+            ...s,
+            type: "section",
+          })),
+        };
+      }
+
       return {
         fragments: [
           ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),

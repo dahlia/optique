@@ -396,6 +396,47 @@ const prodMode = merge(
 const applicationConfig = or(devMode, prodMode);
 ~~~~
 
+### Labeled merge groups
+
+*This feature is available since Optique 0.4.0.*
+
+Like `object()`, the `merge()` parser can accept an optional label as its first
+parameter. This label appears in help text to organize the combined options into
+a logical group, making documentation clearer when merging parsers that don't
+already have their own labels:
+
+~~~~ typescript twoslash
+import { merge, object, option } from "@optique/core/parser";
+import { string, integer, choice } from "@optique/core/valueparser";
+
+// Define simple option groups without labels
+const connectionOptions = object({
+  host: option("--host", string()),
+  port: option("--port", integer())
+});
+
+const performanceOptions = object({
+  workers: option("-w", "--workers", integer({ min: 1 })),
+  timeout: option("-t", "--timeout", integer()),
+  cache: option("--cache", choice(["none", "memory", "disk"]))
+});
+
+// Combine with a label for organized help text
+const serverConfig = merge(
+  "Server Configuration",  // Label for the merged group
+  connectionOptions,
+  performanceOptions
+);
+
+// The label "Server Configuration" will appear in help text,
+// grouping all options from both parsers under this section
+~~~~
+
+This is particularly useful when combining parsers from different modules or
+when the constituent parsers don't have their own labels. It ensures that the
+merged options appear as a cohesive group in help documentation rather than
+scattered individual options.
+
 ### Advanced parser combinations
 
 *This feature is available since Optique 0.3.0.*

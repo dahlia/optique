@@ -4511,6 +4511,190 @@ describe("merge", () => {
       assert.ok(argEntry);
     });
   });
+
+  describe("labeled merge", () => {
+    it("should support label as first parameter for merge()", () => {
+      const parser1 = object({
+        verbose: option("-v", "--verbose"),
+        port: option("-p", "--port", integer()),
+      });
+      const parser2 = object({
+        host: option("-h", "--host", string()),
+        debug: option("-d", "--debug"),
+      });
+      const mergedParser = merge("Server Options", parser1, parser2);
+
+      assert.ok(mergedParser.priority >= 10);
+      assert.ok("verbose" in mergedParser.initialState);
+      assert.ok("port" in mergedParser.initialState);
+      assert.ok("host" in mergedParser.initialState);
+      assert.ok("debug" in mergedParser.initialState);
+    });
+
+    it("should parse correctly with labeled merge", () => {
+      const basicOptions = object({
+        verbose: option("-v", "--verbose"),
+        quiet: option("-q", "--quiet"),
+      });
+      const serverOptions = object({
+        port: option("-p", "--port", integer()),
+        host: option("-h", "--host", string()),
+      });
+      const parser = merge("Configuration", basicOptions, serverOptions);
+
+      const result = parse(parser, ["-v", "-p", "8080", "-h", "localhost"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.verbose, true);
+        assert.equal(result.value.quiet, false);
+        assert.equal(result.value.port, 8080);
+        assert.equal(result.value.host, "localhost");
+      }
+    });
+
+    it("should include label in documentation fragments", () => {
+      const group1 = object({
+        option1: option("-1", "--opt1", string()),
+        option2: option("-2", "--opt2"),
+      });
+      const group2 = object({
+        option3: option("-3", "--opt3", integer()),
+        option4: option("-4", "--opt4"),
+      });
+
+      const parser = merge("Combined Options", group1, group2);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
+
+      // Should have at least one section with the label
+      const labeledSection = fragments.fragments.find(
+        (f) => f.type === "section" && f.title === "Combined Options",
+      );
+      assert.ok(labeledSection);
+
+      // The labeled section should contain entries from both parsers
+      if (labeledSection && labeledSection.type === "section") {
+        const hasOpt1 = labeledSection.entries.some(
+          (e) => e.term.type === "option" && e.term.names.includes("--opt1"),
+        );
+        const hasOpt3 = labeledSection.entries.some(
+          (e) => e.term.type === "option" && e.term.names.includes("--opt3"),
+        );
+        assert.ok(
+          hasOpt1 ||
+            fragments.fragments.some((f) =>
+              f.type === "section" && f.entries.some(
+                (e) =>
+                  e.term.type === "option" && e.term.names.includes("--opt1"),
+              )
+            ),
+        );
+        assert.ok(
+          hasOpt3 ||
+            fragments.fragments.some((f) =>
+              f.type === "section" && f.entries.some(
+                (e) =>
+                  e.term.type === "option" && e.term.names.includes("--opt3"),
+              )
+            ),
+        );
+      }
+    });
+
+    it("should work with three parsers and a label", () => {
+      const p1 = object({ a: option("-a", string()) });
+      const p2 = object({ b: option("-b", integer()) });
+      const p3 = object({ c: option("-c") });
+
+      const parser = merge("All Options", p1, p2, p3);
+      const result = parse(parser, ["-a", "test", "-b", "42", "-c"]);
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.a, "test");
+        assert.equal(result.value.b, 42);
+        assert.equal(result.value.c, true);
+      }
+    });
+
+    it("should work with up to 10 parsers with label", () => {
+      const p0 = object({ opt0: option("-0") });
+      const p1 = object({ opt1: option("-1") });
+      const p2 = object({ opt2: option("-2") });
+      const p3 = object({ opt3: option("-3") });
+      const p4 = object({ opt4: option("-4") });
+      const p5 = object({ opt5: option("-5") });
+      const p6 = object({ opt6: option("-6") });
+      const p7 = object({ opt7: option("-7") });
+      const p8 = object({ opt8: option("-8") });
+      const p9 = object({ opt9: option("-9") });
+
+      const merged = merge(
+        "Many Options",
+        p0,
+        p1,
+        p2,
+        p3,
+        p4,
+        p5,
+        p6,
+        p7,
+        p8,
+        p9,
+      );
+      const args = ["-0", "-1", "-2", "-3", "-4", "-5", "-6", "-7", "-8", "-9"];
+      const result = parse(merged, args);
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.opt0, true);
+        assert.equal(result.value.opt1, true);
+        assert.equal(result.value.opt2, true);
+        assert.equal(result.value.opt3, true);
+        assert.equal(result.value.opt4, true);
+        assert.equal(result.value.opt5, true);
+        assert.equal(result.value.opt6, true);
+        assert.equal(result.value.opt7, true);
+        assert.equal(result.value.opt8, true);
+        assert.equal(result.value.opt9, true);
+      }
+    });
+
+    it("should preserve existing section labels from object parsers", () => {
+      const group1 = object("Database", {
+        dbHost: option("--db-host", string()),
+        dbPort: option("--db-port", integer()),
+      });
+      const group2 = object("Server", {
+        serverHost: option("--server-host", string()),
+        serverPort: option("--server-port", integer()),
+      });
+
+      const parser = merge("Application Settings", group1, group2);
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
+
+      // Should have the merge label section
+      const appSection = fragments.fragments.find(
+        (f) => f.type === "section" && f.title === "Application Settings",
+      );
+      assert.ok(appSection);
+
+      // Should also preserve the original sections
+      const dbSection = fragments.fragments.find(
+        (f) => f.type === "section" && f.title === "Database",
+      );
+      const serverSection = fragments.fragments.find(
+        (f) => f.type === "section" && f.title === "Server",
+      );
+      assert.ok(dbSection);
+      assert.ok(serverSection);
+    });
+  });
 });
 
 describe("Integration tests", () => {

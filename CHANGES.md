@@ -12,6 +12,25 @@ To be released.
     limited to 5), allowing more complex CLI configurations with larger numbers
     of parsers to be combined into a single object structure.
 
+ -  Added optional label parameter to `merge()` combinator for better help text
+    organization. Similar to `object()`, `merge()` now accepts an optional first
+    string parameter to label the merged group in documentation:
+
+    ~~~~ typescript
+    // Without label (existing usage)
+    merge(apiParser, dbParser, serverParser)
+
+    // With label (new feature)
+    merge("Configuration", apiParser, dbParser, serverParser)
+    ~~~~
+
+    This addresses the inconsistency where developers had to choose between
+    clean code structure using `merge()` or organized help output using labeled
+    `object()` calls. The label appears as a section header in help text,
+    making it easier to group related options from multiple parsers.  [[#12]]
+
+[#12]: https://github.com/dahlia/optique/issues/12
+
 ### @optique/temporal
 
 The *@optique/temporal* package was introduced in this release, providing
