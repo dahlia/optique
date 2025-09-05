@@ -379,6 +379,8 @@ visually distinct from the main help text.
 
 ### Rich documentation support
 
+*This API is available since Optique 0.4.0.*
+
 Both runner functions support adding rich documentation to help text through
 the `brief`, `description`, and `footer` options. These fields allow you to
 provide comprehensive documentation without modifying parser definitions:
