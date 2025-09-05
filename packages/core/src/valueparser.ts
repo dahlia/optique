@@ -283,7 +283,7 @@ export function integer(options: IntegerOptionsBigInt): ValueParser<bigint>;
  * @example
  * ```typescript
  * // Create a parser for regular integers
- * const portParser = integer({ min: 1, max: 65535 });
+ * const portParser = integer({ min: 1, max: 0xffff });
  *
  * // Create a parser for BigInt values
  * const bigIntParser = integer({ type: "bigint", min: 0n });

@@ -113,7 +113,7 @@ import { integer, string } from "@optique/core/valueparser";
 const name = option("-n", "--name", string());
 
 // Integer option with validation
-const port = option("-p", "--port", integer({ min: 1, max: 65535 }));
+const port = option("-p", "--port", integer({ min: 1, max: 0xffff }));
 
 // Option with custom metavar for help text
 const config = option("-c", "--config", string({ metavar: "FILE" }));
@@ -286,7 +286,7 @@ import { integer, string } from "@optique/core/valueparser";
 const filename = argument(string({ metavar: "FILE" }));
 
 // Argument with validation
-const port = argument(integer({ min: 1, max: 65535, metavar: "PORT" }));
+const port = argument(integer({ min: 1, max: 0xffff, metavar: "PORT" }));
 ~~~~
 
 The `argument()` parser automatically handles the `--` separator, which
@@ -534,7 +534,7 @@ import { string, integer } from "@optique/core/valueparser";
 const parser = object({ // [!code highlight]
   input: argument(string({ metavar: "INPUT" })),
   output: option("-o", "--output", string({ metavar: "OUTPUT" })),
-  port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+  port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
   verbose: option("-v", "--verbose")
 });
 

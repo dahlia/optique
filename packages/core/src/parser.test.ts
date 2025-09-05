@@ -438,7 +438,7 @@ describe("option", () => {
     });
 
     it("should propagate value parser failures", () => {
-      const parser = option("--port", integer({ min: 1, max: 65535 }));
+      const parser = option("--port", integer({ min: 1, max: 0xffff }));
       const context = {
         buffer: ["--port", "invalid"] as readonly string[],
         state: parser.initialState,
@@ -1578,7 +1578,7 @@ describe("argument", () => {
 
   it("should work with different value parser constraints", () => {
     const fileParser = argument(string({ pattern: /\.(txt|md)$/ }));
-    const portParser = argument(integer({ min: 1024, max: 65535 }));
+    const portParser = argument(integer({ min: 1024, max: 0xffff }));
 
     const validFileResult = parse(fileParser, ["readme.txt"]);
     assert.ok(validFileResult.success);
@@ -1977,7 +1977,7 @@ describe("optional", () => {
     const parser = object({
       command: option("-c", "--command", string()),
       port: optional(
-        option("-p", "--port", integer({ min: 1024, max: 65535 })),
+        option("-p", "--port", integer({ min: 1024, max: 0xffff })),
       ),
       debug: optional(option("-d", "--debug")),
     });
@@ -2349,7 +2349,7 @@ describe("withDefault", () => {
     const parser = object({
       command: option("-c", "--command", string()),
       port: withDefault(
-        option("-p", "--port", integer({ min: 1024, max: 65535 })),
+        option("-p", "--port", integer({ min: 1024, max: 0xffff })),
         8080,
       ),
       debug: withDefault(option("-d", "--debug"), false),
@@ -3009,7 +3009,7 @@ describe("multiple", () => {
   });
 
   it("should propagate wrapped parser failures", () => {
-    const baseParser = option("-p", "--port", integer({ min: 1, max: 65535 }));
+    const baseParser = option("-p", "--port", integer({ min: 1, max: 0xffff }));
     const multipleParser = multiple(baseParser);
 
     const result = parse(multipleParser, ["-p", "8080", "-p", "invalid"]);
@@ -3253,7 +3253,7 @@ describe("multiple", () => {
     const baseParser = option(
       "-p",
       "--port",
-      integer({ min: 1024, max: 65535 }),
+      integer({ min: 1024, max: 0xffff }),
     );
     const multipleParser = multiple(baseParser, { min: 1, max: 5 });
 
@@ -3894,7 +3894,7 @@ describe("merge", () => {
 
   it("should propagate parser errors correctly", () => {
     const parser1 = object({
-      port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+      port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
     });
 
     const parser2 = object({
@@ -4700,7 +4700,7 @@ describe("merge", () => {
 describe("Integration tests", () => {
   it("should handle complex nested parser combinations", () => {
     const serverParser = object("Server", {
-      port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+      port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
       host: option("-h", "--host", string({ metavar: "HOST" })),
       verbose: option("-v", "--verbose"),
     });
@@ -4814,7 +4814,7 @@ describe("Integration tests", () => {
 
   it("should validate value constraints in complex scenarios", () => {
     const parser = object({
-      port: option("-p", integer({ min: 1024, max: 65535 })),
+      port: option("-p", integer({ min: 1024, max: 0xffff })),
       workers: option("-w", integer({ min: 1, max: 16 })),
       name: option("-n", string({ pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/ })),
     });
@@ -4902,7 +4902,7 @@ describe("Integration tests", () => {
     });
 
     const serveParser = object("Serve", {
-      port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+      port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
       host: option("-h", "--host", string({ metavar: "HOST" })),
       open: option("--open"),
     });
@@ -6894,7 +6894,7 @@ describe("concat", () => {
 
   it("should propagate parser errors correctly", () => {
     const parser1 = tuple([
-      option("-p", "--port", integer({ min: 1, max: 65535 })),
+      option("-p", "--port", integer({ min: 1, max: 0xffff })),
     ]);
 
     const parser2 = tuple([
@@ -7116,7 +7116,7 @@ describe("concat", () => {
 
   it("should handle value parser failures during completion", () => {
     const parser1 = tuple([
-      option("-p", "--port", integer({ min: 1, max: 65535 })),
+      option("-p", "--port", integer({ min: 1, max: 0xffff })),
     ]);
 
     const parser2 = tuple([

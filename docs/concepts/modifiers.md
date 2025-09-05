@@ -254,7 +254,10 @@ const serverConfig = object({
 
   // Optional with defaults - no undefined handling needed
   host: withDefault(option("-h", "--host", string()), "0.0.0.0"),
-  port: withDefault(option("-p", "--port", integer({ min: 1, max: 65535 })), 3000),
+  port: withDefault(
+    option("-p", "--port", integer({ min: 1, max: 0xffff })),
+    3000
+  ),
   logLevel: withDefault(
     option("--log-level", choice(["debug", "info", "warn", "error"])),
     "info" as const,

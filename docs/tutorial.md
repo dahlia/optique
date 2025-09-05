@@ -310,7 +310,7 @@ const parser = object({
   })),
 
   // Integer with bounds checking
-  port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+  port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
 // ^?
 
 
@@ -466,7 +466,7 @@ import { message } from "@optique/core/message";
 
 const parser = or(
   object({
-    port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+    port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
     host: option("-h", "--host", string())
   }),
   object({
@@ -937,7 +937,7 @@ import { path, run } from "@optique/run";
 // Define reusable option groups
 const networkOptions = object("Network", {
   host: option("--host", string({ metavar: "HOST" })),
-  port: option("--port", integer({ min: 1, max: 65535 }))
+  port: option("--port", integer({ min: 1, max: 0xffff }))
 });
 
 const authOptions = object("Authentication", {
@@ -1230,7 +1230,7 @@ import process from "node:process";
 const parser = object({
   input: argument(string({ metavar: "FILE" })),
   output: option("-o", "--output", string({ metavar: "FILE" })),
-  port: optional(option("-p", "--port", integer({ min: 1, max: 65535 }))),
+  port: optional(option("-p", "--port", integer({ min: 1, max: 0xffff }))),
   verbose: option("-v", "--verbose")
 });
 
@@ -1267,7 +1267,7 @@ import { message } from "@optique/core/message";
 const parser = object({
   input: argument(path({ mustExist: true, metavar: "FILE" })),
   output: option("-o", "--output", path({ metavar: "FILE" })),
-  port: optional(option("-p", "--port", integer({ min: 1, max: 65535 }))),
+  port: optional(option("-p", "--port", integer({ min: 1, max: 0xffff }))),
   verbose: option("-v", "--verbose")
 });
 
@@ -1402,7 +1402,10 @@ const cli = merge(
         object({ action: constant("dev") }),
         buildOptions,
         object({
-          port: withDefault(option("-p", "--port", integer({ min: 1, max: 65535 })), 3000),
+          port: withDefault(
+            option("-p", "--port", integer({ min: 1, max: 0xffff })),
+            3000
+          ),
           host: withDefault(option("--host", string()), "localhost"),
           open: optional(option("--open"))
         })

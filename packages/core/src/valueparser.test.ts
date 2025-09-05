@@ -203,7 +203,7 @@ describe("integer", () => {
     });
 
     it("should enforce both min and max constraints", () => {
-      const parser = integer({ min: 1, max: 65535 });
+      const parser = integer({ min: 1, max: 0xffff });
 
       const result1 = parser.parse("8080");
       assert.ok(result1.success);

@@ -104,7 +104,7 @@ import { integer } from "@optique/core/valueparser";
 const count = integer();
 
 // Integer with bounds checking
-const port = integer({ min: 1, max: 65535 });
+const port = integer({ min: 1, max: 0xffff });
 
 // Integer with custom metavar
 const timeout = integer({ min: 0, metavar: "SECONDS" });
@@ -1201,7 +1201,7 @@ import { integer } from "@optique/core/valueparser";
 const serverConfig = object({
   address: option("--bind", ipv4()),
   startDate: argument(date({ format: 'iso' })),
-  port: option("-p", "--port", integer({ min: 1, max: 65535 }))
+  port: option("-p", "--port", integer({ min: 1, max: 0xffff }))
 });
 
 // Full type safety with custom types

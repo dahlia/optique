@@ -41,7 +41,7 @@ import { string, integer } from "@optique/core/valueparser";
 
 const serverConfig = object({
   name: argument(string({ metavar: "NAME" })),
-  port: option("-p", "--port", integer({ min: 1, max: 65535 })),
+  port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
   host: option("-h", "--host", string()),
   verbose: option("-v", "--verbose")
 });
@@ -361,7 +361,7 @@ import { string, integer, choice } from "@optique/core/valueparser";
 // Define reusable option groups
 const networkOptions = object("Network", {
   host: option("--host", string()),
-  port: option("--port", integer({ min: 1, max: 65535 }))
+  port: option("--port", integer({ min: 1, max: 0xffff }))
 });
 
 const authOptions = object("Authentication", {
@@ -648,7 +648,7 @@ const basicFlags = tuple([
 ] as const);
 
 const serverConfig = tuple([
-  option("-p", "--port", integer({ min: 1, max: 65535 })),
+  option("-p", "--port", integer({ min: 1, max: 0xffff })),
   option("-h", "--host", string()),
 ] as const);
 

@@ -24,7 +24,7 @@ const parser = or(
     port: option(
       "-p",
       "--port",
-      integer({ metavar: "PORT", min: 1, max: 65535 }),
+      integer({ metavar: "PORT", min: 1, max: 0xffff }),
     ),
   }),
   object({
