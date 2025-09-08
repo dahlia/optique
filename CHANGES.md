@@ -47,7 +47,54 @@ To be released.
     // Displays: Environment variable API_URL is not set. (bold + underlined)
     ~~~~
 
+ -  Added custom help display messages for `withDefault()` parsers. The
+    `withDefault()` modifier now accepts an optional third parameter to customize
+    how default values are displayed in help text. This allows showing descriptive
+    text instead of actual default values, which is particularly useful for
+    environment variables, computed defaults, or sensitive information.  [[#19]]
+
+    ~~~~ typescript
+    import { message, envVar } from "@optique/core/message";
+    import { withDefault } from "@optique/core/parser";
+
+    // Show custom help text instead of actual values
+    const parser = object({
+      apiUrl: withDefault(
+        option("--api-url", url()),
+        new URL("https://api.example.com"),
+        { message: message`Default API endpoint` }
+      ),
+      token: withDefault(
+        option("--token", string()),
+        () => process.env.API_TOKEN || "",
+        { message: message`${envVar("API_TOKEN")}` }
+      )
+    });
+
+    // Help output shows: --token STRING [API_TOKEN]
+    // Instead of the actual token value
+    ~~~~
+
+ -  Enhanced `formatMessage()` with `resetSuffix` support for better ANSI color
+    handling. The `colors` option can now be an object with a `resetSuffix`
+    property that maintains parent styling context after ANSI reset sequences.
+    This fixes issues where dim styling was interrupted by inner ANSI codes
+    in default value display.  [[#19]]
+
+    ~~~~ typescript
+    formatMessage(msg, {
+      colors: { resetSuffix: "\x1b[2m" },  // Maintains dim after resets
+      quotes: false
+    });
+    ~~~~
+
+ -  Updated `DocEntry.default` field type from `string` to `Message` for rich
+    formatting support in documentation. This change enables structured default
+    value display with colors, environment variables, and other message
+    components while maintaining full backward compatibility.  [[#19]]
+
 [#18]: https://github.com/dahlia/optique/discussions/18
+[#19]: https://github.com/dahlia/optique/issues/19
 [#21]: https://github.com/dahlia/optique/issues/21
 
 

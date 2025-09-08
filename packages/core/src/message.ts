@@ -244,9 +244,21 @@ export interface MessageFormatOptions {
    * Whether to use colors in the formatted message.  If `true`,
    * the formatted message will include ANSI escape codes for colors.
    * If `false`, the message will be plain text without colors.
+   *
+   * Can also be an object with additional color options:
+   *
+   * - `resetSuffix`: String to append after each ANSI reset sequence (`\x1b[0m`)
+   *   to maintain parent styling context.
+   *
    * @default `false`
    */
-  readonly colors?: boolean;
+  readonly colors?: boolean | {
+    /**
+     * String to append after each ANSI reset sequence to maintain
+     * parent styling context (e.g., `"\x1b[2m"` for dim text).
+     */
+    readonly resetSuffix?: string;
+  };
 
   /**
    * Whether to use quotes around values in the formatted message.
@@ -278,8 +290,13 @@ export function formatMessage(
   options: MessageFormatOptions = {},
 ): string {
   // Apply defaults
-  const useColors = options.colors ?? false;
+  const colorConfig = options.colors ?? false;
+  const useColors = typeof colorConfig === "boolean" ? colorConfig : true;
+  const resetSuffix = typeof colorConfig === "object"
+    ? (colorConfig.resetSuffix ?? "")
+    : "";
   const useQuotes = options.quotes ?? true;
+  const resetSequence = `\x1b[0m${resetSuffix}`;
 
   function* stream(): Generator<{ text: string; width: number }> {
     const wordPattern = /\s*\S+\s*/g;
@@ -294,7 +311,7 @@ export function formatMessage(
         const name = useQuotes ? `\`${term.optionName}\`` : term.optionName;
         yield {
           text: useColors
-            ? `\x1b[3m${name}\x1b[0m` // Italic for option names
+            ? `\x1b[3m${name}${resetSequence}` // Italic for option names
             : name,
           width: name.length,
         };
@@ -307,7 +324,7 @@ export function formatMessage(
           if (i > 0) yield { text: "/", width: 1 };
           yield {
             text: useColors
-              ? `\x1b[3m${name}\x1b[0m` // Italic for option names
+              ? `\x1b[3m${name}${resetSequence}` // Italic for option names
               : name,
             width: name.length,
           };
@@ -317,7 +334,7 @@ export function formatMessage(
         const metavar = useQuotes ? `\`${term.metavar}\`` : term.metavar;
         yield {
           text: useColors
-            ? `\x1b[1m${metavar}\x1b[0m` // Bold for metavariables
+            ? `\x1b[1m${metavar}${resetSequence}` // Bold for metavariables
             : metavar,
           width: metavar.length,
         };
@@ -325,7 +342,7 @@ export function formatMessage(
         const value = useQuotes ? `${JSON.stringify(term.value)}` : term.value;
         yield {
           text: useColors
-            ? `\x1b[32m${value}\x1b[0m` // Green for values
+            ? `\x1b[32m${value}${resetSequence}` // Green for values
             : value,
           width: value.length,
         };
@@ -340,7 +357,7 @@ export function formatMessage(
               ? i <= 0
                 ? `\x1b[32m${value}`
                 : i + 1 >= term.values.length
-                ? `${value}\x1b[0m`
+                ? `${value}${resetSequence}`
                 : value
               : value,
             width: value.length,
@@ -350,7 +367,7 @@ export function formatMessage(
         const envVar = useQuotes ? `\`${term.envVar}\`` : term.envVar;
         yield {
           text: useColors
-            ? `\x1b[1;4m${envVar}\x1b[0m` // Bold and underlined for environment variables
+            ? `\x1b[1;4m${envVar}${resetSequence}` // Bold and underlined for environment variables
             : envVar,
           width: envVar.length,
         };

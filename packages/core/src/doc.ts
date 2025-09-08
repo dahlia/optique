@@ -29,7 +29,7 @@ export interface DocEntry {
    * indicate what the default behavior is if the command or option is not
    * specified.
    */
-  readonly default?: string;
+  readonly default?: Message;
 }
 
 /**
@@ -255,7 +255,12 @@ export function formatDocPage(
         const suffix = typeof options.showDefault === "object"
           ? options.showDefault.suffix ?? "]"
           : "]";
-        const defaultText = `${prefix}${entry.default}${suffix}`;
+        const defaultText = `${prefix}${
+          formatMessage(entry.default, {
+            colors: options.colors ? { resetSuffix: "\x1b[2m" } : false,
+            quotes: !options.colors,
+          })
+        }${suffix}`;
         const formattedDefault = options.colors
           ? `\x1b[2m${defaultText}\x1b[0m`
           : defaultText;

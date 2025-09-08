@@ -406,6 +406,91 @@ describe("formatMessage", () => {
     const lines = formatted.split("\n");
     assert.ok(lines.length >= 2);
   });
+
+  describe("resetSuffix functionality", () => {
+    it("should apply resetSuffix after ANSI reset sequences", () => {
+      const msg: Message = [
+        { type: "text", text: "Environment variable " },
+        { type: "envVar", envVar: "PATH" },
+        { type: "text", text: " is required" },
+      ];
+      const formatted = formatMessage(msg, {
+        colors: { resetSuffix: "\x1b[2m" },
+        quotes: false,
+      });
+
+      // Should contain the resetSuffix after the envVar reset
+      assert.ok(formatted.includes("\x1b[0m\x1b[2m"));
+      assert.ok(formatted.includes("\x1b[1;4mPATH\x1b[0m\x1b[2m is required"));
+    });
+
+    it("should work with boolean colors option (backward compatibility)", () => {
+      const msg: Message = [
+        { type: "text", text: "Value " },
+        { type: "value", value: "test" },
+        { type: "text", text: " is invalid" },
+      ];
+
+      // Test with colors: true (boolean)
+      const withColors = formatMessage(msg, { colors: true, quotes: false });
+      assert.equal(withColors, "Value \x1b[32mtest\x1b[0m is invalid");
+
+      // Test with colors: false (boolean)
+      const withoutColors = formatMessage(msg, {
+        colors: false,
+        quotes: false,
+      });
+      assert.equal(withoutColors, "Value test is invalid");
+    });
+
+    it("should apply resetSuffix to all styled elements", () => {
+      const msg: Message = [
+        { type: "optionName", optionName: "--verbose" },
+        { type: "text", text: " and " },
+        { type: "metavar", metavar: "FILE" },
+        { type: "text", text: " with " },
+        { type: "envVar", envVar: "HOME" },
+      ];
+      const formatted = formatMessage(msg, {
+        colors: { resetSuffix: "\x1b[2m" },
+        quotes: false,
+      });
+
+      // Each styled element should end with resetSuffix
+      assert.ok(formatted.includes("--verbose\x1b[0m\x1b[2m"));
+      assert.ok(formatted.includes("FILE\x1b[0m\x1b[2m"));
+      assert.ok(formatted.includes("HOME\x1b[0m\x1b[2m"));
+    });
+
+    it("should handle empty resetSuffix", () => {
+      const msg: Message = [
+        { type: "text", text: "Option " },
+        { type: "optionName", optionName: "--help" },
+        { type: "text", text: " is available" },
+      ];
+      const formatted = formatMessage(msg, {
+        colors: { resetSuffix: "" },
+        quotes: false,
+      });
+
+      // Should behave like normal colors: true
+      assert.equal(formatted, "Option \x1b[3m--help\x1b[0m is available");
+    });
+
+    it("should handle undefined resetSuffix", () => {
+      const msg: Message = [
+        { type: "text", text: "Value " },
+        { type: "value", value: "42" },
+      ];
+      const formatted = formatMessage(msg, {
+        colors: { resetSuffix: undefined },
+        quotes: false,
+      });
+
+      // Should behave like normal colors: true
+      assert.equal(formatted, "Value \x1b[32m42\x1b[0m");
+    });
+  });
 });
 
 describe("integration tests", () => {
@@ -446,6 +531,93 @@ describe("integration tests", () => {
     assert.equal(
       formatted,
       'Expected one of "red" "green" "blue", got "purple"',
+    );
+  });
+
+  it("should handle resetSuffix when colors is an object", () => {
+    const msg = message`Port: ${value("8080")}`;
+    const formatted = formatMessage(msg, {
+      colors: { resetSuffix: "\x1b[2m" },
+      quotes: false,
+    });
+
+    assert.equal(
+      formatted,
+      "Port: \x1b[32m8080\x1b[0m\x1b[2m",
+    );
+  });
+
+  it("should handle resetSuffix with multiple terms", () => {
+    const msg = message`Options: ${optionName("--verbose")} and ${
+      value("true")
+    }`;
+    const formatted = formatMessage(msg, {
+      colors: { resetSuffix: "\x1b[2m" },
+      quotes: false,
+    });
+
+    assert.equal(
+      formatted,
+      "Options: \x1b[3m--verbose\x1b[0m\x1b[2m and \x1b[32mtrue\x1b[0m\x1b[2m",
+    );
+  });
+
+  it("should handle resetSuffix with boolean colors for backward compatibility", () => {
+    const msg = message`Port: ${value("8080")}`;
+    const formatted = formatMessage(msg, { colors: true, quotes: false });
+
+    assert.equal(
+      formatted,
+      "Port: \x1b[32m8080\x1b[0m",
+    );
+  });
+
+  it("should handle resetSuffix with envVar term", () => {
+    const msg = message`Environment variable: ${envVar("API_URL")}`;
+    const formatted = formatMessage(msg, {
+      colors: { resetSuffix: "\x1b[2m" },
+      quotes: false,
+    });
+
+    assert.equal(
+      formatted,
+      "Environment variable: \x1b[1;4mAPI_URL\x1b[0m\x1b[2m",
+    );
+  });
+
+  it("should handle resetSuffix with values term", () => {
+    const msg = message`Values: ${values(["red", "green", "blue"])}`;
+    const formatted = formatMessage(msg, {
+      colors: { resetSuffix: "\x1b[2m" },
+      quotes: false,
+    });
+
+    assert.equal(
+      formatted,
+      "Values: \x1b[32mred green blue\x1b[0m\x1b[2m",
+    );
+  });
+
+  it("should not apply resetSuffix when colors is false", () => {
+    const msg = message`Port: ${value("8080")}`;
+    const formatted = formatMessage(msg, {
+      colors: false,
+      quotes: false,
+    });
+
+    assert.equal(formatted, "Port: 8080");
+  });
+
+  it("should handle empty resetSuffix", () => {
+    const msg = message`Port: ${value("8080")}`;
+    const formatted = formatMessage(msg, {
+      colors: { resetSuffix: "" },
+      quotes: false,
+    });
+
+    assert.equal(
+      formatted,
+      "Port: \x1b[32m8080\x1b[0m",
     );
   });
 });

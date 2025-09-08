@@ -285,6 +285,59 @@ This approach provides several benefits:
  -  *Rich error messages*: Use `WithDefaultError` with `Message` objects
     for structured error content with highlighting and formatting
 
+### Custom help display messages
+
+*This API is available since Optique 0.5.0.*
+
+The `withDefault()` modifier accepts an optional third parameter to customize
+how default values are displayed in help text. This allows you to show
+descriptive text instead of actual default values, which is particularly
+useful for environment variables or computed defaults:
+
+~~~~ typescript twoslash
+import { message, envVar } from "@optique/core/message";
+import { object, option, withDefault } from "@optique/core/parser";
+import { integer, string, url } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = object({
+  // Show custom help text instead of actual URL
+  apiUrl: withDefault(
+    option("--api-url", url()),
+    new URL("https://api.example.com"),
+    { message: message`Default API endpoint` }
+  ),
+
+  // Show environment variable name in help
+  token: withDefault(
+    option("--token", string()),
+    () => process.env.API_TOKEN || "",
+    { message: message`${envVar("API_TOKEN")}` }
+  ),
+
+  // Show descriptive text for computed defaults
+  workers: withDefault(
+    option("--workers", integer()),
+    () => require("os").cpus().length,
+    { message: message`Number of CPU cores` }
+  )
+});
+~~~~
+
+When the custom `message` is provided, it will be displayed in the help output
+instead of the actual default value:
+
+~~~~
+Options:
+  --api-url URL    API endpoint [Default API endpoint]
+  --token STRING   Authentication token [API_TOKEN]
+  --workers INT    Number of workers [Number of CPU cores]
+~~~~
+
+The `message` parameter accepts a [`Message`](./messages.md) object,
+which supports rich formatting with colors, environment variables,
+option names, and other structured elements. This ensures consistent
+styling with the rest of Optique's help output.
+
 ### Usage patterns
 
 The `withDefault()` modifier is ideal when:
@@ -293,8 +346,11 @@ The `withDefault()` modifier is ideal when:
  -  You need different default types than the parser produces (union types)
  -  You're building conditional CLI structures with dependent options
  -  The default value is meaningful and commonly used
+ -  You want to customize how defaults are displayed in help text
+ -  You need to show descriptive text for environment variables or computed defaults
 
 ~~~~ typescript twoslash
+import { message } from "@optique/core/message";
 import { object, option, parse, withDefault } from "@optique/core/parser";
 import { choice, integer, string } from "@optique/core/valueparser";
 class Server {
@@ -313,16 +369,26 @@ const serverConfig = object({
   name: option("-n", "--name", string()),
 
   // Optional with defaults - no undefined handling needed
-  host: withDefault(option("-h", "--host", string()), "0.0.0.0"),
+  host: withDefault(
+    option("-h", "--host", string()),
+    "0.0.0.0",
+    { message: message`Bind to all interfaces` }
+  ),
   port: withDefault(
     option("-p", "--port", integer({ min: 1, max: 0xffff })),
-    3000
+    3000,
+    { message: message`Default development port` }
   ),
   logLevel: withDefault(
     option("--log-level", choice(["debug", "info", "warn", "error"])),
     "info" as const,
+    { message: message`Standard logging level` }
   ),
-  maxConnections: withDefault(option("--max-conn", integer({ min: 1 })), 100)
+  maxConnections: withDefault(
+    option("--max-conn", integer({ min: 1 })),
+    100,
+    { message: message`Reasonable default for small servers` }
+  )
 });
 
 // Clean usage without undefined checks
@@ -336,6 +402,13 @@ if (config.success) {
     maxConnections: config.value.maxConnections // Always 100 if not specified
   });
 }
+
+// Help output will show custom descriptions instead of raw values:
+// Options:
+//   -h, --host STRING        Server host [Bind to all interfaces]
+//   -p, --port INTEGER       Server port [Default development port]
+//   --log-level LEVEL        Log level [Standard logging level]
+//   --max-conn INTEGER       Max connections [Reasonable default for small servers]
 ~~~~
 
 ### Dependent options with union types

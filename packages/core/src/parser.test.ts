@@ -1,4 +1,5 @@
 import {
+  envVar,
   formatMessage,
   type Message,
   message,
@@ -550,7 +551,7 @@ describe("option", () => {
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
       if (fragments.fragments[0].type === "entry") {
-        assert.equal(fragments.fragments[0].default, "8080");
+        assert.deepEqual(fragments.fragments[0].default, message`${"8080"}`);
       }
     });
 
@@ -582,7 +583,7 @@ describe("option", () => {
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
       if (fragments.fragments[0].type === "entry") {
-        assert.equal(fragments.fragments[0].default, "John");
+        assert.deepEqual(fragments.fragments[0].default, message`${"John"}`);
       }
     });
 
@@ -1080,7 +1081,7 @@ describe("object", () => {
         e.term.type === "option" && e.term.names.includes("--port")
       );
       assert.ok(portEntry);
-      assert.equal(portEntry.default, "8080");
+      assert.deepEqual(portEntry.default, message`${"8080"}`);
 
       // Boolean flags should not have default values shown
       const verboseEntry = mainSection.entries.find((e: DocEntry) =>
@@ -1377,8 +1378,8 @@ describe("tuple", () => {
 
       assert.ok(portEntry);
       assert.ok(fileEntry);
-      assert.equal(portEntry.default, "8080");
-      assert.equal(fileEntry.default, "input.txt");
+      assert.deepEqual(portEntry.default, message`${"8080"}`);
+      assert.deepEqual(fileEntry.default, message`${"input.txt"}`);
     });
 
     it("should handle empty tuple", () => {
@@ -1653,7 +1654,10 @@ describe("argument", () => {
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
       if (fragments.fragments[0].type === "entry") {
-        assert.equal(fragments.fragments[0].default, "input.txt");
+        assert.deepEqual(
+          fragments.fragments[0].default,
+          message`${"input.txt"}`,
+        );
       }
     });
 
@@ -1673,7 +1677,7 @@ describe("argument", () => {
         if (fragments.fragments[0].term.type === "argument") {
           assert.equal(fragments.fragments[0].term.metavar, "PORT");
         }
-        assert.equal(fragments.fragments[0].default, "8080");
+        assert.deepEqual(fragments.fragments[0].default, message`${"8080"}`);
       }
     });
 
@@ -2047,7 +2051,7 @@ describe("optional", () => {
         if (fragments.fragments[0].term.type === "option") {
           assert.deepEqual(fragments.fragments[0].term.names, ["-p", "--port"]);
         }
-        assert.equal(fragments.fragments[0].default, "8080");
+        assert.deepEqual(fragments.fragments[0].default, message`${"8080"}`);
       }
     });
 
@@ -2067,7 +2071,10 @@ describe("optional", () => {
         if (fragments.fragments[0].term.type === "argument") {
           assert.equal(fragments.fragments[0].term.metavar, "FILE");
         }
-        assert.equal(fragments.fragments[0].default, "default.txt");
+        assert.deepEqual(
+          fragments.fragments[0].default,
+          message`${"default.txt"}`,
+        );
       }
     });
 
@@ -2417,7 +2424,7 @@ describe("withDefault", () => {
         if (fragments.fragments[0].term.type === "option") {
           assert.deepEqual(fragments.fragments[0].term.names, ["-p", "--port"]);
         }
-        assert.equal(fragments.fragments[0].default, "8080");
+        assert.deepEqual(fragments.fragments[0].default, message`${"8080"}`);
       }
     });
 
@@ -2432,7 +2439,7 @@ describe("withDefault", () => {
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
       if (fragments.fragments[0].type === "entry") {
-        assert.equal(fragments.fragments[0].default, "3000");
+        assert.deepEqual(fragments.fragments[0].default, message`${"3000"}`);
       }
     });
 
@@ -2448,7 +2455,7 @@ describe("withDefault", () => {
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
       if (fragments.fragments[0].type === "entry") {
-        assert.equal(fragments.fragments[0].default, "8080");
+        assert.deepEqual(fragments.fragments[0].default, message`${"8080"}`);
       }
     });
 
@@ -2464,7 +2471,7 @@ describe("withDefault", () => {
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
       if (fragments.fragments[0].type === "entry") {
-        assert.equal(fragments.fragments[0].default, "3000");
+        assert.deepEqual(fragments.fragments[0].default, message`${"3000"}`);
       }
     });
 
@@ -2499,7 +2506,10 @@ describe("withDefault", () => {
         if (fragments.fragments[0].term.type === "argument") {
           assert.equal(fragments.fragments[0].term.metavar, "FILE");
         }
-        assert.equal(fragments.fragments[0].default, "input.txt");
+        assert.deepEqual(
+          fragments.fragments[0].default,
+          message`${"input.txt"}`,
+        );
       }
     });
   });
@@ -2546,6 +2556,133 @@ describe("withDefault", () => {
     if (completeResult.success) {
       assert.equal(completeResult.value, 8080);
     }
+  });
+
+  describe("with options parameter", () => {
+    it("should use custom message in help output", () => {
+      const baseParser = option("--url", string());
+      const customMessage = message`${
+        envVar("SERVICE_URL")
+      } environment variable`;
+      const defaultParser = withDefault(baseParser, "https://default.com", {
+        message: customMessage,
+      });
+
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].default, customMessage);
+      }
+    });
+
+    it("should still use actual default value for parsing", () => {
+      const baseParser = option("--url", string());
+      const actualDefault = "https://actual-default.com";
+      const defaultParser = withDefault(baseParser, actualDefault, {
+        message: message`Environment variable`,
+      });
+
+      const completeResult = defaultParser.complete(undefined);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, actualDefault);
+      }
+    });
+
+    it("should work with function-based default values", () => {
+      const baseParser = option("--port", integer());
+      const defaultFunc = () => 3000;
+      const customMessage = message`Default port from config`;
+      const defaultParser = withDefault(baseParser, defaultFunc, {
+        message: customMessage,
+      });
+
+      // Test help output shows custom message
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].default, customMessage);
+      }
+
+      // Test parsing still uses actual function result
+      const completeResult = defaultParser.complete(undefined);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, 3000);
+      }
+    });
+
+    it("should preserve other parser properties", () => {
+      const description = message`Server URL`;
+      const baseParser = option("--url", string(), { description });
+      const defaultParser = withDefault(baseParser, "https://default.com", {
+        message: message`Custom default`,
+      });
+
+      assert.equal(defaultParser.priority, baseParser.priority);
+      assert.deepEqual(defaultParser.usage, [{
+        type: "optional",
+        terms: baseParser.usage,
+      }]);
+
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].description, description);
+        assert.equal(fragments.fragments[0].term.type, "option");
+        if (fragments.fragments[0].term.type === "option") {
+          assert.deepEqual(fragments.fragments[0].term.names, ["--url"]);
+        }
+      }
+    });
+
+    it("should work without custom message (backward compatibility)", () => {
+      const baseParser = option("--port", integer());
+      const defaultParser = withDefault(baseParser, 3000);
+
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        // Should show the formatted default value
+        assert.deepEqual(fragments.fragments[0].default, message`${"3000"}`);
+      }
+    });
+
+    it("should work with complex message formatting", () => {
+      const baseParser = option("--config", string());
+      const customMessage = message`Path from ${envVar("CONFIG_DIR")} or ${
+        text("~/.config")
+      }`;
+      const defaultParser = withDefault(baseParser, "/etc/config", {
+        message: customMessage,
+      });
+
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].default, customMessage);
+      }
+    });
   });
 });
 
@@ -3419,7 +3556,7 @@ describe("multiple", () => {
             "--locale",
           ]);
         }
-        assert.equal(fragments.fragments[0].default, "en");
+        assert.deepEqual(fragments.fragments[0].default, message`${"en"}`);
       }
     });
 
@@ -3459,7 +3596,10 @@ describe("multiple", () => {
         if (fragments.fragments[0].term.type === "argument") {
           assert.equal(fragments.fragments[0].term.metavar, "FILE");
         }
-        assert.equal(fragments.fragments[0].default, "file1.txt");
+        assert.deepEqual(
+          fragments.fragments[0].default,
+          message`${"file1.txt"}`,
+        );
       }
     });
 
@@ -6601,7 +6741,7 @@ describe("getDocPage", () => {
       e.term.names && e.term.names.includes("--port")
     );
     assert.ok(portEntry);
-    assert.equal(portEntry.default, "8080");
+    assert.deepEqual(portEntry.default, message`${"8080"}`);
   });
 
   it("should handle tuple parser correctly", () => {

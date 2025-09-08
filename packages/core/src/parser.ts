@@ -500,7 +500,7 @@ export function option<T>(
         },
         description: options.description,
         default: defaultValue != null && valueParser != null
-          ? valueParser.format(defaultValue as T)
+          ? message`${valueParser.format(defaultValue as T)}`
           : undefined,
       }];
       return { fragments, description: options.description };
@@ -836,7 +836,7 @@ export function argument<T>(
         description: options.description,
         default: defaultValue == null
           ? undefined
-          : valueParser.format(defaultValue),
+          : message`${valueParser.format(defaultValue)}`,
       }];
       return { fragments, description: options.description };
     },
@@ -909,6 +909,27 @@ export function optional<TValue, TState>(
 }
 
 /**
+ * Options for the {@link withDefault} parser.
+ */
+export interface WithDefaultOptions {
+  /**
+   * Custom message to display in help output instead of the formatted default value.
+   * This allows showing descriptive text like "SERVICE_URL environment variable"
+   * instead of the actual default value.
+   *
+   * @example
+   * ```typescript
+   * withDefault(
+   *   option("--url", url()),
+   *   process.env["SERVICE_URL"],
+   *   { message: message`${envVar("SERVICE_URL")} environment variable` }
+   * )
+   * ```
+   */
+  readonly message?: Message;
+}
+
+/**
  * Error type for structured error messages in {@link withDefault} default value callbacks.
  * Unlike regular errors that only support string messages, this error type accepts
  * a {@link Message} object that supports rich formatting, colors, and structured content.
@@ -957,11 +978,42 @@ export class WithDefaultError extends Error {
  *                     doesn't match or consume input. Can be a value of type
  *                     {@link TDefault} or a function that returns such a value.
  * @returns A {@link Parser} that produces either the result of the wrapped parser
- *          or the default value if the wrapped parser fails to match (union type {@link TValue} | {@link TDefault}).
+ *          or the default value if the wrapped parser fails to match
+ *          (union type {@link TValue} | {@link TDefault}).
  */
 export function withDefault<TValue, TState, TDefault = TValue>(
   parser: Parser<TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
+): Parser<TValue | TDefault, [TState] | undefined>;
+
+/**
+ * Creates a parser that makes another parser use a default value when it fails
+ * to match or consume input. This is similar to {@link optional}, but instead
+ * of returning `undefined` when the wrapped parser doesn't match, it returns
+ * a specified default value.
+ * @template TValue The type of the value returned by the wrapped parser.
+ * @template TState The type of the state used by the wrapped parser.
+ * @template TDefault The type of the default value.
+ * @param parser The {@link Parser} to wrap with default behavior.
+ * @param defaultValue The default value to return when the wrapped parser
+ *                     doesn't match or consume input. Can be a value of type
+ *                     {@link TDefault} or a function that returns such a value.
+ * @param options Optional configuration including custom help display message.
+ * @returns A {@link Parser} that produces either the result of the wrapped parser
+ *          or the default value if the wrapped parser fails to match
+ *          (union type {@link TValue} | {@link TDefault}).
+ * @since 0.5.0
+ */
+export function withDefault<TValue, TState, TDefault = TValue>(
+  parser: Parser<TValue, TState>,
+  defaultValue: TDefault | (() => TDefault),
+  options?: WithDefaultOptions,
+): Parser<TValue | TDefault, [TState] | undefined>;
+
+export function withDefault<TValue, TState, TDefault = TValue>(
+  parser: Parser<TValue, TState>,
+  defaultValue: TDefault | (() => TDefault),
+  options?: WithDefaultOptions,
 ): Parser<TValue | TDefault, [TState] | undefined> {
   return {
     $valueType: [],
@@ -1015,14 +1067,33 @@ export function withDefault<TValue, TState, TDefault = TValue>(
         : state.state === undefined
         ? { kind: "unavailable" }
         : { kind: "available", state: state.state[0] };
-      return parser.getDocFragments(
-        innerState,
-        upperDefaultValue != null
-          ? upperDefaultValue as TValue
-          : typeof defaultValue === "function"
-          ? (defaultValue as () => TDefault)() as unknown as TValue
-          : defaultValue as unknown as TValue,
-      );
+
+      const actualDefaultValue = upperDefaultValue != null
+        ? upperDefaultValue as TValue
+        : typeof defaultValue === "function"
+        ? (defaultValue as () => TDefault)() as unknown as TValue
+        : defaultValue as unknown as TValue;
+
+      const fragments = parser.getDocFragments(innerState, actualDefaultValue);
+
+      // If a custom message is provided, replace the default field in all entries
+      if (options?.message) {
+        const modifiedFragments = fragments.fragments.map((fragment) => {
+          if (fragment.type === "entry") {
+            return {
+              ...fragment,
+              default: options.message,
+            };
+          }
+          return fragment;
+        });
+        return {
+          ...fragments,
+          fragments: modifiedFragments,
+        };
+      }
+
+      return fragments;
     },
   };
 }
