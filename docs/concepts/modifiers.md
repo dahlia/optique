@@ -227,13 +227,15 @@ Dynamic defaults are useful when:
 
 ### Error handling
 
+*This API is available since Optique 0.5.0.*
+
 When using function-based defaults, the `withDefault()` modifier automatically
 catches any errors thrown in the callback and converts them to parser-level
 errors. This allows you to handle validation failures (like missing environment
 variables) directly at the parser level:
 
 ~~~~ typescript twoslash
-import { message, text } from "@optique/core/message";
+import { envVar, message } from "@optique/core/message";
 import { object, option, withDefault, WithDefaultError } from "@optique/core/parser";
 import { string, url } from "@optique/core/valueparser";
 // ---cut-before---
@@ -249,7 +251,7 @@ const parser = object({
   // Rich formatting with WithDefaultError
   configPath: withDefault(option("--config", string()), () => {
     throw new WithDefaultError(
-      message`Environment variable ${text("CONFIG_PATH")} is not set.`
+      message`Environment variable ${envVar("CONFIG_PATH")} is not set.`
     );
   })
 });
@@ -260,17 +262,17 @@ class which accepts a `Message` object instead of a plain string:
 
 ~~~~ typescript twoslash
 import { WithDefaultError, object, option, withDefault } from "@optique/core/parser";
-import { message, text } from "@optique/core/message";
+import { envVar, message } from "@optique/core/message";
 import { string } from "@optique/core/valueparser";
 // ---cut-before---
 const configParser = withDefault(option("--database-url", string()), () => {
-  const envVar = process.env.DATABASE_URL;
-  if (!envVar) {
+  const envValue = process.env.DATABASE_URL;
+  if (!envValue) {
     throw new WithDefaultError(
-      message`Environment variable ${text("DATABASE_URL")} is required but not set.`
+      message`Environment variable ${envVar("DATABASE_URL")} is required but not set.`
     );
   }
-  return envVar;
+  return envValue;
 });
 ~~~~
 

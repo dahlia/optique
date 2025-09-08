@@ -48,43 +48,202 @@ const optionError = message`Option ${optionName("--port")} requires a valid numb
 Message components
 ------------------
 
-Messages can contain several types of components, each with specific semantic meaning:
+Messages can contain several types of components, each with specific semantic
+meaning and visual styling:
 
-Plain text
-:   Regular message content that provides context and explanation
+### Plain text
 
-Values
-:   User-provided input that should be clearly distinguished from other text
+Regular message content that provides context and explanation.
+Plain text appears as normal text without any special formatting.
 
-Option names
-:   CLI option references like `--verbose` or `-p` that should be consistently styled
+### Values
 
-Metavariables
-:   Placeholder names like `FILE` or `PORT` used in help text and error messages
+User-provided input that should be clearly distinguished from other text.
+Values are automatically styled with highlighting and quotes to make them stand out:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+// ---cut-before---
+const userInput = "invalid-port";
+const errorMsg = message`Invalid port ${userInput}.`;
+~~~~
+
+With colors (no quotes):
+
+~~~~ ansi
+Invalid port [32minvalid-port[0m.
+~~~~
+
+Without colors (with quotes):
+
+~~~~ ansi
+Invalid port "invalid-port".
+~~~~
+
+### Option names
+
+CLI option references like `--verbose` or `-p` that should be consistently
+styled. Option names are displayed in italics with backticks:
+
+~~~~ typescript twoslash
+import { message, optionName } from "@optique/core/message";
+// ---cut-before---
+const helpMsg = message`Use ${optionName("--verbose")} for detailed output.`;
+~~~~
+
+With colors (no quotes):
+
+~~~~ ansi
+Use [3m--verbose[0m for detailed output.
+~~~~
+
+Without colors (with quotes):
+
+~~~~ ansi
+Use `--verbose` for detailed output.
+~~~~
+
+For multiple option alternatives, use `optionNames` to display them with proper
+separation:
+
+~~~~ typescript twoslash
+import { message, optionNames } from "@optique/core/message";
+// ---cut-before---
+const helpMsg = message`Use ${optionNames(["--help", "-h", "-?"])} for usage information.`;
+~~~~
+
+With colors (no quotes):
+
+~~~~ ansi
+Use [3m--help[0m/[3m-h[0m/[3m-?[0m for usage information.
+~~~~
+
+Without colors (with quotes):
+
+~~~~ ansi
+Use `--help`/`-h`/`-?` for usage information.
+~~~~
+
+### Metavariables
+
+Placeholder names like `FILE` or `PORT` used in help text and error messages.
+Metavariables are displayed in bold to indicate they represent user input:
+
+~~~~ typescript twoslash
+import { message, metavar } from "@optique/core/message";
+// ---cut-before---
+const errorMsg = message`Expected ${metavar("NUMBER")}, got invalid input.`;
+~~~~
+
+With colors (no quotes):
+
+~~~~ ansi
+Expected [1mNUMBER[0m, got invalid input.
+~~~~
+
+Without colors (with quotes):
+
+~~~~ ansi
+Expected `NUMBER`, got invalid input.
+~~~~
+
+### Environment variables
+
+*Available since Optique 0.5.0.*
+
+Environment variable names that should be highlighted distinctly from other
+components. Environment variables are displayed in bold with underlines:
+
+~~~~ typescript twoslash
+import { message, envVar } from "@optique/core/message";
+// ---cut-before---
+const configMsg = message`Set ${envVar("API_URL")} environment variable.`;
+~~~~
+
+With colors (no quotes):
+
+~~~~ ansi
+Set [1;4mAPI_URL[0m environment variable.
+~~~~
+
+Without colors (with quotes):
+
+~~~~ ansi
+Set `API_URL` environment variable.
+~~~~
+
+### Multiple values
+
+Consecutive values that were provided together, such as multiple arguments or
+repeated option values. These are displayed as a sequence with consistent
+formatting:
+
+~~~~ typescript twoslash
+import { message, values } from "@optique/core/message";
+// ---cut-before---
+const invalidArgs = ["file1.txt", "file2.txt", "file3.txt"];
+const errorMsg = message`Invalid files: ${values(invalidArgs)}.`;
+~~~~
+
+
+With colors (no quotes):
+
+~~~~ ansi
+Invalid files: [32mfile1.txt file2.txt file3.txt[0m.
+~~~~
+
+Without colors (with quotes):
+
+~~~~ ansi
+Invalid files: "file1.txt" "file2.txt" "file3.txt".
+~~~~
+
+### Combined examples
 
 ~~~~ typescript twoslash
 const userInput: string = "";
 const userValue: string = "";
 // ---cut-before---
-import { message, optionName, metavar, values } from "@optique/core/message";
+import {
+  envVar,
+  message,
+  metavar,
+  optionName,
+  optionNames,
+  values,
+} from "@optique/core/message";
 
 const examples = {
   // Automatic value embedding
-  simpleValue: message`Invalid value ${userInput}`,
+  simpleValue: message`Invalid value ${userInput}.`,
 
-  // Explicit option name highlighting
-  optionRef: message`Unknown option ${optionName("--invalid")}`,
+  // Single option name highlighting
+  optionRef: message`Unknown option ${optionName("--invalid")}.`,
+
+  // Multiple option alternatives
+  helpOptions: message`Try ${optionNames(["--help", "-h"])} for usage.`,
 
   // Metavariable for documentation
-  usage: message`Expected ${metavar("FILE")} argument`,
+  usage: message`Expected ${metavar("FILE")} argument.`,
 
-  // Multiple values
-  choices: message`Choose from ${values(["red", "green", "blue"])}`,
+  // Environment variable reference
+  envError: message`Environment variable ${envVar("DATABASE_URL")} is not set.`,
+
+  // Multiple consecutive values
+  invalidFiles: message`Cannot process files ${values(["missing.txt", "readonly.txt"])}.`,
 
   // Combined components
-  complex: message`Option ${optionName("--port")} expects ${metavar("NUMBER")}, got ${userValue}`
+  complex: message`Option ${optionName("--port")} expects ${metavar("NUMBER")}, got ${userValue}.`
 };
 ~~~~
+
+Here's how these examples appear in the terminal:
+
+![Terminal output showing seven different message component examples, each
+displayed in both colored (no quotes) and non-colored (with quotes) formats,
+demonstrating values, option names, metavariables, environment variables, and
+complex combinations](messages/combined-examples.png)
+
 
 Value interpolation
 -------------------
@@ -98,7 +257,7 @@ import { message } from "@optique/core/message";
 const userInput: string = "invalid-port";
 
 // Direct value interpolation - automatically quoted and styled
-const error = message`Invalid port ${userInput}`;
+const error = message`Invalid port ${userInput}.`;
 ~~~~
 
 Explicit component creation
@@ -120,16 +279,16 @@ import {
 
 // Dynamic option reference
 const option = isLongForm ? "--verbose" : "-v";
-const helpMessage = message`Use ${optionName(option)} for detailed output`;
+const helpMessage = message`Use ${optionName(option)} for detailed output.`;
 
 // Multiple option alternatives
-const optionsMessage = message`Try ${optionNames(["--help", "-h", "-?"])} for usage`;
+const optionsMessage = message`Try ${optionNames(["--help", "-h", "-?"])} for usage.`;
 
 // Consecutive values
-const valuesMessage = message`Invalid values: ${values(args)}`;
+const valuesMessage = message`Invalid values: ${values(args)}.`;
 
-// Complex metavariable usage
-const usageMessage = message`${metavar("COMMAND")} [${metavar("OPTIONS")}] ${metavar("FILE")}...`;
+// Metavariable in error context
+const typeError = message`Expected ${metavar("STRING")}, got ${metavar("NUMBER")}.`;
 ~~~~
 
 Message composition
@@ -143,16 +302,16 @@ are automatically concatenated:
 import { message, optionName, metavar } from "@optique/core/message";
 
 // Create reusable message components
-const invalidInput = message`invalid input format`;
-const missingOption = message`required option ${optionName("--config")} not found`;
+const invalidInput = message`invalid input format.`;
+const missingOption = message`required option ${optionName("--config")} not found.`;
 
 // Compose messages by embedding existing ones
 const contextualError = message`Configuration error: ${invalidInput}`;
 const detailedError = message`Setup failed - ${missingOption}`;
 
 // Complex composition with multiple message parts
-const troubleshootingInfo = message`Check ${metavar("FILE")} permissions`;
-const fullError = message`${detailedError}. ${troubleshootingInfo}`;
+const troubleshootingInfo = message`Check ${metavar("FILE")} permissions.`;
+const fullError = message`${detailedError} ${troubleshootingInfo}`;
 ~~~~
 
 This composition feature enables building structured error messages from
@@ -163,9 +322,9 @@ import { message, optionName } from "@optique/core/message";
 
 // Base error messages
 const errorMessages = {
-  fileNotFound: (filename: string) => message`File ${filename} not found`,
-  permissionDenied: (action: string) => message`Permission denied for ${action}`,
-  invalidFormat: (format: string) => message`Invalid ${format} format`
+  fileNotFound: (filename: string) => message`File ${filename} not found.`,
+  permissionDenied: (action: string) => message`Permission denied for ${action}.`,
+  invalidFormat: (format: string) => message`Invalid ${format} format.`
 };
 
 // Compose complex errors from base messages
@@ -173,12 +332,12 @@ function createFileError(filename: string, action: string) {
   const baseError = errorMessages.fileNotFound(filename);
   const permissionError = errorMessages.permissionDenied(action);
 
-  return message`Operation failed: ${baseError}. ${permissionError}`;
+  return message`Operation failed: ${baseError} ${permissionError}`;
 }
 
 // Usage in parser error handling
 const configError = createFileError("config.json", "read");
-const validationError = message`${errorMessages.invalidFormat("JSON")} in configuration`;
+const validationError = message`${errorMessages.invalidFormat("JSON")} in configuration.`;
 ~~~~
 
 
@@ -282,7 +441,7 @@ import { print, printError } from "@optique/run";
 import { message, optionName } from "@optique/core/message";
 
 // Force specific formatting
-print(message`Status: ${optionName("--quiet")} mode enabled`, {
+print(message`Status: ${optionName("--quiet")} mode enabled.`, {
   colors: false,    // Disable colors
   quotes: true,     // Force quote marks
   maxWidth: 60,     // Wrap at 60 characters

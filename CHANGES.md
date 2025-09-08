@@ -29,9 +29,22 @@ To be released.
     // Structured error with rich formatting
     withDefault(option("--config", string()), () => {
       throw new WithDefaultError(
-        message`Environment variable ${text("CONFIG_PATH")} is not set`
+        message`Environment variable ${envVar("CONFIG_PATH")} is not set`
       );
     });
+    ~~~~
+
+ -  Added `envVar` message term type for environment variable references.
+    Environment variables are displayed with bold and underline formatting
+    to distinguish them from other message components like option names
+    and metavariables.  The `envVar()` helper function creates environment
+    variable terms for use in structured messages.
+
+    ~~~~ typescript
+    import { envVar, message } from "@optique/core/message";
+    
+    const configError = message`Environment variable ${envVar("API_URL")} is not set.`;
+    // Displays: Environment variable API_URL is not set. (bold + underlined)
     ~~~~
 
 [#18]: https://github.com/dahlia/optique/discussions/18

@@ -1,4 +1,5 @@
 import {
+  envVar,
   formatMessage,
   type Message,
   message,
@@ -164,6 +165,12 @@ describe("message term constructors", () => {
     assert.equal(term.type, "values");
     assert.deepEqual(term.values, ["foo", "bar", "baz"]);
   });
+
+  it("should create envVar term", () => {
+    const term = envVar("API_URL");
+    assert.equal(term.type, "envVar");
+    assert.equal(term.envVar, "API_URL");
+  });
 });
 
 describe("formatMessage", () => {
@@ -231,6 +238,32 @@ describe("formatMessage", () => {
     ];
     const formatted = formatMessage(msg, { colors: true, quotes: true });
     assert.equal(formatted, "Expected \x1b[1m`FILE`\x1b[0m");
+  });
+
+  it("should format envVar without colors", () => {
+    const msg: Message = [
+      { type: "text", text: "Environment variable " },
+      { type: "envVar", envVar: "API_URL" },
+      { type: "text", text: " is not set" },
+    ];
+    const formatted = formatMessage(msg, {
+      colors: false,
+      quotes: true,
+    });
+    assert.equal(formatted, "Environment variable `API_URL` is not set");
+  });
+
+  it("should format envVar with colors", () => {
+    const msg: Message = [
+      { type: "text", text: "Environment variable " },
+      { type: "envVar", envVar: "API_URL" },
+      { type: "text", text: " is not set" },
+    ];
+    const formatted = formatMessage(msg, { colors: true, quotes: true });
+    assert.equal(
+      formatted,
+      "Environment variable \x1b[1;4m`API_URL`\x1b[0m is not set",
+    );
   });
 
   it("should format single value without colors", () => {

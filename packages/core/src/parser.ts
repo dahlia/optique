@@ -918,7 +918,7 @@ export function optional<TValue, TState>(
  * withDefault(option("--url", url()), () => {
  *   if (!process.env.INSTANCE_URL) {
  *     throw new WithDefaultError(
- *       message`Environment variable ${text("INSTANCE_URL")} is not set.`
+ *       message`Environment variable ${envVar("INSTANCE_URL")} is not set.`
  *     );
  *   }
  *   return new URL(process.env.INSTANCE_URL);

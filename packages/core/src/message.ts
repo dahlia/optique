@@ -93,6 +93,22 @@ export type MessageTerm =
      * representations of consecutive values.  For example, `["42", "hello"]`.
      */
     readonly values: readonly string[];
+  }
+  /**
+   * An environment variable term in the message, which represents
+   * an environment variable name.
+   * @since 0.5.0
+   */
+  | {
+    /**
+     * The type of the term, which is `"envVar"` for an environment variable.
+     */
+    readonly type: "envVar";
+    /**
+     * The environment variable name, which is a string that represents
+     * an environment variable. For example, `"PATH"` or `"API_URL"`.
+     */
+    readonly envVar: string;
   };
 
 /**
@@ -210,6 +226,17 @@ export function values(values: readonly string[]): MessageTerm {
 }
 
 /**
+ * Creates a {@link MessageTerm} for an environment variable.
+ * @param envVar The environment variable name, which is a string that represents
+ *               an environment variable. For example, `"PATH"` or `"API_URL"`.
+ * @returns A {@link MessageTerm} representing the environment variable.
+ * @since 0.5.0
+ */
+export function envVar(envVar: string): MessageTerm {
+  return { type: "envVar", envVar };
+}
+
+/**
  * Options for the {@link formatMessage} function.
  */
 export interface MessageFormatOptions {
@@ -319,6 +346,14 @@ export function formatMessage(
             width: value.length,
           };
         }
+      } else if (term.type === "envVar") {
+        const envVar = useQuotes ? `\`${term.envVar}\`` : term.envVar;
+        yield {
+          text: useColors
+            ? `\x1b[1;4m${envVar}\x1b[0m` // Bold and underlined for environment variables
+            : envVar,
+          width: envVar.length,
+        };
       } else {
         throw new TypeError(
           `Invalid MessageTerm type: ${term["type"]}.`,
