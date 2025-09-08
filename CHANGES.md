@@ -6,6 +6,18 @@ Version 0.3.1
 
 To be released.
 
+### @optique/run
+
+ -  Fixed inconsistent error message coloring across JavaScript runtimes
+    by replacing `console.error()` and `console.log()` with direct
+    `process.stderr.write()` and `process.stdout.write()` calls.
+    Previously, runtimes like Bun would display `console.error()` output
+    in red, causing ANSI reset codes in formatted option names to interrupt
+    the error coloring. This change ensures consistent output formatting
+    across all JavaScript runtimes.  [[#20]]
+
+[#20]: https://github.com/dahlia/optique/issues/20
+
 
 Version 0.3.0
 -------------

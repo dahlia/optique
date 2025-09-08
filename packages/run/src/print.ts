@@ -194,9 +194,9 @@ export function createPrinter(options: PrinterOptions = {}): Printer {
     const formatted = formatMessage(message, formatOptions);
 
     if (stream === "stderr") {
-      console.error(formatted);
+      process.stderr.write(formatted + "\n");
     } else {
-      console.log(formatted);
+      process.stdout.write(formatted + "\n");
     }
   };
 }
