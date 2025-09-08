@@ -225,6 +225,64 @@ Dynamic defaults are useful when:
  -  You want to compute expensive defaults only when needed
  -  The default value might change between invocations
 
+### Error handling
+
+When using function-based defaults, the `withDefault()` modifier automatically
+catches any errors thrown in the callback and converts them to parser-level
+errors. This allows you to handle validation failures (like missing environment
+variables) directly at the parser level:
+
+~~~~ typescript twoslash
+import { message, text } from "@optique/core/message";
+import { object, option, withDefault, WithDefaultError } from "@optique/core/parser";
+import { string, url } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = object({
+  // Regular error handling - converted to plain text
+  apiUrl: withDefault(option("--url", url()), () => {
+    if (!process.env.API_URL) {
+      throw new Error("Environment variable API_URL is not set.");
+    }
+    return new URL(process.env.API_URL);
+  }),
+
+  // Rich formatting with WithDefaultError
+  configPath: withDefault(option("--config", string()), () => {
+    throw new WithDefaultError(
+      message`Environment variable ${text("CONFIG_PATH")} is not set.`
+    );
+  })
+});
+~~~~
+
+For structured error messages with rich formatting, use the `WithDefaultError`
+class which accepts a `Message` object instead of a plain string:
+
+~~~~ typescript twoslash
+import { WithDefaultError, object, option, withDefault } from "@optique/core/parser";
+import { message, text } from "@optique/core/message";
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+const configParser = withDefault(option("--database-url", string()), () => {
+  const envVar = process.env.DATABASE_URL;
+  if (!envVar) {
+    throw new WithDefaultError(
+      message`Environment variable ${text("DATABASE_URL")} is required but not set.`
+    );
+  }
+  return envVar;
+});
+~~~~
+
+This approach provides several benefits:
+
+ -  *Parser-level validation*: Errors are caught and reported as parsing
+    failures rather than runtime exceptions
+ -  *Consistent error formatting*: Errors are displayed using Optique's
+    standard error formatting and colors
+ -  *Rich error messages*: Use `WithDefaultError` with `Message` objects
+    for structured error content with highlighting and formatting
+
 ### Usage patterns
 
 The `withDefault()` modifier is ideal when:
