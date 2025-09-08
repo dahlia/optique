@@ -1,4 +1,9 @@
-import { formatMessage, type Message, message } from "@optique/core/message";
+import {
+  formatMessage,
+  type Message,
+  message,
+  text,
+} from "@optique/core/message";
 import {
   argument,
   command,
@@ -20,6 +25,7 @@ import {
   type ParserResult,
   tuple,
   withDefault,
+  WithDefaultError,
 } from "@optique/core/parser";
 import type { DocEntry, DocFragment } from "@optique/core/doc";
 import { integer, string } from "@optique/core/valueparser";
@@ -2496,6 +2502,50 @@ describe("withDefault", () => {
         assert.equal(fragments.fragments[0].default, "input.txt");
       }
     });
+  });
+
+  it("should handle errors thrown by default value callback", () => {
+    const baseParser = option("--url", string());
+    const defaultParser = withDefault(baseParser, () => {
+      throw new Error("Environment variable not set");
+    });
+
+    const completeResult = defaultParser.complete(undefined);
+    assert.ok(!completeResult.success);
+    if (!completeResult.success) {
+      assertErrorIncludes(completeResult.error, "Environment variable not set");
+    }
+  });
+
+  it("should handle WithDefaultError with structured message", () => {
+    const baseParser = option("--config", string());
+    const defaultParser = withDefault(baseParser, () => {
+      throw new WithDefaultError(
+        message`Environment variable ${text("CONFIG_PATH")} is not set`,
+      );
+    });
+
+    const completeResult = defaultParser.complete(undefined);
+    assert.ok(!completeResult.success);
+    if (!completeResult.success) {
+      assert.deepEqual(
+        completeResult.error,
+        message`Environment variable ${text("CONFIG_PATH")} is not set`,
+      );
+    }
+  });
+
+  it("should not catch errors when default value callback succeeds", () => {
+    const baseParser = option("--port", integer());
+    const defaultParser = withDefault(baseParser, () => {
+      return 8080;
+    });
+
+    const completeResult = defaultParser.complete(undefined);
+    assert.ok(completeResult.success);
+    if (completeResult.success) {
+      assert.equal(completeResult.value, 8080);
+    }
   });
 });
 

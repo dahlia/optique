@@ -6,6 +6,37 @@ Version 0.5.0
 
 To be released.
 
+### @optique/core
+
+ -  Added automatic error handling for `withDefault()` default value callbacks.
+    When a default value callback throws an error, it is now automatically
+    caught and converted to a parser-level error. This allows users to handle
+    validation errors (like missing environment variables) directly at
+    the parser level instead of after calling `run()`.  [[#18], [#21]]
+
+ -  Added `WithDefaultError` class for structured error messages in
+    `withDefault()` callbacks. This error type accepts a `Message` object
+    instead of just a string, enabling rich formatting with colors and
+    structured content in error messages. Regular errors are still supported and
+    automatically converted to plain text messages.  [[#18], [#21]]
+
+    ~~~~ typescript
+    // Regular error (automatically converted to text)
+    withDefault(option("--url", url()), () => {
+      throw new Error("Environment variable not set");
+    });
+
+    // Structured error with rich formatting
+    withDefault(option("--config", string()), () => {
+      throw new WithDefaultError(
+        message`Environment variable ${text("CONFIG_PATH")} is not set`
+      );
+    });
+    ~~~~
+
+[#18]: https://github.com/dahlia/optique/discussions/18
+[#21]: https://github.com/dahlia/optique/issues/21
+
 
 Version 0.4.1
 -------------

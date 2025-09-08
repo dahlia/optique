@@ -6,6 +6,7 @@ import type {
   DocSection,
 } from "./doc.ts";
 import {
+  formatMessage,
   type Message,
   message,
   metavar,
@@ -908,6 +909,42 @@ export function optional<TValue, TState>(
 }
 
 /**
+ * Error type for structured error messages in {@link withDefault} default value callbacks.
+ * Unlike regular errors that only support string messages, this error type accepts
+ * a {@link Message} object that supports rich formatting, colors, and structured content.
+ *
+ * @example
+ * ```typescript
+ * withDefault(option("--url", url()), () => {
+ *   if (!process.env.INSTANCE_URL) {
+ *     throw new WithDefaultError(
+ *       message`Environment variable ${text("INSTANCE_URL")} is not set.`
+ *     );
+ *   }
+ *   return new URL(process.env.INSTANCE_URL);
+ * })
+ * ```
+ *
+ * @since 0.5.0
+ */
+export class WithDefaultError extends Error {
+  /**
+   * The structured message associated with this error.
+   */
+  readonly errorMessage: Message;
+
+  /**
+   * Creates a new WithDefaultError with a structured message.
+   * @param message The structured {@link Message} describing the error.
+   */
+  constructor(message: Message) {
+    super(formatMessage(message));
+    this.errorMessage = message;
+    this.name = "WithDefaultError";
+  }
+}
+
+/**
  * Creates a parser that makes another parser use a default value when it fails
  * to match or consume input. This is similar to {@link optional}, but instead
  * of returning `undefined` when the wrapped parser doesn't match, it returns
@@ -953,12 +990,19 @@ export function withDefault<TValue, TState, TDefault = TValue>(
     },
     complete(state) {
       if (typeof state === "undefined") {
-        return {
-          success: true,
-          value: typeof defaultValue === "function"
+        try {
+          const value = typeof defaultValue === "function"
             ? (defaultValue as () => TDefault)()
-            : defaultValue,
-        };
+            : defaultValue;
+          return { success: true, value };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof WithDefaultError
+              ? error.errorMessage
+              : message`${text(String(error))}`,
+          };
+        }
       }
       return parser.complete(state[0]);
     },
