@@ -7,6 +7,22 @@ Version 0.5.0
 To be released.
 
 
+Version 0.4.1
+-------------
+
+Released on September 8, 2025.
+
+### @optique/run
+
+ -  Fixed inconsistent error message coloring across JavaScript runtimes
+    by replacing `console.error()` and `console.log()` with direct
+    `process.stderr.write()` and `process.stdout.write()` calls.
+    Previously, runtimes like Bun would display `console.error()` output
+    in red, causing ANSI reset codes in formatted option names to interrupt
+    the error coloring. This change ensures consistent output formatting
+    across all JavaScript runtimes.  [[#20]]
+
+
 Version 0.4.0
 -------------
 
@@ -219,6 +235,24 @@ support Temporal natively.
  -  Added `PlainMonthDayOptions` interface.
  -  Added `timeZone()` value parser.
  -  Added `TimeZoneOptions` interface.
+
+
+Version 0.3.1
+-------------
+
+Released on September 8, 2025.
+
+### @optique/run
+
+ -  Fixed inconsistent error message coloring across JavaScript runtimes
+    by replacing `console.error()` and `console.log()` with direct
+    `process.stderr.write()` and `process.stdout.write()` calls.
+    Previously, runtimes like Bun would display `console.error()` output
+    in red, causing ANSI reset codes in formatted option names to interrupt
+    the error coloring. This change ensures consistent output formatting
+    across all JavaScript runtimes.  [[#20]]
+
+[#20]: https://github.com/dahlia/optique/issues/20
 
 
 Version 0.3.0
