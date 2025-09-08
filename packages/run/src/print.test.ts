@@ -20,10 +20,10 @@ function createMockFn(): {
 describe("print module", () => {
   describe("print function", () => {
     it("should write to stdout with automatic formatting", () => {
-      // Mock console.log
-      const logMock = createMockFn();
-      const originalLog = console.log;
-      console.log = logMock.fn as typeof console.log;
+      // Mock process.stdout.write
+      const writeMock = createMockFn();
+      const originalWrite = process.stdout.write;
+      process.stdout.write = writeMock.fn as typeof process.stdout.write;
 
       // Mock TTY detection
       const originalIsTTY = process.stdout.isTTY;
@@ -33,61 +33,60 @@ describe("print module", () => {
         const msg = message`Hello ${"world"}!`;
         print(msg);
 
-        assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0] as string;
+        assert.strictEqual(writeMock.calls.length, 1);
+        const output = writeMock.calls[0].arguments[0] as string;
         assert.ok(typeof output === "string");
-        assert.ok(output.includes("Hello"));
-        assert.ok(output.includes("world"));
+        // TTY environment should produce colored output with quotes
+        assert.strictEqual(output, 'Hello \x1b[32m"world"\x1b[0m!\n');
       } finally {
         // Restore original functions
-        console.log = originalLog;
+        process.stdout.write = originalWrite;
         process.stdout.isTTY = originalIsTTY;
       }
     });
 
     it("should respect custom formatting options", () => {
-      const logMock = createMockFn();
-      const originalLog = console.log;
-      console.log = logMock.fn as typeof console.log;
+      const writeMock = createMockFn();
+      const originalWrite = process.stdout.write;
+      process.stdout.write = writeMock.fn as typeof process.stdout.write;
 
       try {
         const msg = message`Using ${optionName("--verbose")} option`;
         print(msg, { colors: false, quotes: false });
 
-        assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0] as string;
-        // Should not contain color codes when colors: false
-        assert.ok(!output.includes("\x1b["));
-        // Should not contain backticks when quotes: false
-        assert.ok(!output.includes("`"));
+        assert.strictEqual(writeMock.calls.length, 1);
+        const output = writeMock.calls[0].arguments[0] as string;
+        // With colors: false and quotes: false, should be plain text
+        assert.strictEqual(output, "Using --verbose option\n");
       } finally {
-        console.log = originalLog;
+        process.stdout.write = originalWrite;
       }
     });
 
     it("should write to stderr when stream option is specified", () => {
-      const errorMock = createMockFn();
-      const originalError = console.error;
-      console.error = errorMock.fn as typeof console.error;
+      const stderrWriteMock = createMockFn();
+      const originalStderrWrite = process.stderr.write;
+      process.stderr.write = stderrWriteMock.fn as typeof process.stderr.write;
 
       try {
         const msg = message`Debug info`;
         print(msg, { stream: "stderr" });
 
-        assert.strictEqual(errorMock.calls.length, 1);
-        const output = errorMock.calls[0].arguments[0] as string;
-        assert.ok(output.includes("Debug info"));
+        assert.strictEqual(stderrWriteMock.calls.length, 1);
+        const output = stderrWriteMock.calls[0].arguments[0] as string;
+        // With no colors (default for stderr output), should be plain text with quotes
+        assert.strictEqual(output, "Debug info\n");
       } finally {
-        console.error = originalError;
+        process.stderr.write = originalStderrWrite;
       }
     });
   });
 
   describe("printError function", () => {
     it("should write to stderr with Error prefix", () => {
-      const errorMock = createMockFn();
-      const originalError = console.error;
-      console.error = errorMock.fn as typeof console.error;
+      const stderrWriteMock = createMockFn();
+      const originalStderrWrite = process.stderr.write;
+      process.stderr.write = stderrWriteMock.fn as typeof process.stderr.write;
 
       // Mock TTY detection for stderr
       const originalIsTTY = process.stderr.isTTY;
@@ -97,21 +96,21 @@ describe("print module", () => {
         const msg = message`File ${"config.json"} not found`;
         printError(msg);
 
-        assert.strictEqual(errorMock.calls.length, 1);
-        const output = errorMock.calls[0].arguments[0] as string;
+        assert.strictEqual(stderrWriteMock.calls.length, 1);
+        const output = stderrWriteMock.calls[0].arguments[0] as string;
         assert.ok(output.startsWith("Error: "));
         assert.ok(output.includes("File"));
         assert.ok(output.includes("config.json"));
       } finally {
-        console.error = originalError;
+        process.stderr.write = originalStderrWrite;
         process.stderr.isTTY = originalIsTTY;
       }
     });
 
     it("should use quotes in non-TTY environments by default", () => {
-      const errorMock = createMockFn();
-      const originalError = console.error;
-      console.error = errorMock.fn as typeof console.error;
+      const stderrWriteMock = createMockFn();
+      const originalStderrWrite = process.stderr.write;
+      process.stderr.write = stderrWriteMock.fn as typeof process.stderr.write;
 
       // Mock non-TTY environment
       const originalIsTTY = process.stderr.isTTY;
@@ -121,12 +120,12 @@ describe("print module", () => {
         const msg = message`Invalid ${optionName("--port")} value`;
         printError(msg);
 
-        assert.strictEqual(errorMock.calls.length, 1);
-        const output = errorMock.calls[0].arguments[0] as string;
+        assert.strictEqual(stderrWriteMock.calls.length, 1);
+        const output = stderrWriteMock.calls[0].arguments[0] as string;
         // Should contain backticks in non-TTY environment
         assert.ok(output.includes("`--port`"));
       } finally {
-        console.error = originalError;
+        process.stderr.write = originalStderrWrite;
         process.stderr.isTTY = originalIsTTY;
       }
     });
@@ -136,20 +135,20 @@ describe("print module", () => {
       const originalExit = process.exit;
       process.exit = exitMock.fn as typeof process.exit;
 
-      const errorMock = createMockFn();
-      const originalError = console.error;
-      console.error = errorMock.fn as typeof console.error;
+      const stderrWriteMock = createMockFn();
+      const originalStderrWrite = process.stderr.write;
+      process.stderr.write = stderrWriteMock.fn as typeof process.stderr.write;
 
       try {
         const msg = message`Critical error`;
         printError(msg, { exitCode: 2 });
 
-        assert.strictEqual(errorMock.calls.length, 1);
+        assert.strictEqual(stderrWriteMock.calls.length, 1);
         assert.strictEqual(exitMock.calls.length, 1);
         assert.strictEqual(exitMock.calls[0].arguments[0], 2);
       } finally {
         process.exit = originalExit;
-        console.error = originalError;
+        process.stderr.write = originalStderrWrite;
       }
     });
 
@@ -158,28 +157,28 @@ describe("print module", () => {
       const originalExit = process.exit;
       process.exit = exitMock.fn as typeof process.exit;
 
-      const errorMock = createMockFn();
-      const originalError = console.error;
-      console.error = errorMock.fn as typeof console.error;
+      const stderrWriteMock = createMockFn();
+      const originalStderrWrite = process.stderr.write;
+      process.stderr.write = stderrWriteMock.fn as typeof process.stderr.write;
 
       try {
         const msg = message`Warning message`;
         printError(msg);
 
-        assert.strictEqual(errorMock.calls.length, 1);
+        assert.strictEqual(stderrWriteMock.calls.length, 1);
         assert.strictEqual(exitMock.calls.length, 0);
       } finally {
         process.exit = originalExit;
-        console.error = originalError;
+        process.stderr.write = originalStderrWrite;
       }
     });
   });
 
   describe("createPrinter function", () => {
     it("should create a printer with default options", () => {
-      const logMock = createMockFn();
-      const originalLog = console.log;
-      console.log = logMock.fn as typeof console.log;
+      const writeMock = createMockFn();
+      const originalWrite = process.stdout.write;
+      process.stdout.write = writeMock.fn as typeof process.stdout.write;
 
       const originalIsTTY = process.stdout.isTTY;
       process.stdout.isTTY = true;
@@ -190,19 +189,19 @@ describe("print module", () => {
 
         printer(msg);
 
-        assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0] as string;
+        assert.strictEqual(writeMock.calls.length, 1);
+        const output = writeMock.calls[0].arguments[0] as string;
         assert.ok(output.includes("Created printer"));
       } finally {
-        console.log = originalLog;
+        process.stdout.write = originalWrite;
         process.stdout.isTTY = originalIsTTY;
       }
     });
 
     it("should create a printer with custom options", () => {
-      const errorMock = createMockFn();
-      const originalError = console.error;
-      console.error = errorMock.fn as typeof console.error;
+      const stderrWriteMock = createMockFn();
+      const originalStderrWrite = process.stderr.write;
+      process.stderr.write = stderrWriteMock.fn as typeof process.stderr.write;
 
       try {
         const printer = createPrinter({
@@ -214,21 +213,21 @@ describe("print module", () => {
         const msg = message`Using ${metavar("CONFIG")} file`;
         printer(msg);
 
-        assert.strictEqual(errorMock.calls.length, 1);
-        const output = errorMock.calls[0].arguments[0] as string;
+        assert.strictEqual(stderrWriteMock.calls.length, 1);
+        const output = stderrWriteMock.calls[0].arguments[0] as string;
         // Should not contain color codes
         assert.ok(!output.includes("\x1b["));
         // Should contain backticks for metavar
         assert.ok(output.includes("`CONFIG`"));
       } finally {
-        console.error = originalError;
+        process.stderr.write = originalStderrWrite;
       }
     });
 
     it("should handle complex messages with multiple components", () => {
-      const logMock = createMockFn();
-      const originalLog = console.log;
-      console.log = logMock.fn as typeof console.log;
+      const writeMock = createMockFn();
+      const originalWrite = process.stdout.write;
+      process.stdout.write = writeMock.fn as typeof process.stdout.write;
 
       try {
         const printer = createPrinter({ colors: false, quotes: false });
@@ -239,22 +238,22 @@ describe("print module", () => {
 
         printer(msg);
 
-        assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0] as string;
+        assert.strictEqual(writeMock.calls.length, 1);
+        const output = writeMock.calls[0].arguments[0] as string;
         assert.ok(output.includes("Choose from"));
         assert.ok(output.includes("red"));
         assert.ok(output.includes("green"));
         assert.ok(output.includes("blue"));
         assert.ok(output.includes("--color"));
       } finally {
-        console.log = originalLog;
+        process.stdout.write = originalWrite;
       }
     });
 
     it("should respect maxWidth option", () => {
-      const logMock = createMockFn();
-      const originalLog = console.log;
-      console.log = logMock.fn as typeof console.log;
+      const writeMock = createMockFn();
+      const originalWrite = process.stdout.write;
+      process.stdout.write = writeMock.fn as typeof process.stdout.write;
 
       try {
         const printer = createPrinter({ maxWidth: 20 });
@@ -263,21 +262,21 @@ describe("print module", () => {
 
         printer(longMsg);
 
-        assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0] as string;
+        assert.strictEqual(writeMock.calls.length, 1);
+        const output = writeMock.calls[0].arguments[0] as string;
         // Should contain newlines due to wrapping
         assert.ok(output.includes("\n"));
       } finally {
-        console.log = originalLog;
+        process.stdout.write = originalWrite;
       }
     });
   });
 
   describe("message composition", () => {
     it("should handle composed messages correctly", () => {
-      const logMock = createMockFn();
-      const originalLog = console.log;
-      console.log = logMock.fn as typeof console.log;
+      const writeMock = createMockFn();
+      const originalWrite = process.stdout.write;
+      process.stdout.write = writeMock.fn as typeof process.stdout.write;
 
       try {
         const baseError = message`File ${"test.txt"} not found`;
@@ -285,14 +284,14 @@ describe("print module", () => {
 
         print(contextualError, { colors: false });
 
-        assert.strictEqual(logMock.calls.length, 1);
-        const output = logMock.calls[0].arguments[0] as string;
+        assert.strictEqual(writeMock.calls.length, 1);
+        const output = writeMock.calls[0].arguments[0] as string;
         assert.ok(output.includes("Operation failed:"));
         assert.ok(output.includes("File"));
         assert.ok(output.includes("test.txt"));
         assert.ok(output.includes("not found"));
       } finally {
-        console.log = originalLog;
+        process.stdout.write = originalWrite;
       }
     });
   });
