@@ -369,26 +369,16 @@ const serverConfig = object({
   name: option("-n", "--name", string()),
 
   // Optional with defaults - no undefined handling needed
-  host: withDefault(
-    option("-h", "--host", string()),
-    "0.0.0.0",
-    { message: message`Bind to all interfaces` }
-  ),
+  host: withDefault(option("-h", "--host", string()), "0.0.0.0"),
   port: withDefault(
     option("-p", "--port", integer({ min: 1, max: 0xffff })),
-    3000,
-    { message: message`Default development port` }
+    3000
   ),
   logLevel: withDefault(
     option("--log-level", choice(["debug", "info", "warn", "error"])),
     "info" as const,
-    { message: message`Standard logging level` }
   ),
-  maxConnections: withDefault(
-    option("--max-conn", integer({ min: 1 })),
-    100,
-    { message: message`Reasonable default for small servers` }
-  )
+  maxConnections: withDefault(option("--max-conn", integer({ min: 1 })), 100)
 });
 
 // Clean usage without undefined checks
@@ -403,12 +393,12 @@ if (config.success) {
   });
 }
 
-// Help output will show custom descriptions instead of raw values:
+// Help output will show actual default values:
 // Options:
-//   -h, --host STRING        Server host [Bind to all interfaces]
-//   -p, --port INTEGER       Server port [Default development port]
-//   --log-level LEVEL        Log level [Standard logging level]
-//   --max-conn INTEGER       Max connections [Reasonable default for small servers]
+//   -h, --host STRING        Server host [0.0.0.0]
+//   -p, --port INTEGER       Server port [3000]
+//   --log-level LEVEL        Log level [info]
+//   --max-conn INTEGER       Max connections [100]
 ~~~~
 
 ### Dependent options with union types
