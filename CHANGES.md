@@ -42,7 +42,7 @@ To be released.
 
     ~~~~ typescript
     import { envVar, message } from "@optique/core/message";
-    
+
     const configError = message`Environment variable ${envVar("API_URL")} is not set.`;
     // Displays: Environment variable API_URL is not set. (bold + underlined)
     ~~~~
@@ -96,6 +96,19 @@ To be released.
 [#18]: https://github.com/dahlia/optique/discussions/18
 [#19]: https://github.com/dahlia/optique/issues/19
 [#21]: https://github.com/dahlia/optique/issues/21
+
+
+Version 0.4.2
+-------------
+
+Released on September 10, 2025.
+
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
 
 
 Version 0.4.1
@@ -328,6 +341,19 @@ support Temporal natively.
  -  Added `TimeZoneOptions` interface.
 
 
+Version 0.3.2
+-------------
+
+Released on September 10, 2025.
+
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
+
+
 Version 0.3.1
 -------------
 
@@ -509,6 +535,19 @@ Released on August 29, 2025.
     environments.
 
 
+Version 0.2.1
+-------------
+
+Released on September 9, 2025.
+
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
+
+
 Version 0.2.0
 -------------
 
@@ -527,6 +566,21 @@ Released on August 22, 2025.
     correctly in some cases.
 
 [#1]: https://github.com/dahlia/optique/issues/1
+
+
+Version 0.1.2
+-------------
+
+Released on September 9, 2025.
+
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
+
+[#22]: https://github.com/dahlia/optique/issues/22
 
 
 Version 0.1.1
