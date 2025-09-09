@@ -70,7 +70,7 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "@optique/core": "workspace:"
+    "@optique/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
