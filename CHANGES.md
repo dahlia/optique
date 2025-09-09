@@ -6,6 +6,15 @@ Version 0.1.2
 
 To be released.
 
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
+
+[#22]: https://github.com/dahlia/optique/issues/22
+
 
 Version 0.1.1
 -------------
