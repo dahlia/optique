@@ -1,6 +1,6 @@
 {
   "name": "gitique",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "A simple Git CLI implementation using Optique and es-git",
   "main": "dist/index.js",
