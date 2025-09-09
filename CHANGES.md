@@ -6,6 +6,13 @@ Version 0.4.2
 
 To be released.
 
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
+
 
 Version 0.4.1
 -------------
@@ -237,6 +244,19 @@ support Temporal natively.
  -  Added `TimeZoneOptions` interface.
 
 
+Version 0.3.2
+-------------
+
+Released on September 10, 2025.
+
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
+
+
 Version 0.3.1
 -------------
 
@@ -418,6 +438,19 @@ Released on August 29, 2025.
     environments.
 
 
+Version 0.2.1
+-------------
+
+Released on September 9, 2025.
+
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
+
+
 Version 0.2.0
 -------------
 
@@ -436,6 +469,21 @@ Released on August 22, 2025.
     correctly in some cases.
 
 [#1]: https://github.com/dahlia/optique/issues/1
+
+
+Version 0.1.2
+-------------
+
+Released on September 9, 2025.
+
+### @optique/run
+
+ -  Fixed dependency resolution bug where *@optique/core* dependency was not
+    properly versioned, causing installations to use outdated stable versions
+    instead of matching development versions. This resolves type errors and
+    message formatting issues when using dev versions.  [[#22]]
+
+[#22]: https://github.com/dahlia/optique/issues/22
 
 
 Version 0.1.1
