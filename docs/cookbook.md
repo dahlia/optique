@@ -583,6 +583,77 @@ change parsing behavior. This separation of concerns allows you to optimize
 for both code clarity and user experience independently.
 
 
+Negatable Boolean options
+-------------------------
+
+Linux CLI tools commonly support `--no-` prefix options that negate default
+behavior. This pattern allows users to explicitly disable features that are
+enabled by default.
+
+~~~~ typescript twoslash
+import { map, object, option } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+import { print, run } from "@optique/run";
+// ---cut-before---
+const configParser = object({
+  // Code fence is enabled by default, --no-code-fence disables it
+  codeFence: map(option("--no-code-fence"), (o) => !o),
+
+  // Line numbers are disabled by default, --line-numbers enables it
+  lineNumbers: option("--line-numbers"),
+
+  // Colors are enabled by default, --no-colors disables them
+  colors: map(option("--no-colors"), (o) => !o),
+
+  // Syntax highlighting is enabled by default, --no-syntax disables it
+  syntax: map(option("--no-syntax"), (o) => !o),
+});
+
+const result = run(configParser);
+//    ^?
+
+
+
+
+
+
+
+
+console.debug(result);
+~~~~
+
+This pattern leverages the fact that [`option()`](./concepts/primitives.md#option-parser)
+without a value parser creates a Boolean flag that produces `false` when absent
+and `true` when present. The [`map()`](./concepts/modifiers.md#map-parser)
+combinator inverts this behavior:
+
+When `--no-code-fence` is provided
+:   `option()` produces `true` → `map()` inverts to `false`
+
+When `--no-code-fence` is not provided
+:   `option()` produces `false` → `map()` inverts to `true`
+
+This creates the expected Linux CLI behavior where features are enabled by
+default and can be explicitly disabled with `--no-` prefixed options.
+
+### Usage examples
+
+~~~~ bash
+# All defaults: codeFence=true, lineNumbers=false, colors=true, syntax=true
+myapp
+
+# Disable colors and syntax, enable line numbers
+myapp --no-colors --no-syntax --line-numbers
+
+# Disable code fence only
+myapp --no-code-fence
+~~~~
+
+This pattern is particularly useful for configuration-heavy tools where users
+need fine-grained control over default behaviors, following the Unix tradition
+of sensible defaults with explicit override capabilities.
+
+
 Design principles
 -----------------
 
