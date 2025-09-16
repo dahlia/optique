@@ -6,6 +6,14 @@ Version 0.4.3
 
 To be released.
 
+### @optique/temporal
+
+ -  Fixed timezone identifier validation failure in Deno 2.5.0. The `timeZone()`
+    parser now works correctly with all supported timezones by removing explicit
+    zero values for hour, minute, and second fields when creating validation
+    `ZonedDateTime` objects. This addresses a regression in Deno 2.5.0's Temporal
+    API implementation that rejected zero values for time fields.
+
 
 Version 0.4.2
 -------------

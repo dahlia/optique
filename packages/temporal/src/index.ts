@@ -437,9 +437,6 @@ export function timeZone(options: TimeZoneOptions = {}): ValueParser<TimeZone> {
           year: 2020,
           month: 1,
           day: 1,
-          hour: 0,
-          minute: 0,
-          second: 0,
           timeZone: input,
         });
         return { success: true, value: input as TimeZone };
