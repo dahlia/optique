@@ -98,6 +98,20 @@ To be released.
 [#21]: https://github.com/dahlia/optique/issues/21
 
 
+Version 0.4.3
+-------------
+
+Released on September 16, 2025.
+
+### @optique/temporal
+
+ -  Fixed timezone identifier validation failure in Deno 2.5.0. The `timeZone()`
+    parser now works correctly with all supported timezones by removing explicit
+    zero values for hour, minute, and second fields when creating validation
+    `ZonedDateTime` objects. This addresses a regression in Deno 2.5.0's Temporal
+    API implementation that rejected zero values for time fields.
+
+
 Version 0.4.2
 -------------
 
