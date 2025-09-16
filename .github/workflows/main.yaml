@@ -147,6 +147,9 @@ jobs:
         UNSTABLE_DOCS_URL: ${{ vars.UNSTABLE_DOCS_URL }}
         SITEMAP_HOSTNAME: ${{ vars.SITEMAP_HOSTNAME }}
         PLAUSIBLE_DOMAIN: ${{ vars.PLAUSIBLE_DOMAIN }}
+        ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
+        ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
+        ALGOLIA_INDEX_NAME: ${{ secrets.ALGOLIA_INDEX_NAME }}
       working-directory: docs
     - uses: actions/upload-pages-artifact@v3
       with:

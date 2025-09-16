@@ -33,6 +33,21 @@ if (process.env.PLAUSIBLE_DOMAIN) {
   ];
 }
 
+let search = { provider: "local", options: {} };
+if (
+  process.env.ALGOLIA_APP_ID && process.env.ALGOLIA_API_KEY &&
+  process.env.ALGOLIA_INDEX_NAME
+) {
+  search = {
+    provider: "algolia",
+    options: {
+      appId: process.env.ALGOLIA_APP_ID,
+      apiKey: process.env.ALGOLIA_API_KEY,
+      indexName: process.env.ALGOLIA_INDEX_NAME,
+    },
+  };
+}
+
 const CONCEPTS = {
   text: "Concepts",
   items: [
@@ -92,6 +107,8 @@ export default defineConfig({
     },
 
     outline: "deep",
+
+    search,
   },
 
   head: [
