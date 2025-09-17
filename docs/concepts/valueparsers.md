@@ -319,7 +319,9 @@ The parser returns native [`URL`] objects, providing immediate access to URL
 components:
 
 ~~~~ typescript twoslash
-import { parse, url, argument } from "@optique/core";
+import { parse } from "@optique/core/parser";
+import { argument } from "@optique/core/primitives";
+import { url } from "@optique/core/valueparser";
 const apiUrl = argument(url());
 // ---cut-before---
 const result = parse(apiUrl, ["https://api.example.com:8080/v1/users"]);
@@ -395,7 +397,9 @@ const invalidLocales = [
 The parser returns [`Intl.Locale`] objects with rich locale information:
 
 ~~~~ typescript twoslash
-import { parse, locale, argument } from "@optique/core";
+import { parse } from "@optique/core/parser";
+import { argument } from "@optique/core/primitives";
+import { locale } from "@optique/core/valueparser";
 const userLocale = argument(locale());
 // ---cut-before---
 const result = parse(userLocale, ["zh-Hans-CN"]);
@@ -479,7 +483,9 @@ The parser returns a branded `Uuid` type rather than a plain string, providing a
 
 ~~~~ typescript twoslash
 // @errors: 2345
-import { argument, parse, uuid } from "@optique/core";
+import { parse } from "@optique/core/parser";
+import { argument } from "@optique/core/primitives";
+import { uuid } from "@optique/core/valueparser";
 const uuidParser = argument(uuid())
 // ---cut-before---
 type Uuid = `${string}-${string}-${string}-${string}-${string}`;
@@ -947,7 +953,8 @@ Error: Invalid timezone identifier: Invalid/Timezone. Must be a valid IANA timez
 The temporal parsers return native Temporal objects with rich functionality:
 
 ~~~~ typescript twoslash
-import { parse, argument } from "@optique/core";
+import { parse } from "@optique/core/parser";
+import { argument } from "@optique/core/primitives";
 import { instant, duration } from "@optique/temporal";
 // ---cut-before---
 const timestampArg = argument(instant());
@@ -1195,7 +1202,8 @@ function date(options: DateParserOptions = {}): ValueParser<Date> {
   };
 }
 // ---cut-before---
-import { argument, object, option, parse } from "@optique/core/parser";
+import { object, parse } from "@optique/core/parser";
+import { argument, option } from "@optique/core/primitives";
 import { integer } from "@optique/core/valueparser";
 
 const serverConfig = object({

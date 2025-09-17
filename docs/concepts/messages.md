@@ -472,7 +472,7 @@ context-specific feedback instead of generic error messages.
 Most primitive parsers support customizing their core error conditions:
 
 ~~~~ typescript twoslash
-import { option, flag } from "@optique/core/parser";
+import { option, flag } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { message, optionName, metavar, type Message } from "@optique/core/message";
 
@@ -500,7 +500,7 @@ Error messages can be functions that receive the problematic input and return
 a customized message. This allows for more specific and helpful feedback:
 
 ~~~~ typescript twoslash
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message, optionName, type Message } from "@optique/core/message";
 
@@ -523,7 +523,8 @@ Parser combinators like `or()` and `longestMatch()` also support error
 customization for better failure reporting:
 
 ~~~~ typescript twoslash
-import { or, option, constant } from "@optique/core/parser";
+import { or } from "@optique/core/parser";
+import { constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message, optionName } from "@optique/core/message";
 
@@ -545,7 +546,8 @@ Object parsers can customize errors for missing required fields and
 unexpected properties:
 
 ~~~~ typescript twoslash
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { message, optionName } from "@optique/core/message";
 
@@ -566,7 +568,8 @@ const serverConfig = object({
 Multiple parsers can provide custom messages for count validation:
 
 ~~~~ typescript twoslash
-import { multiple, option } from "@optique/core/parser";
+import { multiple } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message, optionName, metavar } from "@optique/core/message";
 
@@ -589,7 +592,7 @@ This allows you to give more specific feedback when user input doesn't meet
 the expected format or constraints.
 
 ~~~~ typescript twoslash
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string, integer, choice, url } from "@optique/core/valueparser";
 import { message, optionName, values, text } from "@optique/core/message";
 
@@ -662,7 +665,7 @@ The error customization system also extends to additional Optique packages:
 #### `@optique/run` package
 
 ~~~~ typescript twoslash
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { path } from "@optique/run/valueparser";
 import { message, text, values } from "@optique/core/message";
 
@@ -696,7 +699,7 @@ const outputDir = option("--output", path({
 #### `@optique/temporal` package
 
 ~~~~ typescript twoslash
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { instant, duration, timeZone } from "@optique/temporal";
 import { message } from "@optique/core/message";
 
@@ -735,7 +738,7 @@ helpful user experience:
  4. *Use consistent styling*: Apply proper component types for CLI elements
 
 ~~~~ typescript twoslash
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message, optionName, metavar, values, type Message } from "@optique/core/message";
 

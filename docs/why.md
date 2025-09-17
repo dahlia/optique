@@ -74,7 +74,8 @@ Optique's [`or()`](./concepts/constructs.md#or-parser) combinator lets you
 express these constraints directly in the parser structure:
 
 ~~~~ typescript twoslash
-import { object, option, or, constant } from "@optique/core/parser";
+import { object, or } from "@optique/core/parser";
+import { constant, option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
 const authOptions = object({
@@ -120,7 +121,8 @@ exclusive groups where each group requires multiple options? Just nest more
 [`object()`](./concepts/constructs.md#object-parser) and `or()` combinators:
 
 ~~~~ typescript twoslash
-import { object, option, or, constant } from "@optique/core/parser";
+import { object, or } from "@optique/core/parser";
+import { constant, option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
 const localDeploy = object({
@@ -181,7 +183,8 @@ as first-class values that naturally compose.
 Consider sharing common options across different commands:
 
 ~~~~ typescript twoslash
-import { object, option, merge } from "@optique/core/parser";
+import { object, merge } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
 const CommonOptions = object({
@@ -231,7 +234,8 @@ Consider a deployment tool that needs different option sets for different
 environments, with some options shared and others specific to each context.
 
 ~~~~ typescript twoslash
-import { command, constant, merge, object, option, or } from "@optique/core/parser";
+import { merge, object, or } from "@optique/core/parser";
+import { command, constant, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 
 // Base components that capture common patterns
@@ -299,7 +303,8 @@ Optique's functional approach means parsers are just values you can transform
 with standard functional programming techniques:
 
 ~~~~ typescript twoslash
-import { object, option, withDefault } from "@optique/core/parser";
+import { object, withDefault } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
 // Start with a base parser
@@ -354,15 +359,12 @@ discriminated unions for complex command structures:
 ~~~~ typescript twoslash
 import {
   type InferValue,
-  argument,
-  command,
-  constant,
   object,
-  option,
   optional,
   or,
   withDefault,
 } from "@optique/core/parser";
+import { argument, command, constant, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 
 const userCommands = or(

@@ -90,7 +90,7 @@ name. This example demonstrates the core concepts of value parsers and type
 inference.
 
 ~~~~ typescript twoslash
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { run, print } from "@optique/run";
 import { message } from "@optique/core/message";
@@ -135,7 +135,7 @@ Boolean flags work differently—they don't take values and simply indicate
 presence or absence:
 
 ~~~~ typescript twoslash
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { run } from "@optique/run";
 
 // Boolean flag (no value parser needed)
@@ -163,7 +163,7 @@ to type `git commit message.txt` rather than `git commit --file message.txt`.
 Let's create a file processor that demonstrates this pattern:
 
 ~~~~ typescript twoslash
-import { argument } from "@optique/core/parser";
+import { argument } from "@optique/core/primitives";
 import { run, print } from "@optique/run";
 import { path } from "@optique/run/valueparser";
 import { message } from "@optique/core/message";
@@ -209,7 +209,8 @@ automatically infers the exact shape of this object, including which fields
 are optional and what types they contain.
 
 ~~~~ typescript twoslash
-import { type InferValue, argument, object, option } from "@optique/core/parser";
+import { type InferValue, object } from "@optique/core/parser";
+import { argument, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { run, print } from "@optique/run";
 import { path } from "@optique/run/valueparser";
@@ -289,7 +290,8 @@ rules. Let's explore the most commonly used ones, with special attention to
 the versatile `path()` parser:
 
 ~~~~ typescript twoslash
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { integer, url, locale } from "@optique/core/valueparser";
 import { run } from "@optique/run";
 import { path } from "@optique/run/valueparser"
@@ -369,10 +371,11 @@ literal types rather than generic `string` types. This means TypeScript can
 help you handle all possible cases and catch typos at compile time:
 
 ~~~~ typescript twoslash
-import { run, print } from "@optique/run";
-import { object, option } from "@optique/core/parser";
-import { choice, integer } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { print, run } from "@optique/run";
+import { choice, integer } from "@optique/core/valueparser";
 
 const parser = object({
   logLevel: option("--log-level", choice(["debug", "info", "warn", "error"])),
@@ -459,10 +462,11 @@ TypeScript calls a “discriminated union”—a type where each alternative can
 be distinguished from the others:
 
 ~~~~ typescript twoslash
-import { type InferValue, constant, object, option, or } from "@optique/core/parser";
-import { integer, string, url } from "@optique/core/valueparser";
-import { run, print } from "@optique/run";
 import { message } from "@optique/core/message";
+import { type InferValue, object, or } from "@optique/core/parser";
+import { constant, option } from "@optique/core/primitives";
+import { print, run } from "@optique/run";
+import { integer, string, url } from "@optique/core/valueparser";
 
 const parser = or(
   object({
@@ -510,10 +514,11 @@ pattern matching and exhaustive case analysis:
 
 ~~~~ typescript twoslash
 // @errors: 2339
-import { constant, object, option, or } from "@optique/core/parser";
-import { integer, string, url } from "@optique/core/valueparser";
-import { run, print } from "@optique/run";
 import { message } from "@optique/core/message";
+import { object, or } from "@optique/core/parser";
+import { constant, option } from "@optique/core/primitives";
+import { print, run } from "@optique/run";
+import { integer, string, url } from "@optique/core/valueparser";
 
 const parser = or(
   object({
@@ -570,10 +575,11 @@ and [`withDefault()`](./concepts/modifiers.md#withdefault-parser) is important:
 when you want to simplify your application logic:
 
 ~~~~ typescript twoslash
-import { map, object, option, optional, withDefault } from "@optique/core/parser";
-import { integer, string } from "@optique/core/valueparser";
-import { path, run, print } from "@optique/run";
 import { message } from "@optique/core/message";
+import { map, object, optional, withDefault } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { path, print, run } from "@optique/run";
+import { integer, string } from "@optique/core/valueparser";
 
 const parser = object({
   // Optional returns T | undefined
@@ -645,10 +651,11 @@ doesn't provide any, your application gets an empty array and can continue
 normally:
 
 ~~~~ typescript twoslash
-import { argument, multiple, object, option } from "@optique/core/parser";
-import { string } from "@optique/core/valueparser";
-import { path, run, print } from "@optique/run";
 import { message } from "@optique/core/message";
+import { multiple, object } from "@optique/core/parser";
+import { argument, option } from "@optique/core/primitives";
+import { path, print, run } from "@optique/run";
+import { string } from "@optique/core/valueparser";
 
 const parser = object({
   // Multiple files with constraints
@@ -749,18 +756,10 @@ practice. Each subcommand will have its own unique options, but they'll all
 be part of a single, type-safe parser:
 
 ~~~~ typescript twoslash
-import {
-  type InferValue,
-  argument,
-  command,
-  constant,
-  multiple,
-  object,
-  option,
-  or,
-} from "@optique/core/parser";
-import { string } from "@optique/core/valueparser";
+import { type InferValue, multiple, object, or } from "@optique/core/parser";
+import { argument, command, constant, option} from "@optique/core/primitives";
 import { path, run } from "@optique/run";
+import { string } from "@optique/core/valueparser";
 
 const parser = or(
   command("add", object({  // [!code highlight]
@@ -812,9 +811,10 @@ const result = run(parser, {
 For more complex tools, you can nest subcommands multiple levels deep:
 
 ~~~~ typescript twoslash
-import { argument, command, constant, object, option, or } from "@optique/core/parser";
-import { choice, string } from "@optique/core/valueparser";
+import { object, or } from "@optique/core/parser";
+import { argument, command, constant, option } from "@optique/core/primitives";
 import { run } from "@optique/run";
+import { choice, string } from "@optique/core/valueparser";
 
 // Second-level commands for "app config"
 const configCommands = or(
@@ -930,9 +930,10 @@ handle specific areas of functionality. Then you compose these focused parsers
 in different combinations depending on what each command needs:
 
 ~~~~ typescript twoslash
-import { constant, merge, object, option, optional, or } from "@optique/core/parser";
-import { choice, integer, string } from "@optique/core/valueparser";
+import { merge, object, optional, or } from "@optique/core/parser";
+import { constant, option } from "@optique/core/primitives";
 import { path, run } from "@optique/run";
+import { choice, integer, string } from "@optique/core/valueparser";
 
 // Define reusable option groups
 const networkOptions = object("Network", {
@@ -1018,19 +1019,16 @@ we've learned:
 ~~~~ typescript twoslash
 import {
   type InferValue,
-  argument,
-  command,
-  constant,
   merge,
   multiple,
   object,
-  option,
   optional,
   or,
   withDefault,
 } from "@optique/core/parser";
-import { choice, integer, string, url } from "@optique/core/valueparser";
+import { argument, command, constant, option } from "@optique/core/primitives";
 import { path, run } from "@optique/run";
+import { choice, integer, string, url } from "@optique/core/valueparser";
 
 // Reusable option groups
 const commonOptions = object("Common", {
@@ -1223,7 +1221,8 @@ Here's how the same parser would work with *@optique/core*:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/core/facade";
-import { argument, object, option, optional } from "@optique/core/parser";
+import { object, optional } from "@optique/core/parser";
+import { argument, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import process from "node:process";
 
@@ -1259,7 +1258,8 @@ Compare this to the *@optique/run* version we've been using throughout this
 tutorial:
 
 ~~~~ typescript twoslash
-import { argument, object, option, optional } from "@optique/core/parser";
+import { object, optional } from "@optique/core/parser";
+import { argument, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { path, run, print } from "@optique/run";
 import { message } from "@optique/core/message";
@@ -1298,7 +1298,8 @@ automatically.
 *@optique/run* provides several configuration options for fine-tuning behavior:
 
 ~~~~ typescript twoslash
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { run } from "@optique/run";
 
@@ -1354,17 +1355,14 @@ learned:
 #!/usr/bin/env node
 import {
   type InferValue,
-  argument,
-  command,
-  constant,
   merge,
   multiple,
   object,
-  option,
   optional,
   or,
   withDefault,
 } from "@optique/core/parser";
+import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { path, run } from "@optique/run";
 

@@ -83,6 +83,14 @@
       "import": "./dist/parser.js",
       "require": "./dist/parser.cjs"
     },
+    "./primitives": {
+      "types": {
+        "import": "./dist/primitives.d.ts",
+        "require": "./dist/primitives.cts"
+      },
+      "import": "./dist/primitives.js",
+      "require": "./dist/primitives.cjs"
+    },
     "./usage": {
       "types": {
         "import": "./dist/usage.d.ts",

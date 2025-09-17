@@ -1,13 +1,10 @@
 import {
-  argument,
-  command,
-  constant,
   type InferValue,
   multiple,
   object,
-  option,
   optional,
 } from "@optique/core/parser";
+import { argument, command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { print, printError } from "@optique/run";

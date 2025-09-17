@@ -1,7 +1,7 @@
 // This example demonstrates how to use group() to organize mutually exclusive
 // options under a labeled section in help output while maintaining clean code.
 import { group, map, or, withDefault } from "@optique/core/parser";
-import { flag } from "@optique/core/parser";
+import { flag } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";
 

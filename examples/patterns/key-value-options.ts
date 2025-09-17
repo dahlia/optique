@@ -4,7 +4,8 @@
  * Demonstrates how to parse key=value pairs commonly used in CLI tools
  * like Docker (-e KEY=VALUE) or Kubernetes (--set key=value).
  */
-import { map, multiple, object, option, or } from "@optique/core/parser";
+import { map, multiple, object, or } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { message, text } from "@optique/core/message";
 import {
   type ValueParser,

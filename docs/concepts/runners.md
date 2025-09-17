@@ -27,7 +27,8 @@ parsing operation. It takes a parser and an array of string arguments, returning
 a result object that you must handle manually.
 
 ~~~~ typescript twoslash
-import { object, option, parse } from "@optique/core/parser";
+import { object, parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { formatMessage } from "@optique/core/message";
 
@@ -57,7 +58,8 @@ The `parse()` function returns a discriminated union type that indicates
 success or failure:
 
 ~~~~ typescript twoslash
-import { object, option, parse } from "@optique/core/parser";
+import { object, parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { formatMessage } from "@optique/core/message";
 
@@ -89,7 +91,8 @@ behavior through callbacks.
 
 ~~~~ typescript twoslash
 import { run } from "@optique/core/facade";
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
 const parser = object({
@@ -140,7 +143,8 @@ The `RunOptions` interface provides extensive customization:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/core/facade";
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 
@@ -182,7 +186,8 @@ terminal detection, and process exit.
 
 ~~~~ typescript twoslash
 import { run, print } from "@optique/run";
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 
@@ -219,7 +224,8 @@ You can still customize behavior when needed:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/run";
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 
@@ -247,7 +253,8 @@ for fine-tuning behavior:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/run";
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 
@@ -281,7 +288,8 @@ Enable built-in help functionality with different modes:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/run";
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
 const parser = object({ name: option("-n", "--name", string()) });
@@ -309,7 +317,8 @@ Enable built-in version functionality with flexible configuration:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/run";
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
 const parser = object({ name: option("-n", "--name", string()) });
@@ -352,7 +361,8 @@ options or arguments are created with `withDefault()`:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/run";
-import { object, option, withDefault } from "@optique/core/parser";
+import { object, withDefault } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
 const parser = object({
@@ -387,7 +397,8 @@ provide comprehensive documentation without modifying parser definitions:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/run";
-import { object, option } from "@optique/core/parser";
+import { object } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 
@@ -420,12 +431,12 @@ Usage: [1mmyapp[0m [3m-i[0m[2m/[0m[3m--input[0m [4m[2mSTRING[0m [3m-
 
 This utility processes files with various transformations.
 
-Supports multiple input formats including JSON, YAML, and plain text. Output can be 
+Supports multiple input formats including JSON, YAML, and plain text. Output can be
 customized with different formatting options.
 
 Options:
-  [3m-i[0m[2m, [0m[3m--input[0m [4m[2mSTRING[0m          
-  [3m-o[0m[2m, [0m[3m--output[0m [4m[2mSTRING[0m         
+  [3m-i[0m[2m, [0m[3m--input[0m [4m[2mSTRING[0m
+  [3m-o[0m[2m, [0m[3m--output[0m [4m[2mSTRING[0m
 
 Examples:
   myapp -i data.json -o result.txt
@@ -458,8 +469,8 @@ The `InferValue<T>` utility type extracts the result type from any parser,
 enabling type-safe code when working with parser results programmatically.
 
 ~~~~ typescript twoslash
-import type { InferValue, Parser } from "@optique/core/parser";
-import { object, option, or, command, constant } from "@optique/core/parser";
+import { type InferValue, type Parser, object, or } from "@optique/core/parser";
+import { command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
 // Complex parser with union types

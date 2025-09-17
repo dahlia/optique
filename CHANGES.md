@@ -8,6 +8,29 @@ To be released.
 
 ### @optique/core
 
+ -  Refactored primitive parsers into separate `@optique/core/primitives` module
+    for better code organization. The primitive parsers (`constant()`, `option()`,
+    `flag()`, `argument()`, `command()`) and their related types have been moved
+    to a dedicated primitives module. This separation improves maintainability
+    by grouping related functionality and reduces the size of the main parser
+    module.
+
+    For backward compatibility, all primitive parsers continue to be re-exported
+    from `@optique/core/parser`, so existing code will work unchanged. However,
+    the recommended approach going forward is to import primitive parsers
+    directly from the new module:
+
+    ~~~~ typescript
+    // Recommended: import directly from primitives module
+    import { option, flag, argument } from "@optique/core/primitives";
+
+    // Still supported: import from parser module (backward compatibility)
+    import { option, flag, argument } from "@optique/core/parser";
+    ~~~~
+
+    This change only affects internal code organization and does not impact the
+    public API or runtime behavior of any parsers.
+
  -  Added automatic error handling for `withDefault()` default value callbacks.
     When a default value callback throws an error, it is now automatically
     caught and converted to a parser-level error. This allows users to handle

@@ -1,11 +1,5 @@
-import {
-  argument,
-  constant,
-  object,
-  option,
-  or,
-  withDefault,
-} from "@optique/core/parser";
+import { object, or, withDefault } from "@optique/core/parser";
+import { argument, constant, option } from "@optique/core/primitives";
 import { integer, string, url } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";
