@@ -28,6 +28,199 @@ import {
 } from "./valueparser.ts";
 
 /**
+ * Options for customizing error messages in the or() combinator.
+ * @since 0.5.0
+ */
+export interface OrOptions {
+  errors?: {
+    /**
+     * Custom error message when no parser matches.
+     * @since 0.5.0
+     */
+    noMatch?: Message;
+    /**
+     * Custom error message for unexpected input.
+     * Can be a static message or a function that receives the unexpected token.
+     * @since 0.5.0
+     */
+    unexpectedInput?: Message | ((token: string) => Message);
+  };
+}
+
+/**
+ * Options for customizing error messages in the longestMatch() combinator.
+ * @since 0.5.0
+ */
+export interface LongestMatchOptions {
+  errors?: {
+    /**
+     * Custom error message when no parser matches.
+     * @since 0.5.0
+     */
+    noMatch?: Message;
+    /**
+     * Custom error message for unexpected input.
+     * Can be a static message or a function that receives the unexpected token.
+     * @since 0.5.0
+     */
+    unexpectedInput?: Message | ((token: string) => Message);
+  };
+}
+
+/**
+ * Options for customizing error messages in the option() parser.
+ * @since 0.5.0
+ */
+export interface OptionErrorOptions {
+  /**
+   * Custom error message when the option is missing (for required options).
+   * Can be a static message or a function that receives the option names.
+   * @since 0.5.0
+   */
+  missing?: Message | ((optionNames: readonly string[]) => Message);
+  /**
+   * Custom error message when options are terminated (after --).
+   * @since 0.5.0
+   */
+  optionsTerminated?: Message;
+  /**
+   * Custom error message when input is empty but option is expected.
+   * @since 0.5.0
+   */
+  endOfInput?: Message;
+  /**
+   * Custom error message when option is used multiple times.
+   * Can be a static message or a function that receives the token.
+   * @since 0.5.0
+   */
+  duplicate?: Message | ((token: string) => Message);
+  /**
+   * Custom error message when value parsing fails.
+   * Can be a static message or a function that receives the error message.
+   * @since 0.5.0
+   */
+  invalidValue?: Message | ((error: Message) => Message);
+  /**
+   * Custom error message when a Boolean flag receives an unexpected value.
+   * Can be a static message or a function that receives the value.
+   * @since 0.5.0
+   */
+  unexpectedValue?: Message | ((value: string) => Message);
+}
+
+/**
+ * Options for customizing error messages in the argument() parser.
+ * @since 0.5.0
+ */
+export interface ArgumentErrorOptions {
+  /**
+   * Custom error message when input is empty but argument is expected.
+   * @since 0.5.0
+   */
+  endOfInput?: Message;
+  /**
+   * Custom error message when value parsing fails.
+   * Can be a static message or a function that receives the error message.
+   * @since 0.5.0
+   */
+  invalidValue?: Message | ((error: Message) => Message);
+  /**
+   * Custom error message when argument is used multiple times.
+   * Can be a static message or a function that receives the metavar.
+   * @since 0.5.0
+   */
+  multiple?: Message | ((metavar: string) => Message);
+}
+
+/**
+ * Options for customizing error messages in the flag() parser.
+ * @since 0.5.0
+ */
+export interface FlagErrorOptions {
+  /**
+   * Custom error message when the flag is missing (for required flags).
+   * Can be a static message or a function that receives the option names.
+   * @since 0.5.0
+   */
+  missing?: Message | ((optionNames: readonly string[]) => Message);
+  /**
+   * Custom error message when options are terminated (after --).
+   * @since 0.5.0
+   */
+  optionsTerminated?: Message;
+  /**
+   * Custom error message when input is empty but flag is expected.
+   * @since 0.5.0
+   */
+  endOfInput?: Message;
+  /**
+   * Custom error message when flag is used multiple times.
+   * Can be a static message or a function that receives the token.
+   * @since 0.5.0
+   */
+  duplicate?: Message | ((token: string) => Message);
+}
+
+/**
+ * Options for customizing error messages in the command() parser.
+ * @since 0.5.0
+ */
+export interface CommandErrorOptions {
+  /**
+   * Custom error message when the command is not matched.
+   * Can be a static message or a function that receives the command name.
+   * @since 0.5.0
+   */
+  notMatched?: Message | ((commandName: string) => Message);
+  /**
+   * Custom error message for invalid command state.
+   * @since 0.5.0
+   */
+  invalidState?: Message;
+  /**
+   * Custom error message for unexpected input.
+   * Can be a static message or a function that receives the unexpected token.
+   * @since 0.5.0
+   */
+  unexpectedInput?: Message | ((token: string) => Message);
+}
+
+/**
+ * Options for customizing error messages in the multiple() parser.
+ * @since 0.5.0
+ */
+export interface MultipleErrorOptions {
+  /**
+   * Custom error message when no remaining parsers can match the input.
+   * @since 0.5.0
+   */
+  noRemainingParsers?: Message;
+}
+
+/**
+ * Options for customizing error messages in the object() parser.
+ * @since 0.5.0
+ */
+export interface ObjectErrorOptions {
+  /**
+   * Custom error message when no parser matches the input.
+   * @since 0.5.0
+   */
+  noMatch?: Message;
+  /**
+   * Custom error message when input is empty but parser is expected.
+   * @since 0.5.0
+   */
+  endOfInput?: Message;
+  /**
+   * Custom error message for unexpected input.
+   * Can be a static message or a function that receives the unexpected token.
+   * @since 0.5.0
+   */
+  unexpectedInput?: Message | ((token: string) => Message);
+}
+
+/**
  * Represents the state passed to getDocFragments.
  * Can be either the actual parser state or an explicit indicator
  * that no state is available.
@@ -214,6 +407,11 @@ export interface OptionOptions {
    * The description of the option, which can be used for help messages.
    */
   readonly description?: Message;
+  /**
+   * Error message customization options.
+   * @since 0.5.0
+   */
+  readonly errors?: OptionErrorOptions;
 }
 
 /**
@@ -316,20 +514,26 @@ export function option<T>(
     ],
     initialState: valueParser == null ? { success: true, value: false } : {
       success: false,
-      error: message`Missing option ${eOptionNames(optionNames)}.`,
+      error: options.errors?.missing
+        ? (typeof options.errors.missing === "function"
+          ? options.errors.missing(optionNames)
+          : options.errors.missing)
+        : message`Missing option ${eOptionNames(optionNames)}.`,
     },
     parse(context) {
       if (context.optionsTerminated) {
         return {
           success: false,
           consumed: 0,
-          error: message`No more options can be parsed.`,
+          error: options.errors?.optionsTerminated ??
+            message`No more options can be parsed.`,
         };
       } else if (context.buffer.length < 1) {
         return {
           success: false,
           consumed: 0,
-          error: message`Expected an option, but got end of input.`,
+          error: options.errors?.endOfInput ??
+            message`Expected an option, but got end of input.`,
         };
       }
 
@@ -357,7 +561,11 @@ export function option<T>(
           return {
             success: false,
             consumed: 1,
-            error: message`${context.buffer[0]} cannot be used multiple times.`,
+            error: options.errors?.duplicate
+              ? (typeof options.errors.duplicate === "function"
+                ? options.errors.duplicate(context.buffer[0])
+                : options.errors.duplicate)
+              : message`${context.buffer[0]} cannot be used multiple times.`,
           };
         }
         if (valueParser == null) {
@@ -405,9 +613,11 @@ export function option<T>(
           return {
             success: false,
             consumed: 1,
-            error: message`${
-              eOptionName(prefix)
-            } cannot be used multiple times.`,
+            error: options.errors?.duplicate
+              ? (typeof options.errors.duplicate === "function"
+                ? options.errors.duplicate(prefix)
+                : options.errors.duplicate)
+              : message`${eOptionName(prefix)} cannot be used multiple times.`,
           };
         }
         const value = context.buffer[0].slice(prefix.length);
@@ -415,9 +625,13 @@ export function option<T>(
           return {
             success: false,
             consumed: 1,
-            error: message`Option ${
-              eOptionName(prefix)
-            } is a Boolean flag, but got a value: ${value}.`,
+            error: options.errors?.unexpectedValue
+              ? (typeof options.errors.unexpectedValue === "function"
+                ? options.errors.unexpectedValue(value)
+                : options.errors.unexpectedValue)
+              : message`Option ${
+                eOptionName(prefix)
+              } is a Boolean flag, but got a value: ${value}.`,
           };
         }
         const result = valueParser.parse(value);
@@ -446,9 +660,13 @@ export function option<T>(
             return {
               success: false,
               consumed: 1,
-              error: message`${
-                eOptionName(shortOption)
-              } cannot be used multiple times.`,
+              error: options.errors?.duplicate
+                ? (typeof options.errors.duplicate === "function"
+                  ? options.errors.duplicate(shortOption)
+                  : options.errors.duplicate)
+                : message`${
+                  eOptionName(shortOption)
+                } cannot be used multiple times.`,
             };
           }
           return {
@@ -478,13 +696,21 @@ export function option<T>(
       if (state == null) {
         return valueParser == null ? { success: true, value: false } : {
           success: false,
-          error: message`Missing option ${eOptionNames(optionNames)}.`,
+          error: options.errors?.missing
+            ? (typeof options.errors.missing === "function"
+              ? options.errors.missing(optionNames)
+              : options.errors.missing)
+            : message`Missing option ${eOptionNames(optionNames)}.`,
         };
       }
       if (state.success) return state;
       return {
         success: false,
-        error: message`${eOptionNames(optionNames)}: ${state.error}`,
+        error: options.errors?.invalidValue
+          ? (typeof options.errors.invalidValue === "function"
+            ? options.errors.invalidValue(state.error)
+            : options.errors.invalidValue)
+          : message`${eOptionNames(optionNames)}: ${state.error}`,
       };
     },
     getDocFragments(
@@ -519,6 +745,11 @@ export interface FlagOptions {
    * The description of the flag, which can be used for help messages.
    */
   readonly description?: Message;
+  /**
+   * Error message customization options.
+   * @since 0.5.0
+   */
+  readonly errors?: FlagErrorOptions;
 }
 
 /**
@@ -584,13 +815,15 @@ export function flag(
         return {
           success: false,
           consumed: 0,
-          error: message`No more options can be parsed.`,
+          error: options.errors?.optionsTerminated ??
+            message`No more options can be parsed.`,
         };
       } else if (context.buffer.length < 1) {
         return {
           success: false,
           consumed: 0,
-          error: message`Expected an option, but got end of input.`,
+          error: options.errors?.endOfInput ??
+            message`Expected an option, but got end of input.`,
         };
       }
 
@@ -615,9 +848,13 @@ export function flag(
           return {
             success: false,
             consumed: 1,
-            error: message`${
-              eOptionName(context.buffer[0])
-            } cannot be used multiple times.`,
+            error: options.errors?.duplicate
+              ? (typeof options.errors.duplicate === "function"
+                ? options.errors.duplicate(context.buffer[0])
+                : options.errors.duplicate)
+              : message`${
+                eOptionName(context.buffer[0])
+              } cannot be used multiple times.`,
           };
         }
         return {
@@ -658,9 +895,13 @@ export function flag(
           return {
             success: false,
             consumed: 1,
-            error: message`${
-              eOptionName(shortOption)
-            } cannot be used multiple times.`,
+            error: options.errors?.duplicate
+              ? (typeof options.errors.duplicate === "function"
+                ? options.errors.duplicate(shortOption)
+                : options.errors.duplicate)
+              : message`${
+                eOptionName(shortOption)
+              } cannot be used multiple times.`,
           };
         }
         return {
@@ -689,9 +930,11 @@ export function flag(
       if (state == null) {
         return {
           success: false,
-          error: message`Required flag ${
-            eOptionNames(optionNames)
-          } is missing.`,
+          error: options.errors?.missing
+            ? (typeof options.errors.missing === "function"
+              ? options.errors.missing(optionNames)
+              : options.errors.missing)
+            : message`Required flag ${eOptionNames(optionNames)} is missing.`,
         };
       }
       if (state.success) return { success: true, value: true };
@@ -728,6 +971,11 @@ export interface ArgumentOptions {
    * The description of the argument, which can be used for help messages.
    */
   readonly description?: Message;
+  /**
+   * Error message customization options.
+   * @since 0.5.0
+   */
+  readonly errors?: ArgumentErrorOptions;
 }
 
 /**
@@ -759,7 +1007,8 @@ export function argument<T>(
         return {
           success: false,
           consumed: 0,
-          error: message`Expected an argument, but got end of input.`,
+          error: options.errors?.endOfInput ??
+            message`Expected an argument, but got end of input.`,
         };
       }
 
@@ -794,9 +1043,13 @@ export function argument<T>(
         return {
           success: false,
           consumed: i,
-          error: message`The argument ${
-            metavar(valueParser.metavar)
-          } cannot be used multiple times.`,
+          error: options.errors?.multiple
+            ? (typeof options.errors.multiple === "function"
+              ? options.errors.multiple(valueParser.metavar)
+              : options.errors.multiple)
+            : message`The argument ${
+              metavar(valueParser.metavar)
+            } cannot be used multiple times.`,
         };
       }
 
@@ -816,14 +1069,19 @@ export function argument<T>(
       if (state == null) {
         return {
           success: false,
-          error: message`Expected a ${
-            metavar(valueParser.metavar)
-          }, but too few arguments.`,
+          error: options.errors?.endOfInput ??
+            message`Expected a ${
+              metavar(valueParser.metavar)
+            }, but too few arguments.`,
         };
       } else if (state.success) return state;
       return {
         success: false,
-        error: message`${metavar(valueParser.metavar)}: ${state.error}`,
+        error: options.errors?.invalidValue
+          ? (typeof options.errors.invalidValue === "function"
+            ? options.errors.invalidValue(state.error)
+            : options.errors.invalidValue)
+          : message`${metavar(valueParser.metavar)}: ${state.error}`,
       };
     },
     getDocFragments(
@@ -1160,6 +1418,7 @@ export function map<T, U, TState>(
 
 /**
  * Options for the {@link multiple} parser.
+ * @since 0.5.0
  */
 export interface MultipleOptions {
   /**
@@ -1177,6 +1436,24 @@ export interface MultipleOptions {
    * @default `Infinity`
    */
   readonly max?: number;
+
+  /**
+   * Error messages customization.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Error message when fewer than the minimum number of values are provided.
+     * @since 0.5.0
+     */
+    readonly tooFew?: Message | ((min: number, actual: number) => Message);
+
+    /**
+     * Error message when more than the maximum number of values are provided.
+     * @since 0.5.0
+     */
+    readonly tooMany?: Message | ((max: number, actual: number) => Message);
+  };
 }
 
 /**
@@ -1245,18 +1522,30 @@ export function multiple<TValue, TState>(
         }
       }
       if (result.length < min) {
+        const customMessage = options.errors?.tooFew;
         return {
           success: false,
-          error: message`Expected at least ${
-            text(min.toLocaleString("en"))
-          } values, but got only ${text(result.length.toLocaleString("en"))}.`,
+          error: customMessage
+            ? (typeof customMessage === "function"
+              ? customMessage(min, result.length)
+              : customMessage)
+            : message`Expected at least ${
+              text(min.toLocaleString("en"))
+            } values, but got only ${
+              text(result.length.toLocaleString("en"))
+            }.`,
         };
       } else if (result.length > max) {
+        const customMessage = options.errors?.tooMany;
         return {
           success: false,
-          error: message`Expected at most ${
-            text(max.toLocaleString("en"))
-          } values, but got ${text(result.length.toLocaleString("en"))}.`,
+          error: customMessage
+            ? (typeof customMessage === "function"
+              ? customMessage(max, result.length)
+              : customMessage)
+            : message`Expected at most ${
+              text(max.toLocaleString("en"))
+            } values, but got ${text(result.length.toLocaleString("en"))}.`,
         };
       }
       return { success: true, value: result };
@@ -1278,6 +1567,30 @@ export function multiple<TValue, TState>(
 }
 
 /**
+ * Options for the {@link object} parser.
+ * @since 0.5.0
+ */
+export interface ObjectOptions {
+  /**
+   * Error messages customization.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Error message when an unexpected option or argument is encountered.
+     * @since 0.5.0
+     */
+    readonly unexpectedInput?: Message | ((token: string) => Message);
+
+    /**
+     * Error message when end of input is reached unexpectedly.
+     * @since 0.5.0
+     */
+    readonly endOfInput?: Message;
+  };
+}
+
+/**
  * Creates a parser that combines multiple parsers into a single object parser.
  * Each parser in the object is applied to parse different parts of the input,
  * and the results are combined into an object with the same structure.
@@ -1292,6 +1605,36 @@ export function object<
   T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
 >(
   parsers: T,
+): Parser<
+  {
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+      : never;
+  },
+  {
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+      : never;
+  }
+>;
+
+/**
+ * Creates a parser that combines multiple parsers into a single object parser.
+ * Each parser in the object is applied to parse different parts of the input,
+ * and the results are combined into an object with the same structure.
+ * @template T A record type where each value is a {@link Parser}.
+ * @param parsers An object containing named parsers that will be combined
+ *                into a single object parser.
+ * @param options Optional configuration for error customization.
+ *                See {@link ObjectOptions}.
+ * @returns A {@link Parser} that produces an object with the same keys as
+ *          the input, where each value is the result of the corresponding
+ *          parser.
+ * @since 0.5.0
+ */
+export function object<
+  T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
+>(
+  parsers: T,
+  options: ObjectOptions,
 ): Parser<
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -1331,11 +1674,44 @@ export function object<
   }
 >;
 
+/**
+ * Creates a labeled parser that combines multiple parsers into a single
+ * object parser with an associated label for documentation or error reporting.
+ * @template T A record type where each value is a {@link Parser}.
+ * @param label A descriptive label for this parser group, used for
+ *              documentation and error messages.
+ * @param parsers An object containing named parsers that will be combined
+ *                into a single object parser.
+ * @param options Optional configuration for error customization.
+ *                See {@link ObjectOptions}.
+ * @returns A {@link Parser} that produces an object with the same keys as
+ *          the input, where each value is the result of the corresponding
+ *          parser.
+ * @since 0.5.0
+ */
+export function object<
+  T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
+>(
+  label: string,
+  parsers: T,
+  options: ObjectOptions,
+): Parser<
+  {
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+      : never;
+  },
+  {
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+      : never;
+  }
+>;
+
 export function object<
   T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
 >(
   labelOrParsers: string | T,
-  maybeParsers?: T,
+  maybeParsersOrOptions?: T | ObjectOptions,
+  maybeOptions?: ObjectOptions,
 ): Parser<
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
@@ -1343,9 +1719,19 @@ export function object<
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
-  const parsers = typeof labelOrParsers === "string"
-    ? maybeParsers!
-    : labelOrParsers;
+
+  let parsers: T;
+  let options: ObjectOptions = {};
+
+  if (typeof labelOrParsers === "string") {
+    // object(label, parsers) or object(label, parsers, options)
+    parsers = maybeParsersOrOptions as T;
+    options = maybeOptions ?? {};
+  } else {
+    // object(parsers) or object(parsers, options)
+    parsers = labelOrParsers;
+    options = (maybeParsersOrOptions as ObjectOptions) ?? {};
+  }
   const parserPairs = Object.entries(parsers);
   parserPairs.sort(([_, parserA], [__, parserB]) =>
     parserB.priority - parserA.priority
@@ -1369,8 +1755,17 @@ export function object<
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length > 0
-          ? message`Unexpected option or argument: ${context.buffer[0]}.`
-          : message`Expected an option or argument, but got end of input.`,
+          ? (() => {
+            const token = context.buffer[0];
+            const customMessage = options.errors?.unexpectedInput;
+            return customMessage
+              ? (typeof customMessage === "function"
+                ? customMessage(token)
+                : customMessage)
+              : message`Unexpected option or argument: ${token}.`;
+          })()
+          : (options.errors?.endOfInput ??
+            message`Expected an option or argument, but got end of input.`),
       };
 
       // Try greedy parsing: attempt to consume as many fields as possible
@@ -2216,7 +2611,43 @@ export function or<
 
 export function or(
   ...parsers: Parser<unknown, unknown>[]
+): Parser<unknown, undefined | [number, ParserResult<unknown>]>;
+
+/**
+ * Creates a parser that tries each parser in sequence until one succeeds,
+ * with custom error message options.
+ * @param parser1 The first parser to try.
+ * @param rest Additional parsers and {@link OrOptions} for error customization.
+ * @returns A parser that succeeds if any of the input parsers succeed.
+ * @since 0.5.0
+ */
+export function or(
+  parser1: Parser<unknown, unknown>,
+  ...rest: [...parsers: Parser<unknown, unknown>[], options: OrOptions]
+): Parser<unknown, undefined | [number, ParserResult<unknown>]>;
+/**
+ * @since 0.5.0
+ */
+export function or(
+  ...args: Array<Parser<unknown, unknown> | OrOptions>
 ): Parser<unknown, undefined | [number, ParserResult<unknown>]> {
+  // Extract parsers and options from arguments
+  let parsers: Parser<unknown, unknown>[];
+  let options: OrOptions | undefined;
+
+  if (
+    args.length > 0 && args[args.length - 1] &&
+    typeof args[args.length - 1] === "object" &&
+    !("$valueType" in args[args.length - 1])
+  ) {
+    // Last argument is options
+    options = args[args.length - 1] as OrOptions;
+    parsers = args.slice(0, -1) as Parser<unknown, unknown>[];
+  } else {
+    // No options provided
+    parsers = args as Parser<unknown, unknown>[];
+    options = undefined;
+  }
   return {
     $valueType: [],
     $stateType: [],
@@ -2227,7 +2658,11 @@ export function or(
       state: undefined | [number, ParserResult<unknown>],
     ): ValueParserResult<unknown> {
       if (state == null) {
-        return { success: false, error: message`No parser matched.` }; // FIXME
+        return {
+          success: false,
+          error: options?.errors?.noMatch ??
+            message`No matching option or command found.`,
+        };
       }
       const [i, result] = state;
       if (result.success) return parsers[i].complete(result.next.state);
@@ -2239,10 +2674,19 @@ export function or(
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length < 1
-          ? message`No parser matched.`
-          : message`Unexpected option or subcommand: ${
-            eOptionName(context.buffer[0])
-          }.`,
+          ? (options?.errors?.noMatch ??
+            message`No matching option or command found.`)
+          : (() => {
+            const token = context.buffer[0];
+            const defaultMsg = message`Unexpected option or subcommand: ${
+              eOptionName(token)
+            }.`;
+            return options?.errors?.unexpectedInput != null
+              ? (typeof options.errors.unexpectedInput === "function"
+                ? options.errors.unexpectedInput(token)
+                : options.errors.unexpectedInput)
+              : defaultMsg;
+          })(),
       };
       const orderedParsers = parsers.map((p, i) =>
         [p, i] as [Parser<unknown, unknown>, number]
@@ -2480,7 +2924,47 @@ export function longestMatch<
 
 export function longestMatch(
   ...parsers: Parser<unknown, unknown>[]
+): Parser<unknown, undefined | [number, ParserResult<unknown>]>;
+
+/**
+ * Creates a parser that tries all parsers and selects the one that consumes
+ * the most input, with custom error message options.
+ * @param parser1 The first parser to try.
+ * @param rest Additional parsers and {@link LongestMatchOptions} for error customization.
+ * @returns A parser that succeeds with the result from the parser that
+ *          consumed the most input.
+ * @since 0.5.0
+ */
+export function longestMatch(
+  parser1: Parser<unknown, unknown>,
+  ...rest: [
+    ...parsers: Parser<unknown, unknown>[],
+    options: LongestMatchOptions,
+  ]
+): Parser<unknown, undefined | [number, ParserResult<unknown>]>;
+/**
+ * @since 0.5.0
+ */
+export function longestMatch(
+  ...args: Array<Parser<unknown, unknown> | LongestMatchOptions>
 ): Parser<unknown, undefined | [number, ParserResult<unknown>]> {
+  // Extract parsers and options from arguments
+  let parsers: Parser<unknown, unknown>[];
+  let options: LongestMatchOptions | undefined;
+
+  if (
+    args.length > 0 && args[args.length - 1] &&
+    typeof args[args.length - 1] === "object" &&
+    !("$valueType" in args[args.length - 1])
+  ) {
+    // Last argument is options
+    options = args[args.length - 1] as LongestMatchOptions;
+    parsers = args.slice(0, -1) as Parser<unknown, unknown>[];
+  } else {
+    // No options provided
+    parsers = args as Parser<unknown, unknown>[];
+    options = undefined;
+  }
   return {
     $valueType: [],
     $stateType: [],
@@ -2491,7 +2975,11 @@ export function longestMatch(
       state: undefined | [number, ParserResult<unknown>],
     ): ValueParserResult<unknown> {
       if (state == null) {
-        return { success: false, error: message`No parser matched.` };
+        return {
+          success: false,
+          error: options?.errors?.noMatch ??
+            message`No matching option or command found.`,
+        };
       }
       const [i, result] = state;
       if (result.success) return parsers[i].complete(result.next.state);
@@ -2508,10 +2996,19 @@ export function longestMatch(
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length < 1
-          ? message`No parser matched.`
-          : message`Unexpected option or subcommand: ${
-            eOptionName(context.buffer[0])
-          }.`,
+          ? (options?.errors?.noMatch ??
+            message`No matching option or command found.`)
+          : (() => {
+            const token = context.buffer[0];
+            const defaultMsg = message`Unexpected option or subcommand: ${
+              eOptionName(token)
+            }.`;
+            return options?.errors?.unexpectedInput != null
+              ? (typeof options.errors.unexpectedInput === "function"
+                ? options.errors.unexpectedInput(token)
+                : options.errors.unexpectedInput)
+              : defaultMsg;
+          })(),
       };
 
       // Try all parsers and find the one with longest match
@@ -3659,7 +4156,7 @@ export function merge(
       return {
         success: false,
         consumed: 0,
-        error: message`No parser matched the input.`,
+        error: message`No matching option or argument found.`,
       };
     },
     complete(state) {
@@ -4059,12 +4556,39 @@ export function concat(
 
 /**
  * Options for the {@link command} parser.
+ * @since 0.5.0
  */
 export interface CommandOptions {
   /**
    * A description of the command, used for documentation.
    */
   readonly description?: Message;
+
+  /**
+   * Error messages customization.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Error message when command is expected but not found.
+     * @since 0.5.0
+     */
+    readonly notMatched?:
+      | Message
+      | ((expected: string, actual: string | null) => Message);
+
+    /**
+     * Error message when command was not matched during completion.
+     * @since 0.5.0
+     */
+    readonly notFound?: Message;
+
+    /**
+     * Error message for invalid command state.
+     * @since 0.5.0
+     */
+    readonly invalidState?: Message;
+  };
 }
 
 /**
@@ -4105,12 +4629,17 @@ export function command<T, TState>(
       if (context.state === undefined) {
         // Check if buffer starts with our command name
         if (context.buffer.length < 1 || context.buffer[0] !== name) {
+          const actual = context.buffer.length > 0 ? context.buffer[0] : null;
+          const errorMessage = options.errors?.notMatched ??
+            message`Expected command ${eOptionName(name)}, but got ${
+              actual ?? "end of input"
+            }.`;
           return {
             success: false,
             consumed: 0,
-            error: message`Expected command ${eOptionName(name)}, but got ${
-              context.buffer.length > 0 ? context.buffer[0] : "end of input"
-            }.`,
+            error: typeof errorMessage === "function"
+              ? errorMessage(name, actual)
+              : errorMessage,
           };
         }
         // Command matched, consume it and move to "matched" state
@@ -4162,14 +4691,15 @@ export function command<T, TState>(
       return {
         success: false,
         consumed: 0,
-        error: message`Invalid command state.`,
+        error: options.errors?.invalidState ?? message`Invalid command state.`,
       };
     },
     complete(state) {
       if (typeof state === "undefined") {
         return {
           success: false,
-          error: message`Command ${eOptionName(name)} was not matched.`,
+          error: options.errors?.notFound ??
+            message`Command ${eOptionName(name)} was not matched.`,
         };
       } else if (state[0] === "matched") {
         // Command matched but inner parser never started, try to complete with initial state
@@ -4181,7 +4711,8 @@ export function command<T, TState>(
       // Should never reach here
       return {
         success: false,
-        error: message`Invalid command state during completion.`,
+        error: options.errors?.invalidState ??
+          message`Invalid command state during completion.`,
       };
     },
     getDocFragments(state: DocState<CommandState<TState>>, defaultValue?) {

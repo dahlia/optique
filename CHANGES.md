@@ -93,9 +93,71 @@ To be released.
     value display with colors, environment variables, and other message
     components while maintaining full backward compatibility.  [[#19]]
 
+ -  Added comprehensive error message customization system that allows
+    users to customize error messages for all parser types and combinators.
+    This addresses the need for better user-facing error messages in CLI
+    applications by enabling context-specific error text with support for
+    both static messages and dynamic error generation functions.  [[#27]]
+
+     -  Parser error options: All primitive parsers (`option()`, `flag()`,
+        `argument()`, `command()`) now accept an `errors` option to customize
+        error messages:
+
+        ~~~~ typescript
+        const parser = option("--port", integer(), {
+          errors: {
+            missing: message`Port number is required for server operation.`,
+            invalidValue: (error) => message`Invalid port: ${error}`
+          }
+        });
+        ~~~~
+
+     -  Combinator error options: Parser combinators (`or()`, `longestMatch()`,
+        `object()`, `multiple()`) support error customization for various
+        failure scenarios:
+
+        ~~~~ typescript
+        const parser = or(
+          flag("--verbose"),
+          flag("--quiet"),
+          {
+            errors: {
+              noMatch: message`Please specify either --verbose or --quiet.`
+            }
+          }
+        );
+        ~~~~
+
+     -  Function-based error messages: Error options can be functions that
+        receive context parameters to generate dynamic error messages:
+
+        ~~~~ typescript
+        const parser = command("deploy", argument(string()), {
+          errors: {
+            notMatched: (expected, actual) =>
+              message`Expected "${expected}" command, but got "${actual ?? "nothing"}".`
+          }
+        });
+        ~~~~
+
+     -  Type-safe error interfaces: Each parser type has its own error
+        options interface (`OptionErrorOptions`, `FlagErrorOptions`,
+        `ArgumentErrorOptions`, `CommandErrorOptions`, `ObjectOptions`,
+        `MultipleOptions`, `OrOptions`, `LongestMatchOptions`) providing
+        IntelliSense support and type safety.
+
+     -  Improved default messages: Default error messages have been improved
+        to be more user-friendly, changing generic messages like “No parser
+        matched” to specific ones like “No matching option or command found.”
+
+     -  Backward compatibility: All error customization is optional and
+        maintains full backward compatibility. Existing code continues to work
+        unchanged while new APIs are available when needed.
+
 [#18]: https://github.com/dahlia/optique/discussions/18
 [#19]: https://github.com/dahlia/optique/issues/19
 [#21]: https://github.com/dahlia/optique/issues/21
+[#27]: https://github.com/dahlia/optique/issues/27
 
 
 Version 0.4.3

@@ -456,3 +456,168 @@ printError(message`Warning: deprecated ${optionName("--old-flag")}.`);
 
 The formatting options give you fine-grained control while maintaining
 the structured nature of your messages across different output contexts.
+
+
+Customizing parser error messages
+---------------------------------
+
+*Available since Optique 0.5.0.*
+
+Optique allows you to customize error messages for all parser types through
+their `errors` option. This provides better user experience by giving
+context-specific feedback instead of generic error messages.
+
+### Basic parser errors
+
+Most primitive parsers support customizing their core error conditions:
+
+~~~~ typescript twoslash
+import { option, flag } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+import { message, optionName, metavar, type Message } from "@optique/core/message";
+
+// Option parser with custom errors
+const portOption = option("--port", integer(), {
+  errors: {
+    missing: message`${optionName("--port")} is required for server startup.`,
+    invalidValue: (error: Message) => message`Port validation failed: ${error}`,
+    endOfInput: message`${optionName("--port")} requires a ${metavar("NUMBER")}.`
+  }
+});
+
+// Flag parser with custom error
+const verboseFlag = flag("--verbose", {
+  errors: {
+    duplicate: (token: string) =>
+      message`${optionName("--verbose")} was already specified: ${token}.`
+  }
+});
+~~~~
+
+### Function-based error messages
+
+Error messages can be functions that receive the problematic input and return
+a customized message. This allows for more specific and helpful feedback:
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+import { message, optionName, type Message } from "@optique/core/message";
+
+const formatOption = option("--format", string(), {
+  errors: {
+    // Static message
+    missing: message`Output format must be specified.`,
+
+    // Dynamic message based on original error
+    invalidValue: (error: Message) => {
+      return message`Invalid format specified: ${error}`;
+    }
+  }
+});
+~~~~
+
+### Combinator error customization
+
+Parser combinators like `or()` and `longestMatch()` also support error
+customization for better failure reporting:
+
+~~~~ typescript twoslash
+import { or, option, constant } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+import { message, optionName } from "@optique/core/message";
+
+// Custom error when no alternative matches
+const configOption = option("--config", string());
+const helpOption = option("--help");
+const configOrHelp = or(configOption, helpOption, {
+  errors: {
+    noMatch: message`Either provide ${optionName("--config")} or use help option.`,
+    unexpectedInput: (token: string) =>
+      message`Unexpected input ${token}. Expected configuration or help option.`
+  }
+});
+~~~~
+
+### Object parser error customization
+
+Object parsers can customize errors for missing required fields and
+unexpected properties:
+
+~~~~ typescript twoslash
+import { object, option } from "@optique/core/parser";
+import { string, integer } from "@optique/core/valueparser";
+import { message, optionName } from "@optique/core/message";
+
+const serverConfig = object({
+  host: option("--host", string()),
+  port: option("--port", integer())
+}, {
+  errors: {
+    unexpectedInput: (token: string) =>
+      message`Unknown server option ${optionName(token)}.`,
+    endOfInput: message`Server configuration incomplete. Expected more options.`
+  }
+});
+~~~~
+
+### Multiple parser error customization
+
+Multiple parsers can provide custom messages for count validation:
+
+~~~~ typescript twoslash
+import { multiple, option } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+import { message, optionName, metavar } from "@optique/core/message";
+
+const inputFiles = multiple(option("--input", string()), {
+  min: 1,
+  max: 5,
+  errors: {
+    tooFew: (count: number, min: number) =>
+      message`At least ${String(min)} input file(s) required, got ${String(count)}.`,
+    tooMany: (count: number, max: number) =>
+      message`Maximum ${String(max)} input files allowed, got ${String(count)}.`
+  }
+});
+~~~~
+
+### Best practices for custom errors
+
+When customizing error messages, follow these patterns for consistent and
+helpful user experience:
+
+ 1. *Be specific*: Include the problematic input value when possible
+ 2. *Provide context*: Reference the specific option or command involved
+ 3. *Suggest solutions*: Mention valid alternatives or corrective actions
+ 4. *Use consistent styling*: Apply proper component types for CLI elements
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/parser";
+import { string } from "@optique/core/valueparser";
+import { message, optionName, metavar, values, type Message } from "@optique/core/message";
+
+// Good: Specific, contextual, actionable
+const databaseUrl = option("--database", string(), {
+  errors: {
+    missing: message`Database connection required. Set ${optionName("--database")} or DATABASE_URL environment variable.`,
+    invalidValue: (error: Message) => {
+      return message`Database URL validation failed: ${error}`;
+    }
+  }
+});
+
+// Good: Lists valid alternatives with custom validation
+const logLevel = option("--log-level", string(), {
+  errors: {
+    invalidValue: (error: Message) => {
+      const validLevels = ["debug", "info", "warn", "error"];
+      return message`Log level validation failed: ${error}. Valid levels: ${values(validLevels)}.`;
+    }
+  }
+});
+~~~~
+
+Custom error messages integrate seamlessly with Optique's structured message
+system, ensuring consistent formatting and proper terminal output regardless
+of whether colors are enabled or disabled.

@@ -4247,7 +4247,7 @@ describe("merge", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assert.equal(result.consumed, 0);
-      assertErrorIncludes(result.error, "No parser matched the input");
+      assertErrorIncludes(result.error, "No matching option or argument found");
     }
   });
 
@@ -4446,7 +4446,7 @@ describe("merge", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assert.equal(result.consumed, 0);
-      assertErrorIncludes(result.error, "No parser matched the input");
+      assertErrorIncludes(result.error, "No matching option or argument found");
     }
   });
 
@@ -8062,5 +8062,699 @@ describe("group", () => {
         f.type === "section" && "title" in f && typeof f.title === "string",
     );
     assert.ok(outputSections.some((s) => s.title === "Output Options"));
+  });
+});
+
+describe("Error message customization", () => {
+  it("should use custom noMatch error in or() combinator", () => {
+    const parser = or(
+      command("add", constant("add")),
+      command("remove", constant("remove")),
+      {
+        errors: {
+          noMatch: message`Please use either 'add' or 'remove' command.`,
+        },
+      },
+    );
+
+    const result = parse(parser, []);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Please use either 'add' or 'remove' command.",
+      );
+    }
+  });
+
+  it("should use custom unexpectedInput error in or() combinator", () => {
+    const parser = or(
+      command("add", constant("add")),
+      command("remove", constant("remove")),
+      {
+        errors: {
+          unexpectedInput: (token) =>
+            message`Unknown command '${text(token)}'. Use 'add' or 'remove'.`,
+        },
+      },
+    );
+
+    const result = parse(parser, ["unknown"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Unknown command 'unknown'. Use 'add' or 'remove'.",
+      );
+    }
+  });
+
+  it("should use custom noMatch error in longestMatch() combinator", () => {
+    const parser = longestMatch(
+      command("add", constant("add")),
+      command("remove", constant("remove")),
+      {
+        errors: {
+          noMatch: message`Please specify a valid command: add or remove.`,
+        },
+      },
+    );
+
+    const result = parse(parser, []);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Please specify a valid command: add or remove.",
+      );
+    }
+  });
+
+  it("should use static unexpectedInput error in longestMatch() combinator", () => {
+    const parser = longestMatch(
+      command("add", constant("add")),
+      command("remove", constant("remove")),
+      {
+        errors: {
+          unexpectedInput: message`Invalid command. Supported: add, remove.`,
+        },
+      },
+    );
+
+    const result = parse(parser, ["invalid"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Invalid command. Supported: add, remove.",
+      );
+    }
+  });
+
+  it("should use default messages when no custom errors are provided", () => {
+    const parser = or(
+      command("add", constant("add")),
+      command("remove", constant("remove")),
+    );
+
+    const result = parse(parser, []);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "No matching option or command found.",
+      );
+    }
+  });
+});
+
+describe("option() error customization", () => {
+  it("should use custom missing error", () => {
+    const parser = option("--verbose", string(), {
+      errors: {
+        missing: message`The --verbose option is required.`,
+      },
+    });
+
+    const result = parser.complete(undefined);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The --verbose option is required.",
+      );
+    }
+  });
+
+  it("should use custom optionsTerminated error", () => {
+    const parser = option("--verbose", {
+      errors: {
+        optionsTerminated: message`Cannot parse --verbose after -- terminator.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--verbose"],
+      state: undefined,
+      optionsTerminated: true,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Cannot parse --verbose after -- terminator.",
+      );
+    }
+  });
+
+  it("should use custom duplicate error with function", () => {
+    const parser = option("--verbose", {
+      errors: {
+        duplicate: (token) =>
+          message`The option ${text(token)} was already specified.`,
+      },
+    });
+
+    // Context with existing successful state should fail with duplicate error
+    const context = {
+      buffer: ["--verbose"],
+      state: { success: true, value: true } as const,
+      optionsTerminated: false,
+    };
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The option --verbose was already specified.",
+      );
+    }
+  });
+
+  it("should use custom invalidValue error", () => {
+    const parser = option("--port", integer(), {
+      errors: {
+        invalidValue: (error) => message`Invalid port number: ${error}`,
+      },
+    });
+
+    // Create a failed value parser result to test complete method
+    const failedState = {
+      success: false,
+      error: message`Expected a valid integer, but got "invalid".`,
+    } as const;
+
+    const result = parser.complete(failedState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Invalid port number:"));
+    }
+  });
+});
+
+describe("flag() error customization", () => {
+  it("should use custom missing error", () => {
+    const parser = flag("--force", {
+      errors: {
+        missing: message`The --force flag is required for this operation.`,
+      },
+    });
+
+    const result = parser.complete(undefined);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The --force flag is required for this operation.",
+      );
+    }
+  });
+
+  it("should use custom optionsTerminated error", () => {
+    const parser = flag("--force", {
+      errors: {
+        optionsTerminated: message`Cannot parse --force after -- terminator.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--force"],
+      state: undefined,
+      optionsTerminated: true,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Cannot parse --force after -- terminator.",
+      );
+    }
+  });
+
+  it("should use custom duplicate error with function", () => {
+    const parser = flag("--force", {
+      errors: {
+        duplicate: (token) =>
+          message`The flag ${text(token)} was already specified.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--force"],
+      state: { success: true, value: true } as const,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The flag --force was already specified.",
+      );
+    }
+  });
+});
+
+describe("argument() error customization", () => {
+  it("should use custom endOfInput error", () => {
+    const parser = argument(string(), {
+      errors: {
+        endOfInput: message`Please provide a filename argument.`,
+      },
+    });
+
+    const context = {
+      buffer: [],
+      state: undefined,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Please provide a filename argument.",
+      );
+    }
+  });
+
+  it("should use custom endOfInput error in complete", () => {
+    const parser = argument(string(), {
+      errors: {
+        endOfInput: message`Missing required argument.`,
+      },
+    });
+
+    const result = parser.complete(undefined);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Missing required argument.",
+      );
+    }
+  });
+
+  it("should use custom invalidValue error", () => {
+    const parser = argument(integer(), {
+      errors: {
+        invalidValue: (error) => message`Invalid number provided: ${error}`,
+      },
+    });
+
+    const failedState = {
+      success: false,
+      error: message`Expected a valid integer, but got "abc".`,
+    } as const;
+
+    const result = parser.complete(failedState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Invalid number provided:"));
+    }
+  });
+});
+
+describe("command() error customization", () => {
+  it("should use custom notMatched error", () => {
+    const innerParser = argument(string());
+    const parser = command("deploy", innerParser, {
+      errors: {
+        notMatched: message`The "deploy" command is required here.`,
+      },
+    });
+
+    const context = {
+      buffer: ["build"],
+      state: undefined,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        'The "deploy" command is required here.',
+      );
+    }
+  });
+
+  it("should use custom notMatched error with function", () => {
+    const innerParser = argument(string());
+    const parser = command("deploy", innerParser, {
+      errors: {
+        notMatched: (expected, actual) =>
+          message`Expected command ${expected}, but found ${
+            actual ?? "nothing"
+          }.`,
+      },
+    });
+
+    const context = {
+      buffer: ["build"],
+      state: undefined,
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        'Expected command "deploy", but found "build".',
+      );
+    }
+  });
+
+  it("should use custom notFound error in complete", () => {
+    const innerParser = argument(string());
+    const parser = command("deploy", innerParser, {
+      errors: {
+        notFound: message`The deploy command was never invoked.`,
+      },
+    });
+
+    const result = parser.complete(undefined);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The deploy command was never invoked.",
+      );
+    }
+  });
+
+  it("should use custom invalidState error", () => {
+    const innerParser = argument(string());
+    const parser = command("deploy", innerParser, {
+      errors: {
+        invalidState: message`Command state is corrupted.`,
+      },
+    });
+
+    // This test simulates an invalid state scenario by using unknown type
+    // Since the actual invalid state path is hard to reach in normal operation,
+    // we test by directly calling complete with an invalid state
+    const invalidState = ["invalid"] as unknown as Parameters<
+      typeof parser.complete
+    >[0];
+    const result = parser.complete(invalidState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Command state is corrupted.",
+      );
+    }
+  });
+});
+
+describe("object() error customization", () => {
+  it("should use custom unexpectedInput error", () => {
+    const parser = object({
+      verbose: flag("-v", "--verbose"),
+      output: option("-o", string()),
+    }, {
+      errors: {
+        unexpectedInput:
+          message`Unknown option detected. Check your command syntax.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--unknown"],
+      state: {
+        verbose: undefined,
+        output: undefined,
+      },
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Unknown option detected. Check your command syntax.",
+      );
+    }
+  });
+
+  it("should use custom unexpectedInput error with function", () => {
+    const parser = object({
+      verbose: flag("-v", "--verbose"),
+    }, {
+      errors: {
+        unexpectedInput: (token) =>
+          message`Invalid option: ${token}. Use --help for available options.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--invalid"],
+      state: {
+        verbose: undefined,
+      },
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        'Invalid option: "--invalid". Use --help for available options.',
+      );
+    }
+  });
+
+  it("should use custom endOfInput error", () => {
+    const parser = object({
+      file: argument(string()),
+      verbose: flag("-v", "--verbose"),
+    }, {
+      errors: {
+        endOfInput:
+          message`Please provide more arguments to complete the command.`,
+      },
+    });
+
+    // This test is tricky because endOfInput occurs when buffer is empty
+    // and parsers cannot be completed. Let me create a scenario where this happens.
+    const context = {
+      buffer: [],
+      state: {
+        file: undefined,
+        verbose: undefined,
+      },
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Please provide more arguments to complete the command.",
+      );
+    }
+  });
+
+  it("should use custom error in labeled object", () => {
+    const parser = object("CLI Options", {
+      help: flag("-h", "--help"),
+      version: flag("--version"),
+    }, {
+      errors: {
+        unexpectedInput: message`Unrecognized CLI option.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--invalid"],
+      state: {
+        help: undefined,
+        version: undefined,
+      },
+      optionsTerminated: false,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Unrecognized CLI option.",
+      );
+    }
+  });
+});
+
+describe("multiple() error customization", () => {
+  it("should use custom tooFew error", () => {
+    const parser = multiple(argument(string()), {
+      min: 2,
+      errors: {
+        tooFew: message`You must provide at least 2 file paths.`,
+      },
+    });
+
+    // Create a context with only one value parsed
+    const singleArgState = [{
+      success: true,
+      value: "file1.txt",
+    }] as const;
+
+    const result = parser.complete(singleArgState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "You must provide at least 2 file paths.",
+      );
+    }
+  });
+
+  it("should use custom tooFew error with function", () => {
+    const parser = multiple(argument(string()), {
+      min: 3,
+      errors: {
+        tooFew: (min, actual) =>
+          message`Need ${text(min.toString())} files, but only found ${
+            text(actual.toString())
+          }.`,
+      },
+    });
+
+    // Create a context with only one value parsed
+    const singleArgState = [{
+      success: true,
+      value: "file1.txt",
+    }] as const;
+
+    const result = parser.complete(singleArgState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Need 3 files, but only found 1.",
+      );
+    }
+  });
+
+  it("should use custom tooMany error", () => {
+    const parser = multiple(argument(string()), {
+      max: 2,
+      errors: {
+        tooMany: message`Too many arguments provided. Maximum allowed is 2.`,
+      },
+    });
+
+    // Create a context with three values parsed
+    const threeArgState = [
+      { success: true, value: "file1.txt" },
+      { success: true, value: "file2.txt" },
+      { success: true, value: "file3.txt" },
+    ] as const;
+
+    const result = parser.complete(threeArgState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Too many arguments provided. Maximum allowed is 2.",
+      );
+    }
+  });
+
+  it("should use custom tooMany error with function", () => {
+    const parser = multiple(argument(string()), {
+      max: 1,
+      errors: {
+        tooMany: (max, actual) =>
+          message`Expected only ${text(max.toString())} file, but got ${
+            text(actual.toString())
+          }.`,
+      },
+    });
+
+    // Create a context with two values parsed
+    const twoArgState = [
+      { success: true, value: "file1.txt" },
+      { success: true, value: "file2.txt" },
+    ] as const;
+
+    const result = parser.complete(twoArgState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Expected only 1 file, but got 2.",
+      );
+    }
+  });
+
+  it("should use custom unexpectedValue error for Boolean flags", () => {
+    const parser = option("--flag", {
+      errors: {
+        unexpectedValue: (value: string) =>
+          message`Flag cannot have value ${value}.`,
+      },
+    });
+
+    const result = parser.parse({
+      buffer: ["--flag=test"],
+      state: { success: true, value: false },
+      optionsTerminated: false,
+    });
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        'Flag cannot have value "test".',
+      );
+    }
+  });
+
+  it("should use custom multiple error for arguments", () => {
+    const parser = argument(string(), {
+      errors: {
+        multiple: (metavar: string) =>
+          message`Argument ${metavar} was already provided.`,
+      },
+    });
+
+    // First call succeeds
+    const firstResult = parser.parse({
+      buffer: ["first"],
+      state: undefined,
+      optionsTerminated: false,
+    });
+    assert.ok(firstResult.success);
+
+    // Second call should fail with custom error
+    const secondResult = parser.parse({
+      buffer: ["second"],
+      state: firstResult.success ? firstResult.next.state : undefined,
+      optionsTerminated: false,
+    });
+
+    assert.ok(!secondResult.success);
+    if (!secondResult.success) {
+      assert.equal(
+        formatMessage(secondResult.error),
+        'Argument "STRING" was already provided.',
+      );
+    }
   });
 });
