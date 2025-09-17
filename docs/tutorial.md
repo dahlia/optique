@@ -576,7 +576,8 @@ when you want to simplify your application logic:
 
 ~~~~ typescript twoslash
 import { message } from "@optique/core/message";
-import { map, object, optional, withDefault } from "@optique/core/parser";
+import { map, optional, withDefault } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { path, print, run } from "@optique/run";
 import { integer, string } from "@optique/core/valueparser";
@@ -652,7 +653,8 @@ normally:
 
 ~~~~ typescript twoslash
 import { message } from "@optique/core/message";
-import { multiple, object } from "@optique/core/parser";
+import { multiple } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { path, print, run } from "@optique/run";
 import { string } from "@optique/core/valueparser";
@@ -756,7 +758,8 @@ practice. Each subcommand will have its own unique options, but they'll all
 be part of a single, type-safe parser:
 
 ~~~~ typescript twoslash
-import { type InferValue, multiple, object, or } from "@optique/core/parser";
+import { multiple } from "@optique/core/modifiers";
+import { type InferValue, object, or } from "@optique/core/parser";
 import { argument, command, constant, option} from "@optique/core/primitives";
 import { path, run } from "@optique/run";
 import { string } from "@optique/core/valueparser";
@@ -930,7 +933,8 @@ handle specific areas of functionality. Then you compose these focused parsers
 in different combinations depending on what each command needs:
 
 ~~~~ typescript twoslash
-import { merge, object, optional, or } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
+import { merge, object, or } from "@optique/core/parser";
 import { constant, option } from "@optique/core/primitives";
 import { path, run } from "@optique/run";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -1017,15 +1021,8 @@ Let's build a comprehensive deployment tool that demonstrates all the features
 we've learned:
 
 ~~~~ typescript twoslash
-import {
-  type InferValue,
-  merge,
-  multiple,
-  object,
-  optional,
-  or,
-  withDefault,
-} from "@optique/core/parser";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
+import { type InferValue, merge, object, or } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { path, run } from "@optique/run";
 import { choice, integer, string, url } from "@optique/core/valueparser";
@@ -1221,7 +1218,8 @@ Here's how the same parser would work with *@optique/core*:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/core/facade";
-import { object, optional } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import process from "node:process";
@@ -1258,7 +1256,8 @@ Compare this to the *@optique/run* version we've been using throughout this
 tutorial:
 
 ~~~~ typescript twoslash
-import { object, optional } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { path, run, print } from "@optique/run";
@@ -1353,15 +1352,8 @@ learned:
 
 ~~~~ typescript twoslash
 #!/usr/bin/env node
-import {
-  type InferValue,
-  merge,
-  multiple,
-  object,
-  optional,
-  or,
-  withDefault,
-} from "@optique/core/parser";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
+import { type InferValue, merge, object, or } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { path, run } from "@optique/run";

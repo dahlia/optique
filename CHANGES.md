@@ -8,28 +8,38 @@ To be released.
 
 ### @optique/core
 
- -  Refactored primitive parsers into separate `@optique/core/primitives` module
-    for better code organization. The primitive parsers (`constant()`, `option()`,
-    `flag()`, `argument()`, `command()`) and their related types have been moved
-    to a dedicated primitives module. This separation improves maintainability
-    by grouping related functionality and reduces the size of the main parser
-    module.
+ -  Refactored parser modules for better code organization by splitting the large
+    `@optique/core/parser` module into focused, specialized modules. This improves
+    maintainability, reduces module size, and provides clearer separation of
+    concerns. All changes maintain full backward compatibility through re-exports.
 
-    For backward compatibility, all primitive parsers continue to be re-exported
-    from `@optique/core/parser`, so existing code will work unchanged. However,
-    the recommended approach going forward is to import primitive parsers
-    directly from the new module:
+     -  *Primitive parsers*: Moved primitive parsers (`constant()`, `option()`,
+        `flag()`, `argument()`, `command()`) and their related types to
+        a dedicated `@optique/core/primitives` module. These core building
+        blocks are now logically separated from parser combinators.
+
+     -  *Parser modifiers*: Moved parser modifier functions (`optional()`,
+        `withDefault()`, `map()`, `multiple()`) and their related types to a
+        dedicated `@optique/core/modifiers` module. These higher-order functions
+        that transform and enhance parsers are now grouped together.
+
+    For backward compatibility, all functions continue to be re-exported from
+    `@optique/core/parser`, so existing code will work unchanged. However, the
+    recommended approach going forward is to import directly from the specialized
+    modules:
 
     ~~~~ typescript
-    // Recommended: import directly from primitives module
+    // Recommended: import directly from specialized modules
     import { option, flag, argument } from "@optique/core/primitives";
+    import { optional, withDefault, multiple } from "@optique/core/modifiers";
+    import { object, or, merge } from "@optique/core/parser";
 
-    // Still supported: import from parser module (backward compatibility)
-    import { option, flag, argument } from "@optique/core/parser";
+    // Still supported: import everything from parser module (backward compatibility)
+    import { option, flag, optional, withDefault, object, or } from "@optique/core/parser";
     ~~~~
 
-    This change only affects internal code organization and does not impact the
-    public API or runtime behavior of any parsers.
+    This refactoring only affects internal code organization and does not impact
+    the public API or runtime behavior of any parsers.
 
  -  Added automatic error handling for `withDefault()` default value callbacks.
     When a default value callback throws an error, it is now automatically

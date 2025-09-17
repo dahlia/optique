@@ -1,13 +1,7 @@
 import { run, RunError } from "@optique/core/facade";
 import { message } from "@optique/core/message";
-import {
-  map,
-  multiple,
-  object,
-  optional,
-  or,
-  withDefault,
-} from "@optique/core/parser";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import { object, or } from "@optique/core/parser";
 import { argument, command, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";

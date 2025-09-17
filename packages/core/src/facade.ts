@@ -1,12 +1,11 @@
 import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import { formatMessage, type Message, message } from "./message.ts";
+import { multiple, optional } from "./modifiers.ts";
 import {
   getDocPage,
   type InferValue,
   longestMatch,
-  multiple,
   object,
-  optional,
   parse,
   type Parser,
 } from "./parser.ts";

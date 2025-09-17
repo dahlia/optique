@@ -1,3 +1,5 @@
+import { formatMessage, type Message, message } from "@optique/core/message";
+import { multiple, optional } from "@optique/core/modifiers";
 import {
   argument,
   command,
@@ -5,19 +7,16 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
-import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import { formatMessage, type Message, message } from "@optique/core/message";
 import { integer, string } from "@optique/core/valueparser";
 import {
   type InferValue,
-  multiple,
   object,
-  optional,
   or,
   parse,
   tuple,
 } from "@optique/core/parser";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);

@@ -75,6 +75,14 @@
       "import": "./dist/message.js",
       "require": "./dist/message.cjs"
     },
+    "./modifiers": {
+      "types": {
+        "import": "./dist/modifiers.d.ts",
+        "require": "./dist/modifiers.cts"
+      },
+      "import": "./dist/modifiers.js",
+      "require": "./dist/modifiers.cjs"
+    },
     "./parser": {
       "types": {
         "import": "./dist/parser.d.ts",

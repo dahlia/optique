@@ -1,4 +1,5 @@
-import { map, or, withDefault } from "@optique/core/parser";
+import { map, withDefault } from "@optique/core/modifiers";
+import { or } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";

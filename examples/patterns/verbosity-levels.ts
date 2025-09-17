@@ -1,6 +1,7 @@
 // This example demonstrates how to implement verbosity levels using repeated
 // flags, e.g., -v, -vv, -vvv, etc., to set different levels of verbosity.
-import { map, multiple, object } from "@optique/core/parser";
+import { map, multiple } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";

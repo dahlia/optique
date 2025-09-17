@@ -27,7 +27,8 @@ that perform multiple related operations, like Git (`git commit`, `git push`)
 or Docker (`docker run`, `docker build`).
 
 ~~~~ typescript twoslash
-import { object, optional, or } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
+import { object, or } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
@@ -147,7 +148,8 @@ together. This pattern is common in tools that can operate in different modes,
 where each mode requires its own configuration.
 
 ~~~~ typescript twoslash
-import { object, or, withDefault } from "@optique/core/parser";
+import { withDefault } from "@optique/core/modifiers";
+import { object, or } from "@optique/core/parser";
 import { argument, constant, option } from "@optique/core/primitives"
 import { integer, string, url } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
@@ -219,7 +221,8 @@ For simpler cases where you need exactly one of several flags, you can use
 mutually exclusive flags that map to different values.
 
 ~~~~ typescript twoslash
-import { map, or, withDefault } from "@optique/core/parser";
+import { map, withDefault } from "@optique/core/modifiers";
+import { or } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { run } from "@optique/run";
@@ -264,7 +267,8 @@ present. This creates a dependency relationship where certain options are
 only valid in specific contexts.
 
 ~~~~ typescript twoslash
-import { merge, object, withDefault } from "@optique/core/parser";
+import { withDefault } from "@optique/core/modifiers";
+import { merge, object } from "@optique/core/parser";
 import { flag, option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { run } from "@optique/run";
@@ -329,7 +333,8 @@ variables or configuration files. This pattern is common in containerization
 tools and configuration management systems.
 
 ~~~~ typescript twoslash
-import { map, multiple, object, or } from "@optique/core/parser";
+import { map, multiple } from "@optique/core/modifiers";
+import { object, or } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { message, text } from "@optique/core/message";
 import {
@@ -462,7 +467,8 @@ Unix approach uses repeated flags: `-v` for verbose, `-vv` for very verbose,
 and so on.
 
 ~~~~ typescript twoslash
-import { map, multiple, object } from "@optique/core/parser";
+import { map, multiple } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";
@@ -528,7 +534,8 @@ When you have many mutually exclusive options, grouping them in help output
 improves usability while maintaining the same parsing logic.
 
 ~~~~ typescript twoslash
-import { group, map, or, withDefault } from "@optique/core/parser";
+import { map, withDefault } from "@optique/core/modifiers";
+import { group, or } from "@optique/core/parser";
 import { flag } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";
@@ -582,7 +589,8 @@ behavior. This pattern allows users to explicitly disable features that are
 enabled by default.
 
 ~~~~ typescript twoslash
-import { map, object } from "@optique/core/parser";
+import { map } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";
@@ -693,7 +701,8 @@ Advanced patterns
 The cookbook patterns can be combined to create sophisticated CLI interfaces:
 
 ~~~~ typescript twoslash
-import { object, withDefault, multiple, merge } from "@optique/core/parser";
+import { multiple, withDefault } from "@optique/core/modifiers";
+import { merge, object } from "@optique/core/parser";
 import { argument, command, constant, flag, option } from "@optique/core/primitives";
 import { string, type ValueParser,
          type ValueParserResult } from "@optique/core/valueparser";

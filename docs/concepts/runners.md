@@ -361,7 +361,8 @@ options or arguments are created with `withDefault()`:
 
 ~~~~ typescript twoslash
 import { run } from "@optique/run";
-import { object, withDefault } from "@optique/core/parser";
+import { withDefault } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 

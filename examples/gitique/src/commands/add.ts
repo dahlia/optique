@@ -1,4 +1,5 @@
-import { type InferValue, multiple, object } from "@optique/core/parser";
+import { multiple } from "@optique/core/modifiers";
+import { type InferValue, object } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";

@@ -1,7 +1,8 @@
 // This example demonstrates how to implement --no- prefix boolean options
 // commonly found in Linux CLI tools, where --no-option negates a default
 // behavior.
-import { map, object } from "@optique/core/parser";
+import { map } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { run } from "@optique/run";
 

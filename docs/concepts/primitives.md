@@ -227,7 +227,8 @@ Dependent options
 :   When a flag's presence enables additional options
 
     ~~~~ typescript twoslash
-    import { object, withDefault } from "@optique/core/parser";
+    import { withDefault } from "@optique/core/modifiers";
+    import { object } from "@optique/core/parser";
     import { flag, option } from "@optique/core/primitives";
 
     // When --advanced is not provided, parser fails and defaults are used
@@ -245,7 +246,8 @@ Mode selection
 :   When different flags trigger different parsing modes
 
     ~~~~ typescript twoslash
-    import { object, optional } from "@optique/core/parser";
+    import { optional } from "@optique/core/modifiers";
+    import { object } from "@optique/core/parser";
     import { flag } from "@optique/core/primitives";
     // ---cut-before---
     const parser = object({
@@ -571,7 +573,8 @@ if they're not provided. Use [modifying combinators](./modifiers.md) like
 `optional()` or `withDefault()` to make them optional:
 
 ~~~~ typescript twoslash
-import { object, optional, withDefault } from "@optique/core/parser";
+import { optional, withDefault } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 
@@ -587,7 +590,8 @@ const parser = object({
 Use the `multiple()` combinator to allow repeated options or arguments:
 
 ~~~~ typescript twoslash
-import { multiple, object } from "@optique/core/parser";
+import { multiple } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 

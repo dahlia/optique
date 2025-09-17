@@ -66,7 +66,8 @@ You can provide a label for documentation and error reporting purposes.
 This label appears in help text to group related options:
 
 ~~~~ typescript twoslash
-import { object, optional } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 // ---cut-before---
@@ -140,7 +141,8 @@ const mixedTuple = tuple([
 Like `object()`, `tuple()` supports labels for documentation:
 
 ~~~~ typescript twoslash
-import { type InferValue, optional, tuple } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
+import { type InferValue, tuple } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { float, string } from "@optique/core/valueparser";
 // ---cut-before---
@@ -278,7 +280,8 @@ if (config.success) {
 The most common use of `or()` is for subcommand dispatch:
 
 ~~~~ typescript twoslash
-import { multiple, object, optional, or, withDefault } from "@optique/core/parser";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
+import { object, or } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 // ---cut-before---
@@ -352,7 +355,8 @@ transformative parsers. This is essential for building maintainable applications
 where related options can be shared across different commands or modes.
 
 ~~~~ typescript twoslash
-import { merge, object, optional, or } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
+import { merge, object, or } from "@optique/core/parser";
 import { constant, option } from "@optique/core/primitives";
 import { string, integer, choice } from "@optique/core/valueparser";
 
@@ -445,13 +449,8 @@ not just `object()` parsers. This enables sophisticated patterns like dependent
 options and conditional configurations:
 
 ~~~~ typescript twoslash
-import {
-  type InferValue,
-  map,
-  merge,
-  object,
-  withDefault,
-} from "@optique/core/parser";
+import { map, withDefault } from "@optique/core/modifiers";
+import { type InferValue, merge, object } from "@optique/core/parser";
 import { flag, option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { run } from "@optique/run";
@@ -508,7 +507,8 @@ A common use case is creating options that are only relevant when certain
 conditions are met:
 
 ~~~~ typescript twoslash
-import { merge, object, withDefault } from "@optique/core/parser";
+import { withDefault } from "@optique/core/modifiers";
+import { merge, object } from "@optique/core/parser";
 import { flag, option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 // ---cut-before---
@@ -575,7 +575,8 @@ When combining different parser types, the merge result maintains full type
 safety while accounting for the unique characteristics of each parser:
 
 ~~~~ typescript twoslash
-import { type InferValue, merge, object, withDefault, map } from "@optique/core/parser";
+import { map, withDefault } from "@optique/core/modifiers";
+import { type InferValue, merge, object } from "@optique/core/parser";
 import { flag, option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 // ---cut-before---
@@ -856,13 +857,8 @@ The most common use case for `longestMatch()` is implementing context-aware
 help systems where `command --help` shows help for that specific command:
 
 ~~~~ typescript twoslash
-import {
-  longestMatch,
-  multiple,
-  object,
-  optional,
-  or,
-} from "@optique/core/parser";
+import { multiple, optional } from "@optique/core/modifiers";
+import { longestMatch, object, or } from "@optique/core/parser";
 import {
   argument,
   command,
@@ -980,13 +976,8 @@ Use `longestMatch()` when you need:
     information
 
 ~~~~ typescript twoslash
-import {
-  longestMatch,
-  multiple,
-  object,
-  optional,
-  or,
-} from "@optique/core/parser";
+import { multiple, optional } from "@optique/core/modifiers";
+import { longestMatch, object, or } from "@optique/core/parser";
 import {
   argument,
   command,
@@ -1057,7 +1048,8 @@ don't natively support labeling. The `group()` parser fills this gap by wrapping
 any parser with a labeled section that appears in help documentation.
 
 ~~~~ typescript twoslash
-import { group, map, or, multiple } from "@optique/core/parser";
+import { map, multiple } from "@optique/core/modifiers";
+import { group, or } from "@optique/core/parser";
 import { argument, flag } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
@@ -1088,7 +1080,8 @@ All parsing operations, state management, and type information are preserved
 unchanged:
 
 ~~~~ typescript twoslash
-import { type InferValue, group, or, map, parse } from "@optique/core/parser";
+import { map } from "@optique/core/modifiers";
+import { type InferValue, group, or, parse } from "@optique/core/parser";
 import { flag } from "@optique/core/primitives";
 
 const formatParser = or(
@@ -1119,15 +1112,8 @@ The `group()` parser is most useful with parsers that don't have built-in
 labeling support:
 
 ~~~~ typescript twoslash
-import {
-  group,
-  or,
-  map,
-  multiple,
-  optional,
-  withDefault,
-  object,
-} from "@optique/core/parser";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import { group, or, object } from "@optique/core/parser";
 import { argument, flag, option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 // ---cut-before---
@@ -1247,14 +1233,8 @@ Use `group()` when you need:
  -  *Clean code structure*: Maintaining modular parser composition
 
 ~~~~ typescript twoslash
-import {
-  group,
-  map,
-  multiple,
-  object,
-  or,
-  withDefault,
-} from "@optique/core/parser";
+import { map, multiple, withDefault } from "@optique/core/modifiers";
+import { group, object, or } from "@optique/core/parser";
 import { argument, flag, option } from "@optique/core/primitives";
 import { string, integer, choice } from "@optique/core/valueparser";
 // ---cut-before---

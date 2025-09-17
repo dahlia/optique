@@ -568,7 +568,7 @@ const serverConfig = object({
 Multiple parsers can provide custom messages for count validation:
 
 ~~~~ typescript twoslash
-import { multiple } from "@optique/core/parser";
+import { multiple } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message, optionName, metavar } from "@optique/core/message";

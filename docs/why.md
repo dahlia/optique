@@ -206,17 +206,6 @@ const deployParser = merge(CommonOptions, DeployOptions);
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 // Natural composition with preserved type information
 ~~~~
 
@@ -303,7 +292,8 @@ Optique's functional approach means parsers are just values you can transform
 with standard functional programming techniques:
 
 ~~~~ typescript twoslash
-import { object, withDefault } from "@optique/core/parser";
+import { withDefault } from "@optique/core/modifiers";
+import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
@@ -357,13 +347,8 @@ same combinators that handle basic options automatically infer sophisticated
 discriminated unions for complex command structures:
 
 ~~~~ typescript twoslash
-import {
-  type InferValue,
-  object,
-  optional,
-  or,
-  withDefault,
-} from "@optique/core/parser";
+import { optional, withDefault } from "@optique/core/modifiers";
+import { type InferValue, object, or } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 

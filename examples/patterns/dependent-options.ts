@@ -1,4 +1,5 @@
-import { merge, object, withDefault } from "@optique/core/parser";
+import { withDefault } from "@optique/core/modifiers";
+import { merge, object } from "@optique/core/parser";
 import { flag, option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";

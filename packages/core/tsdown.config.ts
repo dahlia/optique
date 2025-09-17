@@ -6,6 +6,7 @@ export default defineConfig({
     "src/doc.ts",
     "src/facade.ts",
     "src/message.ts",
+    "src/modifiers.ts",
     "src/parser.ts",
     "src/primitives.ts",
     "src/usage.ts",
