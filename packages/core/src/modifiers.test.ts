@@ -1,3 +1,4 @@
+import { object } from "@optique/core/constructs";
 import {
   envVar,
   formatMessage,
@@ -12,7 +13,7 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
-import { object, parse } from "@optique/core/parser";
+import { parse } from "@optique/core/parser";
 import { argument, constant, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
@@ -1965,5 +1966,165 @@ describe("multiple", () => {
         }
       }
     });
+  });
+});
+
+describe("multiple() error customization", () => {
+  it("should use custom tooFew error", () => {
+    const parser = multiple(argument(string()), {
+      min: 2,
+      errors: {
+        tooFew: message`You must provide at least 2 file paths.`,
+      },
+    });
+
+    // Create a context with only one value parsed
+    const singleArgState = [{
+      success: true,
+      value: "file1.txt",
+    }] as const;
+
+    const result = parser.complete(singleArgState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "You must provide at least 2 file paths.",
+      );
+    }
+  });
+
+  it("should use custom tooFew error with function", () => {
+    const parser = multiple(argument(string()), {
+      min: 3,
+      errors: {
+        tooFew: (min, actual) =>
+          message`Need ${text(min.toString())} files, but only found ${
+            text(actual.toString())
+          }.`,
+      },
+    });
+
+    // Create a context with only one value parsed
+    const singleArgState = [{
+      success: true,
+      value: "file1.txt",
+    }] as const;
+
+    const result = parser.complete(singleArgState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Need 3 files, but only found 1.",
+      );
+    }
+  });
+
+  it("should use custom tooMany error", () => {
+    const parser = multiple(argument(string()), {
+      max: 2,
+      errors: {
+        tooMany: message`Too many arguments provided. Maximum allowed is 2.`,
+      },
+    });
+
+    // Create a context with three values parsed
+    const threeArgState = [
+      { success: true, value: "file1.txt" },
+      { success: true, value: "file2.txt" },
+      { success: true, value: "file3.txt" },
+    ] as const;
+
+    const result = parser.complete(threeArgState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Too many arguments provided. Maximum allowed is 2.",
+      );
+    }
+  });
+
+  it("should use custom tooMany error with function", () => {
+    const parser = multiple(argument(string()), {
+      max: 1,
+      errors: {
+        tooMany: (max, actual) =>
+          message`Expected only ${text(max.toString())} file, but got ${
+            text(actual.toString())
+          }.`,
+      },
+    });
+
+    // Create a context with two values parsed
+    const twoArgState = [
+      { success: true, value: "file1.txt" },
+      { success: true, value: "file2.txt" },
+    ] as const;
+
+    const result = parser.complete(twoArgState);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Expected only 1 file, but got 2.",
+      );
+    }
+  });
+
+  it("should use custom unexpectedValue error for Boolean flags", () => {
+    const parser = option("--flag", {
+      errors: {
+        unexpectedValue: (value: string) =>
+          message`Flag cannot have value ${value}.`,
+      },
+    });
+
+    const result = parser.parse({
+      buffer: ["--flag=test"],
+      state: { success: true, value: false },
+      optionsTerminated: false,
+    });
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        'Flag cannot have value "test".',
+      );
+    }
+  });
+
+  it("should use custom multiple error for arguments", () => {
+    const parser = argument(string(), {
+      errors: {
+        multiple: (metavar: string) =>
+          message`Argument ${metavar} was already provided.`,
+      },
+    });
+
+    // First call succeeds
+    const firstResult = parser.parse({
+      buffer: ["first"],
+      state: undefined,
+      optionsTerminated: false,
+    });
+    assert.ok(firstResult.success);
+
+    // Second call should fail with custom error
+    const secondResult = parser.parse({
+      buffer: ["second"],
+      state: firstResult.success ? firstResult.next.state : undefined,
+      optionsTerminated: false,
+    });
+
+    assert.ok(!secondResult.success);
+    if (!secondResult.success) {
+      assert.equal(
+        formatMessage(secondResult.error),
+        'Argument "STRING" was already provided.',
+      );
+    }
   });
 });

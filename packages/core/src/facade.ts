@@ -1,14 +1,8 @@
+import { longestMatch, object } from "./constructs.ts";
 import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import { formatMessage, type Message, message } from "./message.ts";
 import { multiple, optional } from "./modifiers.ts";
-import {
-  getDocPage,
-  type InferValue,
-  longestMatch,
-  object,
-  parse,
-  type Parser,
-} from "./parser.ts";
+import { getDocPage, type InferValue, parse, type Parser } from "./parser.ts";
 import { argument, command, constant, flag } from "./primitives.ts";
 import { formatUsage } from "./usage.ts";
 import { string } from "./valueparser.ts";

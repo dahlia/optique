@@ -51,6 +51,14 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./constructs": {
+      "types": {
+        "import": "./dist/constructs.d.ts",
+        "require": "./dist/constructs.cts"
+      },
+      "import": "./dist/constructs.js",
+      "require": "./dist/constructs.cjs"
+    },
     "./doc": {
       "types": {
         "import": "./dist/doc.d.ts",

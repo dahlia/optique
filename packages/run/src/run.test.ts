@@ -1,5 +1,5 @@
+import { object } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
-import { object } from "@optique/core/parser";
 import { argument, command, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { run } from "@optique/run/run";

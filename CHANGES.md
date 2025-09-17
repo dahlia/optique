@@ -18,10 +18,16 @@ To be released.
         a dedicated `@optique/core/primitives` module. These core building
         blocks are now logically separated from parser combinators.
 
-     -  *Parser modifiers*: Moved parser modifier functions (`optional()`,
+     -  *Modifying combinators*: Moved parser modifier functions (`optional()`,
         `withDefault()`, `map()`, `multiple()`) and their related types to a
         dedicated `@optique/core/modifiers` module. These higher-order functions
         that transform and enhance parsers are now grouped together.
+
+     -  *Construct combinators*: Moved parser combinators (`object()`,
+        `tuple()`, `or()`, `merge()`, `concat()`, `longestMatch()`, `group()`)
+        and their related types to a dedicated `@optique/core/constructs` module.
+        These combinator functions that compose and combine parsers are now
+        organized in a separate module.
 
     For backward compatibility, all functions continue to be re-exported from
     `@optique/core/parser`, so existing code will work unchanged. However, the
@@ -32,7 +38,7 @@ To be released.
     // Recommended: import directly from specialized modules
     import { option, flag, argument } from "@optique/core/primitives";
     import { optional, withDefault, multiple } from "@optique/core/modifiers";
-    import { object, or, merge } from "@optique/core/parser";
+    import { object, or, merge } from "@optique/core/constructs";
 
     // Still supported: import everything from parser module (backward compatibility)
     import { option, flag, optional, withDefault, object, or } from "@optique/core/parser";

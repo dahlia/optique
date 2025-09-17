@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import { or } from "@optique/core/constructs";
 import { printError, run } from "@optique/run";
-import { or } from "@optique/core/parser";
 import { message } from "@optique/core/message";
 import { addCommand, executeAdd } from "./commands/add.ts";
 import { commitCommand, executeCommit } from "./commands/commit.ts";

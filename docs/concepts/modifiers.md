@@ -35,8 +35,9 @@ even when the wrapped parser fails to match. If the wrapped parser succeeds,
 without consuming any input or reporting an error.
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
-import { type InferValue, object } from "@optique/core/parser";
+import type { InferValue } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
@@ -58,8 +59,9 @@ This forces you to handle the case where the value might not be present,
 preventing runtime errors from assuming values exist:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
-import { type InferValue, object, parse } from "@optique/core/parser";
+import { type InferValue, parse } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
@@ -93,8 +95,9 @@ The `optional()` modifier is ideal when:
  -  The absence of a value has semantic meaning in your application
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
-import { object, parse } from "@optique/core/parser";
+import { parse } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { choice, string } from "@optique/core/valueparser";
 // ---cut-before---
@@ -134,7 +137,7 @@ that can be different types from what the parser produces, enabling patterns
 like conditional option structures.
 
 ~~~~ typescript twoslash
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 // ---cut-before---
@@ -166,8 +169,9 @@ When the default value is a different type from the parser result, `withDefault(
 creates a union type. This is particularly useful for conditional CLI structures:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
-import { type InferValue, object } from "@optique/core/parser";
+import type { InferValue } from "@optique/core/parser";
 import { flag, option } from "@optique/core/primitives";
 import { run } from "@optique/run";
 
@@ -203,7 +207,7 @@ The `withDefault()` modifier supports both static values and factory functions:
 
 ~~~~ typescript twoslash
 import { withDefault } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import os from "node:os";
@@ -238,9 +242,9 @@ errors. This allows you to handle validation failures (like missing environment
 variables) directly at the parser level:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { envVar, message } from "@optique/core/message";
 import { withDefault, WithDefaultError } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string, url } from "@optique/core/valueparser";
 // ---cut-before---
@@ -266,8 +270,8 @@ For structured error messages with rich formatting, use the `WithDefaultError`
 class which accepts a `Message` object instead of a plain string:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { WithDefaultError, withDefault } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { envVar, message } from "@optique/core/message";
 import { string } from "@optique/core/valueparser";
@@ -302,9 +306,9 @@ descriptive text instead of actual default values, which is particularly
 useful for environment variables or computed defaults:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { message, envVar } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { integer, string, url } from "@optique/core/valueparser";
 // ---cut-before---
@@ -359,9 +363,10 @@ The `withDefault()` modifier is ideal when:
  -  You need to show descriptive text for environment variables or computed defaults
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
-import { object, parse } from "@optique/core/parser";
+import { parse } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 class Server {
@@ -418,8 +423,9 @@ A powerful pattern uses `withDefault()` with different types to create condition
 CLI structures where options depend on flags:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
-import { object, parse } from "@optique/core/parser";
+import { parse } from "@optique/core/parser";
 import { flag, option } from "@optique/core/primitives";
 
 // Define conditional configuration
@@ -467,8 +473,8 @@ different types, apply formatting, or compute derived values without changing
 how the parsing itself works.
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { map, multiple } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 
@@ -543,8 +549,8 @@ all results into an array. This is essential for CLI options that can be
 repeated, such as multiple input files, include paths, or environment variables.
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
@@ -596,8 +602,9 @@ When no matches are found, `multiple()` returns an empty array rather than
 failing. This makes repeated options truly optional:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
-import { object, parse } from "@optique/core/parser";
+import { parse } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 // ---cut-before---

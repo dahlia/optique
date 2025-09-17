@@ -1,5 +1,5 @@
+import { merge, object } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
-import { merge, object } from "@optique/core/parser";
 import { flag, option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
 import { print, run } from "@optique/run";

@@ -49,7 +49,8 @@ mutually exclusive options. It provides the discriminator field that enables
 type-safe pattern matching:
 
 ~~~~ typescript twoslash
-import { object, or, parse } from "@optique/core/parser";
+import { object, or } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
@@ -213,7 +214,7 @@ Required confirmation flags
 :   Operations that need explicit user confirmation
 
     ~~~~ typescript twoslash
-    import { object } from "@optique/core/parser";
+    import { object } from "@optique/core/constructs";
     import { argument, flag } from "@optique/core/primitives";
     import { string } from "@optique/core/valueparser";
     // ---cut-before---
@@ -227,8 +228,8 @@ Dependent options
 :   When a flag's presence enables additional options
 
     ~~~~ typescript twoslash
+    import { object } from "@optique/core/constructs";
     import { withDefault } from "@optique/core/modifiers";
-    import { object } from "@optique/core/parser";
     import { flag, option } from "@optique/core/primitives";
 
     // When --advanced is not provided, parser fails and defaults are used
@@ -246,8 +247,8 @@ Mode selection
 :   When different flags trigger different parsing modes
 
     ~~~~ typescript twoslash
+    import { object } from "@optique/core/constructs";
     import { optional } from "@optique/core/modifiers";
-    import { object } from "@optique/core/parser";
     import { flag } from "@optique/core/primitives";
     // ---cut-before---
     const parser = object({
@@ -311,7 +312,7 @@ Arguments are consumed in the order they appear, and the parser will fail
 if it encounters an option where it expects a positional argument:
 
 ~~~~ typescript twoslash
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option, argument } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
@@ -355,7 +356,7 @@ subcommands. It matches a specific command name and then applies an inner parser
 to the remaining arguments.
 
 ~~~~ typescript twoslash
-import { object, or } from "@optique/core/parser";
+import { object, or } from "@optique/core/constructs";
 import { command, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
@@ -380,7 +381,8 @@ conflicts where option parsers might try to interpret command names as invalid
 options.
 
 ~~~~ typescript twoslash
-import { object, or, parse } from "@optique/core/parser";
+import { object, or } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
 import { command, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
@@ -427,7 +429,7 @@ You can nest commands multiple levels deep by using `command()` parsers as inner
 parsers:
 
 ~~~~ typescript twoslash
-import { object, or } from "@optique/core/parser";
+import { object, or } from "@optique/core/constructs";
 import { argument, command, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 // ---cut-before---
@@ -540,7 +542,8 @@ More commonly, you'll combine multiple primitive parsers using
 [structural combinators](./constructs.md) like `object()`:
 
 ~~~~ typescript twoslash
-import { type InferValue, object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
+import type { InferValue } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
@@ -573,8 +576,8 @@ if they're not provided. Use [modifying combinators](./modifiers.md) like
 `optional()` or `withDefault()` to make them optional:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { optional, withDefault } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 
@@ -590,8 +593,8 @@ const parser = object({
 Use the `multiple()` combinator to allow repeated options or arguments:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 

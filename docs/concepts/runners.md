@@ -27,7 +27,8 @@ parsing operation. It takes a parser and an array of string arguments, returning
 a result object that you must handle manually.
 
 ~~~~ typescript twoslash
-import { object, parse } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { formatMessage } from "@optique/core/message";
@@ -58,7 +59,8 @@ The `parse()` function returns a discriminated union type that indicates
 success or failure:
 
 ~~~~ typescript twoslash
-import { object, parse } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { formatMessage } from "@optique/core/message";
@@ -90,8 +92,8 @@ and formatted error messages while still giving you control over program
 behavior through callbacks.
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { run } from "@optique/core/facade";
-import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
@@ -142,8 +144,8 @@ This approach automatically handles:
 The `RunOptions` interface provides extensive customization:
 
 ~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
 import { run } from "@optique/core/facade";
-import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
@@ -185,11 +187,11 @@ with zero configuration required. It automatically handles argument extraction,
 terminal detection, and process exit.
 
 ~~~~ typescript twoslash
-import { run, print } from "@optique/run";
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
+import { run, print } from "@optique/run";
 
 const parser = object({
   name: option("-n", "--name", string()),
@@ -223,11 +225,11 @@ The function automatically:
 You can still customize behavior when needed:
 
 ~~~~ typescript twoslash
-import { run } from "@optique/run";
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
+import { run } from "@optique/run";
 
 const parser = object({ name: option("-n", "--name", string()) });
 
@@ -252,11 +254,11 @@ convenience and standard CLI behavior.
 for fine-tuning behavior:
 
 ~~~~ typescript twoslash
-import { run } from "@optique/run";
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
+import { run } from "@optique/run";
 
 const parser = object({
   name: option("-n", "--name", string()),
@@ -287,10 +289,10 @@ const config = run(parser, {
 Enable built-in help functionality with different modes:
 
 ~~~~ typescript twoslash
-import { run } from "@optique/run";
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
 
 const parser = object({ name: option("-n", "--name", string()) });
 
@@ -316,10 +318,10 @@ const result4 = run(parser, {});
 Enable built-in version functionality with flexible configuration:
 
 ~~~~ typescript twoslash
-import { run } from "@optique/run";
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
 
 const parser = object({ name: option("-n", "--name", string()) });
 
@@ -360,11 +362,11 @@ Both runner functions support displaying default values in help text when
 options or arguments are created with `withDefault()`:
 
 ~~~~ typescript twoslash
-import { run } from "@optique/run";
+import { object } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
-import { object } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
+import { run } from "@optique/run";
 
 const parser = object({
   name: option("-n", "--name", string()),
@@ -397,11 +399,11 @@ the `brief`, `description`, and `footer` options. These fields allow you to
 provide comprehensive documentation without modifying parser definitions:
 
 ~~~~ typescript twoslash
-import { run } from "@optique/run";
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
+import { run } from "@optique/run";
 
 const parser = object("Options", {
   input: option("-i", "--input", string()),
@@ -470,7 +472,8 @@ The `InferValue<T>` utility type extracts the result type from any parser,
 enabling type-safe code when working with parser results programmatically.
 
 ~~~~ typescript twoslash
-import { type InferValue, type Parser, object, or } from "@optique/core/parser";
+import { object, or } from "@optique/core/constructs";
+import type { InferValue, Parser } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 

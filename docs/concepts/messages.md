@@ -523,7 +523,7 @@ Parser combinators like `or()` and `longestMatch()` also support error
 customization for better failure reporting:
 
 ~~~~ typescript twoslash
-import { or } from "@optique/core/parser";
+import { or } from "@optique/core/constructs";
 import { constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message, optionName } from "@optique/core/message";
@@ -546,7 +546,7 @@ Object parsers can customize errors for missing required fields and
 unexpected properties:
 
 ~~~~ typescript twoslash
-import { object } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { message, optionName } from "@optique/core/message";

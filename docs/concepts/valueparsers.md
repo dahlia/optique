@@ -1202,7 +1202,8 @@ function date(options: DateParserOptions = {}): ValueParser<Date> {
   };
 }
 // ---cut-before---
-import { object, parse } from "@optique/core/parser";
+import { object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
 import { argument, option } from "@optique/core/primitives";
 import { integer } from "@optique/core/valueparser";
 

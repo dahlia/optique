@@ -1,5 +1,5 @@
+import { object, or } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
-import { object, or } from "@optique/core/parser";
 import { argument, constant, option } from "@optique/core/primitives";
 import { integer, string, url } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
