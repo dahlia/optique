@@ -10,6 +10,7 @@ import {
   timeZone,
   zonedDateTime,
 } from "@optique/temporal";
+import { message } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -444,5 +445,231 @@ describe("timeZone", () => {
   it("should support custom metavar", () => {
     const customParser = timeZone({ metavar: "TZ" });
     assert.equal(customParser.metavar, "TZ");
+  });
+});
+
+describe("error customization", () => {
+  describe("instant parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = instant({
+        errors: {
+          invalidFormat: message`Please provide a valid timestamp.`,
+        },
+      });
+
+      const result = parser.parse("invalid-instant");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please provide a valid timestamp." },
+      ]);
+    });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = instant({
+        errors: {
+          invalidFormat: (input) =>
+            message`${input} is not a valid ISO 8601 instant.`,
+        },
+      });
+
+      const result = parser.parse("bad-timestamp");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "bad-timestamp" },
+        { type: "text", text: " is not a valid ISO 8601 instant." },
+      ]);
+    });
+  });
+
+  describe("duration parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = duration({
+        errors: {
+          invalidFormat: message`Duration must be in ISO 8601 format.`,
+        },
+      });
+
+      const result = parser.parse("not-a-duration");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Duration must be in ISO 8601 format." },
+      ]);
+    });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = duration({
+        errors: {
+          invalidFormat: (input) =>
+            message`${input} is not a valid duration format like PT1H30M.`,
+        },
+      });
+
+      const result = parser.parse("invalid");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "invalid" },
+        { type: "text", text: " is not a valid duration format like PT1H30M." },
+      ]);
+    });
+  });
+
+  describe("zonedDateTime parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = zonedDateTime({
+        errors: {
+          invalidFormat: message`Invalid zoned datetime format.`,
+        },
+      });
+
+      const result = parser.parse("bad-datetime");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Invalid zoned datetime format." },
+      ]);
+    });
+  });
+
+  describe("plainDate parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = plainDate({
+        errors: {
+          invalidFormat: message`Date must be in YYYY-MM-DD format.`,
+        },
+      });
+
+      const result = parser.parse("invalid-date");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Date must be in YYYY-MM-DD format." },
+      ]);
+    });
+  });
+
+  describe("plainTime parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = plainTime({
+        errors: {
+          invalidFormat: message`Time must be in HH:MM:SS format.`,
+        },
+      });
+
+      const result = parser.parse("bad-time");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Time must be in HH:MM:SS format." },
+      ]);
+    });
+  });
+
+  describe("plainDateTime parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = plainDateTime({
+        errors: {
+          invalidFormat: message`DateTime must be in ISO format.`,
+        },
+      });
+
+      const result = parser.parse("invalid-datetime");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "DateTime must be in ISO format." },
+      ]);
+    });
+  });
+
+  describe("plainYearMonth parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = plainYearMonth({
+        errors: {
+          invalidFormat: message`Year-month must be in YYYY-MM format.`,
+        },
+      });
+
+      const result = parser.parse("invalid-ym");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Year-month must be in YYYY-MM format." },
+      ]);
+    });
+  });
+
+  describe("plainMonthDay parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = plainMonthDay({
+        errors: {
+          invalidFormat: message`Month-day must be in --MM-DD format.`,
+        },
+      });
+
+      const result = parser.parse("invalid-md");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Month-day must be in --MM-DD format." },
+      ]);
+    });
+  });
+
+  describe("timeZone parser", () => {
+    it("should use custom invalidFormat error message", () => {
+      const parser = timeZone({
+        errors: {
+          invalidFormat: message`Invalid timezone identifier.`,
+        },
+      });
+
+      const result = parser.parse("Invalid/Timezone");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Invalid timezone identifier." },
+      ]);
+    });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = timeZone({
+        errors: {
+          invalidFormat: (input) =>
+            message`${input} is not a valid IANA timezone identifier.`,
+        },
+      });
+
+      const result = parser.parse("Bad/Zone");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "Bad/Zone" },
+        { type: "text", text: " is not a valid IANA timezone identifier." },
+      ]);
+    });
+  });
+
+  describe("error fallback behavior", () => {
+    it("should fall back to default error when custom error is not provided", () => {
+      const parser = instant(); // No errors customization
+
+      const result = parser.parse("invalid-instant");
+      assert.ok(!result.success);
+      // Should use default error message
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "text" && term.text.includes("Invalid instant")
+        ),
+      );
+    });
+
+    it("should work correctly when errors option is provided but specific error is not", () => {
+      const parser = instant({
+        errors: {
+          // No invalidFormat specified, should use default
+        },
+      });
+
+      const result = parser.parse("bad-instant");
+      assert.ok(!result.success);
+      // Should use default error message
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "text" && term.text.includes("Invalid instant")
+        ),
+      );
+    });
   });
 });

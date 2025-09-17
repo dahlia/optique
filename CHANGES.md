@@ -128,6 +128,33 @@ To be released.
         );
         ~~~~
 
+     -  Value parser error customization: All value parsers now support
+        customizable error messages through an `errors` option in their
+        configuration. This enables application-specific error messages
+        that better guide users:
+
+        ~~~~ typescript
+        // Core value parsers
+        const portOption = option("--port", integer({
+          min: 1024,
+          max: 65535,
+          errors: {
+            invalidInteger: message`Port must be a whole number.`,
+            belowMinimum: (value, min) =>
+              message`Port ${text(value.toString())} too low. Use ${text(min.toString())} or higher.`,
+            aboveMaximum: (value, max) =>
+              message`Port ${text(value.toString())} too high. Maximum is ${text(max.toString())}.`
+          }
+        }));
+
+        const formatOption = option("--format", choice(["json", "yaml", "xml"], {
+          errors: {
+            invalidChoice: (input, choices) =>
+              message`Format ${input} not supported. Available: ${values(choices)}.`
+          }
+        }));
+        ~~~~
+
      -  Function-based error messages: Error options can be functions that
         receive context parameters to generate dynamic error messages:
 
@@ -158,6 +185,78 @@ To be released.
 [#19]: https://github.com/dahlia/optique/issues/19
 [#21]: https://github.com/dahlia/optique/issues/21
 [#27]: https://github.com/dahlia/optique/issues/27
+
+### @optique/run
+
+ -  Added comprehensive error message customization for the `path()` value
+    parser. Path validation now supports custom error messages for all
+    validation scenarios, enabling more user-friendly error messages in
+    file and directory operations:
+
+    ~~~~ typescript
+    import { path } from "@optique/run/valueparser";
+    import { message, values } from "@optique/core/message";
+
+    // Configuration file with custom validation errors
+    const configFile = option("--config", path({
+      mustExist: true,
+      type: "file",
+      extensions: [".json", ".yaml", ".yml"],
+      errors: {
+        pathNotFound: (input) =>
+          message`Configuration file ${input} not found.`,
+        notAFile: message`Configuration must be a file, not a directory.`,
+        invalidExtension: (input, extensions, actualExt) =>
+          message`Config file ${input} has wrong extension ${actualExt}. Expected: ${values(extensions)}.`,
+      }
+    }));
+    ~~~~
+
+    The `PathOptions` interface now includes an `errors` field with support
+    for customizing `pathNotFound`, `notAFile`, `notADirectory`,
+    `invalidExtension`, and `parentNotFound` error messages. All error
+    customization options support both static `Message` objects and dynamic
+    functions that receive validation context parameters.  [[#27]]
+
+### @optique/temporal
+
+ -  Added comprehensive error message customization for all temporal value
+    parsers. This enables application-specific error messages for date, time,
+    and timezone validation scenarios:
+
+    ~~~~ typescript
+    import { instant, duration, timeZone } from "@optique/temporal";
+    import { message } from "@optique/core/message";
+
+    // Timestamp parser with user-friendly errors
+    const startTime = option("--start", instant({
+      errors: {
+        invalidFormat: (input) =>
+          message`Start time ${input} is invalid. Use ISO 8601 format like 2023-12-25T10:30:00Z.`,
+      }
+    }));
+
+    // Duration parser with contextual errors
+    const timeout = option("--timeout", duration({
+      errors: {
+        invalidFormat: message`Timeout must be in ISO 8601 duration format (e.g., PT30S, PT5M, PT1H).`,
+      }
+    }));
+
+    // Timezone parser with helpful suggestions
+    const timezone = option("--timezone", timeZone({
+      errors: {
+        invalidFormat: (input) =>
+          message`Timezone ${input} is not valid. Use IANA identifiers like America/New_York or UTC.`,
+      }
+    }));
+    ~~~~
+
+    All temporal parsers (`instant()`, `duration()`, `zonedDateTime()`,
+    `plainDate()`, `plainTime()`, `plainDateTime()`, `plainYearMonth()`,
+    `plainMonthDay()`, `timeZone()`) now support an `errors` option with
+    `invalidFormat` error message customization. This maintains consistency
+    with the error customization system across all Optique packages.  [[#27]]
 
 
 Version 0.4.3

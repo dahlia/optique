@@ -1,4 +1,4 @@
-import { formatMessage } from "@optique/core/message";
+import { formatMessage, message, values } from "@optique/core/message";
 import { path } from "@optique/run/valueparser";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -382,6 +382,205 @@ describe("path", () => {
       if (result.success) {
         assert.equal(result.value, "any-file.any");
       }
+    });
+  });
+
+  describe("error customization", () => {
+    it("should use custom invalidExtension error message", () => {
+      const parser = path({
+        extensions: [".txt", ".md"],
+        errors: {
+          invalidExtension: message`Please provide a text or markdown file.`,
+        },
+      });
+
+      const result = parser.parse("document.pdf");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please provide a text or markdown file." },
+      ]);
+    });
+
+    it("should use function-based invalidExtension error message", () => {
+      const parser = path({
+        extensions: [".json", ".yaml"],
+        errors: {
+          invalidExtension: (input, extensions, actualExt) =>
+            message`File ${input} has extension ${actualExt}. Expected: ${
+              values(extensions)
+            }.`,
+        },
+      });
+
+      const result = parser.parse("config.xml");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "File " },
+        { type: "value", value: "config.xml" },
+        { type: "text", text: " has extension " },
+        { type: "value", value: ".xml" },
+        { type: "text", text: ". Expected: " },
+        { type: "values", values: [".json", ".yaml"] },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should use custom pathNotFound error message", () => {
+      const parser = path({
+        mustExist: true,
+        errors: {
+          pathNotFound: message`The specified path could not be found.`,
+        },
+      });
+
+      const result = parser.parse("/nonexistent/path");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "The specified path could not be found." },
+      ]);
+    });
+
+    it("should use function-based pathNotFound error message", () => {
+      const parser = path({
+        mustExist: true,
+        errors: {
+          pathNotFound: (input) =>
+            message`Cannot locate file or directory: ${input}`,
+        },
+      });
+
+      const result = parser.parse("/missing/file.txt");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Cannot locate file or directory: " },
+        { type: "value", value: "/missing/file.txt" },
+      ]);
+    });
+
+    it("should use custom notAFile error message", () => {
+      const tempDir = createTempDir();
+      try {
+        const parser = path({
+          mustExist: true,
+          type: "file",
+          errors: {
+            notAFile: message`Expected a file, not a directory.`,
+          },
+        });
+
+        const result = parser.parse(tempDir);
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected a file, not a directory." },
+        ]);
+      } finally {
+        cleanupDir(tempDir);
+      }
+    });
+
+    it("should use custom notADirectory error message", () => {
+      const tempDir = createTempDir();
+      try {
+        const testFile = join(tempDir, "test.txt");
+        writeFileSync(testFile, "content");
+
+        const parser = path({
+          mustExist: true,
+          type: "directory",
+          errors: {
+            notADirectory: (input) =>
+              message`${input} is a file, but a directory was expected.`,
+          },
+        });
+
+        const result = parser.parse(testFile);
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, [
+          { type: "value", value: testFile },
+          { type: "text", text: " is a file, but a directory was expected." },
+        ]);
+      } finally {
+        cleanupDir(tempDir);
+      }
+    });
+
+    it("should use custom parentNotFound error message", () => {
+      const parser = path({
+        allowCreate: true,
+        errors: {
+          parentNotFound: message`Parent directory is missing.`,
+        },
+      });
+
+      const result = parser.parse("/nonexistent/parent/newfile.txt");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Parent directory is missing." },
+      ]);
+    });
+
+    it("should use function-based parentNotFound error message", () => {
+      const parser = path({
+        allowCreate: true,
+        errors: {
+          parentNotFound: (parentDir) =>
+            message`Parent directory ${parentDir} must exist first.`,
+        },
+      });
+
+      const result = parser.parse("/nonexistent/parent/newfile.txt");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Parent directory " },
+        { type: "value", value: "/nonexistent/parent" },
+        { type: "text", text: " must exist first." },
+      ]);
+    });
+
+    it("should fall back to default error when custom error is not provided", () => {
+      const tempDir = createTempDir();
+      try {
+        const parser = path({
+          mustExist: true,
+          type: "file",
+          errors: {
+            pathNotFound: message`Custom path not found.`,
+            // notAFile is not customized, should use default
+          },
+        });
+
+        // Test custom error
+        const result1 = parser.parse("/nonexistent/file");
+        assert.ok(!result1.success);
+        assert.deepEqual(result1.error, [
+          { type: "text", text: "Custom path not found." },
+        ]);
+
+        // Test default error fallback
+        const result2 = parser.parse(tempDir);
+        assert.ok(!result2.success);
+        // Should use default error message for notAFile
+        assert.ok(
+          result2.error.some((term) =>
+            term.type === "text" && term.text.includes("Expected a file, but")
+          ),
+        );
+      } finally {
+        cleanupDir(tempDir);
+      }
+    });
+
+    it("should work correctly when no errors option is provided", () => {
+      const parser = path({ mustExist: true });
+
+      const result = parser.parse("/nonexistent/path");
+      assert.ok(!result.success);
+      // Should use default error message
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "text" && term.text.includes("does not exist")
+        ),
+      );
     });
   });
 });

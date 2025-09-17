@@ -77,6 +77,19 @@ export interface StringOptions {
    * Optional regular expression pattern that the string must match.
    */
   readonly pattern?: RegExp;
+
+  /**
+   * Custom error messages for various string parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input doesn't match the pattern.
+     * Can be a static message or a function that receives the input and pattern.
+     * @since 0.5.0
+     */
+    patternMismatch?: Message | ((input: string, pattern: RegExp) => Message);
+  };
 }
 
 /**
@@ -99,6 +112,21 @@ export interface ChoiceOptions {
    * @default `false`
    */
   readonly caseInsensitive?: boolean;
+
+  /**
+   * Custom error messages for choice parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input doesn't match any of the valid choices.
+     * Can be a static message or a function that receives the input and valid choices.
+     * @since 0.5.0
+     */
+    invalidChoice?:
+      | Message
+      | ((input: string, choices: readonly string[]) => Message);
+  };
 }
 
 /**
@@ -145,9 +173,11 @@ export function choice<const T extends string>(
       if (index < 0) {
         return {
           success: false,
-          error: message`Expected one of ${
-            values.join(", ")
-          }, but got ${input}.`,
+          error: options.errors?.invalidChoice
+            ? (typeof options.errors.invalidChoice === "function"
+              ? options.errors.invalidChoice(input, values)
+              : options.errors.invalidChoice)
+            : message`Expected one of ${values.join(", ")}, but got ${input}.`,
         };
       }
       return { success: true, value: values[index] };
@@ -174,9 +204,13 @@ export function string(options: StringOptions = {}): ValueParser<string> {
       if (options.pattern != null && !options.pattern.test(input)) {
         return {
           success: false,
-          error: message`Expected a string matching pattern ${
-            text(options.pattern.source)
-          }, but got ${input}.`,
+          error: options.errors?.patternMismatch
+            ? (typeof options.errors.patternMismatch === "function"
+              ? options.errors.patternMismatch(input, options.pattern)
+              : options.errors.patternMismatch)
+            : message`Expected a string matching pattern ${
+              text(options.pattern.source)
+            }, but got ${input}.`,
         };
       }
       return { success: true, value: input };
@@ -219,6 +253,33 @@ export interface IntegerOptionsNumber {
    * no maximum is enforced.
    */
   readonly max?: number;
+
+  /**
+   * Custom error messages for integer parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid integer.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidInteger?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when integer is below minimum value.
+     * Can be a static message or a function that receives the value and minimum.
+     * @since 0.5.0
+     */
+    belowMinimum?: Message | ((value: number, min: number) => Message);
+
+    /**
+     * Custom error message when integer is above maximum value.
+     * Can be a static message or a function that receives the value and maximum.
+     * @since 0.5.0
+     */
+    aboveMaximum?: Message | ((value: number, max: number) => Message);
+  };
 }
 
 /**
@@ -250,6 +311,33 @@ export interface IntegerOptionsBigInt {
    * no maximum is enforced.
    */
   readonly max?: bigint;
+
+  /**
+   * Custom error messages for bigint integer parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid integer.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidInteger?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when integer is below minimum value.
+     * Can be a static message or a function that receives the value and minimum.
+     * @since 0.5.0
+     */
+    belowMinimum?: Message | ((value: bigint, min: bigint) => Message);
+
+    /**
+     * Custom error message when integer is above maximum value.
+     * Can be a static message or a function that receives the value and maximum.
+     * @since 0.5.0
+     */
+    aboveMaximum?: Message | ((value: bigint, max: bigint) => Message);
+  };
 }
 
 /**
@@ -315,7 +403,11 @@ export function integer(
           if (e instanceof SyntaxError) {
             return {
               success: false,
-              error: message`Expected a valid integer, but got ${input}.`,
+              error: options.errors?.invalidInteger
+                ? (typeof options.errors.invalidInteger === "function"
+                  ? options.errors.invalidInteger(input)
+                  : options.errors.invalidInteger)
+                : message`Expected a valid integer, but got ${input}.`,
             };
           }
           throw e;
@@ -323,16 +415,24 @@ export function integer(
         if (options.min != null && value < options.min) {
           return {
             success: false,
-            error: message`Expected a value greater than or equal to ${
-              text(options.min.toLocaleString("en"))
-            }, but got ${input}.`,
+            error: options.errors?.belowMinimum
+              ? (typeof options.errors.belowMinimum === "function"
+                ? options.errors.belowMinimum(value, options.min)
+                : options.errors.belowMinimum)
+              : message`Expected a value greater than or equal to ${
+                text(options.min.toLocaleString("en"))
+              }, but got ${input}.`,
           };
         } else if (options.max != null && value > options.max) {
           return {
             success: false,
-            error: message`Expected a value less than or equal to ${
-              text(options.max.toLocaleString("en"))
-            }, but got ${input}.`,
+            error: options.errors?.aboveMaximum
+              ? (typeof options.errors.aboveMaximum === "function"
+                ? options.errors.aboveMaximum(value, options.max)
+                : options.errors.aboveMaximum)
+              : message`Expected a value less than or equal to ${
+                text(options.max.toLocaleString("en"))
+              }, but got ${input}.`,
           };
         }
         return { success: true, value };
@@ -348,23 +448,35 @@ export function integer(
       if (!input.match(/^\d+$/)) {
         return {
           success: false,
-          error: message`Expected a valid integer, but got ${input}.`,
+          error: options?.errors?.invalidInteger
+            ? (typeof options.errors.invalidInteger === "function"
+              ? options.errors.invalidInteger(input)
+              : options.errors.invalidInteger)
+            : message`Expected a valid integer, but got ${input}.`,
         };
       }
       const value = Number.parseInt(input);
       if (options?.min != null && value < options.min) {
         return {
           success: false,
-          error: message`Expected a value greater than or equal to ${
-            text(options.min.toLocaleString("en"))
-          }, but got ${input}.`,
+          error: options.errors?.belowMinimum
+            ? (typeof options.errors.belowMinimum === "function"
+              ? options.errors.belowMinimum(value, options.min)
+              : options.errors.belowMinimum)
+            : message`Expected a value greater than or equal to ${
+              text(options.min.toLocaleString("en"))
+            }, but got ${input}.`,
         };
       } else if (options?.max != null && value > options.max) {
         return {
           success: false,
-          error: message`Expected a value less than or equal to ${
-            text(options.max.toLocaleString("en"))
-          }, but got ${input}.`,
+          error: options.errors?.aboveMaximum
+            ? (typeof options.errors.aboveMaximum === "function"
+              ? options.errors.aboveMaximum(value, options.max)
+              : options.errors.aboveMaximum)
+            : message`Expected a value less than or equal to ${
+              text(options.max.toLocaleString("en"))
+            }, but got ${input}.`,
         };
       }
       return { success: true, value };
@@ -414,6 +526,33 @@ export interface FloatOptions {
    * @default `false`
    */
   readonly allowInfinity?: boolean;
+
+  /**
+   * Custom error messages for float parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid number.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidNumber?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when number is below minimum value.
+     * Can be a static message or a function that receives the value and minimum.
+     * @since 0.5.0
+     */
+    belowMinimum?: Message | ((value: number, min: number) => Message);
+
+    /**
+     * Custom error message when number is above maximum value.
+     * Can be a static message or a function that receives the value and maximum.
+     * @since 0.5.0
+     */
+    aboveMaximum?: Message | ((value: number, max: number) => Message);
+  };
 }
 
 /**
@@ -452,29 +591,45 @@ export function float(options: FloatOptions = {}): ValueParser<number> {
         if (Number.isNaN(value)) {
           return {
             success: false,
-            error: message`Expected a valid number, but got ${input}.`,
+            error: options.errors?.invalidNumber
+              ? (typeof options.errors.invalidNumber === "function"
+                ? options.errors.invalidNumber(input)
+                : options.errors.invalidNumber)
+              : message`Expected a valid number, but got ${input}.`,
           };
         }
       } else {
         return {
           success: false,
-          error: message`Expected a valid number, but got ${input}.`,
+          error: options.errors?.invalidNumber
+            ? (typeof options.errors.invalidNumber === "function"
+              ? options.errors.invalidNumber(input)
+              : options.errors.invalidNumber)
+            : message`Expected a valid number, but got ${input}.`,
         };
       }
 
       if (options.min != null && value < options.min) {
         return {
           success: false,
-          error: message`Expected a value greater than or equal to ${
-            text(options.min.toLocaleString("en"))
-          }, but got ${input}.`,
+          error: options.errors?.belowMinimum
+            ? (typeof options.errors.belowMinimum === "function"
+              ? options.errors.belowMinimum(value, options.min)
+              : options.errors.belowMinimum)
+            : message`Expected a value greater than or equal to ${
+              text(options.min.toLocaleString("en"))
+            }, but got ${input}.`,
         };
       } else if (options.max != null && value > options.max) {
         return {
           success: false,
-          error: message`Expected a value less than or equal to ${
-            text(options.max.toLocaleString("en"))
-          }, but got ${input}.`,
+          error: options.errors?.aboveMaximum
+            ? (typeof options.errors.aboveMaximum === "function"
+              ? options.errors.aboveMaximum(value, options.max)
+              : options.errors.aboveMaximum)
+            : message`Expected a value less than or equal to ${
+              text(options.max.toLocaleString("en"))
+            }, but got ${input}.`,
         };
       }
       return { success: true, value };
@@ -504,6 +659,28 @@ export interface UrlOptions {
    * If not specified, any protocol is allowed.
    */
   readonly allowedProtocols?: readonly string[];
+
+  /**
+   * Custom error messages for URL parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid URL.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidUrl?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when URL protocol is not allowed.
+     * Can be a static message or a function that receives the protocol and allowed protocols.
+     * @since 0.5.0
+     */
+    disallowedProtocol?:
+      | Message
+      | ((protocol: string, allowedProtocols: readonly string[]) => Message);
+  };
 }
 
 /**
@@ -525,7 +702,11 @@ export function url(options: UrlOptions = {}): ValueParser<URL> {
       if (!URL.canParse(input)) {
         return {
           success: false,
-          error: message`Invalid URL: ${input}.`,
+          error: options.errors?.invalidUrl
+            ? (typeof options.errors.invalidUrl === "function"
+              ? options.errors.invalidUrl(input)
+              : options.errors.invalidUrl)
+            : message`Invalid URL: ${input}.`,
         };
       }
       const url = new URL(input);
@@ -534,8 +715,14 @@ export function url(options: UrlOptions = {}): ValueParser<URL> {
       ) {
         return {
           success: false,
-          error:
-            message`URL protocol ${url.protocol} is not allowed. Allowed protocols: ${
+          error: options.errors?.disallowedProtocol
+            ? (typeof options.errors.disallowedProtocol === "function"
+              ? options.errors.disallowedProtocol(
+                url.protocol,
+                options.allowedProtocols!,
+              )
+              : options.errors.disallowedProtocol)
+            : message`URL protocol ${url.protocol} is not allowed. Allowed protocols: ${
               allowedProtocols.join(", ")
             }.`,
         };
@@ -559,6 +746,19 @@ export interface LocaleOptions {
    * @default `"LOCALE"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for locale parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid locale identifier.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidLocale?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -582,7 +782,11 @@ export function locale(options: LocaleOptions = {}): ValueParser<Intl.Locale> {
         if (e instanceof RangeError) {
           return {
             success: false,
-            error: message`Invalid locale: ${input}.`,
+            error: options.errors?.invalidLocale
+              ? (typeof options.errors.invalidLocale === "function"
+                ? options.errors.invalidLocale(input)
+                : options.errors.invalidLocale)
+              : message`Invalid locale: ${input}.`,
           };
         }
         throw e;
@@ -622,6 +826,28 @@ export interface UuidOptions {
    * allowed versions. If not specified, any valid UUID format is accepted.
    */
   readonly allowedVersions?: readonly number[];
+
+  /**
+   * Custom error messages for UUID parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid UUID format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidUuid?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when UUID version is not allowed.
+     * Can be a static message or a function that receives the version and allowed versions.
+     * @since 0.5.0
+     */
+    disallowedVersion?:
+      | Message
+      | ((version: number, allowedVersions: readonly number[]) => Message);
+  };
 }
 
 /**
@@ -647,8 +873,11 @@ export function uuid(options: UuidOptions = {}): ValueParser<Uuid> {
       if (!uuidRegex.test(input)) {
         return {
           success: false,
-          error:
-            message`Expected a valid UUID in format ${"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}, but got ${input}.`,
+          error: options.errors?.invalidUuid
+            ? (typeof options.errors.invalidUuid === "function"
+              ? options.errors.invalidUuid(input)
+              : options.errors.invalidUuid)
+            : message`Expected a valid UUID in format ${"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}, but got ${input}.`,
         };
       }
 
@@ -661,22 +890,30 @@ export function uuid(options: UuidOptions = {}): ValueParser<Uuid> {
         const version = parseInt(versionChar, 16);
 
         if (!options.allowedVersions.includes(version)) {
-          let expectedVersions = message``;
-          let i = 0;
-          for (const v of options.allowedVersions) {
-            expectedVersions = i < 1
-              ? message`${expectedVersions}${v.toLocaleString("en")}`
-              : i + 1 >= options.allowedVersions.length
-              ? message`${expectedVersions}, or ${v.toLocaleString("en")}`
-              : message`${expectedVersions}, ${v.toLocaleString("en")}`;
-            i++;
-          }
           return {
             success: false,
-            error:
-              message`Expected UUID version ${expectedVersions}, but got version ${
-                version.toLocaleString("en")
-              }.`,
+            error: options.errors?.disallowedVersion
+              ? (typeof options.errors.disallowedVersion === "function"
+                ? options.errors.disallowedVersion(
+                  version,
+                  options.allowedVersions,
+                )
+                : options.errors.disallowedVersion)
+              : (() => {
+                let expectedVersions = message``;
+                let i = 0;
+                for (const v of options.allowedVersions) {
+                  expectedVersions = i < 1
+                    ? message`${expectedVersions}${v.toLocaleString("en")}`
+                    : i + 1 >= options.allowedVersions.length
+                    ? message`${expectedVersions}, or ${v.toLocaleString("en")}`
+                    : message`${expectedVersions}, ${v.toLocaleString("en")}`;
+                  i++;
+                }
+                return message`Expected UUID version ${expectedVersions}, but got version ${
+                  version.toLocaleString("en")
+                }.`;
+              })(),
           };
         }
       }

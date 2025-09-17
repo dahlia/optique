@@ -582,6 +582,148 @@ const inputFiles = multiple(option("--input", string()), {
 });
 ~~~~
 
+### Value parser error customization
+
+Value parsers can also provide custom error messages for validation failures.
+This allows you to give more specific feedback when user input doesn't meet
+the expected format or constraints.
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/parser";
+import { string, integer, choice, url } from "@optique/core/valueparser";
+import { message, optionName, values, text } from "@optique/core/message";
+
+// String parser with pattern validation
+const codeOption = option("--code", string({
+  pattern: /^[A-Z]{3}-\d{4}$/,
+  errors: {
+    patternMismatch: (input, pattern) =>
+      message`Code ${input} must follow format ABC-1234.`
+  }
+}));
+
+// Integer parser with range validation
+const portOption = option("--port", integer({
+  min: 1024,
+  max: 65535,
+  errors: {
+    invalidInteger: message`Port must be a whole number.`,
+    belowMinimum: (value, min) =>
+      message`Port ${text(value.toString())} too low. Use ${text(min.toString())} or higher.`,
+    aboveMaximum: (value, max) =>
+      message`Port ${text(value.toString())} too high. Maximum is ${text(max.toString())}.`
+  }
+}));
+
+// Choice parser with custom suggestions
+const formatOption = option("--format", choice(["json", "yaml", "xml"], {
+  errors: {
+    invalidChoice: (input, choices) =>
+      message`Format ${input} not supported. Available: ${values(choices)}.`
+  }
+}));
+
+// URL parser with protocol restrictions
+const endpointOption = option("--endpoint", url({
+  allowedProtocols: ["https:"],
+  errors: {
+    invalidUrl: message`Please provide a valid web address.`,
+    disallowedProtocol: (protocol, allowedProtocols) =>
+      message`Only secure connections allowed. Use ${values(allowedProtocols)} instead of ${protocol}.`
+  }
+}));
+~~~~
+
+Value parser error customization works with all built-in parsers:
+
+`string()`
+:   Custom `patternMismatch` errors for regex validation
+
+`integer()` and `float()`
+:   Custom `invalidInteger`/`invalidNumber`, `belowMinimum`, and `aboveMaximum`
+    errors
+
+`choice()`
+:   Custom `invalidChoice` errors with available options
+
+`url()`
+:   Custom `invalidUrl` and `disallowedProtocol` errors
+
+`locale()`
+:   Custom `invalidLocale` errors for malformed locale identifiers
+
+`uuid()`
+:   Custom `invalidUuid` and `disallowedVersion` errors
+
+### Additional packages
+
+The error customization system also extends to additional Optique packages:
+
+#### `@optique/run` package
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/parser";
+import { path } from "@optique/run/valueparser";
+import { message, text, values } from "@optique/core/message";
+
+// File path parser with custom validation errors
+const configFile = option("--config", path({
+  mustExist: true,
+  type: "file",
+  extensions: [".json", ".yaml", ".yml"],
+  errors: {
+    pathNotFound: (input) =>
+      message`Configuration file ${input} not found.`,
+    notAFile: message`Configuration must be a file, not a directory.`,
+    invalidExtension: (input, extensions, actualExt) =>
+      message`Config file ${input} has wrong extension ${actualExt}. Expected: ${values(extensions)}.`,
+  }
+}));
+
+// Output directory with creation support
+const outputDir = option("--output", path({
+  type: "directory",
+  allowCreate: true,
+  errors: {
+    parentNotFound: (parentDir) =>
+      message`Cannot create output directory: parent ${parentDir} doesn't exist.`,
+    notADirectory: (input) =>
+      message`Output path ${input} exists but is not a directory.`,
+  }
+}));
+~~~~
+
+#### `@optique/temporal` package
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/parser";
+import { instant, duration, timeZone } from "@optique/temporal";
+import { message } from "@optique/core/message";
+
+// Timestamp parser with user-friendly errors
+const startTime = option("--start", instant({
+  errors: {
+    invalidFormat: (input) =>
+      message`Start time ${input} is invalid. Use ISO 8601 format like 2023-12-25T10:30:00Z.`,
+  }
+}));
+
+// Duration parser with contextual errors
+const timeout = option("--timeout", duration({
+  errors: {
+    invalidFormat: message`Timeout must be in ISO 8601 duration format (e.g., PT30S, PT5M, PT1H).`,
+  }
+}));
+
+// Timezone parser with helpful suggestions
+const timezone = option("--timezone", timeZone({
+  errors: {
+    invalidFormat: (input) =>
+      message`Timezone ${input} is not valid. Use IANA identifiers like America/New_York or UTC.`,
+  }
+}));
+~~~~
+
 ### Best practices for custom errors
 
 When customizing error messages, follow these patterns for consistent and

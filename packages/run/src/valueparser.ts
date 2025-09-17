@@ -1,4 +1,4 @@
-import { message, text } from "@optique/core/message";
+import { type Message, message, text } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { existsSync, statSync } from "node:fs";
 import { dirname, extname } from "node:path";
@@ -38,6 +38,53 @@ export interface PathOptions {
    * start with a dot (e.g. `".json"`, `".yaml"`).
    */
   readonly extensions?: readonly string[];
+
+  /**
+   * Custom error messages for path validation failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when file extension is invalid.
+     * Can be a static message or a function that receives input, expected extensions, and actual extension.
+     * @since 0.5.0
+     */
+    invalidExtension?:
+      | Message
+      | ((
+        input: string,
+        extensions: readonly string[],
+        actualExtension: string,
+      ) => Message);
+
+    /**
+     * Custom error message when path does not exist.
+     * Can be a static message or a function that receives the input path.
+     * @since 0.5.0
+     */
+    pathNotFound?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when path is expected to be a file but isn't.
+     * Can be a static message or a function that receives the input path.
+     * @since 0.5.0
+     */
+    notAFile?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when path is expected to be a directory but isn't.
+     * Can be a static message or a function that receives the input path.
+     * @since 0.5.0
+     */
+    notADirectory?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when parent directory does not exist for new files.
+     * Can be a static message or a function that receives the parent directory path.
+     * @since 0.5.0
+     */
+    parentNotFound?: Message | ((parentDir: string) => Message);
+  };
 }
 
 /**
@@ -91,11 +138,16 @@ export function path(options: PathOptions = {}): ValueParser<string> {
       if (extensions && extensions.length > 0) {
         const ext = extname(input);
         if (!extensions.includes(ext)) {
+          const actualExt = ext || "no extension";
           return {
             success: false,
-            error: message`Expected file with extension ${
-              text(extensions.join(", "))
-            }, got ${text(ext || "no extension")}.`,
+            error: options.errors?.invalidExtension
+              ? (typeof options.errors.invalidExtension === "function"
+                ? options.errors.invalidExtension(input, extensions, actualExt)
+                : options.errors.invalidExtension)
+              : message`Expected file with extension ${
+                text(extensions.join(", "))
+              }, got ${text(actualExt)}.`,
           };
         }
       }
@@ -105,7 +157,11 @@ export function path(options: PathOptions = {}): ValueParser<string> {
         if (!existsSync(input)) {
           return {
             success: false,
-            error: message`Path ${text(input)} does not exist.`,
+            error: options.errors?.pathNotFound
+              ? (typeof options.errors.pathNotFound === "function"
+                ? options.errors.pathNotFound(input)
+                : options.errors.pathNotFound)
+              : message`Path ${text(input)} does not exist.`,
           };
         }
 
@@ -114,15 +170,23 @@ export function path(options: PathOptions = {}): ValueParser<string> {
         if (type === "file" && !stats.isFile()) {
           return {
             success: false,
-            error: message`Expected a file, but ${text(input)} is not a file.`,
+            error: options.errors?.notAFile
+              ? (typeof options.errors.notAFile === "function"
+                ? options.errors.notAFile(input)
+                : options.errors.notAFile)
+              : message`Expected a file, but ${text(input)} is not a file.`,
           };
         }
         if (type === "directory" && !stats.isDirectory()) {
           return {
             success: false,
-            error: message`Expected a directory, but ${
-              text(input)
-            } is not a directory.`,
+            error: options.errors?.notADirectory
+              ? (typeof options.errors.notADirectory === "function"
+                ? options.errors.notADirectory(input)
+                : options.errors.notADirectory)
+              : message`Expected a directory, but ${
+                text(input)
+              } is not a directory.`,
           };
         }
       }
@@ -133,7 +197,11 @@ export function path(options: PathOptions = {}): ValueParser<string> {
         if (!existsSync(parentDir)) {
           return {
             success: false,
-            error: message`Parent directory ${text(parentDir)} does not exist.`,
+            error: options.errors?.parentNotFound
+              ? (typeof options.errors.parentNotFound === "function"
+                ? options.errors.parentNotFound(parentDir)
+                : options.errors.parentNotFound)
+              : message`Parent directory ${text(parentDir)} does not exist.`,
           };
         }
       }

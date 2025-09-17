@@ -1,5 +1,5 @@
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
+import { type Message, message } from "@optique/core/message";
 
 /**
  * IANA Time Zone Database identifier.
@@ -34,6 +34,19 @@ export interface InstantOptions {
    * @default `"TIMESTAMP"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for instant parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid instant format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -47,6 +60,19 @@ export interface DurationOptions {
    * @default `"DURATION"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for duration parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid duration format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -60,6 +86,19 @@ export interface ZonedDateTimeOptions {
    * @default `"ZONED_DATETIME"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for zoned datetime parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid zoned datetime format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -73,6 +112,19 @@ export interface PlainDateOptions {
    * @default `"DATE"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for plain date parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid date format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -86,6 +138,19 @@ export interface PlainTimeOptions {
    * @default `"TIME"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for plain time parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid time format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -99,6 +164,19 @@ export interface PlainDateTimeOptions {
    * @default `"DATETIME"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for plain datetime parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid datetime format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -112,6 +190,19 @@ export interface PlainYearMonthOptions {
    * @default `"YEAR-MONTH"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for plain year-month parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid year-month format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -125,6 +216,19 @@ export interface PlainMonthDayOptions {
    * @default `"--MONTH-DAY"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for plain month-day parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid month-day format.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -138,6 +242,19 @@ export interface TimeZoneOptions {
    * @default `"TIMEZONE"`
    */
   readonly metavar?: string;
+
+  /**
+   * Custom error messages for timezone parsing failures.
+   * @since 0.5.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid timezone identifier.
+     * Can be a static message or a function that receives the input.
+     * @since 0.5.0
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+  };
 }
 
 /**
@@ -163,8 +280,11 @@ export function instant(
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid instant: ${input}. Expected ISO 8601 format like ${"2020-01-23T17:04:36Z"}.`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid instant: ${input}. Expected ISO 8601 format like ${"2020-01-23T17:04:36Z"}.`,
         };
       }
     },
@@ -198,8 +318,11 @@ export function duration(
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid duration: ${input}. Expected ISO 8601 format like ${"PT1H30M"}.`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid duration: ${input}. Expected ISO 8601 format like ${"PT1H30M"}.`,
         };
       }
     },
@@ -232,8 +355,11 @@ export function zonedDateTime(
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid zoned datetime: ${input}. Expected ISO 8601 format with timezone like ${"2020-01-23T17:04:36+01:00[Europe/Paris]"}.`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid zoned datetime: ${input}. Expected ISO 8601 format with timezone like ${"2020-01-23T17:04:36+01:00[Europe/Paris]"}.`,
         };
       }
     },
@@ -266,8 +392,11 @@ export function plainDate(
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid date: ${input}. Expected ISO 8601 format like ${"2020-01-23"}.`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid date: ${input}. Expected ISO 8601 format like ${"2020-01-23"}.`,
         };
       }
     },
@@ -300,8 +429,11 @@ export function plainTime(
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid time: ${input}. Expected ISO 8601 format like ${"17:04:36"}.`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid time: ${input}. Expected ISO 8601 format like ${"17:04:36"}.`,
         };
       }
     },
@@ -334,8 +466,11 @@ export function plainDateTime(
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid datetime: ${input}. Expected ISO 8601 format like ${"2020-01-23T17:04:36"}.`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid datetime: ${input}. Expected ISO 8601 format like ${"2020-01-23T17:04:36"}.`,
         };
       }
     },
@@ -368,8 +503,11 @@ export function plainYearMonth(
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid year-month: ${input}. Expected ISO 8601 format like ${"2020-01"}.`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid year-month: ${input}. Expected ISO 8601 format like ${"2020-01"}.`,
         };
       }
     },
@@ -402,8 +540,11 @@ export function plainMonthDay(
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid month-day: ${input}. Expected ISO 8601 format like ${"--01-23"}.`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid month-day: ${input}. Expected ISO 8601 format like ${"--01-23"}.`,
         };
       }
     },
@@ -443,8 +584,11 @@ export function timeZone(options: TimeZoneOptions = {}): ValueParser<TimeZone> {
       } catch {
         return {
           success: false,
-          error:
-            message`Invalid timezone identifier: ${input}. Must be a valid IANA timezone like "Asia/Seoul" or "UTC".`,
+          error: options.errors?.invalidFormat
+            ? (typeof options.errors.invalidFormat === "function"
+              ? options.errors.invalidFormat(input)
+              : options.errors.invalidFormat)
+            : message`Invalid timezone identifier: ${input}. Must be a valid IANA timezone like "Asia/Seoul" or "UTC".`,
         };
       }
     },

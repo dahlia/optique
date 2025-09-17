@@ -4,9 +4,11 @@ import {
   integer,
   isValueParser,
   locale,
+  string,
   url,
   uuid,
 } from "@optique/core/valueparser";
+import { message, text, values } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -2855,6 +2857,351 @@ describe("uuid", () => {
 
       const result3 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"); // v1
       assert.ok(!result3.success);
+    });
+  });
+});
+
+describe("error customization", () => {
+  describe("string parser", () => {
+    it("should use custom patternMismatch error message", () => {
+      const parser = string({
+        pattern: /^\d+$/,
+        errors: {
+          patternMismatch: message`Custom error: input must be numeric.`,
+        },
+      });
+
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Custom error: input must be numeric." },
+      ]);
+    });
+
+    it("should use function-based patternMismatch error message", () => {
+      const parser = string({
+        pattern: /^\d+$/,
+        errors: {
+          patternMismatch: (input, pattern) =>
+            message`Value ${input} does not match pattern ${
+              text(pattern.source)
+            }.`,
+        },
+      });
+
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Value " },
+        { type: "value", value: "abc" },
+        { type: "text", text: " does not match pattern " },
+        { type: "text", text: "^\\d+$" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("choice parser", () => {
+    it("should use custom invalidChoice error message", () => {
+      const parser = choice(["red", "green", "blue"], {
+        errors: {
+          invalidChoice: message`Please select a valid color.`,
+        },
+      });
+
+      const result = parser.parse("yellow");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please select a valid color." },
+      ]);
+    });
+
+    it("should use function-based invalidChoice error message", () => {
+      const parser = choice(["red", "green", "blue"], {
+        errors: {
+          invalidChoice: (input, choices) =>
+            message`${input} is not valid. Choose from: ${values(choices)}.`,
+        },
+      });
+
+      const result = parser.parse("yellow");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "yellow" },
+        { type: "text", text: " is not valid. Choose from: " },
+        { type: "values", values: ["red", "green", "blue"] },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("integer parser", () => {
+    it("should use custom invalidInteger error message", () => {
+      const parser = integer({
+        errors: {
+          invalidInteger: message`Must be a whole number.`,
+        },
+      });
+
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Must be a whole number." },
+      ]);
+    });
+
+    it("should use custom belowMinimum error message", () => {
+      const parser = integer({
+        min: 10,
+        errors: {
+          belowMinimum: (value, min) =>
+            message`Value ${text(value.toString())} is too small (minimum: ${
+              text(min.toString())
+            }).`,
+        },
+      });
+
+      const result = parser.parse("5");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Value " },
+        { type: "text", text: "5" },
+        { type: "text", text: " is too small (minimum: " },
+        { type: "text", text: "10" },
+        { type: "text", text: ")." },
+      ]);
+    });
+
+    it("should use custom aboveMaximum error message", () => {
+      const parser = integer({
+        max: 100,
+        errors: {
+          aboveMaximum: (value, max) =>
+            message`Value ${text(value.toString())} exceeds maximum of ${
+              text(max.toString())
+            }.`,
+        },
+      });
+
+      const result = parser.parse("150");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Value " },
+        { type: "text", text: "150" },
+        { type: "text", text: " exceeds maximum of " },
+        { type: "text", text: "100" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("float parser", () => {
+    it("should use custom invalidNumber error message", () => {
+      const parser = float({
+        errors: {
+          invalidNumber: message`Please enter a valid decimal number.`,
+        },
+      });
+
+      const result = parser.parse("not-a-number");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please enter a valid decimal number." },
+      ]);
+    });
+
+    it("should use custom belowMinimum error message", () => {
+      const parser = float({
+        min: 0.5,
+        errors: {
+          belowMinimum: (value, min) =>
+            message`${
+              text(value.toString())
+            } is below the minimum threshold of ${text(min.toString())}.`,
+        },
+      });
+
+      const result = parser.parse("0.1");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "0.1" },
+        { type: "text", text: " is below the minimum threshold of " },
+        { type: "text", text: "0.5" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should use custom aboveMaximum error message", () => {
+      const parser = float({
+        max: 10.0,
+        errors: {
+          aboveMaximum: (value, max) =>
+            message`${text(value.toString())} exceeds the maximum limit of ${
+              text(max.toString())
+            }.`,
+        },
+      });
+
+      const result = parser.parse("15.5");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "15.5" },
+        { type: "text", text: " exceeds the maximum limit of " },
+        { type: "text", text: "10" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("url parser", () => {
+    it("should use custom invalidUrl error message", () => {
+      const parser = url({
+        errors: {
+          invalidUrl: message`Please provide a valid web address.`,
+        },
+      });
+
+      const result = parser.parse("not-a-url");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please provide a valid web address." },
+      ]);
+    });
+
+    it("should use custom disallowedProtocol error message", () => {
+      const parser = url({
+        allowedProtocols: ["https:"],
+        errors: {
+          disallowedProtocol: (protocol, allowedProtocols) =>
+            message`Protocol ${protocol} not allowed. Use: ${
+              values(allowedProtocols)
+            }.`,
+        },
+      });
+
+      const result = parser.parse("http://example.com");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Protocol " },
+        { type: "value", value: "http:" },
+        { type: "text", text: " not allowed. Use: " },
+        { type: "values", values: ["https:"] },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("locale parser", () => {
+    it("should use custom invalidLocale error message", () => {
+      const parser = locale({
+        errors: {
+          invalidLocale: message`Please use a valid language code.`,
+        },
+      });
+
+      const result = parser.parse("xyz-INVALID-123");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please use a valid language code." },
+      ]);
+    });
+
+    it("should use function-based invalidLocale error message", () => {
+      const parser = locale({
+        errors: {
+          invalidLocale: (input) =>
+            message`${input} is not a recognized locale identifier.`,
+        },
+      });
+
+      const result = parser.parse("xyz-INVALID-123");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "xyz-INVALID-123" },
+        { type: "text", text: " is not a recognized locale identifier." },
+      ]);
+    });
+  });
+
+  describe("uuid parser", () => {
+    it("should use custom invalidUuid error message", () => {
+      const parser = uuid({
+        errors: {
+          invalidUuid: message`Please provide a valid UUID string.`,
+        },
+      });
+
+      const result = parser.parse("not-a-uuid");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Please provide a valid UUID string." },
+      ]);
+    });
+
+    it("should use custom disallowedVersion error message", () => {
+      const parser = uuid({
+        allowedVersions: [4],
+        errors: {
+          disallowedVersion: (version, allowedVersions) =>
+            message`UUID version ${
+              text(version.toString())
+            } not supported. Need version ${
+              values(allowedVersions.map((v) => v.toString()))
+            }.`,
+        },
+      });
+
+      const result = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"); // v1
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "UUID version " },
+        { type: "text", text: "1" },
+        { type: "text", text: " not supported. Need version " },
+        { type: "values", values: ["4"] },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("error fallback behavior", () => {
+    it("should fall back to default error when custom error is not provided", () => {
+      const parser = integer({
+        min: 10,
+        errors: {
+          invalidInteger: message`Custom invalid message.`,
+          // belowMinimum is not customized, should use default
+        },
+      });
+
+      const result1 = parser.parse("abc");
+      assert.ok(!result1.success);
+      assert.deepEqual(result1.error, [
+        { type: "text", text: "Custom invalid message." },
+      ]);
+
+      const result2 = parser.parse("5");
+      assert.ok(!result2.success);
+      // Should use default error message for belowMinimum
+      assert.ok(
+        result2.error.some((term) =>
+          term.type === "text" &&
+          term.text.includes("Expected a value greater than or equal to")
+        ),
+      );
+    });
+
+    it("should work correctly when no errors option is provided", () => {
+      const parser = integer({ min: 10 });
+
+      const result = parser.parse("5");
+      assert.ok(!result.success);
+      // Should use default error message
+      assert.ok(
+        result.error.some((term) =>
+          term.type === "text" &&
+          term.text.includes("Expected a value greater than or equal to")
+        ),
+      );
     });
   });
 });
