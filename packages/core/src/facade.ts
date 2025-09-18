@@ -13,14 +13,6 @@ import { string } from "./valueparser.ts";
 interface HelpParsers {
   readonly helpCommand: Parser<readonly string[], unknown> | null;
   readonly helpOption: Parser<boolean, unknown> | null;
-  readonly contextualHelpParser:
-    | Parser<{
-      help: true;
-      version: false;
-      commands: readonly string[];
-      __help: true;
-    }, unknown>
-    | null;
 }
 
 interface VersionParsers {
@@ -44,23 +36,13 @@ function createHelpParser(mode: "command" | "option" | "both"): HelpParsers {
     description: message`Show help information.`,
   });
 
-  const _contextualHelpParser = object({
-    help: constant(true),
-    version: constant(false),
-    commands: multiple(argument(string({
-      metavar: "COMMAND",
-      pattern: /^[^-].*$/, // Reject strings starting with -
-    }))),
-    __help: flag("--help"),
-  });
-
   switch (mode) {
     case "command":
-      return { helpCommand, helpOption: null, contextualHelpParser: null };
+      return { helpCommand, helpOption: null };
     case "option":
-      return { helpCommand: null, helpOption, contextualHelpParser: null }; // Remove contextual parser for now
+      return { helpCommand: null, helpOption };
     case "both":
-      return { helpCommand, helpOption, contextualHelpParser: null }; // Remove contextual parser for now
+      return { helpCommand, helpOption };
   }
 }
 
@@ -138,7 +120,6 @@ function combineWithHelpVersion(
 
         let helpFound = false;
         let helpIndex = -1;
-        let helpCount = 0;
 
         // Look for --help and --version to implement last-option-wins
         let versionIndex = -1;
@@ -147,7 +128,6 @@ function combineWithHelpVersion(
           if (buffer[i] === "--help") {
             helpFound = true;
             helpIndex = i;
-            helpCount++;
           }
           if (buffer[i] === "--version") {
             versionIndex = i;
@@ -239,7 +219,6 @@ function combineWithHelpVersion(
 
         let versionFound = false;
         let versionIndex = -1;
-        let versionCount = 0;
 
         // Look for --version and --help to implement last-option-wins
         let helpIndex = -1;
@@ -248,7 +227,6 @@ function combineWithHelpVersion(
           if (buffer[i] === "--version") {
             versionFound = true;
             versionIndex = i;
-            versionCount++;
           }
           if (buffer[i] === "--help") {
             helpIndex = i;
@@ -319,11 +297,6 @@ function combineWithHelpVersion(
       version: constant(false),
       commands: helpParsers.helpCommand,
     }));
-  }
-
-  // Add contextual help parser
-  if (helpParsers.contextualHelpParser) {
-    parsers.push(helpParsers.contextualHelpParser);
   }
 
   // Add main parser LAST - it's the most general
@@ -643,7 +616,7 @@ export function run<
   const version = options.version ? versionMode : "none";
 
   const helpParsers = help === "none"
-    ? { helpCommand: null, helpOption: null, contextualHelpParser: null }
+    ? { helpCommand: null, helpOption: null }
     : createHelpParser(help);
 
   const versionParsers = version === "none"
