@@ -4,7 +4,7 @@ Optique changelog
 Version 0.4.4
 -------------
 
-To be released.
+Released on September 18, 2025.
 
 ### @optique/core
 
