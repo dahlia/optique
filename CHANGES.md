@@ -6,6 +6,14 @@ Version 0.4.4
 
 To be released.
 
+### @optique/core
+
+ -  Fixed subcommand help display bug in the `run()` function when using
+    the `help` option. Previously, `cli my-cmd --help` would incorrectly
+    show root-level help instead of subcommand-specific help when parsers
+    were combined with `or()`. Now `--help` correctly shows help for the
+    specific subcommand being used.  [[#26]]
+
 
 Version 0.4.3
 -------------

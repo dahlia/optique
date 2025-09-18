@@ -1,5 +1,5 @@
 import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
-import { formatMessage, type Message, message } from "./message.ts";
+import { formatMessage, type Message, message, optionName } from "./message.ts";
 import {
   argument,
   command,
@@ -141,7 +141,7 @@ function combineWithHelpVersion(
         if (optionsTerminated) {
           return {
             success: false,
-            error: message`Options terminated`,
+            error: message`Options terminated.`,
             consumed: 0,
           };
         }
@@ -168,7 +168,7 @@ function combineWithHelpVersion(
         if (helpFound && versionIndex > helpIndex) {
           return {
             success: false,
-            error: message`Version option wins`,
+            error: message`Version option wins.`,
             consumed: 0,
           };
         }
@@ -176,6 +176,16 @@ function combineWithHelpVersion(
         // Multiple --help is OK - just show help
 
         if (helpFound) {
+          // Extract command names that appear before --help
+          const commands: string[] = [];
+          for (let i = 0; i < helpIndex; i++) {
+            const arg = buffer[i];
+            // Include non-option arguments as commands (don't start with -)
+            if (!arg.startsWith("-")) {
+              commands.push(arg);
+            }
+          }
+
           // Consume all remaining arguments and return success
           return {
             success: true,
@@ -185,7 +195,7 @@ function combineWithHelpVersion(
               state: {
                 help: true,
                 version: false,
-                commands: [],
+                commands,
                 helpFlag: true,
               },
             },
@@ -196,7 +206,7 @@ function combineWithHelpVersion(
         // --help not found
         return {
           success: false,
-          error: message`Flag --help not found`,
+          error: message`Flag ${optionName("--help")} not found.`,
           consumed: 0,
         };
       },
@@ -232,7 +242,7 @@ function combineWithHelpVersion(
         if (optionsTerminated) {
           return {
             success: false,
-            error: message`Options terminated`,
+            error: message`Options terminated.`,
             consumed: 0,
           };
         }
@@ -259,7 +269,7 @@ function combineWithHelpVersion(
         if (versionFound && helpIndex > versionIndex) {
           return {
             success: false,
-            error: message`Help option wins`,
+            error: message`Help option wins.`,
             consumed: 0,
           };
         }
@@ -282,7 +292,7 @@ function combineWithHelpVersion(
         // --version not found
         return {
           success: false,
-          error: message`Flag --version not found`,
+          error: message`Flag ${optionName("--version")} not found.`,
           consumed: 0,
         };
       },
