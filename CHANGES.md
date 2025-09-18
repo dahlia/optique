@@ -298,6 +298,20 @@ To be released.
     with the error customization system across all Optique packages.  [[#27]]
 
 
+Version 0.4.4
+-------------
+
+Released on September 18, 2025.
+
+### @optique/core
+
+ -  Fixed subcommand help display bug in the `run()` function when using
+    the `help` option. Previously, `cli my-cmd --help` would incorrectly
+    show root-level help instead of subcommand-specific help when parsers
+    were combined with `or()`. Now `--help` correctly shows help for the
+    specific subcommand being used.  [[#26]]
+
+
 Version 0.4.3
 -------------
 

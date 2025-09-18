@@ -1006,6 +1006,120 @@ describe("run", () => {
       assert.ok(helpOutput.includes("deploy") || helpOutput.includes("Deploy"));
     });
 
+    it("should show subcommand-specific help with --help flag after subcommand (Issue #26)", () => {
+      const syncCommand = command(
+        "sync",
+        object({
+          force: flag("--force"),
+          verbose: flag("--verbose"),
+        }),
+        {
+          description: message`Synchronize data`,
+        },
+      );
+
+      const buildCommand = command(
+        "build",
+        object({
+          output: option("--output", string()),
+          minify: flag("--minify"),
+        }),
+        {
+          description: message`Build the project`,
+        },
+      );
+
+      // Use or() to combine multiple commands - this is where the bug was
+      const parser = or(syncCommand, buildCommand);
+
+      let helpShown = false;
+      let helpOutput = "";
+
+      // Test: cli sync --help should show sync-specific help, not root help
+      const result = run(parser, "cli", ["sync", "--help"], {
+        help: {
+          mode: "option",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "help-shown");
+      assert.ok(helpShown);
+      // Should show sync-specific options, not both commands
+      assert.ok(helpOutput.includes("--force"));
+      assert.ok(helpOutput.includes("--verbose"));
+      assert.ok(helpOutput.includes("Synchronize data"));
+      // Should NOT show build command or its options
+      assert.ok(!helpOutput.includes("--output"));
+      assert.ok(!helpOutput.includes("--minify"));
+      assert.ok(!helpOutput.includes("Build the project"));
+    });
+
+    it("should show subcommand help even with other options present", () => {
+      const syncCommand = command(
+        "sync",
+        object({
+          force: flag("--force"),
+          verbose: flag("--verbose"),
+        }),
+        {
+          description: message`Synchronize data`,
+        },
+      );
+
+      const buildCommand = command(
+        "build",
+        object({
+          output: option("--output", string()),
+          minify: flag("--minify"),
+        }),
+        {
+          description: message`Build the project`,
+        },
+      );
+
+      const parser = or(syncCommand, buildCommand);
+
+      let helpShown = false;
+      let helpOutput = "";
+
+      // Test: cli build --help --output out.js should show build help
+      const result = run(parser, "cli", [
+        "build",
+        "--help",
+        "--output",
+        "out.js",
+      ], {
+        help: {
+          mode: "option",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "help-shown");
+      assert.ok(helpShown);
+      // Should show build-specific options
+      assert.ok(helpOutput.includes("--output"));
+      assert.ok(helpOutput.includes("--minify"));
+      assert.ok(helpOutput.includes("Build the project"));
+      // Should NOT show sync command or its options
+      assert.ok(!helpOutput.includes("--force"));
+      assert.ok(!helpOutput.includes("--verbose"));
+      assert.ok(!helpOutput.includes("Synchronize data"));
+    });
+
     it("should handle multiple nested optional parsers with help/version", () => {
       const parser = object({
         verbose: optional(flag("--verbose")),
@@ -1572,5 +1686,366 @@ describe("Documentation augmentation (brief, description, footer)", () => {
     assert.ok(output.includes("Override brief"));
     assert.ok(output.includes("Override description"));
     assert.ok(output.includes("Override footer"));
+  });
+});
+
+describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => {
+  it("should handle --help with options terminator (--)", () => {
+    const parser = object({
+      files: multiple(argument(string())),
+    });
+
+    let helpShown = false;
+
+    // Test: cli -- --help should NOT show help (--help is treated as argument)
+    const result = run(parser, "cli", ["--", "--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+    });
+
+    // Should parse successfully with --help as a file argument
+    assert.deepEqual(result, { files: ["--help"] });
+    assert.ok(!helpShown);
+  });
+
+  it("should handle multiple commands before --help", () => {
+    const addCommand = command(
+      "add",
+      object({
+        all: flag("--all"),
+      }),
+      {
+        description: message`Add files`,
+      },
+    );
+
+    const gitCommand = command(
+      "git",
+      addCommand,
+      {
+        description: message`Git version control`,
+      },
+    );
+
+    const parser = gitCommand;
+
+    let helpShown = false;
+    let helpOutput = "";
+
+    // Test: cli git add --help should show help for the full command chain
+    const result = run(parser, "cli", ["git", "add", "--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+    });
+
+    assert.equal(result, "help-shown");
+    assert.ok(helpShown);
+    assert.ok(helpOutput.includes("--all"));
+    assert.ok(helpOutput.includes("Add files"));
+    // Should NOT show the outer git command description
+    assert.ok(!helpOutput.includes("Git version control"));
+  });
+
+  it("should handle --help in different positions", () => {
+    const syncCommand = command(
+      "sync",
+      object({
+        force: flag("--force"),
+        verbose: flag("--verbose"),
+      }),
+      {
+        description: message`Synchronize data`,
+      },
+    );
+
+    const parser = syncCommand;
+
+    // Test 1: --help at the beginning should show root help
+    let helpOutput1 = "";
+    const result1 = run(parser, "cli", ["--help", "sync"], {
+      help: {
+        mode: "option",
+        onShow: () => "help-shown",
+      },
+      stdout: (text) => {
+        helpOutput1 = text;
+      },
+    });
+
+    assert.equal(result1, "help-shown");
+    // Should show root help (includes the sync command)
+    assert.ok(helpOutput1.includes("sync"));
+
+    // Test 2: --help in the middle should show sync help
+    let helpOutput2 = "";
+    const result2 = run(parser, "cli", ["sync", "--help", "--force"], {
+      help: {
+        mode: "option",
+        onShow: () => "help-shown",
+      },
+      stdout: (text) => {
+        helpOutput2 = text;
+      },
+    });
+
+    assert.equal(result2, "help-shown");
+    // Should show sync-specific help
+    assert.ok(helpOutput2.includes("--force"));
+    assert.ok(helpOutput2.includes("Synchronize data"));
+  });
+
+  it("should handle invalid commands before --help gracefully", () => {
+    const syncCommand = command(
+      "sync",
+      object({
+        force: flag("--force"),
+      }),
+      {
+        description: message`Synchronize data`,
+      },
+    );
+
+    const buildCommand = command(
+      "build",
+      object({
+        output: option("--output", string()),
+      }),
+      {
+        description: message`Build project`,
+      },
+    );
+
+    const parser = or(syncCommand, buildCommand);
+
+    let helpShown = false;
+    let helpOutput = "";
+
+    // Test: cli invalid-cmd --help should show help with the invalid command context
+    const result = run(parser, "cli", ["invalid-cmd", "--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+    });
+
+    assert.equal(result, "help-shown");
+    assert.ok(helpShown);
+    // Should show root help since invalid-cmd doesn't match any parser
+    assert.ok(helpOutput.includes("sync") || helpOutput.includes("build"));
+  });
+
+  it("should handle mixed options and commands with --help", () => {
+    const deployCommand = command(
+      "deploy",
+      object({
+        env: option("--env", string()),
+        force: flag("--force"),
+        target: argument(string()),
+      }),
+      {
+        description: message`Deploy application`,
+      },
+    );
+
+    const parser = deployCommand;
+
+    let helpShown = false;
+    let helpOutput = "";
+
+    // Test: cli deploy --env prod --help target should show deploy help
+    const result = run(parser, "cli", [
+      "deploy",
+      "--env",
+      "prod",
+      "--help",
+      "target",
+    ], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+    });
+
+    assert.equal(result, "help-shown");
+    assert.ok(helpShown);
+    assert.ok(helpOutput.includes("--env"));
+    assert.ok(helpOutput.includes("--force"));
+    assert.ok(helpOutput.includes("Deploy application"));
+  });
+
+  it("should handle --help with version flag conflicts in subcommand context", () => {
+    const syncCommand = command(
+      "sync",
+      object({
+        force: flag("--force"),
+      }),
+      {
+        description: message`Synchronize data`,
+      },
+    );
+
+    const parser = syncCommand;
+
+    let helpShown = false;
+    let versionShown = false;
+    let output = "";
+
+    // Test: cli sync --help --version should follow last-option-wins
+    const result = run(parser, "cli", ["sync", "--help", "--version"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      version: {
+        mode: "option",
+        value: "1.0.0",
+        onShow: () => {
+          versionShown = true;
+          return "version-shown";
+        },
+      },
+      stdout: (text) => {
+        output = text;
+      },
+    });
+
+    // Version should win due to last-option-wins
+    assert.equal(result, "version-shown");
+    assert.ok(!helpShown);
+    assert.ok(versionShown);
+    assert.equal(output, "1.0.0");
+  });
+
+  it("should handle empty command arguments before --help", () => {
+    const syncCommand = command(
+      "sync",
+      object({
+        force: flag("--force"),
+      }),
+      {
+        description: message`Synchronize data`,
+      },
+    );
+
+    const parser = syncCommand;
+
+    let helpShown = false;
+    let helpOutput = "";
+
+    // Test: cli --help (no command) should show root help
+    const result = run(parser, "cli", ["--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+    });
+
+    assert.equal(result, "help-shown");
+    assert.ok(helpShown);
+    // Should show root help including the sync command
+    assert.ok(helpOutput.includes("sync"));
+  });
+
+  it("should handle deeply nested command structures with --help", () => {
+    const statusSubCommand = command(
+      "status",
+      object({
+        short: flag("--short"),
+      }),
+      {
+        description: message`Show status`,
+      },
+    );
+
+    const branchSubCommand = command(
+      "branch",
+      object({
+        all: flag("--all"),
+      }),
+      {
+        description: message`List branches`,
+      },
+    );
+
+    const gitSubCommands = or(statusSubCommand, branchSubCommand);
+
+    const gitCommand = command(
+      "git",
+      gitSubCommands,
+      {
+        description: message`Git operations`,
+      },
+    );
+
+    const devCommand = command(
+      "dev",
+      gitCommand,
+      {
+        description: message`Development tools`,
+      },
+    );
+
+    const parser = devCommand;
+
+    let helpShown = false;
+    let helpOutput = "";
+
+    // Test: cli dev git status --help should show status-specific help
+    const result = run(parser, "cli", ["dev", "git", "status", "--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+    });
+
+    assert.equal(result, "help-shown");
+    assert.ok(helpShown);
+    assert.ok(helpOutput.includes("--short"));
+    assert.ok(helpOutput.includes("Show status"));
+    // Should NOT show other subcommands or parent commands
+    assert.ok(!helpOutput.includes("--all"));
+    assert.ok(!helpOutput.includes("List branches"));
+    assert.ok(!helpOutput.includes("Git operations"));
+    assert.ok(!helpOutput.includes("Development tools"));
   });
 });
