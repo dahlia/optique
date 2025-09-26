@@ -395,4 +395,92 @@ describe("formatDocPage", () => {
       ),
     );
   });
+
+  it("should skip sections with no entries (Issue #29)", () => {
+    const page: DocPage = {
+      usage: [{ type: "command", name: "cmd1" }],
+      sections: [
+        {
+          title: "Group 1 commands",
+          entries: [], // Empty entries array
+        },
+        {
+          title: "Options",
+          entries: [
+            {
+              term: { type: "option", names: ["--help"] },
+              description: [{ type: "text", text: "Show help" }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const output = formatDocPage("test", page, { colors: false });
+
+    // Should not contain the empty "Group 1 commands:" section
+    assert.ok(!output.includes("Group 1 commands:"));
+
+    // Should still contain the Options section with entries
+    assert.ok(output.includes("Options:"));
+    assert.ok(output.includes("--help"));
+  });
+
+  it("should handle multiple empty sections", () => {
+    const page: DocPage = {
+      usage: [{ type: "command", name: "test" }],
+      sections: [
+        {
+          title: "Empty Section 1",
+          entries: [],
+        },
+        {
+          title: "Non-Empty Section",
+          entries: [
+            {
+              term: { type: "option", names: ["-v", "--verbose"] },
+              description: [{ type: "text", text: "Verbose output" }],
+            },
+          ],
+        },
+        {
+          title: "Empty Section 2",
+          entries: [],
+        },
+      ],
+    };
+
+    const output = formatDocPage("test", page, { colors: false });
+
+    // Should not contain either empty section
+    assert.ok(!output.includes("Empty Section 1:"));
+    assert.ok(!output.includes("Empty Section 2:"));
+
+    // Should still contain the non-empty section
+    assert.ok(output.includes("Non-Empty Section:"));
+    assert.ok(output.includes("-v, --verbose"));
+  });
+
+  it("should handle sections with only empty entries", () => {
+    const page: DocPage = {
+      usage: [], // Empty usage to show default
+      sections: [
+        {
+          title: "Should Not Appear",
+          entries: [], // No entries at all
+        },
+        {
+          entries: [], // Untitled section with no entries
+        },
+      ],
+    };
+
+    const output = formatDocPage("test", page, { colors: false });
+
+    // Should not contain the titled empty section
+    assert.ok(!output.includes("Should Not Appear:"));
+
+    // Output should only have the usage line
+    assert.equal(output.trim(), "Usage: test");
+  });
 });
