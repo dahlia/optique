@@ -7,6 +7,22 @@ Version 0.6.0
 To be released.
 
 
+Version 0.5.1
+-------------
+
+Released on September 26, 2025.
+
+### @optique/core
+
+ -  Fixed an issue where empty group sections were displayed in help output for
+    nested subcommands. When using `group()` with nested commands, help text
+    would show empty group headers when the grouped items were no longer
+    available in the current command context. The `formatDocPage()` function
+    now skips sections with no entries.  [[#29]]
+
+[#29]: https://github.com/dahlia/optique/issues/29
+
+
 Version 0.5.0
 -------------
 

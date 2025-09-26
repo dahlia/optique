@@ -224,6 +224,8 @@ export function formatDocPage(
     a.title == null && b.title == null ? 0 : a.title == null ? -1 : 1
   );
   for (const section of sections) {
+    // Skip sections with no entries
+    if (section.entries.length < 1) continue;
     output += "\n";
     if (section.title != null) {
       output += `${section.title}:\n`;
