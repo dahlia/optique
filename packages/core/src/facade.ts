@@ -185,6 +185,14 @@ function combineWithHelpVersion(
         return { success: true, value: state };
       },
 
+      suggest(_context, prefix) {
+        // Suggest --help if it matches the prefix
+        if ("--help".startsWith(prefix)) {
+          return [{ text: "--help" }];
+        }
+        return [];
+      },
+
       getDocFragments(state) {
         return helpParsers.helpOption?.getDocFragments(state) ??
           { fragments: [] };
@@ -267,6 +275,14 @@ function combineWithHelpVersion(
 
       complete(state) {
         return { success: true, value: state };
+      },
+
+      suggest(_context, prefix) {
+        // Suggest --version if it matches the prefix
+        if ("--version".startsWith(prefix)) {
+          return [{ text: "--version" }];
+        }
+        return [];
       },
 
       getDocFragments(state) {

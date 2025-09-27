@@ -49,6 +49,17 @@ export function optional<TValue, TState>(
       }
       return parser.complete(state[0]);
     },
+    suggest(context, prefix) {
+      // Delegate to wrapped parser
+      const innerState = typeof context.state === "undefined"
+        ? parser.initialState
+        : context.state[0];
+
+      return parser.suggest({
+        ...context,
+        state: innerState,
+      }, prefix);
+    },
     getDocFragments(
       state: DocState<[TState] | undefined>,
       defaultValue?: TValue,
@@ -213,6 +224,17 @@ export function withDefault<TValue, TState, TDefault = TValue>(
       }
       return parser.complete(state[0]);
     },
+    suggest(context, prefix) {
+      // Delegate to wrapped parser
+      const innerState = typeof context.state === "undefined"
+        ? parser.initialState
+        : context.state[0];
+
+      return parser.suggest({
+        ...context,
+        state: innerState,
+      }, prefix);
+    },
     getDocFragments(
       state: DocState<[TState] | undefined>,
       upperDefaultValue?: TValue | TDefault,
@@ -303,6 +325,10 @@ export function map<T, U, TState>(
         return { success: true, value: transform(result.value) };
       }
       return result;
+    },
+    suggest(context, prefix) {
+      // Delegate to wrapped parser - suggestions are based on input format, not output
+      return parser.suggest(context, prefix);
     },
     getDocFragments(state: DocState<TState>, _defaultValue?: U) {
       // Since we can't reverse the transformation, we delegate to the original parser
@@ -449,6 +475,17 @@ export function multiple<TValue, TState>(
         };
       }
       return { success: true, value: result };
+    },
+    suggest(context, prefix) {
+      // Use the most recent state for suggestions, or initial state if empty
+      const innerState = context.state.length > 0
+        ? context.state.at(-1)!
+        : parser.initialState;
+
+      return parser.suggest({
+        ...context,
+        state: innerState,
+      }, prefix);
     },
     getDocFragments(state: DocState<readonly TState[]>, defaultValue?) {
       const innerState: DocState<TState> = state.kind === "unavailable"

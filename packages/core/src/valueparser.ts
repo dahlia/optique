@@ -1,4 +1,5 @@
 import { type Message, message, text } from "./message.ts";
+import type { Suggestion } from "./parser.ts";
 
 /**
  * Interface for parsing CLI option values and arguments.
@@ -35,6 +36,16 @@ export interface ValueParser<T> {
    * @returns A string representation of the value.
    */
   format(value: T): string;
+
+  /**
+   * Provides completion suggestions for values of this type.
+   * This is optional and used for shell completion functionality.
+   *
+   * @param prefix The current input prefix to complete.
+   * @returns An iterable of suggestion objects.
+   * @since 0.6.0
+   */
+  suggest?(prefix: string): Iterable<Suggestion>;
 }
 
 /**
@@ -184,6 +195,20 @@ export function choice<const T extends string>(
     },
     format(value: T): string {
       return value;
+    },
+    suggest(prefix: string) {
+      const normalizedPrefix = options.caseInsensitive
+        ? prefix.toLowerCase()
+        : prefix;
+
+      return values
+        .filter((value) => {
+          const normalizedValue = options.caseInsensitive
+            ? value.toLowerCase()
+            : value;
+          return normalizedValue.startsWith(normalizedPrefix);
+        })
+        .map((value) => ({ text: value }));
     },
   };
 }

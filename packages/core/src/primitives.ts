@@ -6,7 +6,7 @@ import {
   optionName as eOptionName,
   optionNames as eOptionNames,
 } from "./message.ts";
-import type { DocState, Parser } from "./parser.ts";
+import type { DocState, Parser, Suggestion } from "./parser.ts";
 import type { OptionName, UsageTerm } from "./usage.ts";
 import {
   isValueParser,
@@ -31,6 +31,9 @@ export function constant<const T>(value: T): Parser<T, T> {
     },
     complete(state) {
       return { success: true, value: state };
+    },
+    suggest(_context, _prefix) {
+      return [];
     },
     getDocFragments(_state: DocState<T>, _defaultValue?) {
       return { fragments: [] };
@@ -393,6 +396,77 @@ export function option<T>(
           : message`${eOptionNames(optionNames)}: ${state.error}`,
       };
     },
+    suggest(context, prefix) {
+      const suggestions: Suggestion[] = [];
+
+      // Check for --option=value format
+      const equalsIndex = prefix.indexOf("=");
+      if (equalsIndex >= 0) {
+        // Handle --option=value completion
+        const optionPart = prefix.slice(0, equalsIndex);
+        const valuePart = prefix.slice(equalsIndex + 1);
+
+        // Check if this option matches any of our option names
+        if ((optionNames as readonly string[]).includes(optionPart)) {
+          if (valueParser && valueParser.suggest) {
+            const valueSuggestions = valueParser.suggest(valuePart);
+            // Prepend the option= part to each suggestion
+            for (const suggestion of valueSuggestions) {
+              suggestions.push({
+                text: `${optionPart}=${suggestion.text}`,
+                description: suggestion.description,
+              });
+            }
+          }
+        }
+      } else {
+        // If the prefix looks like an option prefix, suggest matching option names
+        if (
+          prefix.startsWith("--") || prefix.startsWith("-") ||
+          prefix.startsWith("/")
+        ) {
+          for (const optionName of optionNames) {
+            if (optionName.startsWith(prefix)) {
+              // Special case: if prefix is exactly "-", only suggest short options (single dash + single char)
+              if (prefix === "-" && optionName.length !== 2) {
+                continue;
+              }
+              suggestions.push({ text: optionName });
+            }
+          }
+        }
+
+        // Check if we should suggest values for this option
+        // This happens in two scenarios:
+        // 1. The buffer contains our option name as the last token (e.g., ["-f"])
+        // 2. The parser state is undefined and we haven't yet processed any args
+        if (valueParser && valueParser.suggest) {
+          let shouldSuggestValues = false;
+
+          // Scenario 1: Buffer contains option name
+          if (context.buffer.length > 0) {
+            const lastToken = context.buffer[context.buffer.length - 1];
+            if ((optionNames as readonly string[]).includes(lastToken)) {
+              shouldSuggestValues = true;
+            }
+          } // Scenario 2: Empty buffer but state is undefined (we might be continuing from a consumed option)
+          // This happens when suggest() function has already consumed the option name
+          else if (context.state === undefined && context.buffer.length === 0) {
+            // We need more sophisticated logic here to determine if we should suggest values
+            // For now, we'll assume that if we have a value parser and no buffer,
+            // we might be in a value-expecting state
+            shouldSuggestValues = true;
+          }
+
+          if (shouldSuggestValues) {
+            const valueSuggestions = valueParser.suggest(prefix);
+            suggestions.push(...valueSuggestions);
+          }
+        }
+      }
+
+      return suggestions;
+    },
     getDocFragments(
       _state: DocState<ValueParserResult<T | boolean> | undefined>,
       defaultValue?,
@@ -652,6 +726,27 @@ export function flag(
         error: message`${eOptionNames(optionNames)}: ${state.error}`,
       };
     },
+    suggest(_context, prefix) {
+      const suggestions: Suggestion[] = [];
+
+      // If the prefix looks like an option prefix, suggest matching option names
+      if (
+        prefix.startsWith("--") || prefix.startsWith("-") ||
+        prefix.startsWith("/")
+      ) {
+        for (const optionName of optionNames) {
+          if (optionName.startsWith(prefix)) {
+            // Special case: if prefix is exactly "-", only suggest short options (single dash + single char)
+            if (prefix === "-" && optionName.length !== 2) {
+              continue;
+            }
+            suggestions.push({ text: optionName });
+          }
+        }
+      }
+
+      return suggestions;
+    },
     getDocFragments(
       _state: DocState<ValueParserResult<true> | undefined>,
       _defaultValue?,
@@ -816,6 +911,17 @@ export function argument<T>(
             : options.errors.invalidValue)
           : message`${metavar(valueParser.metavar)}: ${state.error}`,
       };
+    },
+    suggest(_context, prefix) {
+      const suggestions: Suggestion[] = [];
+
+      // Delegate to value parser if it has completion capabilities
+      if (valueParser.suggest) {
+        const valueSuggestions = valueParser.suggest(prefix);
+        suggestions.push(...valueSuggestions);
+      }
+
+      return suggestions;
     },
     getDocFragments(
       _state: DocState<ValueParserResult<T> | undefined>,
@@ -1000,6 +1106,36 @@ export function command<T, TState>(
         error: options.errors?.invalidState ??
           message`Invalid command state during completion.`,
       };
+    },
+    suggest(context, prefix) {
+      const suggestions: Suggestion[] = [];
+
+      // Handle different command states
+      if (context.state === undefined) {
+        // Command not yet matched - suggest command name if it matches prefix
+        if (name.startsWith(prefix)) {
+          suggestions.push({
+            text: name,
+            ...(options.description && { description: options.description }),
+          });
+        }
+      } else if (context.state[0] === "matched") {
+        // Command matched but inner parser not started - delegate to inner parser
+        const innerSuggestions = parser.suggest({
+          ...context,
+          state: parser.initialState,
+        }, prefix);
+        suggestions.push(...innerSuggestions);
+      } else if (context.state[0] === "parsing") {
+        // Command in parsing state - delegate to inner parser
+        const innerSuggestions = parser.suggest({
+          ...context,
+          state: context.state[1],
+        }, prefix);
+        suggestions.push(...innerSuggestions);
+      }
+
+      return suggestions;
     },
     getDocFragments(state: DocState<CommandState<TState>>, defaultValue?) {
       if (state.kind === "unavailable" || typeof state.state === "undefined") {

@@ -79,6 +79,20 @@ export interface Parser<TValue, TState> {
   complete(state: TState): ValueParserResult<TValue>;
 
   /**
+   * Generates next-step suggestions based on the current context
+   * and an optional prefix.  This can be used to provide shell completion
+   * suggestions or to guide users in constructing valid commands.
+   * @param context The context of the parser, which includes the input buffer
+   *                and the current state.
+   * @param prefix A prefix string that can be used to filter suggestions.
+   *               Can be an empty string if no prefix is provided.
+   * @returns An iterable of {@link Suggestion} objects, each containing
+   *          a suggestion text and an optional description.
+   * @since 0.6.0
+   */
+  suggest(context: ParserContext<TState>, prefix: string): Iterable<Suggestion>;
+
+  /**
    * Generates a documentation fragment for this parser, which can be used
    * to describe the parser's usage, description, and default value.
    * @param state The current state of the parser, wrapped in a DocState
@@ -115,6 +129,25 @@ export interface ParserContext<TState> {
    * that no further options should be processed.
    */
   readonly optionsTerminated: boolean;
+}
+
+/**
+ * Represents a suggestion for command-line completion or guidance.
+ * Each suggestion consists of a {@link text} and an optional
+ * {@link description}.
+ * @since 0.6.0
+ */
+export interface Suggestion {
+  /**
+   * The suggestion text that can be used for completion or guidance.
+   */
+  readonly text: string;
+
+  /**
+   * An optional description providing additional context
+   * or information about the suggestion.
+   */
+  readonly description?: Message;
 }
 
 /**
@@ -242,6 +275,72 @@ export function parse<T>(
   return endResult.success
     ? { success: true, value: endResult.value }
     : { success: false, error: endResult.error };
+}
+
+/**
+ * Generates command-line suggestions based on current parsing state.
+ * This function processes the input arguments up to the last argument,
+ * then calls the parser's suggest method with the remaining prefix.
+ * @template T The type of the value produced by the parser.
+ * @param parser The {@link Parser} to use for generating suggestions.
+ * @param args The array of command-line arguments including the partial
+ *             argument to complete.  The last element is treated as
+ *             the prefix for suggestions.
+ * @returns An array of {@link Suggestion} objects containing completion
+ *          candidates.
+ * @example
+ * ```typescript
+ * const parser = object({
+ *   verbose: option("-v", "--verbose"),
+ *   format: option("-f", "--format", choice(["json", "yaml"]))
+ * });
+ *
+ * // Get suggestions for options starting with "--"
+ * const suggestions = suggest(parser, ["--"]);
+ * // Returns: [{ text: "--verbose" }, { text: "--format" }]
+ *
+ * // Get suggestions after parsing some arguments
+ * const suggestions2 = suggest(parser, ["-v", "--format="]);
+ * // Returns: [{ text: "--format=json" }, { text: "--format=yaml" }]
+ * ```
+ * @since 0.6.0
+ */
+export function suggest<T>(
+  parser: Parser<T, unknown>,
+  args: readonly [string, ...readonly string[]],
+): readonly Suggestion[] {
+  const allButLast = args.slice(0, -1);
+  const prefix = args[args.length - 1];
+
+  let context: ParserContext<unknown> = {
+    buffer: allButLast,
+    optionsTerminated: false,
+    state: parser.initialState,
+  };
+
+  // Parse up to the prefix
+  while (context.buffer.length > 0) {
+    const result = parser.parse(context);
+    if (!result.success) {
+      // If parsing fails, we might still be able to provide suggestions
+      // based on the current state. Try to get suggestions from the parser.
+      return Array.from(parser.suggest(context, prefix));
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+
+    // Check for infinite loop (same as in parse function)
+    if (
+      context.buffer.length > 0 &&
+      context.buffer.length === previousBuffer.length &&
+      context.buffer[0] === previousBuffer[0]
+    ) {
+      return [];
+    }
+  }
+
+  // Get suggestions from the parser with the prefix
+  return Array.from(parser.suggest(context, prefix));
 }
 
 /**
