@@ -1320,4 +1320,125 @@ handle domain-specific data types while maintaining consistency with
 the built-in parsers and providing excellent integration with TypeScript's
 type system.
 
+
+Completion suggestions
+----------------------
+
+*This API is available since Optique 0.6.0.*
+
+Value parsers can implement an optional `suggest()` method to provide
+intelligent completion suggestions for shell completion. This method enables
+users to discover valid values by pressing Tab, improving usability and
+reducing input errors.
+
+### Built-in parser suggestions
+
+Many built-in value parsers automatically provide completion suggestions:
+
+~~~~ typescript twoslash
+import { choice, locale, url } from "@optique/core/valueparser";
+import { timeZone } from "@optique/temporal";
+
+// Choice parser suggests all available options
+const format = choice(["json", "yaml", "xml"]);
+// Completing "j" suggests: ["json"]
+
+// URL parser suggests protocol completions when allowedProtocols is set
+const apiUrl = url({ allowedProtocols: ["https:", "http:"] });
+// Completing "ht" suggests: ["http://", "https://"]
+
+// Locale parser suggests common locale identifiers
+const userLocale = locale();
+// Completing "en" suggests: ["en", "en-US", "en-GB", "en-CA", ...]
+
+// Timezone parser uses Intl.supportedValuesOf for dynamic suggestions
+const timezone = timeZone();
+// Completing "America/" suggests: ["America/New_York", "America/Chicago", ...]
+~~~~
+
+### Custom suggestion implementation
+
+Implement the `suggest()` method in custom value parsers to provide
+domain-specific completions:
+
+~~~~ typescript twoslash
+import { type ValueParser, type ValueParserResult } from "@optique/core/valueparser";
+import { type Suggestion } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+
+function httpMethod(): ValueParser<string> {
+  const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+
+  return {
+    metavar: "METHOD",
+    parse(input: string): ValueParserResult<string> {
+      const method = input.toUpperCase();
+      if (methods.includes(method)) {
+        return { success: true, value: method };
+      }
+      return {
+        success: false,
+        error: message`Invalid HTTP method: ${input}. Valid methods: ${methods.join(", ")}.`,
+      };
+    },
+    format(value: string): string {
+      return value;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      for (const method of methods) {
+        if (method.toLowerCase().startsWith(prefix.toLowerCase())) {
+          yield {
+            kind: "literal",
+            text: method,
+            description: message`HTTP ${method} request method`
+          };
+        }
+      }
+    },
+  };
+}
+~~~~
+
+### File completion delegation
+
+For file and directory inputs, delegate completion to the shell's native
+file system integration using file-type suggestions:
+
+~~~~ typescript twoslash
+import { type ValueParser, type ValueParserResult } from "@optique/core/valueparser";
+import { type Suggestion } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+
+function configFile(): ValueParser<string> {
+  return {
+    metavar: "CONFIG",
+    parse(input: string): ValueParserResult<string> {
+      // Validation logic here
+      return { success: true, value: input };
+    },
+    format(value: string): string {
+      return value;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      yield {
+        kind: "file",
+        type: "file",
+        extensions: [".json", ".yaml", ".yml"],
+        includeHidden: false,
+        description: message`Configuration file`
+      };
+    },
+  };
+}
+~~~~
+
+The `suggest()` method receives the current input prefix and should yield
+`Suggestion` objects. The shell completion system handles filtering and
+display, while native file completion provides better performance and
+platform-specific behavior for file system operations.
+
+Completion suggestions improve user experience by making CLI applications
+more discoverable and reducing typing errors, while maintaining the same
+type safety and validation guarantees as the parsing logic.
+
 <!-- cSpell: ignore myapp phonebk toolong -->

@@ -646,6 +646,45 @@ export function or(
       }
       return { ...error, success: false };
     },
+    suggest(context, prefix) {
+      const suggestions = [];
+
+      if (context.state == null) {
+        // No parser has been selected yet, get suggestions from all parsers
+        for (const parser of parsers) {
+          const parserSuggestions = parser.suggest({
+            ...context,
+            state: parser.initialState,
+          }, prefix);
+          suggestions.push(...parserSuggestions);
+        }
+      } else {
+        // A parser has been selected, delegate to that parser
+        const [index, parserResult] = context.state;
+        if (parserResult.success) {
+          const parserSuggestions = parsers[index].suggest({
+            ...context,
+            state: parserResult.next.state,
+          }, prefix);
+          suggestions.push(...parserSuggestions);
+        }
+      }
+
+      // Remove duplicates by text/pattern
+      const seen = new Set<string>();
+      return suggestions.filter((suggestion) => {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    },
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
@@ -994,6 +1033,45 @@ export function longestMatch(
 
       return { ...error, success: false };
     },
+    suggest(context, prefix) {
+      const suggestions = [];
+
+      if (context.state == null) {
+        // No parser has been selected yet, get suggestions from all parsers
+        for (const parser of parsers) {
+          const parserSuggestions = parser.suggest({
+            ...context,
+            state: parser.initialState,
+          }, prefix);
+          suggestions.push(...parserSuggestions);
+        }
+      } else {
+        // A parser has been selected, delegate to that parser
+        const [index, parserResult] = context.state;
+        if (parserResult.success) {
+          const parserSuggestions = parsers[index].suggest({
+            ...context,
+            state: parserResult.next.state,
+          }, prefix);
+          suggestions.push(...parserSuggestions);
+        }
+      }
+
+      // Remove duplicates by text/pattern
+      const seen = new Set<string>();
+      return suggestions.filter((suggestion) => {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    },
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
@@ -1319,6 +1397,40 @@ export function object<
       }
       return { success: true, value: result };
     },
+    suggest(context, prefix) {
+      const suggestions = [];
+
+      // Try getting suggestions from each parser based on their priority
+      for (const [field, parser] of parserPairs) {
+        const fieldState =
+          (context.state && typeof context.state === "object" &&
+              field in context.state)
+            ? context.state[field]
+            : parser.initialState;
+
+        const fieldSuggestions = parser.suggest({
+          ...context,
+          state: fieldState,
+        }, prefix);
+
+        suggestions.push(...fieldSuggestions);
+      }
+
+      // Remove duplicates by text/pattern
+      const seen = new Set<string>();
+      return suggestions.filter((suggestion) => {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    },
     getDocFragments(
       state: DocState<{ readonly [K in keyof T]: unknown }>,
       defaultValue?,
@@ -1544,6 +1656,39 @@ export function tuple<
       }
 
       return { success: true, value: result };
+    },
+    suggest(context, prefix) {
+      const suggestions = [];
+
+      // For tuple parser, try each parser in sequence until one matches
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        const parserState = context.state && Array.isArray(context.state)
+          ? context.state[i]
+          : parser.initialState;
+
+        const parserSuggestions = parser.suggest({
+          ...context,
+          state: parserState,
+        }, prefix);
+
+        suggestions.push(...parserSuggestions);
+      }
+
+      // Remove duplicates by text/pattern
+      const seen = new Set<string>();
+      return suggestions.filter((suggestion) => {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
     },
     getDocFragments(
       state: DocState<{ readonly [K in keyof T]: unknown }>,
@@ -2709,6 +2854,65 @@ export function merge(
       }
       return { success: true, value: object };
     },
+    suggest(context, prefix) {
+      const suggestions = [];
+
+      // For merge parser, get suggestions from all parsers
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        let parserState: unknown;
+
+        if (parser.initialState === undefined) {
+          const key = `__parser_${i}`;
+          if (
+            context.state && typeof context.state === "object" &&
+            key in context.state
+          ) {
+            parserState = context.state[key];
+          } else {
+            parserState = undefined;
+          }
+        } else if (
+          parser.initialState && typeof parser.initialState === "object"
+        ) {
+          if (context.state && typeof context.state === "object") {
+            const extractedState: Record<string | symbol, unknown> = {};
+            for (const field in parser.initialState) {
+              extractedState[field] = field in context.state
+                ? context.state[field]
+                : parser.initialState[field];
+            }
+            parserState = extractedState;
+          } else {
+            parserState = parser.initialState;
+          }
+        } else {
+          parserState = parser.initialState;
+        }
+
+        const parserSuggestions = parser.suggest({
+          ...context,
+          state: parserState as Parameters<typeof parser.suggest>[0]["state"],
+        }, prefix);
+
+        suggestions.push(...parserSuggestions);
+      }
+
+      // Remove duplicates by text/pattern
+      const seen = new Set<string>();
+      return suggestions.filter((suggestion) => {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    },
     getDocFragments(
       state: DocState<Record<string | symbol, unknown>>,
       _defaultValue?,
@@ -3033,6 +3237,39 @@ export function concat(
       }
       return { success: true, value: results };
     },
+    suggest(context, prefix) {
+      const suggestions = [];
+
+      // For concat parser, get suggestions from all parsers
+      for (let i = 0; i < parsers.length; i++) {
+        const parser = parsers[i];
+        const parserState = context.state && Array.isArray(context.state)
+          ? context.state[i]
+          : parser.initialState;
+
+        const parserSuggestions = parser.suggest({
+          ...context,
+          state: parserState,
+        }, prefix);
+
+        suggestions.push(...parserSuggestions);
+      }
+
+      // Remove duplicates by text/pattern
+      const seen = new Set<string>();
+      return suggestions.filter((suggestion) => {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    },
     getDocFragments(state: DocState<readonly unknown[]>, _defaultValue?) {
       const fragments = parsers.flatMap((p, index) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
@@ -3115,6 +3352,7 @@ export function group<TValue, TState>(
     initialState: parser.initialState,
     parse: (context) => parser.parse(context),
     complete: (state) => parser.complete(state),
+    suggest: (context, prefix) => parser.suggest(context, prefix),
     getDocFragments: (state, defaultValue) => {
       const { description, fragments } = parser.getDocFragments(
         state,

@@ -742,6 +742,188 @@ This creates a deploy command that:
  -  Has optional dry-run mode
  -  Uses dependent confirmation when not in dry-run mode
 
+
+Shell completion patterns
+-------------------------
+
+*This API is available since Optique 0.6.0.*
+
+Modern CLI applications benefit from intelligent shell completion that helps
+users discover available options and reduces typing errors. Optique provides
+built-in completion support that integrates seamlessly with your parser
+definitions.
+
+### Basic completion setup
+
+Enable completion for any CLI application by adding the `completion` option:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { argument, option } from "@optique/core/primitives";
+import { string, choice } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  format: option("-f", "--format", choice(["json", "yaml", "xml"])),
+  output: option("-o", "--output", string({ metavar: "FILE" })),
+  verbose: option("-v", "--verbose"),
+  input: argument(string({ metavar: "INPUT" })),
+});
+
+const config = run(parser, { completion: "both" });
+~~~~
+
+This automatically provides intelligent completion for:
+
+ -  Option names: `--format`, `--output`, `--verbose`
+ -  Choice values: `--format json`, `--format yaml`
+ -  Help integration: `--help` is included in completions
+
+### Custom value parser suggestions
+
+Create value parsers with domain-specific completion suggestions:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type { Suggestion } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+
+// Custom parser for log levels with intelligent completion
+function logLevel(): ValueParser<string> {
+  const levels = ["error", "warn", "info", "debug", "trace"];
+
+  return {
+    metavar: "LEVEL",
+    parse(input: string): ValueParserResult<string> {
+      if (levels.includes(input.toLowerCase())) {
+        return { success: true, value: input.toLowerCase() };
+      }
+      return {
+        success: false,
+        error: message`Invalid log level: ${input}. Valid levels: ${levels.join(", ")}.`,
+      };
+    },
+    format(value: string): string {
+      return value;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      for (const level of levels) {
+        if (level.startsWith(prefix.toLowerCase())) {
+          yield {
+            kind: "literal",
+            text: level,
+            description: message`Set log level to ${level}`
+          };
+        }
+      }
+    },
+  };
+}
+~~~~
+
+### Multi-command CLI with rich completion
+
+Complex CLI tools with subcommands benefit greatly from completion:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { string, choice } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const serverCommand = command("server", object({
+  action: constant("server"),
+  port: optional(option("-p", "--port", string())),
+  host: optional(option("-h", "--host", string())),
+  env: optional(option("--env", choice(["dev", "staging", "prod"]))),
+}));
+
+const buildCommand = command("build", object({
+  action: constant("build"),
+  target: argument(choice(["web", "mobile", "desktop"])),
+  mode: optional(option("--mode", choice(["debug", "release"]))),
+  output: optional(option("-o", "--output", string())),
+}));
+
+const parser = or(serverCommand, buildCommand);
+
+const config = run(parser, { completion: "both" });
+~~~~
+
+This provides completion for:
+
+ -  Command names: `server`, `build`
+ -  Command-specific options: `--port` only for server, `--mode` only for build
+ -  Enum values: `--env dev`, `--mode release`
+ -  Context-aware suggestions based on the current command
+
+### File path completion integration
+
+For file and directory arguments, Optique delegates to native shell completion:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { argument, option } from "@optique/core/primitives";
+import { path } from "@optique/run/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  config: option("-c", "--config", path({
+    extensions: [".json", ".yaml"],
+    type: "file"
+  })),
+  outputDir: option("-o", "--output", path({
+    type: "directory"
+  })),
+  input: argument(path({
+    extensions: [".md", ".txt"],
+    type: "file"
+  })),
+});
+
+const config = run(parser, { completion: "both" });
+~~~~
+
+The `path()` value parser automatically provides:
+
+ -  Native file system completion using shell built-ins
+ -  Extension filtering (*.json*, *.yaml* files only)
+ -  Type filtering (files vs directories)
+ -  Proper handling of spaces, special characters, and symlinks
+
+### Installation and usage
+
+Once completion is enabled, users install it with simple commands:
+
+::: code-group
+
+~~~~ bash [Bash]
+# Generate and install Bash completion
+myapp completion bash > ~/.bashrc.d/myapp.bash
+source ~/.bashrc.d/myapp.bash
+~~~~
+
+~~~~ zsh [zsh]
+# Generate and install zsh completion
+myapp completion zsh > ~/.zsh/completions/_myapp
+~~~~
+
+:::
+
+The completion system leverages the same parser structure used for argument
+validation, ensuring suggestions always stay synchronized with your CLI's
+actual behavior without requiring separate maintenance.
+
+Users then benefit from intelligent completion:
+
+~~~~ bash
+myapp <TAB>                    # Shows: server, build, help
+myapp server --<TAB>           # Shows: --port, --host, --env, --help
+myapp server --env <TAB>       # Shows: dev, staging, prod
+myapp build <TAB>              # Shows: web, mobile, desktop
+~~~~
+
 The patterns in this cookbook provide the building blocks for creating
 CLI interfaces that are both powerful and type-safe, with clear separation
 between parsing logic, type safety, and user experience.

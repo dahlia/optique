@@ -69,6 +69,54 @@ You are 25 years old.
 Verbose mode enabled.
 ~~~~
 
+
+Shell completion
+----------------
+
+*@optique/run* automatically supports shell completion for Bash and zsh.
+Enable completion by adding the `completion` option to your `run()`
+configuration:
+
+~~~~ typescript
+import { run } from "@optique/run";
+import { object, option, argument } from "@optique/core/parser";
+import { string, choice } from "@optique/core/valueparser";
+
+const parser = object({
+  format: option("-f", "--format", choice(["json", "yaml", "xml"])),
+  input: argument(string({ metavar: "FILE" })),
+  verbose: option("-v", "--verbose"),
+});
+
+const config = run(parser, {
+  completion: { mode: "both" }
+});
+~~~~
+
+Users can then generate and install completion scripts:
+
+~~~~ bash
+# Generate Bash completion script
+myapp completion bash > ~/.bashrc.d/myapp.bash
+source ~/.bashrc.d/myapp.bash
+
+# Generate zsh completion script
+myapp completion zsh > ~/.zsh/completions/_myapp
+~~~~
+
+The completion system automatically provides intelligent suggestions for:
+
+ -  Option names and aliases (`--format`, `-f`)
+ -  Option values (`--format json`, `--format=yaml`)
+ -  Subcommands and arguments
+ -  File paths (when using `path()` value parser)
+
+For more details, see the [completion guide].
+
+[completion guide]: https://optique.dev/concepts/completion
+
+---
+
 For more resources, see the [docs] and the [*examples/*](/examples/) directory.
 
 [docs]: https://optique.dev/

@@ -1,4 +1,5 @@
 import { type Message, message, text } from "./message.ts";
+import type { Suggestion } from "./parser.ts";
 
 /**
  * Interface for parsing CLI option values and arguments.
@@ -35,6 +36,16 @@ export interface ValueParser<T> {
    * @returns A string representation of the value.
    */
   format(value: T): string;
+
+  /**
+   * Provides completion suggestions for values of this type.
+   * This is optional and used for shell completion functionality.
+   *
+   * @param prefix The current input prefix to complete.
+   * @returns An iterable of suggestion objects.
+   * @since 0.6.0
+   */
+  suggest?(prefix: string): Iterable<Suggestion>;
 }
 
 /**
@@ -184,6 +195,20 @@ export function choice<const T extends string>(
     },
     format(value: T): string {
       return value;
+    },
+    suggest(prefix: string) {
+      const normalizedPrefix = options.caseInsensitive
+        ? prefix.toLowerCase()
+        : prefix;
+
+      return values
+        .filter((value) => {
+          const normalizedValue = options.caseInsensitive
+            ? value.toLowerCase()
+            : value;
+          return normalizedValue.startsWith(normalizedPrefix);
+        })
+        .map((value) => ({ kind: "literal", text: value }));
     },
   };
 }
@@ -732,6 +757,21 @@ export function url(options: UrlOptions = {}): ValueParser<URL> {
     format(value: URL): string {
       return value.href;
     },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      if (allowedProtocols && prefix.length > 0 && !prefix.includes("://")) {
+        // Suggest protocol completions if prefix doesn't contain ://
+        for (const protocol of allowedProtocols) {
+          // Remove trailing colon if present, then add ://
+          const cleanProtocol = protocol.replace(/:+$/, "");
+          if (cleanProtocol.startsWith(prefix.toLowerCase())) {
+            yield {
+              kind: "literal",
+              text: `${cleanProtocol}://`,
+            };
+          }
+        }
+      }
+    },
   };
 }
 
@@ -795,6 +835,280 @@ export function locale(options: LocaleOptions = {}): ValueParser<Intl.Locale> {
     },
     format(value: Intl.Locale): string {
       return value.baseName;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      // Since Intl.supportedValuesOf doesn't support 'locale', we use a curated list
+      // of common locale identifiers based on Unicode CLDR and common usage patterns
+      const commonLocales = [
+        // English variants
+        "en",
+        "en-US",
+        "en-GB",
+        "en-CA",
+        "en-AU",
+        "en-NZ",
+        "en-IE",
+        "en-ZA",
+        "en-IN",
+
+        // Spanish variants
+        "es",
+        "es-ES",
+        "es-MX",
+        "es-AR",
+        "es-CL",
+        "es-CO",
+        "es-PE",
+        "es-VE",
+        "es-EC",
+        "es-GT",
+        "es-CU",
+        "es-BO",
+        "es-DO",
+        "es-HN",
+        "es-PY",
+        "es-SV",
+        "es-NI",
+        "es-CR",
+        "es-PA",
+        "es-UY",
+        "es-PR",
+
+        // French variants
+        "fr",
+        "fr-FR",
+        "fr-CA",
+        "fr-BE",
+        "fr-CH",
+        "fr-LU",
+        "fr-MC",
+
+        // German variants
+        "de",
+        "de-DE",
+        "de-AT",
+        "de-CH",
+        "de-BE",
+        "de-LU",
+        "de-LI",
+
+        // Italian variants
+        "it",
+        "it-IT",
+        "it-CH",
+        "it-SM",
+        "it-VA",
+
+        // Portuguese variants
+        "pt",
+        "pt-BR",
+        "pt-PT",
+        "pt-AO",
+        "pt-MZ",
+        "pt-CV",
+        "pt-GW",
+        "pt-ST",
+        "pt-TL",
+
+        // Russian and Slavic
+        "ru",
+        "ru-RU",
+        "ru-BY",
+        "ru-KZ",
+        "ru-KG",
+        "ru-MD",
+        "uk",
+        "uk-UA",
+        "be",
+        "be-BY",
+        "bg",
+        "bg-BG",
+        "cs",
+        "cs-CZ",
+        "sk",
+        "sk-SK",
+        "sl",
+        "sl-SI",
+        "hr",
+        "hr-HR",
+        "sr",
+        "sr-RS",
+        "mk",
+        "mk-MK",
+
+        // East Asian
+        "ja",
+        "ja-JP",
+        "ko",
+        "ko-KR",
+        "zh",
+        "zh-CN",
+        "zh-TW",
+        "zh-HK",
+        "zh-SG",
+        "zh-MO",
+
+        // Arabic variants
+        "ar",
+        "ar-SA",
+        "ar-AE",
+        "ar-BH",
+        "ar-DZ",
+        "ar-EG",
+        "ar-IQ",
+        "ar-JO",
+        "ar-KW",
+        "ar-LB",
+        "ar-LY",
+        "ar-MA",
+        "ar-OM",
+        "ar-QA",
+        "ar-SY",
+        "ar-TN",
+        "ar-YE",
+
+        // Indian subcontinent
+        "hi",
+        "hi-IN",
+        "bn",
+        "bn-BD",
+        "bn-IN",
+        "ur",
+        "ur-PK",
+        "ta",
+        "ta-IN",
+        "te",
+        "te-IN",
+        "mr",
+        "mr-IN",
+        "gu",
+        "gu-IN",
+        "kn",
+        "kn-IN",
+        "ml",
+        "ml-IN",
+        "pa",
+        "pa-IN",
+
+        // Turkish
+        "tr",
+        "tr-TR",
+        "tr-CY",
+
+        // Polish
+        "pl",
+        "pl-PL",
+
+        // Dutch
+        "nl",
+        "nl-NL",
+        "nl-BE",
+        "nl-SR",
+
+        // Nordic languages
+        "sv",
+        "sv-SE",
+        "sv-FI",
+        "da",
+        "da-DK",
+        "no",
+        "no-NO",
+        "nb",
+        "nb-NO",
+        "nn",
+        "nn-NO",
+        "fi",
+        "fi-FI",
+        "is",
+        "is-IS",
+
+        // Other European
+        "el",
+        "el-GR",
+        "el-CY",
+        "hu",
+        "hu-HU",
+        "ro",
+        "ro-RO",
+        "et",
+        "et-EE",
+        "lv",
+        "lv-LV",
+        "lt",
+        "lt-LT",
+        "mt",
+        "mt-MT",
+        "ga",
+        "ga-IE",
+        "cy",
+        "cy-GB",
+        "eu",
+        "eu-ES",
+        "ca",
+        "ca-ES",
+        "ca-AD",
+
+        // Asian languages
+        "th",
+        "th-TH",
+        "vi",
+        "vi-VN",
+        "id",
+        "id-ID",
+        "ms",
+        "ms-MY",
+        "ms-BN",
+        "ms-SG",
+        "tl",
+        "tl-PH",
+        "km",
+        "km-KH",
+        "my",
+        "my-MM",
+        "lo",
+        "lo-LA",
+        "si",
+        "si-LK",
+        "ne",
+        "ne-NP",
+
+        // African languages
+        "sw",
+        "sw-TZ",
+        "sw-KE",
+        "am",
+        "am-ET",
+        "ha",
+        "ha-NG",
+        "yo",
+        "yo-NG",
+        "ig",
+        "ig-NG",
+        "zu",
+        "zu-ZA",
+        "xh",
+        "xh-ZA",
+        "af",
+        "af-ZA",
+
+        // Hebrew
+        "he",
+        "he-IL",
+
+        // Persian/Farsi
+        "fa",
+        "fa-IR",
+        "fa-AF",
+      ];
+
+      for (const locale of commonLocales) {
+        if (locale.toLowerCase().startsWith(prefix.toLowerCase())) {
+          yield {
+            kind: "literal",
+            text: locale,
+          };
+        }
+      }
     },
   };
 }

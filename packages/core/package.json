@@ -51,6 +51,14 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./completion": {
+      "types": {
+        "import": "./dist/completion.d.ts",
+        "require": "./dist/completion.cts"
+      },
+      "import": "./dist/completion.js",
+      "require": "./dist/completion.cjs"
+    },
     "./constructs": {
       "types": {
         "import": "./dist/constructs.d.ts",

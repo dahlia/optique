@@ -6,6 +6,34 @@ Version 0.6.0
 
 To be released.
 
+### @optique/core
+
+ -  Added shell completion support for Bash and zsh. Optique now provides
+    built-in completion functionality that integrates seamlessly with the
+    existing parser architecture. This allows CLI applications to offer
+    intelligent suggestions for commands, options, and arguments without
+    requiring additional configuration.  [[#5]]
+
+     -  Added `Suggestion` type.
+     -  Added `Parser.suggest()` method.
+     -  Added `ValueParser.suggest()` method.
+     -  Added `suggest()` function.
+     -  Added `@optique/core/completion` module.
+     -  Added `ShellCompletion` interface.
+     -  Added `bash` and `zsh` shell completion generators.
+     -  Added `RunOptions.completion` option.
+
+[#5]: https://github.com/dahlia/optique/issues/5
+
+### @optique/run
+
+ -  Added completion integration to the `run()` function. Applications can
+    now enable shell completion by setting the `completion` option, which
+    automatically handles completion script generation and runtime completion
+    requests.  [[#5]]
+
+     -  Added `RunOptions.completion` option.
+
 
 Version 0.5.1
 -------------

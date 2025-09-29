@@ -1,8 +1,23 @@
+import { bash, type ShellCompletion, zsh } from "./completion.ts";
 import { longestMatch, object } from "./constructs.ts";
 import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
-import { formatMessage, type Message, message, optionName } from "./message.ts";
+import {
+  formatMessage,
+  type Message,
+  message,
+  type MessageTerm,
+  optionName,
+  text,
+  value,
+} from "./message.ts";
 import { multiple, optional } from "./modifiers.ts";
-import { getDocPage, type InferValue, parse, type Parser } from "./parser.ts";
+import {
+  getDocPage,
+  type InferValue,
+  parse,
+  type Parser,
+  suggest,
+} from "./parser.ts";
 import { argument, command, constant, flag } from "./primitives.ts";
 import { formatUsage } from "./usage.ts";
 import { string } from "./valueparser.ts";
@@ -81,6 +96,11 @@ type ParsedResult =
   | { readonly type: "success"; readonly value: unknown }
   | { readonly type: "help"; readonly commands: readonly string[] }
   | { readonly type: "version" }
+  | {
+    readonly type: "completion";
+    readonly shell: string;
+    readonly args: readonly string[];
+  }
   | { readonly type: "error"; readonly error: Message };
 
 /**
@@ -185,6 +205,14 @@ function combineWithHelpVersion(
         return { success: true, value: state };
       },
 
+      suggest(_context, prefix) {
+        // Suggest --help if it matches the prefix
+        if ("--help".startsWith(prefix)) {
+          return [{ kind: "literal", text: "--help" }];
+        }
+        return [];
+      },
+
       getDocFragments(state) {
         return helpParsers.helpOption?.getDocFragments(state) ??
           { fragments: [] };
@@ -267,6 +295,14 @@ function combineWithHelpVersion(
 
       complete(state) {
         return { success: true, value: state };
+      },
+
+      suggest(_context, prefix) {
+        // Suggest --version if it matches the prefix
+        if ("--version".startsWith(prefix)) {
+          return [{ kind: "literal", text: "--version" }];
+        }
+        return [];
       },
 
       getDocFragments(state) {
@@ -493,6 +529,34 @@ export interface RunOptions<THelp, TError> {
   };
 
   /**
+   * Completion configuration. When provided, enables shell completion functionality.
+   * @since 0.6.0
+   */
+  readonly completion?: {
+    /**
+     * Determines how completion is made available:
+     *
+     * - `"command"`: Only the `completion` subcommand is available
+     * - `"option"`: Only the `--completion` option is available
+     * - `"both"`: Both `completion` subcommand and `--completion` option are available
+     *
+     * @default `"both"`
+     */
+    readonly mode?: "command" | "option" | "both";
+
+    /**
+     * Callback function invoked when completion is requested. The function can
+     * optionally receive an exit code parameter.
+     *
+     * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
+     * on Deno to this option.
+     *
+     * @default Returns `void` when completion is shown.
+     */
+    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+  };
+
+  /**
    * What to display above error messages:
    * - `"usage"`: Show usage information
    * - `"help"`: Show help text (if available)
@@ -549,6 +613,72 @@ export interface RunOptions<THelp, TError> {
 }
 
 /**
+ * Handles shell completion requests.
+ * @since 0.6.0
+ */
+function handleCompletion<THelp, TError>(
+  completionArgs: readonly string[],
+  programName: string,
+  parser: Parser<unknown, unknown>,
+  stdout: (text: string) => void,
+  stderr: (text: string) => void,
+  onCompletion: (() => THelp) | ((exitCode: number) => THelp),
+  onError: (() => TError) | ((exitCode: number) => TError),
+  colors?: boolean,
+): THelp | TError {
+  if (completionArgs.length === 0) {
+    stderr("Error: Missing shell name for completion.\n");
+    stderr("Usage: " + programName + " completion <shell> [args...]\n");
+    return onError(1);
+  }
+
+  const shellName = completionArgs[0];
+  const args = completionArgs.slice(1);
+
+  // Get available shells
+  const availableShells: Record<string, ShellCompletion> = {
+    bash,
+    zsh,
+  };
+
+  const shell = availableShells[shellName];
+
+  if (!shell) {
+    const available: MessageTerm[] = [];
+    for (const shell in availableShells) {
+      if (available.length > 0) available.push(text(", "));
+      available.push(value(shell));
+    }
+    stderr(
+      formatMessage(
+        message`Error: Unsupported shell ${shellName}. Available shells: ${available}.`,
+        { colors, quotes: !colors },
+      ),
+    );
+    return onError(1);
+  }
+
+  if (args.length === 0) {
+    // Generate completion script
+    const script = shell.generateScript(programName, ["completion", shellName]);
+    stdout(script);
+  } else {
+    // Provide completion suggestions
+    // Add the current (incomplete) argument to the args array for suggest()
+    const suggestions = suggest(parser, args as [string, ...string[]]);
+    for (const chunk of shell.encodeSuggestions(suggestions)) {
+      stdout(chunk);
+    }
+  }
+
+  try {
+    return onCompletion(0);
+  } catch {
+    return (onCompletion as (() => THelp))();
+  }
+}
+
+/**
  * Runs a parser against command-line arguments with built-in help and error
  * handling.
  *
@@ -587,15 +717,7 @@ export function run<
   args: readonly string[],
   options: RunOptions<THelp, TError> = {},
 ): InferValue<TParser> {
-  // Extract help configuration
-  const helpMode = options.help?.mode ?? "option";
-  const onHelp = options.help?.onShow ?? (() => ({} as THelp));
-
-  // Extract version configuration
-  const versionMode = options.version?.mode ?? "option";
-  const versionValue = options.version?.value ?? "";
-  const onVersion = options.version?.onShow ?? (() => ({} as THelp));
-
+  // Extract all options first
   let {
     colors,
     maxWidth,
@@ -610,6 +732,72 @@ export function run<
     description,
     footer,
   } = options;
+
+  // Check for completion request first (before any parsing)
+  const completionMode = options.completion?.mode ?? "both";
+  const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
+
+  if (options.completion) {
+    // Handle completion command format: "completion <shell> [args...]"
+    if (
+      (completionMode === "command" || completionMode === "both") &&
+      args.length >= 1 && args[0] === "completion"
+    ) {
+      return handleCompletion(
+        args.slice(1),
+        programName,
+        parser,
+        stdout,
+        stderr,
+        onCompletion,
+        onError,
+        colors,
+      );
+    }
+
+    // Handle completion option format: "--completion=<shell> [args...]"
+    if (completionMode === "option" || completionMode === "both") {
+      for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (arg.startsWith("--completion=")) {
+          const shell = arg.slice("--completion=".length);
+          const completionArgs = args.slice(i + 1);
+          return handleCompletion(
+            [shell, ...completionArgs],
+            programName,
+            parser,
+            stdout,
+            stderr,
+            onCompletion,
+            onError,
+            colors,
+          );
+        } else if (arg === "--completion" && i + 1 < args.length) {
+          const shell = args[i + 1];
+          const completionArgs = args.slice(i + 2);
+          return handleCompletion(
+            [shell, ...completionArgs],
+            programName,
+            parser,
+            stdout,
+            stderr,
+            onCompletion,
+            onError,
+            colors,
+          );
+        }
+      }
+    }
+  }
+
+  // Extract help configuration
+  const helpMode = options.help?.mode ?? "option";
+  const onHelp = options.help?.onShow ?? (() => ({} as THelp));
+
+  // Extract version configuration
+  const versionMode = options.version?.mode ?? "option";
+  const versionValue = options.version?.value ?? "";
+  const onVersion = options.version?.onShow ?? (() => ({} as THelp));
 
   // Create help and version parsers using the new helper functions
   const help = options.help ? helpMode : "none";
@@ -719,50 +907,56 @@ export function run<
       }
     }
 
-    case "error":
-      // Fall through to error handling
-      break;
-  }
-  // Error handling
-  if (aboveError === "help") {
-    const doc = getDocPage(args.length < 1 ? augmentedParser : parser, args);
-    if (doc == null) aboveError = "usage";
-    else {
-      // Augment the doc page with provided options
-      const augmentedDoc = {
-        ...doc,
-        brief: brief ?? doc.brief,
-        description: description ?? doc.description,
-        footer: footer ?? doc.footer,
-      };
-      stderr(formatDocPage(programName, augmentedDoc, {
-        colors,
-        maxWidth,
-        showDefault,
-      }));
-    }
-  }
-  if (aboveError === "usage") {
-    stderr(
-      `Usage: ${
-        indentLines(
-          formatUsage(programName, augmentedParser.usage, {
+    case "error": {
+      // Error handling
+      if (aboveError === "help") {
+        const doc = getDocPage(
+          args.length < 1 ? augmentedParser : parser,
+          args,
+        );
+        if (doc == null) aboveError = "usage";
+        else {
+          // Augment the doc page with provided options
+          const augmentedDoc = {
+            ...doc,
+            brief: brief ?? doc.brief,
+            description: description ?? doc.description,
+            footer: footer ?? doc.footer,
+          };
+          stderr(formatDocPage(programName, augmentedDoc, {
             colors,
-            maxWidth: maxWidth == null ? undefined : maxWidth - 7,
-            expandCommands: true,
-          }),
-          7,
-        )
-      }`,
-    );
+            maxWidth,
+            showDefault,
+          }));
+        }
+      }
+      if (aboveError === "usage") {
+        stderr(
+          `Usage: ${
+            indentLines(
+              formatUsage(programName, augmentedParser.usage, {
+                colors,
+                maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                expandCommands: true,
+              }),
+              7,
+            )
+          }`,
+        );
+      }
+      // classified.error is now typed as Message
+      const errorMessage = formatMessage(classified.error, {
+        colors,
+        quotes: !colors,
+      });
+      stderr(`Error: ${errorMessage}`);
+      return onError(1);
+    }
+
+    default:
+      // This shouldn't happen but TypeScript doesn't know that
+      throw new RunError("Unexpected parse result type");
   }
-  // classified.error is now typed as Message
-  const errorMessage = formatMessage(classified.error, {
-    colors,
-    quotes: !colors,
-  });
-  stderr(`Error: ${errorMessage}`);
-  return onError(1);
 }
 
 /**

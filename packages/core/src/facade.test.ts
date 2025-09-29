@@ -2048,4 +2048,276 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     assert.ok(!helpOutput.includes("Git operations"));
     assert.ok(!helpOutput.includes("Development tools"));
   });
+
+  describe("completion functionality", () => {
+    it("should generate bash completion script when completion command is used", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+        name: argument(string()),
+      });
+
+      let completionOutput = "";
+      let completionShown = false;
+
+      const result = run(parser, "myapp", ["completion", "bash"], {
+        completion: {
+          mode: "command",
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.equal(result, "completion-shown");
+      assert.ok(completionShown);
+      assert.ok(completionOutput.includes("function _myapp"));
+      assert.ok(completionOutput.includes("complete -F _myapp myapp"));
+      assert.ok(completionOutput.includes("myapp 'completion' 'bash'"));
+    });
+
+    it("should generate zsh completion script when completion command is used", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+        name: argument(string()),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "zsh"], {
+        completion: {
+          mode: "command",
+          onShow: () => "completion-shown",
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.ok(completionOutput.includes("function _myapp"));
+      assert.ok(completionOutput.includes("compdef _myapp myapp"));
+      assert.ok(completionOutput.includes("myapp 'completion' 'zsh'"));
+    });
+
+    it("should provide completion suggestions when args are provided", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+        format: option("--format", string()),
+        name: argument(string()),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "bash", "--"], {
+        completion: {
+          mode: "command",
+        },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      // Should suggest options for bash (newline separated)
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.includes("--verbose"));
+      assert.ok(suggestions.includes("--format"));
+    });
+
+    it("should provide completion suggestions for zsh format", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+        format: option("--format", string()),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "zsh", "--"], {
+        completion: {
+          mode: "command",
+        },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      // Zsh format uses null-terminated strings
+      assert.ok(completionOutput.includes("--verbose\0"));
+      assert.ok(completionOutput.includes("--format\0"));
+    });
+
+    it("should work with --completion option format", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["--completion=bash"], {
+        completion: {
+          mode: "option",
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.ok(completionOutput.includes("function _myapp"));
+      assert.ok(completionOutput.includes("complete -F _myapp myapp"));
+    });
+
+    it("should work with separated --completion option format", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["--completion", "bash"], {
+        completion: {
+          mode: "option",
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.ok(completionOutput.includes("function _myapp"));
+    });
+
+    it("should handle unsupported shell with error message", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let errorOutput = "";
+      let errorResult: unknown;
+
+      run(parser, "myapp", ["completion", "powershell"], {
+        completion: {
+          mode: "command",
+        },
+        onError: (exitCode) => {
+          errorResult = `error-${exitCode}`;
+          return errorResult;
+        },
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("Unsupported shell"));
+      assert.ok(errorOutput.includes("bash, zsh"));
+    });
+
+    it("should handle missing shell name with error", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let errorOutput = "";
+      let errorResult: unknown;
+
+      run(parser, "myapp", ["completion"], {
+        completion: {
+          mode: "command",
+        },
+        onError: (exitCode) => {
+          errorResult = `error-${exitCode}`;
+          return errorResult;
+        },
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("Missing shell name"));
+      assert.ok(errorOutput.includes("Usage: myapp completion <shell>"));
+    });
+
+    it("should support both command and option modes", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      // Test command mode
+      let commandOutput = "";
+      run(parser, "myapp", ["completion", "bash"], {
+        completion: { mode: "both" },
+        stdout: (text) => {
+          commandOutput = text;
+        },
+      });
+
+      // Test option mode
+      let optionOutput = "";
+      run(parser, "myapp", ["--completion=bash"], {
+        completion: { mode: "both" },
+        stdout: (text) => {
+          optionOutput = text;
+        },
+      });
+
+      assert.ok(commandOutput.includes("function _myapp"));
+      assert.ok(optionOutput.includes("function _myapp"));
+    });
+
+    it("should not interfere with normal parsing when completion is not requested", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+        name: argument(string()),
+      });
+
+      const result = run(parser, "myapp", ["--verbose", "Alice"], {
+        completion: { mode: "both" },
+      });
+
+      assert.deepEqual(result, { verbose: true, name: "Alice" });
+    });
+
+    it("should work with complex parsers", () => {
+      const parser = or(
+        command(
+          "git",
+          object({
+            verbose: option("--verbose"),
+            subcommand: or(
+              command("status", object({})),
+              command(
+                "add",
+                object({
+                  all: option("--all"),
+                  file: argument(string()),
+                }),
+              ),
+            ),
+          }),
+        ),
+        object({
+          help: option("--help"),
+        }),
+      );
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "bash", "git", "add", "--"], {
+        completion: { mode: "command" },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      // Should provide completions for the git add subcommand context
+      const suggestions = completionOutput.split("\n").filter((s) =>
+        s.length > 0
+      );
+      assert.ok(suggestions.length > 0);
+    });
+  });
 });

@@ -2,9 +2,8 @@ import { object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
-import { print, printError } from "@optique/run";
+import { path, print, printError } from "@optique/run";
 import { addAllFiles, addFile, getRepository } from "../utils/git.ts";
 import {
   formatAddedFile,
@@ -28,7 +27,7 @@ const addOptions = object({
   verbose: option("-v", "--verbose", {
     description: message`Show detailed output during the add operation`,
   }),
-  files: multiple(argument(string({ metavar: "FILE" }), {
+  files: multiple(argument(path({ metavar: "FILE" }), {
     description: message`Files to add to the index`,
   })),
 });

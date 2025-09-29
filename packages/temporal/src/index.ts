@@ -1,4 +1,5 @@
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type { Suggestion } from "@optique/core/parser";
 import { type Message, message } from "@optique/core/message";
 
 /**
@@ -594,6 +595,30 @@ export function timeZone(options: TimeZoneOptions = {}): ValueParser<TimeZone> {
     },
     format(value: TimeZone): string {
       return value;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      let timezones: string[];
+
+      try {
+        // Use the modern Intl API to get all supported timezones
+        timezones = Intl.supportedValuesOf("timeZone");
+      } catch {
+        // If Intl.supportedValuesOf is not available, provide at least UTC and GMT
+        timezones = ["UTC", "GMT"];
+      }
+
+      // Always ensure UTC and GMT are included if they're not already
+      if (!timezones.includes("UTC")) timezones.unshift("UTC");
+      if (!timezones.includes("GMT")) timezones.unshift("GMT");
+
+      for (const timezone of timezones) {
+        if (timezone.toLowerCase().startsWith(prefix.toLowerCase())) {
+          yield {
+            kind: "literal",
+            text: timezone,
+          };
+        }
+      }
     },
   };
 }
