@@ -153,6 +153,81 @@ describe("run", () => {
     });
   });
 
+  describe("completion functionality", () => {
+    it("should accept completion configuration", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      // Test that completion configuration is properly typed and accepted
+      const result = run(parser, {
+        programName: "test",
+        args: ["Alice"],
+        completion: "both",
+      });
+
+      assert.deepEqual(result, { name: "Alice" });
+    });
+
+    it("should support completion mode options", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+        name: argument(string()),
+      });
+
+      // Test different completion modes are properly typed
+      const modes: Array<"command" | "option" | "both"> = [
+        "command",
+        "option",
+        "both",
+      ];
+
+      for (const mode of modes) {
+        const result = run(parser, {
+          programName: "test",
+          args: ["--verbose", "Bob"],
+          completion: mode,
+        });
+
+        assert.deepEqual(result, { verbose: true, name: "Bob" });
+      }
+    });
+
+    it("should work without completion configuration", () => {
+      const parser = object({
+        count: option("-c", "--count", integer()),
+        name: argument(string()),
+      });
+
+      // Test that completion is optional
+      const result = run(parser, {
+        programName: "test",
+        args: ["-c", "5", "Charlie"],
+        // completion omitted = no completion functionality
+      });
+
+      assert.deepEqual(result, { count: 5, name: "Charlie" });
+    });
+
+    it("should support completion alongside help and version", () => {
+      const parser = object({
+        debug: option("--debug"),
+        name: argument(string()),
+      });
+
+      // Test that completion works with other features
+      const result = run(parser, {
+        programName: "test",
+        args: ["--debug", "David"],
+        help: "both",
+        version: "1.0.0",
+        completion: "both",
+      });
+
+      assert.deepEqual(result, { debug: true, name: "David" });
+    });
+  });
+
   describe("documentation fields", () => {
     it("should accept brief option", () => {
       const parser = object({

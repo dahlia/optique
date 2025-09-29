@@ -78,6 +78,19 @@ export interface RunOptions {
   };
 
   /**
+   * Completion configuration. Determines how shell completion is made available:
+   *
+   * - `"command"`: Only the `completion` subcommand is available
+   * - `"option"`: Only the `--completion` option is available
+   * - `"both"`: Both `completion` subcommand and `--completion` option are available
+   *
+   * When not provided, completion functionality is disabled.
+   *
+   * @since 0.6.0
+   */
+  readonly completion?: "command" | "option" | "both";
+
+  /**
    * What to display above error messages:
    *
    * - `"usage"`: Show usage line before error message
@@ -161,9 +174,23 @@ export interface RunOptions {
  * const result = run(parser, {
  *   programName: "myapp",
  *   help: "both",           // Enable both --help option and help command
+ *   completion: "both",     // Enable both completion command and --completion option
  *   colors: true,           // Force colored output
  *   errorExitCode: 2,       // Exit with code 2 on errors
  * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Shell completion usage
+ * const result = run(parser, {
+ *   completion: "both",
+ * });
+ *
+ * // Users can then:
+ * // myapp completion bash > ~/.bash_completion.d/myapp  # Generate script
+ * // source ~/.bash_completion.d/myapp                   # Enable completion
+ * // myapp --format=<TAB>                                # Use completion
  * ```
  */
 export function run<T extends Parser<unknown, unknown>>(
@@ -178,6 +205,7 @@ export function run<T extends Parser<unknown, unknown>>(
     showDefault,
     help,
     version,
+    completion,
     aboveError = "usage",
     errorExitCode = 1,
     brief,
@@ -204,12 +232,21 @@ export function run<T extends Parser<unknown, unknown>>(
     }
     : undefined;
 
+  // Convert completion configuration for the base run function
+  const completionConfig = completion
+    ? {
+      mode: completion,
+      onShow: () => process.exit(0) as never,
+    }
+    : undefined;
+
   return runBase<T, never, never>(parser, programName, args, {
     colors,
     maxWidth,
     showDefault,
     help: helpConfig,
     version: versionConfig,
+    completion: completionConfig,
     aboveError,
     brief,
     description,

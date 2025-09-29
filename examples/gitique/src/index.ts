@@ -31,6 +31,7 @@ async function main() {
     const result = run(parser, {
       programName: "gitique",
       help: "both", // Enable both --help option and help command
+      completion: "both", // Enable both completion command and --completion option
       aboveError: "usage", // Show usage information above error messages
       colors: true, // Force colored output for better UX
     });
