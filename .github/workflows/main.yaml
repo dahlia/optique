@@ -6,6 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - run: sudo apt-get install -y zsh
     - uses: pnpm/action-setup@v4
       with:
         version: latest
@@ -19,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - run: sudo apt-get install -y zsh
     - uses: denoland/setup-deno@v2
       with:
         deno-version: v2.x
@@ -37,6 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - run: sudo apt-get install -y zsh
     - uses: pnpm/action-setup@v4
       with:
         version: latest
