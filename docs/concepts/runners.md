@@ -166,6 +166,9 @@ const result = run(parser, "myapp", ["--name", "test"], {
     mode: "both",        // Both --version option and version command
     value: "2.1.0",      // Version string to display
   },
+  completion: {          // Shell completion functionality
+    mode: "both",        // "command" | "option" | "both"
+  },
   aboveError: "help",    // Show full help before error messages
   stderr: (text) => {    // Custom error output handler
     console.error(`ERROR: ${text}`);
@@ -355,6 +358,60 @@ const result4 = run(parser, {
 // No version (default) - simply omit the version option
 const result5 = run(parser, {});
 ~~~~
+
+### Shell completion
+
+*This API is available since Optique 0.6.0.*
+
+Enable shell completion support for Bash and zsh with simple configuration.
+The `run()` function automatically handles completion script generation and
+runtime completion requests:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option, argument } from "@optique/core/primitives";
+import { string, choice } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  format: option("-f", "--format", choice(["json", "yaml"])),
+  input: argument(string()),
+});
+
+const config = run(parser, {
+  completion: "both",  // "command" | "option" | "both"
+});
+~~~~
+
+The `completion` modes control how completion is triggered:
+
+`"command"`
+:   Completion via subcommand (`myapp completion bash`)
+
+`"option"`
+:   Completion via option (`myapp --completion bash`)
+
+`"both"`
+:   Both patterns supported
+
+Users can generate and install completion scripts:
+
+::: code-group
+
+~~~~ bash [Bash]
+myapp completion bash > ~/.bashrc.d/myapp.bash
+source ~/.bashrc.d/myapp.bash
+~~~~
+
+~~~~ zsh [zsh]
+myapp completion zsh > ~/.zsh/completions/_myapp
+~~~~
+
+:::
+
+Shell completion works automatically with all parser types and value parsers,
+providing intelligent suggestions based on your parser structure. For detailed
+information, see the [*Shell completion* section](./completion.md).
 
 ### Default value display
 

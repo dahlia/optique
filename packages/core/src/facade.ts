@@ -1,7 +1,15 @@
 import { bash, type ShellCompletion, zsh } from "./completion.ts";
 import { longestMatch, object } from "./constructs.ts";
 import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
-import { formatMessage, type Message, message, optionName } from "./message.ts";
+import {
+  formatMessage,
+  type Message,
+  message,
+  type MessageTerm,
+  optionName,
+  text,
+  value,
+} from "./message.ts";
 import { multiple, optional } from "./modifiers.ts";
 import {
   getDocPage,
@@ -636,10 +644,14 @@ function handleCompletion<THelp, TError>(
   const shell = availableShells[shellName];
 
   if (!shell) {
-    const available = Object.keys(availableShells).join(", ");
+    const available: MessageTerm[] = [];
+    for (const shell in availableShells) {
+      if (available.length > 0) available.push(text(", "));
+      available.push(value(shell));
+    }
     stderr(
       formatMessage(
-        message`Error: Unsupported shell ${shellName}. Available shells: ${available}`,
+        message`Error: Unsupported shell ${shellName}. Available shells: ${available}.`,
         { colors, quotes: !colors },
       ),
     );

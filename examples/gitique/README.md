@@ -40,6 +40,7 @@ This example demonstrates Optique's key capabilities:
  -  *Option parsing*: `option()`, `optional()`, `multiple()` with type inference
  -  *Value parsers*: `string()`, `integer()` with validation and metadata
  -  *Help generation*: Automatic `--help` and `help` command support
+ -  *Shell completion*: Built-in completion support for Bash and zsh
  -  *Error handling*: User-friendly error messages with usage information
 
 
@@ -157,6 +158,22 @@ gitique help
 # Command-specific help
 gitique add --help
 gitique help commit
+~~~~
+
+**Shell completion:**
+
+~~~~ bash
+# Generate Bash completion script
+gitique completion bash > ~/.bashrc.d/gitique.bash
+source ~/.bashrc.d/gitique.bash
+
+# Generate zsh completion script
+gitique completion zsh > ~/.zsh/completions/_gitique
+
+# Test completion
+gitique <TAB>                    # Shows: add, commit, log, reset, help
+gitique add --<TAB>              # Shows: --all, --force, --verbose, --help
+gitique commit --author <TAB>    # Shows available author suggestions
 ~~~~
 
 Architecture

@@ -55,6 +55,7 @@ const CONCEPTS = {
     { text: "Value parsers", link: "/concepts/valueparsers" },
     { text: "Modifying combinators", link: "/concepts/modifiers" },
     { text: "Construct combinators", link: "/concepts/constructs" },
+    { text: "Shell completion", link: "/concepts/completion" },
     { text: "Messages", link: "/concepts/messages" },
     { text: "Runners and execution", link: "/concepts/runners" },
   ],

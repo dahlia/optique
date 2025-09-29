@@ -148,6 +148,10 @@ main dt {
     font-weight: 500;
 }
 
+main dt code {
+    font-weight: 600;
+}
+
 main dd {
     margin-bottom: 10px;
 }
