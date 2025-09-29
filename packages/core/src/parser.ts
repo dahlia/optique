@@ -133,22 +133,51 @@ export interface ParserContext<TState> {
 
 /**
  * Represents a suggestion for command-line completion or guidance.
- * Each suggestion consists of a {@link text} and an optional
- * {@link description}.
  * @since 0.6.0
  */
-export interface Suggestion {
-  /**
-   * The suggestion text that can be used for completion or guidance.
-   */
-  readonly text: string;
-
-  /**
-   * An optional description providing additional context
-   * or information about the suggestion.
-   */
-  readonly description?: Message;
-}
+export type Suggestion =
+  | {
+    /**
+     * A literal text suggestion.
+     */
+    readonly kind: "literal";
+    /**
+     * The suggestion text that can be used for completion or guidance.
+     */
+    readonly text: string;
+    /**
+     * An optional description providing additional context
+     * or information about the suggestion.
+     */
+    readonly description?: Message;
+  }
+  | {
+    /**
+     * A file system completion suggestion that uses native shell completion.
+     */
+    readonly kind: "file";
+    /**
+     * The current prefix/pattern for fallback when native completion is unavailable.
+     */
+    readonly pattern?: string;
+    /**
+     * The type of file system entries to complete.
+     */
+    readonly type: "file" | "directory" | "any";
+    /**
+     * File extensions to filter by (e.g., [".ts", ".js"]).
+     */
+    readonly extensions?: readonly string[];
+    /**
+     * Whether to include hidden files (those starting with a dot).
+     */
+    readonly includeHidden?: boolean;
+    /**
+     * An optional description providing additional context
+     * or information about the suggestion.
+     */
+    readonly description?: Message;
+  };
 
 /**
  * A discriminated union type representing the result of a parser operation.

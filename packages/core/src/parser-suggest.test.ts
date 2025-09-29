@@ -41,11 +41,13 @@ describe("Parser suggest() methods", () => {
       };
 
       const result1 = Array.from(parser.suggest(context, "--f"));
-      const texts1 = result1.map((s) => s.text).sort();
+      const texts1 = result1.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
       deepStrictEqual(texts1, ["--file", "--format"]);
 
       const result2 = Array.from(parser.suggest(context, "-f"));
-      deepStrictEqual(result2, [{ text: "-f" }]);
+      deepStrictEqual(result2, [{ kind: "literal", text: "-f" }]);
     });
 
     it("should suggest short options", () => {
@@ -57,7 +59,9 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "-"));
-      const texts = result.map((s) => s.text).sort();
+      const texts = result.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
       deepStrictEqual(texts, ["-q", "-v"]);
     });
 
@@ -82,7 +86,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "j"));
-      deepStrictEqual(result, [{ text: "json" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "json" }]);
     });
 
     it("should handle boolean options without value parser", () => {
@@ -107,6 +111,7 @@ describe("Parser suggest() methods", () => {
 
       const result = Array.from(parser.suggest(context, "--format=j"));
       deepStrictEqual(result, [{
+        kind: "literal",
         text: "--format=json",
         description: undefined,
       }]);
@@ -121,7 +126,9 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--format="));
-      const texts = result.map((r) => r.text).sort();
+      const texts = result.map((r) =>
+        r.kind === "literal" ? r.text : r.pattern || ""
+      ).sort();
       deepStrictEqual(texts, [
         "--format=json",
         "--format=xml",
@@ -138,7 +145,11 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "-f=y"));
-      deepStrictEqual(result, [{ text: "-f=yaml", description: undefined }]);
+      deepStrictEqual(result, [{
+        kind: "literal",
+        text: "-f=yaml",
+        description: undefined,
+      }]);
     });
 
     it("should return empty for unmatched option in --option=value format", () => {
@@ -164,7 +175,9 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--f"));
-      const texts = result.map((s) => s.text).sort();
+      const texts = result.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
       deepStrictEqual(texts, ["--force", "--full"]);
     });
 
@@ -191,7 +204,9 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "st"));
-      const texts = result.map((s) => s.text).sort();
+      const texts = result.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
       deepStrictEqual(texts, ["start", "status", "stop"]);
     });
 
@@ -222,6 +237,7 @@ describe("Parser suggest() methods", () => {
 
       const result = Array.from(parser.suggest(context, "bu"));
       deepStrictEqual(result, [{
+        kind: "literal",
         text: "build",
         description: message`Build the project`,
       }]);
@@ -251,7 +267,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
-      deepStrictEqual(result, [{ text: "--verbose" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
 
     it("should delegate to inner parser during parsing", () => {
@@ -267,7 +283,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
-      deepStrictEqual(result, [{ text: "--verbose" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
   });
 
@@ -285,7 +301,9 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--"));
-      const texts = result.map((s) => s.text).sort();
+      const texts = result.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
       deepStrictEqual(texts, ["--force", "--output", "--verbose"]);
     });
 
@@ -301,7 +319,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
-      deepStrictEqual(result, [{ text: "--verbose" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
 
     it("should handle field-specific state", () => {
@@ -319,7 +337,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--o"));
-      deepStrictEqual(result, [{ text: "--output" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--output" }]);
     });
   });
 
@@ -335,7 +353,9 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--"));
-      const texts = result.map((s) => s.text).sort();
+      const texts = result.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
       deepStrictEqual(texts, ["--alpha", "--beta"]);
     });
 
@@ -374,7 +394,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--f"));
-      deepStrictEqual(result, [{ text: "--file" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--file" }]);
     });
 
     it("should remove duplicates across alternatives", () => {
@@ -388,7 +408,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
-      deepStrictEqual(result, [{ text: "--verbose" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
   });
 
@@ -403,7 +423,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
-      deepStrictEqual(result, [{ text: "--verbose" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
 
     it("should handle undefined state", () => {
@@ -416,7 +436,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
-      deepStrictEqual(result, [{ text: "--verbose" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
 
     it("should handle existing state", () => {
@@ -430,7 +450,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
-      deepStrictEqual(result, [{ text: "--verbose" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
   });
 
@@ -445,7 +465,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--p"));
-      deepStrictEqual(result, [{ text: "--port" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--port" }]);
     });
 
     it("should handle function defaults", () => {
@@ -458,7 +478,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--u"));
-      deepStrictEqual(result, [{ text: "--user" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--user" }]);
     });
   });
 
@@ -473,7 +493,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--n"));
-      deepStrictEqual(result, [{ text: "--number" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--number" }]);
     });
 
     it("should preserve value suggestions", () => {
@@ -486,7 +506,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "j"));
-      deepStrictEqual(result, [{ text: "json" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "json" }]);
     });
   });
 
@@ -501,7 +521,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--f"));
-      deepStrictEqual(result, [{ text: "--file" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--file" }]);
     });
 
     it("should use most recent state for suggestions", () => {
@@ -519,7 +539,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--i"));
-      deepStrictEqual(result, [{ text: "--include" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--include" }]);
     });
 
     it("should handle empty state array", () => {
@@ -532,7 +552,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "--f"));
-      deepStrictEqual(result, [{ text: "--file" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "--file" }]);
     });
   });
 });
@@ -542,20 +562,22 @@ describe("ValueParser suggest() methods", () => {
     it("should suggest matching choices", () => {
       const parser = choice(["json", "yaml", "xml", "text"]);
       const result = Array.from(parser.suggest!("j"));
-      deepStrictEqual(result, [{ text: "json" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "json" }]);
     });
 
     it("should suggest multiple matches", () => {
       const parser = choice(["start", "stop", "status", "restart"]);
       const result = Array.from(parser.suggest!("st"));
-      const texts = result.map((s) => s.text).sort();
+      const texts = result.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
       deepStrictEqual(texts, ["start", "status", "stop"]);
     });
 
     it("should handle case insensitive matching", () => {
       const parser = choice(["JSON", "YAML", "XML"], { caseInsensitive: true });
       const result = Array.from(parser.suggest!("j"));
-      deepStrictEqual(result, [{ text: "JSON" }]);
+      deepStrictEqual(result, [{ kind: "literal", text: "JSON" }]);
     });
 
     it("should return empty for no matches", () => {
@@ -567,7 +589,9 @@ describe("ValueParser suggest() methods", () => {
     it("should return all choices for empty prefix", () => {
       const parser = choice(["json", "yaml", "xml"]);
       const result = Array.from(parser.suggest!(""));
-      const texts = result.map((s) => s.text).sort();
+      const texts = result.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
       deepStrictEqual(texts, ["json", "xml", "yaml"]);
     });
   });

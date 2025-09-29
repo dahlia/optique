@@ -208,7 +208,7 @@ export function choice<const T extends string>(
             : value;
           return normalizedValue.startsWith(normalizedPrefix);
         })
-        .map((value) => ({ text: value }));
+        .map((value) => ({ kind: "literal", text: value }));
     },
   };
 }

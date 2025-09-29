@@ -1,4 +1,5 @@
 import { type Message, message, text } from "@optique/core/message";
+import type { Suggestion } from "@optique/core/parser";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { existsSync, statSync } from "node:fs";
 import { dirname, extname } from "node:path";
@@ -210,6 +211,20 @@ export function path(options: PathOptions = {}): ValueParser<string> {
     },
     format(value: string): string {
       return value;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      yield {
+        kind: "file",
+        pattern: prefix,
+        type: type === "either" ? "any" : type,
+        extensions,
+        includeHidden: prefix.startsWith("."),
+        description: type === "directory"
+          ? message`Directory`
+          : type === "file"
+          ? message`File`
+          : message`File or directory`,
+      };
     },
   };
 }

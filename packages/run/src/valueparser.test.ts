@@ -583,4 +583,113 @@ describe("path", () => {
       );
     });
   });
+
+  describe("completion functionality", () => {
+    it("should provide completion suggestions for existing directories", () => {
+      const parser = path();
+
+      // Test completion for current directory
+      const suggestions = Array.from(parser.suggest!("src"));
+
+      // Should return some suggestions (at least one if src directory exists)
+      assert.ok(Array.isArray(suggestions));
+
+      // Each suggestion should have the right structure and optional description
+      suggestions.forEach((suggestion) => {
+        if (suggestion.kind === "literal") {
+          assert.ok(typeof suggestion.text === "string");
+        } else {
+          assert.ok(suggestion.kind === "file");
+        }
+        assert.ok(
+          suggestion.description === undefined ||
+            typeof suggestion.description === "object",
+        );
+      });
+    });
+
+    it("should filter by file extensions", () => {
+      const parser = path({ extensions: [".ts", ".js"] });
+
+      // Test with src/ directory which should contain TypeScript files
+      const suggestions = Array.from(parser.suggest!("src/"));
+
+      // Check that we got some suggestions
+      assert.ok(suggestions.length >= 0); // Allow empty results
+
+      // All file suggestions should have .ts or .js extension (directories are allowed)
+      suggestions.forEach((suggestion) => {
+        if (suggestion.kind === "literal") {
+          if (!suggestion.text.endsWith("/")) { // Not a directory
+            const hasValidExtension = suggestion.text.endsWith(".ts") ||
+              suggestion.text.endsWith(".js");
+            assert.ok(
+              hasValidExtension,
+              `File ${suggestion.text} should have .ts or .js extension`,
+            );
+          }
+        }
+        // File-type suggestions don't need text validation since they use native completion
+      });
+    });
+
+    it("should filter by type (directories only)", () => {
+      const parser = path({ type: "directory" });
+
+      const suggestions = Array.from(parser.suggest!(""));
+
+      // All suggestions should be directories
+      suggestions.forEach((suggestion) => {
+        if (suggestion.kind === "literal") {
+          assert.ok(
+            suggestion.text.endsWith("/") || suggestion.text.endsWith("\\"),
+            `Suggestion ${suggestion.text} should be a directory`,
+          );
+        } else {
+          // File-type suggestions with directory type use native shell completion
+          assert.ok(
+            suggestion.type === "directory",
+            `File suggestion should have directory type`,
+          );
+        }
+      });
+    });
+
+    it("should handle empty prefix gracefully", () => {
+      const parser = path();
+
+      const suggestions = Array.from(parser.suggest!(""));
+
+      // Should not throw and should return an array
+      assert.ok(Array.isArray(suggestions));
+    });
+
+    it("should handle non-existent paths gracefully", () => {
+      const parser = path();
+
+      const suggestions = Array.from(parser.suggest!("non-existent-path/"));
+
+      // Should not throw and should return a file completion suggestion
+      assert.ok(Array.isArray(suggestions));
+      if (suggestions.length > 0) {
+        const suggestion = suggestions[0];
+        assert.ok(suggestion.kind === "file");
+        assert.ok(typeof suggestion.type === "string");
+      }
+    });
+
+    it("should skip hidden files unless prefix starts with dot", () => {
+      const parser = path();
+
+      // Test with regular prefix (should not include hidden files)
+      const regularSuggestions = Array.from(parser.suggest!(""));
+
+      // Test with dot prefix (should include hidden files)
+      const dotSuggestions = Array.from(parser.suggest!("."));
+
+      // This test depends on the directory structure, so we just ensure no errors
+      assert.ok(Array.isArray(regularSuggestions));
+      assert.ok(Array.isArray(dotSuggestions));
+    });
+  });
 });

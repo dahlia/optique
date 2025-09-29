@@ -670,13 +670,18 @@ export function or(
         }
       }
 
-      // Remove duplicates by text
+      // Remove duplicates by text/pattern
       const seen = new Set<string>();
       return suggestions.filter((suggestion) => {
-        if (seen.has(suggestion.text)) {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
           return false;
         }
-        seen.add(suggestion.text);
+        seen.add(key);
         return true;
       });
     },
@@ -1052,13 +1057,18 @@ export function longestMatch(
         }
       }
 
-      // Remove duplicates by text
+      // Remove duplicates by text/pattern
       const seen = new Set<string>();
       return suggestions.filter((suggestion) => {
-        if (seen.has(suggestion.text)) {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
           return false;
         }
-        seen.add(suggestion.text);
+        seen.add(key);
         return true;
       });
     },
@@ -1406,13 +1416,18 @@ export function object<
         suggestions.push(...fieldSuggestions);
       }
 
-      // Remove duplicates by text
+      // Remove duplicates by text/pattern
       const seen = new Set<string>();
       return suggestions.filter((suggestion) => {
-        if (seen.has(suggestion.text)) {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
           return false;
         }
-        seen.add(suggestion.text);
+        seen.add(key);
         return true;
       });
     },
@@ -1660,13 +1675,18 @@ export function tuple<
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text
+      // Remove duplicates by text/pattern
       const seen = new Set<string>();
       return suggestions.filter((suggestion) => {
-        if (seen.has(suggestion.text)) {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
           return false;
         }
-        seen.add(suggestion.text);
+        seen.add(key);
         return true;
       });
     },
@@ -2878,13 +2898,18 @@ export function merge(
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text
+      // Remove duplicates by text/pattern
       const seen = new Set<string>();
       return suggestions.filter((suggestion) => {
-        if (seen.has(suggestion.text)) {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
           return false;
         }
-        seen.add(suggestion.text);
+        seen.add(key);
         return true;
       });
     },
@@ -3230,13 +3255,18 @@ export function concat(
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text
+      // Remove duplicates by text/pattern
       const seen = new Set<string>();
       return suggestions.filter((suggestion) => {
-        if (seen.has(suggestion.text)) {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${
+            suggestion.extensions?.join(",")
+          }:${suggestion.pattern}`;
+        if (seen.has(key)) {
           return false;
         }
-        seen.add(suggestion.text);
+        seen.add(key);
         return true;
       });
     },

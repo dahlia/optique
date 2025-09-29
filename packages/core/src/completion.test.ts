@@ -171,9 +171,9 @@ describe("completion module", () => {
 
     it("should encode suggestions without descriptions", () => {
       const suggestions: Suggestion[] = [
-        { text: "--verbose" },
-        { text: "--quiet" },
-        { text: "--help" },
+        { kind: "literal", text: "--verbose" },
+        { kind: "literal", text: "--quiet" },
+        { kind: "literal", text: "--help" },
       ];
 
       const encoded = Array.from(bash.encodeSuggestions(suggestions));
@@ -183,7 +183,7 @@ describe("completion module", () => {
 
     it("should encode single suggestion without newline", () => {
       const suggestions: Suggestion[] = [
-        { text: "--verbose" },
+        { kind: "literal", text: "--verbose" },
       ];
 
       const encoded = Array.from(bash.encodeSuggestions(suggestions));
@@ -201,8 +201,16 @@ describe("completion module", () => {
 
     it("should ignore descriptions in bash", () => {
       const suggestions: Suggestion[] = [
-        { text: "--verbose", description: message`Enable verbose output` },
-        { text: "--quiet", description: message`Suppress output` },
+        {
+          kind: "literal",
+          text: "--verbose",
+          description: message`Enable verbose output`,
+        },
+        {
+          kind: "literal",
+          text: "--quiet",
+          description: message`Suppress output`,
+        },
       ];
 
       const encoded = Array.from(bash.encodeSuggestions(suggestions));
@@ -270,8 +278,8 @@ describe("completion module", () => {
 
     it("should encode suggestions with null-terminated format", () => {
       const suggestions: Suggestion[] = [
-        { text: "--verbose" },
-        { text: "--quiet" },
+        { kind: "literal", text: "--verbose" },
+        { kind: "literal", text: "--quiet" },
       ];
 
       const encoded = Array.from(zsh.encodeSuggestions(suggestions));
@@ -284,8 +292,16 @@ describe("completion module", () => {
 
     it("should encode suggestions with descriptions", () => {
       const suggestions: Suggestion[] = [
-        { text: "--verbose", description: message`Enable verbose output` },
-        { text: "--quiet", description: message`Suppress output` },
+        {
+          kind: "literal",
+          text: "--verbose",
+          description: message`Enable verbose output`,
+        },
+        {
+          kind: "literal",
+          text: "--quiet",
+          description: message`Suppress output`,
+        },
       ];
 
       const encoded = Array.from(zsh.encodeSuggestions(suggestions));
@@ -305,7 +321,11 @@ describe("completion module", () => {
 
     it("should format descriptions with colors when available", () => {
       const suggestions: Suggestion[] = [
-        { text: "--verbose", description: message`Enable verbose mode` },
+        {
+          kind: "literal",
+          text: "--verbose",
+          description: message`Enable verbose mode`,
+        },
       ];
 
       const encoded = Array.from(zsh.encodeSuggestions(suggestions));

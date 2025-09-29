@@ -200,7 +200,7 @@ function combineWithHelpVersion(
       suggest(_context, prefix) {
         // Suggest --help if it matches the prefix
         if ("--help".startsWith(prefix)) {
-          return [{ text: "--help" }];
+          return [{ kind: "literal", text: "--help" }];
         }
         return [];
       },
@@ -292,7 +292,7 @@ function combineWithHelpVersion(
       suggest(_context, prefix) {
         // Suggest --version if it matches the prefix
         if ("--version".startsWith(prefix)) {
-          return [{ text: "--version" }];
+          return [{ kind: "literal", text: "--version" }];
         }
         return [];
       },

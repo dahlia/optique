@@ -412,10 +412,21 @@ export function option<T>(
             const valueSuggestions = valueParser.suggest(valuePart);
             // Prepend the option= part to each suggestion
             for (const suggestion of valueSuggestions) {
-              suggestions.push({
-                text: `${optionPart}=${suggestion.text}`,
-                description: suggestion.description,
-              });
+              if (suggestion.kind === "literal") {
+                suggestions.push({
+                  kind: "literal",
+                  text: `${optionPart}=${suggestion.text}`,
+                  description: suggestion.description,
+                });
+              } else {
+                // For file suggestions, we can't easily combine with option= format
+                // so we fall back to literal suggestions
+                suggestions.push({
+                  kind: "literal",
+                  text: `${optionPart}=${suggestion.pattern || ""}`,
+                  description: suggestion.description,
+                });
+              }
             }
           }
         }
@@ -431,7 +442,7 @@ export function option<T>(
               if (prefix === "-" && optionName.length !== 2) {
                 continue;
               }
-              suggestions.push({ text: optionName });
+              suggestions.push({ kind: "literal", text: optionName });
             }
           }
         }
@@ -740,7 +751,7 @@ export function flag(
             if (prefix === "-" && optionName.length !== 2) {
               continue;
             }
-            suggestions.push({ text: optionName });
+            suggestions.push({ kind: "literal", text: optionName });
           }
         }
       }
@@ -1115,6 +1126,7 @@ export function command<T, TState>(
         // Command not yet matched - suggest command name if it matches prefix
         if (name.startsWith(prefix)) {
           suggestions.push({
+            kind: "literal",
             text: name,
             ...(options.description && { description: options.description }),
           });
