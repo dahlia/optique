@@ -3206,5 +3206,112 @@ describe("error customization", () => {
   });
 });
 
+describe("ValueParser suggest() methods", () => {
+  describe("url parser", () => {
+    it("should suggest protocol completions when allowedProtocols is set", () => {
+      const parser = url({
+        allowedProtocols: ["https:", "http:", "ftp:"],
+      });
+
+      const suggestions = Array.from(parser.suggest!("ht"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
+
+      assert.deepEqual(texts, ["http://", "https://"]);
+    });
+
+    it("should suggest all protocols for single character prefix", () => {
+      const parser = url({
+        allowedProtocols: ["https:", "http:", "ftp:"],
+      });
+
+      const suggestions = Array.from(parser.suggest!("h"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
+
+      assert.deepEqual(texts, ["http://", "https://"]);
+    });
+
+    it("should not suggest protocols when input contains ://", () => {
+      const parser = url({
+        allowedProtocols: ["https:", "http:", "ftp:"],
+      });
+
+      const suggestions = Array.from(parser.suggest!("https://example"));
+      assert.equal(suggestions.length, 0);
+    });
+
+    it("should not suggest when no allowedProtocols is set", () => {
+      const parser = url();
+
+      const suggestions = Array.from(parser.suggest!("ht"));
+      assert.equal(suggestions.length, 0);
+    });
+
+    it("should handle case insensitive matching", () => {
+      const parser = url({
+        allowedProtocols: ["HTTPS:", "HTTP:"],
+      });
+
+      const suggestions = Array.from(parser.suggest!("ht"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      ).sort();
+
+      assert.deepEqual(texts, ["http://", "https://"]);
+    });
+  });
+
+  describe("locale parser", () => {
+    it("should suggest common locales with matching prefix", () => {
+      const parser = locale();
+
+      const suggestions = Array.from(parser.suggest!("en"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+
+      assert.ok(texts.includes("en"));
+      assert.ok(texts.includes("en-US"));
+      assert.ok(texts.includes("en-GB"));
+      assert.ok(!texts.includes("fr"));
+    });
+
+    it("should suggest multiple language families", () => {
+      const parser = locale();
+
+      const suggestions = Array.from(parser.suggest!("de"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+
+      assert.ok(texts.includes("de"));
+      assert.ok(texts.includes("de-DE"));
+      assert.ok(texts.includes("de-AT"));
+    });
+
+    it("should handle case insensitive matching", () => {
+      const parser = locale();
+
+      const suggestions = Array.from(parser.suggest!("EN"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+
+      assert.ok(texts.length > 0);
+      assert.ok(texts.includes("en"));
+    });
+
+    it("should return empty for non-matching prefix", () => {
+      const parser = locale();
+
+      const suggestions = Array.from(parser.suggest!("xyz"));
+      assert.equal(suggestions.length, 0);
+    });
+  });
+});
+
 // cSpell: ignore résumé phonebk toolongcode hanidec jpan hebr arabext
 // cSpell: ignore localhosts lojban rozaj Resian

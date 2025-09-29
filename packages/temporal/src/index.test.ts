@@ -673,3 +673,69 @@ describe("error customization", () => {
     });
   });
 });
+
+describe("ValueParser suggest() methods", () => {
+  describe("timeZone parser", () => {
+    it("should suggest common timezones with matching prefix", () => {
+      const parser = timeZone();
+
+      const suggestions = Array.from(parser.suggest!("Asia/"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+
+      assert.ok(texts.includes("Asia/Tokyo"));
+      assert.ok(texts.includes("Asia/Seoul"));
+      assert.ok(texts.includes("Asia/Shanghai"));
+      assert.ok(!texts.includes("Europe/London"));
+    });
+
+    it("should suggest UTC and GMT", () => {
+      const parser = timeZone();
+
+      const utcSuggestions = Array.from(parser.suggest!("UTC"));
+      const utcTexts = utcSuggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+      assert.ok(utcTexts.includes("UTC"));
+
+      const gmtSuggestions = Array.from(parser.suggest!("GMT"));
+      const gmtTexts = gmtSuggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+      assert.ok(gmtTexts.includes("GMT"));
+    });
+
+    it("should handle case insensitive matching", () => {
+      const parser = timeZone();
+
+      const suggestions = Array.from(parser.suggest!("america/"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+
+      assert.ok(texts.length > 0);
+      assert.ok(texts.some((t) => t.startsWith("America/")));
+    });
+
+    it("should suggest European timezones", () => {
+      const parser = timeZone();
+
+      const suggestions = Array.from(parser.suggest!("Europe/"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+
+      assert.ok(texts.includes("Europe/London"));
+      assert.ok(texts.includes("Europe/Paris"));
+      assert.ok(texts.includes("Europe/Berlin"));
+    });
+
+    it("should return empty for non-matching prefix", () => {
+      const parser = timeZone();
+
+      const suggestions = Array.from(parser.suggest!("Invalid/"));
+      assert.equal(suggestions.length, 0);
+    });
+  });
+});
