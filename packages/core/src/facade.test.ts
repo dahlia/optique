@@ -2212,7 +2212,8 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       assert.equal(errorResult, "error-1");
       assert.ok(errorOutput.includes("Unsupported shell"));
-      assert.ok(errorOutput.includes("bash, zsh"));
+      assert.ok(errorOutput.includes("bash"));
+      assert.ok(errorOutput.includes("zsh"));
     });
 
     it("should handle missing shell name with error", () => {
