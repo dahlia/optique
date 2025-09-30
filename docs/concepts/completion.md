@@ -1,8 +1,8 @@
 ---
 description: >-
   Learn how to add shell completion support to your CLI applications using
-  Optique's built-in completion system. Covers Bash and zsh integration,
-  custom suggestions, and native file completion.
+  Optique's built-in completion system. Covers Bash, zsh, fish, and PowerShell
+  integration, custom suggestions, and native file completion.
 ---
 
 Shell completion
@@ -12,8 +12,8 @@ Shell completion
 
 Shell completion enhances command-line user experience by providing
 intelligent suggestions for commands, options, and arguments as users type.
-Optique provides built-in completion support for Bash, zsh, and PowerShell
-that integrates seamlessly with the existing parser architecture.
+Optique provides built-in completion support for Bash, zsh, fish, and
+PowerShell that integrates seamlessly with the existing parser architecture.
 
 Unlike many CLI frameworks that require separate completion definitions,
 Optique's completion system leverages the same parser structure used for
@@ -31,8 +31,8 @@ Optique's completion system operates through three key components:
     context
 
 Shell script generation
-:   Optique generates completion scripts for Bash and zsh that integrate
-    with shell completion systems
+:   Optique generates completion scripts for Bash, zsh, fish, and PowerShell
+    that integrate with shell completion systems
 
 Runtime completion
 :   Your application automatically handles completion requests triggered by
@@ -68,6 +68,10 @@ source ~/.bashrc.d/myapp.bash
 
 ~~~~ zsh [zsh]
 myapp completion zsh > ~/.zsh/completions/_myapp
+~~~~
+
+~~~~ fish [fish]
+myapp completion fish > ~/.config/fish/completions/myapp.fish
 ~~~~
 
 ~~~~ powershell [PowerShell]
@@ -303,6 +307,18 @@ rich completion display. The generated script supports:
  -  Advanced completion contexts and filtering
  -  Integration with zsh's completion styling system
 
+### fish completion
+
+fish shell completion scripts use a function-based approach combined with the
+`complete` command to register completions. The generated script leverages
+fish's powerful command-line parsing utilities:
+
+ -  Dynamic argument extraction with `commandline -poc` and `commandline -ct`
+ -  Automatic parsing of quoted strings and special characters
+ -  Tab-separated output format for values with descriptions
+ -  Native file and directory completion using fish's globbing capabilities
+ -  Support for filtering by file extension and hidden status
+
 ### PowerShell completion
 
 PowerShell completion scripts use `Register-ArgumentCompleter` with the
@@ -395,6 +411,10 @@ myapp completion zsh > ~/.zsh/completions/_myapp
 myapp completion zsh > ~/.oh-my-zsh/completions/_myapp
 ~~~~
 
+~~~~ fish [fish]
+myapp completion fish > ~/.config/fish/completions/myapp.fish
+~~~~
+
 ~~~~ powershell [PowerShell]
 myapp completion pwsh > myapp-completion.ps1
 ~~~~
@@ -413,6 +433,11 @@ echo "source ~/.bashrc.d/myapp.bash" >> ~/.bashrc
 ~~~~ zsh [zsh]
 # zsh: Ensure completion directory is in fpath
 # (usually automatic with oh-my-zsh)
+~~~~
+
+~~~~ fish [fish]
+# fish: No extra configuration needed, completions are auto-loaded
+fish_update_completions # (if fish is already running)
 ~~~~
 
 ~~~~ powershell [PowerShell]

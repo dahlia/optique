@@ -3,12 +3,15 @@ import { deepStrictEqual } from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import process from "node:process";
 import { execSync } from "node:child_process";
-import { bash, pwsh, type ShellCompletion, zsh } from "./completion.ts";
+import { bash, fish, pwsh, type ShellCompletion, zsh } from "./completion.ts";
 import type { Suggestion } from "./parser.ts";
 import { message } from "./message.ts";
 
 // Helper functions for shell availability and testing
+const isBun = typeof process !== "undefined" && !!process.versions?.bun;
+
 function isShellAvailable(shell: string): boolean {
   try {
     // Try multiple methods to detect shell availability
@@ -34,6 +37,9 @@ case "$1" in
     elif [[ "$2" == "zsh" ]]; then
       echo "git\\0Git operations\\0"
       echo "docker\\0Docker container operations\\0"
+    elif [[ "$2" == "fish" ]]; then
+      echo -e "git\\tGit operations"
+      echo -e "docker\\tDocker container operations"
     fi
     ;;
   *)
@@ -147,6 +153,31 @@ Write-Output "loaded"
 
     // Return success indicator - full integration testing requires PowerShell 7.4+
     return result.trim().includes("loaded") ? ["success"] : [];
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function testFishCompletion(script: string, cliPath: string): string[] {
+  const tempDir = mkdtempSync(join(tmpdir(), "fish-completion-test-"));
+
+  try {
+    const scriptPath = join(tempDir, "completion.fish");
+    writeFileSync(scriptPath, script);
+
+    // Use `complete -C` to trigger completion for a given command line
+    const commandToComplete = `${cliPath} `;
+    const testScript = `
+source "${scriptPath}"
+complete -C '${commandToComplete}'
+`;
+
+    const result = execSync(`fish -c "${testScript.replace(/"/g, '\\"')}"`, {
+      encoding: "utf8",
+      cwd: tempDir,
+    });
+
+    return result.trim().split("\n").filter((line) => line.length > 0);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -277,6 +308,7 @@ describe("completion module", () => {
 
     it("should work with actual zsh shell", (t) => {
       if (!isShellAvailable("zsh")) {
+        if (isBun) return;
         t.skip("zsh not available");
         return;
       }
@@ -392,6 +424,7 @@ describe("completion module", () => {
 
     it("should work with actual pwsh shell", (t) => {
       if (!isShellAvailable("pwsh")) {
+        if (isBun) return;
         t.skip("pwsh not available");
         return;
       }
@@ -511,9 +544,108 @@ describe("completion module", () => {
     });
   });
 
+  describe("fish shell completion", () => {
+    it("should have correct name", () => {
+      deepStrictEqual(fish.name, "fish");
+    });
+
+    it("should generate proper completion script", () => {
+      const script = fish.generateScript("myapp");
+
+      deepStrictEqual(script.includes("function __myapp"), true);
+      deepStrictEqual(script.includes("commandline -poc"), true);
+      deepStrictEqual(script.includes("commandline -ct"), true);
+      deepStrictEqual(
+        script.includes(
+          "complete -c myapp -f -a '(__myapp)'",
+        ),
+        true,
+      );
+    });
+
+    it("should work with actual fish shell", (t) => {
+      if (!isShellAvailable("fish")) {
+        if (isBun) return;
+        t.skip("fish not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "fish-completion-"));
+
+      try {
+        const cliPath = createTestCli(tempDir);
+        const script = fish.generateScript(cliPath, ["completion", "fish"]);
+        const completions = testFishCompletion(script, cliPath);
+
+        deepStrictEqual(completions, [
+          "git\tGit operations",
+          "docker\tDocker container operations",
+        ]);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should generate script with completion command args", () => {
+      const script = fish.generateScript("myapp", ["completion", "fish"]);
+
+      deepStrictEqual(script.includes("myapp 'completion' 'fish'"), true);
+    });
+
+    it("should escape single quotes in arguments", () => {
+      const script = fish.generateScript("myapp", ["it's", "test"]);
+
+      deepStrictEqual(script.includes("'it'\\''s'"), true);
+    });
+
+    it("should encode suggestions with tab-separated format", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--verbose",
+          description: message`Enable verbose output`,
+        },
+        { kind: "literal", text: "--quiet" },
+      ];
+
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, [
+        "--verbose\tEnable verbose output",
+        "\n",
+        "--quiet\t",
+      ]);
+    });
+
+    it("should encode file suggestions with marker", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: ["ts", "js"],
+          includeHidden: true,
+          description: message`TypeScript or JavaScript files`,
+        },
+      ];
+
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file:ts,js::1\tTypeScript or JavaScript files",
+      );
+    });
+
+    it("should handle empty suggestions list", () => {
+      const suggestions: Suggestion[] = [];
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, []);
+    });
+  });
+
   describe("ShellCompletion interface", () => {
     it("should implement required methods", () => {
-      const shells: ShellCompletion[] = [bash, zsh, pwsh];
+      const shells: ShellCompletion[] = [bash, zsh, pwsh, fish];
 
       for (const shell of shells) {
         // Check that all required properties exist

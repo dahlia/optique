@@ -909,6 +909,11 @@ source ~/.bashrc.d/myapp.bash
 myapp completion zsh > ~/.zsh/completions/_myapp
 ~~~~
 
+~~~~ fish [fish]
+# Generate and install fish completion
+myapp completion fish > ~/.config/fish/completions/myapp.fish
+~~~~
+
 :::
 
 The completion system leverages the same parser structure used for argument

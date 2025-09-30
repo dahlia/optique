@@ -432,4 +432,142 @@ ${
   },
 };
 
+/**
+ * The Fish shell completion generator.
+ * @since 0.6.0
+ */
+export const fish: ShellCompletion = {
+  name: "fish",
+  generateScript(programName: string, args: readonly string[] = []): string {
+    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
+      .join(" ");
+    return `
+function __${programName.replace(/[^a-zA-Z0-9]/g, "_")}
+    set -l tokens (commandline -poc)
+    set -l current (commandline -ct)
+
+    # Check if the first token is the command itself, if so, remove it
+    if test (count $tokens) -gt 0; and test "$tokens[1]" = "${programName}"
+        set -e tokens[1]
+    end
+
+    set -l comp_args
+    if [ (count $tokens) -gt 0 ]
+        set comp_args $tokens $current
+    else
+        set comp_args $current
+    end
+
+    ${programName} ${escapedArgs} $comp_args 2>/dev/null | while read -l line
+        if string match -q '__FILE__:*' -- "$line"
+            # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
+            set -l parts (string split ':' -- "$line")
+            set -l type $parts[2]
+            set -l extensions $parts[3]
+            set -l pattern $parts[4]
+            set -l hidden (string split "\\t" -- $parts[5])[1]
+            set -l desc (string split "\\t" -- $parts[5])[2]
+
+            set -l prefix "$current"
+            if test -z "$prefix"
+              set prefix '*'
+            else
+              set prefix "$current"*
+            end
+
+            # Generate file and directory completions
+            set -l items
+            switch $type
+                case file
+                    if test -n "$extensions"
+                        set -l ext_pattern (string replace ',' '|' -- "$extensions")
+                        for item in $prefix
+                          if test -f "$item"; and string match -qr -- "\\.($ext_pattern)\$" "$item"
+                            set items $items "$item"
+                          end
+                        end
+                    else
+                        for item in $prefix
+                            if test -f "$item"
+                                set items $items "$item"
+                            end
+                        end
+                    end
+                case directory
+                    for item in $prefix/
+                        if test -d "$item"
+                            set items $items "$item"
+                        end
+                    end
+                case any
+                    if test -n "$extensions"
+                        set -l ext_pattern (string replace ',' '|' -- "$extensions")
+                        for item in $prefix*
+                          if test -d "$item"
+                            set items $items "$item/"
+                          else if test -f "$item"; and string match -qr -- "\\.($ext_pattern)\$" "$item"
+                            set items $items "$item"
+                          end
+                        end
+                    else
+                        for item in $prefix*
+                            if test -d "$item"
+                                set items $items "$item/"
+                            else
+                                set items $items "$item"
+                            end
+                        end
+                    end
+            end
+
+            # Filter hidden files unless requested
+            if test "$hidden" != "1"; and not string match -q ".*" -- "$current"
+                set -l filtered
+                for item in $items
+                    if not string match -q ".*" -- (basename "$item")
+                        set filtered $filtered $item
+                    end
+                end
+                set items $filtered
+            end
+
+            for item in $items
+                echo -e "$item\\t$desc"
+            end
+        else
+            echo "$line"
+        end
+    end
+end
+
+complete -c ${programName} -f -a '(__${
+      programName.replace(/[^a-zA-Z0-9]/g, "_")
+    })'
+`;
+  },
+  *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {
+    let i = 0;
+    for (const suggestion of suggestions) {
+      if (i > 0) yield "\n";
+      if (suggestion.kind === "literal") {
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description, { colors: false });
+        yield `${suggestion.text}\t${description}`;
+      } else {
+        // Emit special marker for native file completion
+        const extensions = suggestion.extensions?.join(",") || "";
+        const hidden = suggestion.includeHidden ? "1" : "0";
+        const description = suggestion.description == null
+          ? "[file]"
+          : formatMessage(suggestion.description, { colors: false });
+        yield `__FILE__:${suggestion.type}:${extensions}:${
+          suggestion.pattern || ""
+        }:${hidden}\t${description}`;
+      }
+      i++;
+    }
+  },
+};
+
 // cSpell: ignore: COMPREPLY compdef
