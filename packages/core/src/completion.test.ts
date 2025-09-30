@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { bash, type ShellCompletion, zsh } from "./completion.ts";
+import { bash, pwsh, type ShellCompletion, zsh } from "./completion.ts";
 import type { Suggestion } from "./parser.ts";
 import { message } from "./message.ts";
 
@@ -114,6 +114,39 @@ CURRENT=2
     return ["success"];
   } catch (error) {
     throw new Error(`Zsh completion test failed: ${error}`);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function testPwshCompletion(script: string, _cliPath: string): string[] {
+  const tempDir = mkdtempSync(join(tmpdir(), "pwsh-completion-test-"));
+
+  try {
+    const scriptPath = join(tempDir, "completion.ps1");
+    writeFileSync(scriptPath, script);
+
+    // Test by directly calling the completion command
+    // This avoids dependency on Get-ArgumentCompleter (PowerShell 7.4+)
+    const testScript = `
+. "${scriptPath}"
+
+# Just verify the script loads without error
+Write-Output "loaded"
+`;
+
+    const result = execSync(
+      `pwsh -NoProfile -NonInteractive -Command "${
+        testScript.replace(/"/g, '\\"').replace(/\$/g, "\\$")
+      }"`,
+      {
+        encoding: "utf8",
+        cwd: tempDir,
+      },
+    );
+
+    // Return success indicator - full integration testing requires PowerShell 7.4+
+    return result.trim().includes("loaded") ? ["success"] : [];
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -337,9 +370,150 @@ describe("completion module", () => {
     });
   });
 
+  describe("pwsh shell completion", () => {
+    it("should have correct name", () => {
+      deepStrictEqual(pwsh.name, "pwsh");
+    });
+
+    it("should generate proper completion script", () => {
+      const script = pwsh.generateScript("myapp");
+
+      // Check for essential PowerShell completion components
+      deepStrictEqual(script.includes("Register-ArgumentCompleter"), true);
+      deepStrictEqual(script.includes("-Native"), true);
+      deepStrictEqual(script.includes("-CommandName myapp"), true);
+      deepStrictEqual(script.includes("$wordToComplete"), true);
+      deepStrictEqual(script.includes("$commandAst"), true);
+      deepStrictEqual(
+        script.includes("System.Management.Automation.CompletionResult"),
+        true,
+      );
+    });
+
+    it("should work with actual pwsh shell", (t) => {
+      if (!isShellAvailable("pwsh")) {
+        t.skip("pwsh not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "pwsh-completion-"));
+
+      try {
+        const cliPath = createTestCli(tempDir);
+        const script = pwsh.generateScript(cliPath, ["completion", "pwsh"]);
+
+        const result = testPwshCompletion(script, cliPath);
+
+        // For pwsh, we verify that the completion script can be loaded
+        // and executed without errors (similar to zsh test approach)
+        deepStrictEqual(result.includes("success"), true);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should generate script with completion command args", () => {
+      const script = pwsh.generateScript("myapp", ["completion", "pwsh"]);
+
+      deepStrictEqual(script.includes("'completion', 'pwsh'"), true);
+    });
+
+    it("should escape single quotes in arguments", () => {
+      const script = pwsh.generateScript("myapp", ["it's", "test"]);
+
+      // PowerShell uses doubled single quotes for escaping
+      deepStrictEqual(script.includes("'it''s'"), true);
+    });
+
+    it("should encode suggestions with tab-separated format", () => {
+      const suggestions: Suggestion[] = [
+        { kind: "literal", text: "--verbose" },
+        { kind: "literal", text: "--quiet" },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, [
+        "--verbose\t--verbose\t",
+        "\n",
+        "--quiet\t--quiet\t",
+      ]);
+    });
+
+    it("should encode suggestions with descriptions", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--verbose",
+          description: message`Enable verbose output`,
+        },
+        {
+          kind: "literal",
+          text: "--quiet",
+          description: message`Suppress output`,
+        },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      // Check format: text\tlistItemText\tdescription
+      deepStrictEqual(
+        encoded[0],
+        "--verbose\t--verbose\tEnable verbose output",
+      );
+      deepStrictEqual(encoded[1], "\n");
+      deepStrictEqual(encoded[2], "--quiet\t--quiet\tSuppress output");
+    });
+
+    it("should handle empty suggestions list", () => {
+      const suggestions: Suggestion[] = [];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, []);
+    });
+
+    it("should encode file suggestions with marker", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: ["json", "yaml"],
+          includeHidden: false,
+          description: message`Configuration file`,
+        },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file:json,yaml::0\t[file]\tConfiguration file",
+      );
+    });
+
+    it("should format descriptions without colors", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--verbose",
+          description: message`Enable verbose mode`,
+        },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      // Should contain tab-separated format
+      deepStrictEqual(encoded[0].startsWith("--verbose\t"), true);
+      deepStrictEqual(encoded[0].includes("Enable verbose mode"), true);
+      // Should not contain ANSI color codes
+      deepStrictEqual(encoded[0].includes("\x1b["), false);
+    });
+  });
+
   describe("ShellCompletion interface", () => {
     it("should implement required methods", () => {
-      const shells: ShellCompletion[] = [bash, zsh];
+      const shells: ShellCompletion[] = [bash, zsh, pwsh];
 
       for (const shell of shells) {
         // Check that all required properties exist

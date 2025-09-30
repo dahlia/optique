@@ -260,4 +260,176 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
   },
 };
 
+/**
+ * The PowerShell completion generator.
+ * @since 0.6.0
+ */
+export const pwsh: ShellCompletion = {
+  name: "pwsh",
+  generateScript(programName: string, args: readonly string[] = []): string {
+    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "''")}'`)
+      .join(", ");
+    return `
+Register-ArgumentCompleter -Native -CommandName ${programName} -ScriptBlock {
+    param(\$wordToComplete, \$commandAst, \$cursorPosition)
+
+    # Extract arguments from AST (handles quoted strings properly)
+    \$arguments = @()
+    \$commandElements = \$commandAst.CommandElements
+
+    # Determine the range of elements to extract
+    # Exclude the last element if it matches wordToComplete (partial input case)
+    \$maxIndex = \$commandElements.Count - 1
+    if (\$commandElements.Count -gt 1) {
+        \$lastElement = \$commandElements[\$commandElements.Count - 1]
+        \$lastText = if (\$lastElement -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
+            \$lastElement.Value
+        } else {
+            \$lastElement.Extent.Text
+        }
+        if (\$lastText -eq \$wordToComplete) {
+            \$maxIndex = \$commandElements.Count - 2
+        }
+    }
+
+    for (\$i = 1; \$i -le \$maxIndex; \$i++) {
+        \$element = \$commandElements[\$i]
+
+        if (\$element -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
+            \$arguments += \$element.Value
+        } else {
+            \$arguments += \$element.Extent.Text
+        }
+    }
+
+    # Build arguments array for completion command
+    \$completionArgs = @()
+${
+      escapedArgs
+        ? `    \$completionArgs += @(${escapedArgs})
+`
+        : ""
+    }    \$completionArgs += \$arguments
+    \$completionArgs += \$wordToComplete
+
+    # Call completion command and capture output
+    try {
+        \$output = & ${programName} \$completionArgs 2>\$null
+        if (-not \$output) { return }
+
+        # Parse tab-separated output and create CompletionResult objects
+        \$output -split "\`n" | ForEach-Object {
+            \$line = \$_.Trim()
+            if (-not \$line) { return }
+
+            if (\$line -match '^__FILE__:') {
+                # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
+                \$parts = \$line -split ':', 5
+                \$type = \$parts[1]
+                \$extensions = \$parts[2]
+                \$pattern = \$parts[3]
+                \$hidden = \$parts[4] -eq '1'
+
+                # Determine current prefix for file matching
+                \$prefix = if (\$wordToComplete) { \$wordToComplete } else { '' }
+
+                # Get file system items based on type
+                \$items = @()
+                switch (\$type) {
+                    'file' {
+                        if (\$extensions) {
+                            # Filter by extensions
+                            \$extList = \$extensions -split ','
+                            \$items = Get-ChildItem -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                                Where-Object {
+                                    \$ext = \$_.Extension
+                                    \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
+                                }
+                        } else {
+                            \$items = Get-ChildItem -File -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                        }
+                    }
+                    'directory' {
+                        \$items = Get-ChildItem -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                    }
+                    'any' {
+                        if (\$extensions) {
+                            # Get directories and filtered files
+                            \$dirs = Get-ChildItem -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$extList = \$extensions -split ','
+                            \$files = Get-ChildItem -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                                Where-Object {
+                                    \$ext = \$_.Extension
+                                    \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
+                                }
+                            \$items = \$dirs + \$files
+                        } else {
+                            \$items = Get-ChildItem -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                        }
+                    }
+                }
+
+                # Filter hidden files unless requested
+                if (-not \$hidden) {
+                    \$items = \$items | Where-Object { -not \$_.Attributes.HasFlag([System.IO.FileAttributes]::Hidden) }
+                }
+
+                # Create completion results for files
+                \$items | ForEach-Object {
+                    \$completionText = if (\$_.PSIsContainer) { "\$(\$_.Name)/" } else { \$_.Name }
+                    \$itemType = if (\$_.PSIsContainer) { 'Directory' } else { 'File' }
+                    [System.Management.Automation.CompletionResult]::new(
+                        \$completionText,
+                        \$completionText,
+                        'ParameterValue',
+                        \$itemType
+                    )
+                }
+            } else {
+                # Parse literal completion: text\\tlistItemText\\tdescription
+                \$parts = \$line -split "\`t", 3
+                \$completionText = \$parts[0]
+                \$listItemText = if (\$parts.Length -gt 1 -and \$parts[1]) { \$parts[1] } else { \$completionText }
+                \$toolTip = if (\$parts.Length -gt 2 -and \$parts[2]) { \$parts[2] } else { \$completionText }
+
+                [System.Management.Automation.CompletionResult]::new(
+                    \$completionText,
+                    \$listItemText,
+                    'ParameterValue',
+                    \$toolTip
+                )
+            }
+        }
+    } catch {
+        # Silently ignore errors
+    }
+}
+    `;
+  },
+  *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {
+    let i = 0;
+    for (const suggestion of suggestions) {
+      if (i > 0) yield "\n";
+      if (suggestion.kind === "literal") {
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description, { colors: false });
+        // Format: text\tlistItemText\tdescription
+        yield `${suggestion.text}\t${suggestion.text}\t${description}`;
+      } else {
+        // Emit special marker for native file completion
+        const extensions = suggestion.extensions?.join(",") || "";
+        const hidden = suggestion.includeHidden ? "1" : "0";
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description, { colors: false });
+        yield `__FILE__:${suggestion.type}:${extensions}:${
+          suggestion.pattern || ""
+        }:${hidden}\t[file]\t${description}`;
+      }
+      i++;
+    }
+  },
+};
+
 // cSpell: ignore: COMPREPLY compdef

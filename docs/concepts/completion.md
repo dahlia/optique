@@ -12,8 +12,8 @@ Shell completion
 
 Shell completion enhances command-line user experience by providing
 intelligent suggestions for commands, options, and arguments as users type.
-Optique provides built-in completion support for Bash and zsh that integrates
-seamlessly with the existing parser architecture.
+Optique provides built-in completion support for Bash, zsh, and PowerShell
+that integrates seamlessly with the existing parser architecture.
 
 Unlike many CLI frameworks that require separate completion definitions,
 Optique's completion system leverages the same parser structure used for
@@ -68,6 +68,11 @@ source ~/.bashrc.d/myapp.bash
 
 ~~~~ zsh [zsh]
 myapp completion zsh > ~/.zsh/completions/_myapp
+~~~~
+
+~~~~ powershell [PowerShell]
+myapp completion pwsh > $PROFILE/../myapp-completion.ps1
+Add-Content $PROFILE ". $PROFILE/../myapp-completion.ps1"
 ~~~~
 
 :::
@@ -298,6 +303,18 @@ rich completion display. The generated script supports:
  -  Advanced completion contexts and filtering
  -  Integration with zsh's completion styling system
 
+### PowerShell completion
+
+PowerShell completion scripts use `Register-ArgumentCompleter` with the
+`-Native` parameter to integrate with PowerShell's completion system. The
+generated script provides:
+
+ -  AST-based argument extraction for robust parsing
+ -  `CompletionResult` objects with descriptions and tooltips
+ -  Native file completion using `Get-ChildItem`
+ -  Support for hidden files and extension filtering
+ -  Cross-platform compatibility (Windows, Linux, macOS)
+
 
 Integration with `run()`
 ------------------------
@@ -378,6 +395,10 @@ myapp completion zsh > ~/.zsh/completions/_myapp
 myapp completion zsh > ~/.oh-my-zsh/completions/_myapp
 ~~~~
 
+~~~~ powershell [PowerShell]
+myapp completion pwsh > myapp-completion.ps1
+~~~~
+
 :::
 
 ### 3. Source or install the completion script
@@ -392,6 +413,13 @@ echo "source ~/.bashrc.d/myapp.bash" >> ~/.bashrc
 ~~~~ zsh [zsh]
 # zsh: Ensure completion directory is in fpath
 # (usually automatic with oh-my-zsh)
+~~~~
+
+~~~~ powershell [PowerShell]
+# PowerShell: Add to your profile
+Add-Content $PROFILE ". $PWD/myapp-completion.ps1"
+# Or load in current session
+. ./myapp-completion.ps1
 ~~~~
 
 :::

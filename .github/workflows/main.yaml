@@ -3,10 +3,14 @@ on: [push, pull_request]
 
 jobs:
   test-node:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
-    - run: sudo apt-get install -y zsh
+    - run: |
+        wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell zsh
     - uses: pnpm/action-setup@v4
       with:
         version: latest
@@ -17,10 +21,14 @@ jobs:
     - run: pnpm run -r test
 
   test-deno:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
-    - run: sudo apt-get install -y zsh
+    - run: |
+        wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell zsh
     - uses: denoland/setup-deno@v2
       with:
         deno-version: v2.x
@@ -36,10 +44,14 @@ jobs:
         files: coverage/lcov.info
 
   test-bun:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
-    - run: sudo apt-get install -y zsh
+    - run: |
+        wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell zsh
     - uses: pnpm/action-setup@v4
       with:
         version: latest
