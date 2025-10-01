@@ -377,6 +377,50 @@ When completion is enabled, the `run()` function automatically:
  -  Handles output formatting for each shell
  -  Exits with appropriate status codes
 
+### Custom shell support
+
+By default, Optique provides completion for Bash, zsh, fish, and PowerShell.
+You can add custom shell completions or override the defaults using the
+`shells` option:
+
+~~~~ typescript twoslash
+import type { ShellCompletion } from "@optique/core/completion";
+import { object } from "@optique/core/constructs";
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  name: argument(string()),
+});
+
+// Create a custom shell completion
+const customShell: ShellCompletion = {
+  name: "custom",
+  generateScript(programName: string, args: readonly string[] = []): string {
+    return `# Custom shell completion script for ${programName}`;
+  },
+  *encodeSuggestions(suggestions) {
+    for (const suggestion of suggestions) {
+      if (suggestion.kind === "literal") {
+        yield `${suggestion.text}\n`;
+      }
+    }
+  },
+};
+
+run(parser, {
+  completion: {
+    mode: "both",
+    shells: { custom: customShell }, // Add custom shell
+  },
+});
+~~~~
+
+The custom shell completion will be merged with the default shells, making
+all shells available. You can also override default shells by using the same
+name (e.g., `bash`, `zsh`, `fish`, or `pwsh`).
+
 
 Setup instructions
 ------------------

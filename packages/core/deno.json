@@ -4,6 +4,7 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
+    "./completion": "./src/completion.ts",
     "./constructs": "./src/constructs.ts",
     "./doc": "./src/doc.ts",
     "./facade": "./src/facade.ts",

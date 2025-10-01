@@ -937,3 +937,5 @@ myapp build <TAB>              # Shows: web, mobile, desktop
 The patterns in this cookbook provide the building blocks for creating
 CLI interfaces that are both powerful and type-safe, with clear separation
 between parsing logic, type safety, and user experience.
+
+<!-- cSpell: ignore myapp -->

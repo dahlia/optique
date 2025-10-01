@@ -2320,5 +2320,109 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       );
       assert.ok(suggestions.length > 0);
     });
+
+    it("should support custom shells via shells option", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      // Create a custom shell completion
+      const customShell: import("./completion.ts").ShellCompletion = {
+        name: "custom",
+        generateScript(programName: string) {
+          return `# Custom shell completion for ${programName}`;
+        },
+        *encodeSuggestions(suggestions) {
+          for (const suggestion of suggestions) {
+            if (suggestion.kind === "literal") {
+              yield `CUSTOM:${suggestion.text}\n`;
+            }
+          }
+        },
+      };
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "custom"], {
+        completion: {
+          mode: "command",
+          shells: { custom: customShell },
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.ok(
+        completionOutput.includes("# Custom shell completion for myapp"),
+      );
+    });
+
+    it("should allow overriding default shells", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      // Create a custom bash shell that overrides the default
+      const customBash: import("./completion.ts").ShellCompletion = {
+        name: "bash",
+        generateScript(programName: string) {
+          return `# Custom bash completion for ${programName}`;
+        },
+        *encodeSuggestions(suggestions) {
+          for (const suggestion of suggestions) {
+            if (suggestion.kind === "literal") {
+              yield `OVERRIDE:${suggestion.text}\n`;
+            }
+          }
+        },
+      };
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "bash"], {
+        completion: {
+          mode: "command",
+          shells: { bash: customBash },
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.ok(
+        completionOutput.includes("# Custom bash completion for myapp"),
+      );
+    });
+
+    it("should still provide default shells when custom shells are added", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      const customShell: import("./completion.ts").ShellCompletion = {
+        name: "custom",
+        generateScript(programName: string) {
+          return `# Custom shell completion for ${programName}`;
+        },
+        *encodeSuggestions() {},
+      };
+
+      let completionOutput = "";
+
+      // Should still be able to use zsh even with custom shell added
+      run(parser, "myapp", ["completion", "zsh"], {
+        completion: {
+          mode: "command",
+          shells: { custom: customShell },
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.ok(completionOutput.includes("function _myapp"));
+      assert.ok(completionOutput.includes("compdef _myapp myapp"));
+    });
   });
 });

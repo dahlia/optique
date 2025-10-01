@@ -545,6 +545,15 @@ export interface RunOptions<THelp, TError> {
     readonly mode?: "command" | "option" | "both";
 
     /**
+     * Available shell completions. By default, includes `bash`, `fish`, `pwsh`,
+     * and `zsh`. You can provide additional custom shell completions or override
+     * the defaults.
+     *
+     * @default `{ bash, fish, pwsh, zsh }`
+     */
+    readonly shells?: Record<string, ShellCompletion>;
+
+    /**
      * Callback function invoked when completion is requested. The function can
      * optionally receive an exit code parameter.
      *
@@ -624,6 +633,7 @@ function handleCompletion<THelp, TError>(
   stderr: (text: string) => void,
   onCompletion: (() => THelp) | ((exitCode: number) => THelp),
   onError: (() => TError) | ((exitCode: number) => TError),
+  availableShells: Record<string, ShellCompletion>,
   colors?: boolean,
 ): THelp | TError {
   if (completionArgs.length === 0) {
@@ -634,14 +644,6 @@ function handleCompletion<THelp, TError>(
 
   const shellName = completionArgs[0];
   const args = completionArgs.slice(1);
-
-  // Get available shells
-  const availableShells: Record<string, ShellCompletion> = {
-    bash,
-    fish,
-    pwsh,
-    zsh,
-  };
 
   const shell = availableShells[shellName];
 
@@ -740,6 +742,17 @@ export function run<
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
 
   if (options.completion) {
+    // Get available shells (defaults + user-provided)
+    const defaultShells: Record<string, ShellCompletion> = {
+      bash,
+      fish,
+      pwsh,
+      zsh,
+    };
+    const availableShells = options.completion.shells
+      ? { ...defaultShells, ...options.completion.shells }
+      : defaultShells;
+
     // Handle completion command format: "completion <shell> [args...]"
     if (
       (completionMode === "command" || completionMode === "both") &&
@@ -753,6 +766,7 @@ export function run<
         stderr,
         onCompletion,
         onError,
+        availableShells,
         colors,
       );
     }
@@ -772,6 +786,7 @@ export function run<
             stderr,
             onCompletion,
             onError,
+            availableShells,
             colors,
           );
         } else if (arg === "--completion" && i + 1 < args.length) {
@@ -785,6 +800,7 @@ export function run<
             stderr,
             onCompletion,
             onError,
+            availableShells,
             colors,
           );
         }

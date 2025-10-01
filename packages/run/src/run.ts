@@ -1,3 +1,4 @@
+import type { ShellCompletion } from "@optique/core/completion";
 import { run as runBase } from "@optique/core/facade";
 import type { InferValue, Parser } from "@optique/core/parser";
 import type { ShowDefaultOptions } from "@optique/core/doc";
@@ -83,12 +84,18 @@ export interface RunOptions {
    * - `"command"`: Only the `completion` subcommand is available
    * - `"option"`: Only the `--completion` option is available
    * - `"both"`: Both `completion` subcommand and `--completion` option are available
+   * - `object`: Advanced configuration with mode and custom shells
+   *   - `mode`: "command" | "option" | "both" (default: "both")
+   *   - `shells`: Custom shell completions (optional)
    *
    * When not provided, completion functionality is disabled.
    *
    * @since 0.6.0
    */
-  readonly completion?: "command" | "option" | "both";
+  readonly completion?: "command" | "option" | "both" | {
+    readonly mode?: "command" | "option" | "both";
+    readonly shells?: Record<string, ShellCompletion>;
+  };
 
   /**
    * What to display above error messages:
@@ -235,7 +242,10 @@ export function run<T extends Parser<unknown, unknown>>(
   // Convert completion configuration for the base run function
   const completionConfig = completion
     ? {
-      mode: completion,
+      mode: typeof completion === "string"
+        ? completion
+        : (completion.mode ?? "both"),
+      shells: typeof completion === "string" ? undefined : completion.shells,
       onShow: () => process.exit(0) as never,
     }
     : undefined;
