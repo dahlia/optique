@@ -12,7 +12,7 @@ To be released.
     now provides built-in completion functionality that integrates seamlessly
     with the existing parser architecture. This allows CLI applications to offer
     intelligent suggestions for commands, options, and arguments without
-    requiring additional configuration.  [[#5], [#30]]
+    requiring additional configuration.  [[#5], [#30], [#31]]
 
      -  Added `Suggestion` type.
      -  Added `Parser.suggest()` method.
@@ -25,6 +25,7 @@ To be released.
 
 [#5]: https://github.com/dahlia/optique/issues/5
 [#30]: https://github.com/dahlia/optique/issues/30
+[#31]: https://github.com/dahlia/optique/issues/31
 
 ### @optique/run
 
