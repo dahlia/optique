@@ -909,6 +909,16 @@ source ~/.bashrc.d/myapp.bash
 myapp completion zsh > ~/.zsh/completions/_myapp
 ~~~~
 
+~~~~ fish [fish]
+# Generate and install fish completion
+myapp completion fish > ~/.config/fish/completions/myapp.fish
+~~~~
+
+~~~~ powershell [PowerShell]
+# Generate and install PowerShell completion
+myapp completion pwsh > myapp-completion.ps1
+~~~~
+
 :::
 
 The completion system leverages the same parser structure used for argument

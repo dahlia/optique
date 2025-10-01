@@ -261,6 +261,154 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
 };
 
 /**
+ * The fish shell completion generator.
+ * @since 0.6.0
+ */
+export const fish: ShellCompletion = {
+  name: "fish",
+  generateScript(programName: string, args: readonly string[] = []): string {
+    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "\\'")}'`)
+      .join(" ");
+    const functionName = `__${
+      programName.replace(/[^a-zA-Z0-9]/g, "_")
+    }_complete`;
+    return `
+function ${functionName}
+    set -l tokens (commandline -poc)
+    set -l current (commandline -ct)
+
+    # Extract previous arguments (skip the command name)
+    set -l prev
+    set -l count (count $tokens)
+    if test $count -gt 1
+        set prev $tokens[2..$count]
+    end
+
+    # Call completion command and capture output
+${
+      escapedArgs
+        ? `    set -l output (${programName} ${escapedArgs} $prev $current 2>/dev/null)\n`
+        : `    set -l output (${programName} $prev $current 2>/dev/null)\n`
+    }
+    # Process each line of output
+    for line in $output
+        if string match -q '__FILE__:*' -- $line
+            # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
+            set -l parts (string split ':' -- $line)
+            set -l type $parts[2]
+            set -l extensions $parts[3]
+            set -l pattern $parts[4]
+            set -l hidden $parts[5]
+
+            # Generate file completions based on type
+            set -l items
+            switch $type
+                case file
+                    # Complete files only
+                    for item in $current*
+                        if test -f $item
+                            set -a items $item
+                        end
+                    end
+                case directory
+                    # Complete directories only
+                    for item in $current*
+                        if test -d $item
+                            set -a items $item/
+                        end
+                    end
+                case any
+                    # Complete both files and directories
+                    for item in $current*
+                        if test -d $item
+                            set -a items $item/
+                        else if test -f $item
+                            set -a items $item
+                        end
+                    end
+            end
+
+            # Filter by extensions if specified
+            if test -n "$extensions" -a "$type" != directory
+                set -l filtered
+                set -l ext_list (string split ',' -- $extensions)
+                for item in $items
+                    # Skip directories, they don't have extensions
+                    if string match -q '*/' -- $item
+                        set -a filtered $item
+                        continue
+                    end
+                    # Check if file matches any extension
+                    for ext in $ext_list
+                        if string match -q "*.$ext" -- $item
+                            set -a filtered $item
+                            break
+                        end
+                    end
+                end
+                set items $filtered
+            end
+
+            # Filter out hidden files unless requested
+            if test "$hidden" != "1" -a (string sub -l 1 -- $current) != "."
+                set -l filtered
+                for item in $items
+                    set -l basename (basename $item)
+                    if not string match -q '.*' -- $basename
+                        set -a filtered $item
+                    end
+                end
+                set items $filtered
+            end
+
+            # Output file completions
+            for item in $items
+                echo $item
+            end
+        else
+            # Regular literal completion - split by tab
+            set -l parts (string split \\t -- $line)
+            if test (count $parts) -ge 2
+                # value\tdescription format
+                echo $parts[1]\\t$parts[2]
+            else
+                # Just value
+                echo $line
+            end
+        end
+    end
+end
+
+complete -c ${programName} -f -a '(${functionName})'
+    `;
+  },
+  *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {
+    let i = 0;
+    for (const suggestion of suggestions) {
+      if (i > 0) yield "\n";
+      if (suggestion.kind === "literal") {
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description, { colors: false });
+        // Format: value\tdescription
+        yield `${suggestion.text}\t${description}`;
+      } else {
+        // Emit special marker for native file completion
+        const extensions = suggestion.extensions?.join(",") || "";
+        const hidden = suggestion.includeHidden ? "1" : "0";
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description, { colors: false });
+        yield `__FILE__:${suggestion.type}:${extensions}:${
+          suggestion.pattern || ""
+        }:${hidden}\t${description}`;
+      }
+      i++;
+    }
+  },
+};
+
+/**
  * The PowerShell completion generator.
  * @since 0.6.0
  */
@@ -432,4 +580,4 @@ ${
   },
 };
 
-// cSpell: ignore: COMPREPLY compdef
+// cSpell: ignore: COMPREPLY compdef commandline

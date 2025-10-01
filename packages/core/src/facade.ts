@@ -1,4 +1,4 @@
-import { bash, pwsh, type ShellCompletion, zsh } from "./completion.ts";
+import { bash, fish, pwsh, type ShellCompletion, zsh } from "./completion.ts";
 import { longestMatch, object } from "./constructs.ts";
 import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import {
@@ -638,6 +638,7 @@ function handleCompletion<THelp, TError>(
   // Get available shells
   const availableShells: Record<string, ShellCompletion> = {
     bash,
+    fish,
     pwsh,
     zsh,
   };

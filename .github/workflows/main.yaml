@@ -10,7 +10,7 @@ jobs:
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
         sudo apt-get update
-        sudo apt-get install -y powershell zsh
+        sudo apt-get install -y fish powershell zsh
     - uses: pnpm/action-setup@v4
       with:
         version: latest
@@ -28,7 +28,7 @@ jobs:
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
         sudo apt-get update
-        sudo apt-get install -y powershell zsh
+        sudo apt-get install -y fish powershell zsh
     - uses: denoland/setup-deno@v2
       with:
         deno-version: v2.x
@@ -51,7 +51,7 @@ jobs:
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
         sudo apt-get update
-        sudo apt-get install -y powershell zsh
+        sudo apt-get install -y fish powershell zsh
     - uses: pnpm/action-setup@v4
       with:
         version: latest
@@ -183,3 +183,5 @@ jobs:
           --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME }}
         packageManager: pnpm
         workingDirectory: ${{ github.workspace }}/docs/
+
+# cSpell: ignore dpkg denoland npmjs vitepress

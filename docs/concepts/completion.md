@@ -12,7 +12,7 @@ Shell completion
 
 Shell completion enhances command-line user experience by providing
 intelligent suggestions for commands, options, and arguments as users type.
-Optique provides built-in completion support for Bash, zsh, and PowerShell
+Optique provides built-in completion support for Bash, zsh, fish, and PowerShell
 that integrates seamlessly with the existing parser architecture.
 
 Unlike many CLI frameworks that require separate completion definitions,
@@ -68,6 +68,10 @@ source ~/.bashrc.d/myapp.bash
 
 ~~~~ zsh [zsh]
 myapp completion zsh > ~/.zsh/completions/_myapp
+~~~~
+
+~~~~ fish [fish]
+myapp completion fish > ~/.config/fish/completions/myapp.fish
 ~~~~
 
 ~~~~ powershell [PowerShell]
@@ -303,6 +307,17 @@ rich completion display. The generated script supports:
  -  Advanced completion contexts and filtering
  -  Integration with zsh's completion styling system
 
+### fish completion
+
+fish completion scripts use a function-based approach with the `complete`
+command. The generated script provides:
+
+ -  Tab-separated completion descriptions (`value\tdescription` format)
+ -  Automatic argument parsing using `commandline` utility
+ -  Native file completion using fish globbing and string matching
+ -  Extension filtering and hidden file handling
+ -  Auto-loading from *~/.config/fish/completions/* directory
+
 ### PowerShell completion
 
 PowerShell completion scripts use `Register-ArgumentCompleter` with the
@@ -395,6 +410,10 @@ myapp completion zsh > ~/.zsh/completions/_myapp
 myapp completion zsh > ~/.oh-my-zsh/completions/_myapp
 ~~~~
 
+~~~~ fish [fish]
+myapp completion fish > ~/.config/fish/completions/myapp.fish
+~~~~
+
 ~~~~ powershell [PowerShell]
 myapp completion pwsh > myapp-completion.ps1
 ~~~~
@@ -413,6 +432,12 @@ echo "source ~/.bashrc.d/myapp.bash" >> ~/.bashrc
 ~~~~ zsh [zsh]
 # zsh: Ensure completion directory is in fpath
 # (usually automatic with oh-my-zsh)
+~~~~
+
+~~~~ fish [fish]
+# fish: Completions are automatically loaded from ~/.config/fish/completions/
+# No additional configuration needed - just restart fish or run:
+fish_update_completions
 ~~~~
 
 ~~~~ powershell [PowerShell]
@@ -447,3 +472,5 @@ Completion significantly improves CLI usability and is expected by users of
 modern command-line tools. Optique's built-in support makes adding completion
 straightforward while maintaining type safety and consistency with your
 parser definitions.
+
+<!-- cSpell: ignore myapp fpath -->
