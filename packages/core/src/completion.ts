@@ -409,6 +409,250 @@ complete -c ${programName} -f -a '(${functionName})'
 };
 
 /**
+ * The Nushell completion generator.
+ * @since 0.6.0
+ */
+export const nu: ShellCompletion = {
+  name: "nu",
+  generateScript(programName: string, args: readonly string[] = []): string {
+    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "''")}'`)
+      .join(" ");
+    // Replace spaces and special chars with hyphens for function name
+    const safeName = programName.replace(/[^a-zA-Z0-9]+/g, "-");
+    const functionName = `nu-complete-${safeName}`;
+    return `
+# Helper to split args respecting quotes and whitespace
+def args-split []: string -> list<string> {
+  let STATE_NORMAL = 0
+  let STATE_IN_SINGLE_QUOTE = 1
+  let STATE_IN_DOUBLE_QUOTE = 2
+  let STATE_ESCAPE = 3
+  let WHITESPACES = [" " "\\t" "\\n" "\\r"]
+
+  mut state = $STATE_NORMAL
+  mut current_token = ""
+  mut result: list<string> = []
+  mut prev_state = $STATE_NORMAL
+
+  for char in ($in | split chars) {
+    if $state == $STATE_ESCAPE {
+      $current_token = $current_token + $char
+      $state = $prev_state
+    } else if $char == '\\\\' {
+      $prev_state = $state
+      $state = $STATE_ESCAPE
+    } else if $state == $STATE_NORMAL {
+      if $char == "'" {
+        $state = $STATE_IN_SINGLE_QUOTE
+      } else if $char == '"' {
+        $state = $STATE_IN_DOUBLE_QUOTE
+      } else if ($char in $WHITESPACES) {
+        if ($current_token | is-not-empty) {
+          $result = $result | append $current_token
+          $current_token = ""
+        }
+      } else {
+        $current_token = $current_token + $char
+      }
+    } else if $state == $STATE_IN_SINGLE_QUOTE {
+      if $char == "'" {
+        $state = $STATE_NORMAL
+      } else {
+        $current_token = $current_token + $char
+      }
+    } else if $state == $STATE_IN_DOUBLE_QUOTE {
+      if $char == '"' {
+        $state = $STATE_NORMAL
+      } else {
+        $current_token = $current_token + $char
+      }
+    }
+  }
+  if ($current_token | is-not-empty) {
+    $result = $result | append $current_token
+  }
+  $result
+}
+
+# Completion command that calls back to the CLI
+export def "${functionName}" [context: string] {
+  # Split context into tokens, handling quotes properly
+  let tokens = $context | args-split
+
+  # Remove the command name (first token) to get arguments
+  let args = if ($tokens | length) > 1 {
+    $tokens | skip 1
+  } else {
+    []
+  }
+
+  # If context ends with whitespace, add empty string to represent the new argument
+  let args_with_empty = if ($context | str ends-with ' ') {
+    $args | append ''
+  } else {
+    $args
+  }
+
+  # Ensure at least one argument (empty string) to get completions not script
+  let final_args = if ($args_with_empty | is-empty) {
+    ['']
+  } else {
+    $args_with_empty
+  }
+
+  let output = try {
+${
+      escapedArgs
+        ? `    ^${programName} ${escapedArgs} ...$final_args | complete | get stdout\n`
+        : `    ^${programName} ...$final_args | complete | get stdout\n`
+    }  } catch {
+    ""
+  }
+
+  # Process each line of output
+  $output | lines | each {|line|
+    if ($line | str starts-with '__FILE__:') {
+      # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
+      let parts = ($line | split row ':')
+      let type = ($parts | get 1)
+      let extensions = ($parts | get 2)
+      let pattern = ($parts | get 3)
+      let hidden = ($parts | get 4) == '1'
+
+      # Extract prefix from the last argument if it exists
+      let prefix = if ($final_args | length) > 0 {
+        $final_args | last
+      } else {
+        ""
+      }
+
+      # Generate file completions based on type
+      # Use current directory if prefix is empty
+      let ls_pattern = if ($prefix | is-empty) { "." } else { $prefix + "*" }
+
+      let items = try {
+        match $type {
+          "file" => {
+            if ($extensions | is-empty) {
+              ls $ls_pattern | where type == file
+            } else {
+              let ext_list = ($extensions | split row ',')
+              ls $ls_pattern | where type == file | where {|f|
+                let ext = ($f.name | path parse | get extension)
+                $ext in $ext_list
+              }
+            }
+          },
+          "directory" => {
+            ls $ls_pattern | where type == dir
+          },
+          "any" => {
+            if ($extensions | is-empty) {
+              ls $ls_pattern
+            } else {
+              let ext_list = ($extensions | split row ',')
+              let dirs = ls $ls_pattern | where type == dir
+              let files = ls $ls_pattern | where type == file | where {|f|
+                let ext = ($f.name | path parse | get extension)
+                $ext in $ext_list
+              }
+              $dirs | append $files
+            }
+          }
+        }
+      } catch {
+        []
+      }
+
+      # Filter out hidden files unless requested
+      let filtered = if $hidden or ($prefix | str starts-with '.') {
+        $items
+      } else {
+        $items | where {|item|
+          let basename = ($item.name | path basename)
+          not ($basename | str starts-with '.')
+        }
+      }
+
+      # Format file completions
+      $filtered | each {|item|
+        let name = if $item.type == dir {
+          ($item.name | path basename) + "/"
+        } else {
+          $item.name | path basename
+        }
+        { value: $name }
+      }
+    } else {
+      # Regular literal completion - split by tab
+      let parts = ($line | split row "\t")
+      if ($parts | length) >= 2 {
+        # value\\tdescription format
+        { value: ($parts | get 0), description: ($parts | get 1) }
+      } else if ($parts | length) == 1 and ($parts | get 0 | is-not-empty) {
+        # Just value
+        { value: ($parts | get 0) }
+      } else {
+        null
+      }
+    }
+  } | flatten | compact
+}
+
+# Custom completer for external commands
+# This function will be called by Nushell's completion system
+def --env "${functionName}-external" [] {
+  let existing_completer = $env.config.completions.external.completer
+
+  $env.config.completions.external.completer = {|spans|
+    # Check if this is for our program
+    if ($spans.0 == "${programName}") {
+      # Build context string from spans
+      let context = $spans | str join ' '
+      ${functionName} $context
+    } else if ($existing_completer != null) {
+      # Delegate to existing completer
+      do $existing_completer $spans
+    } else {
+      # No completions
+      null
+    }
+  }
+
+  $env.config.completions.external.enable = true
+}
+
+# Auto-setup: register the completer when this module is imported
+${functionName}-external
+    `;
+  },
+  *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {
+    let i = 0;
+    for (const suggestion of suggestions) {
+      if (i > 0) yield "\n";
+      if (suggestion.kind === "literal") {
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description, { colors: false });
+        // Format: value\tdescription
+        yield `${suggestion.text}\t${description}`;
+      } else {
+        // Emit special marker for native file completion
+        const extensions = suggestion.extensions?.join(",") || "";
+        const hidden = suggestion.includeHidden ? "1" : "0";
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description, { colors: false });
+        yield `__FILE__:${suggestion.type}:${extensions}:${
+          suggestion.pattern || ""
+        }:${hidden}\t${description}`;
+      }
+      i++;
+    }
+  },
+};
+
+/**
  * The PowerShell completion generator.
  * @since 0.6.0
  */
@@ -580,4 +824,4 @@ ${
   },
 };
 
-// cSpell: ignore: COMPREPLY compdef commandline
+// cSpell: ignore: COMPREPLY compdef commandline completername

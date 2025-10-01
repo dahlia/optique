@@ -12,8 +12,8 @@ Shell completion
 
 Shell completion enhances command-line user experience by providing
 intelligent suggestions for commands, options, and arguments as users type.
-Optique provides built-in completion support for Bash, zsh, fish, and PowerShell
-that integrates seamlessly with the existing parser architecture.
+Optique provides built-in completion support for Bash, zsh, fish, PowerShell,
+and Nushell that integrates seamlessly with the existing parser architecture.
 
 Unlike many CLI frameworks that require separate completion definitions,
 Optique's completion system leverages the same parser structure used for
@@ -77,6 +77,11 @@ myapp completion fish > ~/.config/fish/completions/myapp.fish
 ~~~~ powershell [PowerShell]
 myapp completion pwsh > $PROFILE/../myapp-completion.ps1
 Add-Content $PROFILE ". $PROFILE/../myapp-completion.ps1"
+~~~~
+
+~~~~ nushell [Nushell]
+myapp completion nu | save myapp-completion.nu
+source myapp-completion.nu
 ~~~~
 
 :::
@@ -330,6 +335,20 @@ generated script provides:
  -  Support for hidden files and extension filtering
  -  Cross-platform compatibility (Windows, Linux, macOS)
 
+### Nushell completion
+
+Nushell completion scripts use the `$env.config.completions.external.completer`
+system to provide completions for external commands. The generated script
+provides:
+
+ -  Custom completer registration that integrates with Nushell's completion system
+ -  Context-aware completion using custom argument parsing
+ -  Structured data return values with `value` and `description` fields
+ -  Native file completion using Nushell's `ls` command and `match` expressions
+ -  Tab-separated encoding format for CLI communication
+ -  Support for file type filtering and hidden file handling
+ -  Automatic preservation of existing completers for other commands
+
 
 Integration with `run()`
 ------------------------
@@ -379,9 +398,9 @@ When completion is enabled, the `run()` function automatically:
 
 ### Custom shell support
 
-By default, Optique provides completion for Bash, zsh, fish, and PowerShell.
-You can add custom shell completions or override the defaults using the
-`shells` option:
+By default, Optique provides completion for Bash, zsh, fish, PowerShell, and
+Nushell. You can add custom shell completions or override the defaults using
+the `shells` option:
 
 ~~~~ typescript twoslash
 import type { ShellCompletion } from "@optique/core/completion";
@@ -419,7 +438,7 @@ run(parser, {
 
 The custom shell completion will be merged with the default shells, making
 all shells available. You can also override default shells by using the same
-name (e.g., `bash`, `zsh`, `fish`, or `pwsh`).
+name (e.g., `bash`, `zsh`, `fish`, `pwsh`, or `nu`).
 
 
 Setup instructions
@@ -462,6 +481,10 @@ myapp completion fish > ~/.config/fish/completions/myapp.fish
 myapp completion pwsh > myapp-completion.ps1
 ~~~~
 
+~~~~ nushell [Nushell]
+myapp completion nu | save myapp-completion.nu
+~~~~
+
 :::
 
 ### 3. Source or install the completion script
@@ -489,6 +512,15 @@ fish_update_completions
 Add-Content $PROFILE ". $PWD/myapp-completion.ps1"
 # Or load in current session
 . ./myapp-completion.ps1
+~~~~
+
+~~~~ nushell [Nushell]
+# Nushell: Source the completion script in your config
+# The script automatically registers the completer when loaded
+source myapp-completion.nu
+
+# Or add to your config file to load on startup:
+# echo "source ~/myapp-completion.nu" | save --append $nu.config-path
 ~~~~
 
 :::

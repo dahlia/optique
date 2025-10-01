@@ -8,11 +8,12 @@ To be released.
 
 ### @optique/core
 
- -  Added shell completion support for Bash, zsh, fish, and PowerShell. Optique
-    now provides built-in completion functionality that integrates seamlessly
-    with the existing parser architecture. This allows CLI applications to offer
-    intelligent suggestions for commands, options, and arguments without
-    requiring additional configuration.  [[#5], [#30], [#31]]
+ -  Added shell completion support for Bash, zsh, fish, PowerShell, and Nushell.
+    Optique now provides built-in completion functionality that integrates
+    seamlessly with the existing parser architecture. This allows CLI
+    applications to offer intelligent suggestions for commands, options, and
+    arguments without requiring additional configuration.
+    [[#5], [#30], [#31], [#33]]
 
      -  Added `Suggestion` type.
      -  Added `Parser.suggest()` method.
@@ -20,12 +21,14 @@ To be released.
      -  Added `suggest()` function.
      -  Added `@optique/core/completion` module.
      -  Added `ShellCompletion` interface.
-     -  Added `bash`, `zsh`, `fish`, and `pwsh` shell completion generators.
+     -  Added `bash`, `zsh`, `fish`, `pwsh`, and `nu` shell completion
+        generators.
      -  Added `RunOptions.completion` option.
 
 [#5]: https://github.com/dahlia/optique/issues/5
 [#30]: https://github.com/dahlia/optique/issues/30
 [#31]: https://github.com/dahlia/optique/issues/31
+[#33]: https://github.com/dahlia/optique/issues/33
 
 ### @optique/run
 

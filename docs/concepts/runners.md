@@ -363,9 +363,9 @@ const result5 = run(parser, {});
 
 *This API is available since Optique 0.6.0.*
 
-Enable shell completion support for Bash, zsh, fish, and PowerShell with simple
-configuration.  The `run()` function automatically handles completion script
-generation and runtime completion requests:
+Enable shell completion support for Bash, zsh, fish, PowerShell, and Nushell
+with simple configuration.  The `run()` function automatically handles
+completion script generation and runtime completion requests:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -413,6 +413,11 @@ myapp completion fish > ~/.config/fish/completions/myapp.fish
 
 ~~~~ powershell [PowerShell]
 myapp completion pwsh > myapp-completion.ps1
+~~~~
+
+~~~~ nushell [Nushell]
+myapp completion nu | save myapp-completion.nu
+source myapp-completion.nu
 ~~~~
 
 :::

@@ -4,7 +4,14 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { bash, fish, pwsh, type ShellCompletion, zsh } from "./completion.ts";
+import {
+  bash,
+  fish,
+  nu,
+  pwsh,
+  type ShellCompletion,
+  zsh,
+} from "./completion.ts";
 import type { Suggestion } from "./parser.ts";
 import { message } from "./message.ts";
 
@@ -35,8 +42,11 @@ case "$1" in
       echo "git\\0Git operations\\0"
       echo "docker\\0Docker container operations\\0"
     elif [[ "$2" == "fish" ]]; then
-      echo "git\\tGit operations"
-      echo "docker\\tDocker container operations"
+      echo -e "git\\tGit operations"
+      echo -e "docker\\tDocker container operations"
+    elif [[ "$2" == "nu" ]]; then
+      echo -e "git\\tGit operations"
+      echo -e "docker\\tDocker container operations"
     fi
     ;;
   *)
@@ -205,6 +215,69 @@ ${functionName}
     return result.trim().split("\n").filter((line) => line.length > 0);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function testNuCompletion(script: string, cliPath: string): string[] {
+  const tempDir = mkdtempSync(join(tmpdir(), "nu-completion-test-"));
+
+  try {
+    const scriptPath = join(tempDir, "completion.nu");
+    writeFileSync(scriptPath, script);
+
+    // Test completion by loading script and calling completion function directly
+    // Use the sanitized function name that matches generateScript's naming
+    const safeName = cliPath.replace(/[^a-zA-Z0-9]+/g, "-");
+    const functionName = `nu-complete-${safeName}`;
+    const testScript = `
+source ${scriptPath}
+
+# Call the completion function with the command context using 'do'
+do { ${functionName} "${cliPath} " }
+`;
+
+    // Write test script to a file to avoid escaping issues
+    const testScriptPath = join(tempDir, "test.nu");
+    writeFileSync(testScriptPath, testScript);
+
+    let result: string;
+    try {
+      result = execSync(
+        `nu "${testScriptPath}"`,
+        {
+          encoding: "utf8",
+          cwd: tempDir,
+        },
+      );
+    } catch {
+      // If execution failed, return empty array
+      return [];
+    }
+
+    // Parse Nushell table output to extract completion values
+    const lines = result.trim().split("\n");
+    const completions: string[] = [];
+
+    for (const line of lines) {
+      // Match table rows with 3 columns: # | value | description
+      // Example: │ 0 │ git    │ Git operations              │
+      const match = line.match(/│\s*\d+\s*│\s*([^│]+)\s*│\s*([^│]+)\s*│/);
+      if (match) {
+        const value = match[1]?.trim();
+        if (value) {
+          completions.push(value);
+        }
+      }
+    }
+
+    return completions;
+  } finally {
+    // Clean up temp directory
+    try {
+      rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 }
 
@@ -727,9 +800,198 @@ describe("completion module", () => {
     });
   });
 
+  describe("nu shell completion", () => {
+    it("should have correct name", () => {
+      deepStrictEqual(nu.name, "nu");
+    });
+
+    it("should generate proper completion script", () => {
+      const script = nu.generateScript("myapp");
+
+      // Check for essential Nushell completion components
+      deepStrictEqual(script.includes('def "nu-complete-myapp"'), true);
+      deepStrictEqual(script.includes("args-split"), true);
+      deepStrictEqual(script.includes("str ends-with"), true);
+      deepStrictEqual(script.includes("flatten"), true);
+      deepStrictEqual(
+        script.includes("$env.config.completions.external.completer"),
+        true,
+      );
+      deepStrictEqual(script.includes('if ($spans.0 == "myapp")'), true);
+      deepStrictEqual(script.includes("nu-complete-myapp-external"), true);
+    });
+
+    it("should work with actual nu shell", (t) => {
+      const nuAvailable = isShellAvailable("nu");
+
+      if (!nuAvailable) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "nu-completion-"));
+
+      try {
+        const cliPath = createTestCli(tempDir);
+        const script = nu.generateScript(cliPath, ["completion", "nu"]);
+        const completions = testNuCompletion(script, cliPath);
+
+        // Check that we got git and docker completions
+        const hasGit = completions.some((c) =>
+          c === "git" || c.includes("git")
+        );
+        const hasDocker = completions.some((c) =>
+          c === "docker" || c.includes("docker")
+        );
+
+        deepStrictEqual(hasGit, true);
+        deepStrictEqual(hasDocker, true);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should generate script with completion command args", () => {
+      const script = nu.generateScript("myapp", ["completion", "nu"]);
+
+      deepStrictEqual(script.includes("'completion' 'nu'"), true);
+    });
+
+    it("should escape single quotes in arguments", () => {
+      const script = nu.generateScript("myapp", ["it's", "test"]);
+
+      // Nushell uses doubled single quotes for escaping
+      deepStrictEqual(script.includes("'it''s'"), true);
+    });
+
+    it("should encode suggestions with tab-separated format", () => {
+      const suggestions: Suggestion[] = [
+        { kind: "literal", text: "--verbose" },
+        { kind: "literal", text: "--quiet" },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, [
+        "--verbose\t",
+        "\n",
+        "--quiet\t",
+      ]);
+    });
+
+    it("should encode suggestions with descriptions", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--verbose",
+          description: message`Enable verbose output`,
+        },
+        {
+          kind: "literal",
+          text: "--quiet",
+          description: message`Suppress output`,
+        },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      // Check format: value\tdescription
+      deepStrictEqual(encoded[0], "--verbose\tEnable verbose output");
+      deepStrictEqual(encoded[1], "\n");
+      deepStrictEqual(encoded[2], "--quiet\tSuppress output");
+    });
+
+    it("should handle empty suggestions list", () => {
+      const suggestions: Suggestion[] = [];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, []);
+    });
+
+    it("should encode single suggestion without newline", () => {
+      const suggestions: Suggestion[] = [
+        { kind: "literal", text: "--verbose" },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["--verbose\t"]);
+    });
+
+    it("should encode file suggestions with marker", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: ["json", "yaml"],
+          includeHidden: false,
+          description: message`Configuration file`,
+        },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file:json,yaml::0\tConfiguration file",
+      );
+    });
+
+    it("should format descriptions without colors", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--verbose",
+          description: message`Enable verbose mode`,
+        },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      // Should contain tab-separated format
+      deepStrictEqual(encoded[0].startsWith("--verbose\t"), true);
+      deepStrictEqual(encoded[0].includes("Enable verbose mode"), true);
+      // Should not contain ANSI color codes
+      deepStrictEqual(encoded[0].includes("\x1b["), false);
+    });
+
+    it("should use 2-space indentation in generated script", () => {
+      const script = nu.generateScript("myapp");
+
+      // Check that the script uses 2-space indentation
+      const lines = script.split("\n");
+      const indentedLines = lines.filter((line) =>
+        line.startsWith("  ") && !line.startsWith("    ")
+      );
+
+      // Should have some lines with 2-space indentation
+      deepStrictEqual(indentedLines.length > 0, true);
+    });
+
+    it("should handle file completion directive parsing", () => {
+      const script = nu.generateScript("myapp");
+
+      // Check that file completion parsing is included
+      deepStrictEqual(script.includes("__FILE__:"), true);
+      deepStrictEqual(script.includes("split row ':'"), true);
+      deepStrictEqual(script.includes("ls $ls_pattern"), true);
+      deepStrictEqual(script.includes("if ($prefix | is-empty)"), true);
+    });
+
+    it("should support context-aware completion", () => {
+      const script = nu.generateScript("myapp");
+
+      // Check that context is properly parsed
+      deepStrictEqual(script.includes("[context: string]"), true);
+      deepStrictEqual(script.includes("$context | args-split"), true);
+      deepStrictEqual(script.includes("str ends-with ' '"), true);
+    });
+  });
+
   describe("ShellCompletion interface", () => {
     it("should implement required methods", () => {
-      const shells: ShellCompletion[] = [bash, zsh, fish, pwsh];
+      const shells: ShellCompletion[] = [bash, zsh, fish, nu, pwsh];
 
       for (const shell of shells) {
         // Check that all required properties exist
@@ -747,3 +1009,5 @@ describe("completion module", () => {
     });
   });
 });
+
+// cSpell: ignore CWORD COMPREPLY esac compinit

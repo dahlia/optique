@@ -1,4 +1,11 @@
-import { bash, fish, pwsh, type ShellCompletion, zsh } from "./completion.ts";
+import {
+  bash,
+  fish,
+  nu,
+  pwsh,
+  type ShellCompletion,
+  zsh,
+} from "./completion.ts";
 import { longestMatch, object } from "./constructs.ts";
 import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import {
@@ -545,11 +552,11 @@ export interface RunOptions<THelp, TError> {
     readonly mode?: "command" | "option" | "both";
 
     /**
-     * Available shell completions. By default, includes `bash`, `fish`, `pwsh`,
-     * and `zsh`. You can provide additional custom shell completions or override
-     * the defaults.
+     * Available shell completions. By default, includes `bash`, `fish`, `nu`,
+     * `pwsh`, and `zsh`. You can provide additional custom shell completions or
+     * override the defaults.
      *
-     * @default `{ bash, fish, pwsh, zsh }`
+     * @default `{ bash, fish, nu, pwsh, zsh }`
      */
     readonly shells?: Record<string, ShellCompletion>;
 
@@ -746,6 +753,7 @@ export function run<
     const defaultShells: Record<string, ShellCompletion> = {
       bash,
       fish,
+      nu,
       pwsh,
       zsh,
     };

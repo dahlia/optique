@@ -18,6 +18,7 @@
     "twoslash",
     "valueparsers",
     "cpus",
-    "subparser"
+    "subparser",
+    "Nushell"
   ]
 }

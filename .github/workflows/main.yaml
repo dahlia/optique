@@ -9,8 +9,11 @@ jobs:
     - run: |
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
+        sudo mkdir -p /etc/apt/keyrings
+        curl -fsSL https://apt.fury.io/nushell/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
+        echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
         sudo apt-get update
-        sudo apt-get install -y fish powershell zsh
+        sudo apt-get install -y fish nushell powershell zsh
     - uses: pnpm/action-setup@v4
       with:
         version: latest
@@ -27,8 +30,11 @@ jobs:
     - run: |
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
+        sudo mkdir -p /etc/apt/keyrings
+        curl -fsSL https://apt.fury.io/nushell/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
+        echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
         sudo apt-get update
-        sudo apt-get install -y fish powershell zsh
+        sudo apt-get install -y fish nushell powershell zsh
     - uses: denoland/setup-deno@v2
       with:
         deno-version: v2.x
@@ -50,8 +56,11 @@ jobs:
     - run: |
         wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
         sudo dpkg -i packages-microsoft-prod.deb
+        sudo mkdir -p /etc/apt/keyrings
+        curl -fsSL https://apt.fury.io/nushell/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
+        echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
         sudo apt-get update
-        sudo apt-get install -y fish powershell zsh
+        sudo apt-get install -y fish nushell powershell zsh
     - uses: pnpm/action-setup@v4
       with:
         version: latest
@@ -184,4 +193,4 @@ jobs:
         packageManager: pnpm
         workingDirectory: ${{ github.workspace }}/docs/
 
-# cSpell: ignore dpkg denoland npmjs vitepress
+# cSpell: ignore dpkg keyrings dearmor denoland npmjs vitepress
