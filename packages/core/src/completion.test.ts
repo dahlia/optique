@@ -28,25 +28,28 @@ function isShellAvailable(shell: string): boolean {
 }
 
 function createTestCli(tempDir: string): string {
-  const cliScript = `#!/bin/bash
-case "$1" in
-  "completion")
-    if [[ "$2" == "bash" ]]; then
-      echo "git"
-      echo "docker"
-    elif [[ "$2" == "zsh" ]]; then
-      echo "git\\0Git operations\\0"
-      echo "docker\\0Docker container operations\\0"
-    elif [[ "$2" == "fish" ]]; then
-      echo -e "git\\tGit operations"
-      echo -e "docker\\tDocker container operations"
-    fi
-    ;;
-  *)
-    echo "Unknown command"
-    exit 1
-    ;;
-esac
+  const cliScript = `#!/usr/bin/env node
+const [,, command, shell] = process.argv;
+
+if (command !== "completion") {
+  console.error("Unknown command");
+  process.exit(1);
+}
+
+switch (shell) {
+  case "bash":
+    console.log("git");
+    console.log("docker");
+    break;
+  case "zsh":
+    process.stdout.write("git\\0Git operations\\0");
+    process.stdout.write("docker\\0Docker container operations\\0");
+    break;
+  case "fish":
+    console.log("git\\tGit operations");
+    console.log("docker\\tDocker container operations");
+    break;
+}
 `;
 
   const cliPath = join(tempDir, "test-cli");
