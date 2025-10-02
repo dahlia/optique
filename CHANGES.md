@@ -36,6 +36,15 @@ To be released.
      -  Added `CommandOptions.footer` field.
      -  Added `DocFragments.footer` field.
 
+ -  Added `commandLine` message term type for formatting command-line examples
+    in help text and error messages. This allows command-line snippets to be
+    displayed with distinct styling (cyan color in terminals) to make examples
+    more visually clear.
+
+     -  Added `commandLine()` function for creating command-line message terms.
+     -  Updated `MessageTerm` type to include `commandLine` variant.
+     -  Updated `formatMessage()` to support styling command-line examples.
+
 [#5]: https://github.com/dahlia/optique/issues/5
 [#30]: https://github.com/dahlia/optique/issues/30
 [#31]: https://github.com/dahlia/optique/issues/31

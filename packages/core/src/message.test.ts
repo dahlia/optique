@@ -1,4 +1,5 @@
 import {
+  commandLine,
   envVar,
   formatMessage,
   type Message,
@@ -171,6 +172,12 @@ describe("message term constructors", () => {
     assert.equal(term.type, "envVar");
     assert.equal(term.envVar, "API_URL");
   });
+
+  it("should create commandLine term", () => {
+    const term = commandLine("myapp completion bash > output.bash");
+    assert.equal(term.type, "commandLine");
+    assert.equal(term.commandLine, "myapp completion bash > output.bash");
+  });
 });
 
 describe("formatMessage", () => {
@@ -264,6 +271,45 @@ describe("formatMessage", () => {
       formatted,
       "Environment variable \x1b[1;4m`API_URL`\x1b[0m is not set",
     );
+  });
+
+  it("should format commandLine without colors", () => {
+    const msg: Message = [
+      { type: "text", text: "Run: " },
+      {
+        type: "commandLine",
+        commandLine: "myapp completion bash > output.bash",
+      },
+    ];
+    const formatted = formatMessage(msg, {
+      colors: false,
+      quotes: true,
+    });
+    assert.equal(formatted, "Run: `myapp completion bash > output.bash`");
+  });
+
+  it("should format commandLine with colors", () => {
+    const msg: Message = [
+      { type: "text", text: "Run: " },
+      {
+        type: "commandLine",
+        commandLine: "myapp completion bash > output.bash",
+      },
+    ];
+    const formatted = formatMessage(msg, { colors: true, quotes: true });
+    assert.equal(
+      formatted,
+      "Run: \x1b[36m`myapp completion bash > output.bash`\x1b[0m",
+    );
+  });
+
+  it("should format commandLine without quotes", () => {
+    const msg: Message = [
+      { type: "text", text: "Example: " },
+      { type: "commandLine", commandLine: "myapp --help" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+    assert.equal(formatted, "Example: myapp --help");
   });
 
   it("should format single value without colors", () => {
@@ -582,6 +628,19 @@ describe("integration tests", () => {
     assert.equal(
       formatted,
       "Environment variable: \x1b[1;4mAPI_URL\x1b[0m\x1b[2m",
+    );
+  });
+
+  it("should handle resetSuffix with commandLine term", () => {
+    const msg = message`Run: ${commandLine("myapp --help")}`;
+    const formatted = formatMessage(msg, {
+      colors: { resetSuffix: "\x1b[2m" },
+      quotes: false,
+    });
+
+    assert.equal(
+      formatted,
+      "Run: \x1b[36mmyapp --help\x1b[0m\x1b[2m",
     );
   });
 

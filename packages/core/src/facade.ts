@@ -9,6 +9,7 @@ import {
 import { longestMatch, object } from "./constructs.ts";
 import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import {
+  commandLine,
   formatMessage,
   type Message,
   message,
@@ -145,15 +146,19 @@ function createCompletionParser(
       description:
         message`Generate shell completion script or provide completions.`,
       footer: message`Examples:
-  eval "$(${text(programName)} completion bash)"  # Bash
-  eval "$(${text(programName)} completion zsh)"   # Zsh
-  eval "$(${text(programName)} completion fish)"  # Fish
-  ${text(programName)} completion pwsh > ${
-        text(programName)
-      }-completion.ps1; . ./${text(programName)}-completion.ps1  # PowerShell
-  ${text(programName)} completion nu | save ${
-        text(programName)
-      }-completion.nu; source ./${text(programName)}-completion.nu  # Nushell
+  Bash:       ${commandLine(`eval "$(${programName} completion bash)"`)}
+  zsh:        ${commandLine(`eval "$(${programName} completion zsh)"`)}
+  fish:       ${commandLine(`eval "$(${programName} completion fish)"`)}
+  PowerShell: ${
+        commandLine(
+          `${programName} completion pwsh > ${programName}-completion.ps1; . ./${programName}-completion.ps1`,
+        )
+      }
+  Nushell:    ${
+        commandLine(
+          `${programName} completion nu | save ${programName}-completion.nu; source ./${programName}-completion.nu`,
+        )
+      }
 `,
     },
   );

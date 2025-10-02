@@ -109,6 +109,22 @@ export type MessageTerm =
      * an environment variable. For example, `"PATH"` or `"API_URL"`.
      */
     readonly envVar: string;
+  }
+  /**
+   * A command-line term in the message, which represents
+   * a command-line example or snippet.
+   * @since 0.6.0
+   */
+  | {
+    /**
+     * The type of the term, which is `"commandLine"` for a command-line example.
+     */
+    readonly type: "commandLine";
+    /**
+     * The command-line string, which can be a complete command with arguments.
+     * For example, `"myapp completion bash > myapp-completion.bash"`.
+     */
+    readonly commandLine: string;
   };
 
 /**
@@ -234,6 +250,18 @@ export function values(values: readonly string[]): MessageTerm {
  */
 export function envVar(envVar: string): MessageTerm {
   return { type: "envVar", envVar };
+}
+
+/**
+ * Creates a {@link MessageTerm} for a command-line example.
+ * @param commandLine The command-line string, which can be a complete command
+ *                    with arguments. For example,
+ *                    `"myapp completion bash > myapp-completion.bash"`.
+ * @returns A {@link MessageTerm} representing the command-line example.
+ * @since 0.6.0
+ */
+export function commandLine(commandLine: string): MessageTerm {
+  return { type: "commandLine", commandLine };
 }
 
 /**
@@ -370,6 +398,14 @@ export function formatMessage(
             ? `\x1b[1;4m${envVar}${resetSequence}` // Bold and underlined for environment variables
             : envVar,
           width: envVar.length,
+        };
+      } else if (term.type === "commandLine") {
+        const cmd = useQuotes ? `\`${term.commandLine}\`` : term.commandLine;
+        yield {
+          text: useColors
+            ? `\x1b[36m${cmd}${resetSequence}` // Cyan for command-line examples
+            : cmd,
+          width: cmd.length,
         };
       } else {
         throw new TypeError(

@@ -172,6 +172,44 @@ Without colors (with quotes):
 Set `API_URL` environment variable.
 ~~~~
 
+### Command-line examples
+
+*Available since Optique 0.6.0.*
+
+Command-line snippets and examples that should be visually distinct from
+other message components. Command-line examples are displayed in cyan color
+to clearly indicate executable commands:
+
+~~~~ typescript twoslash
+import { message, commandLine } from "@optique/core/message";
+// ---cut-before---
+const helpMsg = message`Run ${commandLine("myapp --help")} to see all options.`;
+~~~~
+
+With colors (no quotes):
+
+~~~~ ansi
+Run [36mmyapp --help[0m to see all options.
+~~~~
+
+Without colors (with quotes):
+
+~~~~ ansi
+Run `myapp --help` to see all options.
+~~~~
+
+This is particularly useful for showing command examples in help text and
+footer sections:
+
+~~~~ typescript twoslash
+import { message, commandLine } from "@optique/core/message";
+// ---cut-before---
+const examples = message`Examples:
+  ${commandLine("myapp completion bash > myapp-completion.bash")}
+  ${commandLine("myapp completion zsh  > _myapp")}
+  ${commandLine("myapp --config app.json --verbose")}`;
+~~~~
+
 ### Multiple values
 
 Consecutive values that were provided together, such as multiple arguments or
@@ -205,6 +243,7 @@ const userInput: string = "";
 const userValue: string = "";
 // ---cut-before---
 import {
+  commandLine,
   envVar,
   message,
   metavar,
@@ -228,6 +267,9 @@ const examples = {
 
   // Environment variable reference
   envError: message`Environment variable ${envVar("DATABASE_URL")} is not set.`,
+
+  // Command-line example
+  cmdExample: message`Run ${commandLine("myapp --config app.json")} to start.`,
 
   // Multiple consecutive values
   invalidFiles: message`Cannot process files ${values(["missing.txt", "readonly.txt"])}.`,
