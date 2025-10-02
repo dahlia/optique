@@ -2239,7 +2239,13 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       assert.equal(errorResult, "error-1");
       assert.ok(errorOutput.includes("Missing shell name"));
-      assert.ok(errorOutput.includes("Usage: myapp completion <shell>"));
+      assert.ok(
+        errorOutput.includes("Usage: myapp completion") &&
+          errorOutput.includes("SHELL"),
+      );
+      // Check that shell names are listed in the description
+      assert.ok(errorOutput.includes("bash"));
+      assert.ok(errorOutput.includes("zsh"));
     });
 
     it("should support both command and option modes", () => {

@@ -17,7 +17,7 @@ import {
   text,
   value,
 } from "./message.ts";
-import { multiple, optional } from "./modifiers.ts";
+import { multiple, optional, withDefault } from "./modifiers.ts";
 import {
   getDocPage,
   type InferValue,
@@ -25,7 +25,7 @@ import {
   type Parser,
   suggest,
 } from "./parser.ts";
-import { argument, command, constant, flag } from "./primitives.ts";
+import { argument, command, constant, flag, option } from "./primitives.ts";
 import { formatUsage } from "./usage.ts";
 import { string } from "./valueparser.ts";
 
@@ -96,6 +96,94 @@ function createVersionParser(
   }
 }
 
+interface CompletionParsers {
+  readonly completionCommand:
+    | Parser<
+      { shell: string | undefined; args: readonly string[] },
+      unknown
+    >
+    | null;
+  readonly completionOption:
+    | Parser<
+      { shell: string; args: readonly string[] },
+      unknown
+    >
+    | null;
+}
+
+/**
+ * Creates completion parsers based on the specified mode.
+ */
+function createCompletionParser(
+  mode: "command" | "option" | "both",
+  availableShells: Record<string, ShellCompletion>,
+): CompletionParsers {
+  const shellList: MessageTerm[] = [];
+  for (const shell in availableShells) {
+    if (shellList.length > 0) shellList.push(text(", "));
+    shellList.push(value(shell));
+  }
+  const completionCommand = command(
+    "completion",
+    object({
+      shell: optional(
+        argument(string({ metavar: "SHELL" }), {
+          description:
+            message`Shell type (${shellList}). Generate completion script when used alone, or provide completions when followed by arguments.`,
+        }),
+      ),
+      args: multiple(
+        argument(string({ metavar: "ARG" }), {
+          description:
+            message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+        }),
+      ),
+    }),
+    {
+      description:
+        message`Generate shell completion script or provide completions.`,
+    },
+  );
+
+  const completionOption = option(
+    "--completion",
+    string({ metavar: "SHELL" }),
+    {
+      description: message`Generate shell completion script.`,
+    },
+  );
+
+  switch (mode) {
+    case "command":
+      return {
+        completionCommand,
+        completionOption: null,
+      };
+    case "option":
+      return {
+        completionCommand: null,
+        completionOption: object({
+          shell: completionOption,
+          args: withDefault(
+            multiple(argument(string({ metavar: "ARG" }))),
+            [] as readonly string[],
+          ),
+        }),
+      };
+    case "both":
+      return {
+        completionCommand,
+        completionOption: object({
+          shell: completionOption,
+          args: withDefault(
+            multiple(argument(string({ metavar: "ARG" }))),
+            [] as readonly string[],
+          ),
+        }),
+      };
+  }
+}
+
 /**
  * Result classification types for cleaner control flow.
  */
@@ -111,12 +199,13 @@ type ParsedResult =
   | { readonly type: "error"; readonly error: Message };
 
 /**
- * Systematically combines the original parser with help and version parsers.
+ * Systematically combines the original parser with help, version, and completion parsers.
  */
 function combineWithHelpVersion(
   originalParser: Parser<unknown, unknown>,
   helpParsers: HelpParsers,
   versionParsers: VersionParsers,
+  completionParsers: CompletionParsers,
 ): Parser<unknown, unknown> {
   const parsers: Parser<unknown, unknown>[] = [];
 
@@ -326,7 +415,21 @@ function combineWithHelpVersion(
     parsers.push(object({
       help: constant(false),
       version: constant(true),
+      completion: constant(false),
       result: versionParsers.versionCommand,
+      helpFlag: helpParsers.helpOption
+        ? optional(helpParsers.helpOption)
+        : constant(false),
+    }));
+  }
+
+  // Add completion command with optional help flag (enables completion --help)
+  if (completionParsers.completionCommand) {
+    parsers.push(object({
+      help: constant(false),
+      version: constant(false),
+      completion: constant(true),
+      completionData: completionParsers.completionCommand,
       helpFlag: helpParsers.helpOption
         ? optional(helpParsers.helpOption)
         : constant(false),
@@ -338,6 +441,7 @@ function combineWithHelpVersion(
     parsers.push(object({
       help: constant(true),
       version: constant(false),
+      completion: constant(false),
       commands: helpParsers.helpCommand,
     }));
   }
@@ -346,6 +450,7 @@ function combineWithHelpVersion(
   parsers.push(object({
     help: constant(false),
     version: constant(false),
+    completion: constant(false),
     result: originalParser,
   }));
   if (parsers.length === 1) {
@@ -380,7 +485,9 @@ function classifyResult(
     const parsedValue = value as {
       help: boolean;
       version: boolean;
+      completion?: boolean;
       commands?: readonly string[];
+      completionData?: { shell: string | undefined; args: readonly string[] };
       result?: unknown;
       helpFlag?: boolean;
       versionFlag?: boolean;
@@ -390,12 +497,14 @@ function classifyResult(
     const hasVersionCommand = args.length > 0 && args[0] === "version";
     const hasHelpOption = args.includes("--help");
     const hasHelpCommand = args.length > 0 && args[0] === "help";
+    const hasCompletionCommand = args.length > 0 && args[0] === "completion";
 
     // Standard CLI behavior:
     // 1. `command --help` should show help for that command
     // 2. `--help --version` or `--version --help` should cause error (conflicting options)
     // 3. `--version` alone should show version
     // 4. `--help` alone should show help
+    // 5. `completion --help` should show help for completion command
 
     // Check for conflicting options: both --version and --help flags
     if (
@@ -409,6 +518,11 @@ function classifyResult(
     // If we have both version command and help flag, help takes precedence (show help for version)
     if (hasVersionCommand && hasHelpOption && parsedValue.helpFlag) {
       return { type: "help", commands: ["version"] };
+    }
+
+    // If we have both completion command and help flag, help takes precedence (show help for completion)
+    if (hasCompletionCommand && hasHelpOption && parsedValue.helpFlag) {
+      return { type: "help", commands: ["completion"] };
     }
 
     // If we have help command or help option, show help
@@ -436,7 +550,16 @@ function classifyResult(
       return { type: "version" };
     }
 
-    // Neither help nor version requested, return the actual result
+    // If completion is present and help is not requested, show completion
+    if (parsedValue.completion && parsedValue.completionData) {
+      return {
+        type: "completion",
+        shell: parsedValue.completionData.shell || "",
+        args: parsedValue.completionData.args || [],
+      };
+    }
+
+    // Neither help nor version nor completion requested, return the actual result
     return { type: "success", value: parsedValue.result ?? value };
   }
 
@@ -636,21 +759,36 @@ function handleCompletion<THelp, TError>(
   completionArgs: readonly string[],
   programName: string,
   parser: Parser<unknown, unknown>,
+  completionParser: Parser<unknown, unknown> | null,
   stdout: (text: string) => void,
   stderr: (text: string) => void,
   onCompletion: (() => THelp) | ((exitCode: number) => THelp),
   onError: (() => TError) | ((exitCode: number) => TError),
   availableShells: Record<string, ShellCompletion>,
   colors?: boolean,
+  maxWidth?: number,
 ): THelp | TError {
-  if (completionArgs.length === 0) {
-    stderr("Error: Missing shell name for completion.\n");
-    stderr("Usage: " + programName + " completion <shell> [args...]\n");
-    return onError(1);
-  }
-
-  const shellName = completionArgs[0];
+  const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
+
+  // Check if shell name is empty
+  if (!shellName) {
+    stderr("Error: Missing shell name for completion.\n");
+
+    // Show help for completion command if parser is available
+    if (completionParser) {
+      const doc = getDocPage(completionParser, ["completion"]);
+      if (doc) {
+        stderr(formatDocPage(programName, doc, { colors, maxWidth }));
+      }
+    }
+
+    try {
+      return onError(1);
+    } catch {
+      return (onError as (() => TError))();
+    }
+  }
 
   const shell = availableShells[shellName];
 
@@ -744,38 +882,72 @@ export function run<
     footer,
   } = options;
 
-  // Check for completion request first (before any parsing)
+  // Extract help configuration
+  const helpMode = options.help?.mode ?? "option";
+  const onHelp = options.help?.onShow ?? (() => ({} as THelp));
+
+  // Extract version configuration
+  const versionMode = options.version?.mode ?? "option";
+  const versionValue = options.version?.value ?? "";
+  const onVersion = options.version?.onShow ?? (() => ({} as THelp));
+
+  // Extract completion configuration
   const completionMode = options.completion?.mode ?? "both";
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
 
+  // Get available shells (defaults + user-provided)
+  const defaultShells: Record<string, ShellCompletion> = {
+    bash,
+    fish,
+    nu,
+    pwsh,
+    zsh,
+  };
+  const availableShells = options.completion?.shells
+    ? { ...defaultShells, ...options.completion.shells }
+    : defaultShells;
+
+  // Create help and version parsers using the helper functions
+  const help = options.help ? helpMode : "none";
+  const version = options.version ? versionMode : "none";
+  const completion = options.completion ? completionMode : "none";
+
+  const helpParsers = help === "none"
+    ? { helpCommand: null, helpOption: null }
+    : createHelpParser(help);
+
+  const versionParsers = version === "none"
+    ? { versionCommand: null, versionOption: null }
+    : createVersionParser(version);
+
+  // Completion parsers for help generation only (not for actual parsing)
+  const completionParsers = completion === "none"
+    ? { completionCommand: null, completionOption: null }
+    : createCompletionParser(completion, availableShells);
+
+  // Early return for completion requests (avoids parser conflicts)
+  // Exception: if --help is present, let the parser handle it
   if (options.completion) {
-    // Get available shells (defaults + user-provided)
-    const defaultShells: Record<string, ShellCompletion> = {
-      bash,
-      fish,
-      nu,
-      pwsh,
-      zsh,
-    };
-    const availableShells = options.completion.shells
-      ? { ...defaultShells, ...options.completion.shells }
-      : defaultShells;
+    const hasHelpOption = args.includes("--help");
 
     // Handle completion command format: "completion <shell> [args...]"
     if (
       (completionMode === "command" || completionMode === "both") &&
-      args.length >= 1 && args[0] === "completion"
+      args.length >= 1 && args[0] === "completion" &&
+      !hasHelpOption // Let parser handle "completion --help"
     ) {
       return handleCompletion(
         args.slice(1),
         programName,
         parser,
+        completionParsers.completionCommand,
         stdout,
         stderr,
         onCompletion,
         onError,
         availableShells,
         colors,
+        maxWidth,
       );
     }
 
@@ -790,12 +962,14 @@ export function run<
             [shell, ...completionArgs],
             programName,
             parser,
+            completionParsers.completionCommand,
             stdout,
             stderr,
             onCompletion,
             onError,
             availableShells,
             colors,
+            maxWidth,
           );
         } else if (arg === "--completion" && i + 1 < args.length) {
           const shell = args[i + 1];
@@ -804,42 +978,32 @@ export function run<
             [shell, ...completionArgs],
             programName,
             parser,
+            completionParsers.completionCommand,
             stdout,
             stderr,
             onCompletion,
             onError,
             availableShells,
             colors,
+            maxWidth,
           );
         }
       }
     }
   }
 
-  // Extract help configuration
-  const helpMode = options.help?.mode ?? "option";
-  const onHelp = options.help?.onShow ?? (() => ({} as THelp));
-
-  // Extract version configuration
-  const versionMode = options.version?.mode ?? "option";
-  const versionValue = options.version?.value ?? "";
-  const onVersion = options.version?.onShow ?? (() => ({} as THelp));
-
-  // Create help and version parsers using the new helper functions
-  const help = options.help ? helpMode : "none";
-  const version = options.version ? versionMode : "none";
-
-  const helpParsers = help === "none"
-    ? { helpCommand: null, helpOption: null }
-    : createHelpParser(help);
-
-  const versionParsers = version === "none"
-    ? { versionCommand: null, versionOption: null }
-    : createVersionParser(version);
-  // Build augmented parser with help and version functionality
-  const augmentedParser = help === "none" && version === "none"
+  // Build augmented parser with help, version, and completion functionality
+  // Completion command is included for help support, but actual completion
+  // requests are handled via early return to avoid parser conflicts
+  const augmentedParser = help === "none" && version === "none" &&
+      completion === "none"
     ? parser
-    : combineWithHelpVersion(parser, helpParsers, versionParsers);
+    : combineWithHelpVersion(
+      parser,
+      helpParsers,
+      versionParsers,
+      completionParsers,
+    );
   const result = parse(augmentedParser, args);
   const classified = classifyResult(result, args);
 
@@ -855,57 +1019,77 @@ export function run<
         return (onVersion as (() => THelp))();
       }
 
+    case "completion":
+      // This case should never be reached due to early return,
+      // but keep it for type safety
+      throw new RunError("Completion should be handled by early return");
+
     case "help": {
       // Handle help request - determine which parser to use for help generation
+      // Include completion command in help even though it's handled via early return
       let helpGeneratorParser: Parser<unknown, unknown>;
       const helpAsCommand = help === "command" || help === "both";
       const versionAsCommand = version === "command" || version === "both";
+      const completionAsCommand = completion === "command" ||
+        completion === "both";
 
-      if (helpAsCommand && versionAsCommand) {
-        // We need to recreate the parsers here since we didn't store them
-        const tempHelpParsers = createHelpParser(help);
-        const tempVersionParsers = createVersionParser(version);
-        if (tempHelpParsers.helpCommand && tempVersionParsers.versionCommand) {
-          helpGeneratorParser = longestMatch(
-            parser,
-            tempHelpParsers.helpCommand,
-            tempVersionParsers.versionCommand,
-          );
-        } else if (tempHelpParsers.helpCommand) {
-          helpGeneratorParser = longestMatch(
-            parser,
-            tempHelpParsers.helpCommand,
-          );
-        } else if (tempVersionParsers.versionCommand) {
-          helpGeneratorParser = longestMatch(
-            parser,
-            tempVersionParsers.versionCommand,
-          );
-        } else {
-          helpGeneratorParser = parser;
-        }
-      } else if (helpAsCommand) {
-        const tempHelpParsers = createHelpParser(help);
-        if (tempHelpParsers.helpCommand) {
-          helpGeneratorParser = longestMatch(
-            parser,
-            tempHelpParsers.helpCommand,
-          );
-        } else {
-          helpGeneratorParser = parser;
-        }
-      } else if (versionAsCommand) {
-        const tempVersionParsers = createVersionParser(version);
-        if (tempVersionParsers.versionCommand) {
-          helpGeneratorParser = longestMatch(
-            parser,
-            tempVersionParsers.versionCommand,
-          );
-        } else {
-          helpGeneratorParser = parser;
-        }
+      // Check if user is requesting help for a specific meta-command
+      const requestedCommand = classified.commands[0];
+      if (
+        requestedCommand === "completion" && completionAsCommand &&
+        completionParsers.completionCommand
+      ) {
+        // User wants help for completion command specifically
+        helpGeneratorParser = completionParsers.completionCommand;
+      } else if (
+        requestedCommand === "help" && helpAsCommand &&
+        helpParsers.helpCommand
+      ) {
+        // User wants help for help command specifically
+        helpGeneratorParser = helpParsers.helpCommand;
+      } else if (
+        requestedCommand === "version" && versionAsCommand &&
+        versionParsers.versionCommand
+      ) {
+        // User wants help for version command specifically
+        helpGeneratorParser = versionParsers.versionCommand;
       } else {
-        helpGeneratorParser = parser;
+        // General help or help for user-defined commands
+        // Collect all command parsers to include in help generation
+        const commandParsers: Parser<unknown, unknown>[] = [parser];
+
+        if (helpAsCommand) {
+          if (helpParsers.helpCommand) {
+            commandParsers.push(helpParsers.helpCommand);
+          }
+        }
+
+        if (versionAsCommand) {
+          if (versionParsers.versionCommand) {
+            commandParsers.push(versionParsers.versionCommand);
+          }
+        }
+
+        if (completionAsCommand) {
+          // Include completion in help even though it's handled via early return
+          if (completionParsers.completionCommand) {
+            commandParsers.push(completionParsers.completionCommand);
+          }
+        }
+
+        // Use longestMatch to combine all parsers
+        if (commandParsers.length === 1) {
+          helpGeneratorParser = commandParsers[0];
+        } else if (commandParsers.length === 2) {
+          helpGeneratorParser = longestMatch(
+            commandParsers[0],
+            commandParsers[1],
+          );
+        } else {
+          helpGeneratorParser = (longestMatch as (
+            ...parsers: Parser<unknown, unknown>[]
+          ) => Parser<unknown, unknown>)(...commandParsers);
+        }
       }
 
       const doc = getDocPage(
@@ -914,11 +1098,17 @@ export function run<
       );
       if (doc != null) {
         // Augment the doc page with provided options
+        // But if showing help for a specific meta-command, don't override its description
+        const isMetaCommandHelp = requestedCommand === "completion" ||
+          requestedCommand === "help" ||
+          requestedCommand === "version";
         const augmentedDoc = {
           ...doc,
-          brief: brief ?? doc.brief,
-          description: description ?? doc.description,
-          footer: footer ?? doc.footer,
+          brief: !isMetaCommandHelp ? (brief ?? doc.brief) : doc.brief,
+          description: !isMetaCommandHelp
+            ? (description ?? doc.description)
+            : doc.description,
+          footer: !isMetaCommandHelp ? (footer ?? doc.footer) : doc.footer,
         };
         stdout(formatDocPage(programName, augmentedDoc, {
           colors,
