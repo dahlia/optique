@@ -76,6 +76,12 @@ export interface DocFragments {
    * An array of documentation fragments that can be entries or sections.
    */
   readonly fragments: readonly DocFragment[];
+
+  /**
+   * An optional footer that appears at the bottom of the documentation.
+   * @since 0.6.0
+   */
+  readonly footer?: Message;
 }
 
 /**

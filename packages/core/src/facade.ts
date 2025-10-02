@@ -116,6 +116,7 @@ interface CompletionParsers {
  */
 function createCompletionParser(
   mode: "command" | "option" | "both",
+  programName: string,
   availableShells: Record<string, ShellCompletion>,
 ): CompletionParsers {
   const shellList: MessageTerm[] = [];
@@ -140,8 +141,20 @@ function createCompletionParser(
       ),
     }),
     {
+      brief: message`Generate shell completion script or provide completions.`,
       description:
         message`Generate shell completion script or provide completions.`,
+      footer: message`Examples:
+  eval "$(${text(programName)} completion bash)"  # Bash
+  eval "$(${text(programName)} completion zsh)"   # Zsh
+  eval "$(${text(programName)} completion fish)"  # Fish
+  ${text(programName)} completion pwsh > ${
+        text(programName)
+      }-completion.ps1; . ./${text(programName)}-completion.ps1  # PowerShell
+  ${text(programName)} completion nu | save ${
+        text(programName)
+      }-completion.nu; source ./${text(programName)}-completion.nu  # Nushell
+`,
     },
   );
 
@@ -923,7 +936,7 @@ export function run<
   // Completion parsers for help generation only (not for actual parsing)
   const completionParsers = completion === "none"
     ? { completionCommand: null, completionOption: null }
-    : createCompletionParser(completion, availableShells);
+    : createCompletionParser(completion, programName, availableShells);
 
   // Early return for completion requests (avoids parser conflicts)
   // Exception: if --help is present, let the parser handle it

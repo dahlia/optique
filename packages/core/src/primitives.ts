@@ -960,9 +960,26 @@ export function argument<T>(
  */
 export interface CommandOptions {
   /**
+   * A brief description of the command, shown in command lists.
+   * If provided along with {@link description}, this will be used in
+   * command listings (e.g., `myapp help`), while {@link description}
+   * will be used for detailed help (e.g., `myapp help subcommand` or
+   * `myapp subcommand --help`).
+   * @since 0.6.0
+   */
+  readonly brief?: Message;
+
+  /**
    * A description of the command, used for documentation.
    */
   readonly description?: Message;
+
+  /**
+   * A footer message that appears at the bottom of the command's help text.
+   * Useful for showing examples, notes, or additional information.
+   * @since 0.6.0
+   */
+  readonly footer?: Message;
 
   /**
    * Error messages customization.
@@ -1151,13 +1168,15 @@ export function command<T, TState>(
     },
     getDocFragments(state: DocState<CommandState<TState>>, defaultValue?) {
       if (state.kind === "unavailable" || typeof state.state === "undefined") {
+        // When showing command in a list, use brief if available,
+        // otherwise fall back to description
         return {
           description: options.description,
           fragments: [
             {
               type: "entry",
               term: { type: "command", name },
-              description: options.description,
+              description: options.brief ?? options.description,
             },
           ],
         };
@@ -1169,6 +1188,7 @@ export function command<T, TState>(
       return {
         ...innerFragments,
         description: innerFragments.description ?? options.description,
+        footer: innerFragments.footer ?? options.footer,
       };
     },
     [Symbol.for("Deno.customInspect")]() {

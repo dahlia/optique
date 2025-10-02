@@ -419,7 +419,7 @@ export function getDocPage(
     if (!result.success) break;
     context = result.next;
   } while (context.buffer.length > 0);
-  const { description, fragments } = parser.getDocFragments(
+  const { description, fragments, footer } = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,
   );
@@ -450,9 +450,12 @@ export function getDocPage(
     }
     i++;
   }
-  return description == null
-    ? { usage, sections }
-    : { usage, sections, description };
+  return {
+    usage,
+    sections,
+    ...(description != null && { description }),
+    ...(footer != null && { footer }),
+  };
 }
 
 // Re-export all parser modules for backward compatibility

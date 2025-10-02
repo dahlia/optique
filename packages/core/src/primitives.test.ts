@@ -1915,3 +1915,233 @@ describe("command() error customization", () => {
     }
   });
 });
+
+describe("command() with brief option", () => {
+  it("should use brief for command list when both brief and description are provided", () => {
+    const parser = command(
+      "deploy",
+      object({
+        env: option("-e", "--env", string()),
+      }),
+      {
+        brief: message`Deploy the application`,
+        description:
+          message`Deploy the application to the specified environment with full configuration options and validation.`,
+      },
+    );
+
+    // When command is not matched (showing in a list), brief should be used
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    assert.equal(fragments.fragments.length, 1);
+    assert.equal(fragments.fragments[0].type, "entry");
+    if (fragments.fragments[0].type === "entry") {
+      assert.deepEqual(
+        fragments.fragments[0].description,
+        message`Deploy the application`,
+      );
+    }
+    // The full description should still be available as fragment description
+    assert.deepEqual(
+      fragments.description,
+      message`Deploy the application to the specified environment with full configuration options and validation.`,
+    );
+  });
+
+  it("should fall back to description when brief is not provided", () => {
+    const parser = command(
+      "build",
+      object({
+        output: option("--output", string()),
+      }),
+      {
+        description: message`Build the project`,
+      },
+    );
+
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    assert.equal(fragments.fragments.length, 1);
+    assert.equal(fragments.fragments[0].type, "entry");
+    if (fragments.fragments[0].type === "entry") {
+      assert.deepEqual(
+        fragments.fragments[0].description,
+        message`Build the project`,
+      );
+    }
+    assert.deepEqual(fragments.description, message`Build the project`);
+  });
+
+  it("should work with or() combinator showing brief for each command", () => {
+    const parser = or(
+      command(
+        "show",
+        object({
+          id: argument(string()),
+        }),
+        {
+          brief: message`Show an item`,
+          description:
+            message`Display detailed information about an item including metadata and history.`,
+        },
+      ),
+      command(
+        "edit",
+        object({
+          id: argument(string()),
+        }),
+        {
+          brief: message`Edit an item`,
+          description:
+            message`Open an editor to modify the contents and properties of an item.`,
+        },
+      ),
+    );
+
+    // When showing command list (unavailable state), each command should show its brief
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+
+    // or() combinator organizes entries into sections
+    assert.ok(fragments.fragments.length > 0);
+    const sectionFragment = fragments.fragments.find((f) =>
+      f.type === "section"
+    );
+    assert.ok(sectionFragment);
+    if (sectionFragment && sectionFragment.type === "section") {
+      assert.equal(sectionFragment.entries.length, 2);
+
+      // Check first command (show)
+      const showEntry = sectionFragment.entries[0];
+      assert.deepEqual(
+        showEntry.description,
+        message`Show an item`,
+      );
+      assert.equal(showEntry.term.type, "command");
+      if (showEntry.term.type === "command") {
+        assert.equal(showEntry.term.name, "show");
+      }
+
+      // Check second command (edit)
+      const editEntry = sectionFragment.entries[1];
+      assert.deepEqual(
+        editEntry.description,
+        message`Edit an item`,
+      );
+      assert.equal(editEntry.term.type, "command");
+      if (editEntry.term.type === "command") {
+        assert.equal(editEntry.term.name, "edit");
+      }
+    }
+  });
+
+  it("should use full description when command is matched", () => {
+    const parser = command(
+      "deploy",
+      object({
+        env: option("-e", "--env", string()),
+      }),
+      {
+        brief: message`Deploy the application`,
+        description:
+          message`Deploy the application to the specified environment.`,
+      },
+    );
+
+    // Simulate matched command state
+    const matchedState = ["matched", "deploy"] as ["matched", string];
+    const fragments = parser.getDocFragments({
+      kind: "available",
+      state: matchedState,
+    });
+
+    // When command is matched, the full description should be used
+    assert.deepEqual(
+      fragments.description,
+      message`Deploy the application to the specified environment.`,
+    );
+  });
+
+  it("should include footer when provided", () => {
+    const parser = command(
+      "backup",
+      object({
+        target: argument(string()),
+      }),
+      {
+        description: message`Create a backup of the specified target`,
+        footer: message`Example: myapp backup /data/important`,
+      },
+    );
+
+    // Simulate matched command state
+    const matchedState = ["matched", "backup"] as ["matched", string];
+    const fragments = parser.getDocFragments({
+      kind: "available",
+      state: matchedState,
+    });
+
+    // Footer should be included when command is matched
+    assert.deepEqual(
+      fragments.footer,
+      message`Example: myapp backup /data/important`,
+    );
+  });
+
+  it("should not include footer when command is unavailable", () => {
+    const parser = command(
+      "backup",
+      object({
+        target: argument(string()),
+      }),
+      {
+        description: message`Create a backup`,
+        footer: message`Example: myapp backup /data`,
+      },
+    );
+
+    // When command is unavailable (in a list)
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+
+    // Footer should not be included in command lists
+    assert.equal(fragments.footer, undefined);
+  });
+
+  it("should work with brief and footer together", () => {
+    const parser = command(
+      "restore",
+      object({
+        source: argument(string()),
+      }),
+      {
+        brief: message`Restore from backup`,
+        description:
+          message`Restore data from a backup archive with verification and validation.`,
+        footer:
+          message`Examples:\n  myapp restore backup.tar.gz\n  myapp restore --verify backup.tar.gz`,
+      },
+    );
+
+    // When showing in a list, only brief is used
+    const listFragments = parser.getDocFragments({ kind: "unavailable" });
+    assert.deepEqual(
+      listFragments.fragments[0].type === "entry"
+        ? listFragments.fragments[0].description
+        : undefined,
+      message`Restore from backup`,
+    );
+    assert.equal(listFragments.footer, undefined);
+
+    // When command is matched, description and footer are used
+    const matchedState = ["matched", "restore"] as ["matched", string];
+    const detailFragments = parser.getDocFragments({
+      kind: "available",
+      state: matchedState,
+    });
+    assert.deepEqual(
+      detailFragments.description,
+      message`Restore data from a backup archive with verification and validation.`,
+    );
+    assert.deepEqual(
+      detailFragments.footer,
+      message`Examples:\n  myapp restore backup.tar.gz\n  myapp restore --verify backup.tar.gz`,
+    );
+  });
+});

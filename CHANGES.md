@@ -25,6 +25,17 @@ To be released.
         generators.
      -  Added `RunOptions.completion` option.
 
+ -  Added `brief` and `footer` options to `command()` parser for improved
+    documentation control. The `brief` option provides a short description for
+    command listings (e.g., `myapp help`), while `description` is used for
+    detailed help (e.g., `myapp help subcommand` or `myapp subcommand --help`).
+    The `footer` option allows adding examples or additional information at the
+    bottom of command-specific help text.
+
+     -  Added `CommandOptions.brief` field.
+     -  Added `CommandOptions.footer` field.
+     -  Added `DocFragments.footer` field.
+
 [#5]: https://github.com/dahlia/optique/issues/5
 [#30]: https://github.com/dahlia/optique/issues/30
 [#31]: https://github.com/dahlia/optique/issues/31
