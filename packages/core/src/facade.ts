@@ -513,14 +513,16 @@ export interface RunOptions<THelp, TError> {
   readonly onError?: (() => TError) | ((exitCode: number) => TError);
 
   /**
-   * Function used to output error messages.
+   * Function used to output error messages.  Assumes it prints the ending
+   * newline.
    *
    * @default `console.error`
    */
   readonly stderr?: (text: string) => void;
 
   /**
-   * Function used to output help and usage messages.
+   * Function used to output help and usage messages.  Assumes it prints
+   * the ending newline.
    *
    * @default `console.log`
    */
