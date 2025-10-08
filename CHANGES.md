@@ -6,6 +6,16 @@ Version 0.6.1
 
 To be released.
 
+### @optique/run
+
+ -  Fixed inconsistent error message coloring in Bun runtime by replacing
+    reliance on default `console.error()` and `console.log()` with direct
+    `process.stderr.write()` and `process.stdout.write()` calls. Previously,
+    Bun's `console.error()` would add red coloring by default, which
+    interfered with ANSI formatting in error messages. This change ensures
+    consistent output formatting across all JavaScript runtimes (Node.js,
+    Bun, and Deno).
+
 
 Version 0.6.0
 -------------
@@ -64,6 +74,22 @@ Released on October 2, 2025.
     requests.  [[#5]]
 
      -  Added `RunOptions.completion` option.
+
+
+Version 0.5.2
+-------------
+
+Released on October 8, 2025.
+
+### @optique/run
+
+ -  Fixed inconsistent error message coloring in Bun runtime by replacing
+    reliance on default `console.error()` and `console.log()` with direct
+    `process.stderr.write()` and `process.stdout.write()` calls. Previously,
+    Bun's `console.error()` would add red coloring by default, which
+    interfered with ANSI formatting in error messages. This change ensures
+    consistent output formatting across all JavaScript runtimes (Node.js,
+    Bun, and Deno).
 
 
 Version 0.5.1

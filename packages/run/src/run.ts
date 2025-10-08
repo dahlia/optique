@@ -251,6 +251,12 @@ export function run<T extends Parser<unknown, unknown>>(
     : undefined;
 
   return runBase<T, never, never>(parser, programName, args, {
+    stderr(line) {
+      process.stderr.write(`${line}\n`);
+    },
+    stdout(line) {
+      process.stdout.write(`${line}\n`);
+    },
     colors,
     maxWidth,
     showDefault,
