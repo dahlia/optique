@@ -7,6 +7,26 @@ Version 0.7.0
 To be released.
 
 
+Version 0.6.2
+-------------
+
+Released on October 27, 2025.
+
+### @optique/core
+
+ -  Fixed incorrect CommonJS type export paths in `package.json`. The
+    `"require"` type paths for submodules were incorrectly pointing to
+    `"*.cts"` files instead of `"*.d.cts"` files, causing type resolution
+    issues when importing submodules in CommonJS environments.  [[#36]]
+
+### @optique/run
+
+ -  Fixed incorrect CommonJS type export paths in `package.json`. The
+    `"require"` type paths for submodules were incorrectly pointing to
+    `"*.cts"` files instead of `"*.d.cts"` files, causing type resolution
+    issues when importing submodules in CommonJS environments.  [[#36]]
+
+
 Version 0.6.1
 -------------
 
@@ -80,6 +100,28 @@ Released on October 2, 2025.
     requests.  [[#5]]
 
      -  Added `RunOptions.completion` option.
+
+
+Version 0.5.3
+-------------
+
+Released on October 27, 2025.
+
+### @optique/core
+
+ -  Fixed incorrect CommonJS type export paths in `package.json`. The
+    `"require"` type paths for submodules were incorrectly pointing to
+    `"*.cts"` files instead of `"*.d.cts"` files, causing type resolution
+    issues when importing submodules in CommonJS environments.  [[#36]]
+
+### @optique/run
+
+ -  Fixed incorrect CommonJS type export paths in `package.json`. The
+    `"require"` type paths for submodules were incorrectly pointing to
+    `"*.cts"` files instead of `"*.d.cts"` files, causing type resolution
+    issues when importing submodules in CommonJS environments.  [[#36]]
+
+[#36]: https://github.com/dahlia/optique/issues/36
 
 
 Version 0.5.2

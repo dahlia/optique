@@ -54,7 +54,7 @@
     "./completion": {
       "types": {
         "import": "./dist/completion.d.ts",
-        "require": "./dist/completion.cts"
+        "require": "./dist/completion.d.cts"
       },
       "import": "./dist/completion.js",
       "require": "./dist/completion.cjs"
@@ -62,7 +62,7 @@
     "./constructs": {
       "types": {
         "import": "./dist/constructs.d.ts",
-        "require": "./dist/constructs.cts"
+        "require": "./dist/constructs.d.cts"
       },
       "import": "./dist/constructs.js",
       "require": "./dist/constructs.cjs"
@@ -70,7 +70,7 @@
     "./doc": {
       "types": {
         "import": "./dist/doc.d.ts",
-        "require": "./dist/doc.cts"
+        "require": "./dist/doc.d.cts"
       },
       "import": "./dist/doc.js",
       "require": "./dist/doc.cjs"
@@ -78,7 +78,7 @@
     "./facade": {
       "types": {
         "import": "./dist/facade.d.ts",
-        "require": "./dist/facade.cts"
+        "require": "./dist/facade.d.cts"
       },
       "import": "./dist/facade.js",
       "require": "./dist/facade.cjs"
@@ -86,7 +86,7 @@
     "./message": {
       "types": {
         "import": "./dist/message.d.ts",
-        "require": "./dist/message.cts"
+        "require": "./dist/message.d.cts"
       },
       "import": "./dist/message.js",
       "require": "./dist/message.cjs"
@@ -94,7 +94,7 @@
     "./modifiers": {
       "types": {
         "import": "./dist/modifiers.d.ts",
-        "require": "./dist/modifiers.cts"
+        "require": "./dist/modifiers.d.cts"
       },
       "import": "./dist/modifiers.js",
       "require": "./dist/modifiers.cjs"
@@ -102,7 +102,7 @@
     "./parser": {
       "types": {
         "import": "./dist/parser.d.ts",
-        "require": "./dist/parser.cts"
+        "require": "./dist/parser.d.cts"
       },
       "import": "./dist/parser.js",
       "require": "./dist/parser.cjs"
@@ -110,7 +110,7 @@
     "./primitives": {
       "types": {
         "import": "./dist/primitives.d.ts",
-        "require": "./dist/primitives.cts"
+        "require": "./dist/primitives.d.cts"
       },
       "import": "./dist/primitives.js",
       "require": "./dist/primitives.cjs"
@@ -118,7 +118,7 @@
     "./usage": {
       "types": {
         "import": "./dist/usage.d.ts",
-        "require": "./dist/usage.cts"
+        "require": "./dist/usage.d.cts"
       },
       "import": "./dist/usage.js",
       "require": "./dist/usage.cjs"
@@ -126,7 +126,7 @@
     "./valueparser": {
       "types": {
         "import": "./dist/valueparser.d.ts",
-        "require": "./dist/valueparser.cts"
+        "require": "./dist/valueparser.d.cts"
       },
       "import": "./dist/valueparser.js",
       "require": "./dist/valueparser.cjs"
