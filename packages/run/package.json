@@ -54,7 +54,7 @@
     "./run": {
       "types": {
         "import": "./dist/run.d.ts",
-        "require": "./dist/run.cts"
+        "require": "./dist/run.d.cts"
       },
       "import": "./dist/run.js",
       "require": "./dist/run.cjs"
@@ -62,7 +62,7 @@
     "./valueparser": {
       "types": {
         "import": "./dist/valueparser.d.ts",
-        "require": "./dist/valueparser.cts"
+        "require": "./dist/valueparser.d.cts"
       },
       "import": "./dist/valueparser.js",
       "require": "./dist/valueparser.cjs"

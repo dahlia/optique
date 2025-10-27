@@ -6,6 +6,22 @@ Version 0.5.3
 
 To be released.
 
+### @optique/core
+
+ -  Fixed incorrect CommonJS type export paths in `package.json`. The
+    `"require"` type paths for submodules were incorrectly pointing to
+    `"*.cts"` files instead of `"*.d.cts"` files, causing type resolution
+    issues when importing submodules in CommonJS environments.  [[#36]]
+
+### @optique/run
+
+ -  Fixed incorrect CommonJS type export paths in `package.json`. The
+    `"require"` type paths for submodules were incorrectly pointing to
+    `"*.cts"` files instead of `"*.d.cts"` files, causing type resolution
+    issues when importing submodules in CommonJS environments.  [[#36]]
+
+[#36]: https://github.com/dahlia/optique/issues/36
+
 
 Version 0.5.2
 -------------
