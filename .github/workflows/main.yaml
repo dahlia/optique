@@ -126,7 +126,7 @@ jobs:
         run_install: true
     - uses: actions/setup-node@v4
       with:
-        node-version: latest
+        node-version: "24"
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
