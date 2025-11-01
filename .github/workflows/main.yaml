@@ -95,6 +95,7 @@ jobs:
       with:
         version: latest
         run_install: true
+    - run: sudo npm install -g npm@latest && npm --version
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" == tag ]]; then
@@ -112,7 +113,6 @@ jobs:
     - run: |
         set -ex
         deno publish --allow-dirty
-        pnpm config set //registry.npmjs.org/:_authToken "$NPM_AUTH_TOKEN"
         if [[ "$GITHUB_REF_TYPE" == tag ]]; then
           pnpm publish \
             --recursive \
@@ -128,7 +128,6 @@ jobs:
             --tag dev
         fi
       env:
-        NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
         NPM_CONFIG_PROVENANCE: "true"
 
   public-docs:
