@@ -1459,6 +1459,9 @@ describe("tuple() - duplicate option detection", () => {
     if (!result.success) {
       assertErrorIncludes(result.error, "Duplicate option name");
       assertErrorIncludes(result.error, "-v");
+      assertErrorIncludes(result.error, "positions");
+      assertErrorIncludes(result.error, "0");
+      assertErrorIncludes(result.error, "1");
     }
   });
 
@@ -1488,6 +1491,27 @@ describe("tuple() - duplicate option detection", () => {
     if (result.success) {
       assert.equal(result.value[0], true);
       assert.equal(result.value[1], false);
+    }
+  });
+
+  it("should detect duplicates in deeply nested optional/multiple structures", () => {
+    const parser = object({
+      a: optional(object({
+        x: option("--opt", "-x"),
+      })),
+      b: multiple(
+        object({
+          y: option("--opt", "-y"),
+        }),
+        { min: 0 },
+      ),
+    });
+
+    const result = parse(parser, ["--opt"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "--opt");
     }
   });
 });
@@ -2474,6 +2498,57 @@ describe("merge() - duplicate option detection", () => {
     if (!result.success) {
       assertErrorIncludes(result.error, "Duplicate option name");
       assertErrorIncludes(result.error, "-v");
+    }
+  });
+
+  it("should allow opt-out with allowDuplicates option (2 parsers)", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      version: option("-v", "--version"),
+    });
+
+    const parser = merge(parser1, parser2, { allowDuplicates: true });
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first parser wins
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.version, false);
+    }
+  });
+
+  it("should report positions in original argument order", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      debug: option("-d", "--debug"),
+    });
+    const parser3 = object({
+      version: option("-v", "--version"),
+    });
+
+    // Manually set priorities to test order preservation
+    // deno-lint-ignore no-explicit-any
+    (parser1 as any).priority = 1; // Lower priority
+    // deno-lint-ignore no-explicit-any
+    (parser2 as any).priority = 10; // Higher priority
+    // deno-lint-ignore no-explicit-any
+    (parser3 as any).priority = 5; // Medium priority
+
+    const parser = merge(parser1, parser2, parser3);
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-v");
+      assertErrorIncludes(result.error, "positions");
+      // Should report positions 0 and 2 (original argument order)
+      // Not sorted by priority order
+      assertErrorIncludes(result.error, "0");
+      assertErrorIncludes(result.error, "2");
     }
   });
 });

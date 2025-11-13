@@ -1877,6 +1877,31 @@ export interface MergeOptions {
  * @template TB The type of the second parser.
  * @param a The first {@link object} parser to merge.
  * @param b The second {@link object} parser to merge.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+>(
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+): Parser<
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>,
+  Record<string | symbol, unknown>
+>;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
  * @param options Optional configuration for the merge parser.
  * @return A new {@link object} parser that combines the values and states
  *         of the two parsers into a single object.
@@ -1887,6 +1912,7 @@ export function merge<
 >(
   a: ExtractObjectTypes<TA> extends never ? never : TA,
   b: ExtractObjectTypes<TB> extends never ? never : TB,
+  options: MergeOptions,
 ): Parser<
   & ExtractObjectTypes<TA>
   & ExtractObjectTypes<TB>,
@@ -2861,12 +2887,16 @@ export function merge(
     ? args.length - 1
     : args.length;
 
-  let parsers = args.slice(startIndex, endIndex) as Parser<
+  const rawParsers = args.slice(startIndex, endIndex) as Parser<
     Record<string | symbol, unknown>,
     Record<string | symbol, unknown>
   >[];
 
-  parsers = parsers.toSorted((a, b) => b.priority - a.priority);
+  // Keep track of original indices before sorting
+  const withIndex = rawParsers.map((p, i) => [p, i] as const);
+  const sorted = withIndex.toSorted(([a], [b]) => b.priority - a.priority);
+  const parsers = sorted.map(([p]) => p);
+
   const initialState: Record<string | symbol, unknown> = {};
   for (const parser of parsers) {
     if (parser.initialState && typeof parser.initialState === "object") {
@@ -2886,13 +2916,13 @@ export function merge(
       if (!options.allowDuplicates) {
         const optionNameSources = new Map<string, number[]>();
 
-        for (let i = 0; i < parsers.length; i++) {
-          const names = extractOptionNames(parsers[i].usage);
+        for (const [parser, originalIndex] of sorted) {
+          const names = extractOptionNames(parser.usage);
           for (const name of names) {
             if (!optionNameSources.has(name)) {
               optionNameSources.set(name, []);
             }
-            optionNameSources.get(name)!.push(i);
+            optionNameSources.get(name)!.push(originalIndex);
           }
         }
 
