@@ -11,6 +11,7 @@ import type {
   ParserContext,
   ParserResult,
 } from "./parser.ts";
+import { extractOptionNames } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -1113,6 +1114,15 @@ export interface ObjectOptions {
    * Error messages customization.
    */
   readonly errors?: ObjectErrorOptions;
+
+  /**
+   * When `true`, allows duplicate option names across different fields.
+   * By default (`false`), duplicate option names will cause a parse error.
+   *
+   * @default `false`
+   * @since 0.7.0
+   */
+  readonly allowDuplicates?: boolean;
 }
 
 /**
@@ -1293,6 +1303,38 @@ export function object<
         : never;
     },
     parse(context) {
+      // Check for duplicate option names unless explicitly allowed
+      if (!options.allowDuplicates) {
+        const optionNameSources = new Map<string, string[]>();
+
+        for (const [field, parser] of parserPairs) {
+          const names = extractOptionNames(parser.usage);
+          for (const name of names) {
+            if (!optionNameSources.has(name)) {
+              optionNameSources.set(name, []);
+            }
+            optionNameSources.get(name)!.push(field);
+          }
+        }
+
+        // Check for duplicates
+        for (const [name, sources] of optionNameSources) {
+          if (sources.length > 1) {
+            return {
+              success: false,
+              consumed: 0,
+              error: message`Duplicate option name ${
+                eOptionName(
+                  name,
+                )
+              } found in fields: ${
+                values(sources)
+              }. Each option name must be unique within a parser combinator.`,
+            };
+          }
+        }
+      }
+
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length > 0
@@ -1459,12 +1501,28 @@ export function object<
 }
 
 /**
+ * Options for the {@link tuple} parser.
+ * @since 0.7.0
+ */
+export interface TupleOptions {
+  /**
+   * When `true`, allows duplicate option names across different parsers.
+   * By default (`false`), duplicate option names will cause a parse error.
+   *
+   * @default `false`
+   * @since 0.7.0
+   */
+  readonly allowDuplicates?: boolean;
+}
+
+/**
  * Creates a parser that combines multiple parsers into a sequential tuple parser.
  * The parsers are applied in the order they appear in the array, and all must
  * succeed for the tuple parser to succeed.
  * @template T A readonly array type where each element is a {@link Parser}.
  * @param parsers An array of parsers that will be applied sequentially
  *                to create a tuple of their results.
+ * @param options Optional configuration for the tuple parser.
  * @returns A {@link Parser} that produces a readonly tuple with the same length
  *          as the input array, where each element is the result of the
  *          corresponding parser.
@@ -1473,6 +1531,7 @@ export function tuple<
   const T extends readonly Parser<unknown, unknown>[],
 >(
   parsers: T,
+  options?: TupleOptions,
 ): Parser<
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -1492,6 +1551,7 @@ export function tuple<
  *              documentation and error messages.
  * @param parsers An array of parsers that will be applied sequentially
  *                to create a tuple of their results.
+ * @param options Optional configuration for the tuple parser.
  * @returns A {@link Parser} that produces a readonly tuple with the same length
  *          as the input array, where each element is the result of the
  *          corresponding parser.
@@ -1501,6 +1561,7 @@ export function tuple<
 >(
   label: string,
   parsers: T,
+  options?: TupleOptions,
 ): Parser<
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -1516,7 +1577,8 @@ export function tuple<
   const T extends readonly Parser<unknown, unknown>[],
 >(
   labelOrParsers: string | T,
-  maybeParsers?: T,
+  maybeParsersOrOptions?: T | TupleOptions,
+  maybeOptions?: TupleOptions,
 ): Parser<
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
@@ -1524,9 +1586,19 @@ export function tuple<
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
-  const parsers = typeof labelOrParsers === "string"
-    ? maybeParsers!
-    : labelOrParsers;
+
+  let parsers: T;
+  let options: TupleOptions = {};
+
+  if (typeof labelOrParsers === "string") {
+    // tuple(label, parsers) or tuple(label, parsers, options)
+    parsers = maybeParsersOrOptions as T;
+    options = maybeOptions ?? {};
+  } else {
+    // tuple(parsers) or tuple(parsers, options)
+    parsers = labelOrParsers;
+    options = (maybeParsersOrOptions as TupleOptions) ?? {};
+  }
   return {
     $valueType: [],
     $stateType: [],
@@ -1542,6 +1614,38 @@ export function tuple<
         : never;
     },
     parse(context) {
+      // Check for duplicate option names unless explicitly allowed
+      if (!options.allowDuplicates) {
+        const optionNameSources = new Map<string, number[]>();
+
+        for (let i = 0; i < parsers.length; i++) {
+          const names = extractOptionNames(parsers[i].usage);
+          for (const name of names) {
+            if (!optionNameSources.has(name)) {
+              optionNameSources.set(name, []);
+            }
+            optionNameSources.get(name)!.push(i);
+          }
+        }
+
+        // Check for duplicates
+        for (const [name, indices] of optionNameSources) {
+          if (indices.length > 1) {
+            return {
+              success: false,
+              consumed: 0,
+              error: message`Duplicate option name ${
+                eOptionName(
+                  name,
+                )
+              } found at positions: ${
+                values(indices.map(String))
+              }. Each option name must be unique within a parser combinator.`,
+            };
+          }
+        }
+      }
+
       let currentContext = context;
       const allConsumed: string[] = [];
       const matchedParsers = new Set<number>();
@@ -1749,6 +1853,21 @@ type ExtractObjectTypes<P> = P extends Parser<infer V, unknown>
   : never;
 
 /**
+ * Options for the {@link merge} parser.
+ * @since 0.7.0
+ */
+export interface MergeOptions {
+  /**
+   * When `true`, allows duplicate option names across merged parsers.
+   * By default (`false`), duplicate option names will cause a parse error.
+   *
+   * @default `false`
+   * @since 0.7.0
+   */
+  readonly allowDuplicates?: boolean;
+}
+
+/**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
  * It is useful for combining multiple {@link object} parsers so that
  * the unified parser produces a single object containing all the values
@@ -1758,6 +1877,7 @@ type ExtractObjectTypes<P> = P extends Parser<infer V, unknown>
  * @template TB The type of the second parser.
  * @param a The first {@link object} parser to merge.
  * @param b The second {@link object} parser to merge.
+ * @param options Optional configuration for the merge parser.
  * @return A new {@link object} parser that combines the values and states
  *         of the two parsers into a single object.
  */
@@ -2701,31 +2821,50 @@ export function merge<
   >;
 
 export function merge(
-  ...args: [
-    string,
-    ...Parser<
+  ...args:
+    | [
+      string,
+      ...Parser<
+        Record<string | symbol, unknown>,
+        Record<string | symbol, unknown>
+      >[],
+    ]
+    | Parser<
       Record<string | symbol, unknown>,
       Record<string | symbol, unknown>
-    >[],
-  ] | Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >[]
+    >[]
+    | [
+      ...Parser<
+        Record<string | symbol, unknown>,
+        Record<string | symbol, unknown>
+      >[],
+      MergeOptions,
+    ]
 ): Parser<
   Record<string | symbol, unknown>,
   Record<string | symbol, unknown>
 > {
   // Check if first argument is a label
   const label = typeof args[0] === "string" ? args[0] : undefined;
-  let parsers = typeof args[0] === "string"
-    ? args.slice(1) as Parser<
-      Record<string | symbol, unknown>,
-      Record<string | symbol, unknown>
-    >[]
-    : args as Parser<
-      Record<string | symbol, unknown>,
-      Record<string | symbol, unknown>
-    >[];
+
+  // Check if last argument is options
+  const lastArg = args[args.length - 1];
+  const options: MergeOptions = (lastArg && typeof lastArg === "object" &&
+      !("parse" in lastArg) && !("complete" in lastArg))
+    ? lastArg as MergeOptions
+    : {};
+
+  // Extract parsers (excluding label and options)
+  const startIndex = typeof args[0] === "string" ? 1 : 0;
+  const endIndex = (lastArg && typeof lastArg === "object" &&
+      !("parse" in lastArg) && !("complete" in lastArg))
+    ? args.length - 1
+    : args.length;
+
+  let parsers = args.slice(startIndex, endIndex) as Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >[];
 
   parsers = parsers.toSorted((a, b) => b.priority - a.priority);
   const initialState: Record<string | symbol, unknown> = {};
@@ -2743,6 +2882,38 @@ export function merge(
     usage: parsers.flatMap((p) => p.usage),
     initialState,
     parse(context) {
+      // Check for duplicate option names unless explicitly allowed
+      if (!options.allowDuplicates) {
+        const optionNameSources = new Map<string, number[]>();
+
+        for (let i = 0; i < parsers.length; i++) {
+          const names = extractOptionNames(parsers[i].usage);
+          for (const name of names) {
+            if (!optionNameSources.has(name)) {
+              optionNameSources.set(name, []);
+            }
+            optionNameSources.get(name)!.push(i);
+          }
+        }
+
+        // Check for duplicates
+        for (const [name, indices] of optionNameSources) {
+          if (indices.length > 1) {
+            return {
+              success: false,
+              consumed: 0,
+              error: message`Duplicate option name ${
+                eOptionName(
+                  name,
+                )
+              } found in merged parsers at positions: ${
+                values(indices.map(String))
+              }. Each option name must be unique within a parser combinator.`,
+            };
+          }
+        }
+      }
+
       for (let i = 0; i < parsers.length; i++) {
         const parser = parsers[i];
         // Extract the appropriate state for this parser

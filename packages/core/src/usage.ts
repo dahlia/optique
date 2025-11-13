@@ -126,6 +126,49 @@ export type UsageTerm =
 export type Usage = readonly UsageTerm[];
 
 /**
+ * Extracts all option names from a usage description.
+ *
+ * This function recursively traverses a {@link Usage} tree and collects all
+ * option names defined within it, including those nested inside optional,
+ * multiple, and exclusive terms.
+ *
+ * @param usage The usage description to extract option names from.
+ * @returns A set containing all option names found in the usage description.
+ *
+ * @example
+ * ```typescript
+ * const usage: Usage = [
+ *   { type: "option", names: ["--verbose", "-v"] },
+ *   { type: "option", names: ["--quiet", "-q"] },
+ * ];
+ * const names = extractOptionNames(usage);
+ * // names = Set(["--verbose", "-v", "--quiet", "-q"])
+ * ```
+ */
+export function extractOptionNames(usage: Usage): Set<string> {
+  const names = new Set<string>();
+
+  function traverseUsage(terms: Usage): void {
+    for (const term of terms) {
+      if (term.type === "option") {
+        for (const name of term.names) {
+          names.add(name);
+        }
+      } else if (term.type === "optional" || term.type === "multiple") {
+        traverseUsage(term.terms);
+      } else if (term.type === "exclusive") {
+        for (const exclusiveUsage of term.terms) {
+          traverseUsage(exclusiveUsage);
+        }
+      }
+    }
+  }
+
+  traverseUsage(usage);
+  return names;
+}
+
+/**
  * Options for formatting usage descriptions.
  */
 export interface UsageFormatOptions {

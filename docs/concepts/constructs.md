@@ -1290,4 +1290,92 @@ const inputOutput = group(
 // making the CLI interface much more approachable
 ~~~~
 
+
+Duplicate option detection
+---------------------------
+
+Optique automatically detects and prevents duplicate option names within parser
+combinators to avoid ambiguous behavior. When the same option name appears in
+multiple fields or parsers, an error is raised at parse time.
+
+### Detected duplicates
+
+The `object()`, `tuple()`, and `merge()` combinators validate that option names
+are unique across their child parsers:
+
+~~~~ typescript twoslash
+import { object, option } from "@optique/core";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+// ❌ This will error - duplicate "-v" option
+const parser = object({
+  verbose: option("-v", "--verbose"),
+  version: option("-v", "--version"),  // Duplicate: -v
+});
+
+const result = parse(parser, ["-v"]);
+// Error: Duplicate option name `-v` found in fields: "verbose" "version".
+//        Each option name must be unique within a parser combinator.
+~~~~
+
+This applies to nested structures as well:
+
+~~~~ typescript twoslash
+import { object, option } from "@optique/core";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+// ❌ Nested duplicate detected
+const parser = object({
+  opts: object({
+    verbose: option("-v"),
+  }),
+  flags: object({
+    version: option("-v"),  // Duplicate across nested objects
+  }),
+});
+~~~~
+
+### Allowed duplicates in `or()`
+
+The `or()` combinator allows duplicate option names because branches are
+mutually exclusive—only one branch can match:
+
+~~~~ typescript twoslash
+import { or, option } from "@optique/core";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+// ✅ This is valid - branches are mutually exclusive
+const parser = or(
+  option("-v", "--verbose"),
+  option("-v", "--version"),
+);
+
+const result = parse(parser, ["-v"]);
+// First matching branch wins
+~~~~
+
+### Opting out with `allowDuplicates`
+
+For advanced use cases, you can disable duplicate detection using the
+`allowDuplicates` option:
+
+~~~~ typescript twoslash
+import { object, option } from "@optique/core";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+const parser = object({
+  verbose: option("-v", "--verbose"),
+  version: option("-v", "--version"),
+}, { allowDuplicates: true });
+
+const result = parse(parser, ["-v"]);
+// Succeeds - first parser wins
+~~~~
+
+> [!CAUTION]
+> Using `allowDuplicates` can lead to unpredictable behavior where the first
+> matching parser consumes the option and subsequent parsers receive their
+> default values. Only use this option when you fully understand the
+> implications.
+
 <!-- cSpell: ignore myapp -->

@@ -1,4 +1,5 @@
 import {
+  extractOptionNames,
   formatUsage,
   formatUsageTerm,
   normalizeUsage,
@@ -2146,5 +2147,179 @@ describe("normalizeUsage", () => {
       ];
       assert.deepEqual(result, expected);
     });
+  });
+});
+
+describe("extractOptionNames", () => {
+  it("should extract option names from a simple option term", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--verbose", "-v"] },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--verbose", "-v"]));
+  });
+
+  it("should extract option names from multiple option terms", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--verbose", "-v"] },
+      { type: "option", names: ["--quiet", "-q"] },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--verbose", "-v", "--quiet", "-q"]));
+  });
+
+  it("should return empty set for argument terms", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "FILE" },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set());
+  });
+
+  it("should return empty set for command terms", () => {
+    const usage: Usage = [
+      { type: "command", name: "init" },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set());
+  });
+
+  it("should extract option names from optional terms", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--force", "-f"] }],
+      },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--force", "-f"]));
+  });
+
+  it("should extract option names from multiple terms", () => {
+    const usage: Usage = [
+      {
+        type: "multiple",
+        terms: [{ type: "option", names: ["--include", "-I"] }],
+        min: 0,
+      },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--include", "-I"]));
+  });
+
+  it("should extract option names from exclusive terms", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--verbose", "-v"] }],
+          [{ type: "option", names: ["--quiet", "-q"] }],
+        ],
+      },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--verbose", "-v", "--quiet", "-q"]));
+  });
+
+  it("should extract option names from nested structures", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [
+          {
+            type: "exclusive",
+            terms: [
+              [{ type: "option", names: ["--verbose", "-v"] }],
+              [{ type: "option", names: ["--debug", "-d"] }],
+            ],
+          },
+        ],
+      },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--verbose", "-v", "--debug", "-d"]));
+  });
+
+  it("should extract option names from complex nested usage", () => {
+    const usage: Usage = [
+      { type: "command", name: "tool" },
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--config", "-c"] }],
+      },
+      {
+        type: "multiple",
+        terms: [
+          {
+            type: "exclusive",
+            terms: [
+              [{ type: "option", names: ["--input", "-i"] }],
+              [{ type: "option", names: ["--output", "-o"] }],
+            ],
+          },
+        ],
+        min: 1,
+      },
+      { type: "argument", metavar: "FILE" },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(
+      result,
+      new Set(["--config", "-c", "--input", "-i", "--output", "-o"]),
+    );
+  });
+
+  it("should handle empty usage", () => {
+    const usage: Usage = [];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set());
+  });
+
+  it("should handle usage with no options", () => {
+    const usage: Usage = [
+      { type: "command", name: "test" },
+      { type: "argument", metavar: "FILE" },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set());
+  });
+
+  it("should not duplicate option names", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--verbose", "-v"] },
+      { type: "option", names: ["--verbose"] }, // Same name appears again
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--verbose", "-v"]));
+  });
+
+  it("should extract option names with metavar", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--output", "-o"], metavar: "FILE" },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--output", "-o"]));
+  });
+
+  it("should handle deeply nested optional and multiple wrappers", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [
+          {
+            type: "multiple",
+            terms: [
+              {
+                type: "optional",
+                terms: [{ type: "option", names: ["--flag", "-f"] }],
+              },
+            ],
+            min: 0,
+          },
+        ],
+      },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--flag", "-f"]));
   });
 });

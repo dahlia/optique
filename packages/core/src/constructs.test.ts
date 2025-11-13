@@ -272,6 +272,35 @@ describe("or", () => {
   });
 });
 
+describe("or() - duplicate option handling", () => {
+  it("should allow duplicate option names in different branches", () => {
+    // or() allows duplicates because branches are mutually exclusive
+    const parser = or(
+      option("-v", "--verbose"),
+      option("-v", "--version"),
+    );
+
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first parser wins
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, true);
+    }
+  });
+
+  it("should allow same options in nested or branches", () => {
+    const parser = or(
+      object({ verbose: option("-v") }),
+      object({ version: option("-v") }),
+      object({ verify: option("-v") }),
+    );
+
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first matching branch wins
+    assert.ok(result.success);
+  });
+});
+
 describe("longestMatch()", () => {
   it("should select parser that consumes more tokens", () => {
     const shortParser = object({
@@ -967,6 +996,135 @@ describe("object() error customization", () => {
   });
 });
 
+describe("object() - duplicate option detection", () => {
+  it("should detect duplicate short options in different fields", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      version: option("-v", "--version"),
+    });
+
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-v");
+      assertErrorIncludes(result.error, "verbose");
+      assertErrorIncludes(result.error, "version");
+    }
+  });
+
+  it("should detect duplicate long options in different fields", () => {
+    const parser = object({
+      foo: option("--opt", "-f"),
+      bar: option("--opt", "-b"),
+    });
+
+    const result = parse(parser, ["--opt"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "--opt");
+      assertErrorIncludes(result.error, "foo");
+      assertErrorIncludes(result.error, "bar");
+    }
+  });
+
+  it("should detect duplicates across 3+ fields", () => {
+    const parser = object({
+      alpha: option("-x"),
+      beta: option("-x"),
+      gamma: option("-x"),
+    });
+
+    const result = parse(parser, ["-x"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-x");
+      assertErrorIncludes(result.error, "alpha");
+      assertErrorIncludes(result.error, "beta");
+      assertErrorIncludes(result.error, "gamma");
+    }
+  });
+
+  it("should allow non-conflicting options", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      output: option("-o", "--output", string()),
+    });
+
+    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.output, "file.txt");
+    }
+  });
+
+  it("should detect duplicates in nested objects", () => {
+    const parser = object({
+      opts: object({
+        verbose: option("-v"),
+      }),
+      flags: object({
+        version: option("-v"),
+      }),
+    });
+
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-v");
+    }
+  });
+
+  it("should allow opt-out with allowDuplicates option", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      version: option("-v", "--version"),
+    }, { allowDuplicates: true });
+
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first parser wins
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.version, false);
+    }
+  });
+
+  it("should not throw for flags with different option names", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      quiet: option("-q", "--quiet"),
+      debug: option("-d", "--debug"),
+    });
+
+    const result = parse(parser, ["-v", "-d"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.quiet, false);
+      assert.equal(result.value.debug, true);
+    }
+  });
+
+  it("should detect duplicate when same option used with different aliases", () => {
+    const parser = object({
+      foo: option("-f", "--foo", "--file"),
+      bar: option("-b", "--bar", "--file"),
+    });
+
+    const result = parse(parser, ["--file"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "--file");
+    }
+  });
+});
+
 describe("tuple", () => {
   it("should create a parser with array-based API", () => {
     const parser = tuple([
@@ -1286,6 +1444,51 @@ describe("tuple", () => {
       );
       assert.ok(hasOptions && hasArguments);
     });
+  });
+});
+
+describe("tuple() - duplicate option detection", () => {
+  it("should detect duplicate short options in different positions", () => {
+    const parser = tuple([
+      option("-v", "--verbose"),
+      option("-v", "--version"),
+    ]);
+
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-v");
+    }
+  });
+
+  it("should allow non-conflicting options", () => {
+    const parser = tuple([
+      option("-v", "--verbose"),
+      option("-o", "--output", string()),
+    ]);
+
+    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], true);
+      assert.equal(result.value[1], "file.txt");
+    }
+  });
+
+  it("should allow opt-out with allowDuplicates option", () => {
+    const parser = tuple([
+      option("-v", "--verbose"),
+      option("-v", "--version"),
+    ], { allowDuplicates: true });
+
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first parser wins
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], true);
+      assert.equal(result.value[1], false);
+    }
   });
 });
 
@@ -2219,6 +2422,62 @@ describe("merge", () => {
   });
 });
 
+describe("merge() - duplicate option detection", () => {
+  it("should detect duplicate options across merged parsers", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      version: option("-v", "--version"),
+    });
+
+    const parser = merge(parser1, parser2);
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-v");
+    }
+  });
+
+  it("should allow non-conflicting merged parsers", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      output: option("-o", "--output", string()),
+    });
+
+    const parser = merge(parser1, parser2);
+    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.output, "file.txt");
+    }
+  });
+
+  it("should detect duplicates across 3+ merged parsers", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      debug: option("-d", "--debug"),
+    });
+    const parser3 = object({
+      version: option("-v", "--version"),
+    });
+
+    const parser = merge(parser1, parser2, parser3);
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-v");
+    }
+  });
+});
+
 describe("concat", () => {
   it("should create a parser that combines multiple tuple parsers", () => {
     const parser1 = tuple([
@@ -3143,5 +3402,58 @@ describe("group", () => {
         f.type === "section" && "title" in f && typeof f.title === "string",
     );
     assert.ok(outputSections.some((s) => s.title === "Output Options"));
+  });
+});
+
+describe("group() - duplicate option detection", () => {
+  it("should detect duplicates in grouped object parsers", () => {
+    const parser = group(
+      "Options",
+      object({
+        verbose: option("-v", "--verbose"),
+        version: option("-v", "--version"),
+      }),
+    );
+
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-v");
+    }
+  });
+
+  it("should allow non-conflicting options in grouped parsers", () => {
+    const parser = group(
+      "Options",
+      object({
+        verbose: option("-v", "--verbose"),
+        output: option("-o", "--output", string()),
+      }),
+    );
+
+    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.output, "file.txt");
+    }
+  });
+
+  it("should detect duplicates in grouped tuple parsers", () => {
+    const parser = group(
+      "Flags",
+      tuple([
+        option("-v", "--verbose"),
+        option("-v", "--version"),
+      ]),
+    );
+
+    const result = parse(parser, ["-v"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Duplicate option name");
+      assertErrorIncludes(result.error, "-v");
+    }
   });
 });

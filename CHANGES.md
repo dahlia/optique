@@ -6,6 +6,36 @@ Version 0.7.0
 
 To be released.
 
+### @optique/core
+
+ -  Added duplicate option name detection to parser combinators. The `object()`,
+    `tuple()`, `merge()`, and `group()` combinators now validate at parse time
+    that option names are unique across their child parsers. When duplicate
+    option names are detected, parsing fails with a clear error message
+    indicating which option name is duplicated and in which fields or positions.
+    [[#37]]
+
+     -  Added `ObjectOptions.allowDuplicates` field to opt out of validation.
+     -  Added `TupleOptions` interface with `allowDuplicates` field.
+     -  Added `MergeOptions` interface with `allowDuplicates` field.
+     -  Added `tuple()` overloads accepting optional `TupleOptions` parameter.
+     -  Added `extractOptionNames()` function to `@optique/core/usage` module.
+
+ -  Changed parsing behavior: `object()`, `tuple()`, `merge()`, and `group()`
+    now reject parsers with duplicate option names by default. Previously,
+    duplicate option names would result in ambiguous parsing where the first
+    matching parser consumed the option and subsequent parsers silently received
+    default values. This breaking change prevents unintentional bugs from option
+    name conflicts.
+
+    To restore previous behavior, set `allowDuplicates: true` in options.
+    [[#37]]
+
+ -  The `or()` combinator continues to allow duplicate option names across
+    branches since alternatives are mutually exclusive.  [[#37]]
+
+[#37]: https://github.com/dahlia/optique/issues/37
+
 
 Version 0.6.2
 -------------
