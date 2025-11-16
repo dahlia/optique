@@ -553,6 +553,7 @@ describe("longestMatch()", () => {
       buffer: ["-a", "value1", "-b", "value2"],
       optionsTerminated: false,
       state: parser.initialState,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -670,6 +671,7 @@ describe("object", () => {
       buffer: ["--help"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -894,6 +896,7 @@ describe("object() error customization", () => {
         output: undefined,
       },
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -922,6 +925,7 @@ describe("object() error customization", () => {
         verbose: undefined,
       },
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -954,6 +958,7 @@ describe("object() error customization", () => {
         verbose: undefined,
       },
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -983,6 +988,7 @@ describe("object() error customization", () => {
         version: undefined,
       },
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1799,6 +1805,7 @@ describe("merge", () => {
       buffer: ["-3"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1998,6 +2005,7 @@ describe("merge", () => {
       buffer: ["--unknown"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);

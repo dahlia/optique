@@ -34,7 +34,57 @@ To be released.
  -  The `or()` combinator continues to allow duplicate option names across
     branches since alternatives are mutually exclusive.  [[#37]]
 
+ -  Added “Did you mean?” suggestion system for typos in option names and
+    command names. When users make typos in command-line arguments, Optique
+    now automatically suggests similar valid options to help them correct
+    the mistake:
+
+    ~~~~ typescript
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      version: option("--version"),
+    });
+
+    // User types: --verbos (typo)
+    const result = parse(parser, ["--verbos"]);
+    // Error: No matched option for `--verbos`.
+    // Did you mean `--verbose`?
+    ~~~~
+
+    The suggestion system uses Levenshtein distance to find similar names,
+    suggesting up to 3 alternatives when the edit distance is at most 3
+    characters and the distance ratio is at most 0.5. Comparison is
+    case-insensitive by default. Suggestions work automatically for both
+    option names and subcommand names in all error contexts (`option()`,
+    `flag()`, `command()`, `object()`, `or()`, and `longestMatch()` parsers).
+    This feature is implemented internally and requires no user configuration.
+    [[#38]]
+
+ -  Improved `formatMessage()` line break handling to distinguish between
+    soft breaks (word wrap) and hard breaks (paragraph separation):
+
+     -  Single newlines (`\n`) are now treated as soft breaks, converted to
+        spaces for natural word wrapping. This allows long error messages to
+        be written across multiple lines in source code while rendering as
+        continuous text.
+
+     -  Double or more consecutive newlines (`\n\n+`) are treated as hard
+        breaks, creating actual paragraph separations in the output.
+
+    This change improves the readability of multi-part error messages, such
+    as those with “Did you mean?” suggestions, by ensuring proper spacing
+    between the base error and suggestions:
+
+    ~~~~
+    Error: Unexpected option or subcommand: comit.
+    Did you mean commit?
+    ~~~~
+
+    Previously, single newlines in `text()` terms would be silently dropped
+    during word wrapping, causing messages to run together without spacing.
+
 [#37]: https://github.com/dahlia/optique/issues/37
+[#38]: https://github.com/dahlia/optique/issues/38
 
 
 Version 0.6.2

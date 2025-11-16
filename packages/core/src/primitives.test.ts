@@ -37,6 +37,7 @@ describe("constant", () => {
       buffer: ["--option", "value"] as readonly string[],
       state: "hello" as const,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -155,6 +156,7 @@ describe("option", () => {
         buffer: ["-v"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -178,6 +180,7 @@ describe("option", () => {
         buffer: ["--verbose"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -201,6 +204,7 @@ describe("option", () => {
         buffer: ["-v"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
       const result1 = parser.parse(context1);
       assert.ok(result1.success);
@@ -212,6 +216,7 @@ describe("option", () => {
         buffer: ["--verbose"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
       const result2 = parser.parse(context2);
       assert.ok(result2.success);
@@ -226,6 +231,7 @@ describe("option", () => {
         buffer: ["-v"] as readonly string[],
         state: { success: true as const, value: true },
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -242,6 +248,7 @@ describe("option", () => {
         buffer: ["-vd"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -265,6 +272,7 @@ describe("option", () => {
         buffer: ["-v"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: true,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -281,6 +289,7 @@ describe("option", () => {
         buffer: ["--"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -298,6 +307,7 @@ describe("option", () => {
         buffer: [] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -316,6 +326,7 @@ describe("option", () => {
         buffer: ["--port", "8080"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -339,6 +350,7 @@ describe("option", () => {
         buffer: ["--port=8080"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -362,6 +374,7 @@ describe("option", () => {
         buffer: ["/P:8080"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -383,6 +396,7 @@ describe("option", () => {
         buffer: ["--port"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -399,6 +413,7 @@ describe("option", () => {
         buffer: ["--verbose=true"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -415,6 +430,7 @@ describe("option", () => {
         buffer: ["--name", "Alice"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -436,6 +452,7 @@ describe("option", () => {
         buffer: ["--port", "invalid"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -455,6 +472,7 @@ describe("option", () => {
       buffer: ["--help"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -620,6 +638,7 @@ describe("option() error customization", () => {
       buffer: ["--verbose"],
       state: undefined,
       optionsTerminated: true,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -645,6 +664,7 @@ describe("option() error customization", () => {
       buffer: ["--verbose"],
       state: { success: true, value: true } as const,
       optionsTerminated: false,
+      usage: parser.usage,
     };
     const result = parser.parse(context);
     assert.strictEqual(result.success, false);
@@ -686,6 +706,7 @@ describe("flag", () => {
         buffer: ["-f"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -705,6 +726,7 @@ describe("flag", () => {
         buffer: ["--force"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -724,6 +746,7 @@ describe("flag", () => {
         buffer: ["-f"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
       let result = parser.parse(context);
       assert.ok(result.success);
@@ -733,6 +756,7 @@ describe("flag", () => {
         buffer: ["--force"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
       result = parser.parse(context);
       assert.ok(result.success);
@@ -784,6 +808,7 @@ describe("flag", () => {
         buffer: ["--force=true"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -801,6 +826,7 @@ describe("flag", () => {
         buffer: ["-f"] as readonly string[],
         state: { success: true as const, value: true as const },
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -817,6 +843,7 @@ describe("flag", () => {
         buffer: ["-fd"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -836,6 +863,7 @@ describe("flag", () => {
         buffer: ["-f"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: true,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -852,6 +880,7 @@ describe("flag", () => {
         buffer: ["--"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -999,6 +1028,7 @@ describe("flag() error customization", () => {
       buffer: ["--force"],
       state: undefined,
       optionsTerminated: true,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1023,6 +1053,7 @@ describe("flag() error customization", () => {
       buffer: ["--force"],
       state: { success: true, value: true } as const,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1050,6 +1081,7 @@ describe("argument", () => {
       buffer: ["myfile.txt"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1070,6 +1102,7 @@ describe("argument", () => {
       buffer: ["42"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1090,6 +1123,7 @@ describe("argument", () => {
       buffer: [] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1106,6 +1140,7 @@ describe("argument", () => {
       buffer: ["invalid"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1268,6 +1303,7 @@ describe("argument() error customization", () => {
       buffer: [],
       state: undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1834,6 +1870,7 @@ describe("command() error customization", () => {
       buffer: ["build"],
       state: undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1861,6 +1898,7 @@ describe("command() error customization", () => {
       buffer: ["build"],
       state: undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);

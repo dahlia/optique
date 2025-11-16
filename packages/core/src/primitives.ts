@@ -7,6 +7,7 @@ import {
   optionNames as eOptionNames,
 } from "./message.ts";
 import type { DocState, Parser, Suggestion } from "./parser.ts";
+import { createErrorWithSuggestions } from "./suggestion.ts";
 import type { OptionName, UsageTerm } from "./usage.ts";
 import {
   isValueParser,
@@ -367,12 +368,21 @@ export function option<T>(
         }
       }
 
+      // Find similar options from context usage and suggest them
+      const invalidOption = context.buffer[0];
+      const baseError = message`No matched option for ${
+        eOptionName(invalidOption)
+      }.`;
+
       return {
         success: false,
         consumed: 0,
-        error: message`No matched option for ${
-          eOptionName(context.buffer[0])
-        }.`,
+        error: createErrorWithSuggestions(
+          baseError,
+          invalidOption,
+          context.usage,
+          "option",
+        ),
       };
     },
     complete(state) {
@@ -712,12 +722,21 @@ export function flag(
         };
       }
 
+      // Find similar options from context usage and suggest them
+      const invalidOption = context.buffer[0];
+      const baseError = message`No matched option for ${
+        eOptionName(invalidOption)
+      }.`;
+
       return {
         success: false,
         consumed: 0,
-        error: message`No matched option for ${
-          eOptionName(context.buffer[0])
-        }.`,
+        error: createErrorWithSuggestions(
+          baseError,
+          invalidOption,
+          context.usage,
+          "option",
+        ),
       };
     },
     complete(state) {
@@ -1050,16 +1069,44 @@ export function command<T, TState>(
         // Check if buffer starts with our command name
         if (context.buffer.length < 1 || context.buffer[0] !== name) {
           const actual = context.buffer.length > 0 ? context.buffer[0] : null;
-          const errorMessage = options.errors?.notMatched ??
-            message`Expected command ${eOptionName(name)}, but got ${
-              actual ?? "end of input"
-            }.`;
+
+          // If custom error is provided, use it
+          if (options.errors?.notMatched) {
+            const errorMessage = options.errors.notMatched;
+            return {
+              success: false,
+              consumed: 0,
+              error: typeof errorMessage === "function"
+                ? errorMessage(name, actual)
+                : errorMessage,
+            };
+          }
+
+          // Generate default error with suggestions
+          if (actual == null) {
+            return {
+              success: false,
+              consumed: 0,
+              error: message`Expected command ${
+                eOptionName(name)
+              }, but got end of input.`,
+            };
+          }
+
+          // Find similar command names
+          const baseError = message`Expected command ${
+            eOptionName(name)
+          }, but got ${actual}.`;
+
           return {
             success: false,
             consumed: 0,
-            error: typeof errorMessage === "function"
-              ? errorMessage(name, actual)
-              : errorMessage,
+            error: createErrorWithSuggestions(
+              baseError,
+              actual,
+              context.usage,
+              "command",
+            ),
           };
         }
         // Command matched, consume it and move to "matched" state

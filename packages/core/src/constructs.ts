@@ -11,6 +11,7 @@ import type {
   ParserContext,
   ParserResult,
 } from "./parser.ts";
+import { createErrorWithSuggestions } from "./suggestion.ts";
 import { extractOptionNames } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
@@ -600,11 +601,21 @@ export function or(
             const defaultMsg = message`Unexpected option or subcommand: ${
               eOptionName(token)
             }.`;
-            return options?.errors?.unexpectedInput != null
-              ? (typeof options.errors.unexpectedInput === "function"
+
+            // If custom error is provided, use it
+            if (options?.errors?.unexpectedInput != null) {
+              return typeof options.errors.unexpectedInput === "function"
                 ? options.errors.unexpectedInput(token)
-                : options.errors.unexpectedInput)
-              : defaultMsg;
+                : options.errors.unexpectedInput;
+            }
+
+            // Otherwise, add suggestions to the default message
+            return createErrorWithSuggestions(
+              defaultMsg,
+              token,
+              context.usage,
+              "both",
+            );
           })(),
       };
       const orderedParsers = parsers.map((p, i) =>
@@ -990,11 +1001,21 @@ export function longestMatch(
             const defaultMsg = message`Unexpected option or subcommand: ${
               eOptionName(token)
             }.`;
-            return options?.errors?.unexpectedInput != null
-              ? (typeof options.errors.unexpectedInput === "function"
+
+            // If custom error is provided, use it
+            if (options?.errors?.unexpectedInput != null) {
+              return typeof options.errors.unexpectedInput === "function"
                 ? options.errors.unexpectedInput(token)
-                : options.errors.unexpectedInput)
-              : defaultMsg;
+                : options.errors.unexpectedInput;
+            }
+
+            // Otherwise, add suggestions to the default message
+            return createErrorWithSuggestions(
+              defaultMsg,
+              token,
+              context.usage,
+              "both",
+            );
           })(),
       };
 
@@ -1341,11 +1362,22 @@ export function object<
           ? (() => {
             const token = context.buffer[0];
             const customMessage = options.errors?.unexpectedInput;
-            return customMessage
-              ? (typeof customMessage === "function"
+
+            // If custom error message is provided, use it
+            if (customMessage) {
+              return typeof customMessage === "function"
                 ? customMessage(token)
-                : customMessage)
-              : message`Unexpected option or argument: ${token}.`;
+                : customMessage;
+            }
+
+            // Generate default error with suggestions
+            const baseError = message`Unexpected option or argument: ${token}.`;
+            return createErrorWithSuggestions(
+              baseError,
+              token,
+              context.usage,
+              "both",
+            );
           })()
           : (options.errors?.endOfInput ??
             message`Expected an option or argument, but got end of input.`),

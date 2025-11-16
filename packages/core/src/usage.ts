@@ -149,11 +149,54 @@ export function extractOptionNames(usage: Usage): Set<string> {
   const names = new Set<string>();
 
   function traverseUsage(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "option") {
         for (const name of term.names) {
           names.add(name);
         }
+      } else if (term.type === "optional" || term.type === "multiple") {
+        traverseUsage(term.terms);
+      } else if (term.type === "exclusive") {
+        for (const exclusiveUsage of term.terms) {
+          traverseUsage(exclusiveUsage);
+        }
+      }
+    }
+  }
+
+  traverseUsage(usage);
+  return names;
+}
+
+/**
+ * Extracts all command names from a Usage array.
+ *
+ * This function recursively traverses the usage structure and collects
+ * all command names, similar to {@link extractOptionNames}.
+ *
+ * @param usage The usage structure to extract command names from
+ * @returns A Set of all command names found in the usage structure
+ *
+ * @example
+ * ```typescript
+ * const usage: Usage = [
+ *   { type: "command", name: "build" },
+ *   { type: "command", name: "test" },
+ * ];
+ * const names = extractCommandNames(usage);
+ * // names = Set(["build", "test"])
+ * ```
+ * @since 0.7.0
+ */
+export function extractCommandNames(usage: Usage): Set<string> {
+  const names = new Set<string>();
+
+  function traverseUsage(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      if (term.type === "command") {
+        names.add(term.name);
       } else if (term.type === "optional" || term.type === "multiple") {
         traverseUsage(term.terms);
       } else if (term.type === "exclusive") {

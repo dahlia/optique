@@ -129,6 +129,15 @@ export interface ParserContext<TState> {
    * that no further options should be processed.
    */
   readonly optionsTerminated: boolean;
+
+  /**
+   * Usage information for the entire parser tree.
+   * Used to provide better error messages with suggestions for typos.
+   * When a parser encounters an invalid option or command, it can use
+   * this information to suggest similar valid options.
+   * @since 0.7.0
+   */
+  readonly usage: Usage;
 }
 
 /**
@@ -278,6 +287,7 @@ export function parse<T>(
     buffer: args,
     optionsTerminated: false,
     state: parser.initialState,
+    usage: parser.usage,
   };
   do {
     const result = parser.parse(context);
@@ -345,6 +355,7 @@ export function suggest<T>(
     buffer: allButLast,
     optionsTerminated: false,
     state: parser.initialState,
+    usage: parser.usage,
   };
 
   // Parse up to the prefix
@@ -413,6 +424,7 @@ export function getDocPage(
     buffer: args,
     optionsTerminated: false,
     state: parser.initialState,
+    usage: parser.usage,
   };
   do {
     const result = parser.parse(context);

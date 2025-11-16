@@ -383,6 +383,62 @@ const validationError = message`${errorMessages.invalidFormat("JSON")} in config
 ~~~~
 
 
+Line break handling
+-------------------
+
+*Available since Optique 0.7.0.*
+
+The `formatMessage()` function handles line breaks in a way similar to Markdown,
+distinguishing between soft breaks (word wrap points) and hard breaks (actual
+paragraph separations):
+
+### Single newlines (`\n`)
+
+Single newlines in `text()` terms are treated as soft breaks and converted to
+spaces. This allows you to write long messages across multiple lines in source
+code while rendering them as continuous text:
+
+~~~~ typescript twoslash
+import { message, text } from "@optique/core/message";
+
+// Long message written across multiple lines
+const msg = message`This is a very long error message that\nspans multiple lines in the source code\nbut renders as continuous text.`;
+~~~~
+
+This renders as:
+
+~~~~
+This is a very long error message that spans multiple lines in the source code but renders as continuous text.
+~~~~
+
+### Double newlines (`\n\n`)
+
+Double or more consecutive newlines are treated as hard breaks, creating actual
+paragraph separations in the output:
+
+~~~~ typescript twoslash
+import { message, text } from "@optique/core/message";
+
+// Message with paragraph break
+const msg = [
+  text("First paragraph with important information."),
+  text("\n\n"),
+  text("Second paragraph with additional details.")
+];
+~~~~
+
+This renders as:
+
+~~~~
+First paragraph with important information.
+Second paragraph with additional details.
+~~~~
+
+This distinction is particularly useful for multi-part error messages, such as
+those with suggestions or help text, ensuring proper spacing between the base
+error and additional information.
+
+
 Terminal output
 ---------------
 
@@ -808,3 +864,130 @@ const logLevel = option("--log-level", string(), {
 Custom error messages integrate seamlessly with Optique's structured message
 system, ensuring consistent formatting and proper terminal output regardless
 of whether colors are enabled or disabled.
+
+
+Automatic “Did you mean?” suggestions
+-------------------------------------
+
+*Available since Optique 0.7.0.*
+
+Optique automatically provides helpful “Did you mean?” suggestions when users
+make typos in option names or command names. This feature works transparently
+without requiring any configuration—when a user enters an invalid option or
+command that's similar to a valid one, Optique suggests the correct alternative:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+const parser = object({
+  verbose: option("--verbose"),
+  version: option("--version"),
+  verify: option("--verify"),
+});
+
+run(parser, { args: ["--verbos"] });  // User typo
+~~~~
+
+This produces the error:
+
+~~~~
+Error: No matched option for `--verbos`.
+Did you mean `--verbose`?
+~~~~
+
+### How it works
+
+The suggestion system uses [Levenshtein distance] to find similar
+names among available options and commands. It automatically:
+
+ -  Compares the invalid input against all valid option and command names
+ -  Finds matches within an edit distance of 3 characters
+ -  Filters candidates by distance ratio (at most 50% of input length)
+ -  Suggests up to 3 closest matches
+ -  Uses case-insensitive comparison for better user experience
+
+[Levenshtein distance]: https://en.wikipedia.org/wiki/Levenshtein_distance
+
+### Multiple suggestions
+
+When multiple similar options exist, Optique shows all relevant suggestions:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+const parser = object({
+  verbose: option("--verbose"),
+  version: option("--version"),
+  verify: option("--verify"),
+});
+
+run(parser, { args: ["--ver"] });  // Ambiguous typo
+~~~~
+
+This produces:
+
+~~~~
+Error: No matched option for `--ver`.
+Did you mean one of these?
+  `--verify`
+  `--version`
+  `--verbose`
+~~~~
+
+### Command name suggestions
+
+The feature works equally well with subcommand names:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { command } from "@optique/core/primitives";
+
+const addCmd = command("add", object({}));
+const commitCmd = command("commit", object({}));
+const parser = or(addCmd, commitCmd);
+~~~~
+
+When a user types `comit` instead of `commit`:
+
+~~~~
+Error: Expected command commit, but got comit.
+Did you mean `commit`?
+~~~~
+
+### Suggestion thresholds
+
+Suggestions are only shown when they're likely to be helpful. Optique won't
+suggest options that are too different from what the user typed:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+const parser = object({
+  verbose: option("--verbose"),
+  quiet: option("--quiet"),
+});
+
+run(parser, { args: ["--xyz"] });  // Too different
+~~~~
+
+This produces an error without suggestions:
+
+~~~~
+Error: Unexpected option or argument: `--xyz`.
+~~~~
+
+The thresholds ensure that suggestions are relevant without overwhelming users
+with unrelated options.
+
+### Integration with error messages
+
+Suggestions are automatically appended to error messages with proper formatting,
+including appropriate line breaks for readability. They work seamlessly with
+both colored and non-colored terminal output, and integrate with custom error
+messages you may have defined.
