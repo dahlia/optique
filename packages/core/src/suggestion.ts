@@ -96,6 +96,19 @@ export interface FindSimilarOptions {
 }
 
 /**
+ * Default options for finding similar strings.
+ * These values are optimized for command-line option/command name suggestions.
+ *
+ * @since 0.7.0
+ */
+export const DEFAULT_FIND_SIMILAR_OPTIONS: Required<FindSimilarOptions> = {
+  maxDistance: 3,
+  maxDistanceRatio: 0.5,
+  maxSuggestions: 3,
+  caseSensitive: false,
+} as const;
+
+/**
  * Finds similar strings from a list of candidates.
  *
  * This function uses Levenshtein distance to find strings that are similar
@@ -125,10 +138,14 @@ export function findSimilar(
   options: FindSimilarOptions = {},
 ): string[] {
   // Apply defaults
-  const maxDistance = options.maxDistance ?? 3;
-  const maxDistanceRatio = options.maxDistanceRatio ?? 0.5;
-  const maxSuggestions = options.maxSuggestions ?? 3;
-  const caseSensitive = options.caseSensitive ?? false;
+  const maxDistance = options.maxDistance ??
+    DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance;
+  const maxDistanceRatio = options.maxDistanceRatio ??
+    DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio;
+  const maxSuggestions = options.maxSuggestions ??
+    DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions;
+  const caseSensitive = options.caseSensitive ??
+    DEFAULT_FIND_SIMILAR_OPTIONS.caseSensitive;
 
   // Return empty if input is empty
   if (input.length === 0) return [];
@@ -242,6 +259,8 @@ export function createSuggestionMessage(
  * @param invalidInput The invalid option or command name that the user typed
  * @param usage The usage information to extract available options/commands from
  * @param type What type of names to suggest ("option", "command", or "both")
+ * @param customFormatter Optional custom function to format suggestions instead
+ *                        of using the default "Did you mean?" formatting
  * @returns A message combining the base error with suggestions, or just the
  *          base error if no similar names are found
  *
@@ -264,6 +283,7 @@ export function createErrorWithSuggestions(
   invalidInput: string,
   usage: Usage,
   type: "option" | "command" | "both" = "both",
+  customFormatter?: (suggestions: readonly string[]) => Message,
 ): Message {
   const candidates = new Set<string>();
 
@@ -279,14 +299,15 @@ export function createErrorWithSuggestions(
     }
   }
 
-  const suggestions = findSimilar(invalidInput, candidates, {
-    maxDistance: 3,
-    maxDistanceRatio: 0.5,
-    maxSuggestions: 3,
-    caseSensitive: false,
-  });
+  const suggestions = findSimilar(
+    invalidInput,
+    candidates,
+    DEFAULT_FIND_SIMILAR_OPTIONS,
+  );
 
-  const suggestionMsg = createSuggestionMessage(suggestions);
+  const suggestionMsg = customFormatter
+    ? customFormatter(suggestions)
+    : createSuggestionMessage(suggestions);
 
   return suggestionMsg.length > 0
     ? [...baseError, text("\n\n"), ...suggestionMsg]

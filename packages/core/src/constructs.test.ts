@@ -8,7 +8,12 @@ import {
   tuple,
 } from "@optique/core/constructs";
 import type { DocEntry, DocFragment } from "@optique/core/doc";
-import { formatMessage, type Message, message } from "@optique/core/message";
+import {
+  formatMessage,
+  type Message,
+  message,
+  text,
+} from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   type InferValue,
@@ -298,6 +303,51 @@ describe("or() - duplicate option handling", () => {
     const result = parse(parser, ["-v"]);
     // Should succeed - first matching branch wins
     assert.ok(result.success);
+  });
+});
+
+describe("or() error customization", () => {
+  it("should use custom suggestions formatter", () => {
+    const parser = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          suggestions: (suggestions) => {
+            if (suggestions.length === 0) return [];
+            return message`Available commands: ${text(suggestions.join(", "))}`;
+          },
+        },
+      },
+    );
+
+    const result = parse(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Available commands"));
+      assert.ok(errorMessage.includes("deploy"));
+    }
+  });
+
+  it("should use custom suggestions formatter to disable suggestions", () => {
+    const parser = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          suggestions: () => [],
+        },
+      },
+    );
+
+    const result = parse(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(!errorMessage.includes("Did you mean"));
+      assert.ok(!errorMessage.includes("deploy"));
+    }
   });
 });
 
@@ -616,6 +666,51 @@ describe("longestMatch()", () => {
         .commands,
       ["test"],
     );
+  });
+});
+
+describe("longestMatch() error customization", () => {
+  it("should use custom suggestions formatter", () => {
+    const parser = longestMatch(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          suggestions: (suggestions) => {
+            if (suggestions.length === 0) return [];
+            return message`Try one of: ${text(suggestions.join(" | "))}`;
+          },
+        },
+      },
+    );
+
+    const result = parse(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Try one of"));
+      assert.ok(errorMessage.includes("deploy"));
+    }
+  });
+
+  it("should use custom suggestions formatter to disable suggestions", () => {
+    const parser = longestMatch(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          suggestions: () => [],
+        },
+      },
+    );
+
+    const result = parse(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(!errorMessage.includes("Did you mean"));
+      assert.ok(!errorMessage.includes("deploy"));
+    }
   });
 });
 
@@ -998,6 +1093,69 @@ describe("object() error customization", () => {
         formatMessage(result.error),
         "Unrecognized CLI option.",
       );
+    }
+  });
+
+  it("should use custom suggestions formatter", () => {
+    const parser = object({
+      verbose: flag("-v", "--verbose"),
+      output: option("-o", "--output", string()),
+    }, {
+      errors: {
+        suggestions: (suggestions) => {
+          if (suggestions.length === 0) return [];
+          return message`Perhaps you meant: ${
+            text(suggestions.map((s) => `"${s}"`).join(", "))
+          }?`;
+        },
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"],
+      state: {
+        verbose: undefined,
+        output: undefined,
+      },
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Perhaps you meant"));
+      assert.ok(errorMessage.includes("--verbose"));
+    }
+  });
+
+  it("should use custom suggestions formatter to disable suggestions", () => {
+    const parser = object({
+      verbose: flag("-v", "--verbose"),
+      output: option("-o", "--output", string()),
+    }, {
+      errors: {
+        suggestions: () => [],
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"],
+      state: {
+        verbose: undefined,
+        output: undefined,
+      },
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(!errorMessage.includes("Did you mean"));
+      assert.ok(!errorMessage.includes("--verbose"));
     }
   });
 });

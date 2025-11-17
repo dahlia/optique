@@ -60,6 +60,61 @@ To be released.
     This feature is implemented internally and requires no user configuration.
     [[#38]]
 
+ -  Added customization support for “Did you mean?” suggestion messages.
+    All parsers that generate suggestion messages now support customizing
+    how suggestions are formatted or disabling them entirely through the
+    `errors` option:
+
+    ~~~~ typescript
+    // Custom suggestion format for option/flag parsers
+    const portOption = option("--port", integer(), {
+      errors: {
+        noMatch: (invalidOption, suggestions) =>
+          suggestions.length > 0
+            ? message`Unknown option ${invalidOption}. Try: ${values(suggestions)}`
+            : message`Unknown option ${invalidOption}.`
+      }
+    });
+
+    // Custom suggestion format for command parser
+    const addCmd = command("add", object({}), {
+      errors: {
+        notMatched: (expected, actual, suggestions) =>
+          suggestions && suggestions.length > 0
+            ? message`Unknown command ${actual}. Similar: ${values(suggestions)}`
+            : message`Expected ${expected} command.`
+      }
+    });
+
+    // Custom suggestion formatter for combinators
+    const config = object({
+      host: option("--host", string()),
+      port: option("--port", integer())
+    }, {
+      errors: {
+        suggestions: (suggestions) =>
+          suggestions.length > 0
+            ? message`Available options: ${values(suggestions)}`
+            : []
+      }
+    });
+    ~~~~
+
+    The customization system allows complete control over suggestion
+    formatting while maintaining backward compatibility. When custom error
+    messages are provided, they receive the array of suggestions and can
+    format, filter, or disable them as needed. This enables applications
+    to provide context-specific error messages that match their CLI's
+    style and user expectations.  [[#38]]
+
+     -  Extended `OptionErrorOptions` interface with `noMatch` field.
+     -  Extended `FlagErrorOptions` interface with `noMatch` field.
+     -  Extended `CommandErrorOptions.notMatched` signature to include
+        optional `suggestions` parameter.
+     -  Extended `OrErrorOptions` interface with `suggestions` field.
+     -  Extended `LongestMatchErrorOptions` interface with `suggestions` field.
+     -  Extended `ObjectErrorOptions` interface with `suggestions` field.
+
  -  Improved `formatMessage()` line break handling to distinguish between
     soft breaks (word wrap) and hard breaks (paragraph separation):
 

@@ -696,6 +696,95 @@ describe("option() error customization", () => {
       assert.ok(errorMessage.includes("Invalid port number:"));
     }
   });
+
+  it("should use custom noMatch error with static message", () => {
+    const innerParser = object({
+      verbose: option("--verbose", "--debug"),
+    });
+    const parser = option("--help", {
+      errors: {
+        noMatch: message`The --help option is required in this context.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The --help option is required in this context.",
+      );
+    }
+  });
+
+  it("should use custom noMatch error with function", () => {
+    const innerParser = object({
+      verbose: option("--verbose", "--debug"),
+    });
+    const parser = option("--help", {
+      errors: {
+        noMatch: (invalidOption, suggestions) => {
+          if (suggestions.length > 0) {
+            return message`Option ${text(invalidOption)} not recognized. Try: ${
+              text(suggestions.join(", "))
+            }`;
+          }
+          return message`Option ${text(invalidOption)} not recognized.`;
+        },
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("--verbos"));
+      assert.ok(
+        errorMessage.includes("--verbose") || errorMessage.includes("--debug"),
+      );
+    }
+  });
+
+  it("should use custom noMatch error to disable suggestions", () => {
+    const innerParser = object({
+      verbose: option("--verbose"),
+    });
+    const parser = option("--help", {
+      errors: {
+        noMatch: (invalidOption) =>
+          message`Invalid option: ${text(invalidOption)}`,
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.strictEqual(errorMessage, "Invalid option: --verbos");
+      assert.ok(!errorMessage.includes("Did you mean"));
+    }
+  });
 });
 
 describe("flag", () => {
@@ -1063,6 +1152,66 @@ describe("flag() error customization", () => {
         formatMessage(result.error),
         "The flag --force was already specified.",
       );
+    }
+  });
+
+  it("should use custom noMatch error with static message", () => {
+    const innerParser = object({
+      force: flag("--force", "--yes"),
+    });
+    const parser = flag("--help", {
+      errors: {
+        noMatch: message`The --help flag is required here.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--forc"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The --help flag is required here.",
+      );
+    }
+  });
+
+  it("should use custom noMatch error with function", () => {
+    const innerParser = object({
+      force: flag("--force"),
+    });
+    const parser = flag("--help", {
+      errors: {
+        noMatch: (invalidOption, suggestions) => {
+          if (suggestions.length > 0) {
+            return message`Flag ${text(invalidOption)} unknown. Did you mean ${
+              text(suggestions[0])
+            }?`;
+          }
+          return message`Flag ${text(invalidOption)} unknown.`;
+        },
+      },
+    });
+
+    const context = {
+      buffer: ["--forc"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("--forc"));
+      assert.ok(errorMessage.includes("--force"));
     }
   });
 });
@@ -1950,6 +2099,73 @@ describe("command() error customization", () => {
         formatMessage(result.error),
         "Command state is corrupted.",
       );
+    }
+  });
+
+  it("should use custom notMatched error with suggestions parameter", () => {
+    const parserWithSuggestions = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+    );
+    const parser = command("deploy", argument(string()), {
+      errors: {
+        notMatched: (expected, actual, suggestions) => {
+          if (suggestions && suggestions.length > 0) {
+            return message`Expected "${expected}", got "${
+              actual ?? "nothing"
+            }". Did you mean ${text(suggestions.join(" or "))}?`;
+          }
+          return message`Expected "${expected}", got "${actual ?? "nothing"}".`;
+        },
+      },
+    });
+
+    const context = {
+      buffer: ["deploi"],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parserWithSuggestions.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("deploi"));
+      assert.ok(errorMessage.includes("deploy"));
+    }
+  });
+
+  it("should use custom notMatched to disable suggestions", () => {
+    const parserWithSuggestions = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+    );
+    const parser = command("deploy", argument(string()), {
+      errors: {
+        notMatched: (expected, actual) =>
+          message`Command mismatch: expected ${expected}, got ${
+            actual ?? "nothing"
+          }.`,
+      },
+    });
+
+    const context = {
+      buffer: ["deploi"],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parserWithSuggestions.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.strictEqual(
+        errorMessage,
+        'Command mismatch: expected "deploy", got "deploi".',
+      );
+      assert.ok(!errorMessage.includes("Did you mean"));
     }
   });
 });

@@ -866,6 +866,159 @@ system, ensuring consistent formatting and proper terminal output regardless
 of whether colors are enabled or disabled.
 
 
+### Suggestion message customization
+
+*Available since Optique 0.7.0.*
+
+Optique's automatic "Did you mean?" suggestions can also be customized through
+the `errors` option. This allows you to control how suggestion messages are
+formatted or disable them entirely for specific parsers.
+
+#### Option and flag parsers
+
+The `option()` and `flag()` parsers support a `noMatch` error option that
+receives both the invalid input and an array of similar valid options:
+
+~~~~ typescript twoslash
+import { option, flag } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+import { message, values } from "@optique/core/message";
+
+// Custom suggestion format
+const portOption = option("--port", integer(), {
+  errors: {
+    noMatch: (invalidOption, suggestions) =>
+      suggestions.length > 0
+        ? message`Unknown option ${invalidOption}. Try: ${values(suggestions)}`
+        : message`Unknown option ${invalidOption}.`
+  }
+});
+
+// Disable suggestions by ignoring the suggestions parameter
+const quietOption = option("--quiet", {
+  errors: {
+    noMatch: (invalidOption, _suggestions) =>
+      message`Invalid option: ${invalidOption}`
+  }
+});
+
+// Use static message (no suggestions)
+const verboseFlag = flag("--verbose", {
+  errors: {
+    noMatch: message`Please use a valid flag.`
+  }
+});
+~~~~
+
+#### Command parser
+
+The `command()` parser's `notMatched` error option now receives suggestions
+as an optional third parameter:
+
+~~~~ typescript twoslash
+import { command } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { message, values } from "@optique/core/message";
+
+const addCmd = command("add", object({}), {
+  errors: {
+    notMatched: (expected, actual, suggestions) => {
+      if (actual == null) {
+        return message`Expected ${expected} command.`;
+      }
+      if (suggestions && suggestions.length > 0) {
+        return message`Unknown command ${actual}. Similar commands: ${values(suggestions)}`;
+      }
+      return message`Unknown command ${actual}.`;
+    }
+  }
+});
+~~~~
+
+#### Combinator and object parsers
+
+The `or()`, `longestMatch()`, and `object()` parsers support a `suggestions`
+error option that customizes how suggestions are formatted. This function
+receives the array of suggestions and returns a message to append to the
+error:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { message, values, text } from "@optique/core/message";
+
+// Custom suggestion formatting
+const config = object({
+  host: option("--host", string()),
+  port: option("--port", integer())
+}, {
+  errors: {
+    suggestions: (suggestions) =>
+      suggestions.length > 0
+        ? message`Available options: ${values(suggestions)}`
+        : []
+  }
+});
+
+// Disable suggestions entirely
+const strictConfig = object({
+  host: option("--host", string()),
+  port: option("--port", integer())
+}, {
+  errors: {
+    suggestions: () => [] // Return empty message to disable suggestions
+  }
+});
+~~~~
+
+The `suggestions` formatter is called with an array of similar valid
+option/command names found through Levenshtein distance matching. You can:
+
+ -  Format suggestions differently (e.g., comma-separated instead of list)
+ -  Add additional context or help text
+ -  Filter or reorder suggestions
+ -  Return an empty array to disable suggestions
+
+~~~~ typescript twoslash
+import { or } from "@optique/core/constructs";
+import { command } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { message, optionName, text, type Message } from "@optique/core/message";
+
+const addCmd = command("add", object({}));
+const commitCmd = command("commit", object({}));
+
+const parser = or(
+  addCmd,
+  commitCmd,
+  {
+    errors: {
+      suggestions: (suggestions) => {
+        if (suggestions.length === 0) return [];
+        if (suggestions.length === 1) {
+          return message`Did you mean ${optionName(suggestions[0])}?
+            Run with ${optionName("--help")} for usage.`;
+        }
+        // Format as comma-separated list
+        let parts: Message = [text("Did you mean: ")];
+        for (let i = 0; i < suggestions.length; i++) {
+          parts = i > 0
+            ? [...parts, text(", "), optionName(suggestions[i])]
+            : [...parts, optionName(suggestions[i])];
+        }
+        return [...parts, text("?")];
+      }
+    }
+  }
+);
+~~~~
+
+Note that if you provide a custom `unexpectedInput` error, suggestions will
+not be added automatically. You must use the `suggestions` formatter if you
+want suggestions with a custom `unexpectedInput` message.
+
+
 Automatic “Did you mean?” suggestions
 -------------------------------------
 

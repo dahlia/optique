@@ -41,6 +41,18 @@ export interface OrErrorOptions {
    * Can be a static message or a function that receives the unexpected token.
    */
   unexpectedInput?: Message | ((token: string) => Message);
+
+  /**
+   * Custom function to format suggestion messages.
+   * If provided, this will be used instead of the default "Did you mean?"
+   * formatting. The function receives an array of similar valid options/commands
+   * and should return a formatted message to append to the error.
+   *
+   * @param suggestions Array of similar valid option/command names
+   * @returns Formatted message to append to the error (can be empty array for no suggestions)
+   * @since 0.7.0
+   */
+  suggestions?: (suggestions: readonly string[]) => Message;
 }
 
 /**
@@ -615,6 +627,7 @@ export function or(
               token,
               context.usage,
               "both",
+              options?.errors?.suggestions,
             );
           })(),
       };
@@ -770,6 +783,18 @@ export interface LongestMatchErrorOptions {
    * Can be a static message or a function that receives the unexpected token.
    */
   unexpectedInput?: Message | ((token: string) => Message);
+
+  /**
+   * Custom function to format suggestion messages.
+   * If provided, this will be used instead of the default "Did you mean?"
+   * formatting. The function receives an array of similar valid options/commands
+   * and should return a formatted message to append to the error.
+   *
+   * @param suggestions Array of similar valid option/command names
+   * @returns Formatted message to append to the error (can be empty array for no suggestions)
+   * @since 0.7.0
+   */
+  suggestions?: (suggestions: readonly string[]) => Message;
 }
 
 /**
@@ -1015,6 +1040,7 @@ export function longestMatch(
               token,
               context.usage,
               "both",
+              options?.errors?.suggestions,
             );
           })(),
       };
@@ -1160,6 +1186,18 @@ export interface ObjectErrorOptions {
    * Error message when end of input is reached unexpectedly.
    */
   readonly endOfInput?: Message;
+
+  /**
+   * Custom function to format suggestion messages.
+   * If provided, this will be used instead of the default "Did you mean?"
+   * formatting. The function receives an array of similar valid options/commands
+   * and should return a formatted message to append to the error.
+   *
+   * @param suggestions Array of similar valid option/command names
+   * @returns Formatted message to append to the error (can be empty array for no suggestions)
+   * @since 0.7.0
+   */
+  readonly suggestions?: (suggestions: readonly string[]) => Message;
 }
 
 /**
@@ -1377,6 +1415,7 @@ export function object<
               token,
               context.usage,
               "both",
+              options.errors?.suggestions,
             );
           })()
           : (options.errors?.endOfInput ??
