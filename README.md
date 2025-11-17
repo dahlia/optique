@@ -13,7 +13,7 @@ Optique: Type-safe combinatorial CLI parser for TypeScript
 Type-safe combinatorial CLI parser for TypeScript inspired by Haskell's
 [optparse-applicative] and TypeScript's [Zod]. Build composable parsers for
 command-line interfaces with full type safety, automatic type inference, and
-built-in shell completion support for Bash and zsh.
+built-in shell completion support for Bash, zsh, fish, PowerShell, and Nushell.
 
 > [!NOTE]
 > Optique is a parsing library that focuses on extracting and validating
@@ -29,6 +29,26 @@ built-in shell completion support for Bash and zsh.
 [GitHub Actions badge]: https://github.com/dahlia/optique/actions/workflows/main.yaml/badge.svg
 [optparse-applicative]: https://github.com/pcapriotti/optparse-applicative
 [Zod]: https://zod.dev/
+
+
+Features
+--------
+
+ -  *Parser combinators*: `object()`, `or()`, `merge()`, `optional()`,
+    `multiple()`, `map()`, and more for composable CLI parsing
+ -  *Full type safety*: Automatic TypeScript type inference for all parser
+    compositions with compile-time validation
+ -  *Rich value parsers*: Built-in parsers for strings, numbers, URLs, locales,
+    UUIDs, and temporal types (via *@optique/temporal*)
+ -  *Shell completion*: Automatic completion script generation for Bash, zsh,
+    fish, PowerShell, and Nushell
+ -  *Smart error messages*: “Did you mean?” suggestions for typos with
+    context-aware error formatting
+ -  *Automatic help generation*: Beautiful help text with usage formatting,
+    labeled sections, and colored output
+ -  *Multi-runtime support*: Works seamlessly with Deno, Node.js, and Bun
+ -  *CLI integration*: Complete CLI setup with `run()` function including help,
+    version, and completion support
 
 
 Quick example
