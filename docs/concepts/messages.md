@@ -236,6 +236,67 @@ Without colors (with quotes):
 Invalid files: "file1.txt" "file2.txt" "file3.txt".
 ~~~~
 
+### Formatting choice lists
+
+When displaying a list of valid choices (such as in error messages for `choice()`
+value parsers), each choice should be formatted individually so they appear as
+distinct values. This differs from `values()`, which is for user-provided
+consecutive values.
+
+For choice lists, format each option separately using a loop:
+
+~~~~ typescript twoslash
+import { type Message, message } from "@optique/core/message";
+
+const choices = ["error", "warn", "info", "debug"];
+const input = "invalid";
+
+// Format each choice individually
+let choicesList: Message = [];
+for (let i = 0; i < choices.length; i++) {
+  if (i > 0) {
+    choicesList = [...choicesList, ...message`, `];
+  }
+  choicesList = [...choicesList, ...message`${choices[i]}`];
+}
+
+const errorMsg = message`Invalid log level: ${input}. Valid levels: ${choicesList}.`;
+~~~~
+
+This ensures each choice appears with proper formatting:
+
+With colors:
+
+~~~~ ansi
+Invalid log level: invalid. Valid levels: [32merror[0m, [32mwarn[0m, [32minfo[0m, [32mdebug[0m.
+~~~~
+
+Without colors:
+
+~~~~ ansi
+Invalid log level: "invalid". Valid levels: "error", "warn", "info", "debug".
+~~~~
+
+> [!NOTE]
+> Do not use `.join(", ")` for choice lists, as this concatenates all choices
+> into a single value string, losing individual formatting:
+> `"error, warn, info, debug"` instead of `"error", "warn", "info", "debug"`.
+
+> [!CAUTION] Why doesn't Optique provide a built-in choice list formatter?
+>
+> Choice list formatting varies significantly across languages and locales,
+> making it impossible to provide a language-neutral formatter. Different
+> languages require different separators and conjunctions:
+>
+> - English: `"foo", "bar", "baz", and "qux"` or `"foo", "bar", "baz", or "qux"`
+> - Japanese: `"foo"、"bar"、"baz"、"qux"` (、instead of commas)
+> - Other languages may use different punctuation, conjunctions, or ordering
+>
+> By requiring manual formatting, Optique ensures you can properly localize
+> your choice lists according to your application's language requirements.
+> For internationalized applications, consider using a library like
+> `Intl.ListFormat` to format choice lists appropriately for each locale.
+
 ### Combined examples
 
 ~~~~ typescript twoslash

@@ -266,7 +266,9 @@ export function option<T>(
               ? (typeof options.errors.duplicate === "function"
                 ? options.errors.duplicate(context.buffer[0])
                 : options.errors.duplicate)
-              : message`${context.buffer[0]} cannot be used multiple times.`,
+              : message`${
+                eOptionName(context.buffer[0])
+              } cannot be used multiple times.`,
           };
         }
         if (valueParser == null) {
