@@ -8,7 +8,8 @@
     "@std/path": "jsr:@std/path@^1.1.1",
     "@types/node": "npm:@types/node@^20.19.9",
     "tsdown": "npm:tsdown@^0.13.0",
-    "typescript": "npm:typescript@^5.8.3"
+    "typescript": "npm:typescript@^5.8.3",
+    "zod": "npm:zod@^4.0.0"
   },
   "unstable": [
     "temporal"

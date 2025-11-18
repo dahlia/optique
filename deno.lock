@@ -8,7 +8,8 @@
     "npm:@types/node@^20.19.9": "20.19.9",
     "npm:es-git@0.4": "0.4.0",
     "npm:tsdown@0.13": "0.13.0_typescript@5.8.3_rolldown@1.0.0-beta.29",
-    "npm:typescript@^5.8.3": "5.8.3"
+    "npm:typescript@^5.8.3": "5.8.3",
+    "npm:zod@4": "4.1.12"
   },
   "jsr": {
     "@std/fs@1.0.19": {
@@ -597,6 +598,9 @@
     },
     "undici-types@6.21.0": {
       "integrity": "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="
+    },
+    "zod@4.1.12": {
+      "integrity": "sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ=="
     }
   },
   "workspace": {
@@ -605,7 +609,8 @@
       "jsr:@std/path@^1.1.1",
       "npm:@types/node@^20.19.9",
       "npm:tsdown@0.13",
-      "npm:typescript@^5.8.3"
+      "npm:typescript@^5.8.3",
+      "npm:zod@4"
     ],
     "members": {
       "examples/gitique": {

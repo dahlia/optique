@@ -15,6 +15,9 @@ catalogs:
     typescript:
       specifier: ^5.8.3
       version: 5.8.3
+    zod:
+      specifier: ^3.25.0 || ^4.0.0
+      version: 4.1.12
 
 importers:
 
@@ -29,6 +32,9 @@ importers:
       '@optique/temporal':
         specifier: 'workspace:'
         version: link:../packages/temporal
+      '@optique/zod':
+        specifier: 'workspace:'
+        version: link:../packages/zod
       '@shikijs/vitepress-twoslash':
         specifier: ^3.10.0
         version: 3.10.0(typescript@5.8.3)
@@ -50,6 +56,9 @@ importers:
       vitepress-plugin-llms:
         specifier: ^1.7.3
         version: 1.7.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
 
   examples/gitique:
     dependencies:
@@ -119,6 +128,25 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
+
+  packages/zod:
+    dependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.9
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
 
 packages:
 
@@ -1695,6 +1723,9 @@ packages:
   yargs@17.7.2:
     resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
     engines: {node: '>=12'}
+
+  zod@4.1.12:
+    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -3486,5 +3517,7 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+
+  zod@4.1.12: {}
 
   zwitch@2.0.4: {}

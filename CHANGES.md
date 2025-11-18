@@ -141,6 +141,22 @@ To be released.
 [#37]: https://github.com/dahlia/optique/issues/37
 [#38]: https://github.com/dahlia/optique/issues/38
 
+### @optique/zod
+
+The *@optique/zod* package was introduced in this release, providing
+integration with the [Zod] validation library. This package enables using
+Zod schemas as value parsers, bringing Zod's powerful validation capabilities
+to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
+[[#39]]
+
+ -  Added `zod()` value parser for validating command-line arguments using
+    Zod schemas.
+ -  Added `ZodParserOptions` interface for configuring metavar and custom
+    error messages.
+
+[Zod]: https://zod.dev/
+[#39]: https://github.com/dahlia/optique/issues/39
+
 
 Version 0.6.2
 -------------
