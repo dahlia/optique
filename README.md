@@ -39,8 +39,8 @@ Features
  -  *Full type safety*: Automatic TypeScript type inference for all parser
     compositions with compile-time validation
  -  *Rich value parsers*: Built-in parsers for strings, numbers, URLs, locales,
-    UUIDs, temporal types (via *@optique/temporal*), and Zod schemas
-    (via *@optique/zod*)
+    UUIDs, temporal types (via *@optique/temporal*), Zod schemas
+    (via *@optique/zod*), and Valibot schemas (via *@optique/valibot*)
  -  *Shell completion*: Automatic completion script generation for Bash, zsh,
     fish, PowerShell, and Nushell
  -  *Smart error messages*: “Did you mean?” suggestions for typos with
@@ -129,12 +129,13 @@ Optique is a monorepo which contains multiple packages.  The main package is
 *@optique/core*, which provides the shared types and parser combinators.
 The following is a list of the available packages:
 
-| Package                                  | JSR                          | npm                          | Description                              |
-| ---------------------------------------- | ---------------------------- | ---------------------------- | ---------------------------------------- |
-| [@optique/core](/packages/core/)         | [JSR][jsr:@optique/core]     | [npm][npm:@optique/core]     | Shared types and parser combinators      |
-| [@optique/run](/packages/run/)           | [JSR][jsr:@optique/run]      | [npm][npm:@optique/run]      | Runner for Node.js/Deno/Bun              |
-| [@optique/temporal](/packages/temporal/) | [JSR][jsr:@optique/temporal] | [npm][npm:@optique/temporal] | [Temporal] value parsers (date and time) |
-| [@optique/zod](/packages/zod/)           | [JSR][jsr:@optique/zod]      | [npm][npm:@optique/zod]      | [Zod] schema integration for validation  |
+| Package                                      | JSR                              | npm                              | Description                                 |
+| -------------------------------------------- | -------------------------------- | -------------------------------- | ------------------------------------------- |
+| [@optique/core](/packages/core/)             | [JSR][jsr:@optique/core]         | [npm][npm:@optique/core]         | Shared types and parser combinators         |
+| [@optique/run](/packages/run/)               | [JSR][jsr:@optique/run]          | [npm][npm:@optique/run]          | Runner for Node.js/Deno/Bun                 |
+| [@optique/temporal](/packages/temporal/)     | [JSR][jsr:@optique/temporal]     | [npm][npm:@optique/temporal]     | [Temporal] value parsers (date and time)    |
+| [@optique/valibot](/packages/valibot/)       | [JSR][jsr:@optique/valibot]      | [npm][npm:@optique/valibot]      | [Valibot] schema integration for validation |
+| [@optique/zod](/packages/zod/)               | [JSR][jsr:@optique/zod]          | [npm][npm:@optique/zod]          | [Zod] schema integration for validation     |
 
 [jsr:@optique/core]: https://jsr.io/@optique/core
 [npm:@optique/core]: https://www.npmjs.com/package/@optique/core
@@ -142,7 +143,10 @@ The following is a list of the available packages:
 [npm:@optique/run]: https://www.npmjs.com/package/@optique/run
 [jsr:@optique/temporal]: https://jsr.io/@optique/temporal
 [npm:@optique/temporal]: https://www.npmjs.com/package/@optique/temporal
+[jsr:@optique/valibot]: https://jsr.io/@optique/valibot
+[npm:@optique/valibot]: https://www.npmjs.com/package/@optique/valibot
 [jsr:@optique/zod]: https://jsr.io/@optique/zod
 [npm:@optique/zod]: https://www.npmjs.com/package/@optique/zod
 [Temporal]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal
+[Valibot]: https://valibot.dev/
 [Zod]: https://zod.dev/

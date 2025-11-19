@@ -141,6 +141,25 @@ To be released.
 [#37]: https://github.com/dahlia/optique/issues/37
 [#38]: https://github.com/dahlia/optique/issues/38
 
+### @optique/valibot
+
+The *@optique/valibot* package was introduced in this release, providing
+integration with the [Valibot] validation library. This package enables using
+Valibot schemas as value parsers, bringing Valibot's powerful validation
+capabilities with a significantly smaller bundle size (~10KB vs Zod's ~52KB)
+to command-line argument parsing. Supports Valibot version 0.42.0 and above.
+[[#40]]
+
+ -  Added `valibot()` value parser for validating command-line arguments using
+    Valibot schemas.
+ -  Added `ValibotParserOptions` interface for configuring metavar and custom
+    error messages.
+ -  Added automatic metavar inference from Valibot schema types (`STRING`,
+    `EMAIL`, `NUMBER`, `INTEGER`, `CHOICE`, etc.).
+
+[Valibot]: https://valibot.dev/
+[#40]: https://github.com/dahlia/optique/issues/40
+
 ### @optique/zod
 
 The *@optique/zod* package was introduced in this release, providing

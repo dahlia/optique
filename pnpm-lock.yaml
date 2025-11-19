@@ -15,6 +15,9 @@ catalogs:
     typescript:
       specifier: ^5.8.3
       version: 5.8.3
+    valibot:
+      specifier: ^0.42.0
+      version: 0.42.1
     zod:
       specifier: ^3.25.0 || ^4.0.0
       version: 4.1.12
@@ -32,6 +35,9 @@ importers:
       '@optique/temporal':
         specifier: 'workspace:'
         version: link:../packages/temporal
+      '@optique/valibot':
+        specifier: 'workspace:'
+        version: link:../packages/valibot
       '@optique/zod':
         specifier: 'workspace:'
         version: link:../packages/zod
@@ -47,6 +53,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
+      valibot:
+        specifier: 'catalog:'
+        version: 0.42.1(typescript@5.8.3)
       vitepress:
         specifier: ^1.6.3
         version: 1.6.4(@algolia/client-search@5.35.0)(@types/node@20.19.9)(postcss@8.5.6)(search-insights@2.17.3)(typescript@5.8.3)
@@ -128,6 +137,25 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
+
+  packages/valibot:
+    dependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.9
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+      valibot:
+        specifier: 'catalog:'
+        version: 0.42.1(typescript@5.8.3)
 
   packages/zod:
     dependencies:
@@ -1636,6 +1664,14 @@ packages:
 
   unist-util-visit@5.0.0:
     resolution: {integrity: sha512-MR04uvD+07cwl/yhVuVWAtw+3GOR/knlL55Nd/wAdblk27GCVt3lqpTivy/tkJcZoNPzTwS1Y+KMojlLDhoTzg==}
+
+  valibot@0.42.1:
+    resolution: {integrity: sha512-3keXV29Ar5b//Hqi4MbSdV7lfVp6zuYLZuA9V1PvQUsXqogr+u5lvLPLk3A4f74VUXDnf/JfWMN6sB+koJ/FFw==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   vfile-message@4.0.3:
     resolution: {integrity: sha512-QTHzsGd1EhbZs4AsQ20JX1rC3cOlt/IWJruk893DfLRr57lcnOeMaWG4K0JrRta4mIJZKth2Au3mM3u03/JWKw==}
@@ -3386,6 +3422,10 @@ snapshots:
       '@types/unist': 3.0.3
       unist-util-is: 6.0.0
       unist-util-visit-parents: 6.0.1
+
+  valibot@0.42.1(typescript@5.8.3):
+    optionalDependencies:
+      typescript: 5.8.3
 
   vfile-message@4.0.3:
     dependencies:

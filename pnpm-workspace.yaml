@@ -7,6 +7,7 @@ catalog:
   "@types/node": ^20.19.9
   tsdown: ^0.13.0
   typescript: ^5.8.3
+  valibot: ^0.42.0
   zod: "^3.25.0 || ^4.0.0"
 
 engineStrict: true

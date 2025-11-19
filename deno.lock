@@ -4,6 +4,7 @@
     "jsr:@std/fs@^1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.9": "1.0.9",
     "jsr:@std/path@^1.1.1": "1.1.1",
+    "jsr:@valibot/valibot@^1.1.0": "1.1.0",
     "npm:@js-temporal/polyfill@~0.5.1": "0.5.1",
     "npm:@types/node@^20.19.9": "20.19.9",
     "npm:es-git@0.4": "0.4.0",
@@ -27,6 +28,9 @@
       "dependencies": [
         "jsr:@std/internal"
       ]
+    },
+    "@valibot/valibot@1.1.0": {
+      "integrity": "2617f02b532011b8140926899d420a3e1bbb0fcb7cdf8e7b669df89e7edd7f5f"
     }
   },
   "npm": {
@@ -607,6 +611,7 @@
     "dependencies": [
       "jsr:@std/fs@^1.0.19",
       "jsr:@std/path@^1.1.1",
+      "jsr:@valibot/valibot@^1.1.0",
       "npm:@types/node@^20.19.9",
       "npm:tsdown@0.13",
       "npm:typescript@^5.8.3",
