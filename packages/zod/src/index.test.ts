@@ -129,15 +129,160 @@ describe("zod()", () => {
     });
   });
 
-  describe("metavar", () => {
-    it("should have default metavar", () => {
-      const parser = zod(z.string());
-      assert.equal(parser.metavar, "VALUE");
+  describe("metavar inference", () => {
+    describe("basic types", () => {
+      it("should infer STRING for z.string()", () => {
+        const parser = zod(z.string());
+        assert.equal(parser.metavar, "STRING");
+      });
+
+      it("should infer NUMBER for z.coerce.number()", () => {
+        const parser = zod(z.coerce.number());
+        assert.equal(parser.metavar, "NUMBER");
+      });
+
+      it("should infer INTEGER for z.coerce.number().int()", () => {
+        const parser = zod(z.coerce.number().int());
+        assert.equal(parser.metavar, "INTEGER");
+      });
+
+      it("should infer BOOLEAN for z.coerce.boolean()", () => {
+        const parser = zod(z.coerce.boolean());
+        assert.equal(parser.metavar, "BOOLEAN");
+      });
+
+      it("should infer DATE for z.coerce.date()", () => {
+        const parser = zod(z.coerce.date());
+        assert.equal(parser.metavar, "DATE");
+      });
     });
 
-    it("should support custom metavar", () => {
-      const parser = zod(z.string(), { metavar: "EMAIL" });
-      assert.equal(parser.metavar, "EMAIL");
+    describe("refined string types", () => {
+      it("should infer EMAIL for z.string().email()", () => {
+        const parser = zod(z.string().email());
+        assert.equal(parser.metavar, "EMAIL");
+      });
+
+      it("should infer URL for z.string().url()", () => {
+        const parser = zod(z.string().url());
+        assert.equal(parser.metavar, "URL");
+      });
+
+      it("should infer UUID for z.string().uuid()", () => {
+        const parser = zod(z.string().uuid());
+        assert.equal(parser.metavar, "UUID");
+      });
+
+      it("should infer DATETIME for z.string().datetime()", () => {
+        const parser = zod(z.string().datetime());
+        assert.equal(parser.metavar, "DATETIME");
+      });
+
+      it("should infer DATE for z.string().date()", () => {
+        const parser = zod(z.string().date());
+        assert.equal(parser.metavar, "DATE");
+      });
+
+      it("should infer TIME for z.string().time()", () => {
+        const parser = zod(z.string().time());
+        assert.equal(parser.metavar, "TIME");
+      });
+
+      it("should infer DURATION for z.string().duration()", () => {
+        const parser = zod(z.string().duration());
+        assert.equal(parser.metavar, "DURATION");
+      });
+
+      it("should infer CUID for z.string().cuid()", () => {
+        const parser = zod(z.string().cuid());
+        assert.equal(parser.metavar, "CUID");
+      });
+
+      it("should infer CUID2 for z.string().cuid2()", () => {
+        const parser = zod(z.string().cuid2());
+        assert.equal(parser.metavar, "CUID2");
+      });
+
+      it("should infer ULID for z.string().ulid()", () => {
+        const parser = zod(z.string().ulid());
+        assert.equal(parser.metavar, "ULID");
+      });
+    });
+
+    describe("enum and union types", () => {
+      it("should infer CHOICE for z.enum()", () => {
+        const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+        assert.equal(parser.metavar, "CHOICE");
+      });
+
+      it("should infer VALUE for z.union()", () => {
+        const parser = zod(z.union([z.string(), z.coerce.number()]));
+        assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should infer VALUE for z.literal()", () => {
+        const parser = zod(z.literal("production"));
+        assert.equal(parser.metavar, "VALUE");
+      });
+    });
+
+    describe("edge cases", () => {
+      it("should use first refinement for multiple refinements", () => {
+        const parser = zod(z.string().email().min(5));
+        assert.equal(parser.metavar, "EMAIL");
+      });
+
+      it("should unwrap optional schemas", () => {
+        const parser = zod(z.string().email().optional());
+        assert.equal(parser.metavar, "EMAIL");
+      });
+
+      it("should unwrap nullable schemas", () => {
+        const parser = zod(z.coerce.number().nullable());
+        assert.equal(parser.metavar, "NUMBER");
+      });
+
+      it("should unwrap default schemas", () => {
+        const parser = zod(z.string().email().default("user@example.com"));
+        assert.equal(parser.metavar, "EMAIL");
+      });
+
+      it("should allow manual override", () => {
+        const parser = zod(z.string().email(), { metavar: "CUSTOM" });
+        assert.equal(parser.metavar, "CUSTOM");
+      });
+
+      it("should fallback to VALUE for unknown types", () => {
+        const parser = zod(z.object({ name: z.string() }));
+        assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should fallback to VALUE for transform schemas", () => {
+        const parser = zod(z.string().transform((s) => s.toUpperCase()));
+        assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should fallback to VALUE for array schemas", () => {
+        const parser = zod(z.array(z.string()));
+        assert.equal(parser.metavar, "VALUE");
+      });
+    });
+
+    describe("number with constraints", () => {
+      it("should infer INTEGER for z.coerce.number().int().min()", () => {
+        const parser = zod(z.coerce.number().int().min(1024).max(65535));
+        assert.equal(parser.metavar, "INTEGER");
+      });
+
+      it("should infer NUMBER for z.coerce.number().min() without int()", () => {
+        const parser = zod(z.coerce.number().min(0).max(1));
+        assert.equal(parser.metavar, "NUMBER");
+      });
+
+      it("should infer INTEGER for z.coerce.number().int().positive()", () => {
+        const parser = zod(z.coerce.number().int().positive());
+        assert.equal(parser.metavar, "INTEGER");
+      });
     });
   });
 
