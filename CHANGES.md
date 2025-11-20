@@ -138,8 +138,31 @@ To be released.
     Previously, single newlines in `text()` terms would be silently dropped
     during word wrapping, causing messages to run together without spacing.
 
+ -  Added configuration for shell completion naming conventions. The `run()`
+    function now supports both singular (`completion`, `--completion`) and
+    plural (`completions`, `--completions`) naming styles. By default, both
+    forms are accepted (`"both"`), but this can be restricted to just one style
+    using the new `name` option in the completion configuration:
+
+    ~~~~ typescript
+    run(parser, {
+      completion: {
+        // Use "completions" and "--completions" only
+        name: "plural",
+      }
+    });
+    ~~~~
+
+    This allows CLI tools to match their preferred style guide or exist alongside
+    other commands. The help text examples automatically reflect the configured
+    naming style. [[#42]]
+
+     -  Added `name` option to `RunOptions.completion` configuration (`"singular"`,
+        `"plural"`, or `"both"`).
+
 [#37]: https://github.com/dahlia/optique/issues/37
 [#38]: https://github.com/dahlia/optique/issues/38
+[#42]: https://github.com/dahlia/optique/issues/42
 
 ### @optique/valibot
 

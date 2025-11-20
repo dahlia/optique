@@ -1125,6 +1125,7 @@ export function longestMatch(
       _defaultValue?,
     ) {
       let description: Message | undefined;
+      let footer: Message | undefined;
       let fragments: readonly DocFragment[];
 
       if (state.kind === "unavailable" || state.state == null) {
@@ -1139,6 +1140,7 @@ export function longestMatch(
             { kind: "available", state: result.next.state },
           );
           description = docResult.description;
+          footer = docResult.footer;
           fragments = docResult.fragments;
         } else {
           fragments = parsers.flatMap((p) =>
@@ -1147,7 +1149,7 @@ export function longestMatch(
         }
       }
 
-      return { description, fragments };
+      return { description, fragments, footer };
     },
   };
 }
