@@ -584,6 +584,8 @@ function classifyResult(
   return { type: "success", value };
 }
 
+export type CompletionMode = "command" | "option" | "both";
+
 /**
  * Configuration options for the {@link run} function.
  *
@@ -690,7 +692,7 @@ export interface RunOptions<THelp, TError> {
      *
      * @default `"both"`
      */
-    readonly mode?: "command" | "option" | "both";
+    readonly mode?: CompletionMode;
 
     /**
      * Available shell completions. By default, includes `bash`, `fish`, `nu`,
@@ -787,6 +789,7 @@ function handleCompletion<THelp, TError>(
   availableShells: Record<string, ShellCompletion>,
   colors?: boolean,
   maxWidth?: number,
+  completionMode?: CompletionMode
 ): THelp | TError {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -828,8 +831,9 @@ function handleCompletion<THelp, TError>(
   }
 
   if (args.length === 0) {
+    const completionOptionOrCommand = completionMode === "option" ? "--completion" : "completion";
     // Generate completion script
-    const script = shell.generateScript(programName, ["completion", shellName]);
+    const script = shell.generateScript(programName, [completionOptionOrCommand, shellName]);
     stdout(script);
   } else {
     // Provide completion suggestions
@@ -968,6 +972,7 @@ export function run<
         availableShells,
         colors,
         maxWidth,
+        completionMode
       );
     }
 
@@ -990,6 +995,7 @@ export function run<
             availableShells,
             colors,
             maxWidth,
+            completionMode
           );
         } else if (arg === "--completion" && i + 1 < args.length) {
           const shell = args[i + 1];
@@ -1006,6 +1012,7 @@ export function run<
             availableShells,
             colors,
             maxWidth,
+            completionMode
           );
         }
       }
