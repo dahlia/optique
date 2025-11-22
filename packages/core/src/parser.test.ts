@@ -1627,7 +1627,7 @@ describe("Error message customization", () => {
     if (!result.success) {
       assert.strictEqual(
         formatMessage(result.error),
-        "No matching option or command found.",
+        "No matching command found.",
       );
     }
   });

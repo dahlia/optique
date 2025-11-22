@@ -786,7 +786,7 @@ describe("object", () => {
     const result = parse(parser, []);
     assert.ok(!result.success);
     if (!result.success) {
-      assertErrorIncludes(result.error, "Expected an option");
+      assertErrorIncludes(result.error, "No matching option found");
     }
   });
 

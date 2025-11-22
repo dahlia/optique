@@ -212,6 +212,49 @@ export function extractCommandNames(usage: Usage): Set<string> {
 }
 
 /**
+ * Extracts all argument metavars from a Usage array.
+ *
+ * This function recursively traverses the usage structure and collects
+ * all argument metavariable names, similar to {@link extractOptionNames}
+ * and {@link extractCommandNames}.
+ *
+ * @param usage The usage structure to extract argument metavars from.
+ * @returns A Set of all argument metavars found in the usage structure.
+ *
+ * @example
+ * ```typescript
+ * const usage: Usage = [
+ *   { type: "argument", metavar: "FILE" },
+ *   { type: "argument", metavar: "OUTPUT" },
+ * ];
+ * const metavars = extractArgumentMetavars(usage);
+ * // metavars = Set(["FILE", "OUTPUT"])
+ * ```
+ * @since 0.9.0
+ */
+export function extractArgumentMetavars(usage: Usage): Set<string> {
+  const metavars = new Set<string>();
+
+  function traverseUsage(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      if (term.type === "argument") {
+        metavars.add(term.metavar);
+      } else if (term.type === "optional" || term.type === "multiple") {
+        traverseUsage(term.terms);
+      } else if (term.type === "exclusive") {
+        for (const exclusiveUsage of term.terms) {
+          traverseUsage(exclusiveUsage);
+        }
+      }
+    }
+  }
+
+  traverseUsage(usage);
+  return metavars;
+}
+
+/**
  * Options for formatting usage descriptions.
  */
 export interface UsageFormatOptions {

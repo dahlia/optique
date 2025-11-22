@@ -349,6 +349,72 @@ const flexibleConfig = or(
 );
 ~~~~
 
+### Error message customization
+
+*This feature is available since Optique 0.9.0.*
+
+The `or()` parser generates contextual error messages by analyzing what types of
+inputs are expected (options, commands, or arguments). You can customize these
+messages using the `errors.noMatch` option, which supports both static messages
+and dynamic functions for advanced use cases like internationalization:
+
+~~~~ typescript twoslash
+import { message, or } from "@optique/core";
+import { command, constant } from "@optique/core/primitives";
+// ---cut-before---
+// Static custom error message
+const parser1 = or(
+  command("add", constant("add")),
+  command("remove", constant("remove")),
+  {
+    errors: {
+      noMatch: message`Invalid command. Please use 'add' or 'remove'.`
+    }
+  }
+);
+
+// Dynamic error message for internationalization
+const parser2 = or(
+  command("add", constant("add")),
+  command("remove", constant("remove")),
+  {
+    errors: {
+      noMatch: ({ hasOptions, hasCommands, hasArguments }) => {
+        if (hasCommands && !hasOptions && !hasArguments) {
+          return message`일치하는 명령을 찾을 수 없습니다.`; // Korean
+        }
+        return message`잘못된 입력입니다.`;
+      }
+    }
+  }
+);
+~~~~
+
+The function form receives a `NoMatchContext` object with three boolean flags:
+
+ -  `hasOptions`: Whether any parsers expect options
+ -  `hasCommands`: Whether any parsers expect commands
+ -  `hasArguments`: Whether any parsers expect arguments
+
+This enables precise, context-aware error messages. For example, if all parsers
+expect only commands, you can show "No matching command found" instead of the
+generic "No matching option or command found."
+
+**Default behavior** (when no custom error is provided):
+
+| Context                          | Default error message                           |
+| -------------------------------- | ----------------------------------------------- |
+| Only arguments expected          | `Missing required argument.`                    |
+| Only commands expected           | `No matching command found.`                    |
+| Only options expected            | `No matching option found.`                     |
+| Commands and options expected    | `No matching option or command found.`          |
+| Arguments and options expected   | `No matching option or argument found.`         |
+| Arguments and commands expected  | `No matching command or argument found.`        |
+| All three types expected         | `No matching option, command, or argument found.` |
+
+The default messages automatically adapt to your parser structure, but you can
+override them for custom formatting or localization needs.
+
 
 `merge()` parser
 ----------------

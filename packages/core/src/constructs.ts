@@ -12,7 +12,13 @@ import type {
   ParserResult,
 } from "./parser.ts";
 import { createErrorWithSuggestions } from "./suggestion.ts";
-import { extractOptionNames } from "./usage.ts";
+import {
+  extractArgumentMetavars,
+  extractCommandNames,
+  extractOptionNames,
+  type Usage,
+  type UsageTerm,
+} from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -27,14 +33,55 @@ export interface OrOptions {
 }
 
 /**
+ * Context information about what types of inputs are expected,
+ * used for generating contextual error messages.
+ * @since 0.9.0
+ */
+export interface NoMatchContext {
+  /**
+   * Whether any of the parsers expect options.
+   */
+  readonly hasOptions: boolean;
+
+  /**
+   * Whether any of the parsers expect commands.
+   */
+  readonly hasCommands: boolean;
+
+  /**
+   * Whether any of the parsers expect arguments.
+   */
+  readonly hasArguments: boolean;
+}
+
+/**
  * Options for customizing error messages in the {@link or} parser.
  * @since 0.5.0
  */
 export interface OrErrorOptions {
   /**
    * Custom error message when no parser matches.
+   * Can be a static message or a function that receives context about what
+   * types of inputs are expected, allowing for more precise error messages.
+   *
+   * @example
+   * ```typescript
+   * // Static message (overrides all cases)
+   * { noMatch: message`Invalid input.` }
+   *
+   * // Dynamic message based on context (for i18n, etc.)
+   * {
+   *   noMatch: ({ hasOptions, hasCommands, hasArguments }) => {
+   *     if (hasArguments && !hasOptions && !hasCommands) {
+   *       return message`인수가 필요합니다.`; // Korean: "Argument required"
+   *     }
+   *     // ... other cases
+   *   }
+   * }
+   * ```
+   * @since 0.9.0 - Function form added
    */
-  noMatch?: Message;
+  noMatch?: Message | ((context: NoMatchContext) => Message);
 
   /**
    * Custom error message for unexpected input.
@@ -53,6 +100,98 @@ export interface OrErrorOptions {
    * @since 0.7.0
    */
   suggestions?: (suggestions: readonly string[]) => Message;
+}
+
+/**
+ * Extracts required (non-optional) usage terms from a usage array.
+ * @param usage The usage to extract required terms from
+ * @returns Usage containing only required (non-optional) terms
+ */
+function extractRequiredUsage(usage: Usage): Usage {
+  const required: UsageTerm[] = [];
+
+  for (const term of usage) {
+    if (term.type === "optional") {
+      // Skip optional terms
+      continue;
+    } else if (term.type === "exclusive") {
+      // For exclusive terms, recursively extract required usage from each branch
+      const requiredBranches = term.terms
+        .map((branch) => extractRequiredUsage(branch))
+        .filter((branch) => branch.length > 0);
+      if (requiredBranches.length > 0) {
+        required.push({ type: "exclusive", terms: requiredBranches });
+      }
+    } else if (term.type === "multiple") {
+      // For multiple terms, only include if min > 0 (required)
+      if (term.min > 0) {
+        const requiredTerms = extractRequiredUsage(term.terms);
+        if (requiredTerms.length > 0) {
+          required.push({
+            type: "multiple",
+            terms: requiredTerms,
+            min: term.min,
+          });
+        }
+      }
+    } else {
+      // Include other terms (argument, option, command) as-is
+      required.push(term);
+    }
+  }
+
+  return required;
+}
+
+/**
+ * Analyzes parsers to determine what types of inputs are expected.
+ * @param parsers The parsers being combined
+ * @returns Context about what types of inputs are expected
+ */
+function analyzeNoMatchContext(
+  parsers: Parser<unknown, unknown>[],
+): NoMatchContext {
+  // Collect usage information from all child parsers
+  const combinedUsage = [
+    { type: "exclusive" as const, terms: parsers.map((p) => p.usage) },
+  ];
+
+  // Extract only required (non-optional) terms for more accurate error messages
+  const requiredUsage = extractRequiredUsage(combinedUsage);
+
+  return {
+    hasOptions: extractOptionNames(requiredUsage).size > 0,
+    hasCommands: extractCommandNames(requiredUsage).size > 0,
+    hasArguments: extractArgumentMetavars(requiredUsage).size > 0,
+  };
+}
+
+/**
+ * Generates a contextual error message based on what types of inputs
+ * the parsers expect (options, commands, or arguments).
+ * @param context Context about what types of inputs are expected
+ * @returns An appropriate error message
+ */
+function generateNoMatchError(context: NoMatchContext): Message {
+  const { hasOptions, hasCommands, hasArguments } = context;
+
+  // Generate specific message based on what's expected
+  if (hasArguments && !hasOptions && !hasCommands) {
+    return message`Missing required argument.`;
+  } else if (hasCommands && !hasOptions && !hasArguments) {
+    return message`No matching command found.`;
+  } else if (hasOptions && !hasCommands && !hasArguments) {
+    return message`No matching option found.`;
+  } else if (hasCommands && hasOptions && !hasArguments) {
+    return message`No matching option or command found.`;
+  } else if (hasArguments && hasOptions && !hasCommands) {
+    return message`No matching option or argument found.`;
+  } else if (hasArguments && hasCommands && !hasOptions) {
+    return message`No matching command or argument found.`;
+  } else {
+    // All three types present
+    return message`No matching option, command, or argument found.`;
+  }
 }
 
 /**
@@ -580,6 +719,10 @@ export function or(
     parsers = args as Parser<unknown, unknown>[];
     options = undefined;
   }
+
+  // Analyze context once for error message generation
+  const noMatchContext = analyzeNoMatchContext(parsers);
+
   return {
     $valueType: [],
     $stateType: [],
@@ -590,10 +733,15 @@ export function or(
       state: undefined | [number, ParserResult<unknown>],
     ): ValueParserResult<unknown> {
       if (state == null) {
+        const customNoMatch = options?.errors?.noMatch;
+        const error = customNoMatch
+          ? (typeof customNoMatch === "function"
+            ? customNoMatch(noMatchContext)
+            : customNoMatch)
+          : generateNoMatchError(noMatchContext);
         return {
           success: false,
-          error: options?.errors?.noMatch ??
-            message`No matching option or command found.`,
+          error,
         };
       }
       const [i, result] = state;
@@ -606,8 +754,14 @@ export function or(
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length < 1
-          ? (options?.errors?.noMatch ??
-            message`No matching option or command found.`)
+          ? (() => {
+            const customNoMatch = options?.errors?.noMatch;
+            return customNoMatch
+              ? (typeof customNoMatch === "function"
+                ? customNoMatch(noMatchContext)
+                : customNoMatch)
+              : generateNoMatchError(noMatchContext);
+          })()
           : (() => {
             const token = context.buffer[0];
             const defaultMsg = message`Unexpected option or subcommand: ${
@@ -775,8 +929,27 @@ export interface LongestMatchOptions {
 export interface LongestMatchErrorOptions {
   /**
    * Custom error message when no parser matches.
+   * Can be a static message or a function that receives context about what
+   * types of inputs are expected, allowing for more precise error messages.
+   *
+   * @example
+   * ```typescript
+   * // Static message (overrides all cases)
+   * { noMatch: message`Invalid input.` }
+   *
+   * // Dynamic message based on context (for i18n, etc.)
+   * {
+   *   noMatch: ({ hasOptions, hasCommands, hasArguments }) => {
+   *     if (hasArguments && !hasOptions && !hasCommands) {
+   *       return message`引数が必要です。`; // Japanese: "Argument required"
+   *     }
+   *     // ... other cases
+   *   }
+   * }
+   * ```
+   * @since 0.9.0 - Function form added
    */
-  noMatch?: Message;
+  noMatch?: Message | ((context: NoMatchContext) => Message);
 
   /**
    * Custom error message for unexpected input.
@@ -988,6 +1161,10 @@ export function longestMatch(
     parsers = args as Parser<unknown, unknown>[];
     options = undefined;
   }
+
+  // Analyze context once for error message generation
+  const noMatchContext = analyzeNoMatchContext(parsers);
+
   return {
     $valueType: [],
     $stateType: [],
@@ -998,10 +1175,15 @@ export function longestMatch(
       state: undefined | [number, ParserResult<unknown>],
     ): ValueParserResult<unknown> {
       if (state == null) {
+        const customNoMatch = options?.errors?.noMatch;
+        const error = customNoMatch
+          ? (typeof customNoMatch === "function"
+            ? customNoMatch(noMatchContext)
+            : customNoMatch)
+          : generateNoMatchError(noMatchContext);
         return {
           success: false,
-          error: options?.errors?.noMatch ??
-            message`No matching option or command found.`,
+          error,
         };
       }
       const [i, result] = state;
@@ -1019,8 +1201,14 @@ export function longestMatch(
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length < 1
-          ? (options?.errors?.noMatch ??
-            message`No matching option or command found.`)
+          ? (() => {
+            const customNoMatch = options?.errors?.noMatch;
+            return customNoMatch
+              ? (typeof customNoMatch === "function"
+                ? customNoMatch(noMatchContext)
+                : customNoMatch)
+              : generateNoMatchError(noMatchContext);
+          })()
           : (() => {
             const token = context.buffer[0];
             const defaultMsg = message`Unexpected option or subcommand: ${
@@ -1186,8 +1374,27 @@ export interface ObjectErrorOptions {
 
   /**
    * Error message when end of input is reached unexpectedly.
+   * Can be a static message or a function that receives context about what
+   * types of inputs are expected, allowing for more precise error messages.
+   *
+   * @example
+   * ```typescript
+   * // Static message (overrides all cases)
+   * { endOfInput: message`Invalid input.` }
+   *
+   * // Dynamic message based on context (for i18n, etc.)
+   * {
+   *   endOfInput: ({ hasOptions, hasCommands, hasArguments }) => {
+   *     if (hasArguments && !hasOptions && !hasCommands) {
+   *       return message`Argument manquant.`; // French: "Missing argument"
+   *     }
+   *     // ... other cases
+   *   }
+   * }
+   * ```
+   * @since 0.9.0 - Function form added
    */
-  readonly endOfInput?: Message;
+  readonly endOfInput?: Message | ((context: NoMatchContext) => Message);
 
   /**
    * Custom function to format suggestion messages.
@@ -1348,6 +1555,10 @@ export function object<
   parserPairs.sort(([_, parserA], [__, parserB]) =>
     parserB.priority - parserA.priority
   );
+
+  // Analyze context once for error message generation
+  const noMatchContext = analyzeNoMatchContext(Object.values(parsers));
+
   return {
     $valueType: [],
     $stateType: [],
@@ -1420,8 +1631,14 @@ export function object<
               options.errors?.suggestions,
             );
           })()
-          : (options.errors?.endOfInput ??
-            message`Expected an option or argument, but got end of input.`),
+          : (() => {
+            const customEndOfInput = options.errors?.endOfInput;
+            return customEndOfInput
+              ? (typeof customEndOfInput === "function"
+                ? customEndOfInput(noMatchContext)
+                : customEndOfInput)
+              : generateNoMatchError(noMatchContext);
+          })(),
       };
 
       // Try greedy parsing: attempt to consume as many fields as possible

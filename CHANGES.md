@@ -138,6 +138,67 @@ To be released.
     Previously, single newlines in `text()` terms would be silently dropped
     during word wrapping, causing messages to run together without spacing.
 
+ -  Improved error messages for `or()`, `longestMatch()`, and `object()`
+    combinators to provide context-aware feedback based on expected input types.
+    Error messages now accurately reflect what's missing (options, commands, or
+    arguments) instead of showing generic "No matching option or command found"
+    for all cases. [[#45]]
+
+    ~~~~ typescript
+    // When only arguments are expected
+    const parser1 = or(argument(string()), argument(integer()));
+    // Error: Missing required argument.
+
+    // When only commands are expected
+    const parser2 = or(command("add", ...), command("remove", ...));
+    // Error: No matching command found.
+
+    // When both options and arguments are expected
+    const parser3 = object({
+      port: option("--port", integer()),
+      file: argument(string()),
+    });
+    // Error: No matching option or argument found.
+    ~~~~
+
+ -  Added function-form support for `errors.noMatch` option in `or()`,
+    `longestMatch()`, and `object()` combinators. Error messages can now be
+    dynamically generated based on context, enabling use cases like
+    internationalization:
+
+    ~~~~ typescript
+    const parser = or(
+      command("add", constant("add")),
+      command("remove", constant("remove")),
+      {
+        errors: {
+          noMatch: ({ hasOptions, hasCommands, hasArguments }) => {
+            if (hasCommands && !hasOptions && !hasArguments) {
+              return message`일치하는 명령을 찾을 수 없습니다.`; // Korean
+            }
+            return message`잘못된 입력입니다.`;
+          }
+        }
+      }
+    );
+    ~~~~
+
+    The callback receives a `NoMatchContext` object with boolean flags
+    (`hasOptions`, `hasCommands`, `hasArguments`) indicating what types of
+    inputs are expected. This allows generating language-specific or
+    context-specific error messages while maintaining backward compatibility
+    with static message form. [[#45]]
+
+     -  Added `NoMatchContext` interface.
+     -  Extended `OrErrorOptions.noMatch` to accept
+        `Message | ((context: NoMatchContext) => Message)`.
+     -  Extended `LongestMatchErrorOptions.noMatch` to accept
+        `Message | ((context: NoMatchContext) => Message)`.
+     -  Extended `ObjectErrorOptions.endOfInput` to accept
+        `Message | ((context: NoMatchContext) => Message)`.
+     -  Added `extractArgumentMetavars()` function to
+        `@optique/core/usage` module.
+
  -  Added configuration for shell completion naming conventions. The `run()`
     function now supports both singular (`completion`, `--completion`) and
     plural (`completions`, `--completions`) naming styles. By default, both
@@ -163,6 +224,7 @@ To be released.
 [#37]: https://github.com/dahlia/optique/issues/37
 [#38]: https://github.com/dahlia/optique/issues/38
 [#42]: https://github.com/dahlia/optique/issues/42
+[#45]: https://github.com/dahlia/optique/issues/45
 
 ### @optique/valibot
 
