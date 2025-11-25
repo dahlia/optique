@@ -6,6 +6,15 @@ Version 0.6.3
 
 To be released.
 
+### @optique/core
+
+ -  Fixed shell completion scripts using `completion` subcommand even when
+    `completion.mode` is set to `"option"`. Now, when the mode is `"option"`,
+    the generated scripts correctly use `--completion` instead of `completion`.
+    [[#41]]
+
+[#41]: https://github.com/dahlia/optique/issues/41
+
 
 Version 0.6.2
 -------------
