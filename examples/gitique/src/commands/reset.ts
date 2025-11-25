@@ -1,10 +1,10 @@
-import { object } from "@optique/core/constructs";
-import { multiple, optional } from "@optique/core/modifiers";
+import { group, merge, object } from "@optique/core/constructs";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
+import { choice, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
-import { print, printError } from "@optique/run";
+import { printError } from "@optique/run";
 import { getRepository, resetIndex } from "../utils/git.ts";
 import type { Repository } from "es-git";
 import {
@@ -14,40 +14,96 @@ import {
 } from "../utils/formatters.ts";
 
 /**
- * Configuration for the `gitique reset` command.
- * Demonstrates Optique's support for mutually exclusive options and arguments.
+ * Reset mode choices.
+ * Demonstrates Optique's choice() value parser.
  */
-const resetOptions = object({
-  command: constant("reset" as const),
-  soft: option("--soft", {
-    description:
-      message`Reset HEAD to the specified commit but keep index and working directory unchanged`,
-  }),
-  mixed: option("--mixed", {
-    description:
-      message`Reset HEAD and index to the specified commit but keep working directory unchanged (default)`,
-  }),
-  hard: option("--hard", {
-    description:
-      message`Reset HEAD, index, and working directory to the specified commit`,
-  }),
-  quiet: option("-q", "--quiet", {
-    description: message`Suppress output messages`,
-  }),
-  commit: optional(argument(string({ metavar: "COMMIT" }), {
-    description: message`Commit to reset to (defaults to HEAD)`,
-  })),
-  files: multiple(argument(string({ metavar: "FILE" }), {
-    description:
-      message`Files to reset (when used without commit, resets these files to HEAD)`,
-  })),
-});
+const resetModes = ["soft", "mixed", "hard"] as const;
 
 /**
- * The complete `gitique reset` command parser.
+ * Mode options for the reset command.
+ * Demonstrates Optique's group() combinator for organizing help text.
  */
-export const resetCommand = command("reset", resetOptions, {
+const modeOptions = group(
+  "Reset Mode",
+  object({
+    mode: withDefault(
+      option("--mode", choice(resetModes, { metavar: "MODE" }), {
+        description:
+          message`Reset mode: soft (keep changes staged), mixed (unstage changes), hard (discard all)`,
+      }),
+      "mixed" as const,
+    ),
+    soft: option("--soft", {
+      description: message`Shorthand for --mode=soft`,
+    }),
+    hard: option("--hard", {
+      description: message`Shorthand for --mode=hard (DANGEROUS)`,
+    }),
+  }),
+);
+
+/**
+ * Output options for the reset command.
+ */
+const outputOptions = group(
+  "Output Options",
+  object({
+    quiet: option("-q", "--quiet", {
+      description: message`Suppress output messages`,
+    }),
+  }),
+);
+
+/**
+ * The complete reset command parser.
+ * Demonstrates:
+ * - group() for organizing options in help text
+ * - merge() for combining multiple option groups
+ * - withDefault() for default values
+ * - choice() for enumerated values
+ * - map() for transforming parser results
+ */
+const resetOptionsParser = map(
+  merge(
+    object({ command: constant("reset" as const) }),
+    modeOptions,
+    outputOptions,
+    object({
+      commit: optional(
+        argument(string({ metavar: "COMMIT" }), {
+          description: message`Commit to reset to (defaults to HEAD)`,
+        }),
+      ),
+      files: multiple(
+        argument(string({ metavar: "FILE" }), {
+          description:
+            message`Files to reset (when used without commit, resets these files to HEAD)`,
+        }),
+      ),
+    }),
+  ),
+  (result) => ({
+    ...result,
+    // Handle shorthand flags by overriding mode
+    mode: result.soft
+      ? ("soft" as const)
+      : result.hard
+      ? ("hard" as const)
+      : result.mode,
+  }),
+);
+
+/**
+ * The complete `gitique reset` command parser with documentation.
+ */
+export const resetCommand = command("reset", resetOptionsParser, {
+  brief: message`Reset current HEAD`,
   description: message`Reset current HEAD to the specified state`,
+  footer: message`Examples:
+  gitique reset                    Mixed reset to HEAD
+  gitique reset --soft HEAD~1      Soft reset, keep changes staged
+  gitique reset --hard             Hard reset (DANGER: loses changes)
+  gitique reset -- file.ts         Unstage specific file`,
 });
 
 /**
@@ -56,30 +112,23 @@ export const resetCommand = command("reset", resetOptions, {
 export type ResetConfig = InferValue<typeof resetCommand>;
 
 /**
- * Determines the reset mode based on the provided options.
- */
-function getResetMode(config: ResetConfig): "soft" | "mixed" | "hard" {
-  if (config.soft) return "soft";
-  if (config.hard) return "hard";
-  return "mixed"; // Default mode
-}
-
-/**
  * Validates the reset configuration for conflicting options.
  */
 function validateResetConfig(config: ResetConfig): void {
-  const modes = [config.soft, config.mixed, config.hard].filter(Boolean);
-  if (modes.length > 1) {
-    throw new Error(
-      "Cannot specify multiple reset modes (--soft, --mixed, --hard)",
-    );
+  // Check for conflicting shorthand flags
+  const modeFlags = [config.soft, config.hard].filter(Boolean);
+  if (modeFlags.length > 1) {
+    throw new Error("Cannot specify both --soft and --hard");
   }
 
   if (config.files.length > 0 && config.commit) {
     throw new Error("Cannot specify both commit and file paths for reset");
   }
 
-  if (config.files.length > 0 && (config.soft || config.hard)) {
+  if (
+    config.files.length > 0 &&
+    (config.mode === "soft" || config.mode === "hard")
+  ) {
     throw new Error(
       "--soft and --hard options are not supported when resetting specific files",
     );
@@ -95,7 +144,7 @@ function resetFiles(
   quiet: boolean,
 ): void {
   if (!quiet) {
-    print(message`Resetting ${files.length.toString()} file(s) to HEAD...`);
+    console.log(`Resetting ${files.length} file(s) to HEAD...`);
   }
 
   for (const file of files) {
@@ -103,16 +152,18 @@ function resetFiles(
       // In a real implementation, this would reset the specific file
       // For now, we'll just show what would happen
       if (!quiet) {
-        print(message`Reset '${file}' to HEAD.`);
+        console.log(`Reset '${file}' to HEAD.`);
       }
     } catch (error) {
-      printError(message`${
-        formatError(
-          `Failed to reset '${file}': ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        )
-      }`);
+      printError(
+        message`${
+          formatError(
+            `Failed to reset '${file}': ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          )
+        }`,
+      );
     }
   }
 }
@@ -127,7 +178,7 @@ async function resetToCommit(
   quiet: boolean,
 ): Promise<void> {
   if (!quiet) {
-    print(message`Performing ${mode} reset to ${commit}...`);
+    console.log(`Performing ${mode} reset to ${commit}...`);
   }
 
   try {
@@ -135,12 +186,10 @@ async function resetToCommit(
       case "soft":
         // Only move HEAD, keep index and working directory
         if (!quiet) {
-          print(
-            message`${
-              formatWarning(
-                "Soft reset: HEAD moved, index and working directory unchanged",
-              )
-            }`,
+          console.log(
+            formatWarning(
+              "Soft reset: HEAD moved, index and working directory unchanged",
+            ),
           );
         }
         break;
@@ -149,12 +198,10 @@ async function resetToCommit(
         // Move HEAD and reset index, keep working directory
         await resetIndex(repo);
         if (!quiet) {
-          print(
-            message`${
-              formatSuccess(
-                "Mixed reset: HEAD and index reset, working directory unchanged",
-              )
-            }`,
+          console.log(
+            formatSuccess(
+              "Mixed reset: HEAD and index reset, working directory unchanged",
+            ),
           );
         }
         break;
@@ -163,17 +210,13 @@ async function resetToCommit(
         // Move HEAD, reset index, and reset working directory
         await resetIndex(repo);
         if (!quiet) {
-          print(
-            message`${
-              formatWarning(
-                "Hard reset: HEAD, index, and working directory reset",
-              )
-            }`,
+          console.log(
+            formatWarning(
+              "Hard reset: HEAD, index, and working directory reset",
+            ),
           );
-          print(
-            message`${
-              formatWarning("All uncommitted changes have been lost!")
-            }`,
+          console.log(
+            formatWarning("All uncommitted changes have been lost!"),
           );
         }
         break;
@@ -200,23 +243,20 @@ export async function executeReset(config: ResetConfig): Promise<void> {
     } else {
       // Reset to commit
       const targetCommit = config.commit ?? "HEAD";
-      const mode = getResetMode(config);
 
-      if (mode === "hard" && !config.quiet) {
-        print(message`${
+      if (config.mode === "hard" && !config.quiet) {
+        console.log(
           formatWarning(
             "Warning: Hard reset will permanently delete all uncommitted changes!",
-          )
-        }`);
+          ),
+        );
       }
 
-      await resetToCommit(repo, targetCommit, mode, config.quiet);
+      await resetToCommit(repo, targetCommit, config.mode, config.quiet);
     }
 
     if (!config.quiet) {
-      print(
-        message`${formatSuccess("Reset operation completed successfully.")}`,
-      );
+      console.log(formatSuccess("Reset operation completed successfully."));
     }
   } catch (error) {
     printError(

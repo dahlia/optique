@@ -1,10 +1,10 @@
-import { object } from "@optique/core/constructs";
-import { optional } from "@optique/core/modifiers";
+import { group, merge, object } from "@optique/core/constructs";
+import { map, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
-import { print, printError } from "@optique/run";
+import { printError } from "@optique/run";
 import { getCommitHistory, getRepository } from "../utils/git.ts";
 import {
   formatCommitDetailed,
@@ -14,40 +14,101 @@ import {
 import type { Commit } from "es-git";
 
 /**
- * Configuration for the `gitique log` command.
- * Demonstrates Optique's optional() combinator for optional parameters.
+ * Output format choices for the log command.
+ * Demonstrates Optique's choice() value parser.
  */
-const logOptions = object({
-  command: constant("log" as const),
-  oneline: option("--oneline", {
-    description:
-      message`Show each commit on a single line with short hash and message`,
-  }),
-  maxCount: optional(
-    option("-n", "--max-count", integer({ metavar: "NUMBER" }), {
-      description: message`Limit the number of commits to show`,
-    }),
-  ),
-  since: optional(option("--since", string({ metavar: "DATE" }), {
-    description: message`Show commits after the specified date`,
-  })),
-  until: optional(option("--until", string({ metavar: "DATE" }), {
-    description: message`Show commits before the specified date`,
-  })),
-  author: optional(option("--author", string({ metavar: "PATTERN" }), {
-    description:
-      message`Show commits by a specific author (partial name match)`,
-  })),
-  grep: optional(option("--grep", string({ metavar: "PATTERN" }), {
-    description: message`Show commits with messages matching the pattern`,
-  })),
-});
+const formatChoices = ["oneline", "short", "medium", "full"] as const;
 
 /**
- * The complete `gitique log` command parser.
+ * Display options for the log command.
+ * Demonstrates Optique's group() combinator for organizing help text.
  */
-export const logCommand = command("log", logOptions, {
+const displayOptions = group(
+  "Display Options",
+  object({
+    format: withDefault(
+      option("--format", choice(formatChoices, { metavar: "FORMAT" }), {
+        description: message`Output format: oneline, short, medium, or full`,
+      }),
+      "medium" as const,
+    ),
+    oneline: option("--oneline", {
+      description: message`Shorthand for --format=oneline`,
+    }),
+    maxCount: withDefault(
+      option("-n", "--max-count", integer({ metavar: "NUMBER", min: 1 }), {
+        description: message`Limit the number of commits to show`,
+      }),
+      10,
+    ),
+  }),
+);
+
+/**
+ * Filter options for the log command.
+ * Demonstrates Optique's group() combinator for organizing help text.
+ */
+const filterOptions = group(
+  "Filter Options",
+  object({
+    since: optional(
+      option("--since", string({ metavar: "DATE" }), {
+        description: message`Show commits after the specified date`,
+      }),
+    ),
+    until: optional(
+      option("--until", string({ metavar: "DATE" }), {
+        description: message`Show commits before the specified date`,
+      }),
+    ),
+    author: optional(
+      option("--author", string({ metavar: "PATTERN" }), {
+        description:
+          message`Show commits by a specific author (partial name match)`,
+      }),
+    ),
+    grep: optional(
+      option("--grep", string({ metavar: "PATTERN" }), {
+        description: message`Show commits with messages matching the pattern`,
+      }),
+    ),
+  }),
+);
+
+/**
+ * The complete log command parser.
+ * Demonstrates:
+ * - group() for organizing options in help text
+ * - merge() for combining multiple option groups
+ * - withDefault() for default values
+ * - choice() for enumerated values
+ * - map() for transforming parser results
+ */
+const logOptionsParser = map(
+  merge(
+    object({ command: constant("log" as const) }),
+    displayOptions,
+    filterOptions,
+  ),
+  (result) => ({
+    ...result,
+    // Handle --oneline shorthand by overriding format
+    format: result.oneline ? ("oneline" as const) : result.format,
+  }),
+);
+
+/**
+ * The complete `gitique log` command parser with documentation.
+ */
+export const logCommand = command("log", logOptionsParser, {
+  brief: message`Show commit history`,
   description: message`Show commit history in reverse chronological order`,
+  footer: message`Examples:
+  gitique log                     Show recent commits
+  gitique log --oneline -n 5      Show 5 commits in one-line format
+  gitique log --format=full       Show full commit details
+  gitique log --author=john       Filter by author
+  gitique log --since="2024-01-01"  Show commits since date`,
 });
 
 /**
@@ -99,8 +160,10 @@ function filterCommits(
     const authorPattern = config.author.toLowerCase();
     filtered = filtered.filter(({ commit }) => {
       const author = commit.author();
-      return author.name.toLowerCase().includes(authorPattern) ||
-        author.email.toLowerCase().includes(authorPattern);
+      return (
+        author.name.toLowerCase().includes(authorPattern) ||
+        author.email.toLowerCase().includes(authorPattern)
+      );
     });
   }
 
@@ -117,6 +180,38 @@ function filterCommits(
 }
 
 /**
+ * Formats a commit in short format.
+ */
+function formatCommitShort(oid: string, commit: Commit): string {
+  const author = commit.author();
+  const summary = commit.message().split("\n")[0];
+  return `commit ${
+    oid.substring(0, 7)
+  }\nAuthor: ${author.name}\n\n    ${summary}\n`;
+}
+
+/**
+ * Formats a commit in full format.
+ */
+function formatCommitFull(oid: string, commit: Commit): string {
+  const author = commit.author();
+  const committer = commit.committer();
+  const commitTime = commit.time();
+
+  const lines = [
+    `commit ${oid}`,
+    `Author: ${author.name} <${author.email}>`,
+    `Commit: ${committer.name} <${committer.email}>`,
+    `Date:   ${commitTime.toDateString()}`,
+    "",
+    ...commit.message().split("\n").map((line: string) => `    ${line}`),
+    "",
+  ];
+
+  return lines.join("\n");
+}
+
+/**
  * Executes the git log command with the parsed configuration.
  */
 export async function executeLog(config: LogConfig): Promise<void> {
@@ -127,7 +222,7 @@ export async function executeLog(config: LogConfig): Promise<void> {
     const commits = getCommitHistory(repo, config.maxCount);
 
     if (commits.length === 0) {
-      print(message`No commits found in the repository.`);
+      console.log("No commits found in the repository.");
       return;
     }
 
@@ -135,16 +230,25 @@ export async function executeLog(config: LogConfig): Promise<void> {
     const filteredCommits = filterCommits(commits, config);
 
     if (filteredCommits.length === 0) {
-      print(message`No commits match the specified criteria.`);
+      console.log("No commits match the specified criteria.");
       return;
     }
 
     // Display commits in the requested format
     for (const { oid, commit } of filteredCommits) {
-      if (config.oneline) {
-        print(message`${formatCommitOneline(oid, commit)}`);
-      } else {
-        print(message`${formatCommitDetailed(oid, commit)}`);
+      switch (config.format) {
+        case "oneline":
+          console.log(formatCommitOneline(oid, commit));
+          break;
+        case "short":
+          console.log(formatCommitShort(oid, commit));
+          break;
+        case "medium":
+          console.log(formatCommitDetailed(oid, commit));
+          break;
+        case "full":
+          console.log(formatCommitFull(oid, commit));
+          break;
       }
     }
   } catch (error) {

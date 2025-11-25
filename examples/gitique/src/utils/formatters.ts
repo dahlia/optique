@@ -120,3 +120,147 @@ export function supportsColors(): boolean {
     process.env.NO_COLOR !== "1"
   );
 }
+
+/**
+ * Status indicator characters for git status output
+ */
+const statusIndicators: Record<string, string> = {
+  Added: "A",
+  Deleted: "D",
+  Modified: "M",
+  Renamed: "R",
+  Copied: "C",
+  Untracked: "?",
+};
+
+/**
+ * Formats a file status line for status command output (long format)
+ */
+export function formatStatusLong(
+  path: string,
+  status: string,
+  staged: boolean,
+  oldPath?: string,
+): string {
+  const statusColor = staged ? colors.green : colors.red;
+  const statusText = status.toLowerCase();
+
+  if (oldPath) {
+    return `${statusColor}        ${statusText}:   ${oldPath} -> ${path}${colors.reset}`;
+  }
+  return `${statusColor}        ${statusText}:   ${path}${colors.reset}`;
+}
+
+/**
+ * Formats a file status line for status command output (short format)
+ */
+export function formatStatusShort(
+  path: string,
+  status: string,
+  staged: boolean,
+  oldPath?: string,
+): string {
+  const indicator = statusIndicators[status] || "?";
+  const stagedCol = staged ? indicator : " ";
+  const unstagedCol = staged ? " " : indicator;
+  const stagedColor = staged ? colors.green : "";
+  const unstagedColor = staged ? "" : colors.red;
+
+  if (oldPath) {
+    return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${oldPath} -> ${path}`;
+  }
+  return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${path}`;
+}
+
+/**
+ * Formats a file status line for status command output (porcelain format)
+ */
+export function formatStatusPorcelain(
+  path: string,
+  status: string,
+  staged: boolean,
+  oldPath?: string,
+): string {
+  const indicator = statusIndicators[status] || "?";
+  const stagedCol = staged ? indicator : " ";
+  const unstagedCol = staged ? " " : indicator;
+
+  if (oldPath) {
+    return `${stagedCol}${unstagedCol} ${oldPath} -> ${path}`;
+  }
+  return `${stagedCol}${unstagedCol} ${path}`;
+}
+
+/**
+ * Formats diff statistics summary
+ */
+export function formatDiffStats(
+  filesChanged: number,
+  insertions: number,
+  deletions: number,
+): string {
+  const parts: string[] = [];
+
+  if (filesChanged > 0) {
+    parts.push(`${filesChanged} file${filesChanged === 1 ? "" : "s"} changed`);
+  }
+  if (insertions > 0) {
+    parts.push(
+      `${colors.green}${insertions} insertion${
+        insertions === 1 ? "" : "s"
+      }(+)${colors.reset}`,
+    );
+  }
+  if (deletions > 0) {
+    parts.push(
+      `${colors.red}${deletions} deletion${
+        deletions === 1 ? "" : "s"
+      }(-)${colors.reset}`,
+    );
+  }
+
+  return parts.join(", ");
+}
+
+/**
+ * Formats a diff delta for --name-only output
+ */
+export function formatDiffNameOnly(path: string): string {
+  return path;
+}
+
+/**
+ * Formats a diff delta for --name-status output
+ */
+export function formatDiffNameStatus(
+  path: string,
+  status: string,
+  oldPath?: string,
+): string {
+  const indicator = statusIndicators[status] || "?";
+  if (oldPath) {
+    return `${indicator}\t${oldPath}\t${path}`;
+  }
+  return `${indicator}\t${path}`;
+}
+
+/**
+ * Formats a diff delta for --stat output
+ */
+export function formatDiffStat(
+  path: string,
+  insertions: number,
+  deletions: number,
+  maxWidth: number = 50,
+): string {
+  const total = insertions + deletions;
+  const barWidth = Math.min(total, maxWidth);
+  const insertionBars = Math.round((insertions / total) * barWidth) || 0;
+  const deletionBars = barWidth - insertionBars;
+
+  const bar = `${colors.green}${
+    "+".repeat(insertionBars)
+  }${colors.reset}${colors.red}${"-".repeat(deletionBars)}${colors.reset}`;
+
+  return ` ${path} | ${total} ${bar}`;
+}
