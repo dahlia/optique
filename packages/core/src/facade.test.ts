@@ -2597,5 +2597,106 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       }
       assert.ok(errorCalled);
     });
+
+    it("should use --completion in generated script when mode is 'option'", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["--completion", "fish"], {
+        completion: { mode: "option" },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      // Verify the generated script uses --completion, not completion
+      assert.ok(
+        completionOutput.includes("'--completion'"),
+        "Should include '--completion' in generated script",
+      );
+      // Ensure it doesn't use the command form 'completion'
+      assert.ok(
+        !completionOutput.includes("'completion'"),
+        "Should not include 'completion' command in generated script",
+      );
+    });
+
+    it("should use completion command in generated script when mode is 'command'", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "fish"], {
+        completion: { mode: "command" },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      // Verify the generated script uses completion command
+      assert.ok(
+        completionOutput.includes("'completion'"),
+        "Should include 'completion' command in generated script",
+      );
+      assert.ok(
+        !completionOutput.includes("'--completion'"),
+        "Should not include '--completion' option in generated script",
+      );
+    });
+
+    it("should use completion command in generated script when mode is 'both'", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "fish"], {
+        completion: { mode: "both" },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      // When mode is 'both', default to using command form 'completion'
+      assert.ok(
+        completionOutput.includes("'completion'"),
+        "Should include 'completion' command in generated script",
+      );
+      assert.ok(
+        !completionOutput.includes("'--completion'"),
+        "Should not include '--completion' option in generated script",
+      );
+    });
+
+    it("should use --completion in bash script when mode is 'option'", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["--completion=bash"], {
+        completion: { mode: "option" },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      // Verify the generated bash script uses --completion
+      assert.ok(
+        completionOutput.includes("'--completion'"),
+        "Should include '--completion' in generated bash script",
+      );
+      assert.ok(
+        !completionOutput.includes("'completion'"),
+        "Should not include 'completion' command in generated bash script",
+      );
+    });
   });
 });

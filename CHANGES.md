@@ -262,6 +262,21 @@ to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
 [#39]: https://github.com/dahlia/optique/issues/39
 
 
+Version 0.6.3
+-------------
+
+Released on November 25, 2025.
+
+### @optique/core
+
+ -  Fixed shell completion scripts using `completion` subcommand even when
+    `completion.mode` is set to `"option"`. Now, when the mode is `"option"`,
+    the generated scripts correctly use `--completion` instead of `completion`.
+    [[#41]]
+
+[#41]: https://github.com/dahlia/optique/issues/41
+
+
 Version 0.6.2
 -------------
 

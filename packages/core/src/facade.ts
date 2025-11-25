@@ -839,6 +839,7 @@ function handleCompletion<THelp, TError>(
   availableShells: Record<string, ShellCompletion>,
   colors?: boolean,
   maxWidth?: number,
+  completionMode?: "command" | "option" | "both",
 ): THelp | TError {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -881,7 +882,13 @@ function handleCompletion<THelp, TError>(
 
   if (args.length === 0) {
     // Generate completion script
-    const script = shell.generateScript(programName, ["completion", shellName]);
+    const completionArg = completionMode === "option"
+      ? "--completion"
+      : "completion";
+    const script = shell.generateScript(programName, [
+      completionArg,
+      shellName,
+    ]);
     stdout(script);
   } else {
     // Provide completion suggestions
@@ -1032,6 +1039,7 @@ export function run<
         availableShells,
         colors,
         maxWidth,
+        completionMode,
       );
     }
 
@@ -1063,6 +1071,7 @@ export function run<
             availableShells,
             colors,
             maxWidth,
+            completionMode,
           );
         } else {
           const singularMatchExact =
@@ -1092,6 +1101,7 @@ export function run<
               availableShells,
               colors,
               maxWidth,
+              completionMode,
             );
           }
         }
