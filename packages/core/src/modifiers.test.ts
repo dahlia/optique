@@ -79,7 +79,7 @@ describe("optional", () => {
     }
   });
 
-  it("should propagate failed parse results correctly", () => {
+  it("should return success with empty consumed when inner parser fails without consuming", () => {
     const baseParser = option("-v", "--verbose");
     const optionalParser = optional(baseParser);
 
@@ -91,10 +91,12 @@ describe("optional", () => {
     };
 
     const parseResult = optionalParser.parse(context);
-    assert.ok(!parseResult.success);
-    if (!parseResult.success) {
-      assert.equal(parseResult.consumed, 0);
-      assertErrorIncludes(parseResult.error, "No matched option");
+    // When inner parser fails without consuming input, optional returns success
+    // with empty consumed array, leaving buffer unchanged
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      assert.deepEqual(parseResult.consumed, []);
+      assert.deepEqual(parseResult.next.buffer, ["--help"]);
     }
   });
 
@@ -194,10 +196,12 @@ describe("optional", () => {
     };
 
     const parseResult = optionalParser.parse(context);
-    assert.ok(!parseResult.success);
-    if (!parseResult.success) {
-      assert.equal(parseResult.consumed, 0);
-      assertErrorIncludes(parseResult.error, "No more options can be parsed");
+    // When optionsTerminated is true, option parser fails without consuming input,
+    // so optional returns success with empty consumed
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      assert.deepEqual(parseResult.consumed, []);
+      assert.deepEqual(parseResult.next.buffer, ["-v"]);
     }
   });
 
@@ -428,6 +432,37 @@ describe("optional", () => {
       }
     });
   });
+
+  it("should return undefined when parsing empty input (issue #48)", () => {
+    const optionalParser = optional(option("-v", "--verbose"));
+
+    const result = parse(optionalParser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, undefined);
+    }
+  });
+
+  it("should return undefined when parsing empty input with value parser (issue #48)", () => {
+    const optionalParser = optional(option("--name", string()));
+
+    const result = parse(optionalParser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, undefined);
+    }
+  });
+
+  it("should propagate errors when inner parser partially consumes input", () => {
+    const optionalParser = optional(option("-n", "--name", string()));
+
+    // "-n" is partially matched but requires a value
+    const result = parse(optionalParser, ["-n"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "value");
+    }
+  });
 });
 
 describe("withDefault", () => {
@@ -524,7 +559,7 @@ describe("withDefault", () => {
     }
   });
 
-  it("should propagate failed parse results correctly", () => {
+  it("should return success with empty consumed when inner parser fails without consuming", () => {
     const baseParser = option("-v", "--verbose");
     const defaultParser = withDefault(baseParser, false);
 
@@ -536,10 +571,12 @@ describe("withDefault", () => {
     };
 
     const parseResult = defaultParser.parse(context);
-    assert.ok(!parseResult.success);
-    if (!parseResult.success) {
-      assert.equal(parseResult.consumed, 0);
-      assertErrorIncludes(parseResult.error, "No matched option");
+    // When inner parser fails without consuming input, withDefault returns success
+    // with empty consumed array, leaving buffer unchanged
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      assert.deepEqual(parseResult.consumed, []);
+      assert.deepEqual(parseResult.next.buffer, ["--help"]);
     }
   });
 
@@ -1022,6 +1059,40 @@ describe("withDefault", () => {
         assert.deepEqual(fragments.fragments[0].default, customMessage);
       }
     });
+  });
+
+  it("should return default value when parsing empty input (issue #48)", () => {
+    const defaultParser = withDefault(option("--name", string()), "Bob");
+
+    const result = parse(defaultParser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "Bob");
+    }
+  });
+
+  it("should return default value when parsing empty input with boolean flag (issue #48)", () => {
+    const defaultParser = withDefault(option("-v", "--verbose"), false);
+
+    const result = parse(defaultParser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, false);
+    }
+  });
+
+  it("should propagate errors when inner parser partially consumes input", () => {
+    const defaultParser = withDefault(
+      option("-n", "--name", string()),
+      "default",
+    );
+
+    // "-n" is partially matched but requires a value
+    const result = parse(defaultParser, ["-n"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "value");
+    }
   });
 });
 
