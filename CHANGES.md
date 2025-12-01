@@ -6,6 +6,16 @@ Version 0.6.4
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `optional()` and `withDefault()` returning an error instead of the
+    expected value when used as a standalone parser with empty input.  For
+    example, `parse(withDefault(option("--name", string()), "Bob"), [])` now
+    correctly returns `"Bob"` instead of failing with “Expected an option,
+    but got end of input.”  [[#48]]
+
+[#48]: https://github.com/dahlia/optique/issues/48
+
 
 Version 0.6.3
 -------------

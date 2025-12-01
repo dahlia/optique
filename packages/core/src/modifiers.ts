@@ -38,6 +38,15 @@ export function optional<TValue, TState>(
           consumed: result.consumed,
         };
       }
+      // If inner parser failed without consuming input, return success
+      // with undefined state so complete() can provide undefined value
+      if (result.consumed === 0) {
+        return {
+          success: true,
+          next: context,
+          consumed: [],
+        };
+      }
       return result;
     },
     complete(state) {
@@ -202,6 +211,15 @@ export function withDefault<TValue, TState, TDefault = TValue>(
             state: [result.next.state],
           },
           consumed: result.consumed,
+        };
+      }
+      // If inner parser failed without consuming input, return success
+      // with undefined state so complete() can provide the default value
+      if (result.consumed === 0) {
+        return {
+          success: true,
+          next: context,
+          consumed: [],
         };
       }
       return result;
