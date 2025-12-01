@@ -6,6 +6,41 @@ Version 0.8.0
 
 To be released.
 
+### @optique/core
+
+ -  Added `conditional()` combinator for discriminated union patterns where
+    certain options depend on a discriminator option value. This enables
+    context-dependent parsing where different sets of options become valid
+    based on the discriminator selection.  [[#49]]
+
+    ~~~~ typescript
+    const parser = conditional(
+      option("--reporter", choice(["console", "junit", "html"])),
+      {
+        console: object({}),
+        junit: object({ outputFile: option("--output-file", string()) }),
+        html: object({ outputFile: option("--output-file", string()) }),
+      }
+    );
+    // Result type: ["console", {}] | ["junit", { outputFile: string }] | ...
+    ~~~~
+
+    Key features:
+
+     -  Explicit discriminator option determines which branch is selected
+     -  Tuple result `[discriminator, branchValue]` for clear type narrowing
+     -  Optional default branch for when discriminator is not provided
+     -  Clear error messages indicating which options are required for each
+        discriminator value
+
+ -  Added `literal` type to `UsageTerm` for representing fixed string values in
+    usage descriptions. Unlike metavars (which are placeholders displayed with
+    special formatting), literals are displayed as plain text. This is used
+    internally by `conditional()` to show actual discriminator values in help
+    text (e.g., `--reporter console` instead of `--reporter TYPE`).  [[#49]]
+
+[#49]: https://github.com/dahlia/optique/issues/49
+
 
 Version 0.7.1
 -------------

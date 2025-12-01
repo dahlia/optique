@@ -115,6 +115,22 @@ export type UsageTerm =
      * arguments, options, commands, or other usage terms.
      */
     readonly terms: readonly Usage[];
+  }
+  /**
+   * A literal term, which represents a fixed string value in the command-line
+   * usage. Unlike metavars which are placeholders for user-provided values,
+   * literals represent exact strings that must be typed as-is.
+   * @since 0.8.0
+   */
+  | {
+    /**
+     * The type of the term, which is always `"literal"` for this term.
+     */
+    readonly type: "literal";
+    /**
+     * The literal value that must be provided exactly as written.
+     */
+    readonly value: string;
   };
 
 /**
@@ -591,6 +607,12 @@ function* formatUsageTermInternal(
         width: 1,
       };
     }
+  } else if (term.type === "literal") {
+    // Literal values are displayed as-is without special formatting
+    yield {
+      text: term.value,
+      width: term.value.length,
+    };
   } else {
     throw new TypeError(
       `Unknown usage term type: ${term["type"]}.`,

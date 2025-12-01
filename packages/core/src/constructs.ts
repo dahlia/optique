@@ -3884,3 +3884,553 @@ export function group<TValue, TState>(
     },
   };
 }
+
+/**
+ * Tagged union type representing which branch is selected.
+ * Uses tagged union to avoid collision with discriminator values.
+ * @internal
+ */
+type SelectedBranch<TDiscriminator extends string> =
+  | { readonly kind: "branch"; readonly key: TDiscriminator }
+  | { readonly kind: "default" };
+
+/**
+ * State type for the conditional parser.
+ * @internal
+ */
+interface ConditionalState<TDiscriminator extends string> {
+  readonly discriminatorState: unknown;
+  readonly discriminatorValue: TDiscriminator | undefined;
+  readonly selectedBranch: SelectedBranch<TDiscriminator> | undefined;
+  readonly branchState: unknown;
+}
+
+/**
+ * Options for customizing error messages in the {@link conditional} combinator.
+ * @since 0.8.0
+ */
+export interface ConditionalErrorOptions {
+  /**
+   * Custom error message when branch parser fails.
+   * Receives the discriminator value for context.
+   */
+  branchError?: (
+    discriminatorValue: string | undefined,
+    error: Message,
+  ) => Message;
+
+  /**
+   * Custom error message for no matching input.
+   */
+  noMatch?: Message | ((context: NoMatchContext) => Message);
+}
+
+/**
+ * Options for customizing the {@link conditional} combinator behavior.
+ * @since 0.8.0
+ */
+export interface ConditionalOptions {
+  /**
+   * Custom error messages.
+   */
+  errors?: ConditionalErrorOptions;
+}
+
+/**
+ * Helper type to infer result type without default branch.
+ * @internal
+ */
+type ConditionalResultWithoutDefault<
+  TDiscriminator extends string,
+  TBranches extends Record<string, Parser<unknown, unknown>>,
+> = {
+  [K in keyof TBranches & string]: readonly [K, InferValue<TBranches[K]>];
+}[keyof TBranches & string];
+
+/**
+ * Helper type to infer result type with default branch.
+ * @internal
+ */
+type ConditionalResultWithDefault<
+  TDiscriminator extends string,
+  TBranches extends Record<string, Parser<unknown, unknown>>,
+  TDefault extends Parser<unknown, unknown>,
+> =
+  | ConditionalResultWithoutDefault<TDiscriminator, TBranches>
+  | readonly [undefined, InferValue<TDefault>];
+
+/**
+ * Helper type to infer value type from a parser.
+ * @internal
+ */
+type InferValue<T> = T extends Parser<infer V, unknown> ? V : never;
+
+/**
+ * Creates a conditional parser without a default branch.
+ * The discriminator option is required; parsing fails if not provided.
+ *
+ * @template TDiscriminator The string literal union type of discriminator values.
+ * @template TBranches Record mapping discriminator values to branch parsers.
+ * @param discriminator Parser for the discriminator option (typically using choice()).
+ * @param branches Object mapping each discriminator value to its branch parser.
+ * @returns A parser that produces a tuple `[discriminatorValue, branchResult]`.
+ * @since 0.8.0
+ */
+export function conditional<
+  TDiscriminator extends string,
+  TBranches extends { [K in TDiscriminator]: Parser<unknown, unknown> },
+>(
+  discriminator: Parser<TDiscriminator, unknown>,
+  branches: TBranches,
+): Parser<
+  ConditionalResultWithoutDefault<TDiscriminator, TBranches>,
+  ConditionalState<TDiscriminator>
+>;
+
+/**
+ * Creates a conditional parser with a default branch.
+ * The default branch is used when the discriminator option is not provided.
+ *
+ * @template TDiscriminator The string literal union type of discriminator values.
+ * @template TBranches Record mapping discriminator values to branch parsers.
+ * @template TDefault The default branch parser type.
+ * @param discriminator Parser for the discriminator option (typically using choice()).
+ * @param branches Object mapping each discriminator value to its branch parser.
+ * @param defaultBranch Parser to use when discriminator is not provided.
+ * @param options Optional configuration for error messages.
+ * @returns A parser that produces a tuple `[discriminatorValue | undefined, branchResult]`.
+ * @since 0.8.0
+ */
+export function conditional<
+  TDiscriminator extends string,
+  TBranches extends { [K in TDiscriminator]: Parser<unknown, unknown> },
+  TDefault extends Parser<unknown, unknown>,
+>(
+  discriminator: Parser<TDiscriminator, unknown>,
+  branches: TBranches,
+  defaultBranch: TDefault,
+  options?: ConditionalOptions,
+): Parser<
+  ConditionalResultWithDefault<TDiscriminator, TBranches, TDefault>,
+  ConditionalState<TDiscriminator>
+>;
+
+/**
+ * Creates a conditional parser that selects different branch parsers based on
+ * a discriminator option value. This enables discriminated union patterns where
+ * certain options are only required or available when a specific discriminator
+ * value is selected.
+ *
+ * The result type is a tuple: `[discriminatorValue, branchResult]`
+ *
+ * @example
+ * ```typescript
+ * // Basic conditional parsing
+ * const parser = conditional(
+ *   option("--reporter", choice(["console", "junit"])),
+ *   {
+ *     console: object({}),
+ *     junit: object({ outputFile: option("--output-file", string()) }),
+ *   },
+ *   object({}) // default when --reporter is not provided
+ * );
+ *
+ * const result = parse(parser, ["--reporter", "junit", "--output-file", "out.xml"]);
+ * // result.value = ["junit", { outputFile: "out.xml" }]
+ *
+ * // Without --reporter, uses default branch:
+ * const defaultResult = parse(parser, []);
+ * // defaultResult.value = [undefined, {}]
+ * ```
+ *
+ * @since 0.8.0
+ */
+export function conditional(
+  discriminator: Parser<string, unknown>,
+  branches: Record<string, Parser<unknown, unknown>>,
+  defaultBranch?: Parser<unknown, unknown>,
+  options?: ConditionalOptions,
+): Parser<
+  readonly [string | undefined, unknown],
+  ConditionalState<string>
+> {
+  const branchParsers = Object.entries(branches);
+  const allBranchParsers = defaultBranch
+    ? [...branchParsers.map(([_, p]) => p), defaultBranch]
+    : branchParsers.map(([_, p]) => p);
+
+  const maxPriority = Math.max(
+    discriminator.priority,
+    ...allBranchParsers.map((p) => p.priority),
+  );
+
+  // Helper to replace metavar with literal value after the option in usage
+  function appendLiteralToUsage(usage: Usage, literalValue: string): Usage {
+    const result: UsageTerm[] = [];
+    for (const term of usage) {
+      if (term.type === "option" && term.metavar !== undefined) {
+        // Add option without metavar, then add a literal term
+        const { metavar: _, ...optionWithoutMetavar } = term;
+        result.push(optionWithoutMetavar);
+        result.push({ type: "literal", value: literalValue });
+      } else if (term.type === "optional") {
+        result.push({
+          ...term,
+          terms: appendLiteralToUsage(term.terms, literalValue),
+        });
+      } else if (term.type === "multiple") {
+        result.push({
+          ...term,
+          terms: appendLiteralToUsage(term.terms, literalValue),
+        });
+      } else if (term.type === "exclusive") {
+        result.push({
+          ...term,
+          terms: term.terms.map((t) => appendLiteralToUsage(t, literalValue)),
+        });
+      } else {
+        result.push(term);
+      }
+    }
+    return result;
+  }
+
+  // Build usage: discriminator (with literal value) + exclusive branches
+  const branchUsages: Usage[] = branchParsers.map(([key, p]) => [
+    ...appendLiteralToUsage(discriminator.usage, key),
+    ...p.usage,
+  ]);
+  if (defaultBranch) {
+    branchUsages.push(defaultBranch.usage);
+  }
+
+  const usage: Usage = branchUsages.length > 1
+    ? [{ type: "exclusive", terms: branchUsages }]
+    : branchUsages[0] ?? [];
+
+  const initialState: ConditionalState<string> = {
+    discriminatorState: discriminator.initialState,
+    discriminatorValue: undefined,
+    selectedBranch: undefined,
+    branchState: undefined,
+  };
+
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: maxPriority,
+    usage,
+    initialState,
+
+    parse(context) {
+      const state = context.state ?? initialState;
+
+      // If branch already selected, delegate to it
+      if (state.selectedBranch !== undefined) {
+        const branchParser = state.selectedBranch.kind === "default"
+          ? defaultBranch!
+          : branches[state.selectedBranch.key];
+
+        const branchResult = branchParser.parse({
+          ...context,
+          state: state.branchState,
+          usage: branchParser.usage, // Use only the selected branch's usage for error suggestions
+        });
+
+        if (branchResult.success) {
+          return {
+            success: true,
+            next: {
+              ...branchResult.next,
+              state: {
+                ...state,
+                branchState: branchResult.next.state,
+              },
+            },
+            consumed: branchResult.consumed,
+          };
+        }
+        return branchResult;
+      }
+
+      // Try to parse discriminator first
+      const discriminatorResult = discriminator.parse({
+        ...context,
+        state: state.discriminatorState,
+      });
+
+      if (
+        discriminatorResult.success && discriminatorResult.consumed.length > 0
+      ) {
+        // Complete discriminator to get the value
+        const completionResult = discriminator.complete(
+          discriminatorResult.next.state,
+        );
+
+        if (completionResult.success) {
+          const value = completionResult.value;
+          const branchParser = branches[value];
+
+          if (branchParser) {
+            // Try to parse more from the branch
+            const branchParseResult = branchParser.parse({
+              ...context,
+              buffer: discriminatorResult.next.buffer,
+              optionsTerminated: discriminatorResult.next.optionsTerminated,
+              state: branchParser.initialState,
+              usage: branchParser.usage, // Use only the selected branch's usage for error suggestions
+            });
+
+            if (branchParseResult.success) {
+              return {
+                success: true,
+                next: {
+                  ...branchParseResult.next,
+                  state: {
+                    discriminatorState: discriminatorResult.next.state,
+                    discriminatorValue: value,
+                    selectedBranch: { kind: "branch", key: value },
+                    branchState: branchParseResult.next.state,
+                  },
+                },
+                consumed: [
+                  ...discriminatorResult.consumed,
+                  ...branchParseResult.consumed,
+                ],
+              };
+            }
+
+            // Branch parse failed but discriminator succeeded
+            return {
+              success: true,
+              next: {
+                ...discriminatorResult.next,
+                state: {
+                  discriminatorState: discriminatorResult.next.state,
+                  discriminatorValue: value,
+                  selectedBranch: { kind: "branch", key: value },
+                  branchState: branchParser.initialState,
+                },
+              },
+              consumed: discriminatorResult.consumed,
+            };
+          }
+        }
+      }
+
+      // Discriminator didn't match, try default branch
+      if (defaultBranch !== undefined) {
+        const defaultResult = defaultBranch.parse({
+          ...context,
+          state: state.branchState ?? defaultBranch.initialState,
+          usage: defaultBranch.usage, // Use only the default branch's usage for error suggestions
+        });
+
+        if (defaultResult.success && defaultResult.consumed.length > 0) {
+          return {
+            success: true,
+            next: {
+              ...defaultResult.next,
+              state: {
+                ...state,
+                selectedBranch: { kind: "default" },
+                branchState: defaultResult.next.state,
+              },
+            },
+            consumed: defaultResult.consumed,
+          };
+        }
+      }
+
+      // Nothing matched
+      const noMatchContext = analyzeNoMatchContext([
+        discriminator,
+        ...allBranchParsers,
+      ]);
+      const errorMessage = options?.errors?.noMatch
+        ? typeof options.errors.noMatch === "function"
+          ? options.errors.noMatch(noMatchContext)
+          : options.errors.noMatch
+        : generateNoMatchError(noMatchContext);
+
+      return {
+        success: false,
+        consumed: 0,
+        error: errorMessage,
+      };
+    },
+
+    complete(state) {
+      // No branch selected yet
+      if (state.selectedBranch === undefined) {
+        // If we have default branch, use it
+        if (defaultBranch !== undefined) {
+          const branchState = state.branchState ?? defaultBranch.initialState;
+          const defaultResult = defaultBranch.complete(branchState);
+          if (!defaultResult.success) {
+            return defaultResult;
+          }
+          return {
+            success: true,
+            value: [undefined, defaultResult.value] as const,
+          };
+        }
+
+        // No default branch, discriminator is required
+        return {
+          success: false,
+          error: message`Missing required discriminator option.`,
+        };
+      }
+
+      // Complete selected branch
+      const branchParser = state.selectedBranch.kind === "default"
+        ? defaultBranch!
+        : branches[state.selectedBranch.key];
+
+      const branchResult = branchParser.complete(state.branchState);
+
+      if (!branchResult.success) {
+        // Add context to error message
+        if (
+          state.discriminatorValue !== undefined &&
+          options?.errors?.branchError
+        ) {
+          return {
+            success: false,
+            error: options.errors.branchError(
+              state.discriminatorValue,
+              branchResult.error,
+            ),
+          };
+        }
+        return branchResult;
+      }
+
+      const discriminatorValue = state.selectedBranch.kind === "default"
+        ? undefined
+        : state.selectedBranch.key;
+
+      return {
+        success: true,
+        value: [discriminatorValue, branchResult.value] as const,
+      };
+    },
+
+    suggest(context, prefix) {
+      const state = context.state ?? initialState;
+      const suggestions = [];
+
+      // If no branch selected, suggest discriminator and default branch options
+      if (state.selectedBranch === undefined) {
+        // Discriminator suggestions
+        suggestions.push(
+          ...discriminator.suggest(
+            { ...context, state: state.discriminatorState },
+            prefix,
+          ),
+        );
+
+        // Default branch suggestions if available
+        if (defaultBranch !== undefined) {
+          suggestions.push(
+            ...defaultBranch.suggest(
+              {
+                ...context,
+                state: state.branchState ?? defaultBranch.initialState,
+              },
+              prefix,
+            ),
+          );
+        }
+      } else {
+        // Delegate to selected branch
+        const branchParser = state.selectedBranch.kind === "default"
+          ? defaultBranch!
+          : branches[state.selectedBranch.key];
+
+        suggestions.push(
+          ...branchParser.suggest(
+            { ...context, state: state.branchState },
+            prefix,
+          ),
+        );
+      }
+
+      // Deduplicate suggestions
+      const seen = new Set<string>();
+      return suggestions.filter((suggestion) => {
+        const key = suggestion.kind === "literal"
+          ? suggestion.text
+          : `__FILE__:${suggestion.type}:${suggestion.extensions?.join(",")}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    },
+
+    getDocFragments(_state, _defaultValue?) {
+      const fragments: DocFragment[] = [];
+
+      // Add discriminator documentation
+      const discriminatorFragments = discriminator.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      fragments.push(...discriminatorFragments.fragments);
+
+      // Add branch-specific documentation
+      for (const [key, branchParser] of branchParsers) {
+        const branchFragments = branchParser.getDocFragments(
+          { kind: "unavailable" },
+          undefined,
+        );
+
+        const entries: DocEntry[] = branchFragments.fragments
+          .filter((f): f is DocEntry & { type: "entry" } => f.type === "entry");
+
+        // Also collect entries from sections
+        for (const fragment of branchFragments.fragments) {
+          if (fragment.type === "section") {
+            entries.push(...fragment.entries);
+          }
+        }
+
+        if (entries.length > 0) {
+          fragments.push({
+            type: "section",
+            title: `Options when ${key}`,
+            entries,
+          });
+        }
+      }
+
+      // Add default branch documentation if present
+      if (defaultBranch !== undefined) {
+        const defaultFragments = defaultBranch.getDocFragments(
+          { kind: "unavailable" },
+          undefined,
+        );
+
+        const entries: DocEntry[] = defaultFragments.fragments
+          .filter((f): f is DocEntry & { type: "entry" } => f.type === "entry");
+
+        for (const fragment of defaultFragments.fragments) {
+          if (fragment.type === "section") {
+            entries.push(...fragment.entries);
+          }
+        }
+
+        if (entries.length > 0) {
+          fragments.push({
+            type: "section",
+            title: "Default options",
+            entries,
+          });
+        }
+      }
+
+      return { fragments };
+    },
+  };
+}

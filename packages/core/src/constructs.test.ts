@@ -1,5 +1,6 @@
 import {
   concat,
+  conditional,
   group,
   longestMatch,
   merge,
@@ -27,7 +28,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -3696,5 +3697,180 @@ describe("group() - duplicate option detection", () => {
       assertErrorIncludes(result.error, "Duplicate option name");
       assertErrorIncludes(result.error, "-v");
     }
+  });
+});
+
+describe("conditional", () => {
+  describe("basic parsing", () => {
+    it("should select correct branch based on discriminator value", () => {
+      const parser = conditional(
+        option("--type", choice(["a", "b"])),
+        {
+          a: object({ foo: option("--foo", string()) }),
+          b: object({ bar: option("--bar", integer()) }),
+        },
+        object({}),
+      );
+
+      const resultA = parse(parser, ["--type", "a", "--foo", "hello"]);
+      assert.ok(resultA.success);
+      if (resultA.success) {
+        assert.deepEqual(resultA.value, ["a", { foo: "hello" }]);
+      }
+
+      const resultB = parse(parser, ["--type", "b", "--bar", "42"]);
+      assert.ok(resultB.success);
+      if (resultB.success) {
+        assert.deepEqual(resultB.value, ["b", { bar: 42 }]);
+      }
+    });
+
+    it("should use default branch when discriminator not provided", () => {
+      const parser = conditional(
+        option("--type", choice(["a", "b"])),
+        {
+          a: object({ foo: option("--foo", string()) }),
+          b: object({ bar: option("--bar", integer()) }),
+        },
+        object({ defaultOpt: option("--default", string()) }),
+      );
+
+      const result = parse(parser, ["--default", "value"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, [undefined, { defaultOpt: "value" }]);
+      }
+    });
+
+    it("should fail when discriminator missing and no default branch", () => {
+      const parser = conditional(
+        option("--type", choice(["a", "b"])),
+        {
+          a: object({ foo: option("--foo", string()) }),
+          b: object({ bar: option("--bar", integer()) }),
+        },
+      );
+
+      const result = parse(parser, ["--foo", "hello"]);
+      assert.ok(!result.success);
+    });
+
+    it("should work with empty branch parsers", () => {
+      const parser = conditional(
+        option("--mode", choice(["fast", "slow"])),
+        {
+          fast: object({}),
+          slow: object({}),
+        },
+        object({}),
+      );
+
+      const result = parse(parser, ["--mode", "fast"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["fast", {}]);
+      }
+    });
+  });
+
+  describe("error handling", () => {
+    it("should provide contextual error when branch option missing", () => {
+      const parser = conditional(
+        option("--type", choice(["a"])),
+        {
+          a: object({ required: option("--required", string()) }),
+        },
+        object({}),
+      );
+
+      const result = parse(parser, ["--type", "a"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "--required");
+      }
+    });
+
+    it("should fail when invalid discriminator value provided", () => {
+      const parser = conditional(
+        option("--type", choice(["a", "b"])),
+        {
+          a: object({}),
+          b: object({}),
+        },
+        object({}),
+      );
+
+      const result = parse(parser, ["--type", "invalid"]);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("type inference", () => {
+    it("should infer correct tuple union type", () => {
+      const parser = conditional(
+        option("--format", choice(["json", "xml"])),
+        {
+          json: object({ pretty: option("--pretty") }),
+          xml: object({ indent: option("--indent", integer()) }),
+        },
+        object({}),
+      );
+
+      type ParsedType = InferValue<typeof parser>;
+
+      const result = parse(parser, ["--format", "json", "--pretty"]);
+      assert.ok(result.success);
+
+      if (result.success) {
+        const [discriminator, value] = result.value;
+        if (discriminator === "json") {
+          // TypeScript should know value has 'pretty' property
+          const pretty: boolean = (value as { pretty: boolean }).pretty;
+          assert.equal(pretty, true);
+        }
+      }
+    });
+  });
+
+  describe("getDocFragments", () => {
+    it("should document discriminator and branch options", () => {
+      const parser = conditional(
+        option("--mode", choice(["fast", "slow"])),
+        {
+          fast: object({ threads: option("--threads", integer()) }),
+          slow: object({ verbose: option("--verbose") }),
+        },
+        object({}),
+      );
+
+      const fragments = parser.getDocFragments({ kind: "unavailable" });
+      assert.ok(fragments.fragments.length > 0);
+    });
+  });
+
+  describe("suggest", () => {
+    it("should suggest discriminator values before selection", () => {
+      const parser = conditional(
+        option("--type", choice(["alpha", "beta"])),
+        {
+          alpha: object({}),
+          beta: object({}),
+        },
+        object({}),
+      );
+
+      const suggestions = [...parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--type",
+      )];
+      assert.ok(
+        suggestions.some((s) => s.kind === "literal" && s.text === "--type"),
+      );
+    });
   });
 });

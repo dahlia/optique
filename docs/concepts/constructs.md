@@ -1114,6 +1114,220 @@ The `longestMatch()` combinator bridges the gap between simple alternatives
 based on input consumption.
 
 
+`conditional()` parser
+----------------------
+
+*This API is available since Optique 0.8.0.*
+
+The `conditional()` parser creates a discriminated union based on a
+discriminator option value. This enables context-dependent parsing where
+certain options are only valid when a specific discriminator value is selected.
+
+~~~~ typescript twoslash
+import { conditional, object } from "@optique/core/constructs";
+import type { InferValue } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice, string } from "@optique/core/valueparser";
+
+const parser = conditional(
+  option("--reporter", choice(["console", "junit", "html"])),
+  {
+    console: object({}),
+    junit: object({ outputFile: option("--output-file", string()) }),
+    html: object({ outputFile: option("--output-file", string()) }),
+  }
+);
+
+type Result = InferValue<typeof parser>;
+//   ^?
+
+
+
+
+
+
+
+// Type automatically inferred as discriminated tuple union.
+~~~~
+
+### Discriminator-based branching
+
+The key behavior of `conditional()` is selecting the appropriate branch parser
+based on the discriminator value. The result is a tuple containing the
+discriminator value and the branch result:
+
+~~~~ typescript twoslash
+import { conditional, object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice, string } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = conditional(
+  option("--format", choice(["json", "xml"])),
+  {
+    json: object({ pretty: option("--pretty") }),
+    xml: object({ indent: option("--indent", string()) }),
+  }
+);
+
+// When --format json is provided
+const jsonResult = parse(parser, ["--format", "json", "--pretty"]);
+if (jsonResult.success) {
+  const [format, options] = jsonResult.value;
+  if (format === "json") {
+    // TypeScript knows options is { pretty: boolean }
+    console.log(`Format: ${format}, Pretty: ${options.pretty}.`);
+  }
+}
+
+// When --format xml is provided
+const xmlResult = parse(parser, ["--format", "xml", "--indent", "  "]);
+if (xmlResult.success) {
+  const [format, options] = xmlResult.value;
+  if (format === "xml") {
+    // TypeScript knows options is { indent: string }
+    console.log(`Format: ${format}, Indent: "${options.indent}".`);
+  }
+}
+~~~~
+
+### Default branch
+
+When a default branch is provided, the discriminator becomes optional. If the
+discriminator is not specified, the default branch is used:
+
+~~~~ typescript twoslash
+import { conditional, object } from "@optique/core/constructs";
+import type { InferValue } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice, string } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = conditional(
+  option("--reporter", choice(["junit", "html"])),
+  {
+    junit: object({ outputFile: option("--output-file", string()) }),
+    html: object({ outputFile: option("--output-file", string()) }),
+  },
+  object({ format: option("--format", string()) }) // Default branch
+);
+
+type Result = InferValue<typeof parser>;
+// Default branch result has undefined as discriminator value.
+~~~~
+
+When the discriminator is not provided, the result tuple has `undefined` as
+the first element:
+
+~~~~ typescript twoslash
+import { conditional, object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice, string } from "@optique/core/valueparser";
+
+const parser = conditional(
+  option("--reporter", choice(["junit", "html"])),
+  {
+    junit: object({ outputFile: option("--output-file", string()) }),
+    html: object({ outputFile: option("--output-file", string()) }),
+  },
+  object({ format: option("--format", string()) })
+);
+// ---cut-before---
+// Without --reporter, default branch is used
+const result = parse(parser, ["--format", "text"]);
+if (result.success) {
+  const [reporter, options] = result.value;
+  if (reporter === undefined) {
+    // Default branch - options is { format: string }
+    console.log(`Using default format: ${options.format}.`);
+  }
+}
+~~~~
+
+### Required discriminator (no default)
+
+When no default branch is provided, the discriminator is required. If it's
+missing, an error is returned:
+
+~~~~ typescript twoslash
+import { conditional, object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice, string } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = conditional(
+  option("--reporter", choice(["junit", "html"])),
+  {
+    junit: object({ outputFile: option("--output-file", string()) }),
+    html: object({ outputFile: option("--output-file", string()) }),
+  }
+  // No default branch - discriminator is required
+);
+
+const result = parse(parser, ["--output-file", "report.xml"]);
+// Error: Missing required option --reporter.
+~~~~
+
+### Type-safe pattern matching
+
+The `conditional()` parser enables type-safe pattern matching based on the
+discriminator value:
+
+~~~~ typescript twoslash
+import { conditional, object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice, string, integer } from "@optique/core/valueparser";
+
+const parser = conditional(
+  option("--db", choice(["sqlite", "postgres", "mysql"])),
+  {
+    sqlite: object({ file: option("--file", string()) }),
+    postgres: object({
+      host: option("--host", string()),
+      port: option("--port", integer()),
+    }),
+    mysql: object({
+      host: option("--host", string()),
+      port: option("--port", integer()),
+    }),
+  }
+);
+// ---cut-before---
+const result = parse(parser, ["--db", "postgres", "--host", "localhost", "--port", "5432"]);
+if (result.success) {
+  const [db, config] = result.value;
+  if (db === "sqlite") {
+    // TypeScript knows config is { file: string }
+    console.log(`SQLite database file: ${config.file}.`);
+  } else if (db === "postgres") {
+    // TypeScript knows config is { host: string, port: number }
+    console.log(`PostgreSQL server at ${config.host}:${config.port}.`);
+  } else if (db === "mysql") {
+    // TypeScript knows config is { host: string, port: number }
+    console.log(`MySQL server at ${config.host}:${config.port}.`);
+  }
+}
+~~~~
+
+### Relationship to `or()`
+
+The `conditional()` parser provides a more structured alternative to `or()`
+for discriminated union patterns:
+
+| Feature                     | `or()`                        | `conditional()`                     |
+| --------------------------- | ----------------------------- | ----------------------------------- |
+| Discriminator               | Manual with `constant()`      | Explicit discriminator option       |
+| Branch selection            | First matching parser         | Based on discriminator value        |
+| Result type                 | Union of branch types         | Tuple `[discriminator, branchType]` |
+| Default handling            | Via parser ordering           | Explicit default branch             |
+| Type narrowing              | Via discriminator field       | Via tuple first element             |
+
+Use `conditional()` when you have an explicit discriminator option that
+determines which set of options is valid. Use `or()` for more general
+mutually exclusive alternatives.
+
+
 `group()` parser
 ----------------
 
