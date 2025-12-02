@@ -42,6 +42,20 @@ To be released.
 [#49]: https://github.com/dahlia/optique/issues/49
 
 
+Version 0.7.2
+-------------
+
+Released on December 2, 2025.
+
+### @optique/core
+
+ -  Fixed `optional()` and `withDefault()` returning an error instead of the
+    expected value when the input contains only the options terminator `"--"`.
+    For example, `parse(withDefault(option("--name", string()), "Bob"), ["--"])`
+    now correctly returns `"Bob"` instead of failing with “Missing option
+    `--name`.”  [[#50]]
+
+
 Version 0.7.1
 -------------
 
@@ -315,6 +329,22 @@ to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
 
 [Zod]: https://zod.dev/
 [#39]: https://github.com/dahlia/optique/issues/39
+
+
+Version 0.6.5
+-------------
+
+Released on December 2, 2025.
+
+### @optique/core
+
+ -  Fixed `optional()` and `withDefault()` returning an error instead of the
+    expected value when the input contains only the options terminator `"--"`.
+    For example, `parse(withDefault(option("--name", string()), "Bob"), ["--"])`
+    now correctly returns `"Bob"` instead of failing with “Missing option
+    `--name`.”  [[#50]]
+
+[#50]: https://github.com/dahlia/optique/issues/50
 
 
 Version 0.6.4

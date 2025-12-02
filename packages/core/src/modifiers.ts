@@ -22,18 +22,38 @@ export function optional<TValue, TState>(
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     parse(context) {
+      const innerState = typeof context.state === "undefined"
+        ? parser.initialState
+        : context.state[0];
+
       const result = parser.parse({
         ...context,
-        state: typeof context.state === "undefined"
-          ? parser.initialState
-          : context.state[0],
+        state: innerState,
       });
+
       if (result.success) {
+        // Check if inner parser actually matched something (state changed)
+        // or if it consumed nothing (e.g., constant parser)
+        if (
+          result.next.state !== innerState || result.consumed.length === 0
+        ) {
+          return {
+            success: true,
+            next: {
+              ...result.next,
+              state: [result.next.state],
+            },
+            consumed: result.consumed,
+          };
+        }
+        // Inner parser returned success but state unchanged while consuming input
+        // (e.g., only consumed "--"). Treat as "not matched" but propagate side
+        // effects (optionsTerminated, buffer)
         return {
           success: true,
           next: {
             ...result.next,
-            state: [result.next.state],
+            state: context.state,
           },
           consumed: result.consumed,
         };
@@ -197,18 +217,38 @@ export function withDefault<TValue, TState, TDefault = TValue>(
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     parse(context) {
+      const innerState = typeof context.state === "undefined"
+        ? parser.initialState
+        : context.state[0];
+
       const result = parser.parse({
         ...context,
-        state: typeof context.state === "undefined"
-          ? parser.initialState
-          : context.state[0],
+        state: innerState,
       });
+
       if (result.success) {
+        // Check if inner parser actually matched something (state changed)
+        // or if it consumed nothing (e.g., constant parser)
+        if (
+          result.next.state !== innerState || result.consumed.length === 0
+        ) {
+          return {
+            success: true,
+            next: {
+              ...result.next,
+              state: [result.next.state],
+            },
+            consumed: result.consumed,
+          };
+        }
+        // Inner parser returned success but state unchanged while consuming input
+        // (e.g., only consumed "--"). Treat as "not matched" but propagate side
+        // effects (optionsTerminated, buffer)
         return {
           success: true,
           next: {
             ...result.next,
-            state: [result.next.state],
+            state: context.state,
           },
           consumed: result.consumed,
         };
