@@ -463,6 +463,39 @@ describe("optional", () => {
       assertErrorIncludes(result.error, "value");
     }
   });
+
+  it("should return undefined when parsing options terminator (issue #50)", () => {
+    const optionalParser = optional(option("--name", string()));
+
+    const result = parse(optionalParser, ["--"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, undefined);
+    }
+  });
+
+  it("should return undefined with -- and propagate optionsTerminated (issue #50)", () => {
+    const optionalParser = optional(option("--name", string()));
+
+    const context = {
+      buffer: ["--", "positional"] as readonly string[],
+      state: optionalParser.initialState,
+      optionsTerminated: false,
+      usage: optionalParser.usage,
+    };
+
+    const parseResult = optionalParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      // Should consume "--" and set optionsTerminated
+      assert.deepEqual(parseResult.consumed, ["--"]);
+      assert.equal(parseResult.next.optionsTerminated, true);
+      // Buffer should have "positional" remaining
+      assert.deepEqual(parseResult.next.buffer, ["positional"]);
+      // State should be undefined so complete() returns undefined
+      assert.equal(parseResult.next.state, undefined);
+    }
+  });
 });
 
 describe("withDefault", () => {
@@ -1092,6 +1125,39 @@ describe("withDefault", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "value");
+    }
+  });
+
+  it("should return default value when parsing options terminator (issue #50)", () => {
+    const defaultParser = withDefault(option("--name", string()), "Bob");
+
+    const result = parse(defaultParser, ["--"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "Bob");
+    }
+  });
+
+  it("should return default value with -- and propagate optionsTerminated (issue #50)", () => {
+    const defaultParser = withDefault(option("--name", string()), "Bob");
+
+    const context = {
+      buffer: ["--", "positional"] as readonly string[],
+      state: defaultParser.initialState,
+      optionsTerminated: false,
+      usage: defaultParser.usage,
+    };
+
+    const parseResult = defaultParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      // Should consume "--" and set optionsTerminated
+      assert.deepEqual(parseResult.consumed, ["--"]);
+      assert.equal(parseResult.next.optionsTerminated, true);
+      // Buffer should have "positional" remaining
+      assert.deepEqual(parseResult.next.buffer, ["positional"]);
+      // State should be undefined so complete() returns default value
+      assert.equal(parseResult.next.state, undefined);
     }
   });
 });
