@@ -131,6 +131,17 @@ export type UsageTerm =
      * The literal value that must be provided exactly as written.
      */
     readonly value: string;
+  }
+  /**
+   * A pass-through term, which represents unrecognized options that are
+   * collected and passed through to an underlying tool or command.
+   * @since 0.8.0
+   */
+  | {
+    /**
+     * The type of the term, which is always `"passthrough"` for this term.
+     */
+    readonly type: "passthrough";
   };
 
 /**
@@ -612,6 +623,13 @@ function* formatUsageTermInternal(
     yield {
       text: term.value,
       width: term.value.length,
+    };
+  } else if (term.type === "passthrough") {
+    // Pass-through options are displayed with a special format
+    const text = "[...]";
+    yield {
+      text: options?.colors ? `\x1b[2m${text}\x1b[0m` : text, // Dim
+      width: text.length,
     };
   } else {
     throw new TypeError(

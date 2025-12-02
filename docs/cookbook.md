@@ -844,6 +844,128 @@ sensible fallbacks and [`optional()`](./concepts/modifiers.md#optional-parser)
 when absence is meaningful.
 
 
+Pass-through options for wrapper CLIs
+-------------------------------------
+
+*This API is available since Optique 0.8.0.*
+
+When building wrapper tools that need to forward unknown options to an
+underlying command, the [`passThrough()`](./concepts/primitives.md#passthrough-parser)
+parser captures unrecognized options without validation errors.
+
+### Basic wrapper pattern
+
+A common use case is wrapping another CLI tool while adding your own options:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { argument, option, passThrough } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  debug: option("--debug"),
+  config: option("-c", "--config", string({ metavar: "FILE" })),
+  extraOpts: passThrough(),
+});
+
+const result = run(parser);
+//    ^?
+
+
+
+
+
+
+
+
+// Use result.extraOpts to pass through to the underlying tool
+~~~~
+
+The key insight is that `passThrough()` has the *lowest priority* (−10), so
+your explicit options are always matched first. Only truly unrecognized options
+are captured in the pass-through array.
+
+### Subcommand-specific pass-through
+
+For tools that delegate entire subcommands to other processes:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { argument, command, constant, option, passThrough } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = or(
+  // Local command with known options
+  command("local", object({
+    action: constant("local"),
+    port: option("-p", "--port", integer()),
+    host: option("-h", "--host", string()),
+  })),
+  // Exec command passes everything through
+  command("exec", object({
+    action: constant("exec"),
+    container: argument(string({ metavar: "CONTAINER" })),
+    args: passThrough({ format: "greedy" }),
+  })),
+);
+
+const result = run(parser);
+
+if (result.action === "exec") {
+  // result.args contains all remaining tokens
+  // Pass them to the container: ["--verbose", "-it", "bash"]
+}
+~~~~
+
+The `"greedy"` format is crucial here: once the container name is captured, all
+remaining tokens (including those that look like options) go into `args`.
+
+### Choosing the right format
+
+The `passThrough()` parser supports three capture formats:
+
+`"equalsOnly"` (default)
+:   Only captures `--opt=val` format. The safest choice when you need to
+    distinguish between options and positional arguments:
+
+    ~~~~ typescript twoslash
+    import { passThrough } from "@optique/core/primitives";
+    // ---cut-before---
+    const parser = passThrough({ format: "equalsOnly" });
+    // Captures: --foo=bar, --baz=123
+    // Rejects: --foo bar, --verbose
+    ~~~~
+
+`"nextToken"`
+:   Captures `--opt val` as two tokens when the value doesn't look like
+    an option. Good for wrapping tools that use space-separated values:
+
+    ~~~~ typescript twoslash
+    import { passThrough } from "@optique/core/primitives";
+    // ---cut-before---
+    const parser = passThrough({ format: "nextToken" });
+    // --foo bar → ["--foo", "bar"]
+    // --foo --bar → ["--foo", "--bar"] (--bar is a separate option)
+    ~~~~
+
+`"greedy"`
+:   Captures *all* remaining tokens. Use for proxy/wrapper tools where
+    everything after a certain point should pass through:
+
+    ~~~~ typescript twoslash
+    import { passThrough } from "@optique/core/primitives";
+    // ---cut-before---
+    const parser = passThrough({ format: "greedy" });
+    // git commit -m "message" → ["git", "commit", "-m", "message"]
+    ~~~~
+
+> [!CAUTION]
+> The `"greedy"` format can shadow explicit parsers. Place it carefully,
+> typically as the last field in a subcommand-specific `object()`.
+
+
 Advanced patterns
 -----------------
 

@@ -456,6 +456,154 @@ const parser = or(
 ~~~~
 
 
+`passThrough()` parser
+----------------------
+
+*This API is available since Optique 0.8.0.*
+
+The `passThrough()` parser collects unrecognized options and passes them through
+without validation. This is useful for building wrapper CLI tools that need
+to forward unknown options to an underlying tool or command.
+
+> [!CAUTION]
+> *Consider alternatives before using `passThrough()`.* This parser
+> intentionally weakens Optique's strict parsing philosophy where “all input
+> must be recognized.” While it enables legitimate wrapper/proxy tool patterns,
+> it comes with significant trade-offs:
+>
+>  -  Typos in pass-through options won't be caught
+>  -  No type safety for forwarded options
+>  -  No shell completion support for pass-through options
+>  -  Error messages become less helpful for users
+>
+> Before reaching for `passThrough()`, consider whether:
+>
+>  -  You can use the standard `--` separator to explicitly mark pass-through
+>     arguments (e.g., `mycli --debug -- --forwarded-opt`)
+>  -  You can define the forwarded options explicitly for better type safety
+>  -  Your use case truly requires capturing arbitrary unknown options
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option, passThrough } from "@optique/core/primitives";
+
+const parser = object({
+  debug: option("--debug"),
+  extra: passThrough(),
+});
+
+// mycli --debug --foo=bar --baz=qux
+// → { debug: true, extra: ["--foo=bar", "--baz=qux"] }
+~~~~
+
+### Capture formats
+
+The `passThrough()` parser supports three different capture formats, each
+with different trade-offs:
+
+#### `"equalsOnly"` (default)
+
+The safest and most predictable format. Only captures options in `--opt=val`
+format where the value is explicitly attached to the option name:
+
+~~~~ typescript twoslash
+import { passThrough } from "@optique/core/primitives";
+// ---cut-before---
+const parser = passThrough({ format: "equalsOnly" });
+
+// Captures: --foo=bar, --baz=qux
+// Does NOT capture: --foo bar, --verbose
+~~~~
+
+This format has no ambiguity because the value is explicitly attached to the
+option name. Non-option arguments and space-separated values are not captured.
+
+#### `"nextToken"`
+
+A balanced choice that handles space-separated option values. When an
+unrecognized option starting with `-` is encountered, the parser also consumes
+the next token if it doesn't start with `-`:
+
+~~~~ typescript twoslash
+import { passThrough } from "@optique/core/primitives";
+// ---cut-before---
+const parser = passThrough({ format: "nextToken" });
+
+// mycli --foo bar --baz qux
+// → ["--foo", "bar", "--baz", "qux"]
+
+// mycli --foo --bar
+// → ["--foo", "--bar"] (--bar is a separate option, not a value)
+~~~~
+
+This format covers most CLI styles while still being reasonably predictable.
+
+#### `"greedy"`
+
+Captures *all remaining tokens* from the first unrecognized token onwards,
+regardless of whether they would match other parsers:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { argument, command, passThrough } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = command("exec", object({
+  container: argument(string()),
+  args: passThrough({ format: "greedy" }),
+}));
+
+// myproxy exec mycontainer --verbose -it bash
+// → { container: "mycontainer", args: ["--verbose", "-it", "bash"] }
+~~~~
+
+> [!CAUTION]
+> The `"greedy"` format requires careful use because it can shadow explicit
+> parsers. Once greedy mode triggers, all remaining tokens are consumed.
+> Typically used only when you have *no other options to parse* after the
+> pass-through point, or in subcommand-specific contexts where the entire
+> subcommand is pass-through.
+
+### Priority
+
+The `passThrough()` parser has the *lowest priority* (−10) among all parsers
+to ensure explicit parsers always match first:
+
+ -  *Priority 15*: `command()` parsers
+ -  *Priority 10*: `option()` and `flag()` parsers
+ -  *Priority 5*: `argument()` parsers
+ -  *Priority 0*: `constant()` parsers
+ -  *Priority −10*: `passThrough()` parsers
+
+This priority system ensures that your recognized options (like `--debug` in
+the example above) are always processed correctly, with only truly unrecognized
+options going to `passThrough()`.
+
+### Options terminator
+
+The `passThrough()` parser respects the `--` options terminator in `"equalsOnly"`
+and `"nextToken"` modes. After `--`, options are no longer captured:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { multiple } from "@optique/core/modifiers";
+import { argument, option, passThrough } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  debug: option("--debug"),
+  extra: passThrough(),
+  files: multiple(argument(string())),
+});
+
+// mycli --debug --foo=bar -- --not-an-option file.txt
+// → { debug: true, extra: ["--foo=bar"], files: ["--not-an-option", "file.txt"] }
+~~~~
+
+In `"greedy"` mode, the parser still captures tokens after `--` since its
+purpose is to pass everything through.
+
+
 Parser priority and state management
 ------------------------------------
 
@@ -469,9 +617,11 @@ parsers (like commands) are tried before more general ones (like arguments):
  -  *Priority 10*: `option()` and `flag()` parsers
  -  *Priority 5*: `argument()` parsers
  -  *Priority 0*: `constant()` parsers
+ -  *Priority −10*: `passThrough()` parsers
 
 Higher priority parsers are always tried first, which prevents ambiguous parsing
-situations and ensures predictable behavior.
+situations and ensures predictable behavior. The `passThrough()` parser has the
+lowest priority to ensure it only captures truly unrecognized options.
 
 ### State management
 

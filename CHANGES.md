@@ -39,6 +39,35 @@ To be released.
     internally by `conditional()` to show actual discriminator values in help
     text (e.g., `--reporter console` instead of `--reporter TYPE`).  [[#49]]
 
+ -  Added `passThrough()` parser for building wrapper CLI tools that need to
+    forward unrecognized options to an underlying tool. This parser captures
+    unknown options without validation errors, enabling legitimate wrapper/proxy
+    patterns.  [[#35]]
+
+    ~~~~ typescript
+    const parser = object({
+      debug: option("--debug"),
+      extra: passThrough(),
+    });
+
+    // mycli --debug --foo=bar --baz=qux
+    // → { debug: true, extra: ["--foo=bar", "--baz=qux"] }
+    ~~~~
+
+    Key features:
+
+     -  Three capture formats: `"equalsOnly"` (default, safest), `"nextToken"`
+        (captures `--opt val` pairs), and `"greedy"` (captures all remaining
+        tokens)
+     -  Lowest priority (−10) ensures explicit parsers always match first
+     -  Respects `--` options terminator in `"equalsOnly"` and `"nextToken"`
+        modes
+     -  Works seamlessly with `object()`, subcommands, and other combinators
+
+ -  Added `passthrough` type to `UsageTerm` for representing pass-through
+    options in usage descriptions. Displayed as `[...]` in help text.
+
+[#35]: https://github.com/dahlia/optique/issues/35
 [#49]: https://github.com/dahlia/optique/issues/49
 
 

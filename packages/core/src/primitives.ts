@@ -1340,3 +1340,236 @@ export function command<T, TState>(
     },
   } satisfies Parser<T, CommandState<TState>>;
 }
+
+/**
+ * Format options for how {@link passThrough} captures options.
+ * @since 0.8.0
+ */
+export type PassThroughFormat = "equalsOnly" | "nextToken" | "greedy";
+
+/**
+ * Options for the {@link passThrough} parser.
+ * @since 0.8.0
+ */
+export interface PassThroughOptions {
+  /**
+   * How to capture option values:
+   *
+   * - `"equalsOnly"`: Only capture `--opt=val` format (default, safest).
+   *   Values with spaces (`--opt val`) are not captured.
+   *
+   * - `"nextToken"`: Capture `--opt` and its value as separate tokens
+   *   (`--opt val`). The next token is captured if it doesn't start with `-`.
+   *
+   * - `"greedy"`: Capture *all* remaining tokens from first unrecognized token.
+   *   This is useful for wrapper/proxy tools that pass everything through.
+   *
+   * @default `"equalsOnly"`
+   */
+  readonly format?: PassThroughFormat;
+
+  /**
+   * A description of what pass-through options are used for.
+   */
+  readonly description?: Message;
+}
+
+/**
+ * Creates a parser that collects unrecognized options and passes them through.
+ * This is useful for building wrapper CLI tools that need to forward unknown
+ * options to an underlying tool.
+ *
+ * **Important**: This parser intentionally weakens Optique's strict parsing
+ * philosophy where "all input must be recognized." The benefit is enabling
+ * legitimate wrapper/proxy tool patterns, but the trade-off is that typos
+ * in pass-through options won't be caught.
+ *
+ * @param options Configuration for how to capture options.
+ * @returns A {@link Parser} that captures unrecognized options as an array
+ *          of strings.
+ *
+ * @example
+ * ```typescript
+ * // Default format: only captures --opt=val
+ * const parser = object({
+ *   debug: option("--debug"),
+ *   extra: passThrough(),
+ * });
+ *
+ * // mycli --debug --foo=bar --baz=qux
+ * // → { debug: true, extra: ["--foo=bar", "--baz=qux"] }
+ *
+ * // nextToken format: captures --opt val pairs
+ * const parser = object({
+ *   debug: option("--debug"),
+ *   extra: passThrough({ format: "nextToken" }),
+ * });
+ *
+ * // mycli --debug --foo bar
+ * // → { debug: true, extra: ["--foo", "bar"] }
+ *
+ * // greedy format: captures all remaining tokens
+ * const parser = command("exec", object({
+ *   container: argument(string()),
+ *   args: passThrough({ format: "greedy" }),
+ * }));
+ *
+ * // myproxy exec mycontainer --verbose -it bash
+ * // → { container: "mycontainer", args: ["--verbose", "-it", "bash"] }
+ * ```
+ *
+ * @since 0.8.0
+ */
+export function passThrough(
+  options: PassThroughOptions = {},
+): Parser<readonly string[], readonly string[]> {
+  const format = options.format ?? "equalsOnly";
+  const optionPattern = /^-[a-z0-9-]|^--[a-z0-9-]+/i;
+  const equalsOptionPattern = /^--[a-z0-9-]+=/i;
+
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: -10, // Lowest priority to be tried last
+    usage: [{ type: "passthrough" }],
+    initialState: [],
+
+    parse(context) {
+      if (context.buffer.length < 1) {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`No input to pass through.`,
+        };
+      }
+
+      const token = context.buffer[0];
+
+      if (format === "greedy") {
+        // Greedy mode: capture ALL remaining tokens
+        const captured = [...context.buffer];
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: [],
+            state: [...context.state, ...captured],
+          },
+          consumed: captured,
+        };
+      }
+
+      // For equalsOnly and nextToken, don't capture after options terminator
+      if (context.optionsTerminated) {
+        return {
+          success: false,
+          consumed: 0,
+          error:
+            message`Options terminated; cannot capture pass-through options.`,
+        };
+      }
+
+      if (format === "equalsOnly") {
+        // Only capture --opt=val format
+        if (!equalsOptionPattern.test(token)) {
+          return {
+            success: false,
+            consumed: 0,
+            error: message`Expected --option=value format, but got: ${token}.`,
+          };
+        }
+
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: [...context.state, token],
+          },
+          consumed: [token],
+        };
+      }
+
+      if (format === "nextToken") {
+        // Must start with an option-like token
+        if (!optionPattern.test(token)) {
+          return {
+            success: false,
+            consumed: 0,
+            error: message`Expected option, but got: ${token}.`,
+          };
+        }
+
+        // Check for --opt=val format (already includes value)
+        if (token.includes("=")) {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: [...context.state, token],
+            },
+            consumed: [token],
+          };
+        }
+
+        // Check if next token is a value (doesn't start with -)
+        const nextToken = context.buffer[1];
+        if (nextToken !== undefined && !optionPattern.test(nextToken)) {
+          // Capture both the option and its value
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(2),
+              state: [...context.state, token, nextToken],
+            },
+            consumed: [token, nextToken],
+          };
+        }
+
+        // No value follows, just capture the option
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: [...context.state, token],
+          },
+          consumed: [token],
+        };
+      }
+
+      // Should never reach here
+      return {
+        success: false,
+        consumed: 0,
+        error: message`Unknown passThrough format: ${format}.`,
+      };
+    },
+
+    complete(state) {
+      return { success: true, value: state };
+    },
+
+    suggest(_context, _prefix) {
+      // passThrough cannot suggest specific values since it captures unknown options
+      return [];
+    },
+
+    getDocFragments(_state, _defaultValue?) {
+      return {
+        fragments: [{
+          type: "entry",
+          term: { type: "passthrough" },
+          description: options.description,
+        }],
+        description: options.description,
+      };
+    },
+
+    [Symbol.for("Deno.customInspect")]() {
+      return `passThrough(${format})`;
+    },
+  };
+}
