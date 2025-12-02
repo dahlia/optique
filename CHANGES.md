@@ -6,6 +6,16 @@ Version 0.6.5
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `optional()` and `withDefault()` returning an error instead of the
+    expected value when the input contains only the options terminator `"--"`.
+    For example, `parse(withDefault(option("--name", string()), "Bob"), ["--"])`
+    now correctly returns `"Bob"` instead of failing with “Missing option
+    `--name`.”  [[#50]]
+
+[#50]: https://github.com/dahlia/optique/issues/50
+
 
 Version 0.6.4
 -------------
