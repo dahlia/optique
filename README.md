@@ -5,6 +5,7 @@ Optique: Type-safe combinatorial CLI parser for TypeScript
 
 [![JSR][JSR badge]][JSR]
 [![npm][npm badge]][npm]
+[![Bundlephobia][Bundlephobia badge]][Bundlephobia]
 [![GitHub Actions][GitHub Actions badge]][GitHub Actions]
 
 > [!WARNING]
@@ -25,6 +26,8 @@ built-in shell completion support for Bash, zsh, fish, PowerShell, and Nushell.
 [JSR badge]: https://jsr.io/badges/@optique/core
 [npm]: https://www.npmjs.com/package/@optique/core
 [npm badge]: https://img.shields.io/npm/v/@optique/core?logo=npm
+[Bundlephobia]: https://bundlephobia.com/package/@optique/core
+[Bundlephobia badge]: https://badgen.net/bundlephobia/dependency-count/@optique/core
 [GitHub Actions]: https://github.com/dahlia/optique/actions/workflows/main.yaml
 [GitHub Actions badge]: https://github.com/dahlia/optique/actions/workflows/main.yaml/badge.svg
 [optparse-applicative]: https://github.com/pcapriotti/optparse-applicative
