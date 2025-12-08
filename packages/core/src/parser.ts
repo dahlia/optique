@@ -302,7 +302,7 @@ export function parse<T>(
     if (
       context.buffer.length > 0 &&
       context.buffer.length === previousBuffer.length &&
-      context.buffer[0] === previousBuffer[0]
+      context.buffer.every((item, i) => item === previousBuffer[i])
     ) {
       return {
         success: false,
@@ -373,7 +373,7 @@ export function suggest<T>(
     if (
       context.buffer.length > 0 &&
       context.buffer.length === previousBuffer.length &&
-      context.buffer[0] === previousBuffer[0]
+      context.buffer.every((item, i) => item === previousBuffer[i])
     ) {
       return [];
     }
