@@ -1,5 +1,70 @@
 import { formatMessage, type Message, message, text } from "./message.ts";
-import type { DocState, Parser } from "./parser.ts";
+import type {
+  DocState,
+  Parser,
+  ParserContext,
+  ParserResult,
+} from "./parser.ts";
+
+/**
+ * Internal helper for optional-style parsing logic shared by optional()
+ * and withDefault(). Handles the common pattern of:
+ * - Unwrapping optional state to inner parser state
+ * - Detecting if inner parser actually matched (state changed or no consumption)
+ * - Returning success with undefined state when inner parser fails without consuming
+ * @internal
+ */
+function parseOptionalStyle<TState>(
+  context: ParserContext<[TState] | undefined>,
+  parser: Parser<unknown, TState>,
+): ParserResult<[TState] | undefined> {
+  const innerState = typeof context.state === "undefined"
+    ? parser.initialState
+    : context.state[0];
+
+  const result = parser.parse({
+    ...context,
+    state: innerState,
+  });
+
+  if (result.success) {
+    // Check if inner parser actually matched something (state changed)
+    // or if it consumed nothing (e.g., constant parser)
+    if (
+      result.next.state !== innerState || result.consumed.length === 0
+    ) {
+      return {
+        success: true,
+        next: {
+          ...result.next,
+          state: [result.next.state],
+        },
+        consumed: result.consumed,
+      };
+    }
+    // Inner parser returned success but state unchanged while consuming input
+    // (e.g., only consumed "--"). Treat as "not matched" but propagate side
+    // effects (optionsTerminated, buffer)
+    return {
+      success: true,
+      next: {
+        ...result.next,
+        state: context.state,
+      },
+      consumed: result.consumed,
+    };
+  }
+  // If inner parser failed without consuming input, return success
+  // with undefined state so complete() can provide the fallback value
+  if (result.consumed === 0) {
+    return {
+      success: true,
+      next: context,
+      consumed: [],
+    };
+  }
+  return result;
+}
 
 /**
  * Creates a parser that makes another parser optional, allowing it to succeed
@@ -22,52 +87,7 @@ export function optional<TValue, TState>(
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     parse(context) {
-      const innerState = typeof context.state === "undefined"
-        ? parser.initialState
-        : context.state[0];
-
-      const result = parser.parse({
-        ...context,
-        state: innerState,
-      });
-
-      if (result.success) {
-        // Check if inner parser actually matched something (state changed)
-        // or if it consumed nothing (e.g., constant parser)
-        if (
-          result.next.state !== innerState || result.consumed.length === 0
-        ) {
-          return {
-            success: true,
-            next: {
-              ...result.next,
-              state: [result.next.state],
-            },
-            consumed: result.consumed,
-          };
-        }
-        // Inner parser returned success but state unchanged while consuming input
-        // (e.g., only consumed "--"). Treat as "not matched" but propagate side
-        // effects (optionsTerminated, buffer)
-        return {
-          success: true,
-          next: {
-            ...result.next,
-            state: context.state,
-          },
-          consumed: result.consumed,
-        };
-      }
-      // If inner parser failed without consuming input, return success
-      // with undefined state so complete() can provide undefined value
-      if (result.consumed === 0) {
-        return {
-          success: true,
-          next: context,
-          consumed: [],
-        };
-      }
-      return result;
+      return parseOptionalStyle(context, parser);
     },
     complete(state) {
       if (typeof state === "undefined") {
@@ -217,52 +237,7 @@ export function withDefault<TValue, TState, TDefault = TValue>(
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     parse(context) {
-      const innerState = typeof context.state === "undefined"
-        ? parser.initialState
-        : context.state[0];
-
-      const result = parser.parse({
-        ...context,
-        state: innerState,
-      });
-
-      if (result.success) {
-        // Check if inner parser actually matched something (state changed)
-        // or if it consumed nothing (e.g., constant parser)
-        if (
-          result.next.state !== innerState || result.consumed.length === 0
-        ) {
-          return {
-            success: true,
-            next: {
-              ...result.next,
-              state: [result.next.state],
-            },
-            consumed: result.consumed,
-          };
-        }
-        // Inner parser returned success but state unchanged while consuming input
-        // (e.g., only consumed "--"). Treat as "not matched" but propagate side
-        // effects (optionsTerminated, buffer)
-        return {
-          success: true,
-          next: {
-            ...result.next,
-            state: context.state,
-          },
-          consumed: result.consumed,
-        };
-      }
-      // If inner parser failed without consuming input, return success
-      // with undefined state so complete() can provide the default value
-      if (result.consumed === 0) {
-        return {
-          success: true,
-          next: context,
-          consumed: [],
-        };
-      }
-      return result;
+      return parseOptionalStyle(context, parser);
     },
     complete(state) {
       if (typeof state === "undefined") {
