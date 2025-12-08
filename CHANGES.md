@@ -67,6 +67,14 @@ To be released.
  -  Added `passthrough` type to `UsageTerm` for representing pass-through
     options in usage descriptions. Displayed as `[...]` in help text.
 
+ -  Fixed `integer()` value parser to accept negative integers when using
+    `type: "number"`. Previously, the regex pattern only matched non-negative
+    integers (`/^\d+$/`), causing inputs like `-42` to be rejected as invalid.
+    The pattern has been updated to `/^-?\d+$/` to correctly handle negative
+    values. Note that `type: "bigint"` already accepted negative integers via
+    `BigInt()` conversion, so this change brings consistency between the two
+    types.
+
 [#35]: https://github.com/dahlia/optique/issues/35
 [#49]: https://github.com/dahlia/optique/issues/49
 

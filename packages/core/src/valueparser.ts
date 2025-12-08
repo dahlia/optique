@@ -478,7 +478,7 @@ export function integer(
   return {
     metavar: options?.metavar ?? "INTEGER",
     parse(input: string): ValueParserResult<number> {
-      if (!input.match(/^\d+$/)) {
+      if (!input.match(/^-?\d+$/)) {
         return {
           success: false,
           error: options?.errors?.invalidInteger

@@ -144,20 +144,17 @@ describe("integer", () => {
       const result2 = parser.parse("12.34");
       assert.ok(!result2.success);
 
-      const result3 = parser.parse("-42");
+      const result3 = parser.parse("42.0");
       assert.ok(!result3.success);
 
-      const result4 = parser.parse("42.0");
+      const result4 = parser.parse("1e5");
       assert.ok(!result4.success);
 
-      const result5 = parser.parse("1e5");
+      const result5 = parser.parse("");
       assert.ok(!result5.success);
 
-      const result6 = parser.parse("");
+      const result6 = parser.parse("  42  ");
       assert.ok(!result6.success);
-
-      const result7 = parser.parse("  42  ");
-      assert.ok(!result7.success);
     });
 
     it("should enforce minimum constraint", () => {
@@ -3454,17 +3451,15 @@ describe("integer edge cases", () => {
       // Precision may be lost
     });
 
-    // This test documents the current behavior - negative integers are rejected
-    // This is a bug that will be fixed in bug 2.4
-    it("should reject negative integers (current behavior - bug)", () => {
+    it("should accept negative integers", () => {
       const parser = integer({});
 
       const result = parser.parse("-42");
-      assert.ok(!result.success);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, -42);
+      }
     });
-
-    // Regression test for when bug 2.4 is fixed
-    it.todo("should accept negative integers (after bug fix)");
   });
 
   describe("bigint parser edge cases", () => {
