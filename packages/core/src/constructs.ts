@@ -167,6 +167,53 @@ function analyzeNoMatchContext(
 }
 
 /**
+ * Error class thrown when duplicate option names are detected during parser
+ * construction. This is a programmer error, not a user error.
+ */
+export class DuplicateOptionError extends Error {
+  constructor(
+    public readonly optionName: string,
+    public readonly sources: string[],
+  ) {
+    super(
+      `Duplicate option name "${optionName}" found in fields: ` +
+        `${sources.join(", ")}. Each option name must be unique within a ` +
+        `parser combinator.`,
+    );
+    this.name = "DuplicateOptionError";
+  }
+}
+
+/**
+ * Checks for duplicate option names across parser sources and throws an error
+ * if duplicates are found. This should be called at construction time.
+ * @param parserSources Array of [source, usage] tuples
+ * @throws DuplicateOptionError if duplicate option names are found
+ */
+function checkDuplicateOptionNames(
+  parserSources: ReadonlyArray<readonly [string, Usage]>,
+): void {
+  const optionNameSources = new Map<string, string[]>();
+
+  for (const [source, usage] of parserSources) {
+    const names = extractOptionNames(usage);
+    for (const name of names) {
+      if (!optionNameSources.has(name)) {
+        optionNameSources.set(name, []);
+      }
+      optionNameSources.get(name)!.push(source);
+    }
+  }
+
+  // Check for duplicates
+  for (const [name, sources] of optionNameSources) {
+    if (sources.length > 1) {
+      throw new DuplicateOptionError(name, sources);
+    }
+  }
+}
+
+/**
  * Generates a contextual error message based on what types of inputs
  * the parsers expect (options, commands, or arguments).
  * @param context Context about what types of inputs are expected
@@ -1556,6 +1603,13 @@ export function object<
     parserB.priority - parserA.priority
   );
 
+  // Check for duplicate option names at construction time unless explicitly allowed
+  if (!options.allowDuplicates) {
+    checkDuplicateOptionNames(
+      parserPairs.map(([field, parser]) => [field, parser.usage] as const),
+    );
+  }
+
   // Analyze context once for error message generation
   const noMatchContext = analyzeNoMatchContext(Object.values(parsers));
 
@@ -1575,38 +1629,6 @@ export function object<
         : never;
     },
     parse(context) {
-      // Check for duplicate option names unless explicitly allowed
-      if (!options.allowDuplicates) {
-        const optionNameSources = new Map<string, string[]>();
-
-        for (const [field, parser] of parserPairs) {
-          const names = extractOptionNames(parser.usage);
-          for (const name of names) {
-            if (!optionNameSources.has(name)) {
-              optionNameSources.set(name, []);
-            }
-            optionNameSources.get(name)!.push(field);
-          }
-        }
-
-        // Check for duplicates
-        for (const [name, sources] of optionNameSources) {
-          if (sources.length > 1) {
-            return {
-              success: false,
-              consumed: 0,
-              error: message`Duplicate option name ${
-                eOptionName(
-                  name,
-                )
-              } found in fields: ${
-                values(sources)
-              }. Each option name must be unique within a parser combinator.`,
-            };
-          }
-        }
-      }
-
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length > 0
@@ -1889,6 +1911,14 @@ export function tuple<
     parsers = labelOrParsers;
     options = (maybeParsersOrOptions as TupleOptions) ?? {};
   }
+
+  // Check for duplicate option names at construction time unless explicitly allowed
+  if (!options.allowDuplicates) {
+    checkDuplicateOptionNames(
+      parsers.map((parser, index) => [String(index), parser.usage] as const),
+    );
+  }
+
   return {
     $valueType: [],
     $stateType: [],
@@ -1904,38 +1934,6 @@ export function tuple<
         : never;
     },
     parse(context) {
-      // Check for duplicate option names unless explicitly allowed
-      if (!options.allowDuplicates) {
-        const optionNameSources = new Map<string, number[]>();
-
-        for (let i = 0; i < parsers.length; i++) {
-          const names = extractOptionNames(parsers[i].usage);
-          for (const name of names) {
-            if (!optionNameSources.has(name)) {
-              optionNameSources.set(name, []);
-            }
-            optionNameSources.get(name)!.push(i);
-          }
-        }
-
-        // Check for duplicates
-        for (const [name, indices] of optionNameSources) {
-          if (indices.length > 1) {
-            return {
-              success: false,
-              consumed: 0,
-              error: message`Duplicate option name ${
-                eOptionName(
-                  name,
-                )
-              } found at positions: ${
-                values(indices.map(String))
-              }. Each option name must be unique within a parser combinator.`,
-            };
-          }
-        }
-      }
-
       let currentContext = context;
       const allConsumed: string[] = [];
       const matchedParsers = new Set<number>();
@@ -3187,6 +3185,15 @@ export function merge(
   const sorted = withIndex.toSorted(([a], [b]) => b.priority - a.priority);
   const parsers = sorted.map(([p]) => p);
 
+  // Check for duplicate option names at construction time unless explicitly allowed
+  if (!options.allowDuplicates) {
+    checkDuplicateOptionNames(
+      sorted.map(([parser, originalIndex]) =>
+        [String(originalIndex), parser.usage] as const
+      ),
+    );
+  }
+
   const initialState: Record<string | symbol, unknown> = {};
   for (const parser of parsers) {
     if (parser.initialState && typeof parser.initialState === "object") {
@@ -3202,38 +3209,6 @@ export function merge(
     usage: parsers.flatMap((p) => p.usage),
     initialState,
     parse(context) {
-      // Check for duplicate option names unless explicitly allowed
-      if (!options.allowDuplicates) {
-        const optionNameSources = new Map<string, number[]>();
-
-        for (const [parser, originalIndex] of sorted) {
-          const names = extractOptionNames(parser.usage);
-          for (const name of names) {
-            if (!optionNameSources.has(name)) {
-              optionNameSources.set(name, []);
-            }
-            optionNameSources.get(name)!.push(originalIndex);
-          }
-        }
-
-        // Check for duplicates
-        for (const [name, indices] of optionNameSources) {
-          if (indices.length > 1) {
-            return {
-              success: false,
-              consumed: 0,
-              error: message`Duplicate option name ${
-                eOptionName(
-                  name,
-                )
-              } found in merged parsers at positions: ${
-                values(indices.map(String))
-              }. Each option name must be unique within a parser combinator.`,
-            };
-          }
-        }
-      }
-
       for (let i = 0; i < parsers.length; i++) {
         const parser = parsers[i];
         // Extract the appropriate state for this parser

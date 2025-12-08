@@ -327,10 +327,11 @@ describe("Parser suggest() methods", () => {
     });
 
     it("should remove duplicate suggestions", () => {
+      // Use allowDuplicates to test suggestion deduplication logic
       const parser = object({
         verbose1: option("-v", "--verbose"),
         verbose2: option("-v", "--verbose"), // Duplicate option names
-      });
+      }, { allowDuplicates: true });
       const context: ParserContext<typeof parser.initialState> = {
         buffer: [],
         state: parser.initialState,

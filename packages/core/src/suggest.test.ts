@@ -212,10 +212,11 @@ describe("suggest function", () => {
     });
 
     it("should remove duplicate suggestions", () => {
+      // Use allowDuplicates to test suggestion deduplication logic
       const parser = object({
         verbose1: option("-v", "--verbose"),
         verbose2: option("-v", "--verbose"), // Same option names
-      });
+      }, { allowDuplicates: true });
       const result = suggest(parser, ["--v"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
