@@ -3874,3 +3874,266 @@ describe("conditional", () => {
     });
   });
 });
+
+describe("complex combinator interactions", () => {
+  describe("or() with multiple()", () => {
+    it("should handle multiple values in or() branches", () => {
+      const parser = or(
+        multiple(option("-a")),
+        multiple(option("-b")),
+      );
+
+      // Multiple -a options
+      const result1 = parse(parser, ["-a", "-a", "-a"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.deepEqual(result1.value, [true, true, true]);
+      }
+
+      // Multiple -b options
+      const result2 = parse(parser, ["-b", "-b"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.deepEqual(result2.value, [true, true]);
+      }
+    });
+
+    it("should detect mixed options from different branches", () => {
+      const parser = or(
+        multiple(option("-a")),
+        multiple(option("-b")),
+      );
+
+      const result = parse(parser, ["-a", "-b"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "cannot be used together");
+      }
+    });
+  });
+
+  describe("nested or() combinators", () => {
+    it("should handle 2-level nested or()", () => {
+      const innerOr = or(option("-a"), option("-b"));
+      const outerOr = or(innerOr, option("-c"));
+
+      const result1 = parse(outerOr, ["-a"]);
+      assert.ok(result1.success);
+
+      const result2 = parse(outerOr, ["-b"]);
+      assert.ok(result2.success);
+
+      const result3 = parse(outerOr, ["-c"]);
+      assert.ok(result3.success);
+    });
+
+    it("should handle 3-level nested or()", () => {
+      const level1 = or(option("-a"), option("-b"));
+      const level2 = or(level1, option("-c"));
+      const level3 = or(level2, option("-d"));
+
+      const result1 = parse(level3, ["-a"]);
+      assert.ok(result1.success);
+
+      const result2 = parse(level3, ["-d"]);
+      assert.ok(result2.success);
+    });
+
+    it("should maintain mutual exclusivity across nested levels", () => {
+      const innerOr = or(option("-a"), option("-b"));
+      const outerOr = or(innerOr, option("-c"));
+
+      const result = parse(outerOr, ["-a", "-c"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "cannot be used together");
+      }
+    });
+  });
+
+  describe("object() with same priority fields", () => {
+    it("should handle multiple fields with same priority", () => {
+      const parser = object({
+        alpha: option("-a"),
+        beta: option("-b"),
+        gamma: option("-c"),
+      });
+
+      // All three parsers have the same default priority
+      const result = parse(parser, ["-c", "-a", "-b"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, {
+          alpha: true,
+          beta: true,
+          gamma: true,
+        });
+      }
+    });
+
+    it("should handle many fields in object (stress test)", () => {
+      // Create an object with 15 fields
+      const parser = object({
+        f1: option("-1"),
+        f2: option("-2"),
+        f3: option("-3"),
+        f4: option("-4"),
+        f5: option("-5"),
+        f6: option("-6"),
+        f7: option("-7"),
+        f8: option("-8"),
+        f9: option("-9"),
+        f10: option("--ten"),
+        f11: option("--eleven"),
+        f12: option("--twelve"),
+        f13: option("--thirteen"),
+        f14: option("--fourteen"),
+        f15: option("--fifteen"),
+      });
+
+      const result = parse(parser, [
+        "-1",
+        "-3",
+        "-5",
+        "-7",
+        "-9",
+        "--eleven",
+        "--thirteen",
+        "--fifteen",
+      ]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.f1, true);
+        assert.equal(result.value.f3, true);
+        assert.equal(result.value.f5, true);
+        assert.equal(result.value.f11, true);
+        assert.equal(result.value.f2, false);
+        assert.equal(result.value.f4, false);
+      }
+    });
+
+    it("should handle all optional fields with empty input", () => {
+      const parser = object({
+        a: optional(option("-a")),
+        b: optional(option("-b")),
+        c: optional(option("-c")),
+      });
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, {
+          a: undefined,
+          b: undefined,
+          c: undefined,
+        });
+      }
+    });
+  });
+
+  describe("deeply nested structures", () => {
+    it("should handle optional(or(object()))", () => {
+      const parser = optional(
+        or(
+          object({
+            a: option("-a"),
+            b: option("-b"),
+          }),
+          object({
+            c: option("-c"),
+            d: option("-d"),
+          }),
+        ),
+      );
+
+      // First branch
+      const result1 = parse(parser, ["-a", "-b"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.deepEqual(result1.value, { a: true, b: true });
+      }
+
+      // Second branch
+      const result2 = parse(parser, ["-c", "-d"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.deepEqual(result2.value, { c: true, d: true });
+      }
+
+      // No input - should return undefined
+      const result3 = parse(parser, []);
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, undefined);
+      }
+    });
+
+    it("should handle 5+ levels of command nesting", () => {
+      const level5 = command("level5", object({ flag: flag("-f") }));
+      const level4 = command("level4", object({ sub: level5 }));
+      const level3 = command("level3", object({ sub: level4 }));
+      const level2 = command("level2", object({ sub: level3 }));
+      const level1 = command("level1", object({ sub: level2 }));
+
+      const result = parse(
+        level1,
+        ["level1", "level2", "level3", "level4", "level5", "-f"],
+      );
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, {
+          sub: {
+            sub: {
+              sub: {
+                sub: {
+                  flag: true,
+                },
+              },
+            },
+          },
+        });
+      }
+    });
+  });
+
+  describe("or() branch mixing with 'cannot be used together'", () => {
+    it("should detect when options from different branches are mixed", () => {
+      const branchA = object({
+        mode: constant("add" as const),
+        files: multiple(argument(string({ metavar: "FILE" }))),
+      });
+      const branchB = object({
+        mode: constant("remove" as const),
+        force: flag("-f", "--force"),
+      });
+      const parser = or(branchA, branchB);
+
+      // Using options from both branches
+      const result = parse(parser, ["file.txt", "-f"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "cannot be used together");
+      }
+    });
+
+    it("should allow valid usage within single branch", () => {
+      const branchA = object({
+        verbose: flag("-v"),
+        files: multiple(argument(string({ metavar: "FILE" }))),
+      });
+      const branchB = object({
+        quiet: flag("-q"),
+        force: flag("-f"),
+      });
+      const parser = or(branchA, branchB);
+
+      // All from first branch
+      const result1 = parse(parser, ["-v", "file1.txt", "file2.txt"]);
+      assert.ok(result1.success);
+
+      // All from second branch
+      const result2 = parse(parser, ["-q", "-f"]);
+      assert.ok(result2.success);
+    });
+  });
+});
