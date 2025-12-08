@@ -65,6 +65,9 @@ const INTEGRATIONS = {
   text: "Integrations",
   items: [
     { text: "LogTape", link: "/integrations/logtape" },
+    { text: "Temporal", link: "/integrations/temporal" },
+    { text: "Valibot", link: "/integrations/valibot" },
+    { text: "Zod", link: "/integrations/zod" },
   ],
 };
 
