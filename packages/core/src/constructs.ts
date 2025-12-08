@@ -10,6 +10,7 @@ import type {
   Parser,
   ParserContext,
   ParserResult,
+  Suggestion,
 } from "./parser.ts";
 import {
   createErrorWithSuggestions,
@@ -242,6 +243,127 @@ function generateNoMatchError(context: NoMatchContext): Message {
     // All three types present
     return message`No matching option, command, or argument found.`;
   }
+}
+
+/**
+ * Shared state type for or() and longestMatch() combinators.
+ * @internal
+ */
+type ExclusiveState = undefined | [number, ParserResult<unknown>];
+
+/**
+ * Options type for exclusive combinators (or/longestMatch).
+ * @internal
+ */
+interface ExclusiveErrorOptions {
+  noMatch?: Message | ((context: NoMatchContext) => Message);
+  unexpectedInput?: Message | ((token: string) => Message);
+  suggestions?: (suggestions: readonly string[]) => Message;
+}
+
+/**
+ * Creates a complete() method shared by or() and longestMatch().
+ * @internal
+ */
+function createExclusiveComplete(
+  parsers: Parser<unknown, unknown>[],
+  options: { errors?: ExclusiveErrorOptions } | undefined,
+  noMatchContext: NoMatchContext,
+): (state: ExclusiveState) => ValueParserResult<unknown> {
+  return (state) => {
+    if (state == null) {
+      return {
+        success: false,
+        error: getNoMatchError(options, noMatchContext),
+      };
+    }
+    const [i, result] = state;
+    if (result.success) return parsers[i].complete(result.next.state);
+    return { success: false, error: result.error };
+  };
+}
+
+/**
+ * Creates a suggest() method shared by or() and longestMatch().
+ * @internal
+ */
+function createExclusiveSuggest(
+  parsers: Parser<unknown, unknown>[],
+): (context: ParserContext<ExclusiveState>, prefix: string) => Suggestion[] {
+  return (context, prefix) => {
+    const suggestions: Suggestion[] = [];
+
+    if (context.state == null) {
+      // No parser has been selected yet, get suggestions from all parsers
+      for (const parser of parsers) {
+        const parserSuggestions = parser.suggest({
+          ...context,
+          state: parser.initialState,
+        }, prefix);
+        suggestions.push(...parserSuggestions);
+      }
+    } else {
+      // A parser has been selected, delegate to that parser
+      const [index, parserResult] = context.state;
+      if (parserResult.success) {
+        const parserSuggestions = parsers[index].suggest({
+          ...context,
+          state: parserResult.next.state,
+        }, prefix);
+        suggestions.push(...parserSuggestions);
+      }
+    }
+
+    return deduplicateSuggestions(suggestions);
+  };
+}
+
+/**
+ * Gets the no-match error, either from custom options or default.
+ * Shared by or() and longestMatch().
+ * @internal
+ */
+function getNoMatchError(
+  options: { errors?: ExclusiveErrorOptions } | undefined,
+  noMatchContext: NoMatchContext,
+): Message {
+  const customNoMatch = options?.errors?.noMatch;
+  return customNoMatch
+    ? (typeof customNoMatch === "function"
+      ? customNoMatch(noMatchContext)
+      : customNoMatch)
+    : generateNoMatchError(noMatchContext);
+}
+
+/**
+ * Creates default error for parse() method when buffer is not empty.
+ * Shared by or() and longestMatch().
+ * @internal
+ */
+function createUnexpectedInputError(
+  token: string,
+  usage: Usage,
+  options: { errors?: ExclusiveErrorOptions } | undefined,
+): Message {
+  const defaultMsg = message`Unexpected option or subcommand: ${
+    eOptionName(token)
+  }.`;
+
+  // If custom error is provided, use it
+  if (options?.errors?.unexpectedInput != null) {
+    return typeof options.errors.unexpectedInput === "function"
+      ? options.errors.unexpectedInput(token)
+      : options.errors.unexpectedInput;
+  }
+
+  // Otherwise, add suggestions to the default message
+  return createErrorWithSuggestions(
+    defaultMsg,
+    token,
+    usage,
+    "both",
+    options?.errors?.suggestions,
+  );
 }
 
 /**
@@ -779,61 +901,19 @@ export function or(
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
     initialState: undefined,
-    complete(
-      state: undefined | [number, ParserResult<unknown>],
-    ): ValueParserResult<unknown> {
-      if (state == null) {
-        const customNoMatch = options?.errors?.noMatch;
-        const error = customNoMatch
-          ? (typeof customNoMatch === "function"
-            ? customNoMatch(noMatchContext)
-            : customNoMatch)
-          : generateNoMatchError(noMatchContext);
-        return {
-          success: false,
-          error,
-        };
-      }
-      const [i, result] = state;
-      if (result.success) return parsers[i].complete(result.next.state);
-      return { success: false, error: result.error };
-    },
+    complete: createExclusiveComplete(parsers, options, noMatchContext),
     parse(
       context: ParserContext<[number, ParserResult<unknown>]>,
     ): ParserResult<[number, ParserResult<unknown>]> {
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length < 1
-          ? (() => {
-            const customNoMatch = options?.errors?.noMatch;
-            return customNoMatch
-              ? (typeof customNoMatch === "function"
-                ? customNoMatch(noMatchContext)
-                : customNoMatch)
-              : generateNoMatchError(noMatchContext);
-          })()
-          : (() => {
-            const token = context.buffer[0];
-            const defaultMsg = message`Unexpected option or subcommand: ${
-              eOptionName(token)
-            }.`;
-
-            // If custom error is provided, use it
-            if (options?.errors?.unexpectedInput != null) {
-              return typeof options.errors.unexpectedInput === "function"
-                ? options.errors.unexpectedInput(token)
-                : options.errors.unexpectedInput;
-            }
-
-            // Otherwise, add suggestions to the default message
-            return createErrorWithSuggestions(
-              defaultMsg,
-              token,
-              context.usage,
-              "both",
-              options?.errors?.suggestions,
-            );
-          })(),
+          ? getNoMatchError(options, noMatchContext)
+          : createUnexpectedInputError(
+            context.buffer[0],
+            context.usage,
+            options,
+          ),
       };
       const orderedParsers = parsers.map((p, i) =>
         [p, i] as [Parser<unknown, unknown>, number]
@@ -875,32 +955,7 @@ export function or(
       }
       return { ...error, success: false };
     },
-    suggest(context, prefix) {
-      const suggestions = [];
-
-      if (context.state == null) {
-        // No parser has been selected yet, get suggestions from all parsers
-        for (const parser of parsers) {
-          const parserSuggestions = parser.suggest({
-            ...context,
-            state: parser.initialState,
-          }, prefix);
-          suggestions.push(...parserSuggestions);
-        }
-      } else {
-        // A parser has been selected, delegate to that parser
-        const [index, parserResult] = context.state;
-        if (parserResult.success) {
-          const parserSuggestions = parsers[index].suggest({
-            ...context,
-            state: parserResult.next.state,
-          }, prefix);
-          suggestions.push(...parserSuggestions);
-        }
-      }
-
-      return deduplicateSuggestions(suggestions);
-    },
+    suggest: createExclusiveSuggest(parsers),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
@@ -1208,25 +1263,7 @@ export function longestMatch(
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
     initialState: undefined,
-    complete(
-      state: undefined | [number, ParserResult<unknown>],
-    ): ValueParserResult<unknown> {
-      if (state == null) {
-        const customNoMatch = options?.errors?.noMatch;
-        const error = customNoMatch
-          ? (typeof customNoMatch === "function"
-            ? customNoMatch(noMatchContext)
-            : customNoMatch)
-          : generateNoMatchError(noMatchContext);
-        return {
-          success: false,
-          error,
-        };
-      }
-      const [i, result] = state;
-      if (result.success) return parsers[i].complete(result.next.state);
-      return { success: false, error: result.error };
-    },
+    complete: createExclusiveComplete(parsers, options, noMatchContext),
     parse(
       context: ParserContext<[number, ParserResult<unknown>]>,
     ): ParserResult<[number, ParserResult<unknown>]> {
@@ -1238,36 +1275,12 @@ export function longestMatch(
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length < 1
-          ? (() => {
-            const customNoMatch = options?.errors?.noMatch;
-            return customNoMatch
-              ? (typeof customNoMatch === "function"
-                ? customNoMatch(noMatchContext)
-                : customNoMatch)
-              : generateNoMatchError(noMatchContext);
-          })()
-          : (() => {
-            const token = context.buffer[0];
-            const defaultMsg = message`Unexpected option or subcommand: ${
-              eOptionName(token)
-            }.`;
-
-            // If custom error is provided, use it
-            if (options?.errors?.unexpectedInput != null) {
-              return typeof options.errors.unexpectedInput === "function"
-                ? options.errors.unexpectedInput(token)
-                : options.errors.unexpectedInput;
-            }
-
-            // Otherwise, add suggestions to the default message
-            return createErrorWithSuggestions(
-              defaultMsg,
-              token,
-              context.usage,
-              "both",
-              options?.errors?.suggestions,
-            );
-          })(),
+          ? getNoMatchError(options, noMatchContext)
+          : createUnexpectedInputError(
+            context.buffer[0],
+            context.usage,
+            options,
+          ),
       };
 
       // Try all parsers and find the one with longest match
@@ -1306,32 +1319,7 @@ export function longestMatch(
 
       return { ...error, success: false };
     },
-    suggest(context, prefix) {
-      const suggestions = [];
-
-      if (context.state == null) {
-        // No parser has been selected yet, get suggestions from all parsers
-        for (const parser of parsers) {
-          const parserSuggestions = parser.suggest({
-            ...context,
-            state: parser.initialState,
-          }, prefix);
-          suggestions.push(...parserSuggestions);
-        }
-      } else {
-        // A parser has been selected, delegate to that parser
-        const [index, parserResult] = context.state;
-        if (parserResult.success) {
-          const parserSuggestions = parsers[index].suggest({
-            ...context,
-            state: parserResult.next.state,
-          }, prefix);
-          suggestions.push(...parserSuggestions);
-        }
-      }
-
-      return deduplicateSuggestions(suggestions);
-    },
+    suggest: createExclusiveSuggest(parsers),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
