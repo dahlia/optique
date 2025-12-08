@@ -11,7 +11,10 @@ import type {
   ParserContext,
   ParserResult,
 } from "./parser.ts";
-import { createErrorWithSuggestions } from "./suggestion.ts";
+import {
+  createErrorWithSuggestions,
+  deduplicateSuggestions,
+} from "./suggestion.ts";
 import {
   extractArgumentMetavars,
   extractCommandNames,
@@ -896,20 +899,7 @@ export function or(
         }
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
@@ -1340,20 +1330,7 @@ export function longestMatch(
         }
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
@@ -1770,20 +1747,7 @@ export function object<
         suggestions.push(...fieldSuggestions);
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(
       state: DocState<{ readonly [K in keyof T]: unknown }>,
@@ -2067,20 +2031,7 @@ export function tuple<
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(
       state: DocState<{ readonly [K in keyof T]: unknown }>,
@@ -3364,20 +3315,7 @@ export function merge(
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(
       state: DocState<Record<string | symbol, unknown>>,
@@ -3721,20 +3659,7 @@ export function concat(
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(state: DocState<readonly unknown[]>, _defaultValue?) {
       const fragments = parsers.flatMap((p, index) => {
@@ -4332,16 +4257,7 @@ export function conditional(
         );
       }
 
-      // Deduplicate suggestions
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${suggestion.extensions?.join(",")}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
 
     getDocFragments(_state, _defaultValue?) {

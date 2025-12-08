@@ -1,5 +1,6 @@
 import type { Message, MessageTerm } from "./message.ts";
 import { message, optionName, text } from "./message.ts";
+import type { Suggestion } from "./parser.ts";
 import type { Usage } from "./usage.ts";
 import { extractCommandNames, extractOptionNames } from "./usage.ts";
 
@@ -312,4 +313,64 @@ export function createErrorWithSuggestions(
   return suggestionMsg.length > 0
     ? [...baseError, text("\n\n"), ...suggestionMsg]
     : baseError;
+}
+
+/**
+ * Creates a unique key for a suggestion to enable deduplication.
+ *
+ * For literal suggestions, the text itself is used as the key.
+ * For file suggestions, a composite key is created from the type,
+ * extensions, and pattern.
+ *
+ * @param suggestion The suggestion to create a key for
+ * @returns A string key that uniquely identifies this suggestion
+ * @internal
+ */
+function getSuggestionKey(suggestion: Suggestion): string {
+  if (suggestion.kind === "literal") {
+    return suggestion.text;
+  }
+  // File suggestion: create a composite key
+  return `__FILE__:${suggestion.type}:${
+    suggestion.extensions?.join(",") ?? ""
+  }:${suggestion.pattern ?? ""}`;
+}
+
+/**
+ * Removes duplicate suggestions from an array while preserving order.
+ *
+ * Suggestions are considered duplicates if they have the same key:
+ * - Literal suggestions: same text
+ * - File suggestions: same type, extensions, and pattern
+ *
+ * The first occurrence of each unique suggestion is kept.
+ *
+ * @param suggestions Array of suggestions that may contain duplicates
+ * @returns A new array with duplicates removed, preserving order of first occurrences
+ *
+ * @example
+ * ```typescript
+ * const suggestions = [
+ *   { kind: "literal", text: "--verbose" },
+ *   { kind: "literal", text: "--help" },
+ *   { kind: "literal", text: "--verbose" }, // duplicate
+ * ];
+ * deduplicateSuggestions(suggestions);
+ * // returns [{ kind: "literal", text: "--verbose" }, { kind: "literal", text: "--help" }]
+ * ```
+ *
+ * @since 0.9.0
+ */
+export function deduplicateSuggestions(
+  suggestions: readonly Suggestion[],
+): Suggestion[] {
+  const seen = new Set<string>();
+  return suggestions.filter((suggestion) => {
+    const key = getSuggestionKey(suggestion);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
