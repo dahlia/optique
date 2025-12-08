@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@logtape/logtape':
+      specifier: ^1.2.2
+      version: 1.2.2
     '@types/node':
       specifier: ^20.19.9
       version: 20.19.9
@@ -26,9 +29,15 @@ importers:
 
   docs:
     devDependencies:
+      '@logtape/logtape':
+        specifier: 'catalog:'
+        version: 1.2.2
       '@optique/core':
         specifier: 'workspace:'
         version: link:../packages/core
+      '@optique/logtape':
+        specifier: 'workspace:'
+        version: link:../packages/logtape
       '@optique/run':
         specifier: 'workspace:'
         version: link:../packages/run
@@ -93,6 +102,25 @@ importers:
 
   packages/core:
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.9
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
+  packages/logtape:
+    dependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../core
+    devDependencies:
+      '@logtape/logtape':
+        specifier: 'catalog:'
+        version: 1.2.2
       '@types/node':
         specifier: 'catalog:'
         version: 20.19.9
@@ -499,6 +527,9 @@ packages:
   '@js-temporal/polyfill@0.5.1':
     resolution: {integrity: sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ==}
     engines: {node: '>=12'}
+
+  '@logtape/logtape@1.2.2':
+    resolution: {integrity: sha512-yx4uj7NUXo5pOk2lljtAf7UN9oDBw9xfxSDC4jxdbfnGDGmq4iJhenWBbU9XV8ilm8AUUMYXq2nk+qvz8E21DA==}
 
   '@napi-rs/wasm-runtime@1.0.1':
     resolution: {integrity: sha512-KVlQ/jgywZpixGCKMNwxStmmbYEMyokZpCf2YuIChhfJA2uqfAKNEM8INz7zzTo55iEXfBhIIs3VqYyqzDLj8g==}
@@ -2077,6 +2108,8 @@ snapshots:
   '@js-temporal/polyfill@0.5.1':
     dependencies:
       jsbi: 4.3.2
+
+  '@logtape/logtape@1.2.2': {}
 
   '@napi-rs/wasm-runtime@1.0.1':
     dependencies:

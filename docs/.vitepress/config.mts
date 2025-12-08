@@ -61,11 +61,19 @@ const CONCEPTS = {
   ],
 };
 
+const INTEGRATIONS = {
+  text: "Integrations",
+  items: [
+    { text: "LogTape", link: "/integrations/logtape" },
+  ],
+};
+
 const REFERENCES = {
   text: "References",
   items: [
     { text: "@optique/core", link: "https://jsr.io/@optique/core/doc" },
     { text: "@optique/run", link: "https://jsr.io/@optique/run/doc" },
+    { text: "@optique/logtape", link: "https://jsr.io/@optique/logtape/doc" },
     { text: "@optique/temporal", link: "https://jsr.io/@optique/temporal/doc" },
     { text: "@optique/valibot", link: "https://jsr.io/@optique/valibot/doc" },
     { text: "@optique/zod", link: "https://jsr.io/@optique/zod/doc" },
@@ -77,8 +85,6 @@ const TOP_NAV = [
   { text: "Installation", link: "/install" },
   { text: "Tutorial", link: "/tutorial" },
   { text: "Cookbook", link: "/cookbook" },
-  CONCEPTS,
-  REFERENCES,
 ];
 
 // https://vitepress.dev/reference/site-config
@@ -91,11 +97,16 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       ...TOP_NAV,
+      CONCEPTS,
+      REFERENCES,
       ...extraNav,
     ],
 
     sidebar: [
       ...TOP_NAV,
+      CONCEPTS,
+      INTEGRATIONS,
+      REFERENCES,
       { text: "Changelog", link: "/changelog" },
     ],
 

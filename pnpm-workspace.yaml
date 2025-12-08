@@ -4,6 +4,8 @@ packages:
 - docs
 
 catalog:
+  "@logtape/file": ^1.2.2
+  "@logtape/logtape": ^1.2.2
   "@types/node": ^20.19.9
   tsdown: ^0.13.0
   typescript: ^5.8.3

@@ -4,6 +4,7 @@
     "examples/*"
   ],
   "imports": {
+    "@logtape/logtape": "jsr:@logtape/logtape@^1.2.2",
     "@std/fs": "jsr:@std/fs@^1.0.19",
     "@std/path": "jsr:@std/path@^1.1.1",
     "@types/node": "npm:@types/node@^20.19.9",

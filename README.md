@@ -136,6 +136,7 @@ The following is a list of the available packages:
 | -------------------------------------------- | -------------------------------- | -------------------------------- | ------------------------------------------- |
 | [@optique/core](/packages/core/)             | [JSR][jsr:@optique/core]         | [npm][npm:@optique/core]         | Shared types and parser combinators         |
 | [@optique/run](/packages/run/)               | [JSR][jsr:@optique/run]          | [npm][npm:@optique/run]          | Runner for Node.js/Deno/Bun                 |
+| [@optique/logtape](/packages/logtape/)       | [JSR][jsr:@optique/logtape]      | [npm][npm:@optique/logtape]      | [LogTape] logging integration               |
 | [@optique/temporal](/packages/temporal/)     | [JSR][jsr:@optique/temporal]     | [npm][npm:@optique/temporal]     | [Temporal] value parsers (date and time)    |
 | [@optique/valibot](/packages/valibot/)       | [JSR][jsr:@optique/valibot]      | [npm][npm:@optique/valibot]      | [Valibot] schema integration for validation |
 | [@optique/zod](/packages/zod/)               | [JSR][jsr:@optique/zod]          | [npm][npm:@optique/zod]          | [Zod] schema integration for validation     |
@@ -144,12 +145,15 @@ The following is a list of the available packages:
 [npm:@optique/core]: https://www.npmjs.com/package/@optique/core
 [jsr:@optique/run]: https://jsr.io/@optique/run
 [npm:@optique/run]: https://www.npmjs.com/package/@optique/run
+[jsr:@optique/logtape]: https://jsr.io/@optique/logtape
+[npm:@optique/logtape]: https://www.npmjs.com/package/@optique/logtape
 [jsr:@optique/temporal]: https://jsr.io/@optique/temporal
 [npm:@optique/temporal]: https://www.npmjs.com/package/@optique/temporal
 [jsr:@optique/valibot]: https://jsr.io/@optique/valibot
 [npm:@optique/valibot]: https://www.npmjs.com/package/@optique/valibot
 [jsr:@optique/zod]: https://jsr.io/@optique/zod
 [npm:@optique/zod]: https://www.npmjs.com/package/@optique/zod
+[LogTape]: https://logtape.org/
 [Temporal]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal
 [Valibot]: https://valibot.dev/
 [Zod]: https://zod.dev/

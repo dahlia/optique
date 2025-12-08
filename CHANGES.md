@@ -78,6 +78,46 @@ To be released.
 [#35]: https://github.com/dahlia/optique/issues/35
 [#49]: https://github.com/dahlia/optique/issues/49
 
+### @optique/logtape
+
+The *@optique/logtape* package was introduced in this release, providing
+integration with the [LogTape] logging library. This package enables
+configuring LogTape logging through command-line arguments with various
+parsing strategies.
+
+ -  Added `logLevel()` value parser for parsing log level strings (`"trace"`,
+    `"debug"`, `"info"`, `"warning"`, `"error"`, `"fatal"`) into LogTape's
+    `LogLevel` type. Parsing is case-insensitive and provides shell completion
+    suggestions.
+
+ -  Added `verbosity()` parser for accumulating `-v` flags to determine log
+    level. Each additional `-v` flag increases verbosity: no flags → `"warning"`,
+    `-v` → `"info"`, `-vv` → `"debug"`, `-vvv` → `"trace"`.
+
+ -  Added `debug()` parser for simple `--debug`/`-d` flag that toggles between
+    normal level (`"info"`) and debug level (`"debug"`).
+
+ -  Added `logOutput()` parser for log output destination. Accepts `-` for
+    console output or a file path for file output, following CLI conventions.
+
+ -  Added `loggingOptions()` preset that combines log level and log output
+    options into a single `group()`. Uses a discriminated union configuration
+    to enforce mutually exclusive level selection methods (`"option"`,
+    `"verbosity"`, or `"debug"`).
+
+ -  Added `createLoggingConfig()` helper function that converts parsed logging
+    options into a LogTape `Config` object for use with `configure()`.
+
+ -  Added `createConsoleSink()` function for creating console sinks with
+    configurable stream selection (stdout/stderr) and level-based stream
+    resolution.
+
+ -  Added `createSink()` async function that creates LogTape sinks from
+    `LogOutput` values. File output requires the optional `@logtape/file`
+    package.
+
+[LogTape]: https://logtape.org/
+
 
 Version 0.7.2
 -------------
