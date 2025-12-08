@@ -451,16 +451,23 @@ export function getDocPage(
   const usage = [...normalizeUsage(parser.usage)];
   let i = 0;
   for (const arg of args) {
+    if (i >= usage.length) break;
     const term = usage[i];
-    if (usage.length > i && term.type === "exclusive") {
+    if (term.type === "exclusive") {
       for (const termGroup of term.terms) {
         const firstTerm = termGroup[0];
         if (firstTerm?.type !== "command" || firstTerm.name !== arg) continue;
+        // Splice replaces 1 element with termGroup, so the next position
+        // should skip over all inserted elements
         usage.splice(i, 1, ...termGroup);
+        i += termGroup.length;
         break;
       }
+      // If no match found in exclusive, just move to next position
+      if (usage[i] === term) i++;
+    } else {
+      i++;
     }
-    i++;
   }
   return {
     usage,
