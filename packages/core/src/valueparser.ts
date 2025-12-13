@@ -86,6 +86,14 @@ export interface StringOptions {
 
   /**
    * Optional regular expression pattern that the string must match.
+   *
+   * **Security note**: When using user-defined or complex patterns, be aware
+   * of potential Regular Expression Denial of Service (ReDoS) attacks.
+   * Maliciously crafted input strings can cause exponential backtracking in
+   * vulnerable patterns, leading to high CPU usage. Avoid patterns with
+   * nested quantifiers like `(a+)+` or overlapping alternations. Consider
+   * using tools like [safe-regex](https://www.npmjs.com/package/safe-regex)
+   * to validate patterns before use.
    */
   readonly pattern?: RegExp;
 
@@ -226,6 +234,11 @@ export function choice<const T extends string>(
  *
  * This parser validates that the input is a string and optionally checks
  * if it matches a specified regular expression pattern.
+ *
+ * **Security note**: When using the `pattern` option with user-defined or
+ * complex patterns, be aware of potential Regular Expression Denial of Service
+ * (ReDoS) attacks. See {@link StringOptions.pattern} for more details.
+ *
  * @param options Configuration options for the string parser.
  * @returns A {@link ValueParser} that parses strings according to the
  *          specified options.

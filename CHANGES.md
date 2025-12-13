@@ -19,6 +19,13 @@ To be released.
     shell metacharacters or other special characters will now throw an error
     when generating completion scripts.
 
+ -  Added documentation warning about potential Regular Expression Denial of
+    Service (ReDoS) attacks when using the `pattern` option in `string()` value
+    parser. Users providing custom patterns should be aware that maliciously
+    crafted input can cause exponential backtracking in vulnerable patterns.
+    The documentation recommends avoiding patterns with nested quantifiers and
+    suggests using tools like *safe-regex* to validate patterns before use.
+
 
 Version 0.8.0
 -------------
