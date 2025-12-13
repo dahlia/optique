@@ -169,6 +169,7 @@ export default defineConfig({
   cleanUrls: true,
 
   markdown: {
+    languages: ["js", "jsx", "ts", "tsx"],
     codeTransformers: [
       transformerTwoslash({
         twoslashOptions: {
