@@ -6,6 +6,19 @@ Version 0.9.0
 
 To be released.
 
+### @optique/core
+
+ -  Fixed a shell command injection vulnerability in the shell
+    completion script generators. The `programName` parameter in shell
+    completion generators (`bash`, `zsh`, `fish`, `nu`, `pwsh`) was directly
+    interpolated into shell scripts without validation, which could allow
+    arbitrary command execution if an attacker-controlled program name was used.
+
+    The fix adds strict validation of program names, allowing only alphanumeric
+    characters, underscores, hyphens, and dots. Programs with names containing
+    shell metacharacters or other special characters will now throw an error
+    when generating completion scripts.
+
 
 Version 0.8.0
 -------------

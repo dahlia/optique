@@ -2,8 +2,9 @@ import { describe, it } from "node:test";
 import { deepStrictEqual } from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { execSync } from "node:child_process";
+import process from "node:process";
 import {
   bash,
   fish,
@@ -61,7 +62,11 @@ esac
   return cliPath;
 }
 
-function testBashCompletion(script: string, cliPath: string): string[] {
+function testBashCompletion(
+  script: string,
+  programName: string,
+  cliDir: string,
+): string[] {
   const tempDir = mkdtempSync(join(tmpdir(), "bash-completion-test-"));
 
   try {
@@ -73,9 +78,11 @@ function testBashCompletion(script: string, cliPath: string): string[] {
     const functionName = functionMatch ? functionMatch[1] : "_test_cli";
 
     // Test completion by sourcing script and calling completion function
+    // Add cliDir to PATH so the program can be found
     const testScript = `
+export PATH="${cliDir}:$PATH"
 source "${scriptPath}"
-COMP_WORDS=("${cliPath}" "")
+COMP_WORDS=("${programName}" "")
 COMP_CWORD=1
 ${functionName}
 printf "%s\\n" "\${COMPREPLY[@]}"
@@ -92,7 +99,11 @@ printf "%s\\n" "\${COMPREPLY[@]}"
   }
 }
 
-function testZshCompletion(script: string, cliPath: string): string[] {
+function testZshCompletion(
+  script: string,
+  programName: string,
+  cliDir: string,
+): string[] {
   const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-test-"));
 
   try {
@@ -100,17 +111,19 @@ function testZshCompletion(script: string, cliPath: string): string[] {
     writeFileSync(scriptPath, script);
 
     // Create a test script that simulates zsh completion
+    // Add cliDir to PATH so the program can be found
     const testScript = `
+export PATH="${cliDir}:$PATH"
 autoload -U compinit && compinit -D
 source "${scriptPath}"
 
 # Mock zsh completion environment
-words=("${cliPath}" "")
+words=("${programName}" "")
 CURRENT=2
 
 # Capture completion output
 {
-  _${cliPath.split("/").pop()?.replace(/[^a-zA-Z0-9]/g, "_")}
+  _${programName.replace(/[^a-zA-Z0-9]/g, "_")}
 } 2>/dev/null || true
 `;
 
@@ -132,7 +145,11 @@ CURRENT=2
   }
 }
 
-function testPwshCompletion(script: string, _cliPath: string): string[] {
+function testPwshCompletion(
+  script: string,
+  _programName: string,
+  cliDir: string,
+): string[] {
   const tempDir = mkdtempSync(join(tmpdir(), "pwsh-completion-test-"));
 
   try {
@@ -141,7 +158,10 @@ function testPwshCompletion(script: string, _cliPath: string): string[] {
 
     // Test by directly calling the completion command
     // This avoids dependency on Get-ArgumentCompleter (PowerShell 7.4+)
+    // Add cliDir to PATH so the program can be found
+    const pathSep = process.platform === "win32" ? ";" : ":";
     const testScript = `
+$env:PATH = "${cliDir}${pathSep}$env:PATH"
 . "${scriptPath}"
 
 # Just verify the script loads without error
@@ -165,7 +185,11 @@ Write-Output "loaded"
   }
 }
 
-function testFishCompletion(script: string, cliPath: string): string[] {
+function testFishCompletion(
+  script: string,
+  programName: string,
+  cliDir: string,
+): string[] {
   const tempDir = mkdtempSync(join(tmpdir(), "fish-completion-test-"));
 
   try {
@@ -180,7 +204,9 @@ function testFishCompletion(script: string, cliPath: string): string[] {
 
     // Test completion by sourcing script and calling completion function
     // We simulate fish's completion environment
+    // Add cliDir to PATH so the program can be found
     const testScript = `
+set -x PATH "${cliDir}" $PATH
 source "${scriptPath}"
 
 # Mock fish completion environment
@@ -188,7 +214,7 @@ function commandline
     switch $argv[1]
         case '-poc'
             # Return previous tokens (command and empty string for current)
-            echo "${cliPath}"
+            echo "${programName}"
             echo ""
         case '-ct'
             # Return current token being completed
@@ -218,7 +244,11 @@ ${functionName}
   }
 }
 
-function testNuCompletion(script: string, cliPath: string): string[] {
+function testNuCompletion(
+  script: string,
+  programName: string,
+  cliDir: string,
+): string[] {
   const tempDir = mkdtempSync(join(tmpdir(), "nu-completion-test-"));
 
   try {
@@ -227,13 +257,15 @@ function testNuCompletion(script: string, cliPath: string): string[] {
 
     // Test completion by loading script and calling completion function directly
     // Use the sanitized function name that matches generateScript's naming
-    const safeName = cliPath.replace(/[^a-zA-Z0-9]+/g, "-");
+    const safeName = programName.replace(/[^a-zA-Z0-9]+/g, "-");
     const functionName = `nu-complete-${safeName}`;
+    // Add cliDir to PATH so the program can be found
     const testScript = `
+$env.PATH = ($env.PATH | prepend "${cliDir}")
 source ${scriptPath}
 
 # Call the completion function with the command context using 'do'
-do { ${functionName} "${cliPath} " }
+do { ${functionName} "${programName} " }
 `;
 
     // Write test script to a file to avoid escaping issues
@@ -307,9 +339,14 @@ describe("completion module", () => {
 
       try {
         const cliPath = createTestCli(tempDir);
-        const script = bash.generateScript(cliPath, ["completion", "bash"]);
+        const programName = "test-cli";
+        const script = bash.generateScript(programName, ["completion", "bash"]);
 
-        const completions = testBashCompletion(script, cliPath);
+        const completions = testBashCompletion(
+          script,
+          programName,
+          dirname(cliPath),
+        );
 
         deepStrictEqual(completions.includes("git"), true);
         deepStrictEqual(completions.includes("docker"), true);
@@ -414,9 +451,14 @@ describe("completion module", () => {
 
       try {
         const cliPath = createTestCli(tempDir);
-        const script = zsh.generateScript(cliPath, ["completion", "zsh"]);
+        const programName = "test-cli";
+        const script = zsh.generateScript(programName, ["completion", "zsh"]);
 
-        const result = testZshCompletion(script, cliPath);
+        const result = testZshCompletion(
+          script,
+          programName,
+          dirname(cliPath),
+        );
 
         // For zsh, we verify that the completion function can be loaded
         // and executed without errors
@@ -529,9 +571,14 @@ describe("completion module", () => {
 
       try {
         const cliPath = createTestCli(tempDir);
-        const script = pwsh.generateScript(cliPath, ["completion", "pwsh"]);
+        const programName = "test-cli";
+        const script = pwsh.generateScript(programName, ["completion", "pwsh"]);
 
-        const result = testPwshCompletion(script, cliPath);
+        const result = testPwshCompletion(
+          script,
+          programName,
+          dirname(cliPath),
+        );
 
         // For pwsh, we verify that the completion script can be loaded
         // and executed without errors (similar to zsh test approach)
@@ -669,9 +716,14 @@ describe("completion module", () => {
 
       try {
         const cliPath = createTestCli(tempDir);
-        const script = fish.generateScript(cliPath, ["completion", "fish"]);
+        const programName = "test-cli";
+        const script = fish.generateScript(programName, ["completion", "fish"]);
 
-        const completions = testFishCompletion(script, cliPath);
+        const completions = testFishCompletion(
+          script,
+          programName,
+          dirname(cliPath),
+        );
 
         // Check that we got git and docker (may have descriptions appended)
         const hasGit = completions.some((line) =>
@@ -833,8 +885,13 @@ describe("completion module", () => {
 
       try {
         const cliPath = createTestCli(tempDir);
-        const script = nu.generateScript(cliPath, ["completion", "nu"]);
-        const completions = testNuCompletion(script, cliPath);
+        const programName = "test-cli";
+        const script = nu.generateScript(programName, ["completion", "nu"]);
+        const completions = testNuCompletion(
+          script,
+          programName,
+          dirname(cliPath),
+        );
 
         // Check that we got git and docker completions
         const hasGit = completions.some((c) =>
@@ -1005,6 +1062,105 @@ describe("completion module", () => {
 
         const encoded = shell.encodeSuggestions([]);
         deepStrictEqual(Symbol.iterator in encoded, true);
+      }
+    });
+  });
+
+  describe("security: program name validation", () => {
+    const shells: ShellCompletion[] = [bash, zsh, fish, nu, pwsh];
+
+    it("should accept valid program names", () => {
+      const validNames = [
+        "myapp",
+        "my-app",
+        "my_app",
+        "my.app",
+        "MyApp123",
+        "app_v2.0.1",
+        "CLI-tool_v1",
+      ];
+
+      for (const shell of shells) {
+        for (const name of validNames) {
+          // Should not throw
+          const script = shell.generateScript(name);
+          deepStrictEqual(typeof script, "string");
+        }
+      }
+    });
+
+    it("should reject program names with shell metacharacters", () => {
+      const dangerousNames = [
+        "app; rm -rf /",
+        "$(whoami)",
+        "`id`",
+        "app|cat /etc/passwd",
+        "app && malicious",
+        "app || malicious",
+        "app > /tmp/file",
+        "app < /etc/passwd",
+        "app\nmalicious",
+        "app\tmalicious",
+        "app$HOME",
+        "app`id`",
+        'app"test',
+        "app'test",
+        "app\\test",
+        "app{a,b}",
+        "app[abc]",
+        "app*",
+        "app?",
+        "app!test",
+        "app#comment",
+        "app%s",
+        "app^test",
+        "app~test",
+        "app:test",
+        "app;test",
+        "app@test",
+        "app=test",
+        "app+test",
+        "app(test)",
+        "app test",
+        "app/path",
+      ];
+
+      for (const shell of shells) {
+        for (const name of dangerousNames) {
+          let threw = false;
+          try {
+            shell.generateScript(name);
+          } catch (e) {
+            threw = true;
+            deepStrictEqual(e instanceof Error, true);
+            deepStrictEqual(
+              (e as Error).message.includes("Invalid program name"),
+              true,
+            );
+          }
+          deepStrictEqual(
+            threw,
+            true,
+            `${shell.name} should reject dangerous program name: ${name}`,
+          );
+        }
+      }
+    });
+
+    it("should reject empty program names", () => {
+      for (const shell of shells) {
+        let threw = false;
+        try {
+          shell.generateScript("");
+        } catch (e) {
+          threw = true;
+          deepStrictEqual(e instanceof Error, true);
+        }
+        deepStrictEqual(
+          threw,
+          true,
+          `${shell.name} should reject empty program name`,
+        );
       }
     });
   });

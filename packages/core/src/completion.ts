@@ -2,6 +2,42 @@ import { formatMessage } from "./message.ts";
 import type { Suggestion } from "./parser.ts";
 
 /**
+ * A regular expression pattern for valid program names that can be safely
+ * interpolated into shell scripts.
+ *
+ * This pattern allows:
+ * - Letters (a-z, A-Z)
+ * - Numbers (0-9)
+ * - Underscore (_)
+ * - Hyphen (-)
+ * - Dot (.)
+ *
+ * @internal
+ */
+const SAFE_PROGRAM_NAME_PATTERN = /^[a-zA-Z0-9_.-]+$/;
+
+/**
+ * Validates a program name for safe use in shell scripts.
+ *
+ * Program names that contain shell metacharacters or other special characters
+ * could enable command injection attacks when interpolated into shell scripts.
+ * This function ensures only safe characters are used.
+ *
+ * @param programName The program name to validate.
+ * @throws {Error} If the program name contains invalid characters.
+ * @internal
+ */
+function validateProgramName(programName: string): void {
+  if (!SAFE_PROGRAM_NAME_PATTERN.test(programName)) {
+    throw new Error(
+      `Invalid program name for shell completion: "${programName}". ` +
+        "Program names must contain only alphanumeric characters, " +
+        "underscores, hyphens, and dots.",
+    );
+  }
+}
+
+/**
  * A shell completion generator.
  * @since 0.6.0
  */
@@ -36,6 +72,7 @@ export interface ShellCompletion {
 export const bash: ShellCompletion = {
   name: "bash",
   generateScript(programName: string, args: readonly string[] = []): string {
+    validateProgramName(programName);
     const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
       .join(" ");
     return `
@@ -141,6 +178,7 @@ complete -F _${programName} ${programName}
 export const zsh: ShellCompletion = {
   name: "zsh",
   generateScript(programName: string, args: readonly string[] = []): string {
+    validateProgramName(programName);
     const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
       .join(" ");
     return `
@@ -267,6 +305,7 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
 export const fish: ShellCompletion = {
   name: "fish",
   generateScript(programName: string, args: readonly string[] = []): string {
+    validateProgramName(programName);
     const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "\\'")}'`)
       .join(" ");
     const functionName = `__${
@@ -415,6 +454,7 @@ complete -c ${programName} -f -a '(${functionName})'
 export const nu: ShellCompletion = {
   name: "nu",
   generateScript(programName: string, args: readonly string[] = []): string {
+    validateProgramName(programName);
     const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "''")}'`)
       .join(" ");
     // Replace spaces and special chars with hyphens for function name
@@ -659,6 +699,7 @@ ${functionName}-external
 export const pwsh: ShellCompletion = {
   name: "pwsh",
   generateScript(programName: string, args: readonly string[] = []): string {
+    validateProgramName(programName);
     const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "''")}'`)
       .join(", ");
     return `
