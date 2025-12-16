@@ -13,7 +13,14 @@ To be released.
     when the name is `"plural"`, the generated scripts correctly use
     `completions` or `--completions` instead of the singular form.  [[#53]]
 
+ -  Fixed shell completion suggestions including positional argument values
+    when completing an option that expects a value.  For example, when
+    completing `--remote ""` in a parser with both `--remote` option and
+    positional tag arguments, only the remote values are now suggested,
+    not the tag values.  [[#55]]
+
 [#53]: https://github.com/dahlia/optique/issues/53
+[#55]: https://github.com/dahlia/optique/issues/55
 
 
 Version 0.7.2
