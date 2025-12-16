@@ -840,6 +840,7 @@ function handleCompletion<THelp, TError>(
   colors?: boolean,
   maxWidth?: number,
   completionMode?: "command" | "option" | "both",
+  completionName?: "singular" | "plural" | "both",
 ): THelp | TError {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -882,9 +883,10 @@ function handleCompletion<THelp, TError>(
 
   if (args.length === 0) {
     // Generate completion script
+    const usePlural = completionName === "plural";
     const completionArg = completionMode === "option"
-      ? "--completion"
-      : "completion";
+      ? (usePlural ? "--completions" : "--completion")
+      : (usePlural ? "completions" : "completion");
     const script = shell.generateScript(programName, [
       completionArg,
       shellName,
@@ -1040,6 +1042,7 @@ export function run<
         colors,
         maxWidth,
         completionMode,
+        completionName,
       );
     }
 
@@ -1072,6 +1075,7 @@ export function run<
             colors,
             maxWidth,
             completionMode,
+            completionName,
           );
         } else {
           const singularMatchExact =
@@ -1102,6 +1106,7 @@ export function run<
               colors,
               maxWidth,
               completionMode,
+              completionName,
             );
           }
         }
