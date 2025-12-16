@@ -1,6 +1,12 @@
 Optique changelog
 =================
 
+Version 0.7.4
+-------------
+
+To be released.
+
+
 Version 0.7.3
 -------------
 

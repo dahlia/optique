@@ -1,6 +1,6 @@
 {
   "name": "@optique/valibot",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Valibot value parsers for Optique",
   "keywords": [
     "CLI",
