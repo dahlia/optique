@@ -23,6 +23,36 @@ import {
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
+
+/**
+ * Checks if the given token is an option name that requires a value
+ * (i.e., has a metavar) within the given usage terms.
+ * @param usage The usage terms to search through.
+ * @param token The token to check.
+ * @returns `true` if the token is an option that requires a value, `false` otherwise.
+ */
+function isOptionRequiringValue(usage: Usage, token: string): boolean {
+  function traverse(terms: Usage): boolean {
+    if (!terms || !Array.isArray(terms)) return false;
+    for (const term of terms) {
+      if (term.type === "option") {
+        // Option requires a value if it has a metavar
+        if (term.metavar && term.names.includes(token)) {
+          return true;
+        }
+      } else if (term.type === "optional" || term.type === "multiple") {
+        if (traverse(term.terms)) return true;
+      } else if (term.type === "exclusive") {
+        for (const exclusiveUsage of term.terms) {
+          if (traverse(exclusiveUsage)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  return traverse(usage);
+}
 import type { ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -1719,7 +1749,33 @@ export function object<
     suggest(context, prefix) {
       const suggestions = [];
 
-      // Try getting suggestions from each parser based on their priority
+      // Check if the last token in the buffer is an option that requires a value.
+      // If so, only suggest values for that specific option parser, not all parsers.
+      // This prevents positional argument suggestions from appearing when completing
+      // an option value.
+      // See: https://github.com/dahlia/optique/issues/55
+      if (context.buffer.length > 0) {
+        const lastToken = context.buffer[context.buffer.length - 1];
+
+        // Find if any parser has this token as an option requiring a value
+        for (const [field, parser] of parserPairs) {
+          if (isOptionRequiringValue(parser.usage, lastToken)) {
+            // Only get suggestions from the parser that owns this option
+            const fieldState =
+              (context.state && typeof context.state === "object" &&
+                  field in context.state)
+                ? context.state[field]
+                : parser.initialState;
+
+            return Array.from(parser.suggest({
+              ...context,
+              state: fieldState,
+            }, prefix));
+          }
+        }
+      }
+
+      // Default behavior: try getting suggestions from each parser
       for (const [field, parser] of parserPairs) {
         const fieldState =
           (context.state && typeof context.state === "object" &&

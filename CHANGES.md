@@ -27,6 +27,25 @@ To be released.
     suggests using tools like *safe-regex* to validate patterns before use.
 
 
+Version 0.8.1
+-------------
+
+Released on December 16, 2025.
+
+### @optique/core
+
+ -  Fixed shell completion scripts using singular form (`completion`,
+    `--completion`) even when `completion.name` is set to `"plural"`.  Now,
+    when the name is `"plural"`, the generated scripts correctly use
+    `completions` or `--completions` instead of the singular form.  [[#53]]
+
+ -  Fixed shell completion suggestions including positional argument values
+    when completing an option that expects a value.  For example, when
+    completing `--remote ""` in a parser with both `--remote` option and
+    positional tag arguments, only the remote values are now suggested,
+    not the tag values.  [[#55]]
+
+
 Version 0.8.0
 -------------
 
@@ -143,6 +162,28 @@ parsing strategies.
     package.
 
 [LogTape]: https://logtape.org/
+
+
+Version 0.7.3
+-------------
+
+Released on December 16, 2025.
+
+### @optique/core
+
+ -  Fixed shell completion scripts using singular form (`completion`,
+    `--completion`) even when `completion.name` is set to `"plural"`.  Now,
+    when the name is `"plural"`, the generated scripts correctly use
+    `completions` or `--completions` instead of the singular form.  [[#53]]
+
+ -  Fixed shell completion suggestions including positional argument values
+    when completing an option that expects a value.  For example, when
+    completing `--remote ""` in a parser with both `--remote` option and
+    positional tag arguments, only the remote values are now suggested,
+    not the tag values.  [[#55]]
+
+[#53]: https://github.com/dahlia/optique/issues/53
+[#55]: https://github.com/dahlia/optique/issues/55
 
 
 Version 0.7.2
