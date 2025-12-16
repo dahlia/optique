@@ -6,6 +6,15 @@ Version 0.7.3
 
 To be released.
 
+### @optique/core
+
+ -  Fixed shell completion scripts using singular form (`completion`,
+    `--completion`) even when `completion.name` is set to `"plural"`.  Now,
+    when the name is `"plural"`, the generated scripts correctly use
+    `completions` or `--completions` instead of the singular form.  [[#53]]
+
+[#53]: https://github.com/dahlia/optique/issues/53
+
 
 Version 0.7.2
 -------------
