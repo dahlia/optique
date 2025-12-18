@@ -1222,7 +1222,7 @@ Here's how the same parser would work with *@optique/core*:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
-import { run } from "@optique/core/facade";
+import { runParser } from "@optique/core/facade";
 import { optional } from "@optique/core/modifiers";
 import { argument, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
@@ -1236,7 +1236,7 @@ const parser = object({
 });
 
 // @optique/core requires explicit argument handling
-const config = run(parser, "myapp", process.argv.slice(2), {
+const config = runParser(parser, "myapp", process.argv.slice(2), {
 //    ^?
 
 

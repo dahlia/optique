@@ -935,9 +935,10 @@ function handleCompletion<THelp, TError>(
  * @param options Configuration options for output formatting and callbacks.
  * @returns The parsed result value, or the return value of `onHelp`/`onError`
  *          callbacks.
- * @throws {RunError} When parsing fails and no `onError` callback is provided.
+ * @throws {RunParserError} When parsing fails and no `onError` callback is
+ *          provided.
  */
-export function run<
+export function runParser<
   TParser extends Parser<unknown, unknown>,
   THelp = void,
   TError = never,
@@ -954,7 +955,7 @@ export function run<
     showDefault,
     aboveError = "usage",
     onError = () => {
-      throw new RunError("Failed to parse command line arguments.");
+      throw new RunParserError("Failed to parse command line arguments.");
     },
     stderr = console.error,
     stdout = console.log,
@@ -1144,7 +1145,7 @@ export function run<
     case "completion":
       // This case should never be reached due to early return,
       // but keep it for type safety
-      throw new RunError("Completion should be handled by early return");
+      throw new RunParserError("Completion should be handled by early return");
 
     case "help": {
       // Handle help request - determine which parser to use for help generation
@@ -1301,20 +1302,34 @@ export function run<
 
     default:
       // This shouldn't happen but TypeScript doesn't know that
-      throw new RunError("Unexpected parse result type");
+      throw new RunParserError("Unexpected parse result type");
   }
 }
+
+/**
+ * @deprecated Use `runParser()` instead. This export will be removed in
+ *             a future major version. The name `run` conflicts with
+ *             `@optique/run`'s `run()` function, causing IDE autocomplete
+ *             confusion.
+ */
+export const run = runParser;
 
 /**
  * An error class used to indicate that the command line arguments
  * could not be parsed successfully.
  */
-export class RunError extends Error {
+export class RunParserError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "RunError";
+    this.name = "RunParserError";
   }
 }
+
+/**
+ * @deprecated Use `RunParserError` instead. This export will be removed in
+ *             a future major version.
+ */
+export const RunError = RunParserError;
 
 function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));

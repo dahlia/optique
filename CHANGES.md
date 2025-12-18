@@ -26,6 +26,18 @@ To be released.
     The documentation recommends avoiding patterns with nested quantifiers and
     suggests using tools like *safe-regex* to validate patterns before use.
 
+ -  Renamed `run()` function to `runParser()` to avoid naming conflict with
+    `@optique/run`'s `run()` function.  IDE autocomplete was suggesting both
+    functions when typing `run`, causing confusion.  The old `run()` export
+    is still available but deprecated and will be removed in a future major
+    version.  [[#54]]
+
+ -  Renamed `RunError` class to `RunParserError` for consistency with the
+    `runParser()` rename.  The old `RunError` export is still available but
+    deprecated and will be removed in a future major version.  [[#54]]
+
+[#54]: https://github.com/dahlia/optique/issues/54
+
 
 Version 0.8.1
 -------------

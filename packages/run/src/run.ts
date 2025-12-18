@@ -1,5 +1,5 @@
 import type { ShellCompletion } from "@optique/core/completion";
-import { run as runBase } from "@optique/core/facade";
+import { runParser } from "@optique/core/facade";
 import type { InferValue, Parser } from "@optique/core/parser";
 import type { ShowDefaultOptions } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
@@ -254,7 +254,7 @@ export function run<T extends Parser<unknown, unknown>>(
     }
     : undefined;
 
-  return runBase<T, never, never>(parser, programName, args, {
+  return runParser<T, never, never>(parser, programName, args, {
     stderr(line) {
       process.stderr.write(`${line}\n`);
     },

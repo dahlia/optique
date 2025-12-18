@@ -87,13 +87,13 @@ parsing attempts.
 Mid-level execution with `@optique/core/facade`
 -----------------------------------------------
 
-The `run()` function from `@optique/core/facade` adds automatic help generation
-and formatted error messages while still giving you control over program
-behavior through callbacks.
+The `runParser()` function from `@optique/core/facade` adds automatic help
+generation and formatted error messages while still giving you control over
+program behavior through callbacks.
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
-import { run } from "@optique/core/facade";
+import { runParser } from "@optique/core/facade";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 
@@ -103,7 +103,7 @@ const parser = object({
 });
 
 // Manual process integration (Node.js example)
-const config = run(
+const config = runParser(
   parser,
   "myserver",                     // program name
   process.argv.slice(2),          // arguments
@@ -145,14 +145,14 @@ The `RunOptions` interface provides extensive customization:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
-import { run } from "@optique/core/facade";
+import { runParser } from "@optique/core/facade";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 
 const parser = object({ name: option("-n", "--name", string()) });
 
-const result = run(parser, "myapp", ["--name", "test"], {
+const result = runParser(parser, "myapp", ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
   showDefault: true,     // Show default values in help text

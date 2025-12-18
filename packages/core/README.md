@@ -37,7 +37,7 @@ Quick example
 -------------
 
 ~~~~ typescript
-import { run } from "@optique/core/facade";
+import { runParser } from "@optique/core/facade";
 import { object, option, argument } from "@optique/core/parser";
 import { string, integer } from "@optique/core/valueparser";
 import process from "node:process";
@@ -48,7 +48,7 @@ const parser = object({
   verbose: option("-v", "--verbose"),
 });
 
-const config = run(parser, "myapp", process.argv.slice(2), {
+const config = runParser(parser, "myapp", process.argv.slice(2), {
   help: "both",
   onError: process.exit,
 });
