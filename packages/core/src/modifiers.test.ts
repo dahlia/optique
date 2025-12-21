@@ -15,7 +15,7 @@ import {
 } from "@optique/core/modifiers";
 import { parse } from "@optique/core/parser";
 import { argument, constant, option } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -1144,6 +1144,36 @@ describe("withDefault", () => {
       assert.deepEqual(parseResult.next.buffer, ["positional"]);
       // State should be undefined so complete() returns default value
       assert.equal(parseResult.next.state, undefined);
+    }
+  });
+
+  it("should preserve literal types from choice() parser (issue #58)", () => {
+    // This test verifies that withDefault preserves the literal type
+    // from a choice() parser instead of widening it to string.
+    const parser = object({
+      format: withDefault(option("--format", choice(["auto", "text"])), "auto"),
+    });
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // Runtime check that the value is correct
+      assert.equal(result.value.format, "auto");
+
+      // Type-level check: the following assignment should compile without error
+      // because format should be "auto" | "text", not string.
+      // If the type were widened to string, this would fail to compile.
+      const _format: "auto" | "text" = result.value.format;
+      void _format; // Prevent unused variable warning
+    }
+
+    // Test with explicit value
+    const resultWithValue = parse(parser, ["--format", "text"]);
+    assert.ok(resultWithValue.success);
+    if (resultWithValue.success) {
+      assert.equal(resultWithValue.value.format, "text");
+      const _format: "auto" | "text" = resultWithValue.value.format;
+      void _format; // Prevent unused variable warning
     }
   });
 });
