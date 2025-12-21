@@ -259,6 +259,67 @@ This is different from the previous pattern because:
  -  *Default handling*: Has a meaningful fallback when no options are given
 
 
+Optional mutually exclusive flags
+---------------------------------
+
+Sometimes you want mutually exclusive options where *none* of them need to be
+provided. For example, a verbosity setting where you can specify `--verbose`
+or `--quiet`, but the default behavior applies when neither is given.
+
+The key insight is that [`or()`](./concepts/constructs.md#or-parser) requires
+at least one alternative to match. To make all alternatives optional, wrap
+the `or()` with [`optional()`](./concepts/modifiers.md#optional-parser):
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { map, optional, withDefault } from "@optique/core/modifiers";
+import { flag } from "@optique/core/primitives";
+import { run } from "@optique/run";
+// ---cut-before---
+// Using optional(): returns undefined when no flag is provided
+const outputMode = optional(
+  or(
+    map(flag("--verbose", "-v"), () => "verbose" as const),
+    map(flag("--quiet", "-q"), () => "quiet" as const),
+  ),
+);
+
+// Using withDefault(): returns a default value when no flag is provided
+const outputModeWithDefault = withDefault(
+  or(
+    map(flag("--verbose", "-v"), () => "verbose" as const),
+    map(flag("--quiet", "-q"), () => "quiet" as const),
+  ),
+  "normal" as const,
+);
+
+const result1 = run(outputMode);
+//    ^?
+
+
+
+const result2 = run(outputModeWithDefault);
+//    ^?
+
+
+console.debug(result1, result2);
+~~~~
+
+This pattern differs from the basic [mutually exclusive flags](#mutually-exclusive-flags)
+pattern in an important way:
+
+ -  *Without wrapper*: `or(A, B)` requires at least one to match—parsing fails
+    if neither is provided
+ -  *With `optional()`*: Returns `undefined` when no alternative matches
+ -  *With `withDefault()`*: Returns a fallback value when no alternative matches
+
+Choose based on your needs:
+
+ -  Use `optional(or(...))` when the absence of a choice is meaningful
+    (e.g., “use system default”)
+ -  Use `withDefault(or(...), fallback)` when you always want a concrete value
+
+
 Dependent options
 -----------------
 

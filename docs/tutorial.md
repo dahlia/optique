@@ -501,6 +501,14 @@ const config: Config = run(parser, {
 print(message`Running in ${"port" in config ? 'server' : 'client'} mode.`);
 ~~~~
 
+> [!TIP]
+> The `or()` parser requires *at least one alternative to match*. If you want
+> to allow none of the alternatives (e.g., optional verbosity flags), wrap
+> the `or()` with `optional()` or `withDefault()`. See the
+> [optional mutually exclusive flags](./cookbook.md#optional-mutually-exclusive-flags)
+> pattern in the cookbook for details.
+
+
 ### Discriminated unions with `constant()`
 
 The previous example creates a union type, but TypeScript can't yet distinguish

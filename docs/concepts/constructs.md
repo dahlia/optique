@@ -200,6 +200,16 @@ alternative in order until one succeeds. This is fundamental for building CLIs
 with different modes of operation, subcommands, or mutually exclusive option
 sets.
 
+> [!NOTE]
+> The `or()` parser requires that *at least one of its alternatives consumes
+> input* to determine which parser branch was “selected.” If no input is
+> provided and none of the alternatives match, `or()` returns an error.
+> This means `or(A, B)` semantically means “either A or B *must* match,”
+> not “optionally A or B.” If you want to allow the case where neither
+> alternative is provided, wrap the `or()` with
+> [`optional()`](./modifiers.md#optional-parser):
+> `optional(or(A, B))`.
+
 ~~~~ typescript twoslash
 import { object, or } from "@optique/core/constructs";
 import type { InferValue } from "@optique/core/parser";
@@ -348,6 +358,73 @@ const flexibleConfig = or(
   })
 );
 ~~~~
+
+### Optional alternatives with `optional(or(...))`
+
+When you want to allow *none* of the alternatives to be provided, wrap the
+`or()` with [`optional()`](./modifiers.md#optional-parser). This is useful when
+you have mutually exclusive options that are all optional:
+
+~~~~ typescript twoslash
+import { or } from "@optique/core/constructs";
+import { map, optional } from "@optique/core/modifiers";
+import { parse } from "@optique/core/parser";
+import { flag } from "@optique/core/primitives";
+
+// Without optional(): at least one flag MUST be provided
+const requiredChoice = or(
+  map(flag("--verbose", "-v"), () => "verbose" as const),
+  map(flag("--quiet", "-q"), () => "quiet" as const),
+);
+
+// With optional(): none of the flags need to be provided
+const optionalChoice = optional(
+  or(
+    map(flag("--verbose", "-v"), () => "verbose" as const),
+    map(flag("--quiet", "-q"), () => "quiet" as const),
+  ),
+);
+
+// No arguments: requiredChoice fails, optionalChoice succeeds
+const result1 = parse(requiredChoice, []);
+console.log(result1.success); // false - "No matching option found"
+
+const result2 = parse(optionalChoice, []);
+console.log(result2.success); // true
+if (result2.success) {
+  console.log(result2.value); // undefined
+}
+
+// With --verbose: both succeed
+const result3 = parse(optionalChoice, ["--verbose"]);
+if (result3.success) {
+  console.log(result3.value); // "verbose"
+}
+~~~~
+
+This pattern is common when implementing verbosity levels or output format
+selection where a default behavior should apply when no explicit choice is made.
+You can combine it with [`withDefault()`](./modifiers.md#withdefault-parser)
+to provide a fallback value instead of `undefined`:
+
+~~~~ typescript twoslash
+import { or } from "@optique/core/constructs";
+import { map, withDefault } from "@optique/core/modifiers";
+import { flag } from "@optique/core/primitives";
+// ---cut-before---
+const verbosityLevel = withDefault(
+  or(
+    map(flag("--verbose", "-v"), () => "verbose" as const),
+    map(flag("--quiet", "-q"), () => "quiet" as const),
+  ),
+  "normal" as const, // Default when neither flag is provided
+);
+
+// No flags → "normal"
+// --verbose → "verbose"
+// --quiet → "quiet"
+~~~~
+
 
 ### Error message customization
 
