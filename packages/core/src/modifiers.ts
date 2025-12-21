@@ -176,7 +176,7 @@ export class WithDefaultError extends Error {
  *          or the default value if the wrapped parser fails to match
  *          (union type {@link TValue} | {@link TDefault}).
  */
-export function withDefault<TValue, TState, TDefault = TValue>(
+export function withDefault<TValue, TState, const TDefault = TValue>(
   parser: Parser<TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
 ): Parser<TValue | TDefault, [TState] | undefined>;
@@ -199,13 +199,13 @@ export function withDefault<TValue, TState, TDefault = TValue>(
  *          (union type {@link TValue} | {@link TDefault}).
  * @since 0.5.0
  */
-export function withDefault<TValue, TState, TDefault = TValue>(
+export function withDefault<TValue, TState, const TDefault = TValue>(
   parser: Parser<TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
   options?: WithDefaultOptions,
 ): Parser<TValue | TDefault, [TState] | undefined>;
 
-export function withDefault<TValue, TState, TDefault = TValue>(
+export function withDefault<TValue, TState, const TDefault = TValue>(
   parser: Parser<TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
   options?: WithDefaultOptions,
