@@ -5,9 +5,66 @@ import { existsSync, statSync } from "node:fs";
 import { dirname, extname } from "node:path";
 
 /**
- * Configuration options for the {@link path} value parser.
+ * Custom error messages for path validation failures.
+ * @since 0.5.0
  */
-export interface PathOptions {
+export interface PathErrorOptions {
+  /**
+   * Custom error message when file extension is invalid.
+   * Can be a static message or a function that receives input, expected
+   * extensions, and actual extension.
+   * @since 0.5.0
+   */
+  invalidExtension?:
+    | Message
+    | ((
+      input: string,
+      extensions: readonly string[],
+      actualExtension: string,
+    ) => Message);
+
+  /**
+   * Custom error message when path does not exist.
+   * Can be a static message or a function that receives the input path.
+   * @since 0.5.0
+   */
+  pathNotFound?: Message | ((input: string) => Message);
+
+  /**
+   * Custom error message when path already exists (used with
+   * {@link PathOptions.mustNotExist}).
+   * Can be a static message or a function that receives the input path.
+   * @since 0.9.0
+   */
+  pathAlreadyExists?: Message | ((input: string) => Message);
+
+  /**
+   * Custom error message when path is expected to be a file but isn't.
+   * Can be a static message or a function that receives the input path.
+   * @since 0.5.0
+   */
+  notAFile?: Message | ((input: string) => Message);
+
+  /**
+   * Custom error message when path is expected to be a directory but isn't.
+   * Can be a static message or a function that receives the input path.
+   * @since 0.5.0
+   */
+  notADirectory?: Message | ((input: string) => Message);
+
+  /**
+   * Custom error message when parent directory does not exist for new files.
+   * Can be a static message or a function that receives the parent directory
+   * path.
+   * @since 0.5.0
+   */
+  parentNotFound?: Message | ((parentDir: string) => Message);
+}
+
+/**
+ * Base configuration options shared by all {@link PathOptions} variants.
+ */
+export interface PathOptionsBase {
   /**
    * The metavariable name for this parser, e.g., `"FILE"`, `"DIR"`.
    * @default "PATH"
@@ -15,21 +72,16 @@ export interface PathOptions {
   readonly metavar?: string;
 
   /**
-   * Whether the path must exist on the filesystem.
-   * @default false
-   */
-  readonly mustExist?: boolean;
-
-  /**
    * Expected type of path (file, directory, or either).
-   * Only checked when {@link mustExist} is true.
+   * Only checked when {@link PathOptionsMustExist.mustExist} is `true`.
    * @default "either"
    */
   readonly type?: "file" | "directory" | "either";
 
   /**
    * Whether to allow creating new files/directories.
-   * When true and mustExist is false, validates that parent directory exists.
+   * When `true` and {@link PathOptionsMustExist.mustExist} is `false`,
+   * validates that parent directory exists.
    * @default false
    */
   readonly allowCreate?: boolean;
@@ -44,49 +96,70 @@ export interface PathOptions {
    * Custom error messages for path validation failures.
    * @since 0.5.0
    */
-  readonly errors?: {
-    /**
-     * Custom error message when file extension is invalid.
-     * Can be a static message or a function that receives input, expected extensions, and actual extension.
-     * @since 0.5.0
-     */
-    invalidExtension?:
-      | Message
-      | ((
-        input: string,
-        extensions: readonly string[],
-        actualExtension: string,
-      ) => Message);
-
-    /**
-     * Custom error message when path does not exist.
-     * Can be a static message or a function that receives the input path.
-     * @since 0.5.0
-     */
-    pathNotFound?: Message | ((input: string) => Message);
-
-    /**
-     * Custom error message when path is expected to be a file but isn't.
-     * Can be a static message or a function that receives the input path.
-     * @since 0.5.0
-     */
-    notAFile?: Message | ((input: string) => Message);
-
-    /**
-     * Custom error message when path is expected to be a directory but isn't.
-     * Can be a static message or a function that receives the input path.
-     * @since 0.5.0
-     */
-    notADirectory?: Message | ((input: string) => Message);
-
-    /**
-     * Custom error message when parent directory does not exist for new files.
-     * Can be a static message or a function that receives the parent directory path.
-     * @since 0.5.0
-     */
-    parentNotFound?: Message | ((parentDir: string) => Message);
-  };
+  readonly errors?: PathErrorOptions;
 }
+
+/**
+ * Configuration options for when the path must exist.
+ */
+export interface PathOptionsMustExist extends PathOptionsBase {
+  /**
+   * When `true`, the path must exist on the filesystem.
+   */
+  readonly mustExist: true;
+
+  /**
+   * Cannot be used together with {@link mustExist}.
+   */
+  readonly mustNotExist?: never;
+}
+
+/**
+ * Configuration options for when the path must not exist.
+ * @since 0.9.0
+ */
+export interface PathOptionsMustNotExist extends PathOptionsBase {
+  /**
+   * Cannot be used together with {@link mustNotExist}.
+   */
+  readonly mustExist?: never;
+
+  /**
+   * When `true`, the path must not exist on the filesystem.
+   * Useful for output files to prevent accidental overwrites.
+   * @since 0.9.0
+   */
+  readonly mustNotExist: true;
+}
+
+/**
+ * Configuration options when no existence check is required.
+ */
+export interface PathOptionsNoExistenceCheck extends PathOptionsBase {
+  /**
+   * Whether the path must exist on the filesystem.
+   * @default false
+   */
+  readonly mustExist?: false;
+
+  /**
+   * Whether the path must not exist on the filesystem.
+   * @default false
+   */
+  readonly mustNotExist?: false;
+}
+
+/**
+ * Configuration options for the {@link path} value parser.
+ *
+ * Note that {@link PathOptionsMustExist.mustExist} and
+ * {@link PathOptionsMustNotExist.mustNotExist} are mutually exclusive;
+ * you cannot set both to `true` at the same time.
+ */
+export type PathOptions =
+  | PathOptionsMustExist
+  | PathOptionsMustNotExist
+  | PathOptionsNoExistenceCheck;
 
 /**
  * Creates a ValueParser for file system paths with validation options.
@@ -126,11 +199,12 @@ export interface PathOptions {
 export function path(options: PathOptions = {}): ValueParser<string> {
   const {
     metavar = "PATH",
-    mustExist = false,
     type = "either",
     allowCreate = false,
     extensions,
   } = options;
+  const mustExist = "mustExist" in options ? options.mustExist : false;
+  const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;
 
   return {
     metavar,
@@ -153,7 +227,38 @@ export function path(options: PathOptions = {}): ValueParser<string> {
         }
       }
 
-      // Existence validation
+      // Non-existence validation (mustNotExist)
+      if (mustNotExist) {
+        if (existsSync(input)) {
+          return {
+            success: false,
+            error: options.errors?.pathAlreadyExists
+              ? (typeof options.errors.pathAlreadyExists === "function"
+                ? options.errors.pathAlreadyExists(input)
+                : options.errors.pathAlreadyExists)
+              : message`Path ${text(input)} already exists.`,
+          };
+        }
+
+        // When mustNotExist, check parent directory if allowCreate is set
+        if (allowCreate) {
+          const parentDir = dirname(input);
+          if (!existsSync(parentDir)) {
+            return {
+              success: false,
+              error: options.errors?.parentNotFound
+                ? (typeof options.errors.parentNotFound === "function"
+                  ? options.errors.parentNotFound(parentDir)
+                  : options.errors.parentNotFound)
+                : message`Parent directory ${text(parentDir)} does not exist.`,
+            };
+          }
+        }
+
+        return { success: true, value: input };
+      }
+
+      // Existence validation (mustExist)
       if (mustExist) {
         if (!existsSync(input)) {
           return {

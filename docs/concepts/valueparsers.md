@@ -545,11 +545,17 @@ The `path()` parser accepts comprehensive configuration options:
 interface PathOptions {
   metavar?: string;           // Custom metavar (default: "PATH")
   mustExist?: boolean;        // Path must exist on filesystem (default: false)
+  mustNotExist?: boolean;     // Path must not exist (default: false)
   type?: "file" | "directory" | "either";  // Expected path type (default: "either")
   allowCreate?: boolean;      // Allow creating new files (default: false)
   extensions?: string[];      // Allowed file extensions (e.g., [".json", ".txt"])
 }
 ~~~~
+
+> [!NOTE]
+> The `mustExist` and `mustNotExist` options are mutually exclusive.
+> You cannot set both to `true` at the same time—TypeScript will catch this
+> as a compile-time error.
 
 ### Existence validation
 
@@ -574,6 +580,37 @@ const existingDir = path({
   mustExist: true,
   type: "directory",
   metavar: "OUTPUT_DIR"
+});
+~~~~
+
+### Non-existence validation
+
+When `mustNotExist: true`, the parser rejects paths that already exist on the
+file system.  This is useful for output files where you want to prevent
+accidental overwrites:
+
+~~~~ typescript twoslash
+import { path } from "@optique/run/valueparser";
+
+// Output file must not exist (prevent accidental overwrites)
+const outputFile = path({
+  mustNotExist: true,
+  type: "file",
+  metavar: "OUTPUT_FILE"
+});
+
+// Output file with extension validation
+const reportFile = path({
+  mustNotExist: true,
+  extensions: [".json", ".csv"],
+  metavar: "REPORT"
+});
+
+// Combine with allowCreate to also check parent directory
+const logFile = path({
+  mustNotExist: true,
+  allowCreate: true,
+  metavar: "LOG_FILE"
 });
 ~~~~
 
@@ -649,6 +686,9 @@ Error: Expected file with extension .json, .yaml, .yml, got .txt.
 
 $ myapp --output "new_file/in/nonexistent/dir.txt"
 Error: Parent directory new_file/in/nonexistent does not exist.
+
+$ myapp --output "existing_file.txt"
+Error: Path existing_file.txt already exists.
 ~~~~
 
 

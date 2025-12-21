@@ -206,6 +206,108 @@ describe("path", () => {
     });
   });
 
+  describe("mustNotExist validation", () => {
+    it("should pass when path does not exist", () => {
+      const testDir = createTempDir();
+      try {
+        const nonExistentPath = join(testDir, "new-file.txt");
+
+        const parser = path({ mustNotExist: true });
+        const result = parser.parse(nonExistentPath);
+
+        assert.equal(result.success, true);
+        if (result.success) {
+          assert.equal(result.value, nonExistentPath);
+        }
+      } finally {
+        cleanupDir(testDir);
+      }
+    });
+
+    it("should fail when file already exists", () => {
+      const testDir = createTempDir();
+      try {
+        const existingFile = join(testDir, "existing-file.txt");
+        writeFileSync(existingFile, "content");
+
+        const parser = path({ mustNotExist: true });
+        const result = parser.parse(existingFile);
+
+        assert.equal(result.success, false);
+        if (!result.success) {
+          assert.match(formatMessage(result.error), /already exists/);
+        }
+      } finally {
+        cleanupDir(testDir);
+      }
+    });
+
+    it("should fail when directory already exists", () => {
+      const testDir = createTempDir();
+      try {
+        const existingDir = join(testDir, "existing-dir");
+        mkdirSync(existingDir);
+
+        const parser = path({ mustNotExist: true });
+        const result = parser.parse(existingDir);
+
+        assert.equal(result.success, false);
+        if (!result.success) {
+          assert.match(formatMessage(result.error), /already exists/);
+        }
+      } finally {
+        cleanupDir(testDir);
+      }
+    });
+
+    it("should still validate extensions when mustNotExist is true", () => {
+      const testDir = createTempDir();
+      try {
+        const nonExistentPath = join(testDir, "new-file.txt");
+
+        const parser = path({
+          mustNotExist: true,
+          extensions: [".json", ".yaml"],
+        });
+        const result = parser.parse(nonExistentPath);
+
+        assert.equal(result.success, false);
+        if (!result.success) {
+          assert.match(
+            formatMessage(result.error),
+            /Expected file with extension/,
+          );
+        }
+      } finally {
+        cleanupDir(testDir);
+      }
+    });
+
+    it("should validate parent directory when allowCreate is true", () => {
+      const testDir = createTempDir();
+      try {
+        const nonExistentPath = join(
+          testDir,
+          "nonexistent-parent",
+          "new-file.txt",
+        );
+
+        const parser = path({ mustNotExist: true, allowCreate: true });
+        const result = parser.parse(nonExistentPath);
+
+        assert.equal(result.success, false);
+        if (!result.success) {
+          assert.match(
+            formatMessage(result.error),
+            /Parent directory.*does not exist/,
+          );
+        }
+      } finally {
+        cleanupDir(testDir);
+      }
+    });
+  });
+
   describe("allowCreate validation", () => {
     it("should pass when parent directory exists", () => {
       const testDir = createTempDir();
@@ -517,6 +619,59 @@ describe("path", () => {
       assert.deepEqual(result.error, [
         { type: "text", text: "Parent directory is missing." },
       ]);
+    });
+
+    it("should use custom pathAlreadyExists error message", () => {
+      const tempDir = createTempDir();
+      try {
+        const existingFile = join(tempDir, "existing.txt");
+        writeFileSync(existingFile, "content");
+
+        const parser = path({
+          mustNotExist: true,
+          errors: {
+            pathAlreadyExists:
+              message`Output file already exists. Use --force to overwrite.`,
+          },
+        });
+
+        const result = parser.parse(existingFile);
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, [
+          {
+            type: "text",
+            text: "Output file already exists. Use --force to overwrite.",
+          },
+        ]);
+      } finally {
+        cleanupDir(tempDir);
+      }
+    });
+
+    it("should use function-based pathAlreadyExists error message", () => {
+      const tempDir = createTempDir();
+      try {
+        const existingFile = join(tempDir, "existing.txt");
+        writeFileSync(existingFile, "content");
+
+        const parser = path({
+          mustNotExist: true,
+          errors: {
+            pathAlreadyExists: (input) =>
+              message`File ${input} already exists and would be overwritten.`,
+          },
+        });
+
+        const result = parser.parse(existingFile);
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, [
+          { type: "text", text: "File " },
+          { type: "value", value: existingFile },
+          { type: "text", text: " already exists and would be overwritten." },
+        ]);
+      } finally {
+        cleanupDir(tempDir);
+      }
     });
 
     it("should use function-based parentNotFound error message", () => {

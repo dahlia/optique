@@ -38,6 +38,34 @@ To be released.
 
 [#54]: https://github.com/dahlia/optique/issues/54
 
+### @optique/run
+
+ -  Added `mustNotExist` option to the `path()` value parser.  When set to
+    `true`, the parser rejects paths that already exist on the filesystem,
+    which is useful for output files to prevent accidental overwrites.  [[#56]]
+
+    ~~~~ typescript
+    // Output file must not exist
+    const outputFile = path({ mustNotExist: true });
+
+    // With extension validation
+    const reportFile = path({
+      mustNotExist: true,
+      extensions: [".json", ".csv"]
+    });
+    ~~~~
+
+ -  Refactored `PathOptions` into a discriminated union type to enforce mutual
+    exclusivity between `mustExist` and `mustNotExist` options at compile time.
+    Setting both to `true` now produces a TypeScript error instead of undefined
+    runtime behavior.  [[#56]]
+
+ -  Added `pathAlreadyExists` error customization option to `PathErrorOptions`
+    for the `path()` value parser.  This allows custom error messages when
+    a path already exists while using the `mustNotExist` option.  [[#56]]
+
+[#56]: https://github.com/dahlia/optique/issues/56
+
 
 Version 0.8.1
 -------------
