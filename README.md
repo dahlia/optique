@@ -122,7 +122,16 @@ Docs
 Optique provides comprehensive documentation to help you get started quickly:
 <https://optique.dev/>.
 
+ -  [Why Optique?] — What makes Optique different from other CLI libraries
+ -  [Tutorial] — Step-by-step guide from simple options to nested subcommands
+ -  [Cookbook] — Practical recipes for common CLI patterns including shell
+    completion
+
 API reference documentation for each package is available on JSR (see below).
+
+[Why Optique?]: https://optique.dev/why
+[Tutorial]: https://optique.dev/tutorial
+[Cookbook]: https://optique.dev/cookbook
 
 
 Packages
