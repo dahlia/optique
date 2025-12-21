@@ -780,6 +780,94 @@ type ComplexConfig = InferValue<typeof complexConfig>;
 // Type automatically inferred with conditional fields and transformations.
 ~~~~
 
+### Optional parser groups
+
+*This feature is available since Optique 0.9.0.*
+
+The `merge()` parser supports `optional()` wrappers around object-generating
+parsers. This allows you to define groups of mutually exclusive options that
+may or may not be provided:
+
+~~~~ typescript twoslash
+import { merge, object, or } from "@optique/core/constructs";
+import { map, multiple, optional } from "@optique/core/modifiers";
+import { argument, flag } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+// Mutually exclusive verbosity flags wrapped in optional()
+const verbosityOptions = optional(
+  or(
+    object({
+      verbosity: optional(
+        map(multiple(flag("--verbose", "-v")), (v) => v.length),
+      ),
+    }),
+    object({
+      verbosity: optional(map(flag("--quiet", "-q"), () => 0)),
+    }),
+  ),
+);
+
+// Combine with required positional argument
+const parser = merge(
+  verbosityOptions,
+  object({ file: argument(string()) }),
+);
+
+// Usage examples:
+// myapp file.txt              → { file: "file.txt" }
+// myapp --verbose file.txt    → { verbosity: 1, file: "file.txt" }
+// myapp -v -v -v file.txt     → { verbosity: 3, file: "file.txt" }
+// myapp --quiet file.txt      → { verbosity: 0, file: "file.txt" }
+~~~~
+
+When using `optional()` in `merge()`:
+
+ -  If the inner parser matches, its result is merged into the final object
+ -  If the inner parser doesn't match (no input consumed), parsing continues
+    with the next parser in the merge
+ -  The state from matched parsers is preserved across parse iterations
+
+The same behavior applies to `withDefault()`, which provides a fallback value
+when the inner parser doesn't match.
+
+This pattern is particularly useful when you have optional feature groups that
+should not interfere with other required arguments:
+
+~~~~ typescript twoslash
+import { merge, object, or } from "@optique/core/constructs";
+import { map, optional } from "@optique/core/modifiers";
+import { argument, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+// Optional output format selection
+const outputOptions = optional(
+  or(
+    object({
+      format: map(option("--json", string()), () => "json" as const),
+      pretty: constant(undefined),
+    }),
+    object({
+      format: constant("text" as const),
+      pretty: option("--pretty"),
+    }),
+  ),
+);
+
+// Main command structure
+const command = merge(
+  outputOptions,
+  object({
+    input: argument(string({ metavar: "FILE" })),
+  }),
+);
+
+// Usage:
+// myapp data.txt                → { input: "data.txt" }
+// myapp --json schema data.txt  → { format: "json", input: "data.txt" }
+// myapp --pretty data.txt       → { format: "text", pretty: true, input: "data.txt" }
+~~~~
+
 
 `concat()` parser
 -----------------

@@ -36,7 +36,31 @@ To be released.
     `runParser()` rename.  The old `RunError` export is still available but
     deprecated and will be removed in a future major version.  [[#54]]
 
+ -  Added support for `optional()` and `withDefault()` wrappers inside `merge()`.
+    Previously, `merge(optional(or(...)), object({...}))` would fail when the
+    optional parser didn't match any input.  Now, parsers that succeed without
+    consuming input (like `optional()` when nothing matches) are handled
+    correctly, allowing the next parser in the merge to process remaining
+    arguments.  [[#57]]
+
+    ~~~~ typescript
+    // Now works correctly
+    const parser = merge(
+      optional(
+        or(
+          object({ verbosity: map(multiple(flag("-v")), v => v.length) }),
+          object({ verbosity: map(flag("-q"), () => 0) }),
+        ),
+      ),
+      object({ file: argument(string()) }),
+    );
+
+    // myapp file.txt         → { file: "file.txt" }
+    // myapp -v -v file.txt   → { verbosity: 2, file: "file.txt" }
+    ~~~~
+
 [#54]: https://github.com/dahlia/optique/issues/54
+[#57]: https://github.com/dahlia/optique/issues/57
 
 ### @optique/run
 

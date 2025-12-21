@@ -3204,6 +3204,13 @@ export function merge(
     usage: parsers.flatMap((p) => p.usage),
     initialState,
     parse(context) {
+      // Track if any parser succeeded with zero consumption
+      // (e.g., optional() returning success without matching)
+      let zeroConsumedSuccess: {
+        context: typeof context;
+        consumed: string[];
+      } | null = null;
+
       for (let i = 0; i < parsers.length; i++) {
         const parser = parsers[i];
         // Extract the appropriate state for this parser
@@ -3240,11 +3247,22 @@ export function merge(
           let newState: Record<string | symbol, unknown>;
           if (parser.initialState === undefined) {
             // For parsers with undefined initialState (like withDefault()),
-            // store their state separately to avoid conflicts with object merging
-            newState = {
-              ...context.state,
-              [`__parser_${i}`]: result.next.state,
-            };
+            // store their state separately to avoid conflicts with object merging.
+            // Only update state if the parser actually matched something
+            // (consumed input OR has non-undefined state).
+            const key = `__parser_${i}`;
+            if (
+              result.consumed.length > 0 || result.next.state !== undefined
+            ) {
+              newState = {
+                ...context.state,
+                [key]: result.next.state,
+              };
+            } else {
+              // Parser succeeded with zero consumption and undefined state
+              // (e.g., optional() with no match). Preserve existing state.
+              newState = { ...context.state };
+            }
           } else {
             // For regular object parsers, use the original merging approach
             newState = {
@@ -3253,19 +3271,43 @@ export function merge(
             };
           }
 
-          return {
-            success: true,
-            next: {
-              ...context,
-              buffer: result.next.buffer,
-              optionsTerminated: result.next.optionsTerminated,
-              state: newState,
-            },
-            consumed: result.consumed,
+          const newContext = {
+            ...context,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: newState,
           };
+
+          // If this parser consumed something, return immediately
+          if (result.consumed.length > 0) {
+            return {
+              success: true,
+              next: newContext,
+              consumed: result.consumed,
+            };
+          }
+
+          // Parser succeeded but consumed nothing (e.g., optional() with no match).
+          // Update context and continue trying other parsers.
+          context = newContext;
+          if (zeroConsumedSuccess === null) {
+            zeroConsumedSuccess = { context: newContext, consumed: [] };
+          } else {
+            zeroConsumedSuccess.context = newContext;
+          }
         } else if (result.consumed < 1) continue;
         else return result;
       }
+
+      // If any parser succeeded with zero consumption, return that success
+      if (zeroConsumedSuccess !== null) {
+        return {
+          success: true,
+          next: zeroConsumedSuccess.context,
+          consumed: zeroConsumedSuccess.consumed,
+        };
+      }
+
       return {
         success: false,
         consumed: 0,

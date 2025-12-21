@@ -2623,6 +2623,143 @@ describe("merge", () => {
       assert.ok(serverSection);
     });
   });
+
+  // Tests for optional()/withDefault() support in merge() (issue #57)
+  // https://github.com/dahlia/optique/issues/57
+  describe("merge with optional(or(...))", () => {
+    it("should parse positional argument when optional(or(...)) matches nothing", () => {
+      const parser = merge(
+        optional(
+          or(
+            object({
+              verbosity: optional(
+                map(multiple(flag("--verbose", "-v")), (v) => v.length),
+              ),
+            }),
+            object({
+              verbosity: optional(map(flag("--quiet", "-q"), () => 0)),
+            }),
+          ),
+        ),
+        object({ text: argument(string()) }),
+      );
+
+      // When no flags are provided, should still parse the argument
+      const result = parse(parser, ["test"]);
+      assert.ok(result.success, "Parsing should succeed");
+      if (result.success) {
+        assert.equal(result.value.text, "test");
+      }
+    });
+
+    it("should parse positional argument with optional(or(...)) using flags", () => {
+      const parser = merge(
+        optional(
+          or(
+            object({
+              verbosity: optional(
+                map(multiple(flag("--verbose", "-v")), (v) => v.length),
+              ),
+            }),
+            object({
+              verbosity: optional(map(flag("--quiet", "-q"), () => 0)),
+            }),
+          ),
+        ),
+        object({ text: argument(string()) }),
+      );
+
+      // When --verbose is provided
+      const result1 = parse(parser, ["--verbose", "test"]);
+      assert.ok(result1.success, "Parsing with --verbose should succeed");
+      if (result1.success) {
+        assert.equal(result1.value.text, "test");
+        assert.equal(result1.value.verbosity, 1);
+      }
+
+      // When --quiet is provided
+      const result2 = parse(parser, ["--quiet", "test"]);
+      assert.ok(result2.success, "Parsing with --quiet should succeed");
+      if (result2.success) {
+        assert.equal(result2.value.text, "test");
+        assert.equal(result2.value.verbosity, 0);
+      }
+
+      // When multiple -v flags are provided
+      const result3 = parse(parser, ["-v", "-v", "-v", "test"]);
+      assert.ok(result3.success, "Parsing with -v -v -v should succeed");
+      if (result3.success) {
+        assert.equal(result3.value.text, "test");
+        assert.equal(result3.value.verbosity, 3);
+      }
+    });
+
+    it("should parse with optional(or(...)) using constant(undefined)", () => {
+      // Another case from issue #57
+      const parser = merge(
+        optional(
+          or(
+            object({
+              puzzleOrientation: map(
+                option(
+                  "--puzzleorientation",
+                  string({ metavar: "JSON_STRING" }),
+                ),
+                JSON.parse,
+              ),
+              puzzleOrientations: constant(undefined),
+            }),
+            object({
+              puzzleOrientation: constant(undefined),
+              puzzleOrientations: map(
+                option(
+                  "--puzzleorientations",
+                  string({ metavar: "JSON_STRING" }),
+                ),
+                JSON.parse,
+              ),
+            }),
+          ),
+        ),
+        object({
+          text: argument(string()),
+        }),
+      );
+
+      // When no option is provided
+      const result = parse(parser, ["3x3x3"]);
+      assert.ok(result.success, "Parsing should succeed");
+      if (result.success) {
+        assert.equal(result.value.text, "3x3x3");
+      }
+    });
+
+    it("should parse with withDefault(or(...), ...)", () => {
+      const parser = merge(
+        withDefault(
+          or(
+            object({
+              verbosity: optional(
+                map(multiple(flag("--verbose", "-v")), (v) => v.length),
+              ),
+            }),
+            object({
+              verbosity: optional(map(flag("--quiet", "-q"), () => 0)),
+            }),
+          ),
+          { verbosity: undefined },
+        ),
+        object({ text: argument(string()) }),
+      );
+
+      // When no flags are provided
+      const result = parse(parser, ["test"]);
+      assert.ok(result.success, "Parsing should succeed");
+      if (result.success) {
+        assert.equal(result.value.text, "test");
+      }
+    });
+  });
 });
 
 describe("merge() - duplicate option detection", () => {
