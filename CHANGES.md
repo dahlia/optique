@@ -67,6 +67,21 @@ To be released.
 [#56]: https://github.com/dahlia/optique/issues/56
 
 
+Version 0.8.2
+-------------
+
+Released on December 21, 2025.
+
+### @optique/core
+
+ -  Fixed `withDefault()` widening literal types in its default value parameter.
+    Previously, passing a literal type as the default value would cause type
+    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal types
+    are correctly preserved.  For example,
+    `withDefault(option("--format", choice(["auto", "text"])), "auto")` now
+    correctly infers `"auto" | "text"` instead of `string`.  [[#58]]
+
+
 Version 0.8.1
 -------------
 
@@ -202,6 +217,21 @@ parsing strategies.
     package.
 
 [LogTape]: https://logtape.org/
+
+
+Version 0.7.4
+-------------
+
+Released on December 21, 2025.
+
+### @optique/core
+
+ -  Fixed `withDefault()` widening literal types in its default value parameter.
+    Previously, passing a literal type as the default value would cause type
+    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal types
+    are correctly preserved.  For example,
+    `withDefault(option("--format", choice(["auto", "text"])), "auto")` now
+    correctly infers `"auto" | "text"` instead of `string`.  [[#58]]
 
 
 Version 0.7.3
@@ -513,6 +543,23 @@ to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
 
 [Zod]: https://zod.dev/
 [#39]: https://github.com/dahlia/optique/issues/39
+
+
+Version 0.6.6
+-------------
+
+Released on December 21, 2025.
+
+### @optique/core
+
+ -  Fixed `withDefault()` widening literal types in its default value parameter.
+    Previously, passing a literal type as the default value would cause type
+    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal types
+    are correctly preserved.  For example,
+    `withDefault(option("--format", choice(["auto", "text"])), "auto")` now
+    correctly infers `"auto" | "text"` instead of `string`.  [[#58]]
+
+[#58]: https://github.com/dahlia/optique/issues/58
 
 
 Version 0.6.5
