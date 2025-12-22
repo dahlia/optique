@@ -31,6 +31,12 @@ export type UsageTerm =
      * the command-line usage.
      */
     readonly metavar: string;
+    /**
+     * When `true`, hides the argument from help text, shell completion
+     * suggestions, and error suggestions.
+     * @since 0.9.0
+     */
+    readonly hidden?: boolean;
   }
   /**
    * An option term, which represents a command-line option that can
@@ -51,6 +57,12 @@ export type UsageTerm =
      * to indicate what value the option expects.
      */
     readonly metavar?: string;
+    /**
+     * When `true`, hides the option from help text, shell completion
+     * suggestions, and "Did you mean?" error suggestions.
+     * @since 0.9.0
+     */
+    readonly hidden?: boolean;
   }
   /**
    * A command term, which represents a subcommand in the command-line
@@ -66,6 +78,12 @@ export type UsageTerm =
      * in the command-line usage.
      */
     readonly name: string;
+    /**
+     * When `true`, hides the command from help text, shell completion
+     * suggestions, and "Did you mean?" error suggestions.
+     * @since 0.9.0
+     */
+    readonly hidden?: boolean;
   }
   /**
    * An optional term, which represents an optional component
@@ -142,6 +160,12 @@ export type UsageTerm =
      * The type of the term, which is always `"passthrough"` for this term.
      */
     readonly type: "passthrough";
+    /**
+     * When `true`, hides the pass-through from help text and shell
+     * completion suggestions.
+     * @since 0.9.0
+     */
+    readonly hidden?: boolean;
   };
 
 /**
@@ -179,6 +203,7 @@ export function extractOptionNames(usage: Usage): Set<string> {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "option") {
+        if (term.hidden) continue;
         for (const name of term.names) {
           names.add(name);
         }
@@ -223,6 +248,7 @@ export function extractCommandNames(usage: Usage): Set<string> {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "command") {
+        if (term.hidden) continue;
         names.add(term.name);
       } else if (term.type === "optional" || term.type === "multiple") {
         traverseUsage(term.terms);
@@ -266,6 +292,7 @@ export function extractArgumentMetavars(usage: Usage): Set<string> {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "argument") {
+        if (term.hidden) continue;
         metavars.add(term.metavar);
       } else if (term.type === "optional" || term.type === "multiple") {
         traverseUsage(term.terms);

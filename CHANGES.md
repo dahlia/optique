@@ -59,8 +59,27 @@ To be released.
     // myapp -v -v file.txt   → { verbosity: 2, file: "file.txt" }
     ~~~~
 
+ -  Added `hidden` option to all primitive parsers (`option()`, `flag()`,
+    `argument()`, `command()`, `passThrough()`).  When `hidden: true`, the
+    parser is excluded from help text, shell completion suggestions, and
+    "Did you mean?" error suggestions, while remaining fully functional for
+    parsing.  This is useful for deprecated options, internal debugging flags,
+    and experimental features.  [[#62]]
+
+    ~~~~ typescript
+    // Deprecated option: still works, but not shown in help
+    const parser = object({
+      output: option("-o", "--output", string()),
+      outputLegacy: option("--out", string(), { hidden: true }),
+    });
+
+    // Internal debugging flag
+    const debug = flag("--trace-internal", { hidden: true });
+    ~~~~
+
 [#54]: https://github.com/dahlia/optique/issues/54
 [#57]: https://github.com/dahlia/optique/issues/57
+[#62]: https://github.com/dahlia/optique/issues/62
 
 ### @optique/run
 

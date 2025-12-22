@@ -1268,6 +1268,96 @@ myapp server --env <TAB>       # Shows: dev, staging, prod
 myapp build <TAB>              # Shows: web, mobile, desktop
 ~~~~
 
+Hidden and deprecated options
+-----------------------------
+
+As CLIs evolve, you may need to deprecate old options while maintaining
+backward compatibility, or add internal debugging options that shouldn't
+appear in user-facing documentation. The `hidden` option lets you keep
+parsers functional while excluding them from help text and completions.
+
+### Deprecation pattern
+
+When renaming or replacing options, keep the old form working but hide it:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { optional } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  // The new, preferred option name
+  output: optional(option("-o", "--output", string(), {
+    description: message`Output file path`,
+  })),
+  // Legacy option name - still works but hidden from help
+  outputLegacy: optional(option("--out", string(), {
+    hidden: true,
+  })),
+});
+// Later, merge the values: output ?? outputLegacy
+~~~~
+
+This approach ensures existing scripts using `--out` continue to work
+while new users learn the preferred `--output` form.
+
+### Internal debugging options
+
+Add options for debugging or development that shouldn't clutter the help:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { withDefault } from "@optique/core/modifiers";
+import { flag, option } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+
+const parser = object({
+  verbose: flag("-v", "--verbose", {
+    description: message`Enable verbose output`,
+  }),
+  // Developer-only options
+  traceRequests: flag("--trace-requests", { hidden: true }),
+  mockDelay: withDefault(option("--mock-delay", integer(), { hidden: true }), 0),
+});
+~~~~
+
+Developers who know about these options can use them, but they won't
+appear in `--help` output or shell completions.
+
+### Experimental features
+
+Hide features that aren't ready for general use:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const commands = or(
+  command("build", object({
+    type: constant("build"),
+    target: option("--target", string()),
+  })),
+  command("test", object({
+    type: constant("test"),
+    pattern: argument(string()),
+  })),
+  // Experimental - not yet documented
+  command("experimental-watch", object({
+    type: constant("watch"),
+    paths: argument(string()),
+  }), { hidden: true }),
+);
+~~~~
+
+Hidden commands work normally but don't appear in command listings or
+get suggested in “Did you mean?” errors.
+
+-------------------------------------------------------------------------------
+
 The patterns in this cookbook provide the building blocks for creating
 CLI interfaces that are both powerful and type-safe, with clear separation
 between parsing logic, type safety, and user experience.

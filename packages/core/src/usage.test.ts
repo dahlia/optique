@@ -1,4 +1,6 @@
 import {
+  extractArgumentMetavars,
+  extractCommandNames,
   extractOptionNames,
   formatUsage,
   formatUsageTerm,
@@ -2321,5 +2323,78 @@ describe("extractOptionNames", () => {
     ];
     const result = extractOptionNames(usage);
     assert.deepEqual(result, new Set(["--flag", "-f"]));
+  });
+
+  it("should skip hidden options", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--visible"], metavar: "V" },
+      { type: "option", names: ["--hidden"], metavar: "H", hidden: true },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--visible"]));
+  });
+
+  it("should skip hidden options in optional term", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [
+          { type: "option", names: ["--visible"] },
+          { type: "option", names: ["--hidden"], hidden: true },
+        ],
+      },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--visible"]));
+  });
+});
+
+describe("extractCommandNames hidden filtering", () => {
+  it("should skip hidden commands", () => {
+    const usage: Usage = [
+      { type: "command", name: "visible" },
+      { type: "command", name: "hidden", hidden: true },
+    ];
+    const result = extractCommandNames(usage);
+    assert.deepEqual(result, new Set(["visible"]));
+  });
+
+  it("should skip hidden commands in exclusive term", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "visible" }],
+          [{ type: "command", name: "hidden", hidden: true }],
+        ],
+      },
+    ];
+    const result = extractCommandNames(usage);
+    assert.deepEqual(result, new Set(["visible"]));
+  });
+});
+
+describe("extractArgumentMetavars hidden filtering", () => {
+  it("should skip hidden arguments", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "VISIBLE" },
+      { type: "argument", metavar: "HIDDEN", hidden: true },
+    ];
+    const result = extractArgumentMetavars(usage);
+    assert.deepEqual(result, new Set(["VISIBLE"]));
+  });
+
+  it("should skip hidden arguments in optional term", () => {
+    const usage: Usage = [
+      {
+        type: "optional",
+        terms: [
+          { type: "argument", metavar: "VISIBLE" },
+          { type: "argument", metavar: "HIDDEN", hidden: true },
+        ],
+      },
+    ];
+    const result = extractArgumentMetavars(usage);
+    assert.deepEqual(result, new Set(["VISIBLE"]));
   });
 });

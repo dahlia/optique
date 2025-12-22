@@ -57,6 +57,14 @@ export interface OptionOptions {
   readonly description?: Message;
 
   /**
+   * When `true`, hides the option from help text, shell completion
+   * suggestions, and "Did you mean?" error suggestions. The option
+   * remains fully functional for parsing.
+   * @since 0.9.0
+   */
+  readonly hidden?: boolean;
+
+  /**
    * Error message customization options.
    * @since 0.5.0
    */
@@ -205,12 +213,17 @@ export function option<T>(
       valueParser == null
         ? {
           type: "optional",
-          terms: [{ type: "option", names: optionNames }],
+          terms: [{
+            type: "option",
+            names: optionNames,
+            ...(options.hidden && { hidden: true }),
+          }],
         }
         : {
           type: "option",
           names: optionNames,
           metavar: valueParser.metavar,
+          ...(options.hidden && { hidden: true }),
         },
     ],
     initialState: valueParser == null ? { success: true, value: false } : {
@@ -450,6 +463,9 @@ export function option<T>(
       };
     },
     suggest(context, prefix) {
+      if (options.hidden) {
+        return [];
+      }
       const suggestions: Suggestion[] = [];
 
       // Check for --option=value format
@@ -535,6 +551,9 @@ export function option<T>(
       _state: DocState<ValueParserResult<T | boolean> | undefined>,
       defaultValue?,
     ) {
+      if (options.hidden) {
+        return { fragments: [], description: options.description };
+      }
       const fragments: readonly DocFragment[] = [{
         type: "entry",
         term: {
@@ -563,6 +582,14 @@ export interface FlagOptions {
    * The description of the flag, which can be used for help messages.
    */
   readonly description?: Message;
+
+  /**
+   * When `true`, hides the flag from help text, shell completion
+   * suggestions, and "Did you mean?" error suggestions. The flag
+   * remains fully functional for parsing.
+   * @since 0.9.0
+   */
+  readonly hidden?: boolean;
 
   /**
    * Error message customization options.
@@ -667,6 +694,7 @@ export function flag(
     usage: [{
       type: "option",
       names: optionNames,
+      ...(options.hidden && { hidden: true }),
     }],
     initialState: undefined,
     parse(context) {
@@ -836,6 +864,9 @@ export function flag(
       };
     },
     suggest(_context, prefix) {
+      if (options.hidden) {
+        return [];
+      }
       const suggestions: Suggestion[] = [];
 
       // If the prefix looks like an option prefix, suggest matching option names
@@ -860,6 +891,9 @@ export function flag(
       _state: DocState<ValueParserResult<true> | undefined>,
       _defaultValue?,
     ) {
+      if (options.hidden) {
+        return { fragments: [], description: options.description };
+      }
       const fragments: readonly DocFragment[] = [{
         type: "entry",
         term: {
@@ -884,6 +918,14 @@ export interface ArgumentOptions {
    * The description of the argument, which can be used for help messages.
    */
   readonly description?: Message;
+
+  /**
+   * When `true`, hides the argument from help text, shell completion
+   * suggestions, and error suggestions. The argument remains fully
+   * functional for parsing.
+   * @since 0.9.0
+   */
+  readonly hidden?: boolean;
 
   /**
    * Error message customization options.
@@ -932,7 +974,11 @@ export function argument<T>(
   options: ArgumentOptions = {},
 ): Parser<T, ValueParserResult<T> | undefined> {
   const optionPattern = /^--?[a-z0-9-]+$/i;
-  const term: UsageTerm = { type: "argument", metavar: valueParser.metavar };
+  const term: UsageTerm = {
+    type: "argument",
+    metavar: valueParser.metavar,
+    ...(options.hidden && { hidden: true }),
+  };
   return {
     $valueType: [],
     $stateType: [],
@@ -1022,6 +1068,9 @@ export function argument<T>(
       };
     },
     suggest(_context, prefix) {
+      if (options.hidden) {
+        return [];
+      }
       const suggestions: Suggestion[] = [];
 
       // Delegate to value parser if it has completion capabilities
@@ -1036,6 +1085,9 @@ export function argument<T>(
       _state: DocState<ValueParserResult<T> | undefined>,
       defaultValue?: T,
     ) {
+      if (options.hidden) {
+        return { fragments: [], description: options.description };
+      }
       const fragments: readonly DocFragment[] = [{
         type: "entry",
         term,
@@ -1078,6 +1130,14 @@ export interface CommandOptions {
    * @since 0.6.0
    */
   readonly footer?: Message;
+
+  /**
+   * When `true`, hides the command from help text, shell completion
+   * suggestions, and "Did you mean?" error suggestions. The command
+   * remains fully functional for parsing.
+   * @since 0.9.0
+   */
+  readonly hidden?: boolean;
 
   /**
    * Error messages customization.
@@ -1148,7 +1208,10 @@ export function command<T, TState>(
     $valueType: [],
     $stateType: [],
     priority: 15, // Higher than options to match commands first
-    usage: [{ type: "command", name }, ...parser.usage],
+    usage: [
+      { type: "command", name, ...(options.hidden && { hidden: true }) },
+      ...parser.usage,
+    ],
     initialState: undefined,
     parse(context) {
       // Handle different states
@@ -1280,6 +1343,9 @@ export function command<T, TState>(
       };
     },
     suggest(context, prefix) {
+      if (options.hidden) {
+        return [];
+      }
       const suggestions: Suggestion[] = [];
 
       // Handle different command states
@@ -1311,6 +1377,9 @@ export function command<T, TState>(
       return suggestions;
     },
     getDocFragments(state: DocState<CommandState<TState>>, defaultValue?) {
+      if (options.hidden) {
+        return { fragments: [], description: options.description };
+      }
       if (state.kind === "unavailable" || typeof state.state === "undefined") {
         // When showing command in a list, use brief if available,
         // otherwise fall back to description
@@ -1372,6 +1441,13 @@ export interface PassThroughOptions {
    * A description of what pass-through options are used for.
    */
   readonly description?: Message;
+
+  /**
+   * When `true`, hides the pass-through from help text and shell
+   * completion suggestions. The parser remains fully functional.
+   * @since 0.9.0
+   */
+  readonly hidden?: boolean;
 }
 
 /**
@@ -1431,7 +1507,7 @@ export function passThrough(
     $valueType: [],
     $stateType: [],
     priority: -10, // Lowest priority to be tried last
-    usage: [{ type: "passthrough" }],
+    usage: [{ type: "passthrough", ...(options.hidden && { hidden: true }) }],
     initialState: [],
 
     parse(context) {
@@ -1558,6 +1634,9 @@ export function passThrough(
     },
 
     getDocFragments(_state, _defaultValue?) {
+      if (options.hidden) {
+        return { fragments: [], description: options.description };
+      }
       return {
         fragments: [{
           type: "entry",

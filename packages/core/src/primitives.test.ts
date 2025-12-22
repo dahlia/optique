@@ -3472,3 +3472,189 @@ describe("passThrough", () => {
     });
   });
 });
+
+describe("hidden option", () => {
+  describe("option()", () => {
+    it("should still parse hidden options", () => {
+      const parser = option("--secret", string(), { hidden: true });
+      const result = parse(parser, ["--secret", "value"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "value");
+      }
+    });
+
+    it("should return empty doc fragments when hidden", () => {
+      const parser = option("--secret", string(), { hidden: true });
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.deepEqual(fragments.fragments, []);
+    });
+
+    it("should return empty suggestions when hidden", () => {
+      const parser = option("--secret", string(), { hidden: true });
+      const suggestions = parser.suggest(
+        {
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "--sec",
+      );
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should include hidden: true in usage term", () => {
+      const parser = option("--secret", string(), { hidden: true });
+      assert.equal(parser.usage.length, 1);
+      const term = parser.usage[0];
+      assert.equal(term.type, "option");
+      assert.equal("hidden" in term && term.hidden, true);
+    });
+  });
+
+  describe("flag()", () => {
+    it("should still parse hidden flags", () => {
+      const parser = flag("--debug", { hidden: true });
+      const result = parse(parser, ["--debug"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, true);
+      }
+    });
+
+    it("should return empty doc fragments when hidden", () => {
+      const parser = flag("--debug", { hidden: true });
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.deepEqual(fragments.fragments, []);
+    });
+
+    it("should return empty suggestions when hidden", () => {
+      const parser = flag("--debug", { hidden: true });
+      const suggestions = parser.suggest(
+        {
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "--deb",
+      );
+      assert.deepEqual(suggestions, []);
+    });
+  });
+
+  describe("argument()", () => {
+    it("should still parse hidden arguments", () => {
+      const parser = argument(string(), { hidden: true });
+      const result = parse(parser, ["value"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "value");
+      }
+    });
+
+    it("should return empty doc fragments when hidden", () => {
+      const parser = argument(string(), { hidden: true });
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.deepEqual(fragments.fragments, []);
+    });
+
+    it("should return empty suggestions when hidden", () => {
+      const parser = argument(string(), { hidden: true });
+      const suggestions = parser.suggest(
+        {
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "",
+      );
+      assert.deepEqual(suggestions, []);
+    });
+  });
+
+  describe("command()", () => {
+    it("should still parse hidden commands", () => {
+      const parser = command(
+        "secret",
+        object({ value: option("--value", string()) }),
+        { hidden: true },
+      );
+      const result = parse(parser, ["secret", "--value", "foo"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.value, "foo");
+      }
+    });
+
+    it("should return empty doc fragments when hidden", () => {
+      const parser = command(
+        "secret",
+        object({ value: option("--value", string()) }),
+        { hidden: true },
+      );
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.deepEqual(fragments.fragments, []);
+    });
+
+    it("should return empty suggestions when hidden", () => {
+      const parser = command(
+        "secret",
+        object({ value: option("--value", string()) }),
+        { hidden: true },
+      );
+      const suggestions = parser.suggest(
+        {
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "sec",
+      );
+      assert.deepEqual(suggestions, []);
+    });
+  });
+
+  describe("passThrough()", () => {
+    it("should still collect passthrough values when hidden", () => {
+      const parser = passThrough({ hidden: true });
+      const result = parse(parser, ["--foo=bar"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["--foo=bar"]);
+      }
+    });
+
+    it("should return empty doc fragments when hidden", () => {
+      const parser = passThrough({ hidden: true });
+      const fragments = parser.getDocFragments(
+        { kind: "available", state: [] },
+        undefined,
+      );
+      assert.deepEqual(fragments.fragments, []);
+    });
+
+    it("should include hidden: true in usage term", () => {
+      const parser = passThrough({ hidden: true });
+      assert.equal(parser.usage.length, 1);
+      const term = parser.usage[0];
+      assert.equal(term.type, "passthrough");
+      assert.equal("hidden" in term && term.hidden, true);
+    });
+  });
+});

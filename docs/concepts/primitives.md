@@ -754,6 +754,82 @@ const parser = object({
 });
 ~~~~
 
+
+Hidden parsers
+--------------
+
+All primitive parsers—`option()`, `flag()`, `argument()`, `command()`,
+and `passThrough()`—support a `hidden` option that excludes them from:
+
+ -  Help text generation
+ -  Shell completion suggestions
+ -  “Did you mean?” error suggestions
+
+Hidden parsers remain fully functional for parsing; they simply aren't
+visible to users through the standard discovery mechanisms.
+
+### When to use hidden parsers
+
+Hidden parsers are useful for:
+
+ -  *Deprecated options*: Keep old options working for backward compatibility
+    while hiding them from new users
+ -  *Internal debugging flags*: Options that developers need but shouldn't be
+    exposed in user-facing documentation
+ -  *Experimental features*: Try out new options without committing to
+    documenting them
+ -  *Alias consolidation*: Hide less-preferred forms while keeping them
+    functional
+
+### Examples
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { argument, command, flag, option, passThrough } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+
+// Hidden option (deprecated)
+const parser1 = object({
+  output: option("-o", "--output", string()),
+  // Keep old --out working but hide it from help
+  outputLegacy: option("--out", string(), { hidden: true }),
+});
+
+// Hidden flag (debugging)
+const parser2 = object({
+  verbose: flag("-v", "--verbose"),
+  // Internal debugging flag
+  trace: flag("--trace-internal", { hidden: true }),
+});
+
+// Hidden command (experimental)
+const commands = or(
+  command("build", object({ mode: option("--mode", string()) })),
+  command("test", object({ watch: flag("--watch") })),
+  // Experimental command not yet documented
+  command("experimental-deploy", object({
+    target: argument(string()),
+  }), { hidden: true }),
+);
+
+// Hidden argument (internal)
+const parser3 = object({
+  file: argument(string()),
+  // Debug parameter not shown in usage
+  debugLevel: argument(integer(), { hidden: true }),
+});
+~~~~
+
+Hidden parsers still parse input normally—they just don't appear in
+help text or completions. Users who know about them can still use them:
+
+~~~~ bash
+# These all work, even though they're hidden
+myapp --out output.txt       # Hidden legacy option
+myapp --trace-internal       # Hidden debug flag
+myapp experimental-deploy    # Hidden command
+~~~~
+
 These patterns demonstrate how primitive parsers serve as the foundation for more complex CLI structures, providing the building blocks that higher-level combinators orchestrate into complete parsing solutions.
 
 <!-- cSpell: ignore myapp mydb -->
