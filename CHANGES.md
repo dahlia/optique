@@ -90,10 +90,33 @@ To be released.
      -  Added `isNonEmptyString()` type guard function.
      -  Added `ensureNonEmptyString()` assertion function.
 
+ -  Extended `choice()` value parser to support number literals in addition to
+    strings.  This enables type-safe enumeration of numeric values like bit
+    depths, port numbers, or other numeric options where only specific values
+    are valid.  [[#64]]
+
+    ~~~~ typescript
+    // Bit depth choice - returns ValueParser<8 | 10 | 12>
+    const bitDepth = choice([8, 10, 12]);
+
+    // Port selection
+    const port = choice([80, 443, 8080]);
+    ~~~~
+
+    The implementation uses function overloads to provide proper type inference
+    for both string and number choices.  The `caseInsensitive` option remains
+    available only for string choices, enforced at the type level.
+
+     -  Added `ChoiceOptionsBase` interface.
+     -  Added `ChoiceOptionsString` interface.
+     -  Added `ChoiceOptionsNumber` interface.
+     -  Deprecated `ChoiceOptions` interface in favor of `ChoiceOptionsString`.
+
 [#54]: https://github.com/dahlia/optique/issues/54
 [#57]: https://github.com/dahlia/optique/issues/57
 [#62]: https://github.com/dahlia/optique/issues/62
 [#63]: https://github.com/dahlia/optique/issues/63
+[#64]: https://github.com/dahlia/optique/issues/64
 
 ### @optique/run
 

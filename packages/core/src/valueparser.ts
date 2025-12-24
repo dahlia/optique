@@ -119,9 +119,10 @@ export interface StringOptions {
 }
 
 /**
- * Options for creating a {@link choice} parser.
+ * Base options for creating a {@link choice} parser.
+ * @since 0.9.0
  */
-export interface ChoiceOptions {
+export interface ChoiceOptionsBase {
   /**
    * The metavariable name for this parser.  This is used in help messages to
    * indicate what kind of value this parser expects.  Usually a single
@@ -129,7 +130,13 @@ export interface ChoiceOptions {
    * @default `"TYPE"`
    */
   readonly metavar?: NonEmptyString;
+}
 
+/**
+ * Options for creating a {@link choice} parser with string values.
+ * @since 0.9.0
+ */
+export interface ChoiceOptionsString extends ChoiceOptionsBase {
   /**
    * If `true`, the parser will perform case-insensitive matching
    * against the enumerated values. This means that input like "value",
@@ -154,6 +161,35 @@ export interface ChoiceOptions {
       | ((input: string, choices: readonly string[]) => Message);
   };
 }
+
+/**
+ * Options for creating a {@link choice} parser with number values.
+ * Note: `caseInsensitive` is not available for number choices.
+ * @since 0.9.0
+ */
+export interface ChoiceOptionsNumber extends ChoiceOptionsBase {
+  /**
+   * Custom error messages for choice parsing failures.
+   * @since 0.9.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input doesn't match any of the valid choices.
+     * Can be a static message or a function that receives the input and valid choices.
+     * @since 0.9.0
+     */
+    invalidChoice?:
+      | Message
+      | ((input: string, choices: readonly number[]) => Message);
+  };
+}
+
+/**
+ * Options for creating a {@link choice} parser.
+ * @deprecated Use {@link ChoiceOptionsString} for string choices or
+ *             {@link ChoiceOptionsNumber} for number choices.
+ */
+export type ChoiceOptions = ChoiceOptionsString;
 
 /**
  * A predicate function that checks if an object is a {@link ValueParser}.
@@ -184,58 +220,164 @@ export function isValueParser<T>(object: unknown): object is ValueParser<T> {
  */
 export function choice<const T extends string>(
   choices: readonly T[],
-  options: ChoiceOptions = {},
+  options?: ChoiceOptionsString,
+): ValueParser<T>;
+
+/**
+ * Creates a {@link ValueParser} that accepts one of multiple
+ * number values.
+ *
+ * This parser validates that the input can be parsed as a number and matches
+ * one of the specified values. If the input does not match any of the values,
+ * it returns an error message indicating the valid options.
+ * @param choices An array of valid number values that this parser can accept.
+ * @param options Configuration options for the choice parser.
+ * @returns A {@link ValueParser} that checks if the input matches one of the
+ *          specified values.
+ * @since 0.9.0
+ */
+export function choice<const T extends number>(
+  choices: readonly T[],
+  options?: ChoiceOptionsNumber,
+): ValueParser<T>;
+
+/**
+ * Implementation of the choice parser for both string and number types.
+ */
+export function choice<const T extends string | number>(
+  choices: readonly T[],
+  options: ChoiceOptionsString | ChoiceOptionsNumber = {},
 ): ValueParser<T> {
   const metavar = options.metavar ?? "TYPE";
   ensureNonEmptyString(metavar);
-  const normalizedValues = options.caseInsensitive
-    ? choices.map((v) => v.toLowerCase())
-    : choices as readonly string[];
+
+  // Check if choices are numbers
+  const isNumberChoice = choices.length > 0 && typeof choices[0] === "number";
+
+  if (isNumberChoice) {
+    // Number choice implementation
+    const numberChoices = choices as readonly number[];
+    const numberOptions = options as ChoiceOptionsNumber;
+    return {
+      metavar,
+      parse(input: string): ValueParserResult<T> {
+        const parsed = Number(input);
+        if (Number.isNaN(parsed)) {
+          return {
+            success: false,
+            error: formatNumberChoiceError(input, numberChoices, numberOptions),
+          };
+        }
+        const index = numberChoices.indexOf(parsed);
+        if (index < 0) {
+          return {
+            success: false,
+            error: formatNumberChoiceError(input, numberChoices, numberOptions),
+          };
+        }
+        return { success: true, value: numberChoices[index] as T };
+      },
+      format(value: T): string {
+        return String(value);
+      },
+      suggest(prefix: string) {
+        return numberChoices
+          .map((value) => String(value))
+          .filter((valueStr) => valueStr.startsWith(prefix))
+          .map((valueStr) => ({ kind: "literal" as const, text: valueStr }));
+      },
+    };
+  }
+
+  // String choice implementation
+  const stringChoices = choices as readonly string[];
+  const stringOptions = options as ChoiceOptionsString;
+  const normalizedValues = stringOptions.caseInsensitive
+    ? stringChoices.map((v) => v.toLowerCase())
+    : stringChoices;
   return {
     metavar,
     parse(input: string): ValueParserResult<T> {
-      const normalizedInput = options.caseInsensitive
+      const normalizedInput = stringOptions.caseInsensitive
         ? input.toLowerCase()
         : input;
       const index = normalizedValues.indexOf(normalizedInput);
       if (index < 0) {
-        // Format choices as "a", "b", "c" instead of "a, b, c"
-        let choicesList: Message = [];
-        for (let i = 0; i < choices.length; i++) {
-          if (i > 0) {
-            choicesList = [...choicesList, ...message`, `];
-          }
-          choicesList = [...choicesList, ...message`${choices[i]}`];
-        }
         return {
           success: false,
-          error: options.errors?.invalidChoice
-            ? (typeof options.errors.invalidChoice === "function"
-              ? options.errors.invalidChoice(input, choices)
-              : options.errors.invalidChoice)
-            : message`Expected one of ${choicesList}, but got ${input}.`,
+          error: formatStringChoiceError(input, stringChoices, stringOptions),
         };
       }
-      return { success: true, value: choices[index] };
+      return { success: true, value: stringChoices[index] as T };
     },
     format(value: T): string {
-      return value;
+      return String(value);
     },
     suggest(prefix: string) {
-      const normalizedPrefix = options.caseInsensitive
+      const normalizedPrefix = stringOptions.caseInsensitive
         ? prefix.toLowerCase()
         : prefix;
 
-      return choices
+      return stringChoices
         .filter((value) => {
-          const normalizedValue = options.caseInsensitive
+          const normalizedValue = stringOptions.caseInsensitive
             ? value.toLowerCase()
             : value;
           return normalizedValue.startsWith(normalizedPrefix);
         })
-        .map((value) => ({ kind: "literal", text: value }));
+        .map((value) => ({ kind: "literal" as const, text: value }));
     },
   };
+}
+
+/**
+ * Formats error message for string choice parser.
+ */
+function formatStringChoiceError(
+  input: string,
+  choices: readonly string[],
+  options: ChoiceOptionsString,
+): Message {
+  if (options.errors?.invalidChoice) {
+    return typeof options.errors.invalidChoice === "function"
+      ? options.errors.invalidChoice(input, choices)
+      : options.errors.invalidChoice;
+  }
+  return formatDefaultChoiceError(input, choices);
+}
+
+/**
+ * Formats error message for number choice parser.
+ */
+function formatNumberChoiceError(
+  input: string,
+  choices: readonly number[],
+  options: ChoiceOptionsNumber,
+): Message {
+  if (options.errors?.invalidChoice) {
+    return typeof options.errors.invalidChoice === "function"
+      ? options.errors.invalidChoice(input, choices)
+      : options.errors.invalidChoice;
+  }
+  return formatDefaultChoiceError(input, choices);
+}
+
+/**
+ * Formats default error message for choice parser.
+ */
+function formatDefaultChoiceError(
+  input: string,
+  choices: readonly (string | number)[],
+): Message {
+  // Format choices as "a", "b", "c" instead of "a, b, c"
+  let choicesList: Message = [];
+  for (let i = 0; i < choices.length; i++) {
+    if (i > 0) {
+      choicesList = [...choicesList, ...message`, `];
+    }
+    choicesList = [...choicesList, ...message`${String(choices[i])}`];
+  }
+  return message`Expected one of ${choicesList}, but got ${input}.`;
 }
 
 /**

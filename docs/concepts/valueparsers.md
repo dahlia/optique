@@ -265,6 +265,37 @@ Error: Expected one of json, yaml, xml, csv, but got txt.
 
 The parser uses `"TYPE"` as its default metavar.
 
+### Number choices
+
+*This feature is available since Optique 0.9.0.*
+
+The `choice()` parser also supports number literals, which is useful for options
+like bit depths, port numbers, or other numeric values where only specific
+values are valid:
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+
+// Bit depth choice
+const bitDepth = choice([8, 10, 12]);
+
+// Port selection
+const port = choice([80, 443, 8080]);
+~~~~
+
+Number choices provide the same type-safe literal types as string choices:
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+// ---cut-before---
+const depth = choice([8, 10, 12]);
+//    ^?
+~~~~
+
+> [!NOTE]
+> The `caseInsensitive` option is only available for string choices.
+> TypeScript will report an error if you try to use it with number choices.
+
 
 `url()` parser
 --------------

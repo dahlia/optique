@@ -1235,6 +1235,217 @@ describe("choice", () => {
       assert.ok(!result4.success);
     });
   });
+
+  describe("number choices", () => {
+    it("should parse valid number values from the choice list", () => {
+      const parser = choice([8, 10, 12]);
+
+      const result1 = parser.parse("8");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 8);
+        assert.equal(typeof result1.value, "number");
+      }
+
+      const result2 = parser.parse("10");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 10);
+      }
+
+      const result3 = parser.parse("12");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, 12);
+      }
+    });
+
+    it("should reject values not in the number choice list", () => {
+      const parser = choice([8, 10]);
+
+      const result1 = parser.parse("9");
+      assert.ok(!result1.success);
+      if (!result1.success) {
+        assert.deepEqual(
+          result1.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "8" },
+            { type: "text", text: ", " },
+            { type: "value", value: "10" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "9" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+
+      const result2 = parser.parse("abc");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("");
+      assert.ok(!result3.success);
+
+      // Note: "8.0" parses to 8, which is in the choice list
+      const result4 = parser.parse("8.0");
+      assert.ok(result4.success);
+      if (result4.success) {
+        assert.equal(result4.value, 8);
+      }
+    });
+
+    it("should work with single number choice", () => {
+      const parser = choice([42]);
+
+      const result1 = parser.parse("42");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 42);
+      }
+
+      const result2 = parser.parse("43");
+      assert.ok(!result2.success);
+    });
+
+    it("should work with negative number choices", () => {
+      const parser = choice([-1, 0, 1]);
+
+      const result1 = parser.parse("-1");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, -1);
+      }
+
+      const result2 = parser.parse("0");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 0);
+      }
+
+      const result3 = parser.parse("1");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, 1);
+      }
+
+      const result4 = parser.parse("-2");
+      assert.ok(!result4.success);
+    });
+
+    it("should work with floating point number choices", () => {
+      const parser = choice([0.5, 1.0, 1.5]);
+
+      const result1 = parser.parse("0.5");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 0.5);
+      }
+
+      const result2 = parser.parse("1");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 1.0);
+      }
+
+      const result3 = parser.parse("1.5");
+      assert.ok(result3.success);
+
+      const result4 = parser.parse("2.0");
+      assert.ok(!result4.success);
+    });
+
+    it("should use custom metavar for number choices", () => {
+      const parser = choice([8, 10, 12], { metavar: "BIT_DEPTH" });
+      assert.equal(parser.metavar, "BIT_DEPTH");
+    });
+
+    it("should use default metavar when not provided for number choices", () => {
+      const parser = choice([1, 2, 3]);
+      assert.equal(parser.metavar, "TYPE");
+    });
+
+    it("should format number values back to strings", () => {
+      const parser = choice([8, 10, 12]);
+      assert.equal(parser.format(8), "8");
+      assert.equal(parser.format(10), "10");
+      assert.equal(parser.format(12), "12");
+    });
+
+    it("should provide suggestions for number choices", () => {
+      const parser = choice([8, 10, 12]);
+
+      // All suggestions when prefix is empty
+      const allSuggestions = [...parser.suggest!("")];
+      assert.deepEqual(allSuggestions, [
+        { kind: "literal", text: "8" },
+        { kind: "literal", text: "10" },
+        { kind: "literal", text: "12" },
+      ]);
+
+      // Filtered suggestions
+      const filteredSuggestions = [...parser.suggest!("1")];
+      assert.deepEqual(filteredSuggestions, [
+        { kind: "literal", text: "10" },
+        { kind: "literal", text: "12" },
+      ]);
+
+      // No matches
+      const noMatches = [...parser.suggest!("9")];
+      assert.deepEqual(noMatches, []);
+    });
+
+    it("should maintain type safety with const assertion for numbers", () => {
+      const bitDepths = [8, 10, 12] as const;
+      const parser = choice(bitDepths);
+
+      const result = parser.parse("8");
+      assert.ok(result.success);
+      if (result.success) {
+        // The type should be 8 | 10 | 12
+        assert.equal(result.value, 8);
+        assert.ok([8, 10, 12].includes(result.value));
+      }
+    });
+
+    it("should handle custom error messages for number choices", () => {
+      const parser = choice([8, 10], {
+        errors: {
+          invalidChoice: (
+            input,
+            _choices,
+          ) => [{ type: "text", text: `Invalid bit depth: ${input}` }],
+        },
+      });
+
+      const result = parser.parse("9");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Invalid bit depth: 9" },
+        ]);
+      }
+    });
+
+    it("should work with empty number choice list", () => {
+      const parser = choice([] as number[]);
+
+      const result = parser.parse("1");
+      assert.ok(!result.success);
+    });
+
+    it("should handle duplicate number values", () => {
+      const parser = choice([1, 1, 2]);
+
+      const result1 = parser.parse("1");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 1);
+      }
+
+      const result2 = parser.parse("2");
+      assert.ok(result2.success);
+    });
+  });
 });
 
 describe("float", () => {
