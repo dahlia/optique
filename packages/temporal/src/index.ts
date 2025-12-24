@@ -1,6 +1,10 @@
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Suggestion } from "@optique/core/parser";
 import { type Message, message } from "@optique/core/message";
+import {
+  ensureNonEmptyString,
+  type NonEmptyString,
+} from "@optique/core/nonempty";
 
 /**
  * IANA Time Zone Database identifier.
@@ -34,7 +38,7 @@ export interface InstantOptions {
    * word in uppercase, like `TIMESTAMP` or `INSTANT`.
    * @default `"TIMESTAMP"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for instant parsing failures.
@@ -60,7 +64,7 @@ export interface DurationOptions {
    * word in uppercase, like `DURATION`.
    * @default `"DURATION"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for duration parsing failures.
@@ -86,7 +90,7 @@ export interface ZonedDateTimeOptions {
    * word in uppercase, like `ZONED_DATETIME`.
    * @default `"ZONED_DATETIME"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for zoned datetime parsing failures.
@@ -112,7 +116,7 @@ export interface PlainDateOptions {
    * word in uppercase, like `DATE`.
    * @default `"DATE"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for plain date parsing failures.
@@ -138,7 +142,7 @@ export interface PlainTimeOptions {
    * word in uppercase, like `TIME`.
    * @default `"TIME"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for plain time parsing failures.
@@ -164,7 +168,7 @@ export interface PlainDateTimeOptions {
    * word in uppercase, like `DATETIME`.
    * @default `"DATETIME"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for plain datetime parsing failures.
@@ -190,7 +194,7 @@ export interface PlainYearMonthOptions {
    * word in uppercase, like `YEAR-MONTH`.
    * @default `"YEAR-MONTH"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for plain year-month parsing failures.
@@ -216,7 +220,7 @@ export interface PlainMonthDayOptions {
    * word in uppercase, like `--MONTH-DAY`.
    * @default `"--MONTH-DAY"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for plain month-day parsing failures.
@@ -242,7 +246,7 @@ export interface TimeZoneOptions {
    * word in uppercase, like `TIMEZONE`.
    * @default `"TIMEZONE"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for timezone parsing failures.
@@ -272,8 +276,10 @@ export interface TimeZoneOptions {
 export function instant(
   options: InstantOptions = {},
 ): ValueParser<Temporal.Instant> {
+  const metavar = options.metavar ?? "TIMESTAMP";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "TIMESTAMP",
+    metavar,
     parse(input: string): ValueParserResult<Temporal.Instant> {
       try {
         const value = Temporal.Instant.from(input);
@@ -310,8 +316,10 @@ export function instant(
 export function duration(
   options: DurationOptions = {},
 ): ValueParser<Temporal.Duration> {
+  const metavar = options.metavar ?? "DURATION";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "DURATION",
+    metavar,
     parse(input: string): ValueParserResult<Temporal.Duration> {
       try {
         const value = Temporal.Duration.from(input);
@@ -347,8 +355,10 @@ export function duration(
 export function zonedDateTime(
   options: ZonedDateTimeOptions = {},
 ): ValueParser<Temporal.ZonedDateTime> {
+  const metavar = options.metavar ?? "ZONED_DATETIME";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "ZONED_DATETIME",
+    metavar,
     parse(input: string): ValueParserResult<Temporal.ZonedDateTime> {
       try {
         const value = Temporal.ZonedDateTime.from(input);
@@ -384,8 +394,10 @@ export function zonedDateTime(
 export function plainDate(
   options: PlainDateOptions = {},
 ): ValueParser<Temporal.PlainDate> {
+  const metavar = options.metavar ?? "DATE";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "DATE",
+    metavar,
     parse(input: string): ValueParserResult<Temporal.PlainDate> {
       try {
         const value = Temporal.PlainDate.from(input);
@@ -421,8 +433,10 @@ export function plainDate(
 export function plainTime(
   options: PlainTimeOptions = {},
 ): ValueParser<Temporal.PlainTime> {
+  const metavar = options.metavar ?? "TIME";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "TIME",
+    metavar,
     parse(input: string): ValueParserResult<Temporal.PlainTime> {
       try {
         const value = Temporal.PlainTime.from(input);
@@ -458,8 +472,10 @@ export function plainTime(
 export function plainDateTime(
   options: PlainDateTimeOptions = {},
 ): ValueParser<Temporal.PlainDateTime> {
+  const metavar = options.metavar ?? "DATETIME";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "DATETIME",
+    metavar,
     parse(input: string): ValueParserResult<Temporal.PlainDateTime> {
       try {
         const value = Temporal.PlainDateTime.from(input);
@@ -495,8 +511,10 @@ export function plainDateTime(
 export function plainYearMonth(
   options: PlainYearMonthOptions = {},
 ): ValueParser<Temporal.PlainYearMonth> {
+  const metavar = options.metavar ?? "YEAR-MONTH";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "YEAR-MONTH",
+    metavar,
     parse(input: string): ValueParserResult<Temporal.PlainYearMonth> {
       try {
         const value = Temporal.PlainYearMonth.from(input);
@@ -532,8 +550,10 @@ export function plainYearMonth(
 export function plainMonthDay(
   options: PlainMonthDayOptions = {},
 ): ValueParser<Temporal.PlainMonthDay> {
+  const metavar = options.metavar ?? "--MONTH-DAY";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "--MONTH-DAY",
+    metavar,
     parse(input: string): ValueParserResult<Temporal.PlainMonthDay> {
       try {
         const value = Temporal.PlainMonthDay.from(input);
@@ -569,8 +589,10 @@ export function plainMonthDay(
  * @returns A ValueParser that parses and validates timezone identifiers.
  */
 export function timeZone(options: TimeZoneOptions = {}): ValueParser<TimeZone> {
+  const metavar = options.metavar ?? "TIMEZONE";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "TIMEZONE",
+    metavar,
     parse(input: string): ValueParserResult<TimeZone> {
       try {
         // Validate by creating a ZonedDateTime with this timezone

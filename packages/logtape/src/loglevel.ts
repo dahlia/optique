@@ -1,4 +1,8 @@
-import { choice, type ValueParser } from "@optique/core/valueparser";
+import {
+  choice,
+  type NonEmptyString,
+  type ValueParser,
+} from "@optique/core/valueparser";
 import type { Message } from "@optique/core/message";
 import type { LogLevel } from "@logtape/logtape";
 
@@ -24,7 +28,7 @@ export interface LogLevelOptions {
    * indicate what kind of value this parser expects.
    * @default `"LEVEL"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for log level parsing failures.

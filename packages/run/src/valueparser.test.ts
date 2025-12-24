@@ -1,4 +1,5 @@
 import { formatMessage, message, values } from "@optique/core/message";
+import type { NonEmptyString } from "@optique/core/valueparser";
 import { path } from "@optique/run/valueparser";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -845,6 +846,23 @@ describe("path", () => {
       // This test depends on the directory structure, so we just ensure no errors
       assert.ok(Array.isArray(regularSuggestions));
       assert.ok(Array.isArray(dotSuggestions));
+    });
+  });
+
+  describe("metavar validation", () => {
+    it("should throw TypeError when metavar is empty string", () => {
+      assert.throws(
+        () => path({ metavar: "" as unknown as NonEmptyString }),
+        {
+          name: "TypeError",
+          message: "Expected a non-empty string.",
+        },
+      );
+    });
+
+    it("should accept non-empty metavar", () => {
+      const parser = path({ metavar: "FILE" });
+      assert.equal(parser.metavar, "FILE");
     });
   });
 });

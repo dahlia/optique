@@ -1,4 +1,8 @@
-import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type {
+  NonEmptyString,
+  ValueParser,
+  ValueParserResult,
+} from "@optique/core/valueparser";
 import { type Message, message } from "@optique/core/message";
 import type { z } from "zod";
 
@@ -13,7 +17,7 @@ export interface ZodParserOptions {
    * word in uppercase, like `VALUE` or `SCHEMA`.
    * @default `"VALUE"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for Zod validation failures.
@@ -49,7 +53,7 @@ export interface ZodParserOptions {
  *
  * @since 0.7.0
  */
-function inferMetavar(schema: z.Schema<unknown>): string {
+function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
   // deno-lint-ignore no-explicit-any
   const def = (schema as any)._def;
 

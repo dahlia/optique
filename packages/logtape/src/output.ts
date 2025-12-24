@@ -1,6 +1,10 @@
 import { option } from "@optique/core/primitives";
 import { optional } from "@optique/core/modifiers";
-import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type {
+  NonEmptyString,
+  ValueParser,
+  ValueParserResult,
+} from "@optique/core/valueparser";
 import type { Parser, Suggestion } from "@optique/core/parser";
 import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
@@ -64,7 +68,7 @@ export interface LogOutputOptions {
    * The metavariable name shown in help text.
    * @default `"FILE"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Description to show in help text.

@@ -726,17 +726,20 @@ handling and help text generation as built-in parsers.
 The `ValueParser<T>` interface defines three required properties:
 
 ~~~~ typescript twoslash
-import type { ValueParserResult } from "@optique/core/valueparser";
+import type { NonEmptyString, ValueParserResult } from "@optique/core/valueparser";
 // ---cut-before---
 interface ValueParser<T> {
-  readonly metavar: string;
+  readonly metavar: NonEmptyString;
   parse(input: string): ValueParserResult<T>;
   format(value: T): string;
 }
 ~~~~
 
 `metavar`
-:   The placeholder text shown in help messages (usually uppercase)
+:   The placeholder text shown in help messages (usually uppercase).
+    Must be a non-empty string—TypeScript will reject empty string literals
+    at compile time, and factory functions will throw `TypeError` at runtime
+    if given an empty string.
 
 `parse()`
 :   Converts string input to typed value or returns error
@@ -806,10 +809,14 @@ More sophisticated parsers can accept configuration options:
 
 ~~~~ typescript twoslash
 import { message } from "@optique/core/message";
-import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type {
+  NonEmptyString,
+  ValueParser,
+  ValueParserResult,
+} from "@optique/core/valueparser";
 
 interface DateParserOptions {
-  metavar?: string;
+  metavar?: NonEmptyString;
   format?: 'iso' | 'us' | 'eu';
   allowFuture?: boolean;
 }
@@ -898,7 +905,11 @@ Custom value parsers work seamlessly with Optique's parser combinators:
 
 ~~~~ typescript twoslash
 import { message } from "@optique/core/message";
-import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type {
+  NonEmptyString,
+  ValueParser,
+  ValueParserResult,
+} from "@optique/core/valueparser";
 
 interface IPv4Address {
   octets: [number, number, number, number];
@@ -918,7 +929,7 @@ function ipv4(): ValueParser<IPv4Address> {
 }
 
 interface DateParserOptions {
-  metavar?: string;
+  metavar?: NonEmptyString;
   format?: 'iso' | 'us' | 'eu';
   allowFuture?: boolean;
 }
@@ -1005,7 +1016,7 @@ function withinBounds(input: string): boolean;
 function semanticallyValid(input: string): boolean;
 function parser<T>(): ValueParser<T> {
 return {
-metavar: "",
+metavar: "VALUE",
 format() { return ""; },
 // ---cut-before---
 parse(input: string): ValueParserResult<T> {

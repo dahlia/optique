@@ -1,3 +1,5 @@
+import type { NonEmptyString } from "./nonempty.ts";
+
 /**
  * Represents a single term in a message, which can be a text, an option
  * name, a list of option names, a metavariable, a value, or a list of
@@ -62,7 +64,7 @@ export type MessageTerm =
      * The metavariable name, which is a string that represents
      * a variable in the message.  For example, `"VALUE"` or `"ARG"`.
      */
-    readonly metavar: string;
+    readonly metavar: NonEmptyString;
   }
   /**
    * A value term in the message, which can be a single value.
@@ -213,7 +215,7 @@ export function optionNames(names: readonly string[]): MessageTerm {
  *                `"ARG"`.
  * @returns A {@link MessageTerm} representing the metavariable.
  */
-export function metavar(metavar: string): MessageTerm {
+export function metavar(metavar: NonEmptyString): MessageTerm {
   return { type: "metavar", metavar };
 }
 

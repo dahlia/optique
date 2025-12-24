@@ -8,6 +8,7 @@ export default defineConfig({
     "src/facade.ts",
     "src/message.ts",
     "src/modifiers.ts",
+    "src/nonempty.ts",
     "src/parser.ts",
     "src/primitives.ts",
     "src/usage.ts",

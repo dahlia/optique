@@ -11,6 +11,7 @@ import {
   zonedDateTime,
 } from "@optique/temporal";
 import { message } from "@optique/core/message";
+import type { NonEmptyString } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -671,6 +672,98 @@ describe("error customization", () => {
         ),
       );
     });
+  });
+});
+
+describe("metavar validation", () => {
+  it("should throw TypeError when instant() receives empty metavar", () => {
+    assert.throws(
+      () => instant({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
+
+  it("should throw TypeError when duration() receives empty metavar", () => {
+    assert.throws(
+      () => duration({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
+
+  it("should throw TypeError when zonedDateTime() receives empty metavar", () => {
+    assert.throws(
+      () => zonedDateTime({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
+
+  it("should throw TypeError when plainDate() receives empty metavar", () => {
+    assert.throws(
+      () => plainDate({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
+
+  it("should throw TypeError when plainTime() receives empty metavar", () => {
+    assert.throws(
+      () => plainTime({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
+
+  it("should throw TypeError when plainDateTime() receives empty metavar", () => {
+    assert.throws(
+      () => plainDateTime({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
+
+  it("should throw TypeError when plainYearMonth() receives empty metavar", () => {
+    assert.throws(
+      () => plainYearMonth({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
+
+  it("should throw TypeError when plainMonthDay() receives empty metavar", () => {
+    assert.throws(
+      () => plainMonthDay({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
+  });
+
+  it("should throw TypeError when timeZone() receives empty metavar", () => {
+    assert.throws(
+      () => timeZone({ metavar: "" as unknown as NonEmptyString }),
+      {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      },
+    );
   });
 });
 

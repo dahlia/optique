@@ -1,4 +1,8 @@
 import { type Message, message, text } from "@optique/core/message";
+import {
+  ensureNonEmptyString,
+  type NonEmptyString,
+} from "@optique/core/nonempty";
 import type { Suggestion } from "@optique/core/parser";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { existsSync, statSync } from "node:fs";
@@ -69,7 +73,7 @@ export interface PathOptionsBase {
    * The metavariable name for this parser, e.g., `"FILE"`, `"DIR"`.
    * @default "PATH"
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Expected type of path (file, directory, or either).
@@ -203,6 +207,7 @@ export function path(options: PathOptions = {}): ValueParser<string> {
     allowCreate = false,
     extensions,
   } = options;
+  ensureNonEmptyString(metavar);
   const mustExist = "mustExist" in options ? options.mustExist : false;
   const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;
 

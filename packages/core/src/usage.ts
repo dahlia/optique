@@ -1,3 +1,5 @@
+import type { NonEmptyString } from "./nonempty.ts";
+
 /**
  * Represents the name of a command-line option.  There are four types of
  * option syntax:
@@ -30,7 +32,7 @@ export type UsageTerm =
      * The name of the argument, which is used to identify it in
      * the command-line usage.
      */
-    readonly metavar: string;
+    readonly metavar: NonEmptyString;
     /**
      * When `true`, hides the argument from help text, shell completion
      * suggestions, and error suggestions.
@@ -56,7 +58,7 @@ export type UsageTerm =
      * An optional metavariable name for the option, which is used
      * to indicate what value the option expects.
      */
-    readonly metavar?: string;
+    readonly metavar?: NonEmptyString;
     /**
      * When `true`, hides the option from help text, shell completion
      * suggestions, and "Did you mean?" error suggestions.

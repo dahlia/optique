@@ -10,6 +10,7 @@
     "./facade": "./src/facade.ts",
     "./message": "./src/message.ts",
     "./modifiers": "./src/modifiers.ts",
+    "./nonempty": "./src/nonempty.ts",
     "./parser": "./src/parser.ts",
     "./primitives": "./src/primitives.ts",
     "./usage": "./src/usage.ts",

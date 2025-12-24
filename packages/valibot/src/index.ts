@@ -1,4 +1,8 @@
-import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type {
+  NonEmptyString,
+  ValueParser,
+  ValueParserResult,
+} from "@optique/core/valueparser";
 import { type Message, message } from "@optique/core/message";
 import type * as v from "valibot";
 import { safeParse } from "valibot";
@@ -14,7 +18,7 @@ export interface ValibotParserOptions {
    * word in uppercase, like `VALUE` or `SCHEMA`.
    * @default `"VALUE"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for Valibot validation failures.
@@ -59,7 +63,7 @@ export interface ValibotParserOptions {
  */
 function inferMetavar(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-): string {
+): NonEmptyString {
   // deno-lint-ignore no-explicit-any
   const schemaType = (schema as any).type;
 

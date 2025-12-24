@@ -1040,7 +1040,7 @@ import { string, type ValueParser,
          type ValueParserResult } from "@optique/core/valueparser";
 function keyValue(separator = "="): ValueParser<[string, string]> {
   return {
-    metavar: "",
+    metavar: `KEY${separator}VALUE`,
     parse(input: string): ValueParserResult<[string, string]> {
       return { success: true, value: ["", ""] };
     },

@@ -77,9 +77,23 @@ To be released.
     const debug = flag("--trace-internal", { hidden: true });
     ~~~~
 
+ -  Added compile-time and runtime validation for `metavar` to reject empty
+    strings.  The `metavar` property in `ValueParser` and related option
+    interfaces now uses a non-empty string type (`NonEmptyString`), providing
+    TypeScript errors when an empty string literal is passed.  Additionally,
+    value parser factory functions (`string()`, `integer()`, `float()`,
+    `choice()`, `url()`, `locale()`, `uuid()`) now throw a `TypeError` at
+    runtime if an empty `metavar` is provided.  [[#63]]
+
+     -  Added `@optique/core/nonempty` module.
+     -  Added `NonEmptyString` type.
+     -  Added `isNonEmptyString()` type guard function.
+     -  Added `ensureNonEmptyString()` assertion function.
+
 [#54]: https://github.com/dahlia/optique/issues/54
 [#57]: https://github.com/dahlia/optique/issues/57
 [#62]: https://github.com/dahlia/optique/issues/62
+[#63]: https://github.com/dahlia/optique/issues/63
 
 ### @optique/run
 
@@ -107,7 +121,15 @@ To be released.
     for the `path()` value parser.  This allows custom error messages when
     a path already exists while using the `mustNotExist` option.  [[#56]]
 
+ -  The `path()` value parser now validates that `metavar` is non-empty,
+    throwing a `TypeError` if an empty string is provided.  [[#63]]
+
 [#56]: https://github.com/dahlia/optique/issues/56
+
+### @optique/temporal
+
+ -  All temporal value parsers now validate that `metavar` is non-empty,
+    throwing a `TypeError` if an empty string is provided.  [[#63]]
 
 
 Version 0.8.2

@@ -4,6 +4,7 @@ import {
   integer,
   isValueParser,
   locale,
+  type NonEmptyString,
   string,
   url,
   uuid,
@@ -3568,6 +3569,78 @@ describe("float edge cases", () => {
     if (result.success) {
       assert.equal(result.value, 0.0000000001);
     }
+  });
+});
+
+describe("ensureNonEmptyString", () => {
+  it("should throw TypeError for empty metavar in string()", () => {
+    assert.throws(
+      () => string({ metavar: "" as unknown as NonEmptyString }),
+      TypeError,
+      "Expected a non-empty string.",
+    );
+  });
+
+  it("should throw TypeError for empty metavar in choice()", () => {
+    assert.throws(
+      () => choice(["a", "b"], { metavar: "" as unknown as NonEmptyString }),
+      TypeError,
+      "Expected a non-empty string.",
+    );
+  });
+
+  it("should throw TypeError for empty metavar in integer()", () => {
+    assert.throws(
+      () => integer({ metavar: "" as unknown as NonEmptyString }),
+      TypeError,
+      "Expected a non-empty string.",
+    );
+  });
+
+  it("should throw TypeError for empty metavar in integer() with bigint", () => {
+    assert.throws(
+      () =>
+        integer({ type: "bigint", metavar: "" as unknown as NonEmptyString }),
+      TypeError,
+      "Expected a non-empty string.",
+    );
+  });
+
+  it("should throw TypeError for empty metavar in float()", () => {
+    assert.throws(
+      () => float({ metavar: "" as unknown as NonEmptyString }),
+      TypeError,
+      "Expected a non-empty string.",
+    );
+  });
+
+  it("should throw TypeError for empty metavar in url()", () => {
+    assert.throws(
+      () => url({ metavar: "" as unknown as NonEmptyString }),
+      TypeError,
+      "Expected a non-empty string.",
+    );
+  });
+
+  it("should throw TypeError for empty metavar in locale()", () => {
+    assert.throws(
+      () => locale({ metavar: "" as unknown as NonEmptyString }),
+      TypeError,
+      "Expected a non-empty string.",
+    );
+  });
+
+  it("should throw TypeError for empty metavar in uuid()", () => {
+    assert.throws(
+      () => uuid({ metavar: "" as unknown as NonEmptyString }),
+      TypeError,
+      "Expected a non-empty string.",
+    );
+  });
+
+  it("should accept non-empty metavar", () => {
+    const parser = string({ metavar: "FILE" });
+    assert.equal(parser.metavar, "FILE");
   });
 });
 

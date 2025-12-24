@@ -1,5 +1,12 @@
 import { type Message, message, text } from "./message.ts";
+import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
 import type { Suggestion } from "./parser.ts";
+
+export {
+  ensureNonEmptyString,
+  isNonEmptyString,
+  type NonEmptyString,
+} from "./nonempty.ts";
 
 /**
  * Interface for parsing CLI option values and arguments.
@@ -15,7 +22,7 @@ export interface ValueParser<T> {
    * to indicate what kind of value this parser expects.  Usually
    * a single word in uppercase, like `PORT` or `FILE`.
    */
-  readonly metavar: string;
+  readonly metavar: NonEmptyString;
 
   /**
    * Parses a string input into a value of type {@link T}.
@@ -82,7 +89,7 @@ export interface StringOptions {
    * word in uppercase, like `HOST` or `NAME`.
    * @default `"STRING"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Optional regular expression pattern that the string must match.
@@ -121,7 +128,7 @@ export interface ChoiceOptions {
    * word in uppercase, like `TYPE` or `MODE`.
    * @default `"TYPE"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * If `true`, the parser will perform case-insensitive matching
@@ -179,11 +186,13 @@ export function choice<const T extends string>(
   choices: readonly T[],
   options: ChoiceOptions = {},
 ): ValueParser<T> {
+  const metavar = options.metavar ?? "TYPE";
+  ensureNonEmptyString(metavar);
   const normalizedValues = options.caseInsensitive
     ? choices.map((v) => v.toLowerCase())
     : choices as readonly string[];
   return {
-    metavar: options.metavar ?? "TYPE",
+    metavar,
     parse(input: string): ValueParserResult<T> {
       const normalizedInput = options.caseInsensitive
         ? input.toLowerCase()
@@ -244,8 +253,10 @@ export function choice<const T extends string>(
  *          specified options.
  */
 export function string(options: StringOptions = {}): ValueParser<string> {
+  const metavar = options.metavar ?? "STRING";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "STRING",
+    metavar,
     parse(input: string): ValueParserResult<string> {
       if (options.pattern != null && !options.pattern.test(input)) {
         return {
@@ -286,7 +297,7 @@ export interface IntegerOptionsNumber {
    * word in uppercase, like `PORT`.
    * @default `"INTEGER"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Minimum allowed value (inclusive). If not specified,
@@ -344,7 +355,7 @@ export interface IntegerOptionsBigInt {
    * word in uppercase, like `PORT`.
    * @default `"INTEGER"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Minimum allowed value (inclusive). If not specified,
@@ -439,8 +450,10 @@ export function integer(
   options?: IntegerOptionsNumber | IntegerOptionsBigInt,
 ): ValueParser<number> | ValueParser<bigint> {
   if (options?.type === "bigint") {
+    const metavar = options.metavar ?? "INTEGER";
+    ensureNonEmptyString(metavar);
     return {
-      metavar: options.metavar ?? "INTEGER",
+      metavar,
       parse(input: string): ValueParserResult<bigint> {
         let value: bigint;
         try {
@@ -488,8 +501,10 @@ export function integer(
       },
     };
   }
+  const metavar = options?.metavar ?? "INTEGER";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options?.metavar ?? "INTEGER",
+    metavar,
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
@@ -543,7 +558,7 @@ export interface FloatOptions {
    * word in uppercase, like `RATE` or `PRICE`.
    * @default `"NUMBER"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Minimum allowed value (inclusive). If not specified,
@@ -615,9 +630,11 @@ export function float(options: FloatOptions = {}): ValueParser<number> {
   // Matches: integers, decimals, scientific notation
   // Does not match: empty strings, whitespace-only, hex/bin/oct numbers
   const floatRegex = /^[+-]?(?:(?:\d+\.?\d*)|(?:\d*\.\d+))(?:[eE][+-]?\d+)?$/;
+  const metavar = options.metavar ?? "NUMBER";
+  ensureNonEmptyString(metavar);
 
   return {
-    metavar: options.metavar ?? "NUMBER",
+    metavar,
     parse(input: string): ValueParserResult<number> {
       let value: number;
       const lowerInput = input.toLowerCase();
@@ -696,7 +713,7 @@ export interface UrlOptions {
    * word in uppercase, like `URL` or `ENDPOINT`.
    * @default `"URL"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * List of allowed URL protocols (e.g., `["http:", "https:"]`).
@@ -742,8 +759,10 @@ export function url(options: UrlOptions = {}): ValueParser<URL> {
   const allowedProtocols = options.allowedProtocols?.map((p) =>
     p.toLowerCase()
   );
+  const metavar = options.metavar ?? "URL";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "URL",
+    metavar,
     parse(input: string): ValueParserResult<URL> {
       if (!URL.canParse(input)) {
         return {
@@ -806,7 +825,7 @@ export interface LocaleOptions {
    * word in uppercase, like `LOCALE` or `LANG`.
    * @default `"LOCALE"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * Custom error messages for locale parsing failures.
@@ -833,8 +852,10 @@ export interface LocaleOptions {
  *          objects.
  */
 export function locale(options: LocaleOptions = {}): ValueParser<Intl.Locale> {
+  const metavar = options.metavar ?? "LOCALE";
+  ensureNonEmptyString(metavar);
   return {
-    metavar: options.metavar ?? "LOCALE",
+    metavar,
     parse(input: string): ValueParserResult<Intl.Locale> {
       let locale: Intl.Locale;
       try {
@@ -1153,7 +1174,7 @@ export interface UuidOptions {
    * word in uppercase, like `UUID` or `ID`.
    * @default `"UUID"`
    */
-  readonly metavar?: string;
+  readonly metavar?: NonEmptyString;
 
   /**
    * List of allowed UUID versions (e.g., `[4, 5]` for UUIDs version 4 and 5).
@@ -1201,9 +1222,11 @@ export function uuid(options: UuidOptions = {}): ValueParser<Uuid> {
   // UUID regex pattern: 8-4-4-4-12 hex digits with dashes
   const uuidRegex =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const metavar = options.metavar ?? "UUID";
+  ensureNonEmptyString(metavar);
 
   return {
-    metavar: options.metavar ?? "UUID",
+    metavar,
     parse(input: string): ValueParserResult<Uuid> {
       if (!uuidRegex.test(input)) {
         return {

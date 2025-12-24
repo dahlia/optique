@@ -500,7 +500,7 @@ describe("suggest function", () => {
     // Regression tests for https://github.com/dahlia/optique/issues/55
     it("should only suggest option values when option is expecting a value", () => {
       const remoteParser = {
-        metavar: "REMOTE",
+        metavar: "REMOTE" as const,
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -518,7 +518,7 @@ describe("suggest function", () => {
       };
 
       const tagParser = {
-        metavar: "TAG",
+        metavar: "TAG" as const,
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -552,7 +552,7 @@ describe("suggest function", () => {
 
     it("should suggest both options and positional arguments when not in option value context", () => {
       const remoteParser = {
-        metavar: "REMOTE",
+        metavar: "REMOTE" as const,
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -570,7 +570,7 @@ describe("suggest function", () => {
       };
 
       const tagParser = {
-        metavar: "TAG",
+        metavar: "TAG" as const,
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -603,7 +603,7 @@ describe("suggest function", () => {
 
     it("should only suggest option values for simple case without preceding arguments", () => {
       const formatParser = {
-        metavar: "FORMAT",
+        metavar: "FORMAT" as const,
         parse(input: string) {
           return { success: true as const, value: input };
         },
@@ -621,7 +621,7 @@ describe("suggest function", () => {
       };
 
       const fileParser = {
-        metavar: "FILE",
+        metavar: "FILE" as const,
         parse(input: string) {
           return { success: true as const, value: input };
         },

@@ -99,6 +99,14 @@
       "import": "./dist/modifiers.js",
       "require": "./dist/modifiers.cjs"
     },
+    "./nonempty": {
+      "types": {
+        "import": "./dist/nonempty.d.ts",
+        "require": "./dist/nonempty.d.cts"
+      },
+      "import": "./dist/nonempty.js",
+      "require": "./dist/nonempty.cjs"
+    },
     "./parser": {
       "types": {
         "import": "./dist/parser.d.ts",
