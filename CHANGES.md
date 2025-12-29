@@ -6,6 +6,14 @@ Version 0.7.5
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `merge()` breaking option parsing inside subcommands when merged with
+    `or()`.  Previously, when using `merge(globalOptions, or(sub1, sub2))`,
+    options inside the subcommands would fail to parse after the subcommand was
+    selected.  For example, `sub1 -o foo` would fail with “No matching option
+    or argument found” even though `-o` was a valid option for `sub1`.  [[#67]]
+
 
 Version 0.7.4
 -------------
@@ -331,6 +339,22 @@ to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
 
 [Zod]: https://zod.dev/
 [#39]: https://github.com/dahlia/optique/issues/39
+
+
+Version 0.6.7
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Fixed `merge()` breaking option parsing inside subcommands when merged with
+    `or()`.  Previously, when using `merge(globalOptions, or(sub1, sub2))`,
+    options inside the subcommands would fail to parse after the subcommand was
+    selected.  For example, `sub1 -o foo` would fail with “No matching option
+    or argument found” even though `-o` was a valid option for `sub1`.  [[#67]]
+
+[#67]: https://github.com/dahlia/optique/issues/67
 
 
 Version 0.6.6
