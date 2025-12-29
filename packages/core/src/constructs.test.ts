@@ -2760,6 +2760,66 @@ describe("merge", () => {
       }
     });
   });
+
+  it("should parse options inside subcommands when merged with or() (#67)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/67
+    const globalOptions = object({
+      global: optional(flag("--global")),
+    });
+
+    const sub1Command = command(
+      "sub1",
+      object({
+        cmd: constant("sub1" as const),
+        theOption: optional(option("-o", "--option", string())),
+      }),
+    );
+
+    const sub2Command = command(
+      "sub2",
+      object({
+        cmd: constant("sub2" as const),
+      }),
+    );
+
+    const parser = merge(globalOptions, or(sub1Command, sub2Command));
+
+    // Test: sub1 with its option
+    const result1 = parse(parser, ["sub1", "-o", "foo"]);
+    assert.ok(result1.success, "sub1 -o foo should parse successfully");
+    if (result1.success) {
+      assert.equal(result1.value.cmd, "sub1");
+      assert.equal(result1.value.theOption, "foo");
+      assert.equal(result1.value.global, undefined);
+    }
+
+    // Test: sub1 without option
+    const result2 = parse(parser, ["sub1"]);
+    assert.ok(result2.success, "sub1 should parse successfully");
+    if (result2.success) {
+      assert.equal(result2.value.cmd, "sub1");
+      assert.equal(result2.value.theOption, undefined);
+    }
+
+    // Test: sub2
+    const result3 = parse(parser, ["sub2"]);
+    assert.ok(result3.success, "sub2 should parse successfully");
+    if (result3.success) {
+      assert.equal(result3.value.cmd, "sub2");
+    }
+
+    // Test: sub1 with global option
+    const result4 = parse(parser, ["--global", "sub1", "-o", "bar"]);
+    assert.ok(
+      result4.success,
+      "--global sub1 -o bar should parse successfully",
+    );
+    if (result4.success) {
+      assert.equal(result4.value.global, true);
+      assert.equal(result4.value.cmd, "sub1");
+      assert.equal(result4.value.theOption, "bar");
+    }
+  });
 });
 
 describe("merge() - duplicate option detection", () => {

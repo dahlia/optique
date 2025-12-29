@@ -3216,9 +3216,17 @@ export function merge(
         // Extract the appropriate state for this parser
         let parserState: unknown;
         if (parser.initialState === undefined) {
-          // For parsers with undefined initialState, they might still have state in the merged context
-          // We need to pass undefined only if no relevant state exists
-          parserState = undefined;
+          // For parsers with undefined initialState (like or()),
+          // check if they have accumulated state during parsing
+          const key = `__parser_${i}`;
+          if (
+            context.state && typeof context.state === "object" &&
+            key in context.state
+          ) {
+            parserState = context.state[key];
+          } else {
+            parserState = undefined;
+          }
         } else if (
           parser.initialState && typeof parser.initialState === "object"
         ) {
