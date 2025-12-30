@@ -56,7 +56,11 @@ interface VersionParsers {
 function createHelpParser(mode: "command" | "option" | "both"): HelpParsers {
   const helpCommand = command(
     "help",
-    multiple(argument(string({ metavar: "COMMAND" }))),
+    multiple(
+      argument(string({ metavar: "COMMAND" }), {
+        description: message`Command name to show help for.`,
+      }),
+    ),
     {
       description: message`Show help information.`,
     },
@@ -224,7 +228,12 @@ function createCompletionParser(
         completionOption: object({
           shell: completionOption,
           args: withDefault(
-            multiple(argument(string({ metavar: "ARG" }))),
+            multiple(
+              argument(string({ metavar: "ARG" }), {
+                description:
+                  message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+              }),
+            ),
             [] as readonly string[],
           ),
         }),
@@ -235,7 +244,12 @@ function createCompletionParser(
         completionOption: object({
           shell: completionOption,
           args: withDefault(
-            multiple(argument(string({ metavar: "ARG" }))),
+            multiple(
+              argument(string({ metavar: "ARG" }), {
+                description:
+                  message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+              }),
+            ),
             [] as readonly string[],
           ),
         }),

@@ -1,4 +1,5 @@
 import { object, or, tuple } from "@optique/core/constructs";
+import type { DocEntry } from "@optique/core/doc";
 import {
   formatMessage,
   type Message,
@@ -1965,6 +1966,38 @@ describe("command", () => {
       assert.ok(fragments.fragments.length > 0);
       // The exact number and content depends on the inner parser implementation
       // but we know it should contain fragments from the inner parser
+    });
+
+    it("should show inner parser option descriptions when command is matched", () => {
+      const description = message`Target language code`;
+      const innerParser = object({
+        target: option("-t", "--target", string({ metavar: "LANG" }), {
+          description,
+        }),
+      });
+      const parser = command("translate", innerParser);
+
+      // Simulate matched state
+      const matchedState: ["matched", string] = ["matched", "translate"];
+      const fragments = parser.getDocFragments({
+        kind: "available" as const,
+        state: matchedState,
+      });
+
+      // Should include inner parser's option descriptions
+      // The option entry may be inside a section, so we need to check both
+      // top-level entries and entries inside sections
+      const allEntries: DocEntry[] = [];
+      for (const f of fragments.fragments) {
+        if (f.type === "entry") {
+          allEntries.push(f);
+        } else if (f.type === "section") {
+          allEntries.push(...f.entries);
+        }
+      }
+      const optionEntry = allEntries.find((e) => e.term.type === "option");
+      assert.ok(optionEntry, "Should have option entry");
+      assert.deepEqual(optionEntry?.description, description);
     });
 
     it("should delegate to inner parser when parsing", () => {

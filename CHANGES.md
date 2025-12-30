@@ -6,6 +6,19 @@ Version 0.7.6
 
 To be released.
 
+### @optique/core
+
+ -  Added default descriptions for built-in `help` command argument and
+    completion option arguments. Previously, these arguments showed no help
+    text. Now they display helpful default descriptions in help output.
+
+ -  Fixed subcommand help not displaying option descriptions in some edge cases.
+    When using `help COMMAND` or `COMMAND --help`, the help output now
+    correctly passes the inner parser's initial state for documentation
+    generation when the command is matched but the inner parser hasn't started
+    yet.  Previously, it passed `unavailable` state which could cause issues
+    with parsers that depend on state for documentation.  [[#68]]
+
 
 Version 0.7.5
 -------------
@@ -345,6 +358,27 @@ to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
 
 [Zod]: https://zod.dev/
 [#39]: https://github.com/dahlia/optique/issues/39
+
+
+Version 0.6.8
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Added default descriptions for built-in `help` command argument and
+    completion option arguments. Previously, these arguments showed no help
+    text. Now they display helpful default descriptions in help output.
+
+ -  Fixed subcommand help not displaying option descriptions in some edge cases.
+    When using `help COMMAND` or `COMMAND --help`, the help output now
+    correctly passes the inner parser's initial state for documentation
+    generation when the command is matched but the inner parser hasn't started
+    yet.  Previously, it passed `unavailable` state which could cause issues
+    with parsers that depend on state for documentation.  [[#68]]
+
+[#68]: https://github.com/dahlia/optique/issues/68
 
 
 Version 0.6.7

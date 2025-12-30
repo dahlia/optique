@@ -1327,7 +1327,7 @@ export function command<T, TState>(
       }
       const innerState: DocState<TState> = state.state[0] === "parsing"
         ? { kind: "available", state: state.state[1] }
-        : { kind: "unavailable" };
+        : { kind: "available", state: parser.initialState };
       const innerFragments = parser.getDocFragments(innerState, defaultValue);
       return {
         ...innerFragments,
