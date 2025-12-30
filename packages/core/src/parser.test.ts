@@ -1559,6 +1559,59 @@ describe("getDocPage", () => {
     assert.ok(cliSection);
     assert.ok(cliSection.entries.length >= 3);
   });
+
+  it("should resolve nested exclusive usage when using longestMatch with subcommands", () => {
+    // This test reproduces the bug where `help add` shows full usage instead of
+    // subcommand-specific usage when the parser is combined with longestMatch()
+    const addCommand = command(
+      "add",
+      object({
+        name: option("-n", "--name", string()),
+      }),
+    );
+
+    const listCommand = command(
+      "list",
+      object({
+        pattern: argument(string()),
+      }),
+    );
+
+    const globalOptions = object({
+      verbose: optional(option("--verbose")),
+    });
+
+    const parser = merge(globalOptions, or(addCommand, listCommand));
+
+    // Simulate what facade.ts does - combine with help command via longestMatch
+    const helpCommand = command(
+      "help",
+      multiple(argument(string())),
+    );
+
+    const combinedParser = longestMatch(parser, helpCommand);
+
+    // Get doc page for "add" subcommand
+    const doc = getDocPage(combinedParser, ["add"]);
+    assert.ok(doc);
+    assert.ok(doc.usage && doc.usage.length > 0);
+
+    // The usage should show only the "add" command usage, not all alternatives
+    // Expected: [command "add", option "-n/--name", optional "--verbose"]
+    // NOT: [exclusive [...add/list...], optional [...], exclusive [...help...]]
+    if (doc.usage) {
+      // First term should be the "add" command, not an exclusive
+      const firstTerm = doc.usage[0];
+      assert.equal(
+        firstTerm.type,
+        "command",
+        `Expected first usage term to be 'command', got '${firstTerm.type}'`,
+      );
+      if (firstTerm.type === "command") {
+        assert.equal(firstTerm.name, "add");
+      }
+    }
+  });
 });
 
 describe("Error message customization", () => {
