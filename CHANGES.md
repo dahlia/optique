@@ -6,6 +6,17 @@ Version 0.6.9
 
 To be released.
 
+### @optique/core
+
+ -  Fixed subcommand help display when using `merge()` with `or()`.
+    Previously, when combining parsers using `merge(..., or(...))`, the help
+    output would fail to display subcommand-specific options because `merge()`
+    did not correctly propagate the runtime state of parsers with undefined
+    initial state.  Now, the state is correctly resolved, ensuring that
+    subcommand help is generated correctly.  [[#69]]
+
+[#69]: https://github.com/dahlia/optique/issues/69
+
 
 Version 0.6.8
 -------------
