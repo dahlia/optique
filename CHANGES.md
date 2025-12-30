@@ -12,6 +12,15 @@ To be released.
     completion option arguments. Previously, these arguments showed no help
     text. Now they display helpful default descriptions in help output.
 
+ -  Fixed subcommand help not displaying option descriptions in some edge cases.
+    When using `help COMMAND` or `COMMAND --help`, the help output now
+    correctly passes the inner parser's initial state for documentation
+    generation when the command is matched but the inner parser hasn't started
+    yet.  Previously, it passed `unavailable` state which could cause issues
+    with parsers that depend on state for documentation.  [[#68]]
+
+[#68]: https://github.com/dahlia/optique/issues/68
+
 
 Version 0.6.7
 -------------
