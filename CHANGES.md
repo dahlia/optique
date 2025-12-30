@@ -155,6 +155,28 @@ To be released.
     throwing a `TypeError` if an empty string is provided.  [[#63]]
 
 
+Version 0.8.5
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Fixed subcommand help display when using `merge()` with `or()`.
+    Previously, when combining parsers using `merge(..., or(...))`, the help
+    output would fail to display subcommand-specific options because `merge()`
+    did not correctly propagate the runtime state of parsers with undefined
+    initial state.  Now, the state is correctly resolved, ensuring that
+    subcommand help is generated correctly.  [[#69]]
+
+ -  Fixed subcommand help displaying incorrect usage line when using
+    `longestMatch()` with nested subcommands.  Previously, when using patterns
+    like `longestMatch(merge(globalOptions, or(sub1, sub2)), helpCommand)`,
+    the usage line in `help COMMAND` output would show all subcommand
+    alternatives instead of only the selected subcommand's usage.  Now, the
+    usage line correctly displays only the relevant subcommand.
+
+
 Version 0.8.4
 -------------
 
@@ -345,6 +367,28 @@ parsing strategies.
     package.
 
 [LogTape]: https://logtape.org/
+
+
+Version 0.7.7
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Fixed subcommand help display when using `merge()` with `or()`.
+    Previously, when combining parsers using `merge(..., or(...))`, the help
+    output would fail to display subcommand-specific options because `merge()`
+    did not correctly propagate the runtime state of parsers with undefined
+    initial state.  Now, the state is correctly resolved, ensuring that
+    subcommand help is generated correctly.  [[#69]]
+
+ -  Fixed subcommand help displaying incorrect usage line when using
+    `longestMatch()` with nested subcommands.  Previously, when using patterns
+    like `longestMatch(merge(globalOptions, or(sub1, sub2)), helpCommand)`,
+    the usage line in `help COMMAND` output would show all subcommand
+    alternatives instead of only the selected subcommand's usage.  Now, the
+    usage line correctly displays only the relevant subcommand.
 
 
 Version 0.7.6
@@ -704,6 +748,30 @@ to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
 
 [Zod]: https://zod.dev/
 [#39]: https://github.com/dahlia/optique/issues/39
+
+
+Version 0.6.9
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Fixed subcommand help display when using `merge()` with `or()`.
+    Previously, when combining parsers using `merge(..., or(...))`, the help
+    output would fail to display subcommand-specific options because `merge()`
+    did not correctly propagate the runtime state of parsers with undefined
+    initial state.  Now, the state is correctly resolved, ensuring that
+    subcommand help is generated correctly.  [[#69]]
+
+ -  Fixed subcommand help displaying incorrect usage line when using
+    `longestMatch()` with nested subcommands.  Previously, when using patterns
+    like `longestMatch(merge(globalOptions, or(sub1, sub2)), helpCommand)`,
+    the usage line in `help COMMAND` output would show all subcommand
+    alternatives instead of only the selected subcommand's usage.  Now, the
+    usage line correctly displays only the relevant subcommand.
+
+[#69]: https://github.com/dahlia/optique/issues/69
 
 
 Version 0.6.8

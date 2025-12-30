@@ -1,6 +1,6 @@
 import type { DocEntry, DocFragments, DocPage, DocSection } from "./doc.ts";
 import { type Message, message } from "./message.ts";
-import { normalizeUsage, type Usage } from "./usage.ts";
+import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -384,6 +384,42 @@ export function suggest<T>(
 }
 
 /**
+ * Recursively searches for a command within nested exclusive usage terms.
+ * When the command is found, returns the expanded usage terms for that command.
+ *
+ * @param term The usage term to search in
+ * @param commandName The command name to find
+ * @returns The expanded usage terms if found, null otherwise
+ */
+function findCommandInExclusive(
+  term: UsageTerm,
+  commandName: string,
+): Usage | null {
+  if (term.type !== "exclusive") return null;
+
+  for (const termGroup of term.terms) {
+    const firstTerm = termGroup[0];
+
+    // Direct match: first term is the command we're looking for
+    if (firstTerm?.type === "command" && firstTerm.name === commandName) {
+      return termGroup;
+    }
+
+    // Recursive case: first term is another exclusive (nested structure)
+    if (firstTerm?.type === "exclusive") {
+      const found = findCommandInExclusive(firstTerm, commandName);
+      if (found) {
+        // Replace the nested exclusive with the found terms,
+        // then append the rest of termGroup (e.g., global options)
+        return [...found, ...termGroup.slice(1)];
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Generates a documentation page for a parser based on its current state after
  * attempting to parse the provided arguments. This function is useful for
  * creating help documentation that reflects the current parsing context.
@@ -454,17 +490,16 @@ export function getDocPage(
     if (i >= usage.length) break;
     const term = usage[i];
     if (term.type === "exclusive") {
-      for (const termGroup of term.terms) {
-        const firstTerm = termGroup[0];
-        if (firstTerm?.type !== "command" || firstTerm.name !== arg) continue;
-        // Splice replaces 1 element with termGroup, so the next position
+      const found = findCommandInExclusive(term, arg);
+      if (found) {
+        // Splice replaces 1 element with found terms, so the next position
         // should skip over all inserted elements
-        usage.splice(i, 1, ...termGroup);
-        i += termGroup.length;
-        break;
+        usage.splice(i, 1, ...found);
+        i += found.length;
+      } else {
+        // If no match found in exclusive, just move to next position
+        i++;
       }
-      // If no match found in exclusive, just move to next position
-      if (usage[i] === term) i++;
     } else {
       i++;
     }
