@@ -6,6 +6,12 @@ Version 0.6.8
 
 To be released.
 
+### @optique/core
+
+ -  Added default descriptions for built-in `help` command argument and
+    completion option arguments. Previously, these arguments showed no help
+    text. Now they display helpful default descriptions in help output.
+
 
 Version 0.6.7
 -------------
