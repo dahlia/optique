@@ -3373,16 +3373,40 @@ export function merge(
       state: DocState<Record<string | symbol, unknown>>,
       _defaultValue?,
     ) {
-      const fragments = parsers.flatMap((p) => {
-        // If parser has undefined initialState, indicate state unavailable;
-        // otherwise pass the available state
-        const parserState = p.initialState === undefined
-          ? { kind: "unavailable" as const }
-          : state.kind === "unavailable"
-          ? { kind: "unavailable" as const }
-          : { kind: "available" as const, state: state.state };
-        return p.getDocFragments(parserState, undefined)
-          .fragments;
+      const fragments = parsers.flatMap((p, i) => {
+        let parserState: DocState<unknown>;
+
+        if (p.initialState === undefined) {
+          // For parsers with undefined initialState (like or()),
+          // check if they have accumulated state during parsing
+          const key = `__parser_${i}`;
+          if (
+            state.kind === "available" &&
+            state.state &&
+            typeof state.state === "object" &&
+            key in state.state
+          ) {
+            parserState = {
+              kind: "available",
+              state: (state.state as Record<string | symbol, unknown>)[key],
+            };
+          } else {
+            parserState = { kind: "unavailable" };
+          }
+        } else {
+          // If parser has defined initialState (like object()),
+          // pass the available state directly as it shares the merged state object
+          parserState = state.kind === "unavailable"
+            ? { kind: "unavailable" }
+            : { kind: "available", state: state.state };
+        }
+
+        // Cast parserState to any because the generic type constraints on p.getDocFragments
+        // are strictly typed to the parser's expected state, but here we are dealing with 'unknown'
+        // due to the way merge() handles disparate parser types.
+        // The runtime logic ensures we are passing the correct state slice or unavailable.
+        // deno-lint-ignore no-explicit-any
+        return p.getDocFragments(parserState as any, undefined).fragments;
       });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];

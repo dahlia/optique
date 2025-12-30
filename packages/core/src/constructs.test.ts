@@ -2683,6 +2683,75 @@ describe("merge", () => {
       assert.equal(result4.value.theOption, "bar");
     }
   });
+
+  it("should show subcommand help when merged with or() (#69)", () => {
+    const addCommand = command(
+      "add",
+      object({
+        action: constant("add" as const),
+        name: option("-n", "--name", string({ metavar: "NAME" })),
+      }),
+    );
+
+    const listCommand = command(
+      "list",
+      object({
+        action: constant("list" as const),
+        pattern: argument(string({ metavar: "PATTERN" })),
+      }),
+    );
+
+    const globalOptions = object({
+      verbose: optional(flag("--verbose")),
+    });
+
+    const parser = merge(globalOptions, or(addCommand, listCommand));
+
+    // Parse "add" command
+    // We need to use parser.parse() directly to get the next state
+    const result = parser.parse({
+      buffer: ["add"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(result.success);
+
+    // Get doc fragments based on the state after parsing "add"
+    const fragments = parser.getDocFragments({
+      kind: "available",
+      state: result.next.state,
+    });
+
+    const sections = fragments.fragments.filter((f) =>
+      f.type === "section"
+    ) as (DocFragment & { type: "section" })[];
+    const allEntries = sections.flatMap((s) => s.entries);
+
+    // Should include --name from add command
+    const hasNameOption = allEntries.some((e: DocEntry) =>
+      e.term.type === "option" && e.term.names.includes("--name")
+    );
+    assert.ok(
+      hasNameOption,
+      "Should include options from the selected command (add)",
+    );
+
+    // Should NOT include pattern argument from list command
+    const hasPatternArg = allEntries.some((e: DocEntry) =>
+      e.term.type === "argument" && e.term.metavar === "PATTERN"
+    );
+    assert.ok(
+      !hasPatternArg,
+      "Should NOT include arguments from other commands (list)",
+    );
+
+    // Should include global options
+    const hasVerbose = allEntries.some((e: DocEntry) =>
+      e.term.type === "option" && e.term.names.includes("--verbose")
+    );
+    assert.ok(hasVerbose, "Should include global options");
+  });
 });
 
 describe("merge() - duplicate option detection", () => {
