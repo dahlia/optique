@@ -160,15 +160,17 @@ export function logOutput(
 ): Parser<LogOutput | undefined, unknown> {
   const long = (options.long ?? "--log-output") as OptionName;
   const valueParser = logOutputValueParser(options);
+  const description = options.description ??
+    message`Log output destination. Use ${"-"} for console.`;
 
   if (options.short) {
     const short = options.short as OptionName;
     return optional(
-      option(short, long, valueParser, { description: options.description }),
+      option(short, long, valueParser, { description }),
     );
   }
   return optional(
-    option(long, valueParser, { description: options.description }),
+    option(long, valueParser, { description }),
   );
 }
 

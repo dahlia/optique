@@ -1,7 +1,7 @@
 import { flag } from "@optique/core/primitives";
 import { map, optional } from "@optique/core/modifiers";
 import type { Parser } from "@optique/core/parser";
-import type { Message } from "@optique/core/message";
+import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
 import type { LogLevel } from "@logtape/logtape";
 
@@ -86,7 +86,7 @@ export function debug(
   const normalLevel = options.normalLevel ?? "info";
 
   const flagParser = flag(short, long, {
-    description: options.description,
+    description: options.description ?? message`Enable debug logging.`,
   });
 
   return map(

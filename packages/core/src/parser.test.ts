@@ -1374,6 +1374,39 @@ describe("getDocPage", () => {
     assert.ok(commandDoc.usage && commandDoc.usage.length > 0);
   });
 
+  it("should show subcommand option descriptions with getDocPage", () => {
+    const targetDesc = message`Target language code`;
+    const sourceDesc = message`Source language code`;
+    const subParser = object({
+      target: option("-t", "--target", string({ metavar: "LANG" }), {
+        description: targetDesc,
+      }),
+      source: option("-s", "--source", string({ metavar: "LANG" }), {
+        description: sourceDesc,
+      }),
+    });
+    const translateCmd = command("translate", subParser);
+    const configCmd = command("config", object({}));
+    const parser = or(translateCmd, configCmd);
+
+    const doc = getDocPage(parser, ["translate"]);
+    assert.ok(doc);
+
+    // Sections should include option descriptions
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    const targetEntry = allEntries.find(
+      (e) => e.term.type === "option" && e.term.names.includes("--target"),
+    );
+    const sourceEntry = allEntries.find(
+      (e) => e.term.type === "option" && e.term.names.includes("--source"),
+    );
+
+    assert.ok(targetEntry, "Should have --target option entry");
+    assert.ok(sourceEntry, "Should have --source option entry");
+    assert.deepEqual(targetEntry?.description, targetDesc);
+    assert.deepEqual(sourceEntry?.description, sourceDesc);
+  });
+
   it("should handle exclusive (or) parsers correctly", () => {
     const parser = or(
       option("-v", "--verbose"),
