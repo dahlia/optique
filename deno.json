@@ -35,6 +35,12 @@
       ],
       "command": "deno check && deno lint && deno fmt --check && deno publish --dry-run --allow-dirty"
     },
+    "install": {
+      "dependencies": [
+        "hooks:install"
+      ],
+      "command": "deno cache packages/*/src/**.ts examples/*/src/**.ts && pnpm install"
+    },
     "test": "deno test --allow-read --allow-write --allow-env --allow-net --env-file=.env.test",
     "test:node": "pnpm run -r test",
     "test:bun": "pnpm run -r test:bun",
