@@ -6,6 +6,13 @@ Version 0.8.4
 
 To be released.
 
+### @optique/logtape
+
+ -  Added default descriptions for `verbosity()`, `debug()`, and `logOutput()`
+    parsers. Previously, these parsers showed no help text unless users
+    explicitly provided a `description` option. Now they display helpful
+    default descriptions in help output.
+
 
 Version 0.8.3
 -------------

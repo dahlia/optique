@@ -1,7 +1,7 @@
 import { flag } from "@optique/core/primitives";
 import { map, multiple } from "@optique/core/modifiers";
 import type { Parser } from "@optique/core/parser";
-import type { Message } from "@optique/core/message";
+import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
 import type { LogLevel } from "@logtape/logtape";
 
@@ -109,7 +109,8 @@ export function verbosity(
   const effectiveBaseIndex = baseIndex >= 0 ? baseIndex : WARNING_INDEX;
 
   const flagParser = flag(short, long, {
-    description: options.description,
+    description: options.description ??
+      message`Be more verbose. Can be repeated.`,
   });
 
   // Create a parser that allows multiple occurrences of the flag
