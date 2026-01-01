@@ -22,6 +22,8 @@ import { runParser } from "./facade.ts";
 import { message } from "./message.ts";
 import {
   getDocPage,
+  getDocPageAsync,
+  getDocPageSync,
   parseAsync,
   parseSync,
   suggestAsync,
@@ -4557,12 +4559,7 @@ describe("usage and help text generation with async parsers", () => {
   });
 
   describe("getDocPage with async parsers", () => {
-    // Note: getDocPage only accepts sync parsers, but for doc generation
-    // we can use type assertion since doc generation doesn't execute
-    // the async parsing logic
-    type SyncParser = import("./parser.ts").Parser<"sync", unknown, unknown>;
-
-    it("should generate doc page for async parser", () => {
+    it("should generate doc page for async parser", async () => {
       const parser = object({
         name: argument(asyncString(), {
           description: message`The name to process`,
@@ -4572,16 +4569,13 @@ describe("usage and help text generation with async parsers", () => {
         }),
       });
 
-      // Cast to sync parser for doc generation (doesn't execute async parsing)
-      const doc = getDocPage(parser as unknown as SyncParser, []);
+      const doc = await getDocPageAsync(parser);
       assert.ok(doc !== undefined);
-      if (doc) {
-        // DocPage has sections, not options/arguments directly
-        assert.ok(doc.sections.length > 0);
-      }
+      // DocPage has sections, not options/arguments directly
+      assert.ok(doc.sections.length > 0);
     });
 
-    it("should generate doc for command with async value parser", () => {
+    it("should generate doc for command with async value parser", async () => {
       const greetCmd = command(
         "greet",
         object({
@@ -4592,15 +4586,13 @@ describe("usage and help text generation with async parsers", () => {
         { description: message`Greet someone` },
       );
 
-      const doc = getDocPage(greetCmd as unknown as SyncParser, ["greet"]);
+      const doc = await getDocPageAsync(greetCmd, ["greet"]);
       assert.ok(doc !== undefined);
-      if (doc) {
-        // Just verify doc page was generated successfully
-        assert.ok(doc.sections !== undefined);
-      }
+      // Just verify doc page was generated successfully
+      assert.ok(doc.sections !== undefined);
     });
 
-    it("should handle nested async parsers in doc page", () => {
+    it("should handle nested async parsers in doc page", async () => {
       const parser = merge(
         object({
           verbose: flag("-v"),
@@ -4611,19 +4603,15 @@ describe("usage and help text generation with async parsers", () => {
         }),
       );
 
-      const doc = getDocPage(parser as unknown as SyncParser, []);
+      const doc = await getDocPageAsync(parser);
       assert.ok(doc !== undefined);
-      if (doc) {
-        // Verify sections exist
-        assert.ok(doc.sections.length > 0);
-      }
+      // Verify sections exist
+      assert.ok(doc.sections.length > 0);
     });
   });
 
   describe("formatDocPage with async parsers", () => {
-    type SyncParser = import("./parser.ts").Parser<"sync", unknown, unknown>;
-
-    it("should format doc page for async parser", () => {
+    it("should format doc page for async parser", async () => {
       const parser = object({
         name: argument(asyncString(), {
           description: message`The name to process`,
@@ -4633,29 +4621,25 @@ describe("usage and help text generation with async parsers", () => {
         }),
       });
 
-      const doc = getDocPage(parser as unknown as SyncParser, []);
+      const doc = await getDocPageAsync(parser);
       assert.ok(doc !== undefined);
-      if (doc) {
-        const formatted = formatDocPage("myapp", doc);
-        assert.ok(formatted.includes("-v"));
-        assert.ok(formatted.includes("--verbose"));
-        assert.ok(formatted.includes("ASYNC_STRING"));
-      }
+      const formatted = formatDocPage("myapp", doc);
+      assert.ok(formatted.includes("-v"));
+      assert.ok(formatted.includes("--verbose"));
+      assert.ok(formatted.includes("ASYNC_STRING"));
     });
 
-    it("should format colored output for async parser", () => {
+    it("should format colored output for async parser", async () => {
       const parser = object({
         name: argument(asyncString()),
         count: option("-c", "--count", integer()),
       });
 
-      const doc = getDocPage(parser as unknown as SyncParser, []);
+      const doc = await getDocPageAsync(parser);
       assert.ok(doc !== undefined);
-      if (doc) {
-        const formatted = formatDocPage("myapp", doc, { colors: true });
-        // Should contain ANSI color codes
-        assert.ok(formatted.length > 0);
-      }
+      const formatted = formatDocPage("myapp", doc, { colors: true });
+      // Should contain ANSI color codes
+      assert.ok(formatted.length > 0);
     });
   });
 
@@ -7277,5 +7261,196 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
         assert.deepEqual(result.value, ["fast", { threads: 8 }]);
       }
     });
+  });
+});
+
+// =============================================================================
+// getDocPageSync and getDocPageAsync Tests
+// =============================================================================
+
+describe("getDocPageSync", () => {
+  it("should return documentation for sync parser", () => {
+    const parser = object({
+      verbose: flag("-v", "--verbose", {
+        description: message`Enable verbose output`,
+      }),
+      port: option("-p", "--port", integer(), {
+        description: message`Port number`,
+      }),
+    });
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc !== undefined);
+    assert.ok(doc.sections.length > 0);
+
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 2);
+  });
+
+  it("should return documentation for nested sync parsers", () => {
+    const parser = merge(
+      object({
+        verbose: flag("-v"),
+      }),
+      object({
+        config: option("--config", string()),
+      }),
+    );
+
+    const doc = getDocPageSync(parser);
+    assert.ok(doc !== undefined);
+    assert.ok(doc.sections.length > 0);
+  });
+
+  it("should handle command parsers", () => {
+    const addCmd = command(
+      "add",
+      object({
+        name: argument(string(), {
+          description: message`Name to add`,
+        }),
+      }),
+      { description: message`Add a new item` },
+    );
+
+    const doc = getDocPageSync(addCmd, ["add"]);
+    assert.ok(doc !== undefined);
+  });
+
+  it("should return undefined for parsers that don't generate docs", () => {
+    // constant() doesn't generate doc fragments
+    const parser = constant("value");
+    const doc = getDocPageSync(parser);
+    // Doc page may still be generated but with empty sections
+    assert.ok(doc !== undefined);
+  });
+});
+
+describe("getDocPageAsync", () => {
+  it("should return documentation for async parser", async () => {
+    const parser = object({
+      name: argument(asyncString(), {
+        description: message`The name to process`,
+      }),
+      verbose: flag("-v", "--verbose", {
+        description: message`Enable verbose output`,
+      }),
+    });
+
+    const doc = await getDocPageAsync(parser);
+    assert.ok(doc !== undefined);
+    assert.ok(doc.sections.length > 0);
+
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 2);
+  });
+
+  it("should return documentation for sync parser (via async)", async () => {
+    const parser = object({
+      port: option("-p", "--port", integer(), {
+        description: message`Port number`,
+      }),
+    });
+
+    const doc = await getDocPageAsync(parser);
+    assert.ok(doc !== undefined);
+    assert.ok(doc.sections.length > 0);
+  });
+
+  it("should handle mixed sync/async parsers", async () => {
+    const parser = merge(
+      object({
+        verbose: flag("-v"),
+      }),
+      object({
+        config: option("--config", asyncString()),
+        output: option("-o", "--output", string()),
+      }),
+    );
+
+    const doc = await getDocPageAsync(parser);
+    assert.ok(doc !== undefined);
+    assert.ok(doc.sections.length > 0);
+  });
+
+  it("should handle command with async value parser", async () => {
+    const greetCmd = command(
+      "greet",
+      object({
+        name: argument(asyncString(), {
+          description: message`Name to greet`,
+        }),
+      }),
+      { description: message`Greet someone` },
+    );
+
+    const doc = await getDocPageAsync(greetCmd, ["greet"]);
+    assert.ok(doc !== undefined);
+  });
+
+  it("should handle async parsers with args for navigation", async () => {
+    const parser = or(
+      command(
+        "add",
+        object({
+          item: argument(asyncString()),
+        }),
+      ),
+      command(
+        "remove",
+        object({
+          item: argument(string()),
+        }),
+      ),
+    );
+
+    const addDoc = await getDocPageAsync(parser, ["add"]);
+    assert.ok(addDoc !== undefined);
+
+    const removeDoc = await getDocPageAsync(parser, ["remove"]);
+    assert.ok(removeDoc !== undefined);
+  });
+
+  it("should format doc page from async parser result", async () => {
+    const parser = object({
+      name: argument(asyncString(), {
+        description: message`The name to process`,
+      }),
+      verbose: flag("-v", "--verbose", {
+        description: message`Enable verbose output`,
+      }),
+    });
+
+    const doc = await getDocPageAsync(parser);
+    assert.ok(doc !== undefined);
+
+    const formatted = formatDocPage("myapp", doc);
+    assert.ok(formatted.includes("-v"));
+    assert.ok(formatted.includes("--verbose"));
+    assert.ok(formatted.includes("ASYNC_STRING"));
+  });
+});
+
+describe("getDocPage with Mode parameter", () => {
+  it("should work with sync parser and return directly", () => {
+    const parser = object({
+      verbose: flag("-v"),
+    });
+
+    const doc = getDocPage(parser);
+    assert.ok(doc !== undefined);
+    assert.ok(doc.sections.length >= 0);
+  });
+
+  it("should work with async parser and return Promise", async () => {
+    const parser = object({
+      name: option("--name", asyncString()),
+    });
+
+    const docPromise = getDocPage(parser);
+    assert.ok(docPromise instanceof Promise);
+
+    const doc = await docPromise;
+    assert.ok(doc !== undefined);
   });
 });

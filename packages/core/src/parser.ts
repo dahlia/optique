@@ -695,6 +695,49 @@ function findCommandInExclusive(
 }
 
 /**
+ * Generates a documentation page for a synchronous parser.
+ *
+ * This is the sync-specific version of {@link getDocPage}. It only accepts
+ * sync parsers and returns the documentation page directly (not wrapped
+ * in a Promise).
+ *
+ * @param parser The sync parser to generate documentation for.
+ * @param args Optional array of command-line arguments for context.
+ * @returns A {@link DocPage} or `undefined`.
+ * @since 0.9.0
+ */
+export function getDocPageSync(
+  parser: Parser<"sync", unknown, unknown>,
+  args: readonly string[] = [],
+): DocPage | undefined {
+  return getDocPageSyncImpl(parser, args);
+}
+
+/**
+ * Generates a documentation page for any parser, returning a Promise.
+ *
+ * This function accepts parsers of any mode (sync or async) and always
+ * returns a Promise. Use this when working with parsers that may contain
+ * async value parsers.
+ *
+ * @param parser The parser to generate documentation for.
+ * @param args Optional array of command-line arguments for context.
+ * @returns A Promise of {@link DocPage} or `undefined`.
+ * @since 0.9.0
+ */
+export function getDocPageAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[] = [],
+): Promise<DocPage | undefined> {
+  if (parser.$mode === "sync") {
+    return Promise.resolve(
+      getDocPageSyncImpl(parser as Parser<"sync", unknown, unknown>, args),
+    );
+  }
+  return getDocPageAsyncImpl(parser, args);
+}
+
+/**
  * Generates a documentation page for a parser based on its current state after
  * attempting to parse the provided arguments. This function is useful for
  * creating help documentation that reflects the current parsing context.
@@ -705,13 +748,16 @@ function findCommandInExclusive(
  * 3. Organizing fragments into entries and sections
  * 4. Resolving command usage terms based on parsed arguments
  *
+ * For sync parsers, returns the documentation page directly.
+ * For async parsers, returns a Promise of the documentation page.
+ *
  * @param parser The parser to generate documentation for
  * @param args Optional array of command-line arguments that have been parsed
  *             so far. Defaults to an empty array. This is used to determine
  *             the current parsing context and generate contextual documentation.
- * @returns A {@link DocPage} containing usage information, sections, and
- *          optional description, or `undefined` if no documentation can be
- *          generated.
+ * @returns For sync parsers, returns a {@link DocPage} directly.
+ *          For async parsers, returns a Promise of {@link DocPage}.
+ *          Returns `undefined` if no documentation can be generated.
  *
  * @example
  * ```typescript
@@ -720,16 +766,49 @@ function findCommandInExclusive(
  *   port: option("-p", "--port", integer())
  * });
  *
- * // Get documentation for the root parser
+ * // Get documentation for sync parser
  * const rootDoc = getDocPage(parser);
  *
- * // Get documentation after parsing some arguments
- * const contextDoc = getDocPage(parser, ["-v"]);
+ * // Get documentation for async parser
+ * const asyncDoc = await getDocPage(asyncParser);
  * ```
+ * @since 0.9.0 Updated to support async parsers.
  */
+// Overload: sync parser returns sync result
 export function getDocPage(
   parser: Parser<"sync", unknown, unknown>,
+  args?: readonly string[],
+): DocPage | undefined;
+
+// Overload: async parser returns Promise
+export function getDocPage(
+  parser: Parser<"async", unknown, unknown>,
+  args?: readonly string[],
+): Promise<DocPage | undefined>;
+
+// Overload: generic mode parser returns ModeValue
+export function getDocPage<M extends Mode>(
+  parser: Parser<M, unknown, unknown>,
+  args?: readonly string[],
+): ModeValue<M, DocPage | undefined>;
+
+// Implementation
+export function getDocPage(
+  parser: Parser<Mode, unknown, unknown>,
   args: readonly string[] = [],
+): DocPage | undefined | Promise<DocPage | undefined> {
+  if (parser.$mode === "sync") {
+    return getDocPageSyncImpl(parser as Parser<"sync", unknown, unknown>, args);
+  }
+  return getDocPageAsyncImpl(parser, args);
+}
+
+/**
+ * Internal sync implementation of getDocPage.
+ */
+function getDocPageSyncImpl(
+  parser: Parser<"sync", unknown, unknown>,
+  args: readonly string[],
 ): DocPage | undefined {
   let context: ParserContext<unknown> = {
     buffer: args,
@@ -742,6 +821,39 @@ export function getDocPage(
     if (!result.success) break;
     context = result.next;
   } while (context.buffer.length > 0);
+  return buildDocPage(parser, context, args);
+}
+
+/**
+ * Internal async implementation of getDocPage.
+ */
+async function getDocPageAsyncImpl(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[],
+): Promise<DocPage | undefined> {
+  let context: ParserContext<unknown> = {
+    buffer: args,
+    optionsTerminated: false,
+    state: parser.initialState,
+    usage: parser.usage,
+  };
+  do {
+    const result = await parser.parse(context);
+    if (!result.success) break;
+    context = result.next;
+  } while (context.buffer.length > 0);
+  return buildDocPage(parser, context, args);
+}
+
+/**
+ * Builds a DocPage from the parser and context.
+ * Shared by both sync and async implementations.
+ */
+function buildDocPage(
+  parser: Parser<Mode, unknown, unknown>,
+  context: ParserContext<unknown>,
+  args: readonly string[],
+): DocPage | undefined {
   const { description, fragments, footer } = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,

@@ -669,6 +669,56 @@ const result = parse(syncParser, ["--name", "test"]);
 For more details on creating async value parsers, see the
 [*Async value parsers*](./valueparsers.md#async-value-parsers) section.
 
+### Documentation page generation
+
+The `getDocPage()` function extracts documentation information from a parser
+for generating help text. Like other functions, it has sync and async variants:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { object } from "@optique/core/constructs";
+import { getDocPage, getDocPageSync, getDocPageAsync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+function apiKey(): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "KEY",
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      return { success: true, value: input };
+    },
+    format: (v) => v,
+  };
+}
+// ---cut-before---
+// Sync parser - use getDocPageSync() or getDocPage()
+const syncParser = object({
+  name: option("-n", "--name", string()),
+});
+const syncDoc = getDocPageSync(syncParser);
+const syncDoc2 = getDocPage(syncParser); // Also returns directly
+
+// Async parser - use getDocPageAsync() or await getDocPage()
+const asyncParser = object({
+  key: option("--api-key", apiKey()),
+  name: option("-n", "--name", string()),
+});
+const asyncDoc = await getDocPageAsync(asyncParser);
+const asyncDoc2 = await getDocPage(asyncParser); // Returns Promise
+~~~~
+
+`getDocPageSync()`
+:   Only accepts sync parsers. Returns `DocPage | undefined` directly.
+
+`getDocPageAsync()`
+:   Accepts any parser (sync or async). Always returns `Promise<DocPage | undefined>`.
+
+`getDocPage()`
+:   The generic function that returns the appropriate type based on the parser's
+    mode.
+
 ### Using `runSync()` and `runAsync()`
 
 *This API is available since Optique 0.9.0.*
