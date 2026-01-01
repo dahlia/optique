@@ -6,6 +6,14 @@ Version 0.6.10
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `object()` parser ignoring symbol keys.  Previously, when using
+    symbol keys in the parser definition (e.g., `object({ [sym]: option(...) })`),
+    the symbol-keyed parsers were silently ignored because `Object.entries()`
+    and `for...in` loops do not enumerate symbol properties.  Now, the parser
+    correctly handles both string and symbol keys by using `Reflect.ownKeys()`.
+
 
 Version 0.6.9
 -------------

@@ -844,6 +844,39 @@ describe("object", () => {
       assert.deepEqual(verboseEntry.description, description);
     });
   });
+
+  describe("Symbol keys", () => {
+    it("should parse options with Symbol keys", () => {
+      const sym1 = Symbol("opt1");
+      const sym2 = Symbol("opt2");
+      const parser = object({
+        [sym1]: option("--opt1", integer()),
+        [sym2]: option("--opt2", integer()),
+      });
+
+      const result = parse(parser, ["--opt1", "10", "--opt2", "20"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value[sym1], 10);
+        assert.equal(result.value[sym2], 20);
+      }
+    });
+
+    it("should parse options with mixed string and Symbol keys", () => {
+      const sym = Symbol("symOpt");
+      const parser = object({
+        strKey: option("--str", integer()),
+        [sym]: option("--sym", integer()),
+      });
+
+      const result = parse(parser, ["--str", "5", "--sym", "15"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.strKey, 5);
+        assert.equal(result.value[sym], 15);
+      }
+    });
+  });
 });
 
 describe("object() error customization", () => {
