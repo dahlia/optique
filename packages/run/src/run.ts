@@ -1,6 +1,12 @@
 import type { ShellCompletion } from "@optique/core/completion";
 import { runParser } from "@optique/core/facade";
-import type { InferValue, Parser } from "@optique/core/parser";
+import type {
+  InferMode,
+  InferValue,
+  Mode,
+  ModeValue,
+  Parser,
+} from "@optique/core/parser";
 import type { ShowDefaultOptions } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
 import path from "node:path";
@@ -201,10 +207,77 @@ export interface RunOptions {
  * // myapp --format=<TAB>                                # Use completion
  * ```
  */
-export function run<T extends Parser<unknown, unknown>>(
+// Overload: sync parser returns sync result
+export function run<T extends Parser<"sync", unknown, unknown>>(
+  parser: T,
+  options?: RunOptions,
+): InferValue<T>;
+
+// Overload: async parser returns Promise
+export function run<T extends Parser<"async", unknown, unknown>>(
+  parser: T,
+  options?: RunOptions,
+): Promise<InferValue<T>>;
+
+// Overload: generic mode parser returns ModeValue
+export function run<T extends Parser<Mode, unknown, unknown>>(
+  parser: T,
+  options?: RunOptions,
+): ModeValue<InferMode<T>, InferValue<T>>;
+
+// Implementation
+export function run<T extends Parser<Mode, unknown, unknown>>(
+  parser: T,
+  options: RunOptions = {},
+): ModeValue<InferMode<T>, InferValue<T>> {
+  return runImpl(parser, options) as ModeValue<InferMode<T>, InferValue<T>>;
+}
+
+/**
+ * Runs a synchronous command-line parser with automatic process integration.
+ *
+ * This is a type-safe version of {@link run} that only accepts sync parsers.
+ * Use this when you know your parser is sync-only to get direct return values
+ * without Promise wrappers.
+ *
+ * @template T The sync parser type being executed.
+ * @param parser The synchronous command-line parser to execute.
+ * @param options Configuration options for customizing behavior.
+ * @returns The parsed result if successful.
+ * @since 0.9.0
+ */
+export function runSync<T extends Parser<"sync", unknown, unknown>>(
   parser: T,
   options: RunOptions = {},
 ): InferValue<T> {
+  return runImpl(parser, options) as InferValue<T>;
+}
+
+/**
+ * Runs an asynchronous command-line parser with automatic process integration.
+ *
+ * This function accepts any parser (sync or async) and always returns a
+ * Promise. Use this when working with parsers that may contain async
+ * value parsers.
+ *
+ * @template T The parser type being executed.
+ * @param parser The command-line parser to execute.
+ * @param options Configuration options for customizing behavior.
+ * @returns A Promise of the parsed result if successful.
+ * @since 0.9.0
+ */
+export function runAsync<T extends Parser<Mode, unknown, unknown>>(
+  parser: T,
+  options: RunOptions = {},
+): Promise<InferValue<T>> {
+  const result = runImpl(parser, options);
+  return Promise.resolve(result) as Promise<InferValue<T>>;
+}
+
+function runImpl<T extends Parser<Mode, unknown, unknown>>(
+  parser: T,
+  options: RunOptions = {},
+): ModeValue<InferMode<T>, InferValue<T>> {
   const {
     programName = path.basename(process.argv[1] || "cli"),
     args = process.argv.slice(2),
@@ -254,7 +327,7 @@ export function run<T extends Parser<unknown, unknown>>(
     }
     : undefined;
 
-  return runParser<T, never, never>(parser, programName, args, {
+  return runParser(parser, programName, args, {
     stderr(line) {
       process.stderr.write(`${line}\n`);
     },
@@ -274,5 +347,5 @@ export function run<T extends Parser<unknown, unknown>>(
     onError() {
       return process.exit(errorExitCode) as never;
     },
-  });
+  }) as ModeValue<InferMode<T>, InferValue<T>>;
 }

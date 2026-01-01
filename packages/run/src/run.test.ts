@@ -1,8 +1,10 @@
-import { object } from "@optique/core/constructs";
+import { longestMatch, object, or } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { argument, command, option } from "@optique/core/primitives";
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
-import { run } from "@optique/run/run";
+import { run, runAsync, runSync } from "@optique/run/run";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -310,5 +312,622 @@ describe("run", () => {
       const result = run(parser, options);
       assert.deepEqual(result, { name: "David" });
     });
+  });
+
+  describe("async parser support", () => {
+    // Create an async ValueParser for testing
+    // (simulates async validation like checking a file exists or network lookup)
+    function asyncString(): ValueParser<"async", string> {
+      return {
+        $mode: "async",
+        metavar: "ASYNC_STRING",
+        async parse(input: string): Promise<ValueParserResult<string>> {
+          // Simulate async operation (e.g., validation against remote service)
+          await new Promise((resolve) => setTimeout(resolve, 1));
+          return { success: true, value: input.toUpperCase() };
+        },
+        format(value: string): string {
+          return value;
+        },
+      };
+    }
+
+    describe("basic async parsing", () => {
+      it("should return Promise for async parser", async () => {
+        const parser = object({
+          name: argument(asyncString()),
+        });
+
+        const result = run(parser, {
+          args: ["alice"],
+          programName: "test",
+        });
+
+        // run() should return a Promise when given an async parser
+        assert.ok(
+          result instanceof Promise,
+          "run() should return Promise for async parser",
+        );
+        const resolved = await result;
+        assert.deepEqual(resolved, { name: "ALICE" });
+      });
+
+      it("should handle mixed sync/async parsers", async () => {
+        const parser = object({
+          name: argument(asyncString()),
+          count: option("-c", "--count", integer()),
+        });
+
+        const result = run(parser, {
+          args: ["-c", "5", "bob"],
+          programName: "test",
+        });
+
+        assert.ok(result instanceof Promise);
+        const resolved = await result;
+        assert.deepEqual(resolved, { name: "BOB", count: 5 });
+      });
+
+      it("should handle async option parser", async () => {
+        const parser = object({
+          value: option("--value", asyncString()),
+        });
+
+        const result = run(parser, {
+          args: ["--value", "test"],
+          programName: "test",
+        });
+
+        assert.ok(result instanceof Promise);
+        const resolved = await result;
+        assert.deepEqual(resolved, { value: "TEST" });
+      });
+    });
+
+    describe("async with commands", () => {
+      it("should handle command with async options", async () => {
+        const parser = command(
+          "greet",
+          object({
+            name: argument(asyncString()),
+            times: option("-t", "--times", integer()),
+          }),
+        );
+
+        const result = run(parser, {
+          args: ["greet", "-t", "3", "world"],
+          programName: "test",
+        });
+
+        assert.ok(result instanceof Promise);
+        const resolved = await result;
+        assert.deepEqual(resolved, { name: "WORLD", times: 3 });
+      });
+    });
+
+    describe("async with RunOptions configurations", () => {
+      it("should work with help configuration", async () => {
+        const parser = object({
+          name: argument(asyncString()),
+        });
+
+        const result = run(parser, {
+          args: ["hello"],
+          programName: "test",
+          help: "both",
+        });
+
+        assert.ok(result instanceof Promise);
+        const resolved = await result;
+        assert.deepEqual(resolved, { name: "HELLO" });
+      });
+
+      it("should work with version configuration", async () => {
+        const parser = object({
+          name: argument(asyncString()),
+        });
+
+        const result = run(parser, {
+          args: ["hello"],
+          programName: "test",
+          version: "1.0.0",
+        });
+
+        assert.ok(result instanceof Promise);
+        const resolved = await result;
+        assert.deepEqual(resolved, { name: "HELLO" });
+      });
+
+      it("should work with completion configuration", async () => {
+        const parser = object({
+          name: argument(asyncString()),
+        });
+
+        const result = run(parser, {
+          args: ["hello"],
+          programName: "test",
+          completion: "both",
+        });
+
+        assert.ok(result instanceof Promise);
+        const resolved = await result;
+        assert.deepEqual(resolved, { name: "HELLO" });
+      });
+
+      it("should work with all configurations combined", async () => {
+        const parser = object({
+          name: argument(asyncString()),
+          verbose: option("--verbose"),
+        });
+
+        const result = run(parser, {
+          args: ["--verbose", "world"],
+          programName: "test",
+          help: "both",
+          version: { value: "2.0.0", mode: "both" },
+          completion: { mode: "both" },
+          colors: false,
+          maxWidth: 80,
+          brief: message`Test program`,
+          description: message`A test program for async parsing`,
+          footer: message`Copyright 2024`,
+        });
+
+        assert.ok(result instanceof Promise);
+        const resolved = await result;
+        assert.deepEqual(resolved, { name: "WORLD", verbose: true });
+      });
+    });
+
+    describe("async type inference", () => {
+      it("should infer async mode from parser", () => {
+        const syncParser = object({
+          name: argument(string()),
+        });
+
+        const asyncParser = object({
+          name: argument(asyncString()),
+        });
+
+        // Sync parser should have mode "sync"
+        assert.equal(syncParser.$mode, "sync");
+
+        // Async parser should have mode "async"
+        assert.equal(asyncParser.$mode, "async");
+      });
+
+      it("should correctly type sync parser result", () => {
+        const parser = object({
+          name: argument(string()),
+        });
+
+        const result = run(parser, {
+          args: ["test"],
+          programName: "test",
+        });
+
+        // Sync parser should NOT return Promise
+        assert.ok(!(result instanceof Promise));
+        assert.deepEqual(result, { name: "test" });
+      });
+    });
+
+    describe("async with modifiers", () => {
+      it("should handle optional() with async parser", async () => {
+        const parser = object({
+          name: optional(option("--name", asyncString())),
+        });
+
+        // With value
+        const result1 = run(parser, {
+          args: ["--name", "alice"],
+          programName: "test",
+        });
+
+        assert.ok(result1 instanceof Promise);
+        assert.deepEqual(await result1, { name: "ALICE" });
+
+        // Without value
+        const result2 = run(parser, {
+          args: [],
+          programName: "test",
+        });
+
+        assert.ok(result2 instanceof Promise);
+        assert.deepEqual(await result2, { name: undefined });
+      });
+
+      it("should handle withDefault() with async parser", async () => {
+        const parser = object({
+          name: withDefault(option("--name", asyncString()), "DEFAULT"),
+        });
+
+        // With value
+        const result1 = run(parser, {
+          args: ["--name", "bob"],
+          programName: "test",
+        });
+
+        assert.ok(result1 instanceof Promise);
+        assert.deepEqual(await result1, { name: "BOB" });
+
+        // Without value - uses default
+        const result2 = run(parser, {
+          args: [],
+          programName: "test",
+        });
+
+        assert.ok(result2 instanceof Promise);
+        assert.deepEqual(await result2, { name: "DEFAULT" });
+      });
+
+      it("should handle multiple() with async parser", async () => {
+        const parser = object({
+          names: multiple(option("--name", asyncString())),
+        });
+
+        const result = run(parser, {
+          args: ["--name", "alice", "--name", "bob", "--name", "charlie"],
+          programName: "test",
+        });
+
+        assert.ok(result instanceof Promise);
+        assert.deepEqual(await result, { names: ["ALICE", "BOB", "CHARLIE"] });
+      });
+
+      it("should handle map() with async parser", async () => {
+        const parser = object({
+          nameLength: map(option("--name", asyncString()), (s) => s.length),
+        });
+
+        const result = run(parser, {
+          args: ["--name", "hello"],
+          programName: "test",
+        });
+
+        assert.ok(result instanceof Promise);
+        assert.deepEqual(await result, { nameLength: 5 });
+      });
+
+      it("should handle chained modifiers with async", async () => {
+        const parser = object({
+          names: map(
+            withDefault(multiple(option("--name", asyncString())), []),
+            (arr) => arr.join(", "),
+          ),
+        });
+
+        const result = run(parser, {
+          args: ["--name", "alice", "--name", "bob"],
+          programName: "test",
+        });
+
+        assert.ok(result instanceof Promise);
+        assert.deepEqual(await result, { names: "ALICE, BOB" });
+      });
+    });
+
+    describe("async with complex constructs", () => {
+      it("should handle or() with async parsers", async () => {
+        const parser = or(
+          object({
+            mode: option("--mode", asyncString()),
+            value: option("--value", asyncString()),
+          }),
+          object({ simple: argument(asyncString()) }),
+        );
+
+        // First branch
+        const result1 = run(parser, {
+          args: ["--mode", "fast", "--value", "test"],
+          programName: "test",
+        });
+
+        assert.ok(result1 instanceof Promise);
+        assert.deepEqual(await result1, { mode: "FAST", value: "TEST" });
+
+        // Second branch
+        const result2 = run(parser, {
+          args: ["hello"],
+          programName: "test",
+        });
+
+        assert.ok(result2 instanceof Promise);
+        assert.deepEqual(await result2, { simple: "HELLO" });
+      });
+
+      it("should handle longestMatch() with async parsers", async () => {
+        // Use distinct commands to avoid ambiguity
+        const addCmd = command(
+          "add",
+          object({ name: argument(asyncString()) }),
+        );
+        const removeCmd = command(
+          "remove",
+          object({ name: argument(asyncString()) }),
+        );
+
+        const parser = longestMatch(addCmd, removeCmd);
+
+        const result1 = run(parser, {
+          args: ["add", "item"],
+          programName: "test",
+        });
+
+        assert.ok(result1 instanceof Promise);
+        assert.deepEqual(await result1, { name: "ITEM" });
+
+        const result2 = run(parser, {
+          args: ["remove", "old"],
+          programName: "test",
+        });
+
+        assert.ok(result2 instanceof Promise);
+        assert.deepEqual(await result2, { name: "OLD" });
+      });
+
+      it("should handle nested commands with async", async () => {
+        const parser = or(
+          command(
+            "add",
+            object({ name: argument(asyncString()) }),
+          ),
+          command(
+            "remove",
+            object({ name: argument(asyncString()), force: option("--force") }),
+          ),
+        );
+
+        const result1 = run(parser, {
+          args: ["add", "item"],
+          programName: "test",
+        });
+
+        assert.ok(result1 instanceof Promise);
+        assert.deepEqual(await result1, { name: "ITEM" });
+
+        const result2 = run(parser, {
+          args: ["remove", "--force", "old-item"],
+          programName: "test",
+        });
+
+        assert.ok(result2 instanceof Promise);
+        assert.deepEqual(await result2, { name: "OLD-ITEM", force: true });
+      });
+    });
+  });
+});
+
+describe("runSync", () => {
+  // Create a sync ValueParser for testing
+  function syncString(): ValueParser<"sync", string> {
+    return {
+      $mode: "sync",
+      metavar: "STRING",
+      parse(input: string): ValueParserResult<string> {
+        return { success: true, value: input.toLowerCase() };
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+  }
+
+  it("should parse sync parser and return directly", () => {
+    const parser = object({
+      name: argument(syncString()),
+    });
+
+    const result = runSync(parser, {
+      args: ["HELLO"],
+      programName: "test",
+    });
+
+    // runSync returns directly, not a Promise
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "hello" });
+  });
+
+  it("should work with built-in sync value parsers", () => {
+    const parser = object({
+      name: option("-n", "--name", string()),
+      count: option("-c", "--count", integer()),
+    });
+
+    const result = runSync(parser, {
+      args: ["--name", "test", "--count", "42"],
+      programName: "test",
+    });
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "test", count: 42 });
+  });
+
+  it("should work with commands", () => {
+    const parser = command(
+      "greet",
+      object({
+        name: argument(string()),
+      }),
+    );
+
+    const result = runSync(parser, {
+      args: ["greet", "world"],
+      programName: "test",
+    });
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "world" });
+  });
+
+  it("should work with modifiers", () => {
+    const parser = object({
+      name: optional(option("-n", "--name", string())),
+      count: withDefault(option("-c", "--count", integer()), 10),
+    });
+
+    const result = runSync(parser, {
+      args: [],
+      programName: "test",
+    });
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: undefined, count: 10 });
+  });
+
+  it("should work with multiple()", () => {
+    const parser = object({
+      names: multiple(option("-n", "--name", string())),
+    });
+
+    const result = runSync(parser, {
+      args: ["-n", "alice", "-n", "bob"],
+      programName: "test",
+    });
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { names: ["alice", "bob"] });
+  });
+});
+
+describe("runAsync", () => {
+  // Create an async ValueParser for testing
+  function asyncString(): ValueParser<"async", string> {
+    return {
+      $mode: "async",
+      metavar: "ASYNC_STRING",
+      parse(input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({
+          success: true,
+          value: input.toUpperCase(),
+        });
+      },
+      format(value: string): string {
+        return value.toLowerCase();
+      },
+    };
+  }
+
+  it("should parse async parser and return Promise", async () => {
+    const parser = object({
+      name: argument(asyncString()),
+    });
+
+    const result = runAsync(parser, {
+      args: ["hello"],
+      programName: "test",
+    });
+
+    // runAsync always returns Promise
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, { name: "HELLO" });
+  });
+
+  it("should also work with sync parsers (returns Promise)", async () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    const result = runAsync(parser, {
+      args: ["hello"],
+      programName: "test",
+    });
+
+    // runAsync always returns Promise, even for sync parsers
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, { name: "hello" });
+  });
+
+  it("should work with mixed sync/async parsers", async () => {
+    const parser = object({
+      name: option("-n", "--name", asyncString()),
+      count: option("-c", "--count", integer()),
+    });
+
+    const result = runAsync(parser, {
+      args: ["--name", "test", "--count", "42"],
+      programName: "test",
+    });
+
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, { name: "TEST", count: 42 });
+  });
+
+  it("should work with commands", async () => {
+    const parser = command(
+      "greet",
+      object({
+        name: argument(asyncString()),
+      }),
+    );
+
+    const result = runAsync(parser, {
+      args: ["greet", "world"],
+      programName: "test",
+    });
+
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, { name: "WORLD" });
+  });
+
+  it("should work with modifiers", async () => {
+    const parser = object({
+      name: optional(option("-n", "--name", asyncString())),
+      count: withDefault(option("-c", "--count", integer()), 10),
+    });
+
+    const result = runAsync(parser, {
+      args: ["--name", "test"],
+      programName: "test",
+    });
+
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, { name: "TEST", count: 10 });
+  });
+
+  it("should work with multiple()", async () => {
+    const parser = object({
+      names: multiple(option("-n", "--name", asyncString())),
+    });
+
+    const result = runAsync(parser, {
+      args: ["-n", "alice", "-n", "bob"],
+      programName: "test",
+    });
+
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, { names: ["ALICE", "BOB"] });
+  });
+
+  it("should work with or()", async () => {
+    const parser = or(
+      object({ mode: option("--mode", asyncString()) }),
+      object({ name: argument(asyncString()) }),
+    );
+
+    const result = runAsync(parser, {
+      args: ["hello"],
+      programName: "test",
+    });
+
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, { name: "HELLO" });
+  });
+
+  it("should work with longestMatch()", async () => {
+    const addCmd = command("add", object({ name: argument(asyncString()) }));
+    const removeCmd = command(
+      "remove",
+      object({ name: argument(asyncString()) }),
+    );
+    const parser = longestMatch(addCmd, removeCmd);
+
+    const result = runAsync(parser, {
+      args: ["add", "item"],
+      programName: "test",
+    });
+
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, { name: "ITEM" });
   });
 });

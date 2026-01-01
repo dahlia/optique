@@ -8,6 +8,57 @@ To be released.
 
 ### @optique/core
 
+ -  Added sync/async mode support to `Parser` and `ValueParser` interfaces.
+    The new `M extends Mode = "sync"` type parameter enables type-safe
+    distinction between synchronous and asynchronous parsers.  [[#52]]
+
+    New types:
+
+     -  `Mode`: Type alias for `"sync" | "async"`.
+     -  `ModeValue<M, T>`: Returns `T` for sync mode, `Promise<T>` for async.
+     -  `ModeIterable<M, T>`: Returns `Iterable<T>` for sync, `AsyncIterable<T>`
+        for async.
+     -  `CombineModes<T extends readonly Mode[]>`: Returns `"async"` if any
+        element is `"async"`, otherwise `"sync"`.
+     -  `ExtractMode<P>`: Extracts the mode from a parser type.
+
+    All parsers now include a `$mode` property indicating their execution mode.
+    Combinators automatically propagate modes from their constituent parsers,
+    resulting in `"async"` mode if any child parser is async.
+
+    New functions for explicit mode handling:
+
+     -  `parseSync()`: Parses with a sync-only parser, returning directly.
+     -  `parseAsync()`: Parses with any parser, returning a Promise.
+     -  `suggestSync()`: Gets suggestions from a sync-only parser.
+     -  `suggestAsync()`: Gets suggestions from any parser as a Promise.
+
+    This change is backward compatible.  Existing code continues to work
+    unchanged as all parsers default to sync mode.
+
+    ~~~~ typescript
+    import type { Mode, ValueParser } from "@optique/core/valueparser";
+    import { parseSync, parseAsync } from "@optique/core/parser";
+
+    // Sync parser (default)
+    const syncParser: ValueParser<"sync", number> = integer();
+
+    // Custom async parser
+    const asyncParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "REMOTE",
+      async parse(input) {
+        const data = await fetch(input);
+        return { success: true, value: await data.text() };
+      },
+      format: (v) => v,
+    };
+
+    // Type-safe parsing
+    const syncResult = parseSync(myParser, args);        // Returns directly
+    const asyncResult = await parseAsync(myParser, args); // Returns Promise
+    ~~~~
+
  -  Fixed a shell command injection vulnerability in the shell
     completion script generators. The `programName` parameter in shell
     completion generators (`bash`, `zsh`, `fish`, `nu`, `pwsh`) was directly
@@ -140,6 +191,7 @@ To be released.
      -  Added `ValueSetOptions` interface.
      -  Added `valueSet()` function.
 
+[#52]: https://github.com/dahlia/optique/issues/52
 [#54]: https://github.com/dahlia/optique/issues/54
 [#57]: https://github.com/dahlia/optique/issues/57
 [#62]: https://github.com/dahlia/optique/issues/62
@@ -147,6 +199,33 @@ To be released.
 [#64]: https://github.com/dahlia/optique/issues/64
 
 ### @optique/run
+
+ -  Added sync/async mode support to the `run()` function.  [[#52]]
+
+    New functions for explicit mode handling:
+
+     -  `runSync()`: Runs with a sync-only parser, returning the parsed value
+        directly.
+     -  `runAsync()`: Runs with any parser, returning a `Promise` of the parsed
+        value.
+
+    The existing `run()` function continues to work unchanged for sync parsers.
+    For async parsers, use `runAsync()` or `await run()`.
+
+    ~~~~ typescript
+    import { run, runSync, runAsync } from "@optique/run";
+    import { object } from "@optique/core/constructs";
+    import { argument } from "@optique/core/primitives";
+
+    // Sync parser (default behavior, unchanged)
+    const syncResult = run(syncParser);
+
+    // Explicit sync-only (compile error if parser is async)
+    const syncOnlyResult = runSync(syncParser);
+
+    // Async parser support
+    const asyncResult = await runAsync(asyncParser);
+    ~~~~
 
  -  Added `mustNotExist` option to the `path()` value parser.  When set to
     `true`, the parser rejects paths that already exist on the filesystem,

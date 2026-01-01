@@ -243,13 +243,13 @@ export type LoggingOptionsConfig =
  */
 export function loggingOptions(
   config: LoggingOptionsConfig,
-): Parser<LoggingOptionsResult, unknown> {
+): Parser<"sync", LoggingOptionsResult, unknown> {
   const groupLabel = config.groupLabel ?? "Logging options";
   const outputEnabled = config.output?.enabled !== false;
   const outputLong = config.output?.long ?? "--log-output";
 
   // Create log level parser based on the configuration
-  let levelParser: Parser<LogLevel, unknown>;
+  let levelParser: Parser<"sync", LogLevel, unknown>;
 
   switch (config.level) {
     case "option": {
@@ -294,11 +294,12 @@ export function loggingOptions(
   const outputParser = withDefault(
     logOutput({ long: outputLong }),
     defaultOutput,
-  ) as unknown as Parser<LogOutput, unknown>;
+  ) as unknown as Parser<"sync", LogOutput, unknown>;
 
   // If output is disabled, create a parser that always returns default
   if (!outputEnabled) {
-    const constantOutputParser: Parser<LogOutput, unknown> = {
+    const constantOutputParser: Parser<"sync", LogOutput, unknown> = {
+      $mode: "sync",
       $valueType: [] as readonly LogOutput[],
       $stateType: [],
       priority: 0,
@@ -310,7 +311,7 @@ export function loggingOptions(
         consumed: [],
       }),
       complete: () => ({ success: true as const, value: defaultOutput }),
-      suggest: () => [],
+      *suggest() {},
       getDocFragments: () => ({ fragments: [] }),
     };
 

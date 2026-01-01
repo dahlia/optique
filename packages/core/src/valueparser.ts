@@ -1,6 +1,6 @@
 import { type Message, message, text, valueSet } from "./message.ts";
 import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
-import type { Suggestion } from "./parser.ts";
+import type { Mode, ModeIterable, ModeValue, Suggestion } from "./parser.ts";
 
 export {
   ensureNonEmptyString,
@@ -8,15 +8,29 @@ export {
   type NonEmptyString,
 } from "./nonempty.ts";
 
+export type { Mode, ModeIterable, ModeValue } from "./parser.ts";
+
 /**
  * Interface for parsing CLI option values and arguments.
  *
  * A `ValueParser` is responsible for converting string input (typically from
  * CLI arguments or option values) into strongly-typed values of type {@link T}.
  *
+ * @template M The execution mode of the parser (`"sync"` or `"async"`).
  * @template T The type of value this parser produces.
+ * @since 0.9.0 Added the `M` type parameter for sync/async mode support.
  */
-export interface ValueParser<T> {
+export interface ValueParser<M extends Mode = "sync", T = unknown> {
+  /**
+   * The execution mode of this value parser.
+   *
+   * - `"sync"`: The `parse` method returns values directly.
+   * - `"async"`: The `parse` method returns Promises.
+   *
+   * @since 0.9.0
+   */
+  readonly $mode: M;
+
   /**
    * The metavariable name for this parser.  Used in help messages
    * to indicate what kind of value this parser expects.  Usually
@@ -30,9 +44,10 @@ export interface ValueParser<T> {
    * @param input The string input to parse
    *              (e.g., the `value` part of `--option=value`).
    * @returns A result object indicating success or failure with an error
-   *          message.
+   *          message.  In async mode, returns a Promise that resolves to
+   *          the result.
    */
-  parse(input: string): ValueParserResult<T>;
+  parse(input: string): ModeValue<M, ValueParserResult<T>>;
 
   /**
    * Formats a value of type {@link T} into a string representation.
@@ -50,9 +65,10 @@ export interface ValueParser<T> {
    *
    * @param prefix The current input prefix to complete.
    * @returns An iterable of suggestion objects.
+   *          In async mode, returns an AsyncIterable.
    * @since 0.6.0
    */
-  suggest?(prefix: string): Iterable<Suggestion>;
+  suggest?(prefix: string): ModeIterable<M, Suggestion>;
 }
 
 /**
@@ -196,14 +212,19 @@ export type ChoiceOptions = ChoiceOptionsString;
  * @param object The object to check.
  * @return `true` if the object is a {@link ValueParser}, `false` otherwise.
  */
-export function isValueParser<T>(object: unknown): object is ValueParser<T> {
+export function isValueParser<M extends Mode, T>(
+  object: unknown,
+): object is ValueParser<M, T> {
   return typeof object === "object" && object != null &&
+    "$mode" in object &&
+    ((object as ValueParser<M, T>).$mode === "sync" ||
+      (object as ValueParser<M, T>).$mode === "async") &&
     "metavar" in object &&
-    typeof (object as ValueParser<T>).metavar === "string" &&
+    typeof (object as ValueParser<M, T>).metavar === "string" &&
     "parse" in object &&
-    typeof (object as ValueParser<T>).parse === "function" &&
+    typeof (object as ValueParser<M, T>).parse === "function" &&
     "format" in object &&
-    typeof (object as ValueParser<T>).format === "function";
+    typeof (object as ValueParser<M, T>).format === "function";
 }
 
 /**
@@ -221,7 +242,7 @@ export function isValueParser<T>(object: unknown): object is ValueParser<T> {
 export function choice<const T extends string>(
   choices: readonly T[],
   options?: ChoiceOptionsString,
-): ValueParser<T>;
+): ValueParser<"sync", T>;
 
 /**
  * Creates a {@link ValueParser} that accepts one of multiple
@@ -239,7 +260,7 @@ export function choice<const T extends string>(
 export function choice<const T extends number>(
   choices: readonly T[],
   options?: ChoiceOptionsNumber,
-): ValueParser<T>;
+): ValueParser<"sync", T>;
 
 /**
  * Implementation of the choice parser for both string and number types.
@@ -247,7 +268,7 @@ export function choice<const T extends number>(
 export function choice<const T extends string | number>(
   choices: readonly T[],
   options: ChoiceOptionsString | ChoiceOptionsNumber = {},
-): ValueParser<T> {
+): ValueParser<"sync", T> {
   const metavar = options.metavar ?? "TYPE";
   ensureNonEmptyString(metavar);
 
@@ -259,6 +280,7 @@ export function choice<const T extends string | number>(
     const numberChoices = choices as readonly number[];
     const numberOptions = options as ChoiceOptionsNumber;
     return {
+      $mode: "sync",
       metavar,
       parse(input: string): ValueParserResult<T> {
         const parsed = Number(input);
@@ -296,6 +318,7 @@ export function choice<const T extends string | number>(
     ? stringChoices.map((v) => v.toLowerCase())
     : stringChoices;
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<T> {
       const normalizedInput = stringOptions.caseInsensitive
@@ -389,10 +412,13 @@ function formatDefaultChoiceError(
  * @returns A {@link ValueParser} that parses strings according to the
  *          specified options.
  */
-export function string(options: StringOptions = {}): ValueParser<string> {
+export function string(
+  options: StringOptions = {},
+): ValueParser<"sync", string> {
   const metavar = options.metavar ?? "STRING";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<string> {
       if (options.pattern != null && !options.pattern.test(input)) {
@@ -540,7 +566,9 @@ export interface IntegerOptionsBigInt {
  * @param options Configuration options for the integer parser.
  * @returns A {@link ValueParser} that parses strings into numbers.
  */
-export function integer(options?: IntegerOptionsNumber): ValueParser<number>;
+export function integer(
+  options?: IntegerOptionsNumber,
+): ValueParser<"sync", number>;
 
 /**
  * Creates a ValueParser for integers that returns `bigint` values.
@@ -548,7 +576,9 @@ export function integer(options?: IntegerOptionsNumber): ValueParser<number>;
  * @param options Configuration options for the `bigint` parser.
  * @returns A {@link ValueParser} that parses strings into `bigint` values.
  */
-export function integer(options: IntegerOptionsBigInt): ValueParser<bigint>;
+export function integer(
+  options: IntegerOptionsBigInt,
+): ValueParser<"sync", bigint>;
 
 /**
  * Creates a ValueParser for parsing integer values from strings.
@@ -585,11 +615,12 @@ export function integer(options: IntegerOptionsBigInt): ValueParser<bigint>;
  */
 export function integer(
   options?: IntegerOptionsNumber | IntegerOptionsBigInt,
-): ValueParser<number> | ValueParser<bigint> {
+): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
   if (options?.type === "bigint") {
     const metavar = options.metavar ?? "INTEGER";
     ensureNonEmptyString(metavar);
     return {
+      $mode: "sync",
       metavar,
       parse(input: string): ValueParserResult<bigint> {
         let value: bigint;
@@ -641,6 +672,7 @@ export function integer(
   const metavar = options?.metavar ?? "INTEGER";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
@@ -762,7 +794,7 @@ export interface FloatOptions {
  * @returns A {@link ValueParser} that parses strings into floating-point
  *          numbers.
  */
-export function float(options: FloatOptions = {}): ValueParser<number> {
+export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
   // Regular expression to match valid floating-point numbers
   // Matches: integers, decimals, scientific notation
   // Does not match: empty strings, whitespace-only, hex/bin/oct numbers
@@ -771,6 +803,7 @@ export function float(options: FloatOptions = {}): ValueParser<number> {
   ensureNonEmptyString(metavar);
 
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<number> {
       let value: number;
@@ -892,13 +925,14 @@ export interface UrlOptions {
  * @param options Configuration options for the URL parser.
  * @returns A {@link ValueParser} that converts string input to `URL` objects.
  */
-export function url(options: UrlOptions = {}): ValueParser<URL> {
+export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
   const allowedProtocols = options.allowedProtocols?.map((p) =>
     p.toLowerCase()
   );
   const metavar = options.metavar ?? "URL";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<URL> {
       if (!URL.canParse(input)) {
@@ -988,10 +1022,13 @@ export interface LocaleOptions {
  * @returns A {@link ValueParser} that converts string input to `Intl.Locale`
  *          objects.
  */
-export function locale(options: LocaleOptions = {}): ValueParser<Intl.Locale> {
+export function locale(
+  options: LocaleOptions = {},
+): ValueParser<"sync", Intl.Locale> {
   const metavar = options.metavar ?? "LOCALE";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Intl.Locale> {
       let locale: Intl.Locale;
@@ -1355,7 +1392,7 @@ export interface UuidOptions {
  * @returns A {@link ValueParser} that converts string input to {@link Uuid}
  *          strings.
  */
-export function uuid(options: UuidOptions = {}): ValueParser<Uuid> {
+export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   // UUID regex pattern: 8-4-4-4-12 hex digits with dashes
   const uuidRegex =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1363,6 +1400,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<Uuid> {
   ensureNonEmptyString(metavar);
 
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Uuid> {
       if (!uuidRegex.test(input)) {

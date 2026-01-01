@@ -1,10 +1,13 @@
 import { formatMessage, type Message, message, text } from "./message.ts";
 import type {
   DocState,
+  Mode,
   Parser,
   ParserContext,
   ParserResult,
+  Suggestion,
 } from "./parser.ts";
+import type { ValueParserResult } from "./valueparser.ts";
 
 /**
  * Internal helper for optional-style parsing logic shared by optional()
@@ -14,9 +17,9 @@ import type {
  * - Returning success with undefined state when inner parser fails without consuming
  * @internal
  */
-function parseOptionalStyle<TState>(
+function parseOptionalStyleSync<TState>(
   context: ParserContext<[TState] | undefined>,
-  parser: Parser<unknown, TState>,
+  parser: Parser<"sync", unknown, TState>,
 ): ParserResult<[TState] | undefined> {
   const innerState = typeof context.state === "undefined"
     ? parser.initialState
@@ -27,6 +30,38 @@ function parseOptionalStyle<TState>(
     state: innerState,
   });
 
+  return processOptionalStyleResult(result, innerState, context);
+}
+
+/**
+ * Internal async helper for optional-style parsing logic.
+ * @internal
+ */
+async function parseOptionalStyleAsync<TState>(
+  context: ParserContext<[TState] | undefined>,
+  parser: Parser<Mode, unknown, TState>,
+): Promise<ParserResult<[TState] | undefined>> {
+  const innerState = typeof context.state === "undefined"
+    ? parser.initialState
+    : context.state[0];
+
+  const result = await parser.parse({
+    ...context,
+    state: innerState,
+  });
+
+  return processOptionalStyleResult(result, innerState, context);
+}
+
+/**
+ * Internal helper to process optional-style parse results.
+ * @internal
+ */
+function processOptionalStyleResult<TState>(
+  result: ParserResult<TState>,
+  innerState: TState,
+  context: ParserContext<[TState] | undefined>,
+): ParserResult<[TState] | undefined> {
   if (result.success) {
     // Check if inner parser actually matched something (state changed)
     // or if it consumed nothing (e.g., constant parser)
@@ -71,43 +106,79 @@ function parseOptionalStyle<TState>(
  * without consuming input if the wrapped parser fails to match.
  * If the wrapped parser succeeds, this returns its value.
  * If the wrapped parser fails, this returns `undefined` without consuming input.
+ * @template M The execution mode of the parser.
  * @template TValue The type of the value returned by the wrapped parser.
  * @template TState The type of the state used by the wrapped parser.
  * @param parser The {@link Parser} to make optional.
  * @returns A {@link Parser} that produces either the result of the wrapped parser
  *          or `undefined` if the wrapped parser fails to match.
  */
-export function optional<TValue, TState>(
-  parser: Parser<TValue, TState>,
-): Parser<TValue | undefined, [TState] | undefined> {
+export function optional<M extends Mode, TValue, TState>(
+  parser: Parser<M, TValue, TState>,
+): Parser<M, TValue | undefined, [TState] | undefined> {
+  // Cast to sync for implementation
+  const syncParser = parser as Parser<"sync", TValue, TState>;
+  const isAsync = parser.$mode === "async";
+
+  // Sync suggest helper
+  function* suggestSync(
+    context: ParserContext<[TState] | undefined>,
+    prefix: string,
+  ): Generator<Suggestion> {
+    const innerState = typeof context.state === "undefined"
+      ? syncParser.initialState
+      : context.state[0];
+    yield* syncParser.suggest({ ...context, state: innerState }, prefix);
+  }
+
+  // Async suggest helper
+  async function* suggestAsync(
+    context: ParserContext<[TState] | undefined>,
+    prefix: string,
+  ): AsyncGenerator<Suggestion> {
+    const innerState = typeof context.state === "undefined"
+      ? syncParser.initialState
+      : context.state[0];
+    const suggestions = parser.suggest(
+      { ...context, state: innerState },
+      prefix,
+    ) as AsyncIterable<Suggestion>;
+    for await (const s of suggestions) {
+      yield s;
+    }
+  }
+
+  // Type cast needed due to TypeScript's conditional type limitations with generic M
   return {
+    $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
-    parse(context) {
-      return parseOptionalStyle(context, parser);
-    },
-    complete(state) {
-      if (typeof state === "undefined") {
-        return {
-          success: true,
-          value: undefined,
-        };
+    parse(context: ParserContext<[TState] | undefined>) {
+      if (isAsync) {
+        return parseOptionalStyleAsync(context, parser);
       }
-      return parser.complete(state[0]);
+      return parseOptionalStyleSync(context, syncParser);
     },
-    suggest(context, prefix) {
-      // Delegate to wrapped parser
-      const innerState = typeof context.state === "undefined"
-        ? parser.initialState
-        : context.state[0];
-
-      return parser.suggest({
-        ...context,
-        state: innerState,
-      }, prefix);
+    complete(state: [TState] | undefined) {
+      if (typeof state === "undefined") {
+        return { success: true, value: undefined };
+      }
+      if (!isAsync) {
+        return syncParser.complete(state[0]);
+      }
+      return (async () => await parser.complete(state[0]))();
+    },
+    suggest(
+      context: ParserContext<[TState] | undefined>,
+      prefix: string,
+    ) {
+      if (isAsync) {
+        return suggestAsync(context, prefix);
+      }
+      return suggestSync(context, prefix);
     },
     getDocFragments(
       state: DocState<[TState] | undefined>,
@@ -118,9 +189,9 @@ export function optional<TValue, TState>(
         : state.state === undefined
         ? { kind: "unavailable" }
         : { kind: "available", state: state.state[0] };
-      return parser.getDocFragments(innerState, defaultValue);
+      return syncParser.getDocFragments(innerState, defaultValue);
     },
-  };
+  } as unknown as Parser<M, TValue | undefined, [TState] | undefined>;
 }
 
 /**
@@ -185,6 +256,7 @@ export class WithDefaultError extends Error {
  * to match or consume input. This is similar to {@link optional}, but instead
  * of returning `undefined` when the wrapped parser doesn't match, it returns
  * a specified default value.
+ * @template M The execution mode of the parser.
  * @template TValue The type of the value returned by the wrapped parser.
  * @template TState The type of the state used by the wrapped parser.
  * @template TDefault The type of the default value.
@@ -196,16 +268,22 @@ export class WithDefaultError extends Error {
  *          or the default value if the wrapped parser fails to match
  *          (union type {@link TValue} | {@link TDefault}).
  */
-export function withDefault<TValue, TState, const TDefault = TValue>(
-  parser: Parser<TValue, TState>,
+export function withDefault<
+  M extends Mode,
+  TValue,
+  TState,
+  const TDefault = TValue,
+>(
+  parser: Parser<M, TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
-): Parser<TValue | TDefault, [TState] | undefined>;
+): Parser<M, TValue | TDefault, [TState] | undefined>;
 
 /**
  * Creates a parser that makes another parser use a default value when it fails
  * to match or consume input. This is similar to {@link optional}, but instead
  * of returning `undefined` when the wrapped parser doesn't match, it returns
  * a specified default value.
+ * @template M The execution mode of the parser.
  * @template TValue The type of the value returned by the wrapped parser.
  * @template TState The type of the state used by the wrapped parser.
  * @template TDefault The type of the default value.
@@ -219,27 +297,74 @@ export function withDefault<TValue, TState, const TDefault = TValue>(
  *          (union type {@link TValue} | {@link TDefault}).
  * @since 0.5.0
  */
-export function withDefault<TValue, TState, const TDefault = TValue>(
-  parser: Parser<TValue, TState>,
+export function withDefault<
+  M extends Mode,
+  TValue,
+  TState,
+  const TDefault = TValue,
+>(
+  parser: Parser<M, TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
   options?: WithDefaultOptions,
-): Parser<TValue | TDefault, [TState] | undefined>;
+): Parser<M, TValue | TDefault, [TState] | undefined>;
 
-export function withDefault<TValue, TState, const TDefault = TValue>(
-  parser: Parser<TValue, TState>,
+export function withDefault<
+  M extends Mode,
+  TValue,
+  TState,
+  const TDefault = TValue,
+>(
+  parser: Parser<M, TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
   options?: WithDefaultOptions,
-): Parser<TValue | TDefault, [TState] | undefined> {
+): Parser<M, TValue | TDefault, [TState] | undefined> {
+  // Cast to sync for implementation
+  const syncParser = parser as Parser<"sync", TValue, TState>;
+  const isAsync = parser.$mode === "async";
+
+  // Sync suggest helper
+  function* suggestSync(
+    context: ParserContext<[TState] | undefined>,
+    prefix: string,
+  ): Generator<Suggestion> {
+    const innerState = typeof context.state === "undefined"
+      ? syncParser.initialState
+      : context.state[0];
+    yield* syncParser.suggest({ ...context, state: innerState }, prefix);
+  }
+
+  // Async suggest helper
+  async function* suggestAsync(
+    context: ParserContext<[TState] | undefined>,
+    prefix: string,
+  ): AsyncGenerator<Suggestion> {
+    const innerState = typeof context.state === "undefined"
+      ? syncParser.initialState
+      : context.state[0];
+    const suggestions = parser.suggest(
+      { ...context, state: innerState },
+      prefix,
+    ) as AsyncIterable<Suggestion>;
+    for await (const s of suggestions) {
+      yield s;
+    }
+  }
+
+  // Type cast needed due to TypeScript's conditional type limitations with generic M
   return {
+    $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
-    parse(context) {
-      return parseOptionalStyle(context, parser);
+    parse(context: ParserContext<[TState] | undefined>) {
+      if (isAsync) {
+        return parseOptionalStyleAsync(context, parser);
+      }
+      return parseOptionalStyleSync(context, syncParser);
     },
-    complete(state) {
+    complete(state: [TState] | undefined) {
       if (typeof state === "undefined") {
         try {
           const value = typeof defaultValue === "function"
@@ -255,18 +380,19 @@ export function withDefault<TValue, TState, const TDefault = TValue>(
           };
         }
       }
-      return parser.complete(state[0]);
+      if (!isAsync) {
+        return syncParser.complete(state[0]);
+      }
+      return (async () => await parser.complete(state[0]))();
     },
-    suggest(context, prefix) {
-      // Delegate to wrapped parser
-      const innerState = typeof context.state === "undefined"
-        ? parser.initialState
-        : context.state[0];
-
-      return parser.suggest({
-        ...context,
-        state: innerState,
-      }, prefix);
+    suggest(
+      context: ParserContext<[TState] | undefined>,
+      prefix: string,
+    ) {
+      if (isAsync) {
+        return suggestAsync(context, prefix);
+      }
+      return suggestSync(context, prefix);
     },
     getDocFragments(
       state: DocState<[TState] | undefined>,
@@ -284,7 +410,10 @@ export function withDefault<TValue, TState, const TDefault = TValue>(
         ? (defaultValue as () => TDefault)() as unknown as TValue
         : defaultValue as unknown as TValue;
 
-      const fragments = parser.getDocFragments(innerState, actualDefaultValue);
+      const fragments = syncParser.getDocFragments(
+        innerState,
+        actualDefaultValue,
+      );
 
       // If a custom message is provided, replace the default field in all entries
       if (options?.message) {
@@ -305,7 +434,7 @@ export function withDefault<TValue, TState, const TDefault = TValue>(
 
       return fragments;
     },
-  };
+  } as unknown as Parser<M, TValue | TDefault, [TState] | undefined>;
 }
 
 /**
@@ -319,6 +448,7 @@ export function withDefault<TValue, TState, const TDefault = TValue>(
  * - Computing derived values from parsed input
  * - Creating reusable transformations that can be applied to any parser
  *
+ * @template M The execution mode of the parser.
  * @template T The type of the value produced by the original parser.
  * @template U The type of the value produced by the mapping function.
  * @template TState The type of the state used by the original parser.
@@ -341,35 +471,81 @@ export function withDefault<TValue, TState, const TDefault = TValue>(
  * const prefixedParser = map(option("-n", integer()), n => `value: ${n}`);
  * ```
  */
-export function map<T, U, TState>(
-  parser: Parser<T, TState>,
+export function map<M extends Mode, T, U, TState>(
+  parser: Parser<M, T, TState>,
   transform: (value: T) => U,
-): Parser<U, TState> {
-  return {
+): Parser<M, U, TState> {
+  // Cast to sync for implementation (mode is handled at type level)
+  const syncParser = parser as Parser<"sync", T, TState>;
+  const isAsync = parser.$mode === "async";
+
+  // Sync suggest helper
+  function* suggestSync(
+    context: ParserContext<TState>,
+    prefix: string,
+  ): Generator<Suggestion> {
+    yield* syncParser.suggest(context, prefix);
+  }
+
+  // Async suggest helper
+  async function* suggestAsync(
+    context: ParserContext<TState>,
+    prefix: string,
+  ): AsyncGenerator<Suggestion> {
+    const suggestions = parser.suggest(
+      context,
+      prefix,
+    ) as AsyncIterable<Suggestion>;
+    for await (const s of suggestions) {
+      yield s;
+    }
+  }
+
+  const result: Parser<"sync", U, TState> = {
+    $mode: "sync",
     $valueType: [] as readonly U[],
     $stateType: parser.$stateType,
     priority: parser.priority,
     usage: parser.usage,
     initialState: parser.initialState,
-    parse: parser.parse.bind(parser),
-    complete(state: TState) {
-      const result = parser.complete(state);
-      if (result.success) {
-        return { success: true, value: transform(result.value) };
+    parse(context: ParserContext<TState>) {
+      if (isAsync) {
+        return parser.parse(context) as unknown as ParserResult<TState>;
       }
-      return result;
+      return syncParser.parse(context);
+    },
+    complete(state: TState): ValueParserResult<U> {
+      if (!isAsync) {
+        const innerResult = syncParser.complete(state);
+        if (innerResult.success) {
+          return { success: true, value: transform(innerResult.value) };
+        }
+        return { success: false, error: innerResult.error };
+      }
+      // Async complete
+      return (async () => {
+        const innerResult = await parser.complete(state);
+        if (innerResult.success) {
+          return { success: true, value: transform(innerResult.value) };
+        }
+        return { success: false, error: innerResult.error };
+      })() as unknown as ValueParserResult<U>;
     },
     suggest(context, prefix) {
-      // Delegate to wrapped parser - suggestions are based on input format, not output
-      return parser.suggest(context, prefix);
+      if (isAsync) {
+        return suggestAsync(context, prefix) as unknown as Iterable<Suggestion>;
+      }
+      return suggestSync(context, prefix);
     },
     getDocFragments(state: DocState<TState>, _defaultValue?: U) {
       // Since we can't reverse the transformation, we delegate to the original parser
       // with the original default value (if available). This is acceptable since
       // documentation typically shows the input format, not the transformed output.
-      return parser.getDocFragments(state, undefined);
+      return syncParser.getDocFragments(state, undefined);
     },
   };
+  // Cast to preserve the original parser's mode type
+  return { ...result, $mode: parser.$mode } as Parser<M, U, TState>;
 }
 
 /**
@@ -419,6 +595,7 @@ export interface MultipleErrorOptions {
  * Creates a parser that allows multiple occurrences of a given parser.
  * This parser can be used to parse multiple values of the same type,
  * such as multiple command-line arguments or options.
+ * @template M The execution mode of the parser.
  * @template TValue The type of the value that the parser produces.
  * @template TState The type of the state used by the parser.
  * @param parser The {@link Parser} to apply multiple times.
@@ -429,109 +606,202 @@ export interface MultipleErrorOptions {
  *          of type {@link TValue} and an array of states
  *          of type {@link TState}.
  */
-export function multiple<TValue, TState>(
-  parser: Parser<TValue, TState>,
+export function multiple<M extends Mode, TValue, TState>(
+  parser: Parser<M, TValue, TState>,
   options: MultipleOptions = {},
-): Parser<readonly TValue[], readonly TState[]> {
+): Parser<M, readonly TValue[], readonly TState[]> {
+  // Cast to sync for sync operations
+  const syncParser = parser as Parser<"sync", TValue, TState>;
+  const isAsync = parser.$mode === "async";
+
   const { min = 0, max = Infinity } = options;
-  return {
-    $valueType: [],
-    $stateType: [],
+
+  type MultipleState = readonly TState[];
+  type ParseResult = ParserResult<MultipleState>;
+
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<MultipleState>,
+  ): ParseResult => {
+    let added = context.state.length < 1;
+    let result = syncParser.parse({
+      ...context,
+      state: context.state.at(-1) ?? syncParser.initialState,
+    });
+    if (!result.success) {
+      if (!added) {
+        result = syncParser.parse({
+          ...context,
+          state: syncParser.initialState,
+        });
+        if (!result.success) return result;
+        added = true;
+      } else {
+        return result;
+      }
+    }
+    return {
+      success: true,
+      next: {
+        ...result.next,
+        state: [
+          ...(added ? context.state : context.state.slice(0, -1)),
+          result.next.state,
+        ],
+      },
+      consumed: result.consumed,
+    };
+  };
+
+  // Async parse implementation
+  const parseAsync = async (
+    context: ParserContext<MultipleState>,
+  ): Promise<ParseResult> => {
+    let added = context.state.length < 1;
+    let resultOrPromise = parser.parse({
+      ...context,
+      state: context.state.at(-1) ?? parser.initialState,
+    });
+    let result = await resultOrPromise;
+    if (!result.success) {
+      if (!added) {
+        resultOrPromise = parser.parse({
+          ...context,
+          state: parser.initialState,
+        });
+        result = await resultOrPromise;
+        if (!result.success) return result;
+        added = true;
+      } else {
+        return result;
+      }
+    }
+    return {
+      success: true,
+      next: {
+        ...result.next,
+        state: [
+          ...(added ? context.state : context.state.slice(0, -1)),
+          result.next.state,
+        ],
+      },
+      consumed: result.consumed,
+    };
+  };
+
+  const resultParser = {
+    $mode: parser.$mode,
+    $valueType: [] as readonly TValue[],
+    $stateType: [] as readonly TState[],
     priority: parser.priority,
     usage: [{ type: "multiple", terms: parser.usage, min }],
-    initialState: [],
-    parse(context) {
-      let added = context.state.length < 1;
-      let result = parser.parse({
-        ...context,
-        state: context.state.at(-1) ?? parser.initialState,
-      });
-      if (!result.success) {
-        if (!added) {
-          result = parser.parse({
-            ...context,
-            state: parser.initialState,
-          });
-          if (!result.success) return result;
-          added = true;
-        } else {
-          return result;
-        }
+    initialState: [] as readonly TState[],
+    parse(context: ParserContext<MultipleState>) {
+      if (isAsync) {
+        return parseAsync(context) as unknown as ParseResult;
       }
-      return {
-        success: true,
-        next: {
-          ...result.next,
-          state: [
-            ...(added ? context.state : context.state.slice(0, -1)),
-            result.next.state,
-          ],
-        },
-        consumed: result.consumed,
-      };
+      return parseSync(context);
     },
-    complete(state) {
-      const result = [];
-      for (const s of state) {
-        const valueResult = parser.complete(s);
-        if (valueResult.success) {
-          result.push(valueResult.value);
-        } else {
-          return { success: false, error: valueResult.error };
+    complete(state: MultipleState) {
+      if (!isAsync) {
+        // Sync complete
+        const result: TValue[] = [];
+        for (const s of state) {
+          const valueResult = syncParser.complete(s);
+          if (valueResult.success) {
+            result.push(valueResult.value);
+          } else {
+            return { success: false, error: valueResult.error };
+          }
         }
+        return validateMultipleResult(result);
       }
-      if (result.length < min) {
-        const customMessage = options.errors?.tooFew;
-        return {
-          success: false,
-          error: customMessage
-            ? (typeof customMessage === "function"
-              ? customMessage(min, result.length)
-              : customMessage)
-            : message`Expected at least ${
-              text(min.toLocaleString("en"))
-            } values, but got only ${
-              text(result.length.toLocaleString("en"))
-            }.`,
-        };
-      } else if (result.length > max) {
-        const customMessage = options.errors?.tooMany;
-        return {
-          success: false,
-          error: customMessage
-            ? (typeof customMessage === "function"
-              ? customMessage(max, result.length)
-              : customMessage)
-            : message`Expected at most ${
-              text(max.toLocaleString("en"))
-            } values, but got ${text(result.length.toLocaleString("en"))}.`,
-        };
-      }
-      return { success: true, value: result };
+
+      // Async complete - type cast needed due to TypeScript's conditional type limitations
+      return (async () => {
+        const result: TValue[] = [];
+        for (const s of state) {
+          const valueResult = await parser.complete(s);
+          if (valueResult.success) {
+            result.push(valueResult.value);
+          } else {
+            return { success: false, error: valueResult.error };
+          }
+        }
+        return validateMultipleResult(result);
+      })() as unknown as ReturnType<typeof resultParser.complete>;
     },
-    suggest(context, prefix) {
+    suggest(context: ParserContext<MultipleState>, prefix: string) {
       // Use the most recent state for suggestions, or initial state if empty
       const innerState = context.state.length > 0
         ? context.state.at(-1)!
         : parser.initialState;
 
-      return parser.suggest({
-        ...context,
-        state: innerState,
-      }, prefix);
+      if (isAsync) {
+        return (async function* () {
+          const suggestions = parser.suggest({
+            ...context,
+            state: innerState,
+          }, prefix) as AsyncIterable<Suggestion>;
+          for await (const s of suggestions) {
+            yield s;
+          }
+        })();
+      }
+      return (function* () {
+        yield* syncParser.suggest({
+          ...context,
+          state: innerState as TState,
+        }, prefix);
+      })();
     },
-    getDocFragments(state: DocState<readonly TState[]>, defaultValue?) {
+    getDocFragments(
+      state: DocState<MultipleState>,
+      defaultValue?: readonly TValue[],
+    ) {
       const innerState: DocState<TState> = state.kind === "unavailable"
         ? { kind: "unavailable" }
         : state.state.length > 0
         ? { kind: "available", state: state.state.at(-1)! }
         : { kind: "unavailable" };
-      return parser.getDocFragments(
+      return syncParser.getDocFragments(
         innerState,
         defaultValue != null && defaultValue.length > 0
           ? defaultValue[0]
           : undefined,
       );
     },
-  };
+  } as unknown as Parser<M, readonly TValue[], readonly TState[]>;
+
+  // Helper function for validating multiple result count
+  function validateMultipleResult(result: TValue[]) {
+    if (result.length < min) {
+      const customMessage = options.errors?.tooFew;
+      return {
+        success: false as const,
+        error: customMessage
+          ? (typeof customMessage === "function"
+            ? customMessage(min, result.length)
+            : customMessage)
+          : message`Expected at least ${
+            text(min.toLocaleString("en"))
+          } values, but got only ${text(result.length.toLocaleString("en"))}.`,
+      };
+    } else if (result.length > max) {
+      const customMessage = options.errors?.tooMany;
+      return {
+        success: false as const,
+        error: customMessage
+          ? (typeof customMessage === "function"
+            ? customMessage(max, result.length)
+            : customMessage)
+          : message`Expected at most ${
+            text(max.toLocaleString("en"))
+          } values, but got ${text(result.length.toLocaleString("en"))}.`,
+      };
+    }
+    return { success: true as const, value: result };
+  }
+
+  return resultParser;
 }

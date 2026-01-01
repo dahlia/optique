@@ -17,8 +17,9 @@ import { run } from "@optique/run";
 /**
  * Custom value parser for key-value pairs with configurable separator
  */
-function keyValue(separator = "="): ValueParser<[string, string]> {
+function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
+    $mode: "sync",
     metavar: `KEY${separator}VALUE`,
     parse(input: string): ValueParserResult<[string, string]> {
       const index = input.indexOf(separator);

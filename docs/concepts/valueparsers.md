@@ -754,12 +754,14 @@ handling and help text generation as built-in parsers.
 
 ### ValueParser interface
 
-The `ValueParser<T>` interface defines three required properties:
+The `ValueParser<M, T>` interface defines three required properties plus a mode
+marker:
 
 ~~~~ typescript twoslash
-import type { NonEmptyString, ValueParserResult } from "@optique/core/valueparser";
+import type { Mode, NonEmptyString, ValueParserResult } from "@optique/core/valueparser";
 // ---cut-before---
-interface ValueParser<T> {
+interface ValueParser<M extends Mode, T> {
+  readonly $mode: M;
   readonly metavar: NonEmptyString;
   parse(input: string): ValueParserResult<T>;
   format(value: T): string;
@@ -791,8 +793,9 @@ interface IPv4Address {
   toString(): string;
 }
 
-function ipv4(): ValueParser<IPv4Address> {
+function ipv4(): ValueParser<"sync", IPv4Address> {
   return {
+    $mode: "sync",
     metavar: "IP_ADDRESS",
 
     parse(input: string): ValueParserResult<IPv4Address> {
@@ -852,10 +855,11 @@ interface DateParserOptions {
   allowFuture?: boolean;
 }
 
-function date(options: DateParserOptions = {}): ValueParser<Date> {
+function date(options: DateParserOptions = {}): ValueParser<"sync", Date> {
   const { metavar = "DATE", format = 'iso', allowFuture = true } = options;
 
   return {
+    $mode: "sync",
     metavar,
 
     parse(input: string): ValueParserResult<Date> {
@@ -947,8 +951,9 @@ interface IPv4Address {
   toString(): string;
 }
 
-function ipv4(): ValueParser<IPv4Address> {
+function ipv4(): ValueParser<"sync", IPv4Address> {
   return {
+    $mode: "sync",
     metavar: "IP_ADDRESS",
     parse(input: string): ValueParserResult<IPv4Address> {
       return { success: false, error: message`` };
@@ -965,9 +970,10 @@ interface DateParserOptions {
   allowFuture?: boolean;
 }
 
-function date(options: DateParserOptions = {}): ValueParser<Date> {
+function date(options: DateParserOptions = {}): ValueParser<"sync", Date> {
   const { metavar = "DATE", format = 'iso', allowFuture = true } = options;
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Date> {
       return { success: false, error: message`` };
@@ -1045,8 +1051,9 @@ const semanticError = message``;
 function correctFormat(input: string): boolean;
 function withinBounds(input: string): boolean;
 function semanticallyValid(input: string): boolean;
-function parser<T>(): ValueParser<T> {
+function parser<T>(): ValueParser<"sync", T> {
 return {
+$mode: "sync",
 metavar: "VALUE",
 format() { return ""; },
 // ---cut-before---
@@ -1097,6 +1104,191 @@ the built-in parsers and providing excellent integration with TypeScript's
 type system.
 
 
+Async value parsers
+-------------------
+
+*This API is available since Optique 0.9.0.*
+
+Value parsers can operate in either synchronous (`"sync"`) or asynchronous
+(`"async"`) mode. The mode is declared via the `$mode` property, which affects
+the return types of the `parse()` and `suggest()` methods.
+
+All built-in value parsers are synchronous, but you can create async parsers
+for scenarios like:
+
+ -  Validating values against a remote API
+ -  Reading configuration from external sources
+ -  Performing I/O-based validation (e.g., checking DNS records)
+
+### Creating async value parsers
+
+An async value parser declares `$mode: "async"` and returns a `Promise` from
+its `parse()` method:
+
+~~~~ typescript twoslash
+import { type ValueParser, type ValueParserResult } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+// An async value parser that validates a URL by checking if it's reachable
+function reachableUrl(): ValueParser<"async", URL> {
+  return {
+    $mode: "async",
+    metavar: "URL",
+    async parse(input: string): Promise<ValueParserResult<URL>> {
+      // First validate URL format
+      let url: URL;
+      try {
+        url = new URL(input);
+      } catch {
+        return {
+          success: false,
+          error: message`Invalid URL format: ${input}.`,
+        };
+      }
+
+      // Then check if the URL is reachable
+      try {
+        const response = await fetch(url, { method: "HEAD" });
+        if (!response.ok) {
+          return {
+            success: false,
+            error: message`URL ${input} returned status ${response.status.toString()}.`,
+          };
+        }
+      } catch (e) {
+        return {
+          success: false,
+          error: message`Could not reach URL ${input}.`,
+        };
+      }
+
+      return { success: true, value: url };
+    },
+    format(value: URL): string {
+      return value.toString();
+    },
+  };
+}
+~~~~
+
+### Mode propagation
+
+When you use an async value parser with primitives and combinators, the mode
+automatically propagates through the parser tree. If any value parser in
+a composite parser is async, the entire parser becomes async:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+declare function reachableUrl(): ValueParser<"async", URL>;
+// ---cut-before---
+// This parser is async because reachableUrl() is async
+const parser = object({
+  endpoint: option("--endpoint", reachableUrl()),  // async
+  name: option("-n", "--name", string()),          // sync
+});
+// parser.$mode is "async"
+~~~~
+
+The mode is tracked at compile time through TypeScript's type system,
+ensuring type safety when working with async parsers.
+
+### Parsing with async parsers
+
+For async parsers, use `parseAsync()` instead of `parse()`:
+
+~~~~ typescript twoslash
+import type { Parser, ValueParser, ValueParserResult } from "@optique/core";
+import { message } from "@optique/core/message";
+import { object } from "@optique/core/constructs";
+import { parseAsync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+declare function reachableUrl(): ValueParser<"async", URL>;
+const parser = object({
+  endpoint: option("--endpoint", reachableUrl()),
+  name: option("-n", "--name", string()),
+});
+// ---cut-before---
+// parseAsync() returns a Promise
+const result = await parseAsync(parser, ["--endpoint", "https://api.example.com"]);
+
+if (result.success) {
+  console.log(`Connecting to ${result.value.endpoint.toString()}.`);
+}
+~~~~
+
+The `parseAsync()` function works with both sync and async parsers, always
+returning a `Promise`. For sync-only parsers, use `parseSync()` which returns
+the result directly.
+
+### Async suggestions
+
+Async value parsers can also provide async completion suggestions by returning
+an `AsyncIterable` from the `suggest()` method:
+
+~~~~ typescript twoslash
+import type { Suggestion, ValueParser, ValueParserResult } from "@optique/core";
+import { message } from "@optique/core/message";
+
+// A value parser that suggests valid user IDs from a remote service
+function userId(): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "USER_ID",
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      // Validate against remote service...
+      return { success: true, value: input };
+    },
+    format(value: string): string {
+      return value;
+    },
+    async *suggest(prefix: string): AsyncIterable<Suggestion> {
+      // Fetch matching user IDs from remote service
+      const response = await fetch(
+        `https://api.example.com/users?prefix=${encodeURIComponent(prefix)}`
+      );
+      const users = await response.json() as { id: string; name: string }[];
+
+      for (const user of users) {
+        yield {
+          kind: "literal",
+          text: user.id,
+          description: message`${user.name}`,
+        };
+      }
+    },
+  };
+}
+~~~~
+
+Similarly, use `suggestAsync()` to get suggestions from async parsers:
+
+~~~~ typescript twoslash
+import type { Parser, ValueParser, ValueParserResult } from "@optique/core";
+import { message } from "@optique/core/message";
+import { suggestAsync } from "@optique/core/parser";
+import { argument } from "@optique/core/primitives";
+
+declare function userId(): ValueParser<"async", string>;
+const parser = argument(userId());
+// ---cut-before---
+// suggestAsync() returns a Promise with an array of suggestions
+const suggestions = await suggestAsync(parser, ["us"]);
+
+for (const suggestion of suggestions) {
+  if (suggestion.kind === "literal") {
+    console.log(suggestion.text);
+  }
+}
+~~~~
+
+
 Completion suggestions
 ----------------------
 
@@ -1142,10 +1334,11 @@ import { type ValueParser, type ValueParserResult } from "@optique/core/valuepar
 import { type Suggestion } from "@optique/core/parser";
 import { message } from "@optique/core/message";
 
-function httpMethod(): ValueParser<string> {
+function httpMethod(): ValueParser<"sync", string> {
   const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
   return {
+    $mode: "sync",
     metavar: "METHOD",
     parse(input: string): ValueParserResult<string> {
       const method = input.toUpperCase();
@@ -1187,8 +1380,9 @@ import { type ValueParser, type ValueParserResult } from "@optique/core/valuepar
 import { type Suggestion } from "@optique/core/parser";
 import { message } from "@optique/core/message";
 
-function configFile(): ValueParser<string> {
+function configFile(): ValueParser<"sync", string> {
   return {
+    $mode: "sync",
     metavar: "CONFIG",
     parse(input: string): ValueParserResult<string> {
       // Validation logic here

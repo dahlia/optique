@@ -275,10 +275,11 @@ export interface TimeZoneOptions {
  */
 export function instant(
   options: InstantOptions = {},
-): ValueParser<Temporal.Instant> {
+): ValueParser<"sync", Temporal.Instant> {
   const metavar = options.metavar ?? "TIMESTAMP";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.Instant> {
       try {
@@ -315,10 +316,11 @@ export function instant(
  */
 export function duration(
   options: DurationOptions = {},
-): ValueParser<Temporal.Duration> {
+): ValueParser<"sync", Temporal.Duration> {
   const metavar = options.metavar ?? "DURATION";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.Duration> {
       try {
@@ -354,10 +356,11 @@ export function duration(
  */
 export function zonedDateTime(
   options: ZonedDateTimeOptions = {},
-): ValueParser<Temporal.ZonedDateTime> {
+): ValueParser<"sync", Temporal.ZonedDateTime> {
   const metavar = options.metavar ?? "ZONED_DATETIME";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.ZonedDateTime> {
       try {
@@ -393,10 +396,11 @@ export function zonedDateTime(
  */
 export function plainDate(
   options: PlainDateOptions = {},
-): ValueParser<Temporal.PlainDate> {
+): ValueParser<"sync", Temporal.PlainDate> {
   const metavar = options.metavar ?? "DATE";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainDate> {
       try {
@@ -432,10 +436,11 @@ export function plainDate(
  */
 export function plainTime(
   options: PlainTimeOptions = {},
-): ValueParser<Temporal.PlainTime> {
+): ValueParser<"sync", Temporal.PlainTime> {
   const metavar = options.metavar ?? "TIME";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainTime> {
       try {
@@ -471,10 +476,11 @@ export function plainTime(
  */
 export function plainDateTime(
   options: PlainDateTimeOptions = {},
-): ValueParser<Temporal.PlainDateTime> {
+): ValueParser<"sync", Temporal.PlainDateTime> {
   const metavar = options.metavar ?? "DATETIME";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainDateTime> {
       try {
@@ -510,10 +516,11 @@ export function plainDateTime(
  */
 export function plainYearMonth(
   options: PlainYearMonthOptions = {},
-): ValueParser<Temporal.PlainYearMonth> {
+): ValueParser<"sync", Temporal.PlainYearMonth> {
   const metavar = options.metavar ?? "YEAR-MONTH";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainYearMonth> {
       try {
@@ -549,10 +556,11 @@ export function plainYearMonth(
  */
 export function plainMonthDay(
   options: PlainMonthDayOptions = {},
-): ValueParser<Temporal.PlainMonthDay> {
+): ValueParser<"sync", Temporal.PlainMonthDay> {
   const metavar = options.metavar ?? "--MONTH-DAY";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainMonthDay> {
       try {
@@ -588,10 +596,13 @@ export function plainMonthDay(
  * @param options Configuration options for the timezone parser.
  * @returns A ValueParser that parses and validates timezone identifiers.
  */
-export function timeZone(options: TimeZoneOptions = {}): ValueParser<TimeZone> {
+export function timeZone(
+  options: TimeZoneOptions = {},
+): ValueParser<"sync", TimeZone> {
   const metavar = options.metavar ?? "TIMEZONE";
   ensureNonEmptyString(metavar);
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<TimeZone> {
       try {

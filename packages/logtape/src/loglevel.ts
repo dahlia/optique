@@ -74,7 +74,9 @@ export interface LogLevelOptions {
  *
  * @since 0.8.0
  */
-export function logLevel(options: LogLevelOptions = {}): ValueParser<LogLevel> {
+export function logLevel(
+  options: LogLevelOptions = {},
+): ValueParser<"sync", LogLevel> {
   return choice(LOG_LEVELS, {
     metavar: options.metavar ?? "LEVEL",
     caseInsensitive: true,

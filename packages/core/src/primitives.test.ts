@@ -24,7 +24,7 @@ import {
   passThrough,
 } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { type InferValue, parse } from "@optique/core/parser";
+import { type InferValue, parseSync } from "@optique/core/parser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -996,7 +996,7 @@ describe("flag", () => {
     it("should succeed when flag is provided", () => {
       const parser = flag("-f", "--force");
 
-      const result = parse(parser, ["-f"]);
+      const result = parseSync(parser, ["-f"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value, true);
@@ -1006,7 +1006,7 @@ describe("flag", () => {
     it("should fail when flag is not provided", () => {
       const parser = flag("-f", "--force");
 
-      const result = parse(parser, []);
+      const result = parseSync(parser, []);
       assert.ok(!result.success);
       if (!result.success) {
         assertErrorIncludes(result.error, "Expected an option");
@@ -1020,7 +1020,7 @@ describe("flag", () => {
       });
 
       // With flag
-      let result = parse(parser, ["-f", "-v"]);
+      let result = parseSync(parser, ["-f", "-v"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.force, true);
@@ -1028,7 +1028,7 @@ describe("flag", () => {
       }
 
       // Without flag
-      result = parse(parser, ["-v"]);
+      result = parseSync(parser, ["-v"]);
       assert.ok(!result.success);
       if (!result.success) {
         assertErrorIncludes(result.error, "Required flag");
@@ -1042,7 +1042,7 @@ describe("flag", () => {
       });
 
       // With flag
-      let result = parse(parser, ["-f", "test"]);
+      let result = parseSync(parser, ["-f", "test"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.force, true);
@@ -1050,7 +1050,7 @@ describe("flag", () => {
       }
 
       // Without flag
-      result = parse(parser, ["test"]);
+      result = parseSync(parser, ["test"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.force, undefined);
@@ -1341,22 +1341,22 @@ describe("argument", () => {
     const fileParser = argument(string({ pattern: /\.(txt|md)$/ }));
     const portParser = argument(integer({ min: 1024, max: 0xffff }));
 
-    const validFileResult = parse(fileParser, ["readme.txt"]);
+    const validFileResult = parseSync(fileParser, ["readme.txt"]);
     assert.ok(validFileResult.success);
     if (validFileResult.success) {
       assert.equal(validFileResult.value, "readme.txt");
     }
 
-    const invalidFileResult = parse(fileParser, ["script.js"]);
+    const invalidFileResult = parseSync(fileParser, ["script.js"]);
     assert.ok(!invalidFileResult.success);
 
-    const validPortResult = parse(portParser, ["8080"]);
+    const validPortResult = parseSync(portParser, ["8080"]);
     assert.ok(validPortResult.success);
     if (validPortResult.success) {
       assert.equal(validPortResult.value, 8080);
     }
 
-    const invalidPortResult = parse(portParser, ["80"]);
+    const invalidPortResult = parseSync(portParser, ["80"]);
     assert.ok(!invalidPortResult.success);
   });
 
@@ -1538,7 +1538,7 @@ describe("command", () => {
       }),
     );
 
-    const result = parse(showParser, ["show", "--progress", "item123"]);
+    const result = parseSync(showParser, ["show", "--progress", "item123"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.type, "show");
@@ -1556,7 +1556,7 @@ describe("command", () => {
       }),
     );
 
-    const result = parse(showParser, ["edit", "item123"]);
+    const result = parseSync(showParser, ["edit", "item123"]);
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "Expected command `show`");
@@ -1572,7 +1572,7 @@ describe("command", () => {
       }),
     );
 
-    const result = parse(editParser, ["edit"]);
+    const result = parseSync(editParser, ["edit"]);
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "too few arguments");
@@ -1590,7 +1590,7 @@ describe("command", () => {
     );
 
     // Test with optional option
-    const result1 = parse(editParser, ["edit", "-e", "vim", "item123"]);
+    const result1 = parseSync(editParser, ["edit", "-e", "vim", "item123"]);
     assert.ok(result1.success);
     if (result1.success) {
       assert.equal(result1.value.type, "edit");
@@ -1599,7 +1599,7 @@ describe("command", () => {
     }
 
     // Test without optional option
-    const result2 = parse(editParser, ["edit", "item456"]);
+    const result2 = parseSync(editParser, ["edit", "item456"]);
     assert.ok(result2.success);
     if (result2.success) {
       assert.equal(result2.value.type, "edit");
@@ -1629,7 +1629,7 @@ describe("command", () => {
     );
 
     // Test show command
-    const showResult = parse(parser, ["show", "--progress", "item123"]);
+    const showResult = parseSync(parser, ["show", "--progress", "item123"]);
     assert.ok(showResult.success);
     if (showResult.success) {
       assert.equal(showResult.value.type, "show");
@@ -1638,7 +1638,7 @@ describe("command", () => {
     }
 
     // Test edit command
-    const editResult = parse(parser, ["edit", "-e", "vim", "item456"]);
+    const editResult = parseSync(parser, ["edit", "-e", "vim", "item456"]);
     assert.ok(editResult.success);
     if (editResult.success) {
       assert.equal(editResult.value.type, "edit");
@@ -1665,7 +1665,7 @@ describe("command", () => {
       ),
     );
 
-    const result = parse(parser, ["delete", "item123"]);
+    const result = parseSync(parser, ["delete", "item123"]);
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "Unexpected option or subcommand");
@@ -1681,7 +1681,7 @@ describe("command", () => {
       }),
     );
 
-    const result = parse(showParser, []);
+    const result = parseSync(showParser, []);
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "end of input");
@@ -1713,8 +1713,8 @@ describe("command", () => {
     type ParserType = InferValue<typeof parser>;
 
     // Test that the inferred type is a union of the two command types
-    const showResult = parse(parser, ["show", "--progress", "item123"]);
-    const editResult = parse(parser, ["edit", "-e", "vim", "item456"]);
+    const showResult = parseSync(parser, ["show", "--progress", "item123"]);
+    const editResult = parseSync(parser, ["edit", "-e", "vim", "item456"]);
 
     if (showResult.success) {
       // These assertions verify runtime behavior matches type expectations
@@ -1752,7 +1752,7 @@ describe("command", () => {
 
     type ComplexType = InferValue<typeof complexParser>;
 
-    const result = parse(complexParser, [
+    const result = parseSync(complexParser, [
       "deploy",
       "--env",
       "production",
@@ -1794,14 +1794,14 @@ describe("command", () => {
     );
 
     // Should match "test" exactly, not "testing"
-    const result1 = parse(parser, ["test", "item123"]);
+    const result1 = parseSync(parser, ["test", "item123"]);
     assert.ok(result1.success);
     if (result1.success) {
       assert.equal(result1.value.type, "test");
     }
 
     // Should match "testing" exactly
-    const result2 = parse(parser, ["testing", "item456"]);
+    const result2 = parseSync(parser, ["testing", "item456"]);
     assert.ok(result2.success);
     if (result2.success) {
       assert.equal(result2.value.type, "testing");
@@ -1816,7 +1816,7 @@ describe("command", () => {
       }),
     );
 
-    const result = parse(parser, ["--help"]);
+    const result = parseSync(parser, ["--help"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.type, "help");
@@ -1827,13 +1827,13 @@ describe("command", () => {
     // Test our CommandState type safety with arrays
     const multiParser = command("multi", multiple(option("-v", "--verbose")));
 
-    const result1 = parse(multiParser, ["multi", "-v", "-v"]);
+    const result1 = parseSync(multiParser, ["multi", "-v", "-v"]);
     assert.ok(result1.success);
     if (result1.success) {
       assert.deepEqual(result1.value, [true, true]);
     }
 
-    const result2 = parse(multiParser, ["multi"]);
+    const result2 = parseSync(multiParser, ["multi"]);
     assert.ok(result2.success);
     if (result2.success) {
       assert.deepEqual(result2.value, []);
@@ -1853,7 +1853,7 @@ describe("command", () => {
       ),
     });
 
-    const result = parse(nestedParser, ["--global", "run", "build"]);
+    const result = parseSync(nestedParser, ["--global", "run", "build"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.globalFlag, true);
@@ -1868,7 +1868,7 @@ describe("command", () => {
       argument(string()),
     ]);
 
-    const result = parse(tupleParser, ["start"]);
+    const result = parseSync(tupleParser, ["start"]);
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "too few arguments");
@@ -1885,7 +1885,7 @@ describe("command", () => {
     );
 
     // Test with -- to terminate options parsing
-    const result = parse(parser, ["exec", "--", "--not-an-option", "arg1"]);
+    const result = parseSync(parser, ["exec", "--", "--not-an-option", "arg1"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.type, "exec");
@@ -1899,13 +1899,13 @@ describe("command", () => {
       command("v2", constant("version2" as const)),
     );
 
-    const result1 = parse(parser, ["v1"]);
+    const result1 = parseSync(parser, ["v1"]);
     assert.ok(result1.success);
     if (result1.success) {
       assert.equal(result1.value, "version1");
     }
 
-    const result2 = parse(parser, ["v2"]);
+    const result2 = parseSync(parser, ["v2"]);
     assert.ok(result2.success);
     if (result2.success) {
       assert.equal(result2.value, "version2");
@@ -1916,7 +1916,7 @@ describe("command", () => {
     // This is a bit of an edge case, but should not crash
     const parser = command("", constant("empty" as const));
 
-    const result = parse(parser, [""]);
+    const result = parseSync(parser, [""]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value, "empty");
@@ -2700,7 +2700,7 @@ describe("passThrough", () => {
         extra: passThrough(),
       });
 
-      const result = parse(parser, ["--debug", "--foo=bar", "--baz=qux"]);
+      const result = parseSync(parser, ["--debug", "--foo=bar", "--baz=qux"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -2714,7 +2714,7 @@ describe("passThrough", () => {
         extra: passThrough({ format: "nextToken" }),
       });
 
-      const result = parse(parser, ["--debug", "--foo", "bar"]);
+      const result = parseSync(parser, ["--debug", "--foo", "bar"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -2741,7 +2741,7 @@ describe("passThrough", () => {
         ),
       );
 
-      const result = parse(parser, [
+      const result = parseSync(parser, [
         "exec",
         "mycontainer",
         "--verbose",
@@ -2843,7 +2843,7 @@ describe("passThrough", () => {
         usage: parser.usage,
       };
 
-      const suggestions = parser.suggest(context, "--");
+      const suggestions = Array.from(parser.suggest(context, "--"));
       assert.deepEqual([...suggestions], []);
     });
   });
@@ -2855,7 +2855,7 @@ describe("passThrough", () => {
         extra: optional(passThrough()),
       });
 
-      const result = parse(parser, ["--debug"]);
+      const result = parseSync(parser, ["--debug"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -2869,7 +2869,7 @@ describe("passThrough", () => {
         extra: optional(passThrough()),
       });
 
-      const result = parse(parser, ["--debug", "--foo=bar"]);
+      const result = parseSync(parser, ["--debug", "--foo=bar"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -2883,7 +2883,7 @@ describe("passThrough", () => {
         args: optional(passThrough({ format: "greedy" })),
       });
 
-      const result = parse(parser, ["mycommand"]);
+      const result = parseSync(parser, ["mycommand"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.cmd, "mycommand");
@@ -2899,7 +2899,7 @@ describe("passThrough", () => {
         extra: withDefault(passThrough(), ["--default=value"]),
       });
 
-      const result = parse(parser, ["--debug"]);
+      const result = parseSync(parser, ["--debug"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -2913,7 +2913,7 @@ describe("passThrough", () => {
         extra: withDefault(passThrough(), ["--default=value"]),
       });
 
-      const result = parse(parser, ["--debug", "--foo=bar"]);
+      const result = parseSync(parser, ["--debug", "--foo=bar"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -2930,7 +2930,7 @@ describe("passThrough", () => {
         }),
       });
 
-      const result = parse(parser, []);
+      const result = parseSync(parser, []);
       assert.ok(result.success);
       assert.ok(defaultCalled);
       if (result.success) {
@@ -2946,7 +2946,7 @@ describe("passThrough", () => {
         extra: map(passThrough(), (opts) => opts.length),
       });
 
-      const result = parse(parser, ["--debug", "--foo=bar", "--baz=qux"]);
+      const result = parseSync(parser, ["--debug", "--foo=bar", "--baz=qux"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -2966,7 +2966,7 @@ describe("passThrough", () => {
         }),
       });
 
-      const result = parse(parser, ["--foo=bar", "--baz=qux"]);
+      const result = parseSync(parser, ["--foo=bar", "--baz=qux"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value.extra, { foo: "bar", baz: "qux" });
@@ -2978,7 +2978,7 @@ describe("passThrough", () => {
         args: map(passThrough({ format: "greedy" }), (args) => args.join(" ")),
       });
 
-      const result = parse(parser, ["--verbose", "-it", "bash"]);
+      const result = parseSync(parser, ["--verbose", "-it", "bash"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.args, "--verbose -it bash");
@@ -2997,7 +2997,7 @@ describe("passThrough", () => {
         }),
       );
 
-      const result = parse(parser, ["--debug", "--foo=bar"]);
+      const result = parseSync(parser, ["--debug", "--foo=bar"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -3018,7 +3018,7 @@ describe("passThrough", () => {
         }),
       );
 
-      const result = parse(parser, [
+      const result = parseSync(parser, [
         "-v",
         "--config",
         "file.json",
@@ -3040,7 +3040,7 @@ describe("passThrough", () => {
         passThrough(),
       ]);
 
-      const result = parse(parser, ["--debug", "--foo=bar", "--baz=qux"]);
+      const result = parseSync(parser, ["--debug", "--foo=bar", "--baz=qux"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value, [true, ["--foo=bar", "--baz=qux"]]);
@@ -3053,7 +3053,7 @@ describe("passThrough", () => {
         passThrough({ format: "greedy" }),
       ]);
 
-      const result = parse(parser, ["mycommand", "--verbose", "-it"]);
+      const result = parseSync(parser, ["mycommand", "--verbose", "-it"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value, ["mycommand", ["--verbose", "-it"]]);
@@ -3074,7 +3074,7 @@ describe("passThrough", () => {
         }),
       );
 
-      const result1 = parse(parser, ["--foo=bar", "--baz=qux"]);
+      const result1 = parseSync(parser, ["--foo=bar", "--baz=qux"]);
       assert.ok(result1.success);
       if (result1.success) {
         assert.equal(result1.value.mode, "wrapper");
@@ -3083,7 +3083,7 @@ describe("passThrough", () => {
         }
       }
 
-      const result2 = parse(parser, ["myfile.txt"]);
+      const result2 = parseSync(parser, ["myfile.txt"]);
       assert.ok(result2.success);
       if (result2.success) {
         assert.equal(result2.value.mode, "direct");
@@ -3106,7 +3106,7 @@ describe("passThrough", () => {
       );
 
       // --debug should match the explicit parser, not passThrough
-      const result = parse(parser, ["--debug"]);
+      const result = parseSync(parser, ["--debug"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.mode, "explicit");
@@ -3128,14 +3128,14 @@ describe("passThrough", () => {
       );
 
       // -p 8080 should match local mode (longest match)
-      const result1 = parse(parser, ["-p", "8080"]);
+      const result1 = parseSync(parser, ["-p", "8080"]);
       assert.ok(result1.success);
       if (result1.success) {
         assert.equal(result1.value.mode, "local");
       }
 
       // --unknown value should match proxy mode
-      const result2 = parse(parser, ["--unknown", "value"]);
+      const result2 = parseSync(parser, ["--unknown", "value"]);
       assert.ok(result2.success);
       if (result2.success) {
         assert.equal(result2.value.mode, "proxy");
@@ -3160,13 +3160,13 @@ describe("passThrough", () => {
         },
       );
 
-      const result1 = parse(parser, ["--mode", "local", "-p", "8080"]);
+      const result1 = parseSync(parser, ["--mode", "local", "-p", "8080"]);
       assert.ok(result1.success);
       if (result1.success) {
         assert.deepEqual(result1.value, ["local", { port: 8080 }]);
       }
 
-      const result2 = parse(parser, ["--mode", "proxy", "--foo", "bar"]);
+      const result2 = parseSync(parser, ["--mode", "proxy", "--foo", "bar"]);
       assert.ok(result2.success);
       if (result2.success) {
         assert.deepEqual(result2.value, ["proxy", { extra: ["--foo", "bar"] }]);
@@ -3186,7 +3186,7 @@ describe("passThrough", () => {
         ),
       });
 
-      const result = parse(parser, ["--debug", "--foo=bar"]);
+      const result = parseSync(parser, ["--debug", "--foo=bar"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.debug, true);
@@ -3214,7 +3214,7 @@ describe("passThrough", () => {
       );
 
       // Command should match first
-      const result1 = parse(parser, ["run", "-v", "file.txt", "--foo=bar"]);
+      const result1 = parseSync(parser, ["run", "-v", "file.txt", "--foo=bar"]);
       assert.ok(result1.success);
       if (result1.success) {
         assert.equal(result1.value.action, "run");
@@ -3226,7 +3226,7 @@ describe("passThrough", () => {
       }
 
       // Default should catch everything else
-      const result2 = parse(parser, ["--unknown", "args"]);
+      const result2 = parseSync(parser, ["--unknown", "args"]);
       assert.ok(result2.success);
       if (result2.success) {
         assert.equal(result2.value.action, "default");
@@ -3245,7 +3245,7 @@ describe("passThrough", () => {
         extra: passThrough(),
       });
 
-      const result = parse(parser, [
+      const result = parseSync(parser, [
         "-v",
         "-d",
         "-c",
@@ -3338,7 +3338,7 @@ describe("passThrough", () => {
         extra: optional(passThrough()),
       });
 
-      const result = parse(parser, []);
+      const result = parseSync(parser, []);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.extra, undefined);
@@ -3351,7 +3351,7 @@ describe("passThrough", () => {
         files: multiple(argument(string())),
       });
 
-      const result = parse(parser, ["--", "--not-an-option"]);
+      const result = parseSync(parser, ["--", "--not-an-option"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.extra, undefined);
@@ -3444,7 +3444,7 @@ describe("passThrough", () => {
     it("should work when passThrough is the only parser", () => {
       const parser = passThrough({ format: "greedy" });
 
-      const result = parse(parser, ["--foo", "bar", "--baz"]);
+      const result = parseSync(parser, ["--foo", "bar", "--baz"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value, ["--foo", "bar", "--baz"]);
@@ -3471,13 +3471,13 @@ describe("passThrough", () => {
         ),
       );
 
-      const result1 = parse(parser, ["build", "--optimize=true"]);
+      const result1 = parseSync(parser, ["build", "--optimize=true"]);
       assert.ok(result1.success);
       if (result1.success && result1.value.action === "build") {
         assert.deepEqual(result1.value.buildArgs, ["--optimize=true"]);
       }
 
-      const result2 = parse(parser, ["test", "--coverage=true"]);
+      const result2 = parseSync(parser, ["test", "--coverage=true"]);
       assert.ok(result2.success);
       if (result2.success && result2.value.action === "test") {
         assert.deepEqual(result2.value.testArgs, ["--coverage=true"]);
@@ -3493,7 +3493,11 @@ describe("passThrough", () => {
         extra: passThrough(),
       });
 
-      const result = parse(parser, ["--foo=bar", "--baz=qux", "--third=one"]);
+      const result = parseSync(parser, [
+        "--foo=bar",
+        "--baz=qux",
+        "--third=one",
+      ]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value.extra, [
@@ -3510,7 +3514,7 @@ describe("hidden option", () => {
   describe("option()", () => {
     it("should still parse hidden options", () => {
       const parser = option("--secret", string(), { hidden: true });
-      const result = parse(parser, ["--secret", "value"]);
+      const result = parseSync(parser, ["--secret", "value"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value, "value");
@@ -3528,7 +3532,7 @@ describe("hidden option", () => {
 
     it("should return empty suggestions when hidden", () => {
       const parser = option("--secret", string(), { hidden: true });
-      const suggestions = parser.suggest(
+      const suggestions = Array.from(parser.suggest(
         {
           buffer: [],
           state: undefined,
@@ -3536,7 +3540,7 @@ describe("hidden option", () => {
           optionsTerminated: false,
         },
         "--sec",
-      );
+      ));
       assert.deepEqual(suggestions, []);
     });
 
@@ -3552,7 +3556,7 @@ describe("hidden option", () => {
   describe("flag()", () => {
     it("should still parse hidden flags", () => {
       const parser = flag("--debug", { hidden: true });
-      const result = parse(parser, ["--debug"]);
+      const result = parseSync(parser, ["--debug"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value, true);
@@ -3570,7 +3574,7 @@ describe("hidden option", () => {
 
     it("should return empty suggestions when hidden", () => {
       const parser = flag("--debug", { hidden: true });
-      const suggestions = parser.suggest(
+      const suggestions = Array.from(parser.suggest(
         {
           buffer: [],
           state: undefined,
@@ -3578,7 +3582,7 @@ describe("hidden option", () => {
           optionsTerminated: false,
         },
         "--deb",
-      );
+      ));
       assert.deepEqual(suggestions, []);
     });
   });
@@ -3586,7 +3590,7 @@ describe("hidden option", () => {
   describe("argument()", () => {
     it("should still parse hidden arguments", () => {
       const parser = argument(string(), { hidden: true });
-      const result = parse(parser, ["value"]);
+      const result = parseSync(parser, ["value"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value, "value");
@@ -3604,7 +3608,7 @@ describe("hidden option", () => {
 
     it("should return empty suggestions when hidden", () => {
       const parser = argument(string(), { hidden: true });
-      const suggestions = parser.suggest(
+      const suggestions = Array.from(parser.suggest(
         {
           buffer: [],
           state: undefined,
@@ -3612,7 +3616,7 @@ describe("hidden option", () => {
           optionsTerminated: false,
         },
         "",
-      );
+      ));
       assert.deepEqual(suggestions, []);
     });
   });
@@ -3624,7 +3628,7 @@ describe("hidden option", () => {
         object({ value: option("--value", string()) }),
         { hidden: true },
       );
-      const result = parse(parser, ["secret", "--value", "foo"]);
+      const result = parseSync(parser, ["secret", "--value", "foo"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.value, "foo");
@@ -3650,7 +3654,7 @@ describe("hidden option", () => {
         object({ value: option("--value", string()) }),
         { hidden: true },
       );
-      const suggestions = parser.suggest(
+      const suggestions = Array.from(parser.suggest(
         {
           buffer: [],
           state: undefined,
@@ -3658,7 +3662,7 @@ describe("hidden option", () => {
           optionsTerminated: false,
         },
         "sec",
-      );
+      ));
       assert.deepEqual(suggestions, []);
     });
   });
@@ -3666,7 +3670,7 @@ describe("hidden option", () => {
   describe("passThrough()", () => {
     it("should still collect passthrough values when hidden", () => {
       const parser = passThrough({ hidden: true });
-      const result = parse(parser, ["--foo=bar"]);
+      const result = parseSync(parser, ["--foo=bar"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value, ["--foo=bar"]);

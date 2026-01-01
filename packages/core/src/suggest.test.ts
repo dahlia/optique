@@ -11,8 +11,8 @@ import {
   option,
   optional,
   or,
-  suggest,
   type Suggestion,
+  suggestSync,
   withDefault,
 } from "./index.ts";
 import { choice, integer, string } from "./valueparser.ts";
@@ -32,13 +32,13 @@ describe("suggest function", () => {
   describe("basic functionality", () => {
     it("should return empty array for empty args", () => {
       const parser = constant("test");
-      const result = suggest(parser, [""]);
+      const result = suggestSync(parser, [""]);
       deepStrictEqual(result, []);
     });
 
     it("should handle single argument prefix", () => {
       const parser = option("-v", "--verbose");
-      const result = suggest(parser, ["--v"]);
+      const result = suggestSync(parser, ["--v"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
 
@@ -47,7 +47,7 @@ describe("suggest function", () => {
         verbose: option("-v", "--verbose"),
         output: option("-o", "--output", string()),
       });
-      const result = suggest(parser, ["-v", "--o"]);
+      const result = suggestSync(parser, ["-v", "--o"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--output" }]);
     });
   });
@@ -55,39 +55,39 @@ describe("suggest function", () => {
   describe("option parser suggestions", () => {
     it("should suggest matching option names with prefix", () => {
       const parser = option("-f", "--format", "--file");
-      const result = suggest(parser, ["--f"]);
+      const result = suggestSync(parser, ["--f"]);
       const expectedTexts = result.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["--file", "--format"]);
     });
 
     it("should suggest short options", () => {
       const parser = option("-v", "--verbose", "-q", "--quiet");
-      const result = suggest(parser, ["-"]);
+      const result = suggestSync(parser, ["-"]);
       const expectedTexts = result.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["-q", "-v"]);
     });
 
     it("should not suggest when prefix doesn't match", () => {
       const parser = option("-f", "--format");
-      const result = suggest(parser, ["--output"]);
+      const result = suggestSync(parser, ["--output"]);
       deepStrictEqual(result, []);
     });
 
     it("should suggest values after option", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
-      const result = suggest(parser, ["-f", "j"]);
+      const result = suggestSync(parser, ["-f", "j"]);
       deepStrictEqual(result, [{ kind: "literal", text: "json" }]);
     });
 
     it("should handle boolean flags without values", () => {
       const parser = option("-v", "--verbose");
-      const result = suggest(parser, ["-v", "something"]);
+      const result = suggestSync(parser, ["-v", "something"]);
       deepStrictEqual(result, []);
     });
 
     it("should suggest --option=value format with matching prefix", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
-      const result = suggest(parser, ["--format=j"]);
+      const result = suggestSync(parser, ["--format=j"]);
       deepStrictEqual(result, [{
         kind: "literal",
         text: "--format=json",
@@ -97,7 +97,7 @@ describe("suggest function", () => {
 
     it("should suggest all values for --option= format", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
-      const result = suggest(parser, ["--format="]);
+      const result = suggestSync(parser, ["--format="]);
       const expectedTexts = result.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, [
         "--format=json",
@@ -108,7 +108,7 @@ describe("suggest function", () => {
 
     it("should suggest -option=value format for short options", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
-      const result = suggest(parser, ["-f=y"]);
+      const result = suggestSync(parser, ["-f=y"]);
       deepStrictEqual(result, [{
         kind: "literal",
         text: "-f=yaml",
@@ -118,19 +118,19 @@ describe("suggest function", () => {
 
     it("should return empty for --option=value when option doesn't match", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
-      const result = suggest(parser, ["--output=json"]);
+      const result = suggestSync(parser, ["--output=json"]);
       deepStrictEqual(result, []);
     });
 
     it("should return empty for --option=value when value doesn't match", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
-      const result = suggest(parser, ["--format=html"]);
+      const result = suggestSync(parser, ["--format=html"]);
       deepStrictEqual(result, []);
     });
 
     it("should work with exact match in --option=value format", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
-      const result = suggest(parser, ["--format=xml"]);
+      const result = suggestSync(parser, ["--format=xml"]);
       deepStrictEqual(result, [{
         kind: "literal",
         text: "--format=xml",
@@ -142,14 +142,14 @@ describe("suggest function", () => {
   describe("flag parser suggestions", () => {
     it("should suggest flag names with prefix", () => {
       const parser = flag("-f", "--force", "--full");
-      const result = suggest(parser, ["--f"]);
+      const result = suggestSync(parser, ["--f"]);
       const expectedTexts = result.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["--force", "--full"]);
     });
 
     it("should not suggest values after flag", () => {
       const parser = flag("-f", "--force");
-      const result = suggest(parser, ["-f", "something"]);
+      const result = suggestSync(parser, ["-f", "something"]);
       deepStrictEqual(result, []);
     });
   });
@@ -157,14 +157,14 @@ describe("suggest function", () => {
   describe("argument parser suggestions", () => {
     it("should delegate to value parser", () => {
       const parser = argument(choice(["start", "stop", "restart"]));
-      const result = suggest(parser, ["st"]);
+      const result = suggestSync(parser, ["st"]);
       const expectedTexts = result.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["start", "stop"]);
     });
 
     it("should handle string arguments", () => {
       const parser = argument(string());
-      const result = suggest(parser, ["test"]);
+      const result = suggestSync(parser, ["test"]);
       // String parser doesn't provide completions by default
       deepStrictEqual(result, []);
     });
@@ -176,7 +176,7 @@ describe("suggest function", () => {
       const parser = command("build", innerParser, {
         description: message`Build the project`,
       });
-      const result = suggest(parser, ["bu"]);
+      const result = suggestSync(parser, ["bu"]);
       deepStrictEqual(result, [{
         kind: "literal",
         text: "build",
@@ -187,14 +187,14 @@ describe("suggest function", () => {
     it("should delegate to inner parser after command matched", () => {
       const innerParser = option("-v", "--verbose");
       const parser = command("build", innerParser);
-      const result = suggest(parser, ["build", "--v"]);
+      const result = suggestSync(parser, ["build", "--v"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
 
     it("should not suggest command when prefix doesn't match", () => {
       const innerParser = option("-v", "--verbose");
       const parser = command("build", innerParser);
-      const result = suggest(parser, ["deploy"]);
+      const result = suggestSync(parser, ["deploy"]);
       deepStrictEqual(result, []);
     });
   });
@@ -206,7 +206,7 @@ describe("suggest function", () => {
         output: option("-o", "--output", string()),
         force: flag("-f", "--force"),
       });
-      const result = suggest(parser, ["--"]);
+      const result = suggestSync(parser, ["--"]);
       const expectedTexts = result.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["--force", "--output", "--verbose"]);
     });
@@ -217,7 +217,7 @@ describe("suggest function", () => {
         verbose1: option("-v", "--verbose"),
         verbose2: option("-v", "--verbose"), // Same option names
       }, { allowDuplicates: true });
-      const result = suggest(parser, ["--v"]);
+      const result = suggestSync(parser, ["--v"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
 
@@ -229,7 +229,7 @@ describe("suggest function", () => {
         }),
         debug: option("-d", "--debug"),
       });
-      const result = suggest(parser, ["--p"]);
+      const result = suggestSync(parser, ["--p"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--port" }]);
     });
 
@@ -238,7 +238,7 @@ describe("suggest function", () => {
         input: option("-i", "--input", string()),
         output: option("-o", "--output", string()),
       });
-      const result = suggest(parser, ["-i", "file.txt", "--o"]);
+      const result = suggestSync(parser, ["-i", "file.txt", "--o"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--output" }]);
     });
   });
@@ -248,7 +248,7 @@ describe("suggest function", () => {
       const parserA = option("-a", "--alpha");
       const parserB = option("-b", "--beta");
       const parser = or(parserA, parserB);
-      const result = suggest(parser, ["--"]);
+      const result = suggestSync(parser, ["--"]);
       const expectedTexts = result.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["--alpha", "--beta"]);
     });
@@ -265,7 +265,7 @@ describe("suggest function", () => {
       const parser = or(parserA, parserB);
 
       // After parsing -v, should only suggest from parserA
-      const result = suggest(parser, ["-v", "--f"]);
+      const result = suggestSync(parser, ["-v", "--f"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--file" }]);
     });
 
@@ -274,7 +274,7 @@ describe("suggest function", () => {
       const testCmd = command("test", option("-c", "--coverage"));
       const parser = or(buildCmd, testCmd);
 
-      const result = suggest(parser, ["t"]);
+      const result = suggestSync(parser, ["t"]);
       deepStrictEqual(result, [{ kind: "literal", text: "test" }]);
     });
   });
@@ -283,7 +283,7 @@ describe("suggest function", () => {
     describe("optional", () => {
       it("should delegate to wrapped parser", () => {
         const parser = optional(option("-v", "--verbose"));
-        const result = suggest(parser, ["--v"]);
+        const result = suggestSync(parser, ["--v"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
       });
 
@@ -292,7 +292,7 @@ describe("suggest function", () => {
           verbose: optional(option("-v", "--verbose")),
           output: option("-o", "--output", string()),
         });
-        const result = suggest(parser, ["--o"]);
+        const result = suggestSync(parser, ["--o"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--output" }]);
       });
     });
@@ -300,7 +300,7 @@ describe("suggest function", () => {
     describe("withDefault", () => {
       it("should delegate to wrapped parser", () => {
         const parser = withDefault(option("-p", "--port", integer()), 8080);
-        const result = suggest(parser, ["--p"]);
+        const result = suggestSync(parser, ["--p"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--port" }]);
       });
 
@@ -309,7 +309,7 @@ describe("suggest function", () => {
           option("-u", "--user", string()),
           () => "default-user",
         );
-        const result = suggest(parser, ["--u"]);
+        const result = suggestSync(parser, ["--u"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--user" }]);
       });
     });
@@ -320,7 +320,7 @@ describe("suggest function", () => {
           option("-n", "--number", integer()),
           (n) => n.toString(),
         );
-        const result = suggest(parser, ["--n"]);
+        const result = suggestSync(parser, ["--n"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--number" }]);
       });
 
@@ -329,7 +329,7 @@ describe("suggest function", () => {
           option("-f", "--format", choice(["json", "yaml"])),
           (format) => format.toUpperCase(),
         );
-        const result = suggest(parser, ["-f", "j"]);
+        const result = suggestSync(parser, ["-f", "j"]);
         deepStrictEqual(result, [{ kind: "literal", text: "json" }]);
       });
     });
@@ -337,13 +337,13 @@ describe("suggest function", () => {
     describe("multiple", () => {
       it("should suggest for repeated items", () => {
         const parser = multiple(option("-f", "--file", string()));
-        const result = suggest(parser, ["--f"]);
+        const result = suggestSync(parser, ["--f"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--file" }]);
       });
 
       it("should work with multiple occurrences", () => {
         const parser = multiple(option("-i", "--include", string()));
-        const result = suggest(parser, ["-i", "first.txt", "--i"]);
+        const result = suggestSync(parser, ["-i", "first.txt", "--i"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--include" }]);
       });
     });
@@ -375,19 +375,19 @@ describe("suggest function", () => {
       );
 
       // Test command suggestions
-      const cmdResult = suggest(parser, ["b"]);
+      const cmdResult = suggestSync(parser, ["b"]);
       deepStrictEqual(cmdResult, [{ kind: "literal", text: "build" }]);
 
       // Test options after command
-      const buildResult = suggest(parser, ["build", "--t"]);
+      const buildResult = suggestSync(parser, ["build", "--t"]);
       deepStrictEqual(buildResult, [{ kind: "literal", text: "--target" }]);
 
       // Test value suggestions
-      const targetResult = suggest(parser, ["build", "--target", "d"]);
+      const targetResult = suggestSync(parser, ["build", "--target", "d"]);
       deepStrictEqual(targetResult, [{ kind: "literal", text: "debug" }]);
 
       // Test different subcommand
-      const testResult = suggest(parser, ["test", "--c"]);
+      const testResult = suggestSync(parser, ["test", "--c"]);
       deepStrictEqual(testResult, [{ kind: "literal", text: "--coverage" }]);
     });
 
@@ -411,15 +411,15 @@ describe("suggest function", () => {
       });
 
       // Test top-level suggestions
-      const topResult = suggest(parser, ["--p"]);
+      const topResult = suggestSync(parser, ["--p"]);
       deepStrictEqual(topResult, [{ kind: "literal", text: "--port" }]);
 
       // Test SSL options
-      const sslResult = suggest(parser, ["--c"]);
+      const sslResult = suggestSync(parser, ["--c"]);
       deepStrictEqual(sslResult, [{ kind: "literal", text: "--cert" }]);
 
       // Test database options
-      const dbResult = suggest(parser, ["--db"]);
+      const dbResult = suggestSync(parser, ["--db"]);
       const expectedTexts = dbResult.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["--db-pool", "--db-url"]);
     });
@@ -451,16 +451,16 @@ describe("suggest function", () => {
       );
 
       // Test command suggestions
-      const cmdResult = suggest(parser, ["c"]);
+      const cmdResult = suggestSync(parser, ["c"]);
       deepStrictEqual(cmdResult, [{ kind: "literal", text: "commit" }]);
 
       // Test commit options
-      const commitResult = suggest(parser, ["commit", "--"]);
+      const commitResult = suggestSync(parser, ["commit", "--"]);
       const expectedTexts = commitResult.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["--all", "--amend", "--message"]);
 
       // Test push with remote suggestions
-      const pushResult = suggest(parser, ["push", "o"]);
+      const pushResult = suggestSync(parser, ["push", "o"]);
       deepStrictEqual(pushResult, [{ kind: "literal", text: "origin" }]);
     });
 
@@ -486,12 +486,12 @@ describe("suggest function", () => {
       });
 
       // Test nested command suggestions
-      const installResult = suggest(parser, ["install", "--s"]);
+      const installResult = suggestSync(parser, ["install", "--s"]);
       const expectedTexts = installResult.map((s) => extractText(s)).sort();
       deepStrictEqual(expectedTexts, ["--save", "--save-dev"]);
 
       // Test script suggestions
-      const runResult = suggest(parser, ["run", "t"]);
+      const runResult = suggestSync(parser, ["run", "t"]);
       deepStrictEqual(runResult, [{ kind: "literal", text: "test" }]);
     });
   });
@@ -500,6 +500,7 @@ describe("suggest function", () => {
     // Regression tests for https://github.com/dahlia/optique/issues/55
     it("should only suggest option values when option is expecting a value", () => {
       const remoteParser = {
+        $mode: "sync" as const,
         metavar: "REMOTE" as const,
         parse(input: string) {
           return { success: true as const, value: input };
@@ -518,6 +519,7 @@ describe("suggest function", () => {
       };
 
       const tagParser = {
+        $mode: "sync" as const,
         metavar: "TAG" as const,
         parse(input: string) {
           return { success: true as const, value: input };
@@ -542,7 +544,7 @@ describe("suggest function", () => {
 
       // When "--remote" is the last parsed token and we're completing its value,
       // only remote values should be suggested, not tag values
-      const result = suggest(parser, ["git", "--remote", ""]);
+      const result = suggestSync(parser, ["git", "--remote", ""]);
       const texts = result.map((s) => extractText(s)).sort();
 
       // Expected: only "origin" and "upstream" (remote values)
@@ -552,6 +554,7 @@ describe("suggest function", () => {
 
     it("should suggest both options and positional arguments when not in option value context", () => {
       const remoteParser = {
+        $mode: "sync" as const,
         metavar: "REMOTE" as const,
         parse(input: string) {
           return { success: true as const, value: input };
@@ -570,6 +573,7 @@ describe("suggest function", () => {
       };
 
       const tagParser = {
+        $mode: "sync" as const,
         metavar: "TAG" as const,
         parse(input: string) {
           return { success: true as const, value: input };
@@ -594,7 +598,7 @@ describe("suggest function", () => {
 
       // When completing after a positional argument (not after an option expecting value),
       // both options and positional arguments can be suggested
-      const result = suggest(parser, ["git", ""]);
+      const result = suggestSync(parser, ["git", ""]);
       const texts = result.map((s) => extractText(s)).sort();
 
       // Should include tag values since we're in positional argument context
@@ -603,6 +607,7 @@ describe("suggest function", () => {
 
     it("should only suggest option values for simple case without preceding arguments", () => {
       const formatParser = {
+        $mode: "sync" as const,
         metavar: "FORMAT" as const,
         parse(input: string) {
           return { success: true as const, value: input };
@@ -621,6 +626,7 @@ describe("suggest function", () => {
       };
 
       const fileParser = {
+        $mode: "sync" as const,
         metavar: "FILE" as const,
         parse(input: string) {
           return { success: true as const, value: input };
@@ -644,7 +650,7 @@ describe("suggest function", () => {
       });
 
       // When "--format" is expecting a value, only format values should be suggested
-      const result = suggest(parser, ["--format", ""]);
+      const result = suggestSync(parser, ["--format", ""]);
       const texts = result.map((s) => extractText(s)).sort();
 
       // Expected: only format values, not file values
@@ -655,13 +661,13 @@ describe("suggest function", () => {
   describe("edge cases", () => {
     it("should handle empty buffer gracefully", () => {
       const parser = option("-v", "--verbose");
-      const result = suggest(parser, [""]);
+      const result = suggestSync(parser, [""]);
       deepStrictEqual(result, []);
     });
 
     it("should handle parser with no suggestions", () => {
       const parser = constant("value");
-      const result = suggest(parser, ["anything"]);
+      const result = suggestSync(parser, ["anything"]);
       deepStrictEqual(result, []);
     });
 
@@ -674,7 +680,7 @@ describe("suggest function", () => {
         }),
       });
 
-      const result = suggest(deepParser, ["--d"]);
+      const result = suggestSync(deepParser, ["--d"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--deep" }]);
     });
 
@@ -684,7 +690,7 @@ describe("suggest function", () => {
         output: option("-o", "--output", string()),
       });
 
-      const result = suggest(parser, ["-r", "--o"]);
+      const result = suggestSync(parser, ["-r", "--o"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--output" }]);
     });
 
@@ -694,7 +700,7 @@ describe("suggest function", () => {
       });
 
       // Test with invalid option-like prefix
-      const result = suggest(parser, ["---invalid"]);
+      const result = suggestSync(parser, ["---invalid"]);
       deepStrictEqual(result, []);
     });
   });

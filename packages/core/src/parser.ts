@@ -4,6 +4,54 @@ import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
 /**
+ * Represents the execution mode for parsers.
+ *
+ * - `"sync"`: Synchronous execution where methods return values directly.
+ * - `"async"`: Asynchronous execution where methods return Promises or
+ *   AsyncIterables.
+ *
+ * @since 0.9.0
+ */
+export type Mode = "sync" | "async";
+
+/**
+ * Wraps a value type based on the execution mode.
+ *
+ * - In sync mode: Returns `T` directly.
+ * - In async mode: Returns `Promise<T>`.
+ *
+ * @template M The execution mode.
+ * @template T The value type to wrap.
+ * @since 0.9.0
+ */
+export type ModeValue<M extends Mode, T> = M extends "async" ? Promise<T> : T;
+
+/**
+ * Wraps an iterable type based on the execution mode.
+ *
+ * - In sync mode: Returns `Iterable<T>`.
+ * - In async mode: Returns `AsyncIterable<T>`.
+ *
+ * @template M The execution mode.
+ * @template T The element type.
+ * @since 0.9.0
+ */
+export type ModeIterable<M extends Mode, T> = M extends "async"
+  ? AsyncIterable<T>
+  : Iterable<T>;
+
+/**
+ * Combines multiple modes into a single mode.
+ * If any mode is `"async"`, the result is `"async"`; otherwise `"sync"`.
+ *
+ * @template T A tuple of Mode types.
+ * @since 0.9.0
+ */
+export type CombineModes<T extends readonly Mode[]> = "async" extends T[number]
+  ? "async"
+  : "sync";
+
+/**
  * Represents the state passed to getDocFragments.
  * Can be either the actual parser state or an explicit indicator
  * that no state is available.
@@ -16,10 +64,16 @@ export type DocState<TState> =
 
 /**
  * Parser interface for command-line argument parsing.
+ * @template M The execution mode of the parser (`"sync"` or `"async"`).
  * @template TValue The type of the value returned by the parser.
  * @template TState The type of the state used during parsing.
+ * @since 0.9.0 Added the `M` type parameter for sync/async mode support.
  */
-export interface Parser<TValue, TState> {
+export interface Parser<
+  M extends Mode = "sync",
+  TValue = unknown,
+  TState = unknown,
+> {
   /**
    * A type tag for the result value of this parser, used for type inference.
    * Usually this is an empty array at runtime, but it does not matter
@@ -35,6 +89,16 @@ export interface Parser<TValue, TState> {
    * @internal
    */
   readonly $stateType: readonly TState[];
+
+  /**
+   * The execution mode of this parser.
+   *
+   * - `"sync"`: All methods return values directly.
+   * - `"async"`: Methods return Promises or AsyncIterables.
+   *
+   * @since 0.9.0
+   */
+  readonly $mode: M;
 
   /**
    * The priority of this parser, which determines the order in which
@@ -61,8 +125,9 @@ export interface Parser<TValue, TState> {
    * @param context The context of the parser, which includes the input buffer
    *                and the current state.
    * @returns A result object indicating success or failure.
+   *          In async mode, returns a Promise that resolves to the result.
    */
-  parse(context: ParserContext<TState>): ParserResult<TState>;
+  parse(context: ParserContext<TState>): ModeValue<M, ParserResult<TState>>;
 
   /**
    * Transforms a {@link TState} into a {@link TValue}, if applicable.
@@ -75,8 +140,9 @@ export interface Parser<TValue, TState> {
    *          the transformation.  If successful, it should contain
    *          the parsed value of type {@link TValue}.  If not applicable,
    *          it should return an error message.
+   *          In async mode, returns a Promise that resolves to the result.
    */
-  complete(state: TState): ValueParserResult<TValue>;
+  complete(state: TState): ModeValue<M, ValueParserResult<TValue>>;
 
   /**
    * Generates next-step suggestions based on the current context
@@ -88,9 +154,13 @@ export interface Parser<TValue, TState> {
    *               Can be an empty string if no prefix is provided.
    * @returns An iterable of {@link Suggestion} objects, each containing
    *          a suggestion text and an optional description.
+   *          In async mode, returns an AsyncIterable.
    * @since 0.6.0
    */
-  suggest(context: ParserContext<TState>, prefix: string): Iterable<Suggestion>;
+  suggest(
+    context: ParserContext<TState>,
+    prefix: string,
+  ): ModeIterable<M, Suggestion>;
 
   /**
    * Generates a documentation fragment for this parser, which can be used
@@ -233,8 +303,15 @@ export type ParserResult<TState> =
  * Infers the result value type of a {@link Parser}.
  * @template T The {@link Parser} to infer the result value type from.
  */
-export type InferValue<T extends Parser<unknown, unknown>> =
+export type InferValue<T extends Parser<Mode, unknown, unknown>> =
   T["$valueType"][number];
+
+/**
+ * Infers the execution mode of a {@link Parser}.
+ * @template T The {@link Parser} to infer the execution mode from.
+ * @since 0.9.0
+ */
+export type InferMode<T extends Parser<Mode, unknown, unknown>> = T["$mode"];
 
 /**
  * The result type of a whole parser operation, which can either be a successful
@@ -269,18 +346,24 @@ export type Result<T> =
  * Parses an array of command-line arguments using the provided combined parser.
  * This function processes the input arguments, applying the parser to each
  * argument until all arguments are consumed or an error occurs.
+ *
+ * This function only accepts synchronous parsers. For asynchronous parsers,
+ * use {@link parseAsync}.
+ *
  * @template T The type of the value produced by the parser.
  * @param parser The combined {@link Parser} to use for parsing the input
- *               arguments.
+ *               arguments.  Must be a synchronous parser.
  * @param args The array of command-line arguments to parse.  Usually this is
  *             `process.argv.slice(2)` in Node.js or `Deno.args` in Deno.
  * @returns A {@link Result} object indicating whether the parsing was
  *          successful or not.  If successful, it contains the parsed value of
  *          type `T`.  If not, it contains an error message describing the
  *          failure.
+ * @since 0.9.0 Renamed from the original `parse` function which now delegates
+ *              to this for sync parsers.
  */
-export function parse<T>(
-  parser: Parser<T, unknown>,
+export function parseSync<T>(
+  parser: Parser<"sync", T, unknown>,
   args: readonly string[],
 ): Result<T> {
   let context: ParserContext<unknown> = {
@@ -317,11 +400,103 @@ export function parse<T>(
 }
 
 /**
+ * Parses an array of command-line arguments using the provided combined parser.
+ * This function processes the input arguments, applying the parser to each
+ * argument until all arguments are consumed or an error occurs.
+ *
+ * This function accepts any parser (sync or async) and always returns a Promise.
+ * For synchronous parsing with sync parsers, use {@link parseSync} instead.
+ *
+ * @template T The type of the value produced by the parser.
+ * @param parser The combined {@link Parser} to use for parsing the input
+ *               arguments.
+ * @param args The array of command-line arguments to parse.  Usually this is
+ *             `process.argv.slice(2)` in Node.js or `Deno.args` in Deno.
+ * @returns A Promise that resolves to a {@link Result} object indicating
+ *          whether the parsing was successful or not.
+ * @since 0.9.0
+ */
+export async function parseAsync<T>(
+  parser: Parser<Mode, T, unknown>,
+  args: readonly string[],
+): Promise<Result<T>> {
+  let context: ParserContext<unknown> = {
+    buffer: args,
+    optionsTerminated: false,
+    state: parser.initialState,
+    usage: parser.usage,
+  };
+  do {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+
+    // If no progress was made (buffer completely unchanged), this indicates
+    // a potential infinite loop where the parser succeeds but doesn't consume input
+    if (
+      context.buffer.length > 0 &&
+      context.buffer.length === previousBuffer.length &&
+      context.buffer.every((item, i) => item === previousBuffer[i])
+    ) {
+      return {
+        success: false,
+        error: message`Unexpected option or argument: ${context.buffer[0]}.`,
+      };
+    }
+  } while (context.buffer.length > 0);
+  const endResult = await parser.complete(context.state);
+  return endResult.success
+    ? { success: true, value: endResult.value }
+    : { success: false, error: endResult.error };
+}
+
+/**
+ * Parses an array of command-line arguments using the provided combined parser.
+ * This function processes the input arguments, applying the parser to each
+ * argument until all arguments are consumed or an error occurs.
+ *
+ * The return type depends on the parser's mode:
+ * - Sync parsers return `Result<T>` directly.
+ * - Async parsers return `Promise<Result<T>>`.
+ *
+ * For explicit control, use {@link parseSync} or {@link parseAsync}.
+ *
+ * @template M The execution mode of the parser.
+ * @template T The type of the value produced by the parser.
+ * @param parser The combined {@link Parser} to use for parsing the input
+ *               arguments.
+ * @param args The array of command-line arguments to parse.  Usually this is
+ *             `process.argv.slice(2)` in Node.js or `Deno.args` in Deno.
+ * @returns A {@link Result} object (for sync) or Promise thereof (for async)
+ *          indicating whether the parsing was successful or not.
+ */
+export function parse<M extends Mode, T>(
+  parser: Parser<M, T, unknown>,
+  args: readonly string[],
+): ModeValue<M, Result<T>> {
+  if (parser.$mode === "async") {
+    return parseAsync(parser, args) as ModeValue<M, Result<T>>;
+  }
+  return parseSync(
+    parser as Parser<"sync", T, unknown>,
+    args,
+  ) as ModeValue<M, Result<T>>;
+}
+
+/**
  * Generates command-line suggestions based on current parsing state.
  * This function processes the input arguments up to the last argument,
  * then calls the parser's suggest method with the remaining prefix.
+ *
+ * This function only accepts synchronous parsers. For asynchronous parsers,
+ * use {@link suggestAsync}.
+ *
  * @template T The type of the value produced by the parser.
  * @param parser The {@link Parser} to use for generating suggestions.
+ *               Must be a synchronous parser.
  * @param args The array of command-line arguments including the partial
  *             argument to complete.  The last element is treated as
  *             the prefix for suggestions.
@@ -335,17 +510,18 @@ export function parse<T>(
  * });
  *
  * // Get suggestions for options starting with "--"
- * const suggestions = suggest(parser, ["--"]);
+ * const suggestions = suggestSync(parser, ["--"]);
  * // Returns: [{ text: "--verbose" }, { text: "--format" }]
  *
  * // Get suggestions after parsing some arguments
- * const suggestions2 = suggest(parser, ["-v", "--format="]);
+ * const suggestions2 = suggestSync(parser, ["-v", "--format="]);
  * // Returns: [{ text: "--format=json" }, { text: "--format=yaml" }]
  * ```
  * @since 0.6.0
+ * @since 0.9.0 Renamed from the original `suggest` function.
  */
-export function suggest<T>(
-  parser: Parser<T, unknown>,
+export function suggestSync<T>(
+  parser: Parser<"sync", T, unknown>,
   args: readonly [string, ...readonly string[]],
 ): readonly Suggestion[] {
   const allButLast = args.slice(0, -1);
@@ -381,6 +557,105 @@ export function suggest<T>(
 
   // Get suggestions from the parser with the prefix
   return Array.from(parser.suggest(context, prefix));
+}
+
+/**
+ * Generates command-line suggestions based on current parsing state.
+ * This function processes the input arguments up to the last argument,
+ * then calls the parser's suggest method with the remaining prefix.
+ *
+ * This function accepts any parser (sync or async) and always returns a Promise.
+ * For synchronous suggestion generation with sync parsers, use
+ * {@link suggestSync} instead.
+ *
+ * @template T The type of the value produced by the parser.
+ * @param parser The {@link Parser} to use for generating suggestions.
+ * @param args The array of command-line arguments including the partial
+ *             argument to complete.  The last element is treated as
+ *             the prefix for suggestions.
+ * @returns A Promise that resolves to an array of {@link Suggestion} objects
+ *          containing completion candidates.
+ * @since 0.9.0
+ */
+export async function suggestAsync<T>(
+  parser: Parser<Mode, T, unknown>,
+  args: readonly [string, ...readonly string[]],
+): Promise<readonly Suggestion[]> {
+  const allButLast = args.slice(0, -1);
+  const prefix = args[args.length - 1];
+
+  let context: ParserContext<unknown> = {
+    buffer: allButLast,
+    optionsTerminated: false,
+    state: parser.initialState,
+    usage: parser.usage,
+  };
+
+  // Parse up to the prefix
+  while (context.buffer.length > 0) {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      // If parsing fails, we might still be able to provide suggestions
+      // based on the current state. Try to get suggestions from the parser.
+      const suggestions: Suggestion[] = [];
+      for await (const suggestion of parser.suggest(context, prefix)) {
+        suggestions.push(suggestion);
+      }
+      return suggestions;
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+
+    // Check for infinite loop (same as in parse function)
+    if (
+      context.buffer.length > 0 &&
+      context.buffer.length === previousBuffer.length &&
+      context.buffer.every((item, i) => item === previousBuffer[i])
+    ) {
+      return [];
+    }
+  }
+
+  // Get suggestions from the parser with the prefix
+  const suggestions: Suggestion[] = [];
+  for await (const suggestion of parser.suggest(context, prefix)) {
+    suggestions.push(suggestion);
+  }
+  return suggestions;
+}
+
+/**
+ * Generates command-line suggestions based on current parsing state.
+ * This function processes the input arguments up to the last argument,
+ * then calls the parser's suggest method with the remaining prefix.
+ *
+ * The return type depends on the parser's mode:
+ * - Sync parsers return `readonly Suggestion[]` directly.
+ * - Async parsers return `Promise<readonly Suggestion[]>`.
+ *
+ * For explicit control, use {@link suggestSync} or {@link suggestAsync}.
+ *
+ * @template M The execution mode of the parser.
+ * @template T The type of the value produced by the parser.
+ * @param parser The {@link Parser} to use for generating suggestions.
+ * @param args The array of command-line arguments including the partial
+ *             argument to complete.  The last element is treated as
+ *             the prefix for suggestions.
+ * @returns An array of {@link Suggestion} objects (for sync) or Promise thereof
+ *          (for async) containing completion candidates.
+ * @since 0.6.0
+ */
+export function suggest<M extends Mode, T>(
+  parser: Parser<M, T, unknown>,
+  args: readonly [string, ...readonly string[]],
+): ModeValue<M, readonly Suggestion[]> {
+  if (parser.$mode === "async") {
+    return suggestAsync(parser, args) as ModeValue<M, readonly Suggestion[]>;
+  }
+  return suggestSync(
+    parser as Parser<"sync", T, unknown>,
+    args,
+  ) as ModeValue<M, readonly Suggestion[]>;
 }
 
 /**
@@ -453,7 +728,7 @@ function findCommandInExclusive(
  * ```
  */
 export function getDocPage(
-  parser: Parser<unknown, unknown>,
+  parser: Parser<"sync", unknown, unknown>,
   args: readonly string[] = [],
 ): DocPage | undefined {
   let context: ParserContext<unknown> = {

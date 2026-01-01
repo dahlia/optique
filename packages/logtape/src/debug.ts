@@ -79,7 +79,7 @@ export interface DebugOptions {
  */
 export function debug(
   options: DebugOptions = {},
-): Parser<LogLevel, unknown> {
+): Parser<"sync", LogLevel, unknown> {
   const short = (options.short ?? "-d") as OptionName;
   const long = (options.long ?? "--debug") as OptionName;
   const debugLevel = options.debugLevel ?? "debug";

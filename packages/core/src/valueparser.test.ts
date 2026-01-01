@@ -21,13 +21,15 @@ describe("isValueParser", () => {
 
   it("should return true for different types of value parsers", () => {
     const stringParser = {
+      $mode: "sync" as const,
       metavar: "STRING",
-      parse: () => ({ success: true, value: "test" }),
+      parse: () => ({ success: true as const, value: "test" }),
       format: (v: string) => v,
     };
     const numberParser = {
+      $mode: "sync" as const,
       metavar: "NUMBER",
-      parse: () => ({ success: true, value: 42 }),
+      parse: () => ({ success: true as const, value: 42 }),
       format: (v: number) => v.toString(),
     };
 
