@@ -6,6 +6,14 @@ Version 0.7.8
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `object()` parser ignoring symbol keys.  Previously, when using
+    symbol keys in the parser definition (e.g., `object({ [sym]: option(...) })`),
+    the symbol-keyed parsers were silently ignored because `Object.entries()`
+    and `for...in` loops do not enumerate symbol properties.  Now, the parser
+    correctly handles both string and symbol keys by using `Reflect.ownKeys()`.
+
 
 Version 0.7.7
 -------------
@@ -386,6 +394,20 @@ to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
 
 [Zod]: https://zod.dev/
 [#39]: https://github.com/dahlia/optique/issues/39
+
+
+Version 0.6.10
+--------------
+
+Released on January 1, 2026.
+
+### @optique/core
+
+ -  Fixed `object()` parser ignoring symbol keys.  Previously, when using
+    symbol keys in the parser definition (e.g., `object({ [sym]: option(...) })`),
+    the symbol-keyed parsers were silently ignored because `Object.entries()`
+    and `for...in` loops do not enumerate symbol properties.  Now, the parser
+    correctly handles both string and symbol keys by using `Reflect.ownKeys()`.
 
 
 Version 0.6.9

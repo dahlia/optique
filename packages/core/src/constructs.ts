@@ -1581,25 +1581,26 @@ export function object<
     parsers = labelOrParsers;
     options = (maybeParsersOrOptions as ObjectOptions) ?? {};
   }
-  const parserPairs = Object.entries(parsers);
+  const parserKeys = Reflect.ownKeys(parsers) as (keyof T)[];
+  const parserPairs = parserKeys.map((k) => [k, parsers[k]] as const);
   parserPairs.sort(([_, parserA], [__, parserB]) =>
     parserB.priority - parserA.priority
   );
+  const initialState: Record<string | symbol, unknown> = {};
+  for (const key of parserKeys) {
+    initialState[key as string | symbol] = parsers[key].initialState;
+  }
 
   // Analyze context once for error message generation
-  const noMatchContext = analyzeNoMatchContext(Object.values(parsers));
-
+  const noMatchContext = analyzeNoMatchContext(
+    parserKeys.map((k) => parsers[k]),
+  );
   return {
     $valueType: [],
     $stateType: [],
-    priority: Math.max(...Object.values(parsers).map((p) => p.priority)),
+    priority: Math.max(...parserKeys.map((k) => parsers[k].priority)),
     usage: parserPairs.flatMap(([_, p]) => p.usage),
-    initialState: Object.fromEntries(
-      Object.entries(parsers).map(([key, parser]) => [
-        key,
-        parser.initialState,
-      ]),
-    ) as {
+    initialState: initialState as {
       readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
         ? U3
         : never;
@@ -1607,7 +1608,7 @@ export function object<
     parse(context) {
       // Check for duplicate option names unless explicitly allowed
       if (!options.allowDuplicates) {
-        const optionNameSources = new Map<string, string[]>();
+        const optionNameSources = new Map<string, (string | symbol)[]>();
 
         for (const [field, parser] of parserPairs) {
           const names = extractOptionNames(parser.usage);
@@ -1615,7 +1616,7 @@ export function object<
             if (!optionNameSources.has(name)) {
               optionNameSources.set(name, []);
             }
-            optionNameSources.get(name)!.push(field);
+            optionNameSources.get(name)!.push(field as string | symbol);
           }
         }
 
@@ -1630,7 +1631,11 @@ export function object<
                   name,
                 )
               } found in fields: ${
-                values(sources)
+                values(
+                  sources.map((s) =>
+                    typeof s === "symbol" ? s.description ?? s.toString() : s
+                  ),
+                )
               }. Each option name must be unique within a parser combinator.`,
             };
           }
@@ -1751,11 +1756,15 @@ export function object<
       const result: { [K in keyof T]: T[K]["$valueType"][number] } =
         // deno-lint-ignore no-explicit-any
         {} as any;
-      for (const field in state) {
-        if (!(field in parsers)) continue;
-        const valueResult = parsers[field].complete(state[field]);
-        if (valueResult.success) result[field] = valueResult.value;
-        else return { success: false, error: valueResult.error };
+      for (const field of parserKeys) {
+        const valueResult = parsers[field].complete(
+          (state as Record<string | symbol, unknown>)[field as string | symbol],
+        );
+        if (valueResult.success) {
+          (result as Record<string | symbol, unknown>)[
+            field as string | symbol
+          ] = valueResult.value;
+        } else return { success: false, error: valueResult.error };
       }
       return { success: true, value: result };
     },
