@@ -191,6 +191,8 @@ export function optional<M extends Mode, TValue, TState>(
         : { kind: "available", state: state.state[0] };
       return syncParser.getDocFragments(innerState, defaultValue);
     },
+    // Type assertion needed because TypeScript cannot verify ModeValue<M, T>
+    // when M is a generic type parameter. Runtime behavior is correct via isAsync.
   } as unknown as Parser<M, TValue | undefined, [TState] | undefined>;
 }
 
@@ -434,6 +436,8 @@ export function withDefault<
 
       return fragments;
     },
+    // Type assertion needed because TypeScript cannot verify ModeValue<M, T>
+    // when M is a generic type parameter. Runtime behavior is correct via isAsync.
   } as unknown as Parser<M, TValue | TDefault, [TState] | undefined>;
 }
 
@@ -510,6 +514,8 @@ export function map<M extends Mode, T, U, TState>(
     initialState: parser.initialState,
     parse(context: ParserContext<TState>) {
       if (isAsync) {
+        // Cast needed: isAsync means parser.parse() returns Promise, but
+        // TypeScript sees the declared return type as ParserResult<TState>
         return parser.parse(context) as unknown as ParserResult<TState>;
       }
       return syncParser.parse(context);
@@ -522,7 +528,8 @@ export function map<M extends Mode, T, U, TState>(
         }
         return { success: false, error: innerResult.error };
       }
-      // Async complete
+      // Async complete: returns Promise but declared return type is sync.
+      // Cast needed because TypeScript cannot narrow based on isAsync flag.
       return (async () => {
         const innerResult = await parser.complete(state);
         if (innerResult.success) {
@@ -533,6 +540,7 @@ export function map<M extends Mode, T, U, TState>(
     },
     suggest(context, prefix) {
       if (isAsync) {
+        // Cast needed: returns AsyncIterable but declared type is Iterable
         return suggestAsync(context, prefix) as unknown as Iterable<Suggestion>;
       }
       return suggestSync(context, prefix);
@@ -698,6 +706,8 @@ export function multiple<M extends Mode, TValue, TState>(
     initialState: [] as readonly TState[],
     parse(context: ParserContext<MultipleState>) {
       if (isAsync) {
+        // Cast needed: isAsync means parseAsync() returns Promise, but
+        // TypeScript sees the declared return type as ParseResult
         return parseAsync(context) as unknown as ParseResult;
       }
       return parseSync(context);
@@ -771,6 +781,8 @@ export function multiple<M extends Mode, TValue, TState>(
           : undefined,
       );
     },
+    // Type assertion needed because TypeScript cannot verify ModeValue<M, T>
+    // when M is a generic type parameter. Runtime behavior is correct via isAsync.
   } as unknown as Parser<M, readonly TValue[], readonly TState[]>;
 
   // Helper function for validating multiple result count

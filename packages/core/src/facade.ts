@@ -7,7 +7,7 @@ import {
   zsh,
 } from "./completion.ts";
 import { longestMatch, object } from "./constructs.ts";
-import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
+import { type DocPage, formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import {
   commandLine,
   formatMessage,
@@ -1050,7 +1050,7 @@ export function runParser<
   options: RunOptions<THelp, TError> = {},
 ): ModeValue<InferMode<TParser>, InferValue<TParser>> {
   // Extract all options first
-  let {
+  const {
     colors,
     maxWidth,
     showDefault,
@@ -1232,9 +1232,11 @@ export function runParser<
   // Helper function to handle parsed result
   // Return type is InferValue<TParser> but callbacks may return THelp/TError
   // which are typically `never` (via process.exit) or a compatible type
+  // For async parsers, this may return a Promise when help/error handling
+  // requires awaiting getDocPage.
   const handleResult = (
     result: Result<unknown>,
-  ): InferValue<TParser> => {
+  ): InferValue<TParser> | Promise<InferValue<TParser>> => {
     const classified = classifyResult(result, args);
 
     switch (classified.type) {
@@ -1326,91 +1328,109 @@ export function runParser<
           }
         }
 
-        const doc = getDocPage(
-          helpGeneratorParser as Parser<"sync", unknown, unknown>,
-          classified.commands,
-        );
-        if (doc != null) {
-          // Augment the doc page with provided options
-          // But if showing help for a specific meta-command, don't override its description
-          const isMetaCommandHelp = (completionName === "singular" ||
-              completionName === "both"
-            ? requestedCommand === "completion"
-            : false) ||
-            (completionName === "plural" || completionName === "both"
-              ? requestedCommand === "completions"
-              : false) ||
-            requestedCommand === "help" ||
-            requestedCommand === "version";
-          const augmentedDoc = {
-            ...doc,
-            brief: !isMetaCommandHelp ? (brief ?? doc.brief) : doc.brief,
-            description: !isMetaCommandHelp
-              ? (description ?? doc.description)
-              : doc.description,
-            footer: !isMetaCommandHelp ? (footer ?? doc.footer) : doc.footer,
-          };
-          stdout(formatDocPage(programName, augmentedDoc, {
-            colors,
-            maxWidth,
-            showDefault,
-          }));
-        }
-        try {
-          return onHelp(0);
-        } catch {
-          return (onHelp as (() => THelp))();
-        }
-      }
-
-      case "error": {
-        // Error handling
-        if (aboveError === "help") {
-          const doc = getDocPage(
-            (args.length < 1 ? augmentedParser : parser) as Parser<
-              "sync",
-              unknown,
-              unknown
-            >,
-            args,
-          );
-          if (doc == null) aboveError = "usage";
-          else {
+        // Helper function to display help and return
+        const displayHelp = (doc: DocPage | undefined): InferValue<TParser> => {
+          if (doc != null) {
             // Augment the doc page with provided options
+            // But if showing help for a specific meta-command, don't override its description
+            const isMetaCommandHelp = (completionName === "singular" ||
+                completionName === "both"
+              ? requestedCommand === "completion"
+              : false) ||
+              (completionName === "plural" || completionName === "both"
+                ? requestedCommand === "completions"
+                : false) ||
+              requestedCommand === "help" ||
+              requestedCommand === "version";
             const augmentedDoc = {
               ...doc,
-              brief: brief ?? doc.brief,
-              description: description ?? doc.description,
-              footer: footer ?? doc.footer,
+              brief: !isMetaCommandHelp ? (brief ?? doc.brief) : doc.brief,
+              description: !isMetaCommandHelp
+                ? (description ?? doc.description)
+                : doc.description,
+              footer: !isMetaCommandHelp ? (footer ?? doc.footer) : doc.footer,
             };
-            stderr(formatDocPage(programName, augmentedDoc, {
+            stdout(formatDocPage(programName, augmentedDoc, {
               colors,
               maxWidth,
               showDefault,
             }));
           }
+          try {
+            return onHelp(0);
+          } catch {
+            return (onHelp as (() => THelp))();
+          }
+        };
+
+        // Get doc page - may return Promise for async parsers
+        const docOrPromise = getDocPage(
+          helpGeneratorParser,
+          classified.commands,
+        );
+        if (docOrPromise instanceof Promise) {
+          return docOrPromise.then(displayHelp);
         }
-        if (aboveError === "usage") {
-          stderr(
-            `Usage: ${
-              indentLines(
-                formatUsage(programName, augmentedParser.usage, {
-                  colors,
-                  maxWidth: maxWidth == null ? undefined : maxWidth - 7,
-                  expandCommands: true,
-                }),
-                7,
-              )
-            }`,
-          );
+        return displayHelp(docOrPromise);
+      }
+
+      case "error": {
+        // Helper function to handle error display after doc is resolved
+        const displayError = (
+          doc: DocPage | undefined,
+          currentAboveError: "help" | "usage" | "none",
+        ): InferValue<TParser> => {
+          let effectiveAboveError = currentAboveError;
+          if (effectiveAboveError === "help") {
+            if (doc == null) effectiveAboveError = "usage";
+            else {
+              // Augment the doc page with provided options
+              const augmentedDoc = {
+                ...doc,
+                brief: brief ?? doc.brief,
+                description: description ?? doc.description,
+                footer: footer ?? doc.footer,
+              };
+              stderr(formatDocPage(programName, augmentedDoc, {
+                colors,
+                maxWidth,
+                showDefault,
+              }));
+            }
+          }
+          if (effectiveAboveError === "usage") {
+            stderr(
+              `Usage: ${
+                indentLines(
+                  formatUsage(programName, augmentedParser.usage, {
+                    colors,
+                    maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                    expandCommands: true,
+                  }),
+                  7,
+                )
+              }`,
+            );
+          }
+          // classified.error is now typed as Message
+          const errorMessage = formatMessage(classified.error, {
+            colors,
+            quotes: !colors,
+          });
+          stderr(`Error: ${errorMessage}`);
+          return onError(1);
+        };
+
+        // Error handling
+        if (aboveError === "help") {
+          const parserForDoc = args.length < 1 ? augmentedParser : parser;
+          const docOrPromise = getDocPage(parserForDoc, args);
+          if (docOrPromise instanceof Promise) {
+            return docOrPromise.then((doc) => displayError(doc, aboveError));
+          }
+          return displayError(docOrPromise, aboveError);
         }
-        // classified.error is now typed as Message
-        const errorMessage = formatMessage(classified.error, {
-          colors,
-          quotes: !colors,
-        });
-        stderr(`Error: ${errorMessage}`);
-        return onError(1);
+        return displayError(undefined, aboveError);
       }
 
       default:
@@ -1419,14 +1439,15 @@ export function runParser<
     }
   };
 
-  // Check parser mode and use appropriate parsing function
+  // Check parser mode and use appropriate parsing function.
+  // Type assertions are needed because TypeScript cannot verify that
+  // ModeValue<InferMode<TParser>, T> resolves to Promise<T> when $mode is "async"
+  // or to T when $mode is "sync". The runtime behavior is correct.
   if (parser.$mode === "async") {
-    // For async parsers, return a Promise
     return parseAsync(augmentedParser, args).then(
       handleResult,
     ) as unknown as ModeValue<InferMode<TParser>, InferValue<TParser>>;
   } else {
-    // For sync parsers, use synchronous parsing
     const result = parseSync(
       augmentedParser as Parser<"sync", unknown, unknown>,
       args,
@@ -1436,6 +1457,67 @@ export function runParser<
       InferValue<TParser>
     >;
   }
+}
+
+/**
+ * Runs a synchronous command-line parser with the given options.
+ *
+ * This is a type-safe version of {@link runParser} that only accepts sync
+ * parsers. Use this when you know your parser is sync-only to get direct
+ * return values without Promise wrappers.
+ *
+ * @template TParser The sync parser type being executed.
+ * @template THelp The return type of the onHelp callback.
+ * @template TError The return type of the onError callback.
+ * @param parser The synchronous command-line parser to execute.
+ * @param programName The name of the program for help messages.
+ * @param args The command-line arguments to parse.
+ * @param options Configuration options for customizing behavior.
+ * @returns The parsed result if successful.
+ * @since 0.9.0
+ */
+export function runParserSync<
+  TParser extends Parser<"sync", unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): InferValue<TParser> {
+  return runParser(parser, programName, args, options);
+}
+
+/**
+ * Runs any command-line parser asynchronously with the given options.
+ *
+ * This function accepts parsers of any mode (sync or async) and always
+ * returns a Promise. Use this when working with parsers that may contain
+ * async value parsers.
+ *
+ * @template TParser The parser type being executed.
+ * @template THelp The return type of the onHelp callback.
+ * @template TError The return type of the onError callback.
+ * @param parser The command-line parser to execute.
+ * @param programName The name of the program for help messages.
+ * @param args The command-line arguments to parse.
+ * @param options Configuration options for customizing behavior.
+ * @returns A Promise of the parsed result if successful.
+ * @since 0.9.0
+ */
+export function runParserAsync<
+  TParser extends Parser<Mode, unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): Promise<InferValue<TParser>> {
+  const result = runParser(parser, programName, args, options);
+  return Promise.resolve(result) as Promise<InferValue<TParser>>;
 }
 
 /**

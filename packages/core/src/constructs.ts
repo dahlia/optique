@@ -2603,6 +2603,8 @@ export function object<
       sections.push(section);
       return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
     },
+    // Type assertion needed because TypeScript cannot verify the combined mode
+    // of multiple parsers at compile time. Runtime behavior is correct via isAsync.
   } as unknown as Parser<
     Mode,
     { readonly [K in keyof T]: unknown },
@@ -3093,6 +3095,8 @@ export function tuple<
         ? `tuple(${JSON.stringify(label)}, ${parsersStr})`
         : `tuple(${parsersStr})`;
     },
+    // Type assertion needed because TypeScript cannot verify the combined mode
+    // of multiple parsers at compile time. Runtime behavior is correct via isAsync.
   } as unknown as Parser<
     Mode,
     { readonly [K in keyof T]: unknown },

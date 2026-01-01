@@ -18,7 +18,7 @@ import {
 } from "./constructs.ts";
 import { map, multiple, optional, withDefault } from "./modifiers.ts";
 import { formatDocPage } from "./doc.ts";
-import { runParser } from "./facade.ts";
+import { runParser, runParserAsync, runParserSync } from "./facade.ts";
 import { message } from "./message.ts";
 import {
   getDocPage,
@@ -7452,5 +7452,193 @@ describe("getDocPage with Mode parameter", () => {
 
     const doc = await docPromise;
     assert.ok(doc !== undefined);
+  });
+});
+
+// =============================================================================
+// runParserSync and runParserAsync Tests
+// =============================================================================
+
+describe("runParserSync", () => {
+  it("should run sync parser and return directly", () => {
+    const parser = object({
+      name: option("-n", "--name", string()),
+      verbose: flag("-v", "--verbose"),
+    });
+
+    const result = runParserSync(parser, "test", ["-n", "hello", "-v"]);
+    assert.deepEqual(result, { name: "hello", verbose: true });
+  });
+
+  it("should handle help option", () => {
+    const parser = object({
+      name: option("-n", "--name", string()),
+    });
+
+    let helpShown = false;
+    runParserSync(parser, "test", ["--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+        },
+      },
+      stdout: () => {},
+    });
+    assert.ok(helpShown);
+  });
+
+  it("should handle parse errors", () => {
+    const parser = object({
+      count: option("-c", "--count", integer()),
+    });
+
+    let errorHandled = false;
+    runParserSync(parser, "test", ["--count", "not-a-number"], {
+      onError: () => {
+        errorHandled = true;
+      },
+      stderr: () => {},
+    });
+    assert.ok(errorHandled);
+  });
+
+  it("should work with nested sync parsers", () => {
+    const parser = merge(
+      object({ verbose: flag("-v") }),
+      object({ name: option("-n", string()) }),
+    );
+
+    const result = runParserSync(parser, "test", ["-v", "-n", "test"]);
+    assert.deepEqual(result, { verbose: true, name: "test" });
+  });
+});
+
+describe("runParserAsync", () => {
+  it("should run sync parser and return Promise", async () => {
+    const parser = object({
+      name: option("-n", "--name", string()),
+    });
+
+    const resultPromise = runParserAsync(parser, "test", ["-n", "hello"]);
+    assert.ok(resultPromise instanceof Promise);
+
+    const result = await resultPromise;
+    assert.deepEqual(result, { name: "hello" });
+  });
+
+  it("should run async parser and return Promise", async () => {
+    const parser = object({
+      name: option("-n", "--name", asyncString()),
+      verbose: flag("-v"),
+    });
+
+    const result = await runParserAsync(parser, "test", [
+      "-n",
+      "async-test",
+      "-v",
+    ]);
+    assert.deepEqual(result, { name: "ASYNC-TEST", verbose: true });
+  });
+
+  it("should handle async parser with help", async () => {
+    const parser = object({
+      name: option("-n", asyncString()),
+    });
+
+    let helpShown = false;
+    await runParserAsync(parser, "test", ["--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+        },
+      },
+      stdout: () => {},
+    });
+    assert.ok(helpShown);
+  });
+
+  it("should handle async parser errors", async () => {
+    const failingParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "FAIL",
+      parse(_input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({
+          success: false,
+          error: message`Always fails.`,
+        });
+      },
+      format: (v) => v,
+    };
+
+    const parser = object({
+      value: option("-v", "--value", failingParser),
+    });
+
+    let errorHandled = false;
+    await runParserAsync(parser, "test", ["--value", "test"], {
+      onError: () => {
+        errorHandled = true;
+      },
+      stderr: () => {},
+    });
+    assert.ok(errorHandled);
+  });
+
+  it("should handle mixed sync/async parsers", async () => {
+    const parser = object({
+      syncName: option("-s", "--sync", string()),
+      asyncName: option("-a", "--async", asyncString()),
+      count: option("-c", "--count", integer()),
+    });
+
+    const result = await runParserAsync(
+      parser,
+      "test",
+      ["-s", "sync-val", "-a", "async-val", "-c", "42"],
+    );
+    assert.deepEqual(result, {
+      syncName: "sync-val",
+      asyncName: "ASYNC-VAL",
+      count: 42,
+    });
+  });
+
+  it("should handle command with async subparser", async () => {
+    const addCmd = command(
+      "add",
+      object({
+        name: argument(asyncString()),
+      }),
+    );
+
+    const result = await runParserAsync(addCmd, "test", ["add", "item-name"]);
+    assert.deepEqual(result, { name: "ITEM-NAME" });
+  });
+});
+
+describe("runParser with Mode parameter", () => {
+  it("should return directly for sync parser", () => {
+    const parser = object({
+      name: option("-n", string()),
+    });
+
+    const result = runParser(parser, "test", ["-n", "sync-test"]);
+    // For sync parser, result should not be a Promise
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "sync-test" });
+  });
+
+  it("should return Promise for async parser", async () => {
+    const parser = object({
+      name: option("-n", asyncString()),
+    });
+
+    const result = runParser(parser, "test", ["-n", "async-test"]);
+    assert.ok(result instanceof Promise);
+
+    const resolved = await result;
+    assert.deepEqual(resolved, { name: "ASYNC-TEST" });
   });
 });

@@ -34,6 +34,8 @@ To be released.
      -  `suggestAsync()`: Gets suggestions from any parser as a Promise.
      -  `getDocPageSync()`: Gets documentation page from a sync-only parser.
      -  `getDocPageAsync()`: Gets documentation page from any parser as a Promise.
+     -  `runParserSync()`: Runs a sync-only parser, returning the result directly.
+     -  `runParserAsync()`: Runs any parser, returning a Promise of the result.
 
     This change is backward compatible.  Existing code continues to work
     unchanged as all parsers default to sync mode.
