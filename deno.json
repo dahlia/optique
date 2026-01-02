@@ -8,6 +8,7 @@
     "@std/fs": "jsr:@std/fs@^1.0.19",
     "@std/path": "jsr:@std/path@^1.1.1",
     "@types/node": "npm:@types/node@^20.19.9",
+    "isomorphic-git": "npm:isomorphic-git@^1.36.1",
     "tsdown": "npm:tsdown@^0.13.0",
     "typescript": "npm:typescript@^5.8.3",
     "valibot": "jsr:@valibot/valibot@^1.1.0",
@@ -44,7 +45,7 @@
       ],
       "command": "deno cache packages/*/src/**.ts examples/*/src/**.ts && pnpm install"
     },
-    "test": "deno test --allow-read --allow-write --allow-env --allow-net --env-file=.env.test",
+    "test": "DENO_TEST_CONCURRENCY=1 deno test --allow-read --allow-write --allow-run --allow-env --allow-net --env-file=.env.test",
     "test:node": "pnpm run -r test",
     "test:bun": "pnpm run -r test:bun",
     "test-all": {

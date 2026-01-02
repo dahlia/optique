@@ -149,6 +149,7 @@ The following is a list of the available packages:
 | [@optique/temporal](/packages/temporal/)     | [JSR][jsr:@optique/temporal]     | [npm][npm:@optique/temporal]     | [Temporal] value parsers (date and time)    |
 | [@optique/valibot](/packages/valibot/)       | [JSR][jsr:@optique/valibot]      | [npm][npm:@optique/valibot]      | [Valibot] schema integration for validation |
 | [@optique/zod](/packages/zod/)               | [JSR][jsr:@optique/zod]          | [npm][npm:@optique/zod]          | [Zod] schema integration for validation     |
+| [@optique/git](/packages/git/)               | [JSR][jsr:@optique/git]          | [npm][npm:@optique/git]          | Git reference parsers (branches, tags, etc) |
 
 [jsr:@optique/core]: https://jsr.io/@optique/core
 [npm:@optique/core]: https://www.npmjs.com/package/@optique/core
@@ -162,6 +163,8 @@ The following is a list of the available packages:
 [npm:@optique/valibot]: https://www.npmjs.com/package/@optique/valibot
 [jsr:@optique/zod]: https://jsr.io/@optique/zod
 [npm:@optique/zod]: https://www.npmjs.com/package/@optique/zod
+[jsr:@optique/git]: https://jsr.io/@optique/git
+[npm:@optique/git]: https://www.npmjs.com/package/@optique/git
 [LogTape]: https://logtape.org/
 [Temporal]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal
 [Valibot]: https://valibot.dev/

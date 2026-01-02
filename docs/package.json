@@ -7,6 +7,7 @@
     "@optique/temporal": "workspace:",
     "@optique/valibot": "workspace:",
     "@optique/zod": "workspace:",
+    "@optique/git": "workspace:",
     "@shikijs/vitepress-twoslash": "^3.20.0",
     "@types/node": "catalog:",
     "markdown-it-deflist": "^3.0.0",
