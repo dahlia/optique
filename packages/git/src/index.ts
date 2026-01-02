@@ -6,7 +6,7 @@
  */
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Suggestion } from "@optique/core/parser";
-import { message, text } from "@optique/core/message";
+import { type Message, message, text } from "@optique/core/message";
 import {
   ensureNonEmptyString,
   type NonEmptyString,
@@ -55,6 +55,47 @@ export interface GitParserOptions {
    * Used in help messages to indicate what kind of value this parser expects.
    */
   metavar?: NonEmptyString;
+
+  /**
+   * Custom error messages for validation failures.
+   *
+   * @since 0.9.0
+   */
+  errors?: GitParserErrors;
+}
+
+/**
+ * Custom error messages for git value parsers.
+ *
+ * @since 0.9.0
+ */
+export interface GitParserErrors {
+  /**
+   * Error message when the git reference (branch, tag, remote, commit) is not found.
+   *
+   * @param input The user-provided input that was not found.
+   * @param available List of available references (if applicable).
+   * @returns A custom error message.
+   */
+  notFound?: (input: string, available?: readonly string[]) => Message;
+
+  /**
+   * Error message when listing git references fails.
+   * This typically occurs when the directory is not a valid git repository.
+   *
+   * @param dir The directory that was being accessed.
+   * @returns A custom error message.
+   */
+  listFailed?: (dir: string) => Message;
+
+  /**
+   * Error message when the input format is invalid.
+   * Applies to parsers that validate format (e.g., commit SHA).
+   *
+   * @param input The user-provided input that has invalid format.
+   * @returns A custom error message.
+   */
+  invalidFormat?: (input: string) => Message;
 }
 
 /**
@@ -125,12 +166,24 @@ function getRepoDir(dirOption: string | undefined): string {
   return dirOption ?? (typeof process !== "undefined" ? process.cwd() : ".");
 }
 
+function formatChoiceList(choices: readonly string[]): Message {
+  let result: Message = [];
+  for (let i = 0; i < choices.length; i++) {
+    if (i > 0) {
+      result = [...result, ...message`, `];
+    }
+    result = [...result, ...message`${choices[i]}`];
+  }
+  return result;
+}
+
 function createAsyncValueParser(
   options: GitParserOptions | undefined,
   metavar: NonEmptyString,
   parseFn: (
     dir: string,
     input: string,
+    errors: GitParserErrors | undefined,
   ) => Promise<ValueParserResult<string>>,
   suggestFn?: (
     dir: string,
@@ -143,7 +196,7 @@ function createAsyncValueParser(
     parse(input: string): Promise<ValueParserResult<string>> {
       const dir = getRepoDir(options?.dir);
       ensureNonEmptyString(metavar);
-      return parseFn(dir, input);
+      return parseFn(dir, input, options?.errors);
     },
     format(value: string): string {
       return value;
@@ -182,19 +235,25 @@ export function gitBranch(
   return createAsyncValueParser(
     options,
     metavar,
-    async (dir, input) => {
+    async (dir, input, errors) => {
       try {
         const branches = await git.listBranches({ fs: gitFs, dir });
         if (branches.includes(input)) {
           return { success: true, value: input };
         }
+        if (errors?.notFound) {
+          return { success: false, error: errors.notFound(input, branches) };
+        }
         return {
           success: false,
           error: message`Branch ${
             text(input)
-          } does not exist. Available branches: ${branches.join(", ")}`,
+          } does not exist. Available branches: ${formatChoiceList(branches)}`,
         };
       } catch {
+        if (errors?.listFailed) {
+          return { success: false, error: errors.listFailed(dir) };
+        }
         return {
           success: false,
           error: message`Failed to list branches. Ensure ${
@@ -245,21 +304,27 @@ export function gitRemoteBranch(
   return createAsyncValueParser(
     options,
     metavar,
-    async (dir, input) => {
+    async (dir, input, errors) => {
       try {
         const branches = await git.listBranches({ fs: gitFs, dir, remote });
         if (branches.includes(input)) {
           return { success: true, value: input };
+        }
+        if (errors?.notFound) {
+          return { success: false, error: errors.notFound(input, branches) };
         }
         return {
           success: false,
           error: message`Remote branch ${
             text(input)
           } does not exist on remote ${text(remote)}. Available branches: ${
-            branches.join(", ")
+            formatChoiceList(branches)
           }`,
         };
       } catch {
+        if (errors?.listFailed) {
+          return { success: false, error: errors.listFailed(dir) };
+        }
         return {
           success: false,
           error: message`Failed to list remote branches. Ensure remote ${
@@ -297,19 +362,25 @@ export function gitTag(
   return createAsyncValueParser(
     options,
     metavar,
-    async (dir, input) => {
+    async (dir, input, errors) => {
       try {
         const tags = await git.listTags({ fs: gitFs, dir });
         if (tags.includes(input)) {
           return { success: true, value: input };
         }
+        if (errors?.notFound) {
+          return { success: false, error: errors.notFound(input, tags) };
+        }
         return {
           success: false,
           error: message`Tag ${text(input)} does not exist. Available tags: ${
-            tags.join(", ")
+            formatChoiceList(tags)
           }`,
         };
       } catch {
+        if (errors?.listFailed) {
+          return { success: false, error: errors.listFailed(dir) };
+        }
         return {
           success: false,
           error: message`Failed to list tags. Ensure ${
@@ -347,20 +418,26 @@ export function gitRemote(
   return createAsyncValueParser(
     options,
     metavar,
-    async (dir, input) => {
+    async (dir, input, errors) => {
       try {
         const remotes = await git.listRemotes({ fs: gitFs, dir });
         const names = remotes.map((r: GitRemote) => r.remote);
         if (names.includes(input)) {
           return { success: true, value: input };
         }
+        if (errors?.notFound) {
+          return { success: false, error: errors.notFound(input, names) };
+        }
         return {
           success: false,
           error: message`Remote ${
             text(input)
-          } does not exist. Available remotes: ${names.join(", ")}`,
+          } does not exist. Available remotes: ${formatChoiceList(names)}`,
         };
       } catch {
+        if (errors?.listFailed) {
+          return { success: false, error: errors.listFailed(dir) };
+        }
         return {
           success: false,
           error: message`Failed to list remotes. Ensure ${
@@ -401,10 +478,13 @@ export function gitCommit(
   return createAsyncValueParser(
     options,
     metavar,
-    async (dir, input) => {
+    async (dir, input, errors) => {
       try {
         ensureNonEmptyString(input);
       } catch {
+        if (errors?.invalidFormat) {
+          return { success: false, error: errors.invalidFormat(input) };
+        }
         return {
           success: false,
           error: message`Invalid commit SHA: ${text(input)}`,
@@ -412,6 +492,9 @@ export function gitCommit(
       }
 
       if (input.length < 4 || input.length > 40) {
+        if (errors?.invalidFormat) {
+          return { success: false, error: errors.invalidFormat(input) };
+        }
         return {
           success: false,
           error: message`Commit ${
@@ -424,6 +507,9 @@ export function gitCommit(
         const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
         return { success: true, value: oid };
       } catch {
+        if (errors?.notFound) {
+          return { success: false, error: errors.notFound(input) };
+        }
         return {
           success: false,
           error: message`Commit ${
@@ -452,7 +538,7 @@ export function gitRef(
   return createAsyncValueParser(
     options,
     metavar,
-    async (dir, input) => {
+    async (dir, input, errors) => {
       try {
         const resolved = await git.resolveRef({ fs: gitFs, dir, ref: input });
         return { success: true, value: resolved };
@@ -461,6 +547,9 @@ export function gitRef(
           const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
           return { success: true, value: oid };
         } catch {
+          if (errors?.notFound) {
+            return { success: false, error: errors.notFound(input) };
+          }
           return {
             success: false,
             error: message`Reference ${

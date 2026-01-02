@@ -9,6 +9,7 @@ import process from "node:process";
 import * as isomorphicGit from "isomorphic-git";
 import type { Suggestion } from "@optique/core/parser";
 import type { NonEmptyString } from "@optique/core/nonempty";
+import { type Message, message } from "@optique/core/message";
 import {
   createGitParsers,
   gitBranch,
@@ -104,6 +105,17 @@ async function cleanupTestRepo(): Promise<void> {
   } catch {
     // Ignore
   }
+}
+
+function formatChoices(choices: readonly string[]): Message {
+  let result: Message = [];
+  for (let i = 0; i < choices.length; i++) {
+    if (i > 0) {
+      result = [...result, ...message`, `];
+    }
+    result = [...result, ...message`${choices[i]}`];
+  }
+  return result;
 }
 
 describe("git parsers", { concurrency: false }, () => {
@@ -712,6 +724,133 @@ describe("git parsers", { concurrency: false }, () => {
       const result2 = await parser.parse("main");
       assert.ok(result1.success);
       assert.ok(result2.success);
+    });
+  });
+
+  describe("custom errors", () => {
+    it("should use custom notFound error for gitBranch", async () => {
+      await cleanupTestRepo();
+      await createTestRepo();
+      const parser = gitBranch({
+        dir: testRepoDir,
+        errors: {
+          notFound: (input, available) =>
+            message`Custom error: ${input} not found. Try: ${
+              available ? formatChoices(available) : "none"
+            }`,
+        },
+      });
+      const result = await parser.parse("nonexistent");
+      assert.ok(!result.success, "Should fail for nonexistent branch");
+      assert.ok(result.error != null, "Should have custom error message");
+    });
+
+    it("should use custom listFailed error for gitBranch", async () => {
+      const parser = gitBranch({
+        dir: "/nonexistent/path",
+        errors: {
+          listFailed: (dir) => message`Cannot read git repository at ${dir}`,
+        },
+      });
+      const result = await parser.parse("main");
+      assert.ok(!result.success, "Should fail for nonexistent path");
+      assert.ok(result.error != null, "Should have custom error message");
+    });
+
+    it("should use custom notFound error for gitTag", async () => {
+      await cleanupTestRepo();
+      await createTestRepoWithBranchesAndTags();
+      const parser = gitTag({
+        dir: testRepoDir,
+        errors: {
+          notFound: (input) => message`Tag ${input} does not exist`,
+        },
+      });
+      const result = await parser.parse("v999.0.0");
+      assert.ok(!result.success, "Should fail for nonexistent tag");
+      assert.ok(result.error != null, "Should have custom error message");
+    });
+
+    it("should use custom notFound error for gitRemote", async () => {
+      await cleanupTestRepo();
+      await createTestRepo();
+      const parser = gitRemote({
+        dir: testRepoDir,
+        errors: {
+          notFound: (input) => message`Remote ${input} is not configured`,
+        },
+      });
+      const result = await parser.parse("nonexistent");
+      assert.ok(!result.success, "Should fail for nonexistent remote");
+      assert.ok(result.error != null, "Should have custom error message");
+    });
+
+    it("should use custom invalidFormat error for gitCommit", async () => {
+      await cleanupTestRepo();
+      await createTestRepo();
+      const parser = gitCommit({
+        dir: testRepoDir,
+        errors: {
+          invalidFormat: (input) =>
+            message`${input} is not a valid commit identifier`,
+        },
+      });
+      const result = await parser.parse("abc");
+      assert.ok(!result.success, "Should fail for invalid SHA format");
+      assert.ok(result.error != null, "Should have custom error message");
+    });
+
+    it("should use custom notFound error for gitCommit", async () => {
+      await cleanupTestRepo();
+      await createTestRepo();
+      const parser = gitCommit({
+        dir: testRepoDir,
+        errors: {
+          notFound: (input) => message`Commit ${input} not found in history`,
+        },
+      });
+      const result = await parser.parse(
+        "0000000000000000000000000000000000000000",
+      );
+      assert.ok(!result.success, "Should fail for nonexistent commit");
+      assert.ok(result.error != null, "Should have custom error message");
+    });
+
+    it("should use custom notFound error for gitRef", async () => {
+      await cleanupTestRepo();
+      await createTestRepo();
+      const parser = gitRef({
+        dir: testRepoDir,
+        errors: {
+          notFound: (input) => message`${input} is not a valid reference`,
+        },
+      });
+      const result = await parser.parse("nonexistent-ref");
+      assert.ok(!result.success, "Should fail for nonexistent reference");
+      assert.ok(result.error != null, "Should have custom error message");
+    });
+
+    it("should use custom notFound error for gitRemoteBranch", async () => {
+      await cleanupTestRepo();
+      await createTestRepo();
+      await isomorphicGit.addRemote({
+        fs,
+        dir: testRepoDir,
+        remote: "origin",
+        url: "https://github.com/example/repo.git",
+      });
+      const parser = gitRemoteBranch("origin", {
+        dir: testRepoDir,
+        errors: {
+          notFound: (input, available) =>
+            message`Branch ${input} not found on origin. Available: ${
+              available ? formatChoices(available) : "none"
+            }`,
+        },
+      });
+      const result = await parser.parse("nonexistent-branch");
+      assert.ok(!result.success, "Should fail for nonexistent remote branch");
+      assert.ok(result.error != null, "Should have custom error message");
     });
   });
 });

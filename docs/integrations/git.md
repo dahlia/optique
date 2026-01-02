@@ -7,7 +7,7 @@ description: >-
 Git integration
 ===============
 
-The `@optique/git` package provides async value parsers for validating Git
+The *@optique/git* package provides async value parsers for validating Git
 references (branches, tags, commits, remotes) using [isomorphic-git]. These
 parsers validate input against an actual Git repository, ensuring that users
 can only specify existing references.
@@ -300,6 +300,85 @@ Error: Commit abc does not exist. Provide a valid commit SHA.
 
 $ myapp --ref nonexistent-ref
 Error: Reference nonexistent-ref does not exist. Provide a valid branch, tag, or commit SHA.
+~~~~
+
+
+Custom error messages
+---------------------
+
+You can customize error messages using the `errors` option with the `Message`
+type from `@optique/core/message`:
+
+~~~~ typescript twoslash
+import { gitBranch } from "@optique/git";
+import { message, type Message } from "@optique/core/message";
+
+function formatChoices(choices: readonly string[]): Message {
+  let result: Message = [];
+  for (let i = 0; i < choices.length; i++) {
+    if (i > 0) {
+      result = [...result, ...message`, `];
+    }
+    result = [...result, ...message`${choices[i]}`];
+  }
+  return result;
+}
+
+const parser = gitBranch({
+  errors: {
+    notFound: (input, available) =>
+      message`Branch ${input} not found. Available: ${
+        available ? formatChoices(available) : "none"
+      }`,
+    listFailed: (dir) =>
+      message`Cannot read git repository at ${dir}`,
+  }
+});
+~~~~
+
+### Error types
+
+The `errors` option supports the following error types:
+
+ -  `notFound(input, available?)` — Called when the git reference is not found.
+    Provides the invalid input and optionally a list of available references.
+ -  `listFailed(dir)` — Called when listing git references fails, typically
+    when the directory is not a valid git repository.
+ -  `invalidFormat(input)` — Called for commit SHA validation failures
+    when the input format is invalid (e.g., too short).
+
+### Example with gitCommit
+
+~~~~ typescript twoslash
+import { gitCommit } from "@optique/git";
+import { message } from "@optique/core/message";
+
+const parser = gitCommit({
+  errors: {
+    invalidFormat: (input) =>
+      message`${input} must be 4-40 characters.`,
+    notFound: (input) =>
+      message`Commit ${input} not found in repository.`,
+  }
+});
+~~~~
+
+### Example with createGitParsers
+
+~~~~ typescript twoslash
+import { createGitParsers } from "@optique/git";
+import { message } from "@optique/core/message";
+
+const git = createGitParsers({
+  errors: {
+    notFound: (input, available) =>
+      message`${input} is not a valid reference.`,
+  }
+});
+
+const branchParser = git.branch();
+const tagParser = git.tag();
+const commitParser = git.commit();
 ~~~~
 
 
