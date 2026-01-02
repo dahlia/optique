@@ -63,14 +63,51 @@ export interface GitParserOptions {
  * @since 0.9.0
  */
 export interface GitParsers {
+  /**
+   * Creates a value parser that validates local branch names.
+   * @param options Configuration options for the parser.
+   * @returns A value parser that accepts existing branch names.
+   */
   branch(options?: GitParserOptions): ValueParser<"async", string>;
+
+  /**
+   * Creates a value parser that validates remote branch names.
+   * @param remote The remote name to validate against.
+   * @param options Configuration options for the parser.
+   * @returns A value parser that accepts existing remote branch names.
+   */
   remoteBranch(
     remote: string,
     options?: GitParserOptions,
   ): ValueParser<"async", string>;
+
+  /**
+   * Creates a value parser that validates tag names.
+   * @param options Configuration options for the parser.
+   * @returns A value parser that accepts existing tag names.
+   */
   tag(options?: GitParserOptions): ValueParser<"async", string>;
+
+  /**
+   * Creates a value parser that validates remote names.
+   * @param options Configuration options for the parser.
+   * @returns A value parser that accepts existing remote names.
+   */
   remote(options?: GitParserOptions): ValueParser<"async", string>;
+
+  /**
+   * Creates a value parser that validates commit SHAs.
+   * @param options Configuration options for the parser.
+   * @returns A value parser that accepts existing commit SHAs.
+   */
   commit(options?: GitParserOptions): ValueParser<"async", string>;
+
+  /**
+   * Creates a value parser that validates any git reference.
+   * Accepts branch names, tag names, or commit SHAs.
+   * @param options Configuration options for the parser.
+   * @returns A value parser that accepts any git reference.
+   */
   ref(options?: GitParserOptions): ValueParser<"async", string>;
 }
 
