@@ -111,10 +111,9 @@ const tagParser = option("-t", "--tag", gitTag());
 ~~~~ typescript twoslash
 import { gitTag } from "@optique/git";
 import { option } from "@optique/core/primitives";
-// @errors: 2345
-// ---cut-before---
+
 const versionParser = option("--release", gitTag({
-  metavar: "VERSION" as "VERSION",
+  metavar: "VERSION",
 }));
 ~~~~
 
@@ -165,8 +164,8 @@ const commitParser = option("--commit", gitCommit());
 
 The parser accepts various SHA formats:
 
- -  Full 40-character SHA: `550e8400-e29b-41d4-a716-446655440000`
- -  Shortened SHAs (7+ characters): `550e840`, `550e8400e29b`
+ -  Full 40-character SHA: `d670460b4b4aece5915caf5c68d12f560a9fe3e4`
+ -  Shortened SHAs (4+ characters): `d670460`, `d670460b4b4a`
 
 ~~~~ typescript twoslash
 import { parseAsync } from "@optique/core/parser";
@@ -220,15 +219,14 @@ const commitParser = option("--commit", git.commit());
 
 ~~~~ typescript twoslash
 import { createGitParsers } from "@optique/git";
-// @errors: 2345
-// ---cut-before---
+
 const git = createGitParsers({
   dir: "/path/to/repo",
-  metavar: "REF" as "REF",
+  metavar: "REF",
 });
 
 // Override metavar for specific parser
-const branchParser = git.branch({ metavar: "BRANCH_NAME" as "BRANCH_NAME" });
+const branchParser = git.branch({ metavar: "BRANCH_NAME" });
 ~~~~
 
 
@@ -310,7 +308,7 @@ Metavar defaults
 
 Each parser uses an appropriate default metavar for help text:
 
-| Parser              | Default Metavar |
+| Parser              | Default metavar |
 |---------------------|-----------------|
 | `gitBranch()`       | `"BRANCH"`      |
 | `gitTag()`          | `"TAG"`         |
@@ -323,10 +321,9 @@ Override with the `metavar` option:
 
 ~~~~ typescript twoslash
 import { gitBranch, gitTag } from "@optique/git";
-// @errors: 2345
-// ---cut-before---
-const branchParser = gitBranch({ metavar: "BRANCH_NAME" as "BRANCH_NAME" });
-const tagParser = gitTag({ metavar: "RELEASE_VERSION" as "RELEASE_VERSION" });
+
+const branchParser = gitBranch({ metavar: "BRANCH_NAME" });
+const tagParser = gitTag({ metavar: "RELEASE_VERSION" });
 ~~~~
 
 
@@ -351,30 +348,30 @@ import { expandOid, listBranches, listTags, listRemotes, readObject, resolveRef 
 Complete example
 ----------------
 
-A git-like CLI application using Git parsers:
+A Git-like CLI application using Git parsers:
 
 ~~~~ typescript twoslash
-// @errors: 2304 2345 2339
 import { createGitParsers } from "@optique/git";
-import { command, argument, option, parseAsync } from "@optique/core";
+import { object, or } from "@optique/core/constructs";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { parseAsync } from "@optique/core/parser";
 
 const git = createGitParsers();
 
-const checkoutCmd = command("checkout", () => ({
+const checkoutCmd = command("checkout", object({
+  type: constant("checkout"),
   branch: option("-b", "--branch", git.branch()),
   startPoint: argument(git.ref()),
 }));
 
-const logCmd = command("log", () => ({
-  commit: option("-c", "--commit", git.commit()),
-  maxCount: option("--max-count", git.tag()),
+const logCmd = command("log", object({
+  type: constant("log"),
+  ref: argument(git.ref()),
 }));
 
-const app = command("git", () => ({
-  subcommand: checkoutCmd.or(logCmd),
-}));
+const app = or(checkoutCmd, logCmd);
 // ---cut-before---
-const result = await parseAsync(app, ["checkout", "--branch", "develop", "main"]);
+const result = await parseAsync(app, ["checkout", "-b", "develop", "main"]);
 if (result.success) {
   console.log(result.value);
 }
