@@ -78,7 +78,7 @@ const branchParser = argument(gitBranch());
 ### Options
 
 ~~~~ typescript twoslash
-import type { FileSystem, GitParserOptions } from "@optique/git";
+import type { GitParserOptions } from "@optique/git";
 ~~~~
 
 ### Example
@@ -285,71 +285,6 @@ const refParser = argument(gitRef());
 ~~~~
 
 
-Custom `FileSystem`
--------------------
-
-The parsers accept a custom `FileSystem` implementation for different
-environments. This is useful for testing or accessing repositories over HTTP.
-
-~~~~ typescript
-interface FileSystem {
-  readFile(path: string): Promise<Uint8Array | string>;
-  writeFile(path: string, data: Uint8Array | string): Promise<void>;
-  mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
-  rmdir(path: string, options?: { recursive?: boolean }): Promise<void>;
-  unlink(path: string): Promise<void>;
-  readdir(path: string): Promise<string[]>;
-  lstat(
-    path: string,
-  ): Promise<
-    { isSymbolicLink(): boolean; isDirectory(): boolean; isFile(): boolean }
-  >;
-  stat(
-    path: string,
-  ): Promise<
-    { isSymbolicLink(): boolean; isDirectory(): boolean; isFile(): boolean }
-  >;
-  readlink(path: string): Promise<string>;
-  symlink(target: string, path: string): Promise<void>;
-  chmod(path: string, mode: number): Promise<void>;
-  chown(path: string, uid: number, gid: number): Promise<void>;
-  rename(oldPath: string, newPath: string): Promise<void>;
-  copyFile(srcPath: string, destPath: string): Promise<void>;
-  exists(path: string): Promise<boolean>;
-}
-~~~~
-
-### Example usage
-
-~~~~ typescript
-import { gitBranch } from "@optique/git";
-
-const customFs: FileSystem = {
-  async readFile(path) { return ""; },
-  async writeFile(path, data) { },
-  async mkdir(path, options) { },
-  async rmdir(path, options) { },
-  async unlink(path) { },
-  async readdir(path) { return []; },
-  async lstat(path) {
-    return { isSymbolicLink: () => false, isDirectory: () => false, isFile: () => true };
-  },
-  async stat(path) {
-    return { isSymbolicLink: () => false, isDirectory: () => false, isFile: () => true };
-  },
-  async readlink(path) { return path; },
-  async symlink(target, path) { },
-  async chmod(path, mode) { },
-  async chown(path, uid, gid) { },
-  async rename(oldPath, newPath) { },
-  async copyFile(srcPath, destPath) { },
-  async exists(path) { return true; },
-};
-
-const parser = gitBranch({ fs: customFs });
-~~~~
-
-
 Error handling
 --------------
 
@@ -375,14 +310,14 @@ Metavar defaults
 
 Each parser uses an appropriate default metavar for help text:
 
-| Parser | Default Metavar |
-|--------|----------------|
-| `gitBranch()` | `"BRANCH"` |
-| `gitTag()` | `"TAG"` |
-| `gitRemote()` | `"REMOTE"` |
-| `gitRemoteBranch()` | `"BRANCH"` |
-| `gitCommit()` | `"COMMIT"` |
-| `gitRef()` | `"REF"` |
+| Parser              | Default Metavar |
+|---------------------|-----------------|
+| `gitBranch()`       | `"BRANCH"`      |
+| `gitTag()`          | `"TAG"`         |
+| `gitRemote()`       | `"REMOTE"`      |
+| `gitRemoteBranch()` | `"BRANCH"`      |
+| `gitCommit()`       | `"COMMIT"`      |
+| `gitRef()`          | `"REF"`         |
 
 Override with the `metavar` option:
 
@@ -405,12 +340,12 @@ advanced use cases:
 import { expandOid, listBranches, listTags, listRemotes, readObject, resolveRef } from "@optique/git";
 ~~~~
 
-- `expandOid()` - Expand short SHAs to full OIDs
-- `listBranches()` - List all local branches
-- `listTags()` - List all tags
-- `listRemotes()` - List all remotes
-- `readObject()` - Read a Git object
-- `resolveRef()` - Resolve a ref to its OID
+ -  `expandOid()` — Expand short SHAs to full OIDs
+ -  `listBranches()` — List all local branches
+ -  `listTags()` — List all tags
+ -  `listRemotes()` — List all remotes
+ -  `readObject()` — Read a Git object
+ -  `resolveRef()` — Resolve a ref to its OID
 
 
 Complete example

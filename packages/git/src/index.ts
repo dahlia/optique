@@ -13,6 +13,7 @@ import {
 } from "@optique/core/nonempty";
 
 import * as git from "isomorphic-git";
+import * as fs from "node:fs/promises";
 import process from "node:process";
 
 export {
@@ -24,37 +25,18 @@ export {
   resolveRef,
 } from "isomorphic-git";
 
-/**
- * Interface for FileSystem operations required by git parsers.
- * This allows custom filesystem implementations for different environments.
- *
- * @since 0.9.0
- */
-export interface FileSystem {
-  readFile(path: string): Promise<Uint8Array | string>;
-  writeFile(path: string, data: Uint8Array | string): Promise<void>;
-  mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
-  rmdir(path: string, options?: { recursive?: boolean }): Promise<void>;
-  unlink(path: string): Promise<void>;
-  readdir(path: string): Promise<string[]>;
-  lstat(
-    path: string,
-  ): Promise<
-    { isSymbolicLink(): boolean; isDirectory(): boolean; isFile(): boolean }
-  >;
-  stat(
-    path: string,
-  ): Promise<
-    { isSymbolicLink(): boolean; isDirectory(): boolean; isFile(): boolean }
-  >;
-  readlink(path: string): Promise<string>;
-  symlink(target: string, path: string): Promise<void>;
-  chmod(path: string, mode: number): Promise<void>;
-  chown(path: string, uid: number, gid: number): Promise<void>;
-  rename(oldPath: string, newPath: string): Promise<void>;
-  copyFile(srcPath: string, destPath: string): Promise<void>;
-  exists(path: string): Promise<boolean>;
-}
+const gitFs = {
+  readFile: fs.readFile,
+  writeFile: fs.writeFile,
+  mkdir: fs.mkdir,
+  rmdir: fs.rmdir,
+  unlink: fs.unlink,
+  readdir: fs.readdir,
+  readlink: fs.readlink,
+  symlink: fs.symlink,
+  stat: fs.stat,
+  lstat: fs.lstat,
+};
 
 /**
  * Options for creating git value parsers.
@@ -62,12 +44,6 @@ export interface FileSystem {
  * @since 0.9.0
  */
 export interface GitParserOptions {
-  /**
-   * The filesystem implementation to use.
-   * Defaults to node:fs/promises (works in Deno and Node.js).
-   */
-  fs?: FileSystem;
-
   /**
    * The directory of the git repository.
    * Defaults to the current working directory.
@@ -108,90 +84,18 @@ const METAVAR_TAG: NonEmptyString = "TAG";
 const METAVAR_REMOTE: NonEmptyString = "REMOTE";
 const _METAVAR_VALUE: NonEmptyString = "VALUE";
 
-let defaultFs: FileSystem | null = null;
-let fsLoading: Promise<FileSystem> | null = null;
-
-async function getDefaultFs(): Promise<FileSystem> {
-  if (defaultFs) return await defaultFs;
-  if (fsLoading) return await fsLoading;
-
-  fsLoading = (async () => {
-    const nodeFs = await import("node:fs/promises");
-    const { TextDecoder } = await import("node:util");
-    const decoder = new TextDecoder();
-    defaultFs = {
-      async readFile(path) {
-        const data = await nodeFs.readFile(path);
-        if (path.endsWith("/index") || path.endsWith(".idx")) {
-          return data;
-        }
-        return decoder.decode(data);
-      },
-      async writeFile(path, data) {
-        await nodeFs.writeFile(path, data);
-      },
-      async mkdir(path, options) {
-        await nodeFs.mkdir(path, options);
-      },
-      async rmdir(path, options) {
-        await nodeFs.rmdir(path, options);
-      },
-      async unlink(path) {
-        await nodeFs.unlink(path);
-      },
-      async readdir(path) {
-        const entries = await nodeFs.readdir(path, { withFileTypes: false });
-        return entries.filter((e): e is string => typeof e === "string");
-      },
-      async lstat(path) {
-        return await nodeFs.lstat(path);
-      },
-      async stat(path) {
-        return await nodeFs.stat(path);
-      },
-      async readlink(path) {
-        return await nodeFs.readlink(path);
-      },
-      async symlink(target, path) {
-        await nodeFs.symlink(target, path, "file");
-      },
-      async chmod(path, mode) {
-        await nodeFs.chmod(path, mode);
-      },
-      async chown(path, uid, gid) {
-        await nodeFs.chown(path, uid, gid);
-      },
-      async rename(oldPath, newPath) {
-        await nodeFs.rename(oldPath, newPath);
-      },
-      async copyFile(srcPath, destPath) {
-        await nodeFs.copyFile(srcPath, destPath);
-      },
-      async exists(path) {
-        try {
-          await nodeFs.stat(path);
-          return true;
-        } catch {
-          return false;
-        }
-      },
-    };
-    return defaultFs;
-  })();
-
-  return fsLoading;
+function getRepoDir(dirOption: string | undefined): string {
+  return dirOption ?? (typeof process !== "undefined" ? process.cwd() : ".");
 }
 
 function createAsyncValueParser(
   options: GitParserOptions | undefined,
   metavar: NonEmptyString,
   parseFn: (
-    fs: FileSystem,
     dir: string,
     input: string,
   ) => Promise<ValueParserResult<string>>,
   suggestFn?: (
-    fs: FileSystem,
     dir: string,
     prefix: string,
   ) => AsyncIterable<Suggestion>,
@@ -199,22 +103,18 @@ function createAsyncValueParser(
   return {
     $mode: "async",
     metavar,
-    async parse(input: string): Promise<ValueParserResult<string>> {
-      const fs = options?.fs ?? await getDefaultFs();
-      const dir = options?.dir ??
-        (typeof process !== "undefined" ? process.cwd() : ".");
+    parse(input: string): Promise<ValueParserResult<string>> {
+      const dir = getRepoDir(options?.dir);
       ensureNonEmptyString(metavar);
-      return parseFn(fs, dir, input);
+      return parseFn(dir, input);
     },
     format(value: string): string {
       return value;
     },
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
-      const fs = options?.fs ?? await getDefaultFs();
-      const dir = options?.dir ??
-        (typeof process !== "undefined" ? process.cwd() : ".");
+      const dir = getRepoDir(options?.dir);
       if (suggestFn) {
-        yield* suggestFn(fs, dir, prefix);
+        yield* suggestFn(dir, prefix);
       }
     },
   };
@@ -245,9 +145,9 @@ export function gitBranch(
   return createAsyncValueParser(
     options,
     metavar,
-    async (fs, dir, input) => {
+    async (dir, input) => {
       try {
-        const branches = await git.listBranches({ fs, dir });
+        const branches = await git.listBranches({ fs: gitFs, dir });
         if (branches.includes(input)) {
           return { success: true, value: input };
         }
@@ -266,9 +166,9 @@ export function gitBranch(
         };
       }
     },
-    async function* suggestBranch(fs, dir, prefix) {
+    async function* suggestBranch(dir, prefix) {
       try {
-        const branches = await git.listBranches({ fs, dir });
+        const branches = await git.listBranches({ fs: gitFs, dir });
         for (const branch of branches) {
           if (branch.startsWith(prefix)) {
             yield { kind: "literal" as const, text: branch };
@@ -308,9 +208,9 @@ export function gitRemoteBranch(
   return createAsyncValueParser(
     options,
     metavar,
-    async (fs, dir, input) => {
+    async (dir, input) => {
       try {
-        const branches = await git.listBranches({ fs, dir, remote });
+        const branches = await git.listBranches({ fs: gitFs, dir, remote });
         if (branches.includes(input)) {
           return { success: true, value: input };
         }
@@ -331,9 +231,9 @@ export function gitRemoteBranch(
         };
       }
     },
-    async function* suggestRemoteBranch(fs, dir, prefix) {
+    async function* suggestRemoteBranch(dir, prefix) {
       try {
-        const branches = await git.listBranches({ fs, dir, remote });
+        const branches = await git.listBranches({ fs: gitFs, dir, remote });
         for (const branch of branches) {
           if (branch.startsWith(prefix)) {
             yield { kind: "literal" as const, text: branch };
@@ -349,20 +249,9 @@ export function gitRemoteBranch(
 /**
  * Creates a value parser that validates tag names.
  *
- * This parser uses isomorphic-git to verify that the provided input
- * matches an existing tag in the repository.
- *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing tag names.
  * @since 0.9.0
- *
- * @example
- * ~~~~ typescript
- * import { gitTag } from "@optique/git";
- * import { option } from "@optique/core/primitives";
- *
- * const parser = option("-t", "--tag", gitTag());
- * ~~~~
  */
 export function gitTag(
   options?: GitParserOptions,
@@ -371,9 +260,9 @@ export function gitTag(
   return createAsyncValueParser(
     options,
     metavar,
-    async (fs, dir, input) => {
+    async (dir, input) => {
       try {
-        const tags = await git.listTags({ fs, dir });
+        const tags = await git.listTags({ fs: gitFs, dir });
         if (tags.includes(input)) {
           return { success: true, value: input };
         }
@@ -392,9 +281,9 @@ export function gitTag(
         };
       }
     },
-    async function* suggestTag(fs, dir, prefix) {
+    async function* suggestTag(dir, prefix) {
       try {
-        const tags = await git.listTags({ fs, dir });
+        const tags = await git.listTags({ fs: gitFs, dir });
         for (const tag of tags) {
           if (tag.startsWith(prefix)) {
             yield { kind: "literal" as const, text: tag };
@@ -410,20 +299,9 @@ export function gitTag(
 /**
  * Creates a value parser that validates remote names.
  *
- * This parser uses isomorphic-git to verify that the provided input
- * matches an existing remote in the repository.
- *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing remote names.
  * @since 0.9.0
- *
- * @example
- * ~~~~ typescript
- * import { gitRemote } from "@optique/git";
- * import { option } from "@optique/core/primitives";
- *
- * const parser = option("-r", "--remote", gitRemote());
- * ~~~~
  */
 export function gitRemote(
   options?: GitParserOptions,
@@ -432,23 +310,18 @@ export function gitRemote(
   return createAsyncValueParser(
     options,
     metavar,
-    async (fs, dir, input) => {
+    async (dir, input) => {
       try {
-        const remotes = await git.listRemotes({ fs, dir });
-        const remoteNames: string[] = [];
-        for (const r of remotes) {
-          if ("remote" in r && typeof r.remote === "string") {
-            remoteNames.push(r.remote);
-          }
-        }
-        if (remoteNames.includes(input)) {
+        const remotes = await git.listRemotes({ fs: gitFs, dir });
+        const names = remotes.map((r: GitRemote) => r.remote);
+        if (names.includes(input)) {
           return { success: true, value: input };
         }
         return {
           success: false,
           error: message`Remote ${
             text(input)
-          } does not exist. Available remotes: ${remoteNames.join(", ")}`,
+          } does not exist. Available remotes: ${names.join(", ")}`,
         };
       } catch {
         return {
@@ -459,15 +332,12 @@ export function gitRemote(
         };
       }
     },
-    async function* suggestRemote(fs, dir, prefix) {
+    async function* suggestRemote(dir, prefix) {
       try {
-        const remotes = await git.listRemotes({ fs, dir });
+        const remotes = await git.listRemotes({ fs: gitFs, dir });
         for (const r of remotes) {
-          if (
-            "remote" in r && typeof r.remote === "string" &&
-            r.remote.startsWith(prefix)
-          ) {
-            yield { kind: "literal", text: r.remote };
+          if (r.remote.startsWith(prefix)) {
+            yield { kind: "literal" as const, text: r.remote };
           }
         }
       } catch {
@@ -480,20 +350,12 @@ export function gitRemote(
 /**
  * Creates a value parser that validates commit SHAs.
  *
- * This parser uses isomorphic-git to verify that the provided input
- * is a valid commit SHA (full or shortened) that exists in the repository.
+ * This parser resolves the provided commit reference to its full 40-character
+ * OID.
  *
  * @param options Configuration options for the parser.
- * @returns A value parser that accepts valid commit SHAs.
+ * @returns A value parser that accepts existing commit SHAs.
  * @since 0.9.0
- *
- * @example
- * ~~~~ typescript
- * import { gitCommit } from "@optique/git";
- * import { option } from "@optique/core/primitives";
- *
- * const parser = option("-c", "--commit", gitCommit());
- * ~~~~
  */
 export function gitCommit(
   options?: GitParserOptions,
@@ -502,10 +364,27 @@ export function gitCommit(
   return createAsyncValueParser(
     options,
     metavar,
-    async (fs, dir, input) => {
+    async (dir, input) => {
       try {
-        const oid = await git.expandOid({ fs, dir, oid: input });
-        await git.readObject({ fs, dir, oid: oid });
+        ensureNonEmptyString(input);
+      } catch {
+        return {
+          success: false,
+          error: message`Invalid commit SHA: ${text(input)}`,
+        };
+      }
+
+      if (input.length < 4 || input.length > 40) {
+        return {
+          success: false,
+          error: message`Commit ${
+            text(input)
+          } must be between 4 and 40 characters.`,
+        };
+      }
+
+      try {
+        const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
         return { success: true, value: oid };
       } catch {
         return {
@@ -516,48 +395,18 @@ export function gitCommit(
         };
       }
     },
-    async function* suggestCommit(fs, dir, prefix) {
-      try {
-        const branches = await git.listBranches({ fs, dir });
-        const commits: string[] = [];
-        for (const branch of branches.slice(0, 10)) {
-          try {
-            const oid = await git.resolveRef({ fs, dir, ref: branch });
-            if (oid.startsWith(prefix)) {
-              commits.push(oid);
-            }
-          } catch {
-            // Skip branches that can't be resolved
-          }
-        }
-        for (const commit of [...new Set(commits)].slice(0, 10)) {
-          yield { kind: "literal" as const, text: commit };
-        }
-      } catch {
-        // Silently fail for suggestions
-      }
-    },
   );
 }
 
 /**
- * Creates a value parser that validates any git reference
- * (branches, tags, or commits).
+ * Creates a value parser that validates any git reference.
  *
- * This parser uses isomorphic-git to verify that the provided input
- * resolves to a valid git reference (branch, tag, or commit SHA).
+ * Accepts branch names, tag names, or commit SHAs and resolves them to the
+ * corresponding commit OID.
  *
  * @param options Configuration options for the parser.
- * @returns A value parser that accepts branches, tags, or commit SHAs.
+ * @returns A value parser that accepts any git reference.
  * @since 0.9.0
- *
- * @example
- * ~~~~ typescript
- * import { gitRef } from "@optique/git";
- * import { option } from "@optique/core/primitives";
- *
- * const parser = option("--ref", gitRef());
- * ~~~~
  */
 export function gitRef(
   options?: GitParserOptions,
@@ -566,28 +415,35 @@ export function gitRef(
   return createAsyncValueParser(
     options,
     metavar,
-    async (fs, dir, input) => {
+    async (dir, input) => {
       try {
-        const oid = await git.resolveRef({ fs, dir, ref: input });
-        return { success: true, value: oid };
+        const resolved = await git.resolveRef({ fs: gitFs, dir, ref: input });
+        return { success: true, value: resolved };
       } catch {
-        return {
-          success: false,
-          error: message`Reference ${
-            text(input)
-          } does not exist. Provide a valid branch, tag, or commit SHA.`,
-        };
+        try {
+          const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
+          return { success: true, value: oid };
+        } catch {
+          return {
+            success: false,
+            error: message`Reference ${
+              text(input)
+            } does not exist. Provide a valid branch, tag, or commit SHA.`,
+          };
+        }
       }
     },
-    async function* suggestRef(fs, dir, prefix) {
+    async function* suggestRef(dir, prefix) {
       try {
-        const branches = await git.listBranches({ fs, dir });
+        const branches = await git.listBranches({ fs: gitFs, dir });
+        const tags = await git.listTags({ fs: gitFs, dir });
+
         for (const branch of branches) {
           if (branch.startsWith(prefix)) {
             yield { kind: "literal" as const, text: branch };
           }
         }
-        const tags = await git.listTags({ fs, dir });
+
         for (const tag of tags) {
           if (tag.startsWith(prefix)) {
             yield { kind: "literal" as const, text: tag };
@@ -601,43 +457,23 @@ export function gitRef(
 }
 
 /**
- * Creates a factory for git parsers with shared configuration.
+ * Creates a set of git parsers with shared configuration.
  *
- * This function returns an object with methods for creating individual git
- * parsers that share the same configuration (filesystem and directory).
- *
- * @param options Shared configuration options for all parsers.
- * @returns An object with methods for creating individual git parsers.
+ * @param options Shared configuration for the parsers.
+ * @returns An object containing git parsers.
  * @since 0.9.0
- *
- * @example
- * ~~~~ typescript
- * import { createGitParsers } from "@optique/git";
- *
- * const git = createGitParsers({ dir: "/path/to/repo" });
- *
- * const branchParser = git.branch();
- * const tagParser = git.tag();
- * ~~~~
  */
 export function createGitParsers(options?: GitParserOptions): GitParsers {
   return {
-    branch: (parserOptions?: GitParserOptions) =>
-      gitBranch({ ...options, ...parserOptions }),
-
-    remoteBranch: (remote: string, parserOptions?: GitParserOptions) =>
-      gitRemoteBranch(remote, { ...options, ...parserOptions }),
-
-    tag: (parserOptions?: GitParserOptions) =>
-      gitTag({ ...options, ...parserOptions }),
-
-    remote: (parserOptions?: GitParserOptions) =>
-      gitRemote({ ...options, ...parserOptions }),
-
-    commit: (parserOptions?: GitParserOptions) =>
-      gitCommit({ ...options, ...parserOptions }),
-
-    ref: (parserOptions?: GitParserOptions) =>
-      gitRef({ ...options, ...parserOptions }),
-  };
+    branch: (branchOptions?: GitParserOptions) =>
+      gitBranch(branchOptions ?? options),
+    remoteBranch: (remote: string, branchOptions?: GitParserOptions) =>
+      gitRemoteBranch(remote, branchOptions ?? options),
+    tag: (tagOptions?: GitParserOptions) => gitTag(tagOptions ?? options),
+    remote: (remoteOptions?: GitParserOptions) =>
+      gitRemote(remoteOptions ?? options),
+    commit: (commitOptions?: GitParserOptions) =>
+      gitCommit(commitOptions ?? options),
+    ref: (refOptions?: GitParserOptions) => gitRef(refOptions ?? options),
+  } satisfies GitParsers;
 }

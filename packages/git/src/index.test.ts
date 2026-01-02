@@ -2,8 +2,8 @@
  * Tests for @optique/git package.
  */
 import assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
 import { describe, it } from "node:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 import * as isomorphicGit from "isomorphic-git";
@@ -11,7 +11,6 @@ import type { Suggestion } from "@optique/core/parser";
 import type { NonEmptyString } from "@optique/core/nonempty";
 import {
   createGitParsers,
-  type FileSystem,
   gitBranch,
   gitCommit,
   gitRef,
@@ -22,73 +21,9 @@ import {
 
 const testRepoDir = join(process.cwd(), "packages/tmp/test-repo");
 
-async function getFs(): Promise<FileSystem> {
-  const nodeFs = await import("node:fs/promises");
-  const { TextDecoder } = await import("node:util");
-  const decoder = new TextDecoder();
-  return {
-    async readFile(path) {
-      const data = await nodeFs.readFile(path);
-      if (path.endsWith("/index") || path.endsWith(".idx")) {
-        return data;
-      }
-      return decoder.decode(data);
-    },
-    async writeFile(path, data) {
-      await nodeFs.writeFile(path, data);
-    },
-    async mkdir(path, options) {
-      await nodeFs.mkdir(path, options);
-    },
-    async rmdir(path, options) {
-      await nodeFs.rmdir(path, options);
-    },
-    async unlink(path) {
-      await nodeFs.unlink(path);
-    },
-    async readdir(path) {
-      const entries = await nodeFs.readdir(path);
-      return entries.filter((e): e is string => typeof e === "string");
-    },
-    async lstat(path) {
-      return await nodeFs.lstat(path);
-    },
-    async stat(path) {
-      return await nodeFs.stat(path);
-    },
-    async readlink(path) {
-      return await nodeFs.readlink(path);
-    },
-    async symlink(target, path) {
-      await nodeFs.symlink(target, path, "file");
-    },
-    async chmod(path, mode) {
-      await nodeFs.chmod(path, mode);
-    },
-    async chown(path, uid, gid) {
-      await nodeFs.chown(path, uid, gid);
-    },
-    async rename(oldPath, newPath) {
-      await nodeFs.rename(oldPath, newPath);
-    },
-    async copyFile(srcPath, destPath) {
-      await nodeFs.copyFile(srcPath, destPath);
-    },
-    async exists(path) {
-      try {
-        await nodeFs.stat(path);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  };
-}
-
 async function createTestRepo(): Promise<void> {
-  const fs = await getFs();
-  await mkdir(testRepoDir, { recursive: true });
-  await writeFile(`${testRepoDir}/test.txt`, "test content");
+  await fs.mkdir(testRepoDir, { recursive: true });
+  await fs.writeFile(`${testRepoDir}/test.txt`, "test content");
   await isomorphicGit.init({ fs, dir: testRepoDir, defaultBranch: "main" });
   const author = { name: "Test User", email: "test@example.com" };
   await isomorphicGit.add({ fs, dir: testRepoDir, filepath: "test.txt" });
@@ -101,9 +36,8 @@ async function createTestRepo(): Promise<void> {
 }
 
 async function createTestRepoWithBranchesAndTags(): Promise<void> {
-  const fs = await getFs();
-  await mkdir(testRepoDir, { recursive: true });
-  await writeFile(`${testRepoDir}/test.txt`, "test content");
+  await fs.mkdir(testRepoDir, { recursive: true });
+  await fs.writeFile(`${testRepoDir}/test.txt`, "test content");
   await isomorphicGit.init({ fs, dir: testRepoDir, defaultBranch: "main" });
   const author = { name: "Test User", email: "test@example.com" };
   await isomorphicGit.add({ fs, dir: testRepoDir, filepath: "test.txt" });
@@ -166,20 +100,10 @@ async function createTestRepoWithBranchesAndTags(): Promise<void> {
 
 async function cleanupTestRepo(): Promise<void> {
   try {
-    await rm(testRepoDir, { recursive: true, force: true });
+    await fs.rm(testRepoDir, { recursive: true, force: true });
   } catch {
     // Ignore
   }
-}
-
-async function _getHeadCommit(): Promise<string> {
-  const fs = await getFs();
-  const branches = await isomorphicGit.listBranches({ fs, dir: testRepoDir });
-  return await isomorphicGit.resolveRef({
-    fs,
-    dir: testRepoDir,
-    ref: branches[0],
-  });
 }
 
 describe("git parsers", { concurrency: false }, () => {
@@ -187,8 +111,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse existing local branch names", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result = await parser.parse("main");
       assert.ok(result.success);
       if (result.success) {
@@ -199,8 +122,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should fail for non-existent branches", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result = await parser.parse("nonexistent-branch");
       assert.ok(!result.success);
     });
@@ -208,9 +130,8 @@ describe("git parsers", { concurrency: false }, () => {
     it("should provide branch name suggestions", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
       await isomorphicGit.branch({ fs, dir: testRepoDir, ref: "develop" });
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const suggestions: Suggestion[] = [];
       for await (const s of parser.suggest!("deve")) {
         suggestions.push(s);
@@ -227,8 +148,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse branches with slashes", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result = await parser.parse("feature/test");
       assert.ok(result.success, "Should parse branch with slash");
       if (result.success) {
@@ -239,8 +159,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse branches with hyphens and numbers", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result = await parser.parse("feature/my-branch-123");
       assert.ok(result.success, "Should parse branch with hyphens and numbers");
       if (result.success) {
@@ -251,8 +170,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse release branches", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result = await parser.parse("release/1.0.x");
       assert.ok(result.success, "Should parse release branch");
       if (result.success) {
@@ -260,15 +178,13 @@ describe("git parsers", { concurrency: false }, () => {
       }
     });
 
-    it("should have async mode", async () => {
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+    it("should have async mode", () => {
+      const parser = gitBranch({ dir: testRepoDir });
       assert.equal(parser.$mode, "async");
     });
 
-    it("should format branch names correctly", async () => {
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+    it("should format branch names correctly", () => {
+      const parser = gitBranch({ dir: testRepoDir });
       assert.equal(parser.format("main"), "main");
       assert.equal(parser.format("feature/my-branch"), "feature/my-branch");
     });
@@ -278,8 +194,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse existing tag names", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+      const parser = gitTag({ dir: testRepoDir });
       const result = await parser.parse("v1.0.0");
       assert.ok(result.success);
       if (result.success) {
@@ -290,8 +205,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should fail for non-existent tags", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+      const parser = gitTag({ dir: testRepoDir });
       const result = await parser.parse("v999.0.0");
       assert.ok(!result.success);
     });
@@ -299,8 +213,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse tags with prerelease versions", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+      const parser = gitTag({ dir: testRepoDir });
       const result = await parser.parse("v2.0.0-beta");
       assert.ok(result.success, "Should parse tag with prerelease");
       if (result.success) {
@@ -311,8 +224,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse tags with slashes", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+      const parser = gitTag({ dir: testRepoDir });
       const result = await parser.parse("feature/test-tag");
       assert.ok(result.success, "Should parse tag with slash");
       if (result.success) {
@@ -323,8 +235,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should provide tag suggestions", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+      const parser = gitTag({ dir: testRepoDir });
       const suggestions: Suggestion[] = [];
       for await (const s of parser.suggest!("v1")) {
         suggestions.push(s);
@@ -338,15 +249,13 @@ describe("git parsers", { concurrency: false }, () => {
       );
     });
 
-    it("should have async mode", async () => {
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+    it("should have async mode", () => {
+      const parser = gitTag({ dir: testRepoDir });
       assert.equal(parser.$mode, "async");
     });
 
-    it("should format tag names correctly", async () => {
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+    it("should format tag names correctly", () => {
+      const parser = gitTag({ dir: testRepoDir });
       assert.equal(parser.format("v1.0.0"), "v1.0.0");
     });
   });
@@ -355,15 +264,13 @@ describe("git parsers", { concurrency: false }, () => {
     it("should fail for non-existent remotes", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitRemote({ fs, dir: testRepoDir });
+      const parser = gitRemote({ dir: testRepoDir });
       const result = await parser.parse("nonexistent");
       assert.ok(!result.success);
     });
 
-    it("should have async mode", async () => {
-      const fs = await getFs();
-      const parser = gitRemote({ fs, dir: testRepoDir });
+    it("should have async mode", () => {
+      const parser = gitRemote({ dir: testRepoDir });
       assert.equal(parser.$mode, "async");
     });
   });
@@ -372,15 +279,13 @@ describe("git parsers", { concurrency: false }, () => {
     it("should fail for non-existent remotes", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitRemoteBranch("nonexistent", { fs, dir: testRepoDir });
+      const parser = gitRemoteBranch("nonexistent", { dir: testRepoDir });
       const result = await parser.parse("main");
       assert.ok(!result.success);
     });
 
-    it("should have async mode", async () => {
-      const fs = await getFs();
-      const parser = gitRemoteBranch("origin", { fs, dir: testRepoDir });
+    it("should have async mode", () => {
+      const parser = gitRemoteBranch("origin", { dir: testRepoDir });
       assert.equal(parser.$mode, "async");
     });
   });
@@ -389,8 +294,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should fail for invalid commit SHAs", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+      const parser = gitCommit({ dir: testRepoDir });
       const result = await parser.parse(
         "0000000000000000000000000000000000000000",
       );
@@ -400,8 +304,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should fail for malformed commit SHAs", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+      const parser = gitCommit({ dir: testRepoDir });
       const result = await parser.parse("not-a-sha-at-all");
       assert.ok(!result.success);
     });
@@ -409,27 +312,23 @@ describe("git parsers", { concurrency: false }, () => {
     it("should fail for too-short commit SHAs", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+      const parser = gitCommit({ dir: testRepoDir });
       const result = await parser.parse("abc");
       assert.ok(!result.success);
     });
 
-    it("should have correct metavar", async () => {
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+    it("should have correct metavar", () => {
+      const parser = gitCommit({ dir: testRepoDir });
       assert.equal(parser.metavar, "COMMIT");
     });
 
-    it("should have async mode", async () => {
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+    it("should have async mode", () => {
+      const parser = gitCommit({ dir: testRepoDir });
       assert.equal(parser.$mode, "async");
     });
 
-    it("should format commit SHAs correctly", async () => {
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+    it("should format commit SHAs correctly", () => {
+      const parser = gitCommit({ dir: testRepoDir });
       assert.equal(parser.format("abc123def456789"), "abc123def456789");
     });
   });
@@ -438,8 +337,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse existing branches and return OID", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: testRepoDir });
+      const parser = gitRef({ dir: testRepoDir });
       const result = await parser.parse("main");
       assert.ok(result.success);
       if (result.success) {
@@ -450,8 +348,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should fail for non-existent refs", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: testRepoDir });
+      const parser = gitRef({ dir: testRepoDir });
       const result = await parser.parse("nonexistent-ref");
       assert.ok(!result.success);
     });
@@ -459,8 +356,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should parse existing tags and return OID", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: testRepoDir });
+      const parser = gitRef({ dir: testRepoDir });
       const result = await parser.parse("v1.0.0");
       assert.ok(result.success, "Should parse existing tag");
       if (result.success) {
@@ -468,15 +364,13 @@ describe("git parsers", { concurrency: false }, () => {
       }
     });
 
-    it("should have async mode", async () => {
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: testRepoDir });
+    it("should have async mode", () => {
+      const parser = gitRef({ dir: testRepoDir });
       assert.equal(parser.$mode, "async");
     });
 
-    it("should format ref values correctly", async () => {
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: testRepoDir });
+    it("should format ref values correctly", () => {
+      const parser = gitRef({ dir: testRepoDir });
       assert.equal(parser.format("abc123def456"), "abc123def456");
     });
   });
@@ -485,8 +379,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should return parsers with correct types", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const git = createGitParsers({ fs, dir: testRepoDir });
+      const git = createGitParsers({ dir: testRepoDir });
       assert.equal(git.branch().$mode, "async");
       assert.equal(git.tag().$mode, "async");
       assert.equal(git.remote().$mode, "async");
@@ -495,80 +388,63 @@ describe("git parsers", { concurrency: false }, () => {
       assert.equal(git.ref().$mode, "async");
     });
 
-    it("should use default directory (process.cwd())", async () => {
-      const fs = await getFs();
-      const git = createGitParsers({ fs });
-      assert.ok(git.branch());
-      assert.ok(git.tag());
-    });
-
     it("should allow overriding options per parser", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const git = createGitParsers({ fs, dir: testRepoDir });
+      const git = createGitParsers({ dir: testRepoDir });
       const parser = git.branch({ metavar: "CUSTOM_BRANCH" as NonEmptyString });
       assert.equal(parser.metavar, "CUSTOM_BRANCH");
     });
   });
 
   describe("metavar", () => {
-    it("should have appropriate metavar for branch parser", async () => {
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+    it("should have appropriate metavar for branch parser", () => {
+      const parser = gitBranch({ dir: testRepoDir });
       assert.equal(parser.metavar, "BRANCH");
     });
 
-    it("should have appropriate metavar for tag parser", async () => {
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+    it("should have appropriate metavar for tag parser", () => {
+      const parser = gitTag({ dir: testRepoDir });
       assert.equal(parser.metavar, "TAG");
     });
 
-    it("should have appropriate metavar for remote parser", async () => {
-      const fs = await getFs();
-      const parser = gitRemote({ fs, dir: testRepoDir });
+    it("should have appropriate metavar for remote parser", () => {
+      const parser = gitRemote({ dir: testRepoDir });
       assert.equal(parser.metavar, "REMOTE");
     });
 
-    it("should have appropriate metavar for commit parser", async () => {
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+    it("should have appropriate metavar for commit parser", () => {
+      const parser = gitCommit({ dir: testRepoDir });
       assert.equal(parser.metavar, "COMMIT");
     });
 
-    it("should have appropriate metavar for ref parser", async () => {
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: testRepoDir });
+    it("should have appropriate metavar for ref parser", () => {
+      const parser = gitRef({ dir: testRepoDir });
       assert.equal(parser.metavar, "REF");
     });
   });
 
   describe("format()", () => {
-    it("should format branch names correctly", async () => {
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+    it("should format branch names correctly", () => {
+      const parser = gitBranch({ dir: testRepoDir });
       assert.equal(parser.format("main"), "main");
       assert.equal(parser.format("feature/my-branch"), "feature/my-branch");
     });
 
-    it("should format tag names correctly", async () => {
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+    it("should format tag names correctly", () => {
+      const parser = gitTag({ dir: testRepoDir });
       assert.equal(parser.format("v1.0.0"), "v1.0.0");
     });
 
-    it("should format commit SHAs correctly", async () => {
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+    it("should format commit SHAs correctly", () => {
+      const parser = gitCommit({ dir: testRepoDir });
       assert.equal(parser.format("abc123def456"), "abc123def456");
     });
   });
 
   describe("error messages", () => {
     it("should provide helpful error messages for invalid branches", async () => {
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result = await parser.parse("invalid-branch");
       assert.ok(!result.success);
       if (!result.success) {
@@ -577,8 +453,7 @@ describe("git parsers", { concurrency: false }, () => {
     });
 
     it("should provide helpful error messages for invalid tags", async () => {
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+      const parser = gitTag({ dir: testRepoDir });
       const result = await parser.parse("invalid-tag");
       assert.ok(!result.success);
       if (!result.success) {
@@ -587,8 +462,7 @@ describe("git parsers", { concurrency: false }, () => {
     });
 
     it("should provide helpful error messages for invalid commits", async () => {
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: testRepoDir });
+      const parser = gitCommit({ dir: testRepoDir });
       const result = await parser.parse("not-a-sha");
       assert.ok(!result.success);
       if (!result.success) {
@@ -597,8 +471,7 @@ describe("git parsers", { concurrency: false }, () => {
     });
 
     it("should provide helpful error messages for invalid refs", async () => {
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: testRepoDir });
+      const parser = gitRef({ dir: testRepoDir });
       const result = await parser.parse("nonexistent-ref");
       assert.ok(!result.success);
       if (!result.success) {
@@ -608,50 +481,40 @@ describe("git parsers", { concurrency: false }, () => {
   });
 
   describe("custom metavar", () => {
-    it("should support custom metavar for branch parser", async () => {
-      const fs = await getFs();
+    it("should support custom metavar for branch parser", () => {
       const parser = gitBranch({
-        fs,
         dir: testRepoDir,
         metavar: "BRANCH_NAME" as NonEmptyString,
       });
       assert.equal(parser.metavar, "BRANCH_NAME");
     });
 
-    it("should support custom metavar for tag parser", async () => {
-      const fs = await getFs();
+    it("should support custom metavar for tag parser", () => {
       const parser = gitTag({
-        fs,
         dir: testRepoDir,
         metavar: "VERSION" as NonEmptyString,
       });
       assert.equal(parser.metavar, "VERSION");
     });
 
-    it("should support custom metavar for commit parser", async () => {
-      const fs = await getFs();
+    it("should support custom metavar for commit parser", () => {
       const parser = gitCommit({
-        fs,
         dir: testRepoDir,
         metavar: "SHA" as NonEmptyString,
       });
       assert.equal(parser.metavar, "SHA");
     });
 
-    it("should support custom metavar for remote parser", async () => {
-      const fs = await getFs();
+    it("should support custom metavar for remote parser", () => {
       const parser = gitRemote({
-        fs,
         dir: testRepoDir,
         metavar: "REMOTE_NAME" as NonEmptyString,
       });
       assert.equal(parser.metavar, "REMOTE_NAME");
     });
 
-    it("should support custom metavar for ref parser", async () => {
-      const fs = await getFs();
+    it("should support custom metavar for ref parser", () => {
       const parser = gitRef({
-        fs,
         dir: testRepoDir,
         metavar: "GIT_REF" as NonEmptyString,
       });
@@ -663,8 +526,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should filter suggestions by prefix", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const suggestions: Suggestion[] = [];
       for await (const s of parser.suggest!("feature/")) {
         suggestions.push(s);
@@ -685,8 +547,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should return empty suggestions for non-matching prefix", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const suggestions: Suggestion[] = [];
       for await (const s of parser.suggest!("nonexistent/")) {
         suggestions.push(s);
@@ -704,8 +565,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should suggest tags with prefix matching", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+      const parser = gitTag({ dir: testRepoDir });
       const suggestions: Suggestion[] = [];
       for await (const s of parser.suggest!("v2")) {
         suggestions.push(s);
@@ -722,8 +582,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should suggest both branches and tags for gitRef", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: testRepoDir });
+      const parser = gitRef({ dir: testRepoDir });
       const suggestions: Suggestion[] = [];
       for await (const s of parser.suggest!("v1")) {
         suggestions.push(s);
@@ -738,21 +597,11 @@ describe("git parsers", { concurrency: false }, () => {
     });
   });
 
-  describe("custom FileSystem", () => {
-    it("should work with custom FileSystem implementation", async () => {
-      await cleanupTestRepo();
-      await createTestRepo();
-      const customFs = await getFs();
-      const parser = gitBranch({ fs: customFs, dir: testRepoDir });
-      const result = await parser.parse("main");
-      assert.ok(result.success, "Should work with custom FileSystem");
-    });
-  });
-
   describe("non-existent directory", () => {
+    const missingDir = "/nonexistent/path/to/repo";
+
     it("should handle non-existent repository directory", async () => {
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: "/nonexistent/path/to/repo" });
+      const parser = gitBranch({ dir: missingDir });
       const result = await parser.parse("main");
       assert.ok(!result.success, "Should fail for non-existent directory");
       if (!result.success) {
@@ -761,22 +610,19 @@ describe("git parsers", { concurrency: false }, () => {
     });
 
     it("should handle non-existent directory for gitTag", async () => {
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: "/nonexistent/path/to/repo" });
+      const parser = gitTag({ dir: missingDir });
       const result = await parser.parse("v1.0.0");
       assert.ok(!result.success, "Should fail for non-existent directory");
     });
 
     it("should handle non-existent directory for gitCommit", async () => {
-      const fs = await getFs();
-      const parser = gitCommit({ fs, dir: "/nonexistent/path/to/repo" });
+      const parser = gitCommit({ dir: missingDir });
       const result = await parser.parse("abc123");
       assert.ok(!result.success, "Should fail for non-existent directory");
     });
 
     it("should handle non-existent directory for gitRef", async () => {
-      const fs = await getFs();
-      const parser = gitRef({ fs, dir: "/nonexistent/path/to/repo" });
+      const parser = gitRef({ dir: missingDir });
       const result = await parser.parse("main");
       assert.ok(!result.success, "Should fail for non-existent directory");
     });
@@ -786,8 +632,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should handle empty prefix for existing branches", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const suggestions: Suggestion[] = [];
       for await (const s of parser.suggest!("")) {
         suggestions.push(s);
@@ -804,8 +649,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should return no suggestions for tags when no matching tags exist", async () => {
       await cleanupTestRepo();
       await createTestRepoWithBranchesAndTags();
-      const fs = await getFs();
-      const parser = gitTag({ fs, dir: testRepoDir });
+      const parser = gitTag({ dir: testRepoDir });
       const suggestions: Suggestion[] = [];
       for await (const s of parser.suggest!("nonexistent-tag")) {
         suggestions.push(s);
@@ -822,18 +666,17 @@ describe("git parsers", { concurrency: false }, () => {
     it("should handle special characters in branch names", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
       const branchName = "feature/test_feature-v2";
       try {
         await isomorphicGit.branch({ fs, dir: testRepoDir, ref: branchName });
-        const parser = gitBranch({ fs, dir: testRepoDir });
+        const parser = gitBranch({ dir: testRepoDir });
         const result = await parser.parse(branchName);
         assert.ok(
           result.success,
           "Should parse branch with special characters",
         );
       } catch {
-        // Branch creation might fail if already exists, skip the parse assertion
+        // Branch creation might fail if already exists
         assert.ok(true, "Branch creation attempted");
       }
     });
@@ -841,8 +684,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should handle case-sensitive branch names", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result = await parser.parse("Main");
       assert.ok(!result.success, "Should fail for case-mismatched branch name");
     });
@@ -852,8 +694,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should produce consistent results when reusing parser", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result1 = await parser.parse("main");
       const result2 = await parser.parse("main");
       assert.ok(result1.success);
@@ -866,8 +707,7 @@ describe("git parsers", { concurrency: false }, () => {
     it("should not accumulate state across parse calls", async () => {
       await cleanupTestRepo();
       await createTestRepo();
-      const fs = await getFs();
-      const parser = gitBranch({ fs, dir: testRepoDir });
+      const parser = gitBranch({ dir: testRepoDir });
       const result1 = await parser.parse("main");
       const result2 = await parser.parse("main");
       assert.ok(result1.success);
