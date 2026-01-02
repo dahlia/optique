@@ -13,10 +13,6 @@ import { message, text, values } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-// Bun uses Oxford comma in Intl.ListFormat, while Deno/Node.js do not
-// deno-lint-ignore no-explicit-any
-const isBun = typeof (globalThis as any).Bun !== "undefined";
-
 describe("isValueParser", () => {
   it("should return true for valid ValueParser objects", () => {
     const parser = integer({});
@@ -907,7 +903,7 @@ describe("choice", () => {
             { type: "value", value: "alpha" },
             { type: "text", text: ", " },
             { type: "value", value: "beta" },
-            { type: "text", text: isBun ? ", and " : " and " },
+            { type: "text", text: ", and " },
             { type: "value", value: "gamma" },
             { type: "text", text: ", but got " },
             { type: "value", value: "delta" },
@@ -990,7 +986,7 @@ describe("choice", () => {
             { type: "value", value: "High" },
             { type: "text", text: ", " },
             { type: "value", value: "Medium" },
-            { type: "text", text: isBun ? ", and " : " and " },
+            { type: "text", text: ", and " },
             { type: "value", value: "Low" },
             { type: "text", text: ", but got " },
             { type: "value", value: "none" },

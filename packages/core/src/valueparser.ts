@@ -370,7 +370,9 @@ function formatDefaultChoiceError(
   choices: readonly (string | number)[],
 ): Message {
   const choiceStrings = choices.map((c) => String(c));
-  return message`Expected one of ${valueSet(choiceStrings)}, but got ${input}.`;
+  return message`Expected one of ${
+    valueSet(choiceStrings, { locale: "en-US" })
+  }, but got ${input}.`;
 }
 
 /**

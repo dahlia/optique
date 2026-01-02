@@ -308,10 +308,10 @@ The `valueSet()` function accepts the following options:
 > `"error, warn, info, debug"` instead of `"error", "warn", "info", "debug"`.
 
 > [!NOTE]
-> Since `valueSet()` relies on the runtime's `Intl.ListFormat` implementation,
-> the exact formatting may vary slightly between JavaScript runtimes. For
-> example, Bun uses the Oxford comma (`"a", "b", and "c"`) while Deno and
-> Node.js do not (`"a", "b" and "c"`).
+> The exact formatting depends on the locale. If no locale is specified,
+> `valueSet()` uses the system default locale, which may vary across
+> environments. For consistent formatting, always specify a locale explicitly
+> (e.g., `{ locale: "en-US" }`).
 
 ### Combined examples
 

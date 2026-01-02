@@ -133,9 +133,9 @@ To be released.
     const msg3 = message`${valueSet(choices, { locale: "ko", type: "disjunction" })}`;
     ~~~~
 
-    Note that since `valueSet()` relies on the runtime's `Intl.ListFormat`
-    implementation, the exact formatting may vary slightly between JavaScript
-    runtimes (e.g., Bun uses the Oxford comma while Deno and Node.js do not).
+    The exact formatting depends on the locale.  If no locale is specified,
+    `valueSet()` uses the system default locale, which may vary across
+    environments.  For consistent formatting, specify a locale explicitly.
 
      -  Added `ValueSetOptions` interface.
      -  Added `valueSet()` function.
