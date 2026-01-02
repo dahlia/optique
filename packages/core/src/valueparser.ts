@@ -1,4 +1,4 @@
-import { type Message, message, text } from "./message.ts";
+import { type Message, message, text, valueSet } from "./message.ts";
 import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
 import type { Suggestion } from "./parser.ts";
 
@@ -369,15 +369,8 @@ function formatDefaultChoiceError(
   input: string,
   choices: readonly (string | number)[],
 ): Message {
-  // Format choices as "a", "b", "c" instead of "a, b, c"
-  let choicesList: Message = [];
-  for (let i = 0; i < choices.length; i++) {
-    if (i > 0) {
-      choicesList = [...choicesList, ...message`, `];
-    }
-    choicesList = [...choicesList, ...message`${String(choices[i])}`];
-  }
-  return message`Expected one of ${choicesList}, but got ${input}.`;
+  const choiceStrings = choices.map((c) => String(c));
+  return message`Expected one of ${valueSet(choiceStrings)}, but got ${input}.`;
 }
 
 /**

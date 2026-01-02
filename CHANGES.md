@@ -112,6 +112,34 @@ To be released.
      -  Added `ChoiceOptionsNumber` interface.
      -  Deprecated `ChoiceOptions` interface in favor of `ChoiceOptionsString`.
 
+ -  Added `valueSet()` function for formatting choice lists with locale-aware
+    separators.  This function uses `Intl.ListFormat` to format lists according
+    to locale conventions with appropriate conjunctions like “and” or “or”,
+    making it suitable for error messages in `choice()` value parsers and
+    similar contexts.
+
+    ~~~~ typescript
+    import { message, valueSet } from "@optique/core/message";
+
+    const choices = ["error", "warn", "info"];
+
+    // Conjunction: "error", "warn" and "info"
+    const msg1 = message`Expected ${valueSet(choices)}.`;
+
+    // Disjunction: "error", "warn" or "info"
+    const msg2 = message`Expected ${valueSet(choices, { type: "disjunction" })}.`;
+
+    // Korean: "error", "warn" 또는 "info"
+    const msg3 = message`${valueSet(choices, { locale: "ko", type: "disjunction" })}`;
+    ~~~~
+
+    Note that since `valueSet()` relies on the runtime's `Intl.ListFormat`
+    implementation, the exact formatting may vary slightly between JavaScript
+    runtimes (e.g., Bun uses the Oxford comma while Deno and Node.js do not).
+
+     -  Added `ValueSetOptions` interface.
+     -  Added `valueSet()` function.
+
 [#54]: https://github.com/dahlia/optique/issues/54
 [#57]: https://github.com/dahlia/optique/issues/57
 [#62]: https://github.com/dahlia/optique/issues/62

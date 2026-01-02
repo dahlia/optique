@@ -10,6 +10,7 @@ import {
   text,
   value,
   values,
+  valueSet,
 } from "./message.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -804,5 +805,136 @@ describe("formatMessage - explicit line breaks", () => {
 
     // Multiple double newlines still create single hard break
     assert.equal(formatted, "Line 1\nLine 2");
+  });
+});
+
+describe("valueSet", () => {
+  it("should format list with conjunction by default", () => {
+    const msg = valueSet(["error", "warn", "info"], { locale: "en" });
+
+    // Should have 5 terms: value, text(", "), value, text(", and "), value
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 5);
+    assert.deepEqual(msg[0], { type: "value", value: "error" });
+    assert.deepEqual(msg[1], { type: "text", text: ", " });
+    assert.deepEqual(msg[2], { type: "value", value: "warn" });
+    assert.deepEqual(msg[3], { type: "text", text: ", and " });
+    assert.deepEqual(msg[4], { type: "value", value: "info" });
+  });
+
+  it("should format list with disjunction", () => {
+    const msg = valueSet(["error", "warn", "info"], {
+      locale: "en",
+      type: "disjunction",
+    });
+
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 5);
+    assert.deepEqual(msg[0], { type: "value", value: "error" });
+    assert.deepEqual(msg[1], { type: "text", text: ", " });
+    assert.deepEqual(msg[2], { type: "value", value: "warn" });
+    assert.deepEqual(msg[3], { type: "text", text: ", or " });
+    assert.deepEqual(msg[4], { type: "value", value: "info" });
+  });
+
+  it("should handle empty array", () => {
+    const msg = valueSet([]);
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 0);
+  });
+
+  it("should handle single element", () => {
+    const msg = valueSet(["only"], { locale: "en" });
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 1);
+    assert.deepEqual(msg[0], { type: "value", value: "only" });
+  });
+
+  it("should handle two elements", () => {
+    const msg = valueSet(["first", "second"], { locale: "en" });
+
+    // Should have 3 terms: value, text(" and "), value
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 3);
+    assert.deepEqual(msg[0], { type: "value", value: "first" });
+    assert.deepEqual(msg[1], { type: "text", text: " and " });
+    assert.deepEqual(msg[2], { type: "value", value: "second" });
+  });
+
+  it("should handle two elements with disjunction", () => {
+    const msg = valueSet(["first", "second"], {
+      locale: "en",
+      type: "disjunction",
+    });
+
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 3);
+    assert.deepEqual(msg[0], { type: "value", value: "first" });
+    assert.deepEqual(msg[1], { type: "text", text: " or " });
+    assert.deepEqual(msg[2], { type: "value", value: "second" });
+  });
+
+  it("should work with Korean locale", () => {
+    const msg = valueSet(["error", "warn", "info"], {
+      locale: "ko",
+      type: "disjunction",
+    });
+
+    // Korean uses different separators
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 5);
+    // Check that values are preserved
+    assert.deepEqual(msg[0], { type: "value", value: "error" });
+    assert.deepEqual(msg[2], { type: "value", value: "warn" });
+    assert.deepEqual(msg[4], { type: "value", value: "info" });
+    // Korean "or" is "또는"
+    assert.equal(msg[3].type, "text");
+    if (msg[3].type === "text") {
+      assert.ok(msg[3].text.includes("또는"));
+    }
+  });
+
+  it("should accept Intl.Locale object", () => {
+    const locale = new Intl.Locale("en-US");
+    const msg = valueSet(["a", "b"], { locale });
+
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 3);
+    assert.deepEqual(msg[0], { type: "value", value: "a" });
+    assert.deepEqual(msg[2], { type: "value", value: "b" });
+  });
+
+  it("should accept array of locales", () => {
+    const msg = valueSet(["a", "b"], { locale: ["en-US", "en"] });
+
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 3);
+  });
+
+  it("should work without options (use system default)", () => {
+    const msg = valueSet(["a", "b", "c"]);
+
+    // Should produce valid output with system default locale
+    assert.ok(Array.isArray(msg));
+    assert.equal(msg.length, 5);
+    assert.deepEqual(msg[0], { type: "value", value: "a" });
+    assert.deepEqual(msg[2], { type: "value", value: "b" });
+    assert.deepEqual(msg[4], { type: "value", value: "c" });
+  });
+
+  it("should integrate with message template", () => {
+    const msg = message`Expected ${valueSet(["a", "b"], { locale: "en" })}.`;
+
+    const formatted = formatMessage(msg, { quotes: true });
+    assert.equal(formatted, 'Expected "a" and "b".');
+  });
+
+  it("should integrate with message template using disjunction", () => {
+    const msg = message`Expected one of ${
+      valueSet(["error", "warn", "info"], { locale: "en", type: "disjunction" })
+    }.`;
+
+    const formatted = formatMessage(msg, { quotes: true });
+    assert.equal(formatted, 'Expected one of "error", "warn", or "info".');
   });
 });

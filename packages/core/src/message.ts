@@ -267,6 +267,108 @@ export function commandLine(commandLine: string): MessageTerm {
 }
 
 /**
+ * Options for the {@link valueSet} function.
+ * @since 0.9.0
+ */
+export interface ValueSetOptions {
+  /**
+   * The locale(s) to use for list formatting.  Can be a BCP 47 language tag
+   * string, an array of language tags, an `Intl.Locale` object, or an array
+   * of `Intl.Locale` objects.  If not specified, the system default locale
+   * is used.
+   */
+  readonly locale?:
+    | string
+    | readonly string[]
+    | Intl.Locale
+    | readonly Intl.Locale[];
+
+  /**
+   * The type of list to format:
+   *
+   * - `"conjunction"`: "A, B, and C" (default)
+   * - `"disjunction"`: "A, B, or C"
+   * - `"unit"`: "A, B, C"
+   *
+   * @default `"conjunction"`
+   */
+  readonly type?: "conjunction" | "disjunction" | "unit";
+
+  /**
+   * The style of the list formatting:
+   *
+   * - `"long"`: "A, B, and C" (default)
+   * - `"short"`: "A, B, & C"
+   * - `"narrow"`: "A, B, C"
+   *
+   * @default `"long"`
+   */
+  readonly style?: "long" | "short" | "narrow";
+}
+
+/**
+ * Creates a {@link Message} for a formatted list of values using the
+ * `Intl.ListFormat` API.  This is useful for displaying choice lists
+ * in error messages with proper locale-aware formatting.
+ *
+ * Each value in the list becomes a separate value term, and the separators
+ * (commas, "and", "or", etc.) become text terms.  This allows each value
+ * to be styled independently while respecting the locale's list formatting
+ * conventions.
+ *
+ * @example
+ * ```typescript
+ * // English conjunction (default): "error", "warn", and "info"
+ * const msg1 = message`Expected one of ${valueSet(["error", "warn", "info"])}.`;
+ *
+ * // English disjunction: "error", "warn", or "info"
+ * const msg2 = message`Expected ${
+ *   valueSet(["error", "warn", "info"], { type: "disjunction" })
+ * }.`;
+ *
+ * // Korean disjunction: "error", "warn" 또는 "info"
+ * const msg3 = message`${
+ *   valueSet(["error", "warn", "info"], { locale: "ko", type: "disjunction" })
+ * } 중 하나여야 합니다.`;
+ * ```
+ *
+ * @param values The list of values to format.
+ * @param options Optional formatting options including locale and list type.
+ * @returns A {@link Message} with alternating value and text terms.
+ * @since 0.9.0
+ */
+export function valueSet(
+  values: readonly string[],
+  options?: ValueSetOptions,
+): Message {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const formatter = new Intl.ListFormat(
+    options?.locale as string | string[] | undefined,
+    {
+      type: options?.type,
+      style: options?.style,
+    },
+  );
+
+  const parts = formatter.formatToParts(values as string[]);
+  const result: MessageTerm[] = [];
+
+  for (const part of parts) {
+    if (part.type === "element") {
+      result.push({ type: "value", value: part.value });
+    } else {
+      // part.type === "literal"
+      result.push({ type: "text", text: part.value });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Options for the {@link formatMessage} function.
  */
 export interface MessageFormatOptions {

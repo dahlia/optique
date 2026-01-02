@@ -13,6 +13,10 @@ import { message, text, values } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+// Bun uses Oxford comma in Intl.ListFormat, while Deno/Node.js do not
+// deno-lint-ignore no-explicit-any
+const isBun = typeof (globalThis as any).Bun !== "undefined";
+
 describe("isValueParser", () => {
   it("should return true for valid ValueParser objects", () => {
     const parser = integer({});
@@ -648,7 +652,7 @@ describe("choice", () => {
           [
             { type: "text", text: "Expected one of " },
             { type: "value", value: "yes" },
-            { type: "text", text: ", " },
+            { type: "text", text: " and " },
             { type: "value", value: "no" },
             { type: "text", text: ", but got " },
             { type: "value", value: "maybe" },
@@ -903,7 +907,7 @@ describe("choice", () => {
             { type: "value", value: "alpha" },
             { type: "text", text: ", " },
             { type: "value", value: "beta" },
-            { type: "text", text: ", " },
+            { type: "text", text: isBun ? ", and " : " and " },
             { type: "value", value: "gamma" },
             { type: "text", text: ", but got " },
             { type: "value", value: "delta" },
@@ -961,7 +965,7 @@ describe("choice", () => {
           [
             { type: "text", text: "Expected one of " },
             { type: "value", value: "YES" },
-            { type: "text", text: ", " },
+            { type: "text", text: " and " },
             { type: "value", value: "NO" },
             { type: "text", text: ", but got " },
             { type: "value", value: "maybe" },
@@ -986,7 +990,7 @@ describe("choice", () => {
             { type: "value", value: "High" },
             { type: "text", text: ", " },
             { type: "value", value: "Medium" },
-            { type: "text", text: ", " },
+            { type: "text", text: isBun ? ", and " : " and " },
             { type: "value", value: "Low" },
             { type: "text", text: ", but got " },
             { type: "value", value: "none" },
@@ -1271,7 +1275,7 @@ describe("choice", () => {
           [
             { type: "text", text: "Expected one of " },
             { type: "value", value: "8" },
-            { type: "text", text: ", " },
+            { type: "text", text: " and " },
             { type: "value", value: "10" },
             { type: "text", text: ", but got " },
             { type: "value", value: "9" },

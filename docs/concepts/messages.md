@@ -210,7 +210,7 @@ const examples = message`Examples:
   ${commandLine("myapp --config app.json --verbose")}`;
 ~~~~
 
-### Multiple values
+### Consecutive values
 
 Consecutive values that were provided together, such as multiple arguments or
 repeated option values. These are displayed as a sequence with consistent
@@ -236,66 +236,82 @@ Without colors (with quotes):
 Invalid files: "file1.txt" "file2.txt" "file3.txt".
 ~~~~
 
-### Formatting choice lists
+### Value sets
 
-When displaying a list of valid choices (such as in error messages for `choice()`
-value parsers), each choice should be formatted individually so they appear as
-distinct values. This differs from `values()`, which is for user-provided
-consecutive values.
+*Available since Optique 0.9.0.*
 
-For choice lists, format each option separately using a loop:
+Value sets are used for displaying a list of valid choices (such as in error
+messages for `choice()` value parsers) with proper locale-aware formatting.
+Unlike `values()` which is for consecutive user-provided values separated by
+spaces, `valueSet()` uses `Intl.ListFormat` to format lists according to locale
+conventions with appropriate conjunctions like “and” or “or”.
 
 ~~~~ typescript twoslash
-import { type Message, message } from "@optique/core/message";
-
+import { message, valueSet } from "@optique/core/message";
+// ---cut-before---
 const choices = ["error", "warn", "info", "debug"];
 const input = "invalid";
 
-// Format each choice individually
-let choicesList: Message = [];
-for (let i = 0; i < choices.length; i++) {
-  if (i > 0) {
-    choicesList = [...choicesList, ...message`, `];
-  }
-  choicesList = [...choicesList, ...message`${choices[i]}`];
-}
+// Format as conjunction: "error", "warn", "info" and "debug"
+const errorMsg = message`Invalid log level: ${input}. Valid levels: ${valueSet(choices)}.`;
 
-const errorMsg = message`Invalid log level: ${input}. Valid levels: ${choicesList}.`;
+// Format as disjunction: "error", "warn", "info" or "debug"
+const altMsg = message`Expected ${valueSet(choices, { type: "disjunction" })}.`;
 ~~~~
 
-This ensures each choice appears with proper formatting:
+Each choice appears with proper formatting:
 
 With colors:
 
 ~~~~ ansi
-Invalid log level: invalid. Valid levels: [32merror[0m, [32mwarn[0m, [32minfo[0m, [32mdebug[0m.
+Invalid log level: [32minvalid[0m. Valid levels: [32merror[0m, [32mwarn[0m, [32minfo[0m and [32mdebug[0m.
 ~~~~
 
 Without colors:
 
 ~~~~ ansi
-Invalid log level: "invalid". Valid levels: "error", "warn", "info", "debug".
+Invalid log level: "invalid". Valid levels: "error", "warn", "info" and "debug".
 ~~~~
+
+You can also specify a locale for proper internationalization:
+
+~~~~ typescript twoslash
+import { message, valueSet } from "@optique/core/message";
+// ---cut-before---
+const choices = ["error", "warn", "info"];
+
+// Korean disjunction: "error", "warn" 또는 "info"
+const koreanMsg = message`${valueSet(choices, { locale: "ko", type: "disjunction" })} 중 하나여야 합니다.`;
+
+// Japanese conjunction: "error"、"warn"、"info"
+const japaneseMsg = message`${valueSet(choices, { locale: "ja" })}のいずれかを指定してください。`;
+~~~~
+
+The `valueSet()` function accepts the following options:
+
+`locale`
+:   The locale(s) to use for formatting. Can be a string, array of strings,
+    `Intl.Locale` object, or array of `Intl.Locale` objects. Defaults to the
+    system locale.
+
+`type`
+:   The type of list: `"conjunction"` for “and” lists (default),
+    `"disjunction"` for “or” lists, or `"unit"` for simple comma-separated
+    lists.
+
+`style`
+:   The formatting style: `"long"` (default), `"short"`, or `"narrow"`.
 
 > [!NOTE]
 > Do not use `.join(", ")` for choice lists, as this concatenates all choices
 > into a single value string, losing individual formatting:
 > `"error, warn, info, debug"` instead of `"error", "warn", "info", "debug"`.
 
-> [!CAUTION] Why doesn't Optique provide a built-in choice list formatter?
->
-> Choice list formatting varies significantly across languages and locales,
-> making it impossible to provide a language-neutral formatter. Different
-> languages require different separators and conjunctions:
->
-> - English: `"foo", "bar", "baz", and "qux"` or `"foo", "bar", "baz", or "qux"`
-> - Japanese: `"foo"、"bar"、"baz"、"qux"` (、instead of commas)
-> - Other languages may use different punctuation, conjunctions, or ordering
->
-> By requiring manual formatting, Optique ensures you can properly localize
-> your choice lists according to your application's language requirements.
-> For internationalized applications, consider using a library like
-> `Intl.ListFormat` to format choice lists appropriately for each locale.
+> [!NOTE]
+> Since `valueSet()` relies on the runtime's `Intl.ListFormat` implementation,
+> the exact formatting may vary slightly between JavaScript runtimes. For
+> example, Bun uses the Oxford comma (`"a", "b", and "c"`) while Deno and
+> Node.js do not (`"a", "b" and "c"`).
 
 ### Combined examples
 
@@ -332,7 +348,7 @@ const examples = {
   // Command-line example
   cmdExample: message`Run ${commandLine("myapp --config app.json")} to start.`,
 
-  // Multiple consecutive values
+  // Consecutive values
   invalidFiles: message`Cannot process files ${values(["missing.txt", "readonly.txt"])}.`,
 
   // Combined components
