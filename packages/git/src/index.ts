@@ -428,9 +428,10 @@ export function gitTag(
 export function gitRemote(
   options?: GitParserOptions,
 ): ValueParser<"async", string> {
+  const metavar: NonEmptyString = options?.metavar ?? METAVAR_REMOTE;
   return createAsyncValueParser(
     options,
-    METAVAR_REMOTE,
+    metavar,
     async (fs, dir, input) => {
       try {
         const remotes = await git.listRemotes({ fs, dir });
@@ -497,9 +498,10 @@ export function gitRemote(
 export function gitCommit(
   options?: GitParserOptions,
 ): ValueParser<"async", string> {
+  const metavar: NonEmptyString = options?.metavar ?? "COMMIT";
   return createAsyncValueParser(
     options,
-    "COMMIT",
+    metavar,
     async (fs, dir, input) => {
       try {
         const oid = await git.expandOid({ fs, dir, oid: input });
@@ -560,9 +562,10 @@ export function gitCommit(
 export function gitRef(
   options?: GitParserOptions,
 ): ValueParser<"async", string> {
+  const metavar: NonEmptyString = options?.metavar ?? "REF";
   return createAsyncValueParser(
     options,
-    "REF",
+    metavar,
     async (fs, dir, input) => {
       try {
         const oid = await git.resolveRef({ fs, dir, ref: input });
