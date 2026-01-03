@@ -6,7 +6,14 @@ import {
   optionName as eOptionName,
   optionNames as eOptionNames,
 } from "./message.ts";
-import type { DocState, Mode, Parser, Suggestion } from "./parser.ts";
+import type {
+  DocState,
+  Mode,
+  Parser,
+  ParserContext,
+  ParserResult,
+  Suggestion,
+} from "./parser.ts";
 import {
   createErrorWithSuggestions,
   DEFAULT_FIND_SIMILAR_OPTIONS,
@@ -132,7 +139,7 @@ function* suggestOptionSync<T>(
   optionNames: readonly string[],
   valueParser: ValueParser<"sync", T> | undefined,
   hidden: boolean,
-  context: import("./parser.ts").ParserContext<
+  context: ParserContext<
     ValueParserResult<T | boolean> | undefined
   >,
   prefix: string,
@@ -217,7 +224,7 @@ async function* suggestOptionAsync<T>(
   optionNames: readonly string[],
   valueParser: ValueParser<Mode, T> | undefined,
   hidden: boolean,
-  context: import("./parser.ts").ParserContext<
+  context: ParserContext<
     ValueParserResult<T | boolean> | undefined
   >,
   prefix: string,
@@ -451,7 +458,7 @@ export function option<M extends Mode, T>(
         : message`Missing option ${eOptionNames(optionNames)}.`,
     },
     parse(
-      context: import("./parser.ts").ParserContext<
+      context: ParserContext<
         ValueParserResult<T | boolean> | undefined
       >,
     ) {
@@ -713,7 +720,7 @@ export function option<M extends Mode, T>(
       };
     },
     suggest(
-      context: import("./parser.ts").ParserContext<
+      context: ParserContext<
         ValueParserResult<T | boolean> | undefined
       >,
       prefix: string,
@@ -1191,7 +1198,7 @@ export function argument<M extends Mode, T>(
     usage: [term],
     initialState: undefined,
     parse(
-      context: import("./parser.ts").ParserContext<
+      context: ParserContext<
         ValueParserResult<T> | undefined
       >,
     ) {
@@ -1291,7 +1298,7 @@ export function argument<M extends Mode, T>(
       };
     },
     suggest(
-      _context: import("./parser.ts").ParserContext<
+      _context: ParserContext<
         ValueParserResult<T> | undefined
       >,
       prefix: string,
@@ -1419,7 +1426,7 @@ type CommandState<TState> =
   | ["parsing", TState]; // Command matched and inner parser active
 
 function* suggestCommandSync<T, TState>(
-  context: import("./parser.ts").ParserContext<CommandState<TState>>,
+  context: ParserContext<CommandState<TState>>,
   prefix: string,
   name: string,
   parser: Parser<"sync", T, TState>,
@@ -1455,7 +1462,7 @@ function* suggestCommandSync<T, TState>(
 }
 
 async function* suggestCommandAsync<T, TState>(
-  context: import("./parser.ts").ParserContext<CommandState<TState>>,
+  context: ParserContext<CommandState<TState>>,
   prefix: string,
   name: string,
   parser: Parser<Mode, T, TState>,
@@ -1528,7 +1535,7 @@ export function command<M extends Mode, T, TState>(
       ...parser.usage,
     ],
     initialState: undefined,
-    parse(context: import("./parser.ts").ParserContext<CommandState<TState>>) {
+    parse(context: ParserContext<CommandState<TState>>) {
       // Handle different states
       if (context.state === undefined) {
         // Check if buffer starts with our command name
@@ -1594,88 +1601,50 @@ export function command<M extends Mode, T, TState>(
           },
           consumed: context.buffer.slice(0, 1),
         };
-      } else if (context.state[0] === "matched") {
-        // Command was matched, now start the inner parser
+      } else if (
+        context.state[0] === "matched" ||
+        context.state[0] === "parsing"
+      ) {
+        // "matched": command was matched, start the inner parser
+        // "parsing": delegate to inner parser with existing state
+        const innerState = context.state[0] === "matched"
+          ? parser.initialState
+          : context.state[1];
+
         const parseResultOrPromise = parser.parse({
           ...context,
-          state: parser.initialState,
+          state: innerState,
         });
+
+        const wrapState = (
+          parseResult: ParserResult<TState>,
+        ) => {
+          if (parseResult.success) {
+            return {
+              success: true as const,
+              next: {
+                ...parseResult.next,
+                state: ["parsing", parseResult.next.state] as [
+                  "parsing",
+                  TState,
+                ],
+              },
+              consumed: parseResult.consumed,
+            };
+          }
+          return parseResult;
+        };
+
         if (isAsync) {
           return (
             parseResultOrPromise as Promise<
-              import("./parser.ts").ParserResult<TState>
+              ParserResult<TState>
             >
-          ).then((parseResult) => {
-            if (parseResult.success) {
-              return {
-                success: true as const,
-                next: {
-                  ...parseResult.next,
-                  state: ["parsing", parseResult.next.state] as [
-                    "parsing",
-                    TState,
-                  ],
-                },
-                consumed: parseResult.consumed,
-              };
-            }
-            return parseResult;
-          });
+          ).then(wrapState);
         }
-        const parseResult =
-          parseResultOrPromise as import("./parser.ts").ParserResult<TState>;
-        if (parseResult.success) {
-          return {
-            success: true,
-            next: {
-              ...parseResult.next,
-              state: ["parsing", parseResult.next.state] as ["parsing", TState],
-            },
-            consumed: parseResult.consumed,
-          };
-        }
-        return parseResult;
-      } else if (context.state[0] === "parsing") {
-        // Delegate to inner parser
-        const parseResultOrPromise = parser.parse({
-          ...context,
-          state: context.state[1],
-        });
-        if (isAsync) {
-          return (
-            parseResultOrPromise as Promise<
-              import("./parser.ts").ParserResult<TState>
-            >
-          ).then((parseResult) => {
-            if (parseResult.success) {
-              return {
-                success: true as const,
-                next: {
-                  ...parseResult.next,
-                  state: ["parsing", parseResult.next.state] as [
-                    "parsing",
-                    TState,
-                  ],
-                },
-                consumed: parseResult.consumed,
-              };
-            }
-            return parseResult;
-          });
-        }
-        const parseResult =
-          parseResultOrPromise as import("./parser.ts").ParserResult<TState>;
-        if (parseResult.success) {
-          return {
-            success: true,
-            next: {
-              ...parseResult.next,
-              state: ["parsing", parseResult.next.state] as ["parsing", TState],
-            },
-            consumed: parseResult.consumed,
-          };
-        }
-        return parseResult;
+        return wrapState(
+          parseResultOrPromise as ParserResult<TState>,
+        );
       }
       // Should never reach here
       return {
@@ -1706,7 +1675,7 @@ export function command<M extends Mode, T, TState>(
       };
     },
     suggest(
-      context: import("./parser.ts").ParserContext<CommandState<TState>>,
+      context: ParserContext<CommandState<TState>>,
       prefix: string,
     ) {
       if (isAsync) {
