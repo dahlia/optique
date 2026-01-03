@@ -36,6 +36,15 @@ async function createTestRepo(): Promise<void> {
   });
 }
 
+function isAlreadyExistsError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "AlreadyExistsError"
+  );
+}
+
 async function createTestRepoWithBranchesAndTags(): Promise<void> {
   await fs.mkdir(testRepoDir, { recursive: true });
   await fs.writeFile(`${testRepoDir}/test.txt`, "test content");
@@ -50,8 +59,8 @@ async function createTestRepoWithBranchesAndTags(): Promise<void> {
   });
   try {
     await isomorphicGit.branch({ fs, dir: testRepoDir, ref: "feature/test" });
-  } catch {
-    // Branch might already exist
+  } catch (e) {
+    if (!isAlreadyExistsError(e)) throw e;
   }
   try {
     await isomorphicGit.branch({
@@ -59,13 +68,13 @@ async function createTestRepoWithBranchesAndTags(): Promise<void> {
       dir: testRepoDir,
       ref: "feature/my-branch-123",
     });
-  } catch {
-    // Branch might already exist
+  } catch (e) {
+    if (!isAlreadyExistsError(e)) throw e;
   }
   try {
     await isomorphicGit.branch({ fs, dir: testRepoDir, ref: "release/1.0.x" });
-  } catch {
-    // Branch might already exist
+  } catch (e) {
+    if (!isAlreadyExistsError(e)) throw e;
   }
   try {
     await isomorphicGit.tag({
@@ -74,8 +83,8 @@ async function createTestRepoWithBranchesAndTags(): Promise<void> {
       ref: "v1.0.0",
       object: "HEAD",
     });
-  } catch {
-    // Tag might already exist
+  } catch (e) {
+    if (!isAlreadyExistsError(e)) throw e;
   }
   try {
     await isomorphicGit.tag({
@@ -84,8 +93,8 @@ async function createTestRepoWithBranchesAndTags(): Promise<void> {
       ref: "v2.0.0-beta",
       object: "HEAD",
     });
-  } catch {
-    // Tag might already exist
+  } catch (e) {
+    if (!isAlreadyExistsError(e)) throw e;
   }
   try {
     await isomorphicGit.tag({
@@ -94,8 +103,8 @@ async function createTestRepoWithBranchesAndTags(): Promise<void> {
       ref: "feature/test-tag",
       object: "HEAD",
     });
-  } catch {
-    // Tag might already exist
+  } catch (e) {
+    if (!isAlreadyExistsError(e)) throw e;
   }
 }
 
