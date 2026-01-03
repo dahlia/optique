@@ -32,28 +32,23 @@ export {
  * Read-only filesystem interface passed to isomorphic-git.
  *
  * This package only performs read operations (validation and listing).
- * Write methods are implemented as stubs that throw errors if called,
+ * Write methods are implemented as stubs that return rejected promises,
  * enforcing the read-only contract and preventing accidental writes.
  */
 const gitFs = {
   readFile: fs.readFile,
-  writeFile: () => {
-    throw new Error("gitFs is read-only: writeFile is disabled.");
-  },
-  mkdir: () => {
-    throw new Error("gitFs is read-only: mkdir is disabled.");
-  },
-  rmdir: () => {
-    throw new Error("gitFs is read-only: rmdir is disabled.");
-  },
-  unlink: () => {
-    throw new Error("gitFs is read-only: unlink is disabled.");
-  },
+  writeFile: () =>
+    Promise.reject(new Error("gitFs is read-only: writeFile is disabled.")),
+  mkdir: () =>
+    Promise.reject(new Error("gitFs is read-only: mkdir is disabled.")),
+  rmdir: () =>
+    Promise.reject(new Error("gitFs is read-only: rmdir is disabled.")),
+  unlink: () =>
+    Promise.reject(new Error("gitFs is read-only: unlink is disabled.")),
   readdir: fs.readdir,
   readlink: fs.readlink,
-  symlink: () => {
-    throw new Error("gitFs is read-only: symlink is disabled.");
-  },
+  symlink: () =>
+    Promise.reject(new Error("gitFs is read-only: symlink is disabled.")),
   stat: fs.stat,
   lstat: fs.lstat,
 };
@@ -570,7 +565,15 @@ export function gitCommit(
       try {
         const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
         return { success: true, value: oid };
-      } catch {
+      } catch (e) {
+        if (hasErrorCode(e, "AmbiguousShortOidError")) {
+          return {
+            success: false,
+            error: message`Commit SHA ${
+              value(input)
+            } is ambiguous. Provide more characters to disambiguate.`,
+          };
+        }
         if (errors?.notFound) {
           return { success: false, error: errors.notFound(input) };
         }
@@ -639,7 +642,15 @@ export function gitRef(
       try {
         const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
         return { success: true, value: oid };
-      } catch {
+      } catch (e) {
+        if (hasErrorCode(e, "AmbiguousShortOidError")) {
+          return {
+            success: false,
+            error: message`Reference ${
+              value(input)
+            } is ambiguous. Provide more characters to disambiguate.`,
+          };
+        }
         if (errors?.notFound) {
           return { success: false, error: errors.notFound(input) };
         }
