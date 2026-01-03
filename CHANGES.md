@@ -59,8 +59,8 @@ To be released.
     };
 
     // Type-safe parsing
-    const syncResult = parseSync(myParser, args);        // Returns directly
-    const asyncResult = await parseAsync(myParser, args); // Returns Promise
+    const syncResult = parseSync(syncParser, args);        // Returns directly
+    const asyncResult = await parseAsync(asyncParser, args); // Returns Promise
     ~~~~
 
  -  Fixed a shell command injection vulnerability in the shell
@@ -219,7 +219,24 @@ To be released.
     ~~~~ typescript
     import { run, runSync, runAsync } from "@optique/run";
     import { object } from "@optique/core/constructs";
-    import { argument } from "@optique/core/primitives";
+    import { option } from "@optique/core/primitives";
+    import { string } from "@optique/core/valueparser";
+
+    // Example sync parser
+    const syncParser = object({ name: option("-n", string()) });
+
+    // Example async parser (with async value parser)
+    const asyncParser = object({
+      data: option("-d", {
+        $mode: "async",
+        metavar: "URL",
+        async parse(input) {
+          const res = await fetch(input);
+          return { success: true, value: await res.text() };
+        },
+        format: (v) => v,
+      }),
+    });
 
     // Sync parser (default behavior, unchanged)
     const syncResult = run(syncParser);
