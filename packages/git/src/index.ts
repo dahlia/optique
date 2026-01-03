@@ -563,7 +563,7 @@ export function gitCommit(
           success: false,
           error: message`Invalid commit SHA: ${
             value(input)
-          }. Commits must be 4–40 hexadecimal characters.`,
+          }. Provide an abbreviated (4+) or full (40) hexadecimal commit SHA.`,
         };
       }
 
