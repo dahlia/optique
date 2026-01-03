@@ -170,7 +170,7 @@ export function optional<M extends Mode, TValue, TState>(
       if (!isAsync) {
         return syncParser.complete(state[0]);
       }
-      return (async () => await parser.complete(state[0]))();
+      return parser.complete(state[0]);
     },
     suggest(
       context: ParserContext<[TState] | undefined>,
@@ -386,7 +386,7 @@ export function withDefault<
       if (!isAsync) {
         return syncParser.complete(state[0]);
       }
-      return (async () => await parser.complete(state[0]))();
+      return parser.complete(state[0]);
     },
     suggest(
       context: ParserContext<[TState] | undefined>,
@@ -686,18 +686,19 @@ export function multiple<M extends Mode, TValue, TState>(
         return validateMultipleResult(result);
       }
 
-      // Async complete - type cast needed due to TypeScript's conditional type limitations
+      // Async complete - use Promise.all for parallel execution
+      // Type cast needed due to TypeScript's conditional type limitations
       return (async () => {
-        const result: TValue[] = [];
-        for (const s of state) {
-          const valueResult = await parser.complete(s);
+        const results = await Promise.all(state.map((s) => parser.complete(s)));
+        const values: TValue[] = [];
+        for (const valueResult of results) {
           if (valueResult.success) {
-            result.push(valueResult.value);
+            values.push(valueResult.value);
           } else {
             return { success: false, error: valueResult.error };
           }
         }
-        return validateMultipleResult(result);
+        return validateMultipleResult(values);
       })() as unknown as ReturnType<typeof resultParser.complete>;
     },
     suggest(context: ParserContext<MultipleState>, prefix: string) {

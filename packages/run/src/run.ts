@@ -347,5 +347,5 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     onError() {
       return process.exit(errorExitCode) as never;
     },
-  }) as ModeValue<InferMode<T>, InferValue<T>>;
+  });
 }
