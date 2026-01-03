@@ -562,24 +562,30 @@ export function gitRef(
     options,
     metavar,
     async (dir, input, errors) => {
+      let resolved: string | undefined;
       try {
-        const resolved = await git.resolveRef({ fs: gitFs, dir, ref: input });
-        return { success: true, value: resolved };
+        resolved = await git.resolveRef({ fs: gitFs, dir, ref: input });
       } catch {
-        try {
-          const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
-          return { success: true, value: oid };
-        } catch {
-          if (errors?.notFound) {
-            return { success: false, error: errors.notFound(input) };
-          }
-          return {
-            success: false,
-            error: message`Reference ${
-              value(input)
-            } does not exist. Provide a valid branch, tag, or commit SHA.`,
-          };
+        // Not a branch or tag, will try as a commit SHA.
+      }
+
+      if (resolved) {
+        return { success: true, value: resolved };
+      }
+
+      try {
+        const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
+        return { success: true, value: oid };
+      } catch {
+        if (errors?.notFound) {
+          return { success: false, error: errors.notFound(input) };
         }
+        return {
+          success: false,
+          error: message`Reference ${
+            value(input)
+          } does not exist. Provide a valid branch, tag, or commit SHA.`,
+        };
       }
     },
     async function* suggestRef(dir, prefix) {
