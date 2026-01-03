@@ -9,7 +9,7 @@ import process from "node:process";
 import * as isomorphicGit from "isomorphic-git";
 import type { Suggestion } from "@optique/core/parser";
 import type { NonEmptyString } from "@optique/core/nonempty";
-import { type Message, message } from "@optique/core/message";
+import { message, valueSet } from "@optique/core/message";
 import {
   createGitParsers,
   gitBranch,
@@ -105,17 +105,6 @@ async function cleanupTestRepo(): Promise<void> {
   } catch {
     // Ignore
   }
-}
-
-function formatChoices(choices: readonly string[]): Message {
-  let result: Message = [];
-  for (let i = 0; i < choices.length; i++) {
-    if (i > 0) {
-      result = [...result, ...message`, `];
-    }
-    result = [...result, ...message`${choices[i]}`];
-  }
-  return result;
 }
 
 describe("git parsers", { concurrency: false }, () => {
@@ -736,7 +725,7 @@ describe("git parsers", { concurrency: false }, () => {
         errors: {
           notFound: (input, available) =>
             message`Custom error: ${input} not found. Try: ${
-              available ? formatChoices(available) : "none"
+              available ? valueSet(available) : "none"
             }`,
         },
       });
@@ -844,7 +833,7 @@ describe("git parsers", { concurrency: false }, () => {
         errors: {
           notFound: (input, available) =>
             message`Branch ${input} not found on origin. Available: ${
-              available ? formatChoices(available) : "none"
+              available ? valueSet(available) : "none"
             }`,
         },
       });

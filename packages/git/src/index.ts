@@ -6,7 +6,7 @@
  */
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Suggestion } from "@optique/core/parser";
-import { type Message, message, value } from "@optique/core/message";
+import { type Message, message, value, valueSet } from "@optique/core/message";
 import {
   ensureNonEmptyString,
   type NonEmptyString,
@@ -190,17 +190,6 @@ function listFailureMessage(
   return fallback;
 }
 
-function formatChoiceList(choices: readonly string[]): Message {
-  let result: Message = [];
-  for (let i = 0; i < choices.length; i++) {
-    if (i > 0) {
-      result = [...result, ...message`, `];
-    }
-    result = [...result, ...message`${choices[i]}`];
-  }
-  return result;
-}
-
 function createAsyncValueParser(
   options: GitParserOptions | undefined,
   metavar: NonEmptyString,
@@ -273,7 +262,7 @@ export function gitBranch(
           success: false,
           error: message`Branch ${
             value(input)
-          } does not exist. Available branches: ${formatChoiceList(branches)}`,
+          } does not exist. Available branches: ${valueSet(branches)}`,
         };
       } catch (error) {
         const fallback = message`Failed to list branches. Ensure ${
@@ -341,7 +330,7 @@ export function gitRemoteBranch(
           error: message`Remote branch ${
             value(input)
           } does not exist on remote ${value(remote)}. Available branches: ${
-            formatChoiceList(branches)
+            valueSet(branches)
           }`,
         };
       } catch (error) {
@@ -397,7 +386,7 @@ export function gitTag(
         return {
           success: false,
           error: message`Tag ${value(input)} does not exist. Available tags: ${
-            formatChoiceList(tags)
+            valueSet(tags)
           }`,
         };
       } catch (error) {
@@ -453,7 +442,7 @@ export function gitRemote(
           success: false,
           error: message`Remote ${
             value(input)
-          } does not exist. Available remotes: ${formatChoiceList(names)}`,
+          } does not exist. Available remotes: ${valueSet(names)}`,
         };
       } catch (error) {
         const fallback = message`Failed to list remotes. Ensure ${
