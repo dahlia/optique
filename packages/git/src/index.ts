@@ -25,6 +25,14 @@ export {
   resolveRef,
 } from "isomorphic-git";
 
+/**
+ * Filesystem interface passed to isomorphic-git.
+ *
+ * Although this package only performs read operations (validation and listing),
+ * isomorphic-git's FsClient type requires write methods to be present.
+ * These methods are included for type compatibility but are never called
+ * by our read-only operations.
+ */
 const gitFs = {
   readFile: fs.readFile,
   writeFile: fs.writeFile,
