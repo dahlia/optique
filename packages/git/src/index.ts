@@ -162,7 +162,16 @@ const METAVAR_TAG: NonEmptyString = "TAG";
 const METAVAR_REMOTE: NonEmptyString = "REMOTE";
 
 function getRepoDir(dirOption: string | undefined): string {
-  return dirOption ?? (typeof process !== "undefined" ? process.cwd() : ".");
+  if (dirOption != null) {
+    return dirOption;
+  }
+  if (typeof process !== "undefined" && typeof process.cwd === "function") {
+    return process.cwd();
+  }
+  throw new Error(
+    "Git parser requires a `dir` option in environments where " +
+      "`process.cwd()` is unavailable.",
+  );
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {
