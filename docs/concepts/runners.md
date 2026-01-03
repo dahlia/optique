@@ -655,7 +655,7 @@ function apiKey(): ValueParser<"async", string> {
     metavar: "KEY",
     async parse(input: string): Promise<ValueParserResult<string>> {
       // Validate API key against remote service
-      const response = await fetch(`https://api.example.com/validate?key=${input}`);
+      const response = await fetch(`https://api.example.com/validate?key=${encodeURIComponent(input)}`);
       if (!response.ok) {
         return { success: false, error: message`Invalid API key.` };
       }

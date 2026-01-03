@@ -20,7 +20,7 @@ To be released.
         for async.
      -  `CombineModes<T extends readonly Mode[]>`: Returns `"async"` if any
         element is `"async"`, otherwise `"sync"`.
-     -  `ExtractMode<P>`: Extracts the mode from a parser type.
+     -  `InferMode<P>`: Extracts the mode from a parser type.
 
     All parsers now include a `$mode` property indicating their execution mode.
     Combinators automatically propagate modes from their constituent parsers,
@@ -41,8 +41,11 @@ To be released.
     unchanged as all parsers default to sync mode.
 
     ~~~~ typescript
-    import type { Mode, ValueParser } from "@optique/core/valueparser";
+    import type { ValueParser } from "@optique/core/valueparser";
+    import { integer } from "@optique/core/valueparser";
     import { parseSync, parseAsync } from "@optique/core/parser";
+
+    const args: readonly string[] = ["42"];
 
     // Sync parser (default)
     const syncParser: ValueParser<"sync", number> = integer();
