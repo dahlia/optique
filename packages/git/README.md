@@ -31,7 +31,7 @@ Quick start
 ~~~~ typescript
 import { gitBranch, gitTag, gitCommit } from "@optique/git";
 import { argument, option, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
   branch: argument(gitBranch()),
@@ -39,7 +39,7 @@ const parser = object({
   commit: option("-c", "--commit", gitCommit()),
 });
 
-const result = await parse(parser, ["feature/login"]);
+const result = await parseAsync(parser, ["feature/login"]);
 // result.success === true
 // result.value.branch === "feature/login"
 ~~~~
@@ -54,7 +54,7 @@ Use `createGitParsers()` to create parsers for a different repository:
 ~~~~ typescript
 import { createGitParsers } from "@optique/git";
 import { argument, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const git = createGitParsers({ dir: "/path/to/repo" });
 
@@ -63,7 +63,7 @@ const parser = object({
   tag: option("-t", "--tag", git.tag()),
 });
 
-const result = await parse(parser, ["v1.0.0"]);
+const result = await parseAsync(parser, ["v1.0.0"]);
 // result.success === true
 // result.value.tag === "v1.0.0"
 ~~~~
@@ -80,13 +80,13 @@ existing branch in the repository.
 ~~~~ typescript
 import { gitBranch } from "@optique/git";
 import { argument, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
   branch: argument(gitBranch()),
 });
 
-const result = await parse(parser, ["main"]);
+const result = await parseAsync(parser, ["main"]);
 // Valid branch
 ~~~~
 
@@ -103,13 +103,13 @@ existing branch on the specified remote.
 ~~~~ typescript
 import { gitRemoteBranch } from "@optique/git";
 import { option, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
   branch: option("-b", "--branch", gitRemoteBranch("origin")),
 });
 
-const result = await parse(parser, ["--branch=main"]);
+const result = await parseAsync(parser, ["--branch=main"]);
 // Valid remote branch on origin
 ~~~~
 
@@ -122,13 +122,13 @@ in the repository.
 ~~~~ typescript
 import { gitTag } from "@optique/git";
 import { option, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
   tag: option("-t", "--tag", gitTag()),
 });
 
-const result = await parse(parser, ["--tag=v1.0.0"]);
+const result = await parseAsync(parser, ["--tag=v1.0.0"]);
 // Valid tag
 ~~~~
 
@@ -141,13 +141,13 @@ remote in the repository.
 ~~~~ typescript
 import { gitRemote } from "@optique/git";
 import { option, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
   remote: option("-r", "--remote", gitRemote()),
 });
 
-const result = await parse(parser, ["--remote=origin"]);
+const result = await parseAsync(parser, ["--remote=origin"]);
 // Valid remote
 ~~~~
 
@@ -160,13 +160,13 @@ A value parser for commit SHAs. Validates that the input is a valid commit SHA
 ~~~~ typescript
 import { gitCommit } from "@optique/git";
 import { option, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
   commit: option("-c", "--commit", gitCommit()),
 });
 
-const result = await parse(parser, ["--commit=abc1234"]);
+const result = await parseAsync(parser, ["--commit=abc1234"]);
 // Valid commit SHA
 ~~~~
 
@@ -179,13 +179,13 @@ that the input resolves to a valid Git reference.
 ~~~~ typescript
 import { gitRef } from "@optique/git";
 import { option, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
   ref: option("--ref", gitRef()),
 });
 
-const result = await parse(parser, ["--ref=v1.0.0"]);
+const result = await parseAsync(parser, ["--ref=v1.0.0"]);
 // Valid branch, tag, or commit
 ~~~~
 
@@ -198,7 +198,7 @@ created by the factory share the same filesystem and directory options.
 ~~~~ typescript
 import { createGitParsers } from "@optique/git";
 import { argument, option, object } from "@optique/core/primitives";
-import { parse } from "@optique/core/parser";
+import { parseAsync } from "@optique/core/parser";
 
 const git = createGitParsers({ dir: "/path/to/repo" });
 
