@@ -644,14 +644,16 @@ export function gitRef(
 export function createGitParsers(options?: GitParserOptions): GitParsers {
   return {
     branch: (branchOptions?: GitParserOptions) =>
-      gitBranch(branchOptions ?? options),
+      gitBranch({ ...options, ...branchOptions }),
     remoteBranch: (remote: string, branchOptions?: GitParserOptions) =>
-      gitRemoteBranch(remote, branchOptions ?? options),
-    tag: (tagOptions?: GitParserOptions) => gitTag(tagOptions ?? options),
+      gitRemoteBranch(remote, { ...options, ...branchOptions }),
+    tag: (tagOptions?: GitParserOptions) =>
+      gitTag({ ...options, ...tagOptions }),
     remote: (remoteOptions?: GitParserOptions) =>
-      gitRemote(remoteOptions ?? options),
+      gitRemote({ ...options, ...remoteOptions }),
     commit: (commitOptions?: GitParserOptions) =>
-      gitCommit(commitOptions ?? options),
-    ref: (refOptions?: GitParserOptions) => gitRef(refOptions ?? options),
+      gitCommit({ ...options, ...commitOptions }),
+    ref: (refOptions?: GitParserOptions) =>
+      gitRef({ ...options, ...refOptions }),
   } satisfies GitParsers;
 }

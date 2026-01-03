@@ -426,6 +426,18 @@ describe("git parsers", { concurrency: false }, () => {
       const parser = git.branch({ metavar: "CUSTOM_BRANCH" as NonEmptyString });
       assert.equal(parser.metavar, "CUSTOM_BRANCH");
     });
+
+    it("should merge per-parser options with factory options", async () => {
+      await cleanupTestRepo();
+      await createTestRepoWithBranchesAndTags();
+      const git = createGitParsers({ dir: testRepoDir });
+      // Per-parser metavar should override, but factory dir should be preserved
+      const parser = git.branch({ metavar: "CUSTOM_BRANCH" as NonEmptyString });
+      assert.equal(parser.metavar, "CUSTOM_BRANCH");
+      // Verify the parser still works (uses factory dir)
+      const result = await parser.parse("main");
+      assert.ok(result.success);
+    });
   });
 
   describe("metavar", () => {
