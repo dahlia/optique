@@ -2,6 +2,7 @@ import { formatMessage, type Message, message, text } from "./message.ts";
 import type {
   DocState,
   Mode,
+  ModeValue,
   Parser,
   ParserContext,
   ParserResult,
@@ -479,81 +480,39 @@ export function map<M extends Mode, T, U, TState>(
   parser: Parser<M, T, TState>,
   transform: (value: T) => U,
 ): Parser<M, U, TState> {
-  // Cast to sync for implementation (mode is handled at type level)
-  const syncParser = parser as Parser<"sync", T, TState>;
-  const isAsync = parser.$mode === "async";
+  const complete = (state: TState): ModeValue<M, ValueParserResult<U>> => {
+    const res = parser.complete(state);
 
-  // Sync suggest helper
-  function* suggestSync(
-    context: ParserContext<TState>,
-    prefix: string,
-  ): Generator<Suggestion> {
-    yield* syncParser.suggest(context, prefix);
-  }
-
-  // Async suggest helper
-  async function* suggestAsync(
-    context: ParserContext<TState>,
-    prefix: string,
-  ): AsyncGenerator<Suggestion> {
-    const suggestions = parser.suggest(
-      context,
-      prefix,
-    ) as AsyncIterable<Suggestion>;
-    for await (const s of suggestions) {
-      yield s;
+    if (res instanceof Promise) {
+      return res.then((r) => {
+        if (r.success) {
+          return { success: true, value: transform(r.value) };
+        }
+        return r;
+      }) as ModeValue<M, ValueParserResult<U>>;
     }
-  }
 
-  const result: Parser<"sync", U, TState> = {
-    $mode: "sync",
-    $valueType: [] as readonly U[],
-    $stateType: parser.$stateType,
-    priority: parser.priority,
-    usage: parser.usage,
-    initialState: parser.initialState,
-    parse(context: ParserContext<TState>) {
-      if (isAsync) {
-        // Cast needed: isAsync means parser.parse() returns Promise, but
-        // TypeScript sees the declared return type as ParserResult<TState>
-        return parser.parse(context) as unknown as ParserResult<TState>;
-      }
-      return syncParser.parse(context);
-    },
-    complete(state: TState): ValueParserResult<U> {
-      if (!isAsync) {
-        const innerResult = syncParser.complete(state);
-        if (innerResult.success) {
-          return { success: true, value: transform(innerResult.value) };
-        }
-        return { success: false, error: innerResult.error };
-      }
-      // Async complete: returns Promise but declared return type is sync.
-      // Cast needed because TypeScript cannot narrow based on isAsync flag.
-      return (async () => {
-        const innerResult = await parser.complete(state);
-        if (innerResult.success) {
-          return { success: true, value: transform(innerResult.value) };
-        }
-        return { success: false, error: innerResult.error };
-      })() as unknown as ValueParserResult<U>;
-    },
-    suggest(context, prefix) {
-      if (isAsync) {
-        // Cast needed: returns AsyncIterable but declared type is Iterable
-        return suggestAsync(context, prefix) as unknown as Iterable<Suggestion>;
-      }
-      return suggestSync(context, prefix);
-    },
-    getDocFragments(state: DocState<TState>, _defaultValue?: U) {
-      // Since we can't reverse the transformation, we delegate to the original parser
-      // with the original default value (if available). This is acceptable since
-      // documentation typically shows the input format, not the transformed output.
-      return syncParser.getDocFragments(state, undefined);
-    },
+    if (res.success) {
+      return { success: true, value: transform(res.value) } as ModeValue<
+        M,
+        ValueParserResult<U>
+      >;
+    }
+
+    return res as ModeValue<M, ValueParserResult<U>>;
   };
-  // Cast to preserve the original parser's mode type
-  return { ...result, $mode: parser.$mode } as Parser<M, U, TState>;
+
+  return {
+    ...parser,
+    $valueType: [] as readonly U[],
+    complete,
+    getDocFragments(state: DocState<TState>, _defaultValue?: U) {
+      // Since we can't reverse the transformation, we delegate to the original
+      // parser with undefined default value. This is acceptable since
+      // documentation typically shows the input format, not the transformed output.
+      return parser.getDocFragments(state, undefined);
+    },
+  } as Parser<M, U, TState>;
 }
 
 /**
