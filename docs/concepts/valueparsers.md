@@ -758,12 +758,12 @@ The `ValueParser<M, T>` interface defines three required properties plus a mode
 marker:
 
 ~~~~ typescript twoslash
-import type { Mode, NonEmptyString, ValueParserResult } from "@optique/core/valueparser";
+import type { Mode, ModeValue, NonEmptyString, ValueParserResult } from "@optique/core/valueparser";
 // ---cut-before---
 interface ValueParser<M extends Mode, T> {
   readonly $mode: M;
   readonly metavar: NonEmptyString;
-  parse(input: string): ValueParserResult<T>;
+  parse(input: string): ModeValue<M, ValueParserResult<T>>;
   format(value: T): string;
 }
 ~~~~
