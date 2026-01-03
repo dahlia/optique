@@ -241,8 +241,9 @@ function inferMetavar(
 export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
   options: ValibotParserOptions = {},
-): ValueParser<T> {
+): ValueParser<"sync", T> {
   return {
+    $mode: "sync",
     metavar: options.metavar ?? inferMetavar(schema),
 
     parse(input: string): ValueParserResult<T> {

@@ -200,7 +200,7 @@ export type PathOptions =
  * }));
  * ```
  */
-export function path(options: PathOptions = {}): ValueParser<string> {
+export function path(options: PathOptions = {}): ValueParser<"sync", string> {
   const {
     metavar = "PATH",
     type = "either",
@@ -212,6 +212,7 @@ export function path(options: PathOptions = {}): ValueParser<string> {
   const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;
 
   return {
+    $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<string> {
       // Extension validation

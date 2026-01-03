@@ -6,12 +6,43 @@ import {
   values,
 } from "./message.ts";
 import type {
+  CombineModes,
   DocState,
+  InferValue,
+  Mode,
+  ModeIterable,
   Parser,
   ParserContext,
   ParserResult,
   Suggestion,
 } from "./parser.ts";
+
+/**
+ * Helper type to extract Mode from a Parser.
+ * @internal
+ */
+type ExtractMode<T> = T extends Parser<infer M, unknown, unknown> ? M : never;
+
+/**
+ * Helper type to combine modes from an object of parsers.
+ * Returns "async" if any parser is async, otherwise "sync".
+ * @internal
+ */
+type CombineObjectModes<
+  T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
+> = CombineModes<
+  { [K in keyof T]: ExtractMode<T[K]> }[keyof T] extends infer M
+    ? M extends Mode ? readonly [M] : never
+    : never
+>;
+
+/**
+ * Helper type to combine modes from a tuple of parsers.
+ * Returns "async" if any parser is async, otherwise "sync".
+ * @internal
+ */
+type CombineTupleModes<T extends readonly Parser<Mode, unknown, unknown>[]> =
+  CombineModes<{ readonly [K in keyof T]: ExtractMode<T[K]> }>;
 import {
   createErrorWithSuggestions,
   deduplicateSuggestions,
@@ -183,7 +214,7 @@ function extractRequiredUsage(usage: Usage): Usage {
  * @returns Context about what types of inputs are expected
  */
 function analyzeNoMatchContext(
-  parsers: Parser<unknown, unknown>[],
+  parsers: Parser<Mode, unknown, unknown>[],
 ): NoMatchContext {
   // Collect usage information from all child parsers
   const combinedUsage = [
@@ -299,10 +330,15 @@ interface ExclusiveErrorOptions {
  * @internal
  */
 function createExclusiveComplete(
-  parsers: Parser<unknown, unknown>[],
+  parsers: Parser<Mode, unknown, unknown>[],
   options: { errors?: ExclusiveErrorOptions } | undefined,
   noMatchContext: NoMatchContext,
-): (state: ExclusiveState) => ValueParserResult<unknown> {
+  isAsync: boolean,
+): (
+  state: ExclusiveState,
+) => ValueParserResult<unknown> | Promise<ValueParserResult<unknown>> {
+  // Cast to sync parsers for sync operations
+  const syncParsers = parsers as Parser<"sync", unknown, unknown>[];
   return (state) => {
     if (state == null) {
       return {
@@ -311,8 +347,20 @@ function createExclusiveComplete(
       };
     }
     const [i, result] = state;
-    if (result.success) return parsers[i].complete(result.next.state);
-    return { success: false, error: result.error };
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    if (isAsync) {
+      // For async mode, await the inner parser's complete
+      return (async () => {
+        const completeResult = await parsers[i].complete(result.next.state);
+        return completeResult;
+      })();
+    }
+
+    // For sync mode, call complete directly
+    return syncParsers[i].complete(result.next.state);
   };
 }
 
@@ -321,33 +369,90 @@ function createExclusiveComplete(
  * @internal
  */
 function createExclusiveSuggest(
-  parsers: Parser<unknown, unknown>[],
-): (context: ParserContext<ExclusiveState>, prefix: string) => Suggestion[] {
+  parsers: Parser<Mode, unknown, unknown>[],
+  isAsync: boolean,
+): (
+  context: ParserContext<ExclusiveState>,
+  prefix: string,
+) => ModeIterable<Mode, Suggestion> {
+  // Cast to sync parsers for sync operations
+  const syncParsers = parsers as Parser<"sync", unknown, unknown>[];
+
+  if (isAsync) {
+    return (context, prefix) => {
+      return (async function* () {
+        const suggestions: Suggestion[] = [];
+
+        if (context.state == null) {
+          // No parser has been selected yet, get suggestions from all parsers
+          for (const parser of parsers) {
+            const parserSuggestions = parser.suggest({
+              ...context,
+              state: parser.initialState,
+            }, prefix);
+            if (parser.$mode === "async") {
+              for await (
+                const s of parserSuggestions as AsyncIterable<Suggestion>
+              ) {
+                suggestions.push(s);
+              }
+            } else {
+              suggestions.push(...(parserSuggestions as Iterable<Suggestion>));
+            }
+          }
+        } else {
+          // A parser has been selected, delegate to that parser
+          const [index, parserResult] = context.state;
+          if (parserResult.success) {
+            const parser = parsers[index];
+            const parserSuggestions = parser.suggest({
+              ...context,
+              state: parserResult.next.state,
+            }, prefix);
+            if (parser.$mode === "async") {
+              for await (
+                const s of parserSuggestions as AsyncIterable<Suggestion>
+              ) {
+                suggestions.push(s);
+              }
+            } else {
+              suggestions.push(...(parserSuggestions as Iterable<Suggestion>));
+            }
+          }
+        }
+
+        yield* deduplicateSuggestions(suggestions);
+      })();
+    };
+  }
+
   return (context, prefix) => {
-    const suggestions: Suggestion[] = [];
+    return (function* () {
+      const suggestions: Suggestion[] = [];
 
-    if (context.state == null) {
-      // No parser has been selected yet, get suggestions from all parsers
-      for (const parser of parsers) {
-        const parserSuggestions = parser.suggest({
-          ...context,
-          state: parser.initialState,
-        }, prefix);
-        suggestions.push(...parserSuggestions);
+      if (context.state == null) {
+        // No parser has been selected yet, get suggestions from all parsers
+        for (const parser of syncParsers) {
+          const parserSuggestions = parser.suggest({
+            ...context,
+            state: parser.initialState,
+          }, prefix);
+          suggestions.push(...parserSuggestions);
+        }
+      } else {
+        // A parser has been selected, delegate to that parser
+        const [index, parserResult] = context.state;
+        if (parserResult.success) {
+          const parserSuggestions = syncParsers[index].suggest({
+            ...context,
+            state: parserResult.next.state,
+          }, prefix);
+          suggestions.push(...parserSuggestions);
+        }
       }
-    } else {
-      // A parser has been selected, delegate to that parser
-      const [index, parserResult] = context.state;
-      if (parserResult.success) {
-        const parserSuggestions = parsers[index].suggest({
-          ...context,
-          state: parserResult.next.state,
-        }, prefix);
-        suggestions.push(...parserSuggestions);
-      }
-    }
 
-    return deduplicateSuggestions(suggestions);
+      yield* deduplicateSuggestions(suggestions);
+    })();
   };
 }
 
@@ -403,6 +508,8 @@ function createUnexpectedInputError(
  * Creates a parser that combines two mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TStateA The type of the state used by the first parser.
@@ -412,10 +519,18 @@ function createUnexpectedInputError(
  * @returns A {@link Parser} that tries to parse using the provided parsers
  *          in order, returning the result of the first successful parser.
  */
-export function or<TA, TB, TStateA, TStateB>(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
+export function or<
+  MA extends Mode,
+  MB extends Mode,
+  TA,
+  TB,
+  TStateA,
+  TStateB,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
 ): Parser<
+  CombineModes<readonly [MA, MB]>,
   TA | TB,
   undefined | [0, ParserResult<TStateA>] | [1, ParserResult<TStateB>]
 >;
@@ -424,6 +539,9 @@ export function or<TA, TB, TStateA, TStateB>(
  * Creates a parser that combines three mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -436,11 +554,22 @@ export function or<TA, TB, TStateA, TStateB>(
  * @return A {@link Parser} that tries to parse using the provided parsers
  *         in order, returning the result of the first successful parser.
  */
-export function or<TA, TB, TC, TStateA, TStateB, TStateC>(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
+export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  TA,
+  TB,
+  TC,
+  TStateA,
+  TStateB,
+  TStateC,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC]>,
   TA | TB | TC,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -452,6 +581,10 @@ export function or<TA, TB, TC, TStateA, TStateB, TStateC>(
  * Creates a parser that combines four mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -467,12 +600,26 @@ export function or<TA, TB, TC, TStateA, TStateB, TStateC>(
  * @return A {@link Parser} that tries to parse using the provided parsers
  *         in order, returning the result of the first successful parser.
  */
-export function or<TA, TB, TC, TD, TStateA, TStateB, TStateC, TStateD>(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
+export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  TA,
+  TB,
+  TC,
+  TD,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD]>,
   TA | TB | TC | TD,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -485,6 +632,11 @@ export function or<TA, TB, TC, TD, TStateA, TStateB, TStateC, TStateD>(
  * Creates a parser that combines five mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -504,6 +656,11 @@ export function or<TA, TB, TC, TD, TStateA, TStateB, TStateC, TStateD>(
  *         in order, returning the result of the first successful parser.
  */
 export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
   TA,
   TB,
   TC,
@@ -515,12 +672,13 @@ export function or<
   TStateD,
   TStateE,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-  e: Parser<TE, TStateE>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME]>,
   TA | TB | TC | TD | TE,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -534,6 +692,12 @@ export function or<
  * Creates a parser that combines six mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -557,6 +721,12 @@ export function or<
  * @since 0.3.0
  */
 export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
   TA,
   TB,
   TC,
@@ -570,13 +740,14 @@ export function or<
   TStateE,
   TStateF,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-  e: Parser<TE, TStateE>,
-  f: Parser<TF, TStateF>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME, MF]>,
   TA | TB | TC | TD | TE | TF,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -591,6 +762,13 @@ export function or<
  * Creates a parser that combines seven mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -617,6 +795,13 @@ export function or<
  * @since 0.3.0
  */
 export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
   TA,
   TB,
   TC,
@@ -632,14 +817,15 @@ export function or<
   TStateF,
   TStateG,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-  e: Parser<TE, TStateE>,
-  f: Parser<TF, TStateF>,
-  g: Parser<TG, TStateG>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG]>,
   TA | TB | TC | TD | TE | TF | TG,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -655,6 +841,14 @@ export function or<
  * Creates a parser that combines eight mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
+ * @template MH The mode of the eighth parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -684,6 +878,14 @@ export function or<
  * @since 0.3.0
  */
 export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
+  MH extends Mode,
   TA,
   TB,
   TC,
@@ -701,15 +903,16 @@ export function or<
   TStateG,
   TStateH,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-  e: Parser<TE, TStateE>,
-  f: Parser<TF, TStateF>,
-  g: Parser<TG, TStateG>,
-  h: Parser<TH, TStateH>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
+  h: Parser<MH, TH, TStateH>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH]>,
   TA | TB | TC | TD | TE | TF | TG | TH,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -726,6 +929,15 @@ export function or<
  * Creates a parser that combines nine mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
+ * @template MH The mode of the eighth parser.
+ * @template MI The mode of the ninth parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -758,6 +970,15 @@ export function or<
  * @since 0.3.0
  */
 export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
+  MH extends Mode,
+  MI extends Mode,
   TA,
   TB,
   TC,
@@ -777,16 +998,17 @@ export function or<
   TStateH,
   TStateI,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-  e: Parser<TE, TStateE>,
-  f: Parser<TF, TStateF>,
-  g: Parser<TG, TStateG>,
-  h: Parser<TH, TStateH>,
-  i: Parser<TI, TStateI>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
+  h: Parser<MH, TH, TStateH>,
+  i: Parser<MI, TI, TStateI>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI]>,
   TA | TB | TC | TD | TE | TF | TG | TH | TI,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -804,6 +1026,16 @@ export function or<
  * Creates a parser that combines ten mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
+ * @template MH The mode of the eighth parser.
+ * @template MI The mode of the ninth parser.
+ * @template MJ The mode of the tenth parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -839,6 +1071,16 @@ export function or<
  * @since 0.3.0
  */
 export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
+  MH extends Mode,
+  MI extends Mode,
+  MJ extends Mode,
   TA,
   TB,
   TC,
@@ -860,17 +1102,18 @@ export function or<
   TStateI,
   TStateJ,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-  e: Parser<TE, TStateE>,
-  f: Parser<TF, TStateF>,
-  g: Parser<TG, TStateG>,
-  h: Parser<TH, TStateH>,
-  i: Parser<TI, TStateI>,
-  j: Parser<TJ, TStateJ>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
+  h: Parser<MH, TH, TStateH>,
+  i: Parser<MI, TI, TStateI>,
+  j: Parser<MJ, TJ, TStateJ>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ]>,
   TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -885,9 +1128,61 @@ export function or<
   | [9, ParserResult<TStateJ>]
 >;
 
+/**
+ * Creates a parser that combines two mutually exclusive parsers into one,
+ * with custom error message options.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param options Custom error message options.
+ * @return A {@link Parser} that tries to parse using the provided parsers.
+ * @since 0.5.0
+ */
+export function or<
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+>(
+  a: TA,
+  b: TB,
+  options: OrOptions,
+): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
+  InferValue<TA> | InferValue<TB>,
+  undefined | [number, ParserResult<unknown>]
+>;
+
+/**
+ * Creates a parser that combines three mutually exclusive parsers into one,
+ * with custom error message options.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @template TC The type of the third parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param options Custom error message options.
+ * @return A {@link Parser} that tries to parse using the provided parsers.
+ * @since 0.5.0
+ */
+export function or<
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+>(
+  a: TA,
+  b: TB,
+  c: TC,
+  options: OrOptions,
+): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
+  InferValue<TA> | InferValue<TB> | InferValue<TC>,
+  undefined | [number, ParserResult<unknown>]
+>;
+
 export function or(
-  ...parsers: Parser<unknown, unknown>[]
-): Parser<unknown, undefined | [number, ParserResult<unknown>]>;
+  ...parsers: Parser<Mode, unknown, unknown>[]
+): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
 
 /**
  * Creates a parser that tries each parser in sequence until one succeeds,
@@ -898,17 +1193,17 @@ export function or(
  * @since 0.5.0
  */
 export function or(
-  parser1: Parser<unknown, unknown>,
-  ...rest: [...parsers: Parser<unknown, unknown>[], options: OrOptions]
-): Parser<unknown, undefined | [number, ParserResult<unknown>]>;
+  parser1: Parser<Mode, unknown, unknown>,
+  ...rest: [...parsers: Parser<Mode, unknown, unknown>[], options: OrOptions]
+): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
 /**
  * @since 0.5.0
  */
 export function or(
-  ...args: Array<Parser<unknown, unknown> | OrOptions>
-): Parser<unknown, undefined | [number, ParserResult<unknown>]> {
+  ...args: Array<Parser<Mode, unknown, unknown> | OrOptions>
+): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
   // Extract parsers and options from arguments
-  let parsers: Parser<unknown, unknown>[];
+  let parsers: Parser<Mode, unknown, unknown>[];
   let options: OrOptions | undefined;
 
   if (
@@ -918,77 +1213,155 @@ export function or(
   ) {
     // Last argument is options
     options = args[args.length - 1] as OrOptions;
-    parsers = args.slice(0, -1) as Parser<unknown, unknown>[];
+    parsers = args.slice(0, -1) as Parser<Mode, unknown, unknown>[];
   } else {
     // No options provided
-    parsers = args as Parser<unknown, unknown>[];
+    parsers = args as Parser<Mode, unknown, unknown>[];
     options = undefined;
   }
 
   // Analyze context once for error message generation
   const noMatchContext = analyzeNoMatchContext(parsers);
 
+  // Compute combined mode: if any parser is async, the result is async
+  const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
+    ? "async"
+    : "sync";
+
+  const isAsync = combinedMode === "async";
+
+  // Cast to sync parsers for sync operations
+  const syncParsers = parsers as Parser<"sync", unknown, unknown>[];
+
+  type OrState = undefined | [number, ParserResult<unknown>];
+  type ParseResult = ParserResult<OrState>;
+
+  const getInitialError = (
+    context: ParserContext<OrState>,
+  ): { consumed: number; error: Message } => ({
+    consumed: 0,
+    error: context.buffer.length < 1
+      ? getNoMatchError(options, noMatchContext)
+      : createUnexpectedInputError(
+        context.buffer[0],
+        context.usage,
+        options,
+      ),
+  });
+
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<OrState>,
+  ): ParseResult => {
+    let error = getInitialError(context);
+    const orderedParsers = syncParsers.map((p, i) =>
+      [p, i] as [Parser<"sync", unknown, unknown>, number]
+    );
+    orderedParsers.sort(([_, a], [__, b]) =>
+      context.state?.[0] === a ? -1 : context.state?.[0] === b ? 1 : a - b
+    );
+    for (const [parser, i] of orderedParsers) {
+      const result = parser.parse({
+        ...context,
+        state: context.state == null || context.state[0] !== i ||
+            !context.state[1].success
+          ? parser.initialState
+          : context.state[1].next.state,
+      });
+      if (result.success && result.consumed.length > 0) {
+        if (context.state?.[0] !== i && context.state?.[1].success) {
+          return {
+            success: false,
+            consumed: context.buffer.length - result.next.buffer.length,
+            error: message`${values(context.state[1].consumed)} and ${
+              values(result.consumed)
+            } cannot be used together.`,
+          };
+        }
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: [i, result],
+          },
+          consumed: result.consumed,
+        };
+      } else if (!result.success && error.consumed < result.consumed) {
+        error = result;
+      }
+    }
+    return { ...error, success: false };
+  };
+
+  // Async parse implementation
+  const parseAsync = async (
+    context: ParserContext<OrState>,
+  ): Promise<ParseResult> => {
+    let error = getInitialError(context);
+    const orderedParsers = parsers.map((p, i) =>
+      [p, i] as [Parser<Mode, unknown, unknown>, number]
+    );
+    orderedParsers.sort(([_, a], [__, b]) =>
+      context.state?.[0] === a ? -1 : context.state?.[0] === b ? 1 : a - b
+    );
+    for (const [parser, i] of orderedParsers) {
+      const resultOrPromise = parser.parse({
+        ...context,
+        state: context.state == null || context.state[0] !== i ||
+            !context.state[1].success
+          ? parser.initialState
+          : context.state[1].next.state,
+      });
+      const result = await resultOrPromise;
+      if (result.success && result.consumed.length > 0) {
+        if (context.state?.[0] !== i && context.state?.[1].success) {
+          return {
+            success: false,
+            consumed: context.buffer.length - result.next.buffer.length,
+            error: message`${values(context.state[1].consumed)} and ${
+              values(result.consumed)
+            } cannot be used together.`,
+          };
+        }
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: [i, result],
+          },
+          consumed: result.consumed,
+        };
+      } else if (!result.success && error.consumed < result.consumed) {
+        error = result;
+      }
+    }
+    return { ...error, success: false };
+  };
+
   return {
+    $mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
     initialState: undefined,
-    complete: createExclusiveComplete(parsers, options, noMatchContext),
-    parse(
-      context: ParserContext<[number, ParserResult<unknown>]>,
-    ): ParserResult<[number, ParserResult<unknown>]> {
-      let error: { consumed: number; error: Message } = {
-        consumed: 0,
-        error: context.buffer.length < 1
-          ? getNoMatchError(options, noMatchContext)
-          : createUnexpectedInputError(
-            context.buffer[0],
-            context.usage,
-            options,
-          ),
-      };
-      const orderedParsers = parsers.map((p, i) =>
-        [p, i] as [Parser<unknown, unknown>, number]
-      );
-      orderedParsers.sort(([_, a], [__, b]) =>
-        context.state?.[0] === a ? -1 : context.state?.[0] === b ? 1 : a - b
-      );
-      for (const [parser, i] of orderedParsers) {
-        const result = parser.parse({
-          ...context,
-          state: context.state == null || context.state[0] !== i ||
-              !context.state[1].success
-            ? parser.initialState
-            : context.state[1].next.state,
-        });
-        if (result.success && result.consumed.length > 0) {
-          if (context.state?.[0] !== i && context.state?.[1].success) {
-            return {
-              success: false,
-              consumed: context.buffer.length - result.next.buffer.length,
-              error: message`${values(context.state[1].consumed)} and ${
-                values(result.consumed)
-              } cannot be used together.`,
-            };
-          }
-          return {
-            success: true,
-            next: {
-              ...context,
-              buffer: result.next.buffer,
-              optionsTerminated: result.next.optionsTerminated,
-              state: [i, result],
-            },
-            consumed: result.consumed,
-          };
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
-        }
+    complete: createExclusiveComplete(
+      parsers,
+      options,
+      noMatchContext,
+      isAsync,
+    ),
+    parse(context: ParserContext<OrState>) {
+      if (isAsync) {
+        return parseAsync(context);
       }
-      return { ...error, success: false };
+      return parseSync(context);
     },
-    suggest: createExclusiveSuggest(parsers),
+    suggest: createExclusiveSuggest(parsers, isAsync),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
@@ -1100,6 +1473,8 @@ export interface LongestMatchErrorOptions {
  * selecting the parser that consumes the most tokens.
  * The resulting parser will try both parsers and return the result
  * of the parser that consumed more input tokens.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TStateA The type of the state used by the first parser.
@@ -1110,10 +1485,18 @@ export interface LongestMatchErrorOptions {
  *          and returns the result of the parser that consumed more tokens.
  * @since 0.3.0
  */
-export function longestMatch<TA, TB, TStateA, TStateB>(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
+export function longestMatch<
+  MA extends Mode,
+  MB extends Mode,
+  TA,
+  TB,
+  TStateA,
+  TStateB,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
 ): Parser<
+  CombineModes<readonly [MA, MB]>,
   TA | TB,
   undefined | [0, ParserResult<TStateA>] | [1, ParserResult<TStateB>]
 >;
@@ -1123,6 +1506,9 @@ export function longestMatch<TA, TB, TStateA, TStateB>(
  * selecting the parser that consumes the most tokens.
  * The resulting parser will try all parsers and return the result
  * of the parser that consumed the most input tokens.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -1136,11 +1522,22 @@ export function longestMatch<TA, TB, TStateA, TStateB>(
  *          and returns the result of the parser that consumed the most tokens.
  * @since 0.3.0
  */
-export function longestMatch<TA, TB, TC, TStateA, TStateB, TStateC>(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
+export function longestMatch<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  TA,
+  TB,
+  TC,
+  TStateA,
+  TStateB,
+  TStateC,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC]>,
   TA | TB | TC,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -1153,6 +1550,10 @@ export function longestMatch<TA, TB, TC, TStateA, TStateB, TStateC>(
  * selecting the parser that consumes the most tokens.
  * The resulting parser will try all parsers and return the result
  * of the parser that consumed the most input tokens.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -1170,6 +1571,10 @@ export function longestMatch<TA, TB, TC, TStateA, TStateB, TStateC>(
  * @since 0.3.0
  */
 export function longestMatch<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
   TA,
   TB,
   TC,
@@ -1179,11 +1584,12 @@ export function longestMatch<
   TStateC,
   TStateD,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD]>,
   TA | TB | TC | TD,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -1197,6 +1603,11 @@ export function longestMatch<
  * selecting the parser that consumes the most tokens.
  * The resulting parser will try all parsers and return the result
  * of the parser that consumed the most input tokens.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
  * @template TA The type of the value returned by the first parser.
  * @template TB The type of the value returned by the second parser.
  * @template TC The type of the value returned by the third parser.
@@ -1217,6 +1628,11 @@ export function longestMatch<
  * @since 0.3.0
  */
 export function longestMatch<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
   TA,
   TB,
   TC,
@@ -1228,12 +1644,13 @@ export function longestMatch<
   TStateD,
   TStateE,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-  e: Parser<TE, TStateE>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME]>,
   TA | TB | TC | TD | TE,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -1243,9 +1660,47 @@ export function longestMatch<
   | [4, ParserResult<TStateE>]
 >;
 
+/**
+ * Creates a parser that combines two mutually exclusive parsers into one,
+ * with custom error message options.
+ * @since 0.5.0
+ */
+export function longestMatch<
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+>(
+  a: TA,
+  b: TB,
+  options: LongestMatchOptions,
+): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
+  InferValue<TA> | InferValue<TB>,
+  undefined | [number, ParserResult<unknown>]
+>;
+
+/**
+ * Creates a parser that combines three mutually exclusive parsers into one,
+ * with custom error message options.
+ * @since 0.5.0
+ */
+export function longestMatch<
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+>(
+  a: TA,
+  b: TB,
+  c: TC,
+  options: LongestMatchOptions,
+): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
+  InferValue<TA> | InferValue<TB> | InferValue<TC>,
+  undefined | [number, ParserResult<unknown>]
+>;
+
 export function longestMatch(
-  ...parsers: Parser<unknown, unknown>[]
-): Parser<unknown, undefined | [number, ParserResult<unknown>]>;
+  ...parsers: Parser<Mode, unknown, unknown>[]
+): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
 
 /**
  * Creates a parser that tries all parsers and selects the one that consumes
@@ -1257,20 +1712,20 @@ export function longestMatch(
  * @since 0.5.0
  */
 export function longestMatch(
-  parser1: Parser<unknown, unknown>,
+  parser1: Parser<Mode, unknown, unknown>,
   ...rest: [
-    ...parsers: Parser<unknown, unknown>[],
+    ...parsers: Parser<Mode, unknown, unknown>[],
     options: LongestMatchOptions,
   ]
-): Parser<unknown, undefined | [number, ParserResult<unknown>]>;
+): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
 /**
  * @since 0.5.0
  */
 export function longestMatch(
-  ...args: Array<Parser<unknown, unknown> | LongestMatchOptions>
-): Parser<unknown, undefined | [number, ParserResult<unknown>]> {
+  ...args: Array<Parser<Mode, unknown, unknown> | LongestMatchOptions>
+): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
   // Extract parsers and options from arguments
-  let parsers: Parser<unknown, unknown>[];
+  let parsers: Parser<Mode, unknown, unknown>[];
   let options: LongestMatchOptions | undefined;
 
   if (
@@ -1280,79 +1735,159 @@ export function longestMatch(
   ) {
     // Last argument is options
     options = args[args.length - 1] as LongestMatchOptions;
-    parsers = args.slice(0, -1) as Parser<unknown, unknown>[];
+    parsers = args.slice(0, -1) as Parser<Mode, unknown, unknown>[];
   } else {
     // No options provided
-    parsers = args as Parser<unknown, unknown>[];
+    parsers = args as Parser<Mode, unknown, unknown>[];
     options = undefined;
   }
 
   // Analyze context once for error message generation
   const noMatchContext = analyzeNoMatchContext(parsers);
 
+  // Compute combined mode: if any parser is async, the result is async
+  const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
+    ? "async"
+    : "sync";
+
+  const isAsync = combinedMode === "async";
+
+  // Cast to sync parsers for sync operations
+  const syncParsers = parsers as Parser<"sync", unknown, unknown>[];
+
+  type LongestMatchState = undefined | [number, ParserResult<unknown>];
+  type ParseResult = ParserResult<LongestMatchState>;
+
+  const getInitialError = (
+    context: ParserContext<LongestMatchState>,
+  ): { consumed: number; error: Message } => ({
+    consumed: 0,
+    error: context.buffer.length < 1
+      ? getNoMatchError(options, noMatchContext)
+      : createUnexpectedInputError(
+        context.buffer[0],
+        context.usage,
+        options,
+      ),
+  });
+
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<LongestMatchState>,
+  ): ParseResult => {
+    let bestMatch: {
+      index: number;
+      result: ParserResult<unknown>;
+      consumed: number;
+    } | null = null;
+    let error = getInitialError(context);
+
+    // Try all parsers and find the one with longest match
+    for (let i = 0; i < syncParsers.length; i++) {
+      const parser = syncParsers[i];
+      const result = parser.parse({
+        ...context,
+        state: context.state == null || context.state[0] !== i ||
+            !context.state[1].success
+          ? parser.initialState
+          : context.state[1].next.state,
+      });
+
+      if (result.success) {
+        const consumed = context.buffer.length - result.next.buffer.length;
+        if (bestMatch === null || consumed > bestMatch.consumed) {
+          bestMatch = { index: i, result, consumed };
+        }
+      } else if (error.consumed < result.consumed) {
+        error = result;
+      }
+    }
+
+    if (bestMatch && bestMatch.result.success) {
+      return {
+        success: true,
+        next: {
+          ...context,
+          buffer: bestMatch.result.next.buffer,
+          optionsTerminated: bestMatch.result.next.optionsTerminated,
+          state: [bestMatch.index, bestMatch.result],
+        },
+        consumed: bestMatch.result.consumed,
+      };
+    }
+
+    return { ...error, success: false };
+  };
+
+  // Async parse implementation
+  const parseAsync = async (
+    context: ParserContext<LongestMatchState>,
+  ): Promise<ParseResult> => {
+    let bestMatch: {
+      index: number;
+      result: ParserResult<unknown>;
+      consumed: number;
+    } | null = null;
+    let error = getInitialError(context);
+
+    // Try all parsers and find the one with longest match
+    for (let i = 0; i < parsers.length; i++) {
+      const parser = parsers[i];
+      const resultOrPromise = parser.parse({
+        ...context,
+        state: context.state == null || context.state[0] !== i ||
+            !context.state[1].success
+          ? parser.initialState
+          : context.state[1].next.state,
+      });
+      const result = await resultOrPromise;
+
+      if (result.success) {
+        const consumed = context.buffer.length - result.next.buffer.length;
+        if (bestMatch === null || consumed > bestMatch.consumed) {
+          bestMatch = { index: i, result, consumed };
+        }
+      } else if (error.consumed < result.consumed) {
+        error = result;
+      }
+    }
+
+    if (bestMatch && bestMatch.result.success) {
+      return {
+        success: true,
+        next: {
+          ...context,
+          buffer: bestMatch.result.next.buffer,
+          optionsTerminated: bestMatch.result.next.optionsTerminated,
+          state: [bestMatch.index, bestMatch.result],
+        },
+        consumed: bestMatch.result.consumed,
+      };
+    }
+
+    return { ...error, success: false };
+  };
+
   return {
+    $mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
     initialState: undefined,
-    complete: createExclusiveComplete(parsers, options, noMatchContext),
-    parse(
-      context: ParserContext<[number, ParserResult<unknown>]>,
-    ): ParserResult<[number, ParserResult<unknown>]> {
-      let bestMatch: {
-        index: number;
-        result: ParserResult<unknown>;
-        consumed: number;
-      } | null = null;
-      let error: { consumed: number; error: Message } = {
-        consumed: 0,
-        error: context.buffer.length < 1
-          ? getNoMatchError(options, noMatchContext)
-          : createUnexpectedInputError(
-            context.buffer[0],
-            context.usage,
-            options,
-          ),
-      };
-
-      // Try all parsers and find the one with longest match
-      for (let i = 0; i < parsers.length; i++) {
-        const parser = parsers[i];
-        const result = parser.parse({
-          ...context,
-          state: context.state == null || context.state[0] !== i ||
-              !context.state[1].success
-            ? parser.initialState
-            : context.state[1].next.state,
-        });
-
-        if (result.success) {
-          const consumed = context.buffer.length - result.next.buffer.length;
-          if (bestMatch === null || consumed > bestMatch.consumed) {
-            bestMatch = { index: i, result, consumed };
-          }
-        } else if (error.consumed < result.consumed) {
-          error = result;
-        }
+    complete: createExclusiveComplete(
+      parsers,
+      options,
+      noMatchContext,
+      isAsync,
+    ),
+    parse(context: ParserContext<LongestMatchState>) {
+      if (isAsync) {
+        return parseAsync(context);
       }
-
-      if (bestMatch && bestMatch.result.success) {
-        return {
-          success: true,
-          next: {
-            ...context,
-            buffer: bestMatch.result.next.buffer,
-            optionsTerminated: bestMatch.result.next.optionsTerminated,
-            state: [bestMatch.index, bestMatch.result],
-          },
-          consumed: bestMatch.result.consumed,
-        };
-      }
-
-      return { ...error, success: false };
+      return parseSync(context);
     },
-    suggest: createExclusiveSuggest(parsers),
+    suggest: createExclusiveSuggest(parsers, isAsync),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
@@ -1455,6 +1990,118 @@ export interface ObjectErrorOptions {
 }
 
 /**
+ * Internal sync helper for object suggest functionality.
+ * @internal
+ */
+function* suggestObjectSync<
+  T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
+>(
+  context: ParserContext<{ readonly [K in keyof T]: unknown }>,
+  prefix: string,
+  parserPairs: [string | symbol, Parser<"sync", unknown, unknown>][],
+): Generator<Suggestion> {
+  // Check if the last token in the buffer is an option that requires a value.
+  // If so, only suggest values for that specific option parser, not all parsers.
+  // This prevents positional argument suggestions from appearing when completing
+  // an option value. See: https://github.com/dahlia/optique/issues/55
+  if (context.buffer.length > 0) {
+    const lastToken = context.buffer[context.buffer.length - 1];
+
+    // Find if any parser has this token as an option requiring a value
+    for (const [field, parser] of parserPairs) {
+      if (isOptionRequiringValue(parser.usage, lastToken)) {
+        // Only get suggestions from the parser that owns this option
+        const fieldState =
+          (context.state && typeof context.state === "object" &&
+              field in context.state)
+            ? (context.state as Record<string | symbol, unknown>)[field]
+            : parser.initialState;
+
+        yield* parser.suggest({ ...context, state: fieldState }, prefix);
+        return;
+      }
+    }
+  }
+
+  // Default behavior: try getting suggestions from each parser
+  const suggestions: Suggestion[] = [];
+  for (const [field, parser] of parserPairs) {
+    const fieldState = (context.state && typeof context.state === "object" &&
+        field in context.state)
+      ? (context.state as Record<string | symbol, unknown>)[field]
+      : parser.initialState;
+
+    const fieldSuggestions = parser.suggest({
+      ...context,
+      state: fieldState,
+    }, prefix);
+
+    suggestions.push(...fieldSuggestions);
+  }
+
+  yield* deduplicateSuggestions(suggestions);
+}
+
+/**
+ * Internal async helper for object suggest functionality.
+ * @internal
+ */
+async function* suggestObjectAsync<
+  T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
+>(
+  context: ParserContext<{ readonly [K in keyof T]: unknown }>,
+  prefix: string,
+  parserPairs: readonly [string | symbol, Parser<Mode, unknown, unknown>][],
+): AsyncGenerator<Suggestion> {
+  // Check if the last token in the buffer is an option that requires a value.
+  if (context.buffer.length > 0) {
+    const lastToken = context.buffer[context.buffer.length - 1];
+
+    // Find if any parser has this token as an option requiring a value
+    for (const [field, parser] of parserPairs) {
+      if (isOptionRequiringValue(parser.usage, lastToken)) {
+        // Only get suggestions from the parser that owns this option
+        const fieldState =
+          (context.state && typeof context.state === "object" &&
+              field in context.state)
+            ? (context.state as Record<string | symbol, unknown>)[field]
+            : parser.initialState;
+
+        const suggestions = parser.suggest(
+          { ...context, state: fieldState },
+          prefix,
+        ) as AsyncIterable<Suggestion>;
+        for await (const s of suggestions) {
+          yield s;
+        }
+        return;
+      }
+    }
+  }
+
+  // Default behavior: try getting suggestions from each parser
+  const suggestions: Suggestion[] = [];
+  for (const [field, parser] of parserPairs) {
+    const fieldState = (context.state && typeof context.state === "object" &&
+        field in context.state)
+      ? (context.state as Record<string | symbol, unknown>)[field]
+      : parser.initialState;
+
+    const fieldSuggestions = parser.suggest(
+      { ...context, state: fieldState },
+      prefix,
+    );
+
+    // Handle both sync and async suggestions
+    for await (const s of fieldSuggestions as AsyncIterable<Suggestion>) {
+      suggestions.push(s);
+    }
+  }
+
+  yield* deduplicateSuggestions(suggestions);
+}
+
+/**
  * Creates a parser that combines multiple parsers into a single object parser.
  * Each parser in the object is applied to parse different parts of the input,
  * and the results are combined into an object with the same structure.
@@ -1466,10 +2113,11 @@ export interface ObjectErrorOptions {
  *          parser.
  */
 export function object<
-  T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
+  T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
 >(
   parsers: T,
 ): Parser<
+  CombineObjectModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
       : never;
@@ -1495,11 +2143,12 @@ export function object<
  * @since 0.5.0
  */
 export function object<
-  T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
+  T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
 >(
   parsers: T,
   options: ObjectOptions,
 ): Parser<
+  CombineObjectModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
       : never;
@@ -1523,11 +2172,12 @@ export function object<
  *          parser.
  */
 export function object<
-  T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
+  T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
 >(
   label: string,
   parsers: T,
 ): Parser<
+  CombineObjectModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
       : never;
@@ -1554,12 +2204,13 @@ export function object<
  * @since 0.5.0
  */
 export function object<
-  T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
+  T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
 >(
   label: string,
   parsers: T,
   options: ObjectOptions,
 ): Parser<
+  CombineObjectModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
       : never;
@@ -1571,12 +2222,15 @@ export function object<
 >;
 
 export function object<
-  T extends { readonly [key: string | symbol]: Parser<unknown, unknown> },
+  T extends {
+    readonly [key: string | symbol]: Parser<Mode, unknown, unknown>;
+  },
 >(
   labelOrParsers: string | T,
   maybeParsersOrOptions?: T | ObjectOptions,
   maybeOptions?: ObjectOptions,
 ): Parser<
+  Mode,
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
 > {
@@ -1597,7 +2251,9 @@ export function object<
     options = (maybeParsersOrOptions as ObjectOptions) ?? {};
   }
   const parserKeys = Reflect.ownKeys(parsers) as (keyof T)[];
-  const parserPairs = parserKeys.map((k) => [k, parsers[k]] as const);
+  const parserPairs = parserKeys.map((k) =>
+    [k, parsers[k]] as [keyof T, Parser<Mode, unknown, unknown>]
+  );
   parserPairs.sort(([_, parserA], [__, parserB]) =>
     parserB.priority - parserA.priority
   );
@@ -1619,7 +2275,232 @@ export function object<
   const noMatchContext = analyzeNoMatchContext(
     parserKeys.map((k) => parsers[k]),
   );
+
+  // Compute combined mode: if any parser is async, the result is async
+  const combinedMode: Mode = parserKeys.some(
+      (k) => parsers[k].$mode === "async",
+    )
+    ? "async"
+    : "sync";
+
+  const isAsync = combinedMode === "async";
+
+  // Helper function for sync parsing of a single field
+  type ParseResult = ParserResult<{ readonly [K in keyof T]: unknown }>;
+  const getInitialError = (
+    context: ParserContext<{ readonly [K in keyof T]: unknown }>,
+  ): { consumed: number; error: Message } => ({
+    consumed: 0,
+    error: context.buffer.length > 0
+      ? (() => {
+        const token = context.buffer[0];
+        const customMessage = options.errors?.unexpectedInput;
+
+        // If custom error message is provided, use it
+        if (customMessage) {
+          return typeof customMessage === "function"
+            ? customMessage(token)
+            : customMessage;
+        }
+
+        // Generate default error with suggestions
+        const baseError = message`Unexpected option or argument: ${token}.`;
+        return createErrorWithSuggestions(
+          baseError,
+          token,
+          context.usage,
+          "both",
+          options.errors?.suggestions,
+        );
+      })()
+      : (() => {
+        const customEndOfInput = options.errors?.endOfInput;
+        return customEndOfInput
+          ? (typeof customEndOfInput === "function"
+            ? customEndOfInput(noMatchContext)
+            : customEndOfInput)
+          : generateNoMatchError(noMatchContext);
+      })(),
+  });
+
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<{ readonly [K in keyof T]: unknown }>,
+  ): ParseResult => {
+    let error = getInitialError(context);
+
+    // Try greedy parsing: attempt to consume as many fields as possible
+    let currentContext = context;
+    let anySuccess = false;
+    const allConsumed: string[] = [];
+
+    // Keep trying to parse fields until no more can be matched
+    let madeProgress = true;
+    while (madeProgress && currentContext.buffer.length > 0) {
+      madeProgress = false;
+
+      for (const [field, parser] of parserPairs) {
+        const result = (parser as Parser<"sync", unknown, unknown>).parse({
+          ...currentContext,
+          state: (currentContext.state &&
+              typeof currentContext.state === "object" &&
+              field in currentContext.state)
+            ? (currentContext.state as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ]
+            : parser.initialState,
+        });
+
+        if (result.success && result.consumed.length > 0) {
+          currentContext = {
+            ...currentContext,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: {
+              ...(currentContext.state as Record<string | symbol, unknown>),
+              [field as string | symbol]: result.next.state,
+            } as { readonly [K in keyof T]: unknown },
+          };
+          allConsumed.push(...result.consumed);
+          anySuccess = true;
+          madeProgress = true;
+          break; // Restart the field loop with updated context
+        } else if (!result.success && error.consumed < result.consumed) {
+          error = result;
+        }
+      }
+    }
+
+    // If we consumed any input, return success
+    if (anySuccess) {
+      return {
+        success: true,
+        next: currentContext,
+        consumed: allConsumed,
+      };
+    }
+
+    // If buffer is empty and no parser consumed input, check if all parsers can complete
+    if (context.buffer.length === 0) {
+      let allCanComplete = true;
+      for (const [field, parser] of parserPairs) {
+        const fieldState =
+          (context.state && typeof context.state === "object" &&
+              field in context.state)
+            ? (context.state as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ]
+            : parser.initialState;
+        const completeResult = (parser as Parser<"sync", unknown, unknown>)
+          .complete(fieldState);
+        if (!completeResult.success) {
+          allCanComplete = false;
+          break;
+        }
+      }
+
+      if (allCanComplete) {
+        return {
+          success: true,
+          next: context,
+          consumed: [],
+        };
+      }
+    }
+
+    return { ...error, success: false };
+  };
+
+  // Async parse implementation
+  const parseAsync = async (
+    context: ParserContext<{ readonly [K in keyof T]: unknown }>,
+  ): Promise<ParseResult> => {
+    let error = getInitialError(context);
+
+    // Try greedy parsing: attempt to consume as many fields as possible
+    let currentContext = context;
+    let anySuccess = false;
+    const allConsumed: string[] = [];
+
+    // Keep trying to parse fields until no more can be matched
+    let madeProgress = true;
+    while (madeProgress && currentContext.buffer.length > 0) {
+      madeProgress = false;
+
+      for (const [field, parser] of parserPairs) {
+        const resultOrPromise = parser.parse({
+          ...currentContext,
+          state: (currentContext.state &&
+              typeof currentContext.state === "object" &&
+              field in currentContext.state)
+            ? (currentContext.state as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ]
+            : parser.initialState,
+        });
+        const result = await resultOrPromise;
+
+        if (result.success && result.consumed.length > 0) {
+          currentContext = {
+            ...currentContext,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: {
+              ...(currentContext.state as Record<string | symbol, unknown>),
+              [field as string | symbol]: result.next.state,
+            } as { readonly [K in keyof T]: unknown },
+          };
+          allConsumed.push(...result.consumed);
+          anySuccess = true;
+          madeProgress = true;
+          break; // Restart the field loop with updated context
+        } else if (!result.success && error.consumed < result.consumed) {
+          error = result;
+        }
+      }
+    }
+
+    // If we consumed any input, return success
+    if (anySuccess) {
+      return {
+        success: true,
+        next: currentContext,
+        consumed: allConsumed,
+      };
+    }
+
+    // If buffer is empty and no parser consumed input, check if all parsers can complete
+    if (context.buffer.length === 0) {
+      let allCanComplete = true;
+      for (const [field, parser] of parserPairs) {
+        const fieldState =
+          (context.state && typeof context.state === "object" &&
+              field in context.state)
+            ? (context.state as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ]
+            : parser.initialState;
+        const completeResult = await parser.complete(fieldState);
+        if (!completeResult.success) {
+          allCanComplete = false;
+          break;
+        }
+      }
+
+      if (allCanComplete) {
+        return {
+          success: true,
+          next: context,
+          consumed: [],
+        };
+      }
+    }
+
+    return { ...error, success: false };
+  };
+
   return {
+    $mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parserKeys.map((k) => parsers[k].priority)),
@@ -1629,219 +2510,78 @@ export function object<
         ? U3
         : never;
     },
-    parse(context) {
-      // Check for duplicate option names unless explicitly allowed
-      if (!options.allowDuplicates) {
-        const optionNameSources = new Map<string, (string | symbol)[]>();
-
-        for (const [field, parser] of parserPairs) {
-          const names = extractOptionNames(parser.usage);
-          for (const name of names) {
-            if (!optionNameSources.has(name)) {
-              optionNameSources.set(name, []);
-            }
-            optionNameSources.get(name)!.push(field as string | symbol);
-          }
-        }
-
-        // Check for duplicates
-        for (const [name, sources] of optionNameSources) {
-          if (sources.length > 1) {
-            return {
-              success: false,
-              consumed: 0,
-              error: message`Duplicate option name ${
-                eOptionName(
-                  name,
-                )
-              } found in fields: ${
-                values(
-                  sources.map((s) =>
-                    typeof s === "symbol" ? s.description ?? s.toString() : s
-                  ),
-                )
-              }. Each option name must be unique within a parser combinator.`,
-            };
-          }
-        }
+    parse(
+      context: ParserContext<{ readonly [K in keyof T]: unknown }>,
+    ) {
+      if (isAsync) {
+        return parseAsync(context);
       }
-
-      let error: { consumed: number; error: Message } = {
-        consumed: 0,
-        error: context.buffer.length > 0
-          ? (() => {
-            const token = context.buffer[0];
-            const customMessage = options.errors?.unexpectedInput;
-
-            // If custom error message is provided, use it
-            if (customMessage) {
-              return typeof customMessage === "function"
-                ? customMessage(token)
-                : customMessage;
-            }
-
-            // Generate default error with suggestions
-            const baseError = message`Unexpected option or argument: ${token}.`;
-            return createErrorWithSuggestions(
-              baseError,
-              token,
-              context.usage,
-              "both",
-              options.errors?.suggestions,
-            );
-          })()
-          : (() => {
-            const customEndOfInput = options.errors?.endOfInput;
-            return customEndOfInput
-              ? (typeof customEndOfInput === "function"
-                ? customEndOfInput(noMatchContext)
-                : customEndOfInput)
-              : generateNoMatchError(noMatchContext);
-          })(),
-      };
-
-      // Try greedy parsing: attempt to consume as many fields as possible
-      let currentContext = context;
-      let anySuccess = false;
-      const allConsumed: string[] = [];
-
-      // Keep trying to parse fields until no more can be matched
-      let madeProgress = true;
-      while (madeProgress && currentContext.buffer.length > 0) {
-        madeProgress = false;
-
-        for (const [field, parser] of parserPairs) {
-          const result = parser.parse({
-            ...currentContext,
-            state: (currentContext.state &&
-                typeof currentContext.state === "object" &&
-                field in currentContext.state)
-              ? currentContext.state[field]
-              : parser.initialState,
-          });
-
-          if (result.success && result.consumed.length > 0) {
-            currentContext = {
-              ...currentContext,
-              buffer: result.next.buffer,
-              optionsTerminated: result.next.optionsTerminated,
-              state: {
-                ...currentContext.state,
-                [field]: result.next.state,
-              },
-            };
-            allConsumed.push(...result.consumed);
-            anySuccess = true;
-            madeProgress = true;
-            break; // Restart the field loop with updated context
-          } else if (!result.success && error.consumed < result.consumed) {
-            error = result;
-          }
-        }
-      }
-
-      // If we consumed any input, return success
-      if (anySuccess) {
-        return {
-          success: true,
-          next: currentContext,
-          consumed: allConsumed,
-        };
-      }
-
-      // If buffer is empty and no parser consumed input, check if all parsers can complete
-      if (context.buffer.length === 0) {
-        let allCanComplete = true;
-        for (const [field, parser] of parserPairs) {
-          const fieldState =
-            (context.state && typeof context.state === "object" &&
-                field in context.state)
-              ? context.state[field]
-              : parser.initialState;
-          const completeResult = parser.complete(fieldState);
-          if (!completeResult.success) {
-            allCanComplete = false;
-            break;
-          }
-        }
-
-        if (allCanComplete) {
-          return {
-            success: true,
-            next: context,
-            consumed: [],
-          };
-        }
-      }
-
-      return { ...error, success: false };
+      return parseSync(context);
     },
-    complete(state) {
-      const result: { [K in keyof T]: T[K]["$valueType"][number] } =
-        // deno-lint-ignore no-explicit-any
-        {} as any;
-      for (const field of parserKeys) {
-        const valueResult = parsers[field].complete(
-          (state as Record<string | symbol, unknown>)[field as string | symbol],
+    complete(state: { readonly [K in keyof T]: unknown }) {
+      // For sync mode, complete synchronously
+      if (!isAsync) {
+        const result: { [K in keyof T]: T[K]["$valueType"][number] } =
+          // deno-lint-ignore no-explicit-any
+          {} as any;
+        for (const field of parserKeys) {
+          const valueResult = (
+            parsers[field] as Parser<"sync", unknown, unknown>
+          ).complete(
+            (state as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ],
+          );
+          if (valueResult.success) {
+            (result as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ] = valueResult.value;
+          } else return { success: false, error: valueResult.error };
+        }
+        return { success: true, value: result };
+      }
+
+      // For async mode, complete asynchronously
+      return (async () => {
+        const result: { [K in keyof T]: T[K]["$valueType"][number] } =
+          // deno-lint-ignore no-explicit-any
+          {} as any;
+        for (const field of parserKeys) {
+          const valueResult = await parsers[field].complete(
+            (state as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ],
+          );
+          if (valueResult.success) {
+            (result as Record<string | symbol, unknown>)[
+              field as string | symbol
+            ] = valueResult.value;
+          } else return { success: false, error: valueResult.error };
+        }
+        return { success: true, value: result };
+      })();
+    },
+    suggest(
+      context: ParserContext<{ readonly [K in keyof T]: unknown }>,
+      prefix: string,
+    ) {
+      // For async parsers, use async generator; for sync parsers, use sync
+      if (isAsync) {
+        return suggestObjectAsync(
+          context,
+          prefix,
+          parserPairs as [string | symbol, Parser<Mode, unknown, unknown>][],
         );
-        if (valueResult.success) {
-          (result as Record<string | symbol, unknown>)[
-            field as string | symbol
-          ] = valueResult.value;
-        } else return { success: false, error: valueResult.error };
       }
-      return { success: true, value: result };
-    },
-    suggest(context, prefix) {
-      const suggestions = [];
-
-      // Check if the last token in the buffer is an option that requires a value.
-      // If so, only suggest values for that specific option parser, not all parsers.
-      // This prevents positional argument suggestions from appearing when completing
-      // an option value.
-      // See: https://github.com/dahlia/optique/issues/55
-      if (context.buffer.length > 0) {
-        const lastToken = context.buffer[context.buffer.length - 1];
-
-        // Find if any parser has this token as an option requiring a value
-        for (const [field, parser] of parserPairs) {
-          if (isOptionRequiringValue(parser.usage, lastToken)) {
-            // Only get suggestions from the parser that owns this option
-            const fieldState =
-              (context.state && typeof context.state === "object" &&
-                  field in context.state)
-                ? context.state[field]
-                : parser.initialState;
-
-            return Array.from(parser.suggest({
-              ...context,
-              state: fieldState,
-            }, prefix));
-          }
-        }
-      }
-
-      // Default behavior: try getting suggestions from each parser
-      for (const [field, parser] of parserPairs) {
-        const fieldState =
-          (context.state && typeof context.state === "object" &&
-              field in context.state)
-            ? context.state[field]
-            : parser.initialState;
-
-        const fieldSuggestions = parser.suggest({
-          ...context,
-          state: fieldState,
-        }, prefix);
-
-        suggestions.push(...fieldSuggestions);
-      }
-
-      return deduplicateSuggestions(suggestions);
+      const syncParserPairs = parserPairs as [
+        string | symbol,
+        Parser<"sync", unknown, unknown>,
+      ][];
+      return suggestObjectSync(context, prefix, syncParserPairs);
     },
     getDocFragments(
       state: DocState<{ readonly [K in keyof T]: unknown }>,
-      defaultValue?,
+      defaultValue?: { readonly [K in keyof T]: unknown },
     ) {
       const fragments = parserPairs.flatMap(([field, p]) => {
         const fieldState: DocState<unknown> = state.kind === "unavailable"
@@ -1863,7 +2603,13 @@ export function object<
       sections.push(section);
       return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
     },
-  };
+    // Type assertion needed because TypeScript cannot verify the combined mode
+    // of multiple parsers at compile time. Runtime behavior is correct via isAsync.
+  } as unknown as Parser<
+    Mode,
+    { readonly [K in keyof T]: unknown },
+    { readonly [K in keyof T]: unknown }
+  >;
 }
 
 /**
@@ -1881,6 +2627,62 @@ export interface TupleOptions {
   readonly allowDuplicates?: boolean;
 }
 
+function suggestTupleSync(
+  context: ParserContext<readonly unknown[]>,
+  prefix: string,
+  parsers: readonly Parser<"sync", unknown, unknown>[],
+): Suggestion[] {
+  const suggestions: Suggestion[] = [];
+  const stateArray = context.state as unknown[] | undefined;
+
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    const parserState = stateArray && Array.isArray(stateArray)
+      ? stateArray[i]
+      : parser.initialState;
+
+    const parserSuggestions = parser.suggest({
+      ...context,
+      state: parserState,
+    }, prefix);
+
+    suggestions.push(...parserSuggestions);
+  }
+
+  return deduplicateSuggestions(suggestions);
+}
+
+async function* suggestTupleAsync(
+  context: ParserContext<readonly unknown[]>,
+  prefix: string,
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): AsyncGenerator<Suggestion> {
+  const suggestions: Suggestion[] = [];
+  const stateArray = context.state as unknown[] | undefined;
+
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    const parserState = stateArray && Array.isArray(stateArray)
+      ? stateArray[i]
+      : parser.initialState;
+
+    const parserSuggestions = parser.suggest({
+      ...context,
+      state: parserState,
+    }, prefix);
+
+    if (parser.$mode === "async") {
+      for await (const s of parserSuggestions as AsyncIterable<Suggestion>) {
+        suggestions.push(s);
+      }
+    } else {
+      suggestions.push(...(parserSuggestions as Iterable<Suggestion>));
+    }
+  }
+
+  yield* deduplicateSuggestions(suggestions);
+}
+
 /**
  * Creates a parser that combines multiple parsers into a sequential tuple parser.
  * The parsers are applied in the order they appear in the array, and all must
@@ -1894,11 +2696,12 @@ export interface TupleOptions {
  *          corresponding parser.
  */
 export function tuple<
-  const T extends readonly Parser<unknown, unknown>[],
+  const T extends readonly Parser<Mode, unknown, unknown>[],
 >(
   parsers: T,
   options?: TupleOptions,
 ): Parser<
+  CombineTupleModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
       : never;
@@ -1923,12 +2726,13 @@ export function tuple<
  *          corresponding parser.
  */
 export function tuple<
-  const T extends readonly Parser<unknown, unknown>[],
+  const T extends readonly Parser<Mode, unknown, unknown>[],
 >(
   label: string,
   parsers: T,
   options?: TupleOptions,
 ): Parser<
+  CombineTupleModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
       : never;
@@ -1940,12 +2744,13 @@ export function tuple<
 >;
 
 export function tuple<
-  const T extends readonly Parser<unknown, unknown>[],
+  const T extends readonly Parser<Mode, unknown, unknown>[],
 >(
   labelOrParsers: string | T,
   maybeParsersOrOptions?: T | TupleOptions,
   maybeOptions?: TupleOptions,
 ): Parser<
+  Mode,
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
 > {
@@ -1966,6 +2771,16 @@ export function tuple<
     options = (maybeParsersOrOptions as TupleOptions) ?? {};
   }
 
+  // Compute combined mode: if any parser is async, the result is async
+  const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
+    ? "async"
+    : "sync";
+
+  const isAsync = combinedMode === "async";
+
+  // Cast to sync parsers for suggest (suggest is always synchronous)
+  const syncParsers = parsers as readonly Parser<"sync", unknown, unknown>[];
+
   // Check for duplicate option names at construction time unless explicitly allowed
   if (!options.allowDuplicates) {
     checkDuplicateOptionNames(
@@ -1973,7 +2788,209 @@ export function tuple<
     );
   }
 
+  type TupleState = { readonly [K in keyof T]: unknown };
+  type ParseResult = ParserResult<TupleState>;
+
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<TupleState>,
+  ): ParseResult => {
+    let currentContext = context;
+    const allConsumed: string[] = [];
+    const matchedParsers = new Set<number>();
+
+    // Similar to object(), try parsers in priority order but maintain tuple semantics
+    while (matchedParsers.size < syncParsers.length) {
+      let foundMatch = false;
+      let error: { consumed: number; error: Message } = {
+        consumed: 0,
+        error: message`No remaining parsers could match the input.`,
+      };
+
+      // Get current state array from context (may have been updated in previous iterations)
+      const stateArray = currentContext.state as unknown[];
+
+      // Create priority-ordered list of remaining parsers
+      const remainingParsers = syncParsers
+        .map((parser, index) => [parser, index] as [typeof parser, number])
+        .filter(([_, index]) => !matchedParsers.has(index))
+        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+
+      for (const [parser, index] of remainingParsers) {
+        const result = parser.parse({
+          ...currentContext,
+          state: stateArray[index],
+        });
+
+        if (result.success && result.consumed.length > 0) {
+          // Parser succeeded and consumed input - take this match
+          const newStateArray = stateArray.map((s: unknown, idx: number) =>
+            idx === index ? result.next.state : s
+          );
+          currentContext = {
+            ...currentContext,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: newStateArray as TupleState,
+          };
+
+          allConsumed.push(...result.consumed);
+          matchedParsers.add(index);
+          foundMatch = true;
+          break; // Take the first (highest priority) match that consumes input
+        } else if (!result.success && error.consumed < result.consumed) {
+          error = result;
+        }
+      }
+
+      // If no consuming parser matched, try non-consuming ones (like optional)
+      // or mark failing optional parsers as matched
+      if (!foundMatch) {
+        for (const [parser, index] of remainingParsers) {
+          const result = parser.parse({
+            ...currentContext,
+            state: stateArray[index],
+          });
+
+          if (result.success && result.consumed.length < 1) {
+            // Parser succeeded without consuming input (like optional)
+            const newStateArray = stateArray.map((s: unknown, idx: number) =>
+              idx === index ? result.next.state : s
+            );
+            currentContext = {
+              ...currentContext,
+              state: newStateArray as TupleState,
+            };
+
+            matchedParsers.add(index);
+            foundMatch = true;
+            break;
+          } else if (!result.success && result.consumed < 1) {
+            // Parser failed without consuming input - this could be
+            // an optional parser that doesn't match.
+            // Check if we can safely skip it.
+            // For now, mark it as matched to continue processing
+            matchedParsers.add(index);
+            foundMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundMatch) {
+        return { ...error, success: false };
+      }
+    }
+
+    return {
+      success: true,
+      next: currentContext,
+      consumed: allConsumed,
+    };
+  };
+
+  // Async parse implementation
+  const parseAsync = async (
+    context: ParserContext<TupleState>,
+  ): Promise<ParseResult> => {
+    let currentContext = context;
+    const allConsumed: string[] = [];
+    const matchedParsers = new Set<number>();
+
+    // Similar to object(), try parsers in priority order but maintain tuple semantics
+    while (matchedParsers.size < parsers.length) {
+      let foundMatch = false;
+      let error: { consumed: number; error: Message } = {
+        consumed: 0,
+        error: message`No remaining parsers could match the input.`,
+      };
+
+      // Get current state array from context (may have been updated in previous iterations)
+      const stateArray = currentContext.state as unknown[];
+
+      // Create priority-ordered list of remaining parsers
+      const remainingParsers = parsers
+        .map((parser, index) => [parser, index] as [typeof parser, number])
+        .filter(([_, index]) => !matchedParsers.has(index))
+        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+
+      for (const [parser, index] of remainingParsers) {
+        const resultOrPromise = parser.parse({
+          ...currentContext,
+          state: stateArray[index],
+        });
+        const result = await resultOrPromise;
+
+        if (result.success && result.consumed.length > 0) {
+          // Parser succeeded and consumed input - take this match
+          const newStateArray = stateArray.map((s: unknown, idx: number) =>
+            idx === index ? result.next.state : s
+          );
+          currentContext = {
+            ...currentContext,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: newStateArray as TupleState,
+          };
+
+          allConsumed.push(...result.consumed);
+          matchedParsers.add(index);
+          foundMatch = true;
+          break; // Take the first (highest priority) match that consumes input
+        } else if (!result.success && error.consumed < result.consumed) {
+          error = result;
+        }
+      }
+
+      // If no consuming parser matched, try non-consuming ones (like optional)
+      // or mark failing optional parsers as matched
+      if (!foundMatch) {
+        for (const [parser, index] of remainingParsers) {
+          const resultOrPromise = parser.parse({
+            ...currentContext,
+            state: stateArray[index],
+          });
+          const result = await resultOrPromise;
+
+          if (result.success && result.consumed.length < 1) {
+            // Parser succeeded without consuming input (like optional)
+            const newStateArray = stateArray.map((s: unknown, idx: number) =>
+              idx === index ? result.next.state : s
+            );
+            currentContext = {
+              ...currentContext,
+              state: newStateArray as TupleState,
+            };
+
+            matchedParsers.add(index);
+            foundMatch = true;
+            break;
+          } else if (!result.success && result.consumed < 1) {
+            // Parser failed without consuming input - this could be
+            // an optional parser that doesn't match.
+            // Check if we can safely skip it.
+            // For now, mark it as matched to continue processing
+            matchedParsers.add(index);
+            foundMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundMatch) {
+        return { ...error, success: false };
+      }
+    }
+
+    return {
+      success: true,
+      next: currentContext,
+      consumed: allConsumed,
+    };
+  };
+
   return {
+    $mode: combinedMode,
     $valueType: [],
     $stateType: [],
     usage: parsers
@@ -1987,147 +3004,67 @@ export function tuple<
         ? U3
         : never;
     },
-    parse(context) {
-      let currentContext = context;
-      const allConsumed: string[] = [];
-      const matchedParsers = new Set<number>();
-
-      // Similar to object(), try parsers in priority order but maintain tuple semantics
-      while (matchedParsers.size < parsers.length) {
-        let foundMatch = false;
-        let error: { consumed: number; error: Message } = {
-          consumed: 0,
-          error: message`No remaining parsers could match the input.`,
-        };
-
-        // Create priority-ordered list of remaining parsers
-        const remainingParsers = parsers
-          .map((parser, index) => [parser, index] as [typeof parser, number])
-          .filter(([_, index]) => !matchedParsers.has(index))
-          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
-
-        for (const [parser, index] of remainingParsers) {
-          const result = parser.parse({
-            ...currentContext,
-            state: currentContext.state[index],
-          });
-
-          if (result.success && result.consumed.length > 0) {
-            // Parser succeeded and consumed input - take this match
-            currentContext = {
-              ...currentContext,
-              buffer: result.next.buffer,
-              optionsTerminated: result.next.optionsTerminated,
-              state: currentContext.state.map((s, idx) =>
-                idx === index ? result.next.state : s
-              ) as {
-                readonly [K in keyof T]: T[K]["$stateType"][number] extends (
-                  infer U4
-                ) ? U4
-                  : never;
-              },
-            };
-
-            allConsumed.push(...result.consumed);
-            matchedParsers.add(index);
-            foundMatch = true;
-            break; // Take the first (highest priority) match that consumes input
-          } else if (!result.success && error.consumed < result.consumed) {
-            error = result;
-          }
-        }
-
-        // If no consuming parser matched, try non-consuming ones (like optional)
-        // or mark failing optional parsers as matched
-        if (!foundMatch) {
-          for (const [parser, index] of remainingParsers) {
-            const result = parser.parse({
-              ...currentContext,
-              state: currentContext.state[index],
-            });
-
-            if (result.success && result.consumed.length < 1) {
-              // Parser succeeded without consuming input (like optional)
-              currentContext = {
-                ...currentContext,
-                state: currentContext.state.map((s, idx) =>
-                  idx === index ? result.next.state : s
-                ) as {
-                  readonly [K in keyof T]: T[K]["$stateType"][number] extends (
-                    infer U5
-                  ) ? U5
-                    : never;
-                },
-              };
-
-              matchedParsers.add(index);
-              foundMatch = true;
-              break;
-            } else if (!result.success && result.consumed < 1) {
-              // Parser failed without consuming input - this could be
-              // an optional parser that doesn't match.
-              // Check if we can safely skip it.
-              // For now, mark it as matched to continue processing
-              matchedParsers.add(index);
-              foundMatch = true;
-              break;
-            }
-          }
-        }
-
-        if (!foundMatch) {
-          return { ...error, success: false };
-        }
+    parse(context: ParserContext<TupleState>) {
+      if (isAsync) {
+        return parseAsync(context);
       }
-
-      return {
-        success: true,
-        next: currentContext,
-        consumed: allConsumed,
-      };
+      return parseSync(context);
     },
-    complete(state) {
-      const result: { [K in keyof T]: T[K]["$valueType"][number] } =
-        // deno-lint-ignore no-explicit-any
-        [] as any;
-
-      for (let i = 0; i < parsers.length; i++) {
-        const valueResult = parsers[i].complete(state[i]);
-        if (valueResult.success) {
+    complete(state: TupleState) {
+      // For sync mode, complete synchronously
+      if (!isAsync) {
+        const result: { [K in keyof T]: T[K]["$valueType"][number] } =
           // deno-lint-ignore no-explicit-any
-          (result as any)[i] = valueResult.value;
-        } else {
-          return { success: false, error: valueResult.error };
+          [] as any;
+        const stateArray = state as unknown[];
+
+        for (let i = 0; i < syncParsers.length; i++) {
+          const valueResult = syncParsers[i].complete(stateArray[i]);
+          if (valueResult.success) {
+            // deno-lint-ignore no-explicit-any
+            (result as any)[i] = valueResult.value;
+          } else {
+            return { success: false, error: valueResult.error };
+          }
         }
+
+        return { success: true, value: result };
       }
 
-      return { success: true, value: result };
+      // For async mode, complete asynchronously
+      return (async () => {
+        const result: { [K in keyof T]: T[K]["$valueType"][number] } =
+          // deno-lint-ignore no-explicit-any
+          [] as any;
+        const stateArray = state as unknown[];
+
+        for (let i = 0; i < parsers.length; i++) {
+          const valueResult = await parsers[i].complete(stateArray[i]);
+          if (valueResult.success) {
+            // deno-lint-ignore no-explicit-any
+            (result as any)[i] = valueResult.value;
+          } else {
+            return { success: false, error: valueResult.error };
+          }
+        }
+
+        return { success: true, value: result };
+      })();
     },
-    suggest(context, prefix) {
-      const suggestions = [];
-
-      // For tuple parser, try each parser in sequence until one matches
-      for (let i = 0; i < parsers.length; i++) {
-        const parser = parsers[i];
-        const parserState = context.state && Array.isArray(context.state)
-          ? context.state[i]
-          : parser.initialState;
-
-        const parserSuggestions = parser.suggest({
-          ...context,
-          state: parserState,
-        }, prefix);
-
-        suggestions.push(...parserSuggestions);
+    suggest(
+      context: ParserContext<TupleState>,
+      prefix: string,
+    ) {
+      if (isAsync) {
+        return suggestTupleAsync(context, prefix, parsers);
       }
-
-      return deduplicateSuggestions(suggestions);
+      return suggestTupleSync(context, prefix, syncParsers);
     },
     getDocFragments(
-      state: DocState<{ readonly [K in keyof T]: unknown }>,
-      defaultValue?,
+      state: DocState<TupleState>,
+      defaultValue?: TupleState,
     ) {
-      const fragments = parsers.flatMap((p, i) => {
+      const fragments = syncParsers.flatMap((p, i) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
           : {
@@ -2158,7 +3095,10 @@ export function tuple<
         ? `tuple(${JSON.stringify(label)}, ${parsersStr})`
         : `tuple(${parsersStr})`;
     },
-  } satisfies Parser<
+    // Type assertion needed because TypeScript cannot verify the combined mode
+    // of multiple parsers at compile time. Runtime behavior is correct via isAsync.
+  } as unknown as Parser<
+    Mode,
     { readonly [K in keyof T]: unknown },
     { readonly [K in keyof T]: unknown }
   >;
@@ -2176,7 +3116,7 @@ type AllObjectLike<T> = T extends readonly unknown[] ? never
  * Helper type to extract object-like types from parser value types,
  * including union types where all members are objects.
  */
-type ExtractObjectTypes<P> = P extends Parser<infer V, unknown>
+type ExtractObjectTypes<P> = P extends Parser<Mode, infer V, unknown>
   ? [AllObjectLike<V>] extends [never] ? never
   : V
   : never;
@@ -2210,12 +3150,13 @@ export interface MergeOptions {
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
 >(
   a: ExtractObjectTypes<TA> extends never ? never : TA,
   b: ExtractObjectTypes<TB> extends never ? never : TB,
 ): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
   & ExtractObjectTypes<TA>
   & ExtractObjectTypes<TB>,
   Record<string | symbol, unknown>
@@ -2236,13 +3177,14 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
 >(
   a: ExtractObjectTypes<TA> extends never ? never : TA,
   b: ExtractObjectTypes<TB> extends never ? never : TB,
   options: MergeOptions,
 ): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
   & ExtractObjectTypes<TA>
   & ExtractObjectTypes<TB>,
   Record<string | symbol, unknown>
@@ -2265,13 +3207,14 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: ExtractObjectTypes<TA> extends never ? never : TA,
   b: ExtractObjectTypes<TB> extends never ? never : TB,
 ): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
   & ExtractObjectTypes<TA>
   & ExtractObjectTypes<TB>,
   Record<string | symbol, unknown>
@@ -2293,14 +3236,15 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
 >(
   a: ExtractObjectTypes<TA> extends never ? never : TA,
   b: ExtractObjectTypes<TB> extends never ? never : TB,
   c: ExtractObjectTypes<TC> extends never ? never : TC,
 ): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
   & ExtractObjectTypes<TA>
   & ExtractObjectTypes<TB>
   & ExtractObjectTypes<TC>,
@@ -2326,9 +3270,9 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: TA,
@@ -2338,6 +3282,7 @@ export function merge<
   : ExtractObjectTypes<TB> extends never ? never
   : ExtractObjectTypes<TC> extends never ? never
   : Parser<
+    CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
     & ExtractObjectTypes<TA>
     & ExtractObjectTypes<TB>
     & ExtractObjectTypes<TC>,
@@ -2362,10 +3307,10 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
 >(
   a: TA,
   b: TB,
@@ -2376,6 +3321,14 @@ export function merge<
   : ExtractObjectTypes<TC> extends never ? never
   : ExtractObjectTypes<TD> extends never ? never
   : Parser<
+    CombineModes<
+      readonly [
+        ExtractMode<TA>,
+        ExtractMode<TB>,
+        ExtractMode<TC>,
+        ExtractMode<TD>,
+      ]
+    >,
     & ExtractObjectTypes<TA>
     & ExtractObjectTypes<TB>
     & ExtractObjectTypes<TC>
@@ -2404,10 +3357,10 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: TA,
@@ -2419,6 +3372,14 @@ export function merge<
   : ExtractObjectTypes<TC> extends never ? never
   : ExtractObjectTypes<TD> extends never ? never
   : Parser<
+    CombineModes<
+      readonly [
+        ExtractMode<TA>,
+        ExtractMode<TB>,
+        ExtractMode<TC>,
+        ExtractMode<TD>,
+      ]
+    >,
     & ExtractObjectTypes<TA>
     & ExtractObjectTypes<TB>
     & ExtractObjectTypes<TC>
@@ -2446,11 +3407,11 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
 >(
   a: ExtractObjectTypes<TA> extends never ? never : TA,
   b: ExtractObjectTypes<TB> extends never ? never : TB,
@@ -2458,6 +3419,15 @@ export function merge<
   d: ExtractObjectTypes<TD> extends never ? never : TD,
   e: ExtractObjectTypes<TE> extends never ? never : TE,
 ): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+    ]
+  >,
   & ExtractObjectTypes<TA>
   & ExtractObjectTypes<TB>
   & ExtractObjectTypes<TC>
@@ -2489,11 +3459,11 @@ export function merge<
  *         of the two parsers into a single object.
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: TA,
@@ -2507,6 +3477,15 @@ export function merge<
   : ExtractObjectTypes<TD> extends never ? never
   : ExtractObjectTypes<TE> extends never ? never
   : Parser<
+    CombineModes<
+      readonly [
+        ExtractMode<TA>,
+        ExtractMode<TB>,
+        ExtractMode<TC>,
+        ExtractMode<TD>,
+        ExtractMode<TE>,
+      ]
+    >,
     & ExtractObjectTypes<TA>
     & ExtractObjectTypes<TB>
     & ExtractObjectTypes<TC>
@@ -2538,12 +3517,12 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
 >(
   a: TA,
   b: TB,
@@ -2593,12 +3572,12 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: TA,
@@ -2648,13 +3627,13 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
-  TG extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
+  TG extends Parser<Mode, unknown, unknown>,
 >(
   a: TA,
   b: TB,
@@ -2709,13 +3688,13 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
-  TG extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
+  TG extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: TA,
@@ -2770,14 +3749,14 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
-  TG extends Parser<unknown, unknown>,
-  TH extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
+  TG extends Parser<Mode, unknown, unknown>,
+  TH extends Parser<Mode, unknown, unknown>,
 >(
   a: TA,
   b: TB,
@@ -2837,14 +3816,14 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
-  TG extends Parser<unknown, unknown>,
-  TH extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
+  TG extends Parser<Mode, unknown, unknown>,
+  TH extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: TA,
@@ -2904,15 +3883,15 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
-  TG extends Parser<unknown, unknown>,
-  TH extends Parser<unknown, unknown>,
-  TI extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
+  TG extends Parser<Mode, unknown, unknown>,
+  TH extends Parser<Mode, unknown, unknown>,
+  TI extends Parser<Mode, unknown, unknown>,
 >(
   a: TA,
   b: TB,
@@ -2977,15 +3956,15 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
-  TG extends Parser<unknown, unknown>,
-  TH extends Parser<unknown, unknown>,
-  TI extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
+  TG extends Parser<Mode, unknown, unknown>,
+  TH extends Parser<Mode, unknown, unknown>,
+  TI extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: TA,
@@ -3050,16 +4029,16 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
-  TG extends Parser<unknown, unknown>,
-  TH extends Parser<unknown, unknown>,
-  TI extends Parser<unknown, unknown>,
-  TJ extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
+  TG extends Parser<Mode, unknown, unknown>,
+  TH extends Parser<Mode, unknown, unknown>,
+  TI extends Parser<Mode, unknown, unknown>,
+  TJ extends Parser<Mode, unknown, unknown>,
 >(
   a: TA,
   b: TB,
@@ -3129,16 +4108,16 @@ export function merge<
  * @since 0.4.0
  */
 export function merge<
-  TA extends Parser<unknown, unknown>,
-  TB extends Parser<unknown, unknown>,
-  TC extends Parser<unknown, unknown>,
-  TD extends Parser<unknown, unknown>,
-  TE extends Parser<unknown, unknown>,
-  TF extends Parser<unknown, unknown>,
-  TG extends Parser<unknown, unknown>,
-  TH extends Parser<unknown, unknown>,
-  TI extends Parser<unknown, unknown>,
-  TJ extends Parser<unknown, unknown>,
+  TA extends Parser<Mode, unknown, unknown>,
+  TB extends Parser<Mode, unknown, unknown>,
+  TC extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, unknown, unknown>,
+  TE extends Parser<Mode, unknown, unknown>,
+  TF extends Parser<Mode, unknown, unknown>,
+  TG extends Parser<Mode, unknown, unknown>,
+  TH extends Parser<Mode, unknown, unknown>,
+  TI extends Parser<Mode, unknown, unknown>,
+  TJ extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
   a: TA,
@@ -3162,6 +4141,20 @@ export function merge<
   : ExtractObjectTypes<TI> extends never ? never
   : ExtractObjectTypes<TJ> extends never ? never
   : Parser<
+    CombineModes<
+      readonly [
+        ExtractMode<TA>,
+        ExtractMode<TB>,
+        ExtractMode<TC>,
+        ExtractMode<TD>,
+        ExtractMode<TE>,
+        ExtractMode<TF>,
+        ExtractMode<TG>,
+        ExtractMode<TH>,
+        ExtractMode<TI>,
+        ExtractMode<TJ>,
+      ]
+    >,
     & ExtractObjectTypes<TA>
     & ExtractObjectTypes<TB>
     & ExtractObjectTypes<TC>
@@ -3180,22 +4173,26 @@ export function merge(
     | [
       string,
       ...Parser<
+        Mode,
         Record<string | symbol, unknown>,
         Record<string | symbol, unknown>
       >[],
     ]
     | Parser<
+      Mode,
       Record<string | symbol, unknown>,
       Record<string | symbol, unknown>
     >[]
     | [
       ...Parser<
+        Mode,
         Record<string | symbol, unknown>,
         Record<string | symbol, unknown>
       >[],
       MergeOptions,
     ]
 ): Parser<
+  Mode,
   Record<string | symbol, unknown>,
   Record<string | symbol, unknown>
 > {
@@ -3217,6 +4214,21 @@ export function merge(
     : args.length;
 
   const rawParsers = args.slice(startIndex, endIndex) as Parser<
+    Mode,
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >[];
+
+  // Compute combined mode: if any parser is async, the result is async
+  const combinedMode: Mode = rawParsers.some((p) => p.$mode === "async")
+    ? "async"
+    : "sync";
+
+  const isAsync = combinedMode === "async";
+
+  // Cast to sync parsers for sync operations
+  const syncRawParsers = rawParsers as Parser<
+    "sync",
     Record<string | symbol, unknown>,
     Record<string | symbol, unknown>
   >[];
@@ -3225,6 +4237,13 @@ export function merge(
   const withIndex = rawParsers.map((p, i) => [p, i] as const);
   const sorted = withIndex.toSorted(([a], [b]) => b.priority - a.priority);
   const parsers = sorted.map(([p]) => p);
+
+  // Sync parsers for sync operations
+  const syncWithIndex = syncRawParsers.map((p, i) => [p, i] as const);
+  const syncSorted = syncWithIndex.toSorted(([a], [b]) =>
+    b.priority - a.priority
+  );
+  const syncParsers = syncSorted.map(([p]) => p);
 
   // Check for duplicate option names at construction time unless explicitly allowed
   if (!options.allowDuplicates) {
@@ -3243,219 +4262,357 @@ export function merge(
       }
     }
   }
+  type MergeState = Record<string | symbol, unknown>;
+  type MergeParseResult = ParserResult<MergeState>;
+
+  // Helper function to extract the appropriate state for a parser
+  const extractParserState = (
+    parser: Parser<Mode, MergeState, MergeState>,
+    context: ParserContext<MergeState>,
+    index: number,
+  ): unknown => {
+    if (parser.initialState === undefined) {
+      // For parsers with undefined initialState (like or()),
+      // check if they have accumulated state during parsing
+      const key = `__parser_${index}`;
+      if (
+        context.state && typeof context.state === "object" &&
+        key in context.state
+      ) {
+        return context.state[key];
+      }
+      return undefined;
+    } else if (
+      parser.initialState && typeof parser.initialState === "object"
+    ) {
+      // For object parsers, extract matching fields from context state
+      if (context.state && typeof context.state === "object") {
+        const extractedState: MergeState = {};
+        for (const field in parser.initialState) {
+          extractedState[field] = field in context.state
+            ? context.state[field]
+            : parser.initialState[field];
+        }
+        return extractedState;
+      }
+      return parser.initialState;
+    }
+    return parser.initialState;
+  };
+
+  // Helper function to merge result state into context state
+  const mergeResultState = (
+    parser: Parser<Mode, MergeState, MergeState>,
+    context: ParserContext<MergeState>,
+    result: ParserResult<unknown>,
+    index: number,
+  ): MergeState => {
+    if (parser.initialState === undefined) {
+      // For parsers with undefined initialState (like withDefault()),
+      // store their state separately to avoid conflicts with object merging.
+      const key = `__parser_${index}`;
+      if (result.success) {
+        if (
+          result.consumed.length > 0 || result.next.state !== undefined
+        ) {
+          return {
+            ...context.state,
+            [key]: result.next.state,
+          };
+        }
+      }
+      // Parser succeeded with zero consumption and undefined state
+      return { ...context.state };
+    }
+    // For regular object parsers, use the original merging approach
+    return result.success
+      ? { ...context.state, ...result.next.state as MergeState }
+      : { ...context.state };
+  };
+
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<MergeState>,
+  ): MergeParseResult => {
+    let currentContext = context;
+    let zeroConsumedSuccess: {
+      context: ParserContext<MergeState>;
+      consumed: string[];
+    } | null = null;
+
+    for (let i = 0; i < syncParsers.length; i++) {
+      const parser = syncParsers[i];
+      const parserState = extractParserState(parser, currentContext, i);
+
+      const result = parser.parse({
+        ...currentContext,
+        state: parserState as Parameters<typeof parser.parse>[0]["state"],
+      });
+
+      if (result.success) {
+        const newState = mergeResultState(parser, currentContext, result, i);
+        const newContext = {
+          ...currentContext,
+          buffer: result.next.buffer,
+          optionsTerminated: result.next.optionsTerminated,
+          state: newState,
+        };
+
+        if (result.consumed.length > 0) {
+          return {
+            success: true,
+            next: newContext,
+            consumed: result.consumed,
+          };
+        }
+
+        currentContext = newContext;
+        if (zeroConsumedSuccess === null) {
+          zeroConsumedSuccess = { context: newContext, consumed: [] };
+        } else {
+          zeroConsumedSuccess.context = newContext;
+        }
+      } else if (result.consumed < 1) {
+        continue;
+      } else {
+        return result as MergeParseResult;
+      }
+    }
+
+    if (zeroConsumedSuccess !== null) {
+      return {
+        success: true,
+        next: zeroConsumedSuccess.context,
+        consumed: zeroConsumedSuccess.consumed,
+      };
+    }
+
+    return {
+      success: false,
+      consumed: 0,
+      error: message`No matching option or argument found.`,
+    };
+  };
+
+  // Async parse implementation
+  const parseAsync = async (
+    context: ParserContext<MergeState>,
+  ): Promise<MergeParseResult> => {
+    let currentContext = context;
+    let zeroConsumedSuccess: {
+      context: ParserContext<MergeState>;
+      consumed: string[];
+    } | null = null;
+
+    for (let i = 0; i < parsers.length; i++) {
+      const parser = parsers[i];
+      const parserState = extractParserState(parser, currentContext, i);
+
+      const resultOrPromise = parser.parse({
+        ...currentContext,
+        state: parserState as Parameters<typeof parser.parse>[0]["state"],
+      });
+      const result = await resultOrPromise;
+
+      if (result.success) {
+        const newState = mergeResultState(parser, currentContext, result, i);
+        const newContext = {
+          ...currentContext,
+          buffer: result.next.buffer,
+          optionsTerminated: result.next.optionsTerminated,
+          state: newState,
+        };
+
+        if (result.consumed.length > 0) {
+          return {
+            success: true,
+            next: newContext,
+            consumed: result.consumed,
+          };
+        }
+
+        currentContext = newContext;
+        if (zeroConsumedSuccess === null) {
+          zeroConsumedSuccess = { context: newContext, consumed: [] };
+        } else {
+          zeroConsumedSuccess.context = newContext;
+        }
+      } else if (result.consumed < 1) {
+        continue;
+      } else {
+        return result as MergeParseResult;
+      }
+    }
+
+    if (zeroConsumedSuccess !== null) {
+      return {
+        success: true,
+        next: zeroConsumedSuccess.context,
+        consumed: zeroConsumedSuccess.consumed,
+      };
+    }
+
+    return {
+      success: false,
+      consumed: 0,
+      error: message`No matching option or argument found.`,
+    };
+  };
+
   return {
+    $mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: parsers.flatMap((p) => p.usage),
     initialState,
-    parse(context) {
-      // Track if any parser succeeded with zero consumption
-      // (e.g., optional() returning success without matching)
-      let zeroConsumedSuccess: {
-        context: typeof context;
-        consumed: string[];
-      } | null = null;
-
-      for (let i = 0; i < parsers.length; i++) {
-        const parser = parsers[i];
-        // Extract the appropriate state for this parser
-        let parserState: unknown;
-        if (parser.initialState === undefined) {
-          // For parsers with undefined initialState (like or()),
-          // check if they have accumulated state during parsing
-          const key = `__parser_${i}`;
-          if (
-            context.state && typeof context.state === "object" &&
-            key in context.state
-          ) {
-            parserState = context.state[key];
-          } else {
-            parserState = undefined;
-          }
-        } else if (
-          parser.initialState && typeof parser.initialState === "object"
-        ) {
-          // For object parsers, extract matching fields from context state
-          if (context.state && typeof context.state === "object") {
-            const extractedState: Record<string | symbol, unknown> = {};
-            for (const field in parser.initialState) {
-              extractedState[field] = field in context.state
-                ? context.state[field]
-                : parser.initialState[field];
-            }
-            parserState = extractedState;
-          } else {
-            parserState = parser.initialState;
-          }
-        } else {
-          parserState = parser.initialState;
-        }
-
-        const result = parser.parse({
-          ...context,
-          state: parserState as Parameters<typeof parser.parse>[0]["state"],
-        });
-        if (result.success) {
-          // Handle state merging based on parser type
-          let newState: Record<string | symbol, unknown>;
-          if (parser.initialState === undefined) {
-            // For parsers with undefined initialState (like withDefault()),
-            // store their state separately to avoid conflicts with object merging.
-            // Only update state if the parser actually matched something
-            // (consumed input OR has non-undefined state).
-            const key = `__parser_${i}`;
-            if (
-              result.consumed.length > 0 || result.next.state !== undefined
-            ) {
-              newState = {
-                ...context.state,
-                [key]: result.next.state,
-              };
-            } else {
-              // Parser succeeded with zero consumption and undefined state
-              // (e.g., optional() with no match). Preserve existing state.
-              newState = { ...context.state };
-            }
-          } else {
-            // For regular object parsers, use the original merging approach
-            newState = {
-              ...context.state,
-              ...result.next.state,
-            };
-          }
-
-          const newContext = {
-            ...context,
-            buffer: result.next.buffer,
-            optionsTerminated: result.next.optionsTerminated,
-            state: newState,
-          };
-
-          // If this parser consumed something, return immediately
-          if (result.consumed.length > 0) {
-            return {
-              success: true,
-              next: newContext,
-              consumed: result.consumed,
-            };
-          }
-
-          // Parser succeeded but consumed nothing (e.g., optional() with no match).
-          // Update context and continue trying other parsers.
-          context = newContext;
-          if (zeroConsumedSuccess === null) {
-            zeroConsumedSuccess = { context: newContext, consumed: [] };
-          } else {
-            zeroConsumedSuccess.context = newContext;
-          }
-        } else if (result.consumed < 1) continue;
-        else return result;
+    parse(context: ParserContext<MergeState>) {
+      if (isAsync) {
+        return parseAsync(context);
       }
-
-      // If any parser succeeded with zero consumption, return that success
-      if (zeroConsumedSuccess !== null) {
-        return {
-          success: true,
-          next: zeroConsumedSuccess.context,
-          consumed: zeroConsumedSuccess.consumed,
-        };
-      }
-
-      return {
-        success: false,
-        consumed: 0,
-        error: message`No matching option or argument found.`,
-      };
+      return parseSync(context);
     },
-    complete(state) {
-      const object: Record<string | symbol, unknown> = {};
-      for (let i = 0; i < parsers.length; i++) {
-        const parser = parsers[i];
-        // Each parser should get its appropriate state for completion
-        let parserState: unknown;
+    complete(state: MergeState) {
+      // Helper function to extract parser state for completion
+      const extractCompleteState = (
+        parser: Parser<Mode, MergeState, MergeState>,
+        index: number,
+      ): unknown => {
         if (parser.initialState === undefined) {
-          // For parsers with undefined initialState (like withDefault()),
-          // check if they have accumulated state during parsing
-          const key = `__parser_${i}`;
+          const key = `__parser_${index}`;
           if (state && typeof state === "object" && key in state) {
-            parserState = state[key];
-          } else {
-            parserState = undefined;
+            return state[key];
           }
+          return undefined;
         } else if (
           parser.initialState && typeof parser.initialState === "object"
         ) {
-          // For object() parsers, extract their portion of the state
           if (state && typeof state === "object") {
-            const extractedState: Record<string | symbol, unknown> = {};
+            const extractedState: MergeState = {};
             for (const field in parser.initialState) {
               extractedState[field] = field in state
                 ? state[field]
                 : parser.initialState[field];
             }
-            parserState = extractedState;
-          } else {
-            parserState = parser.initialState;
+            return extractedState;
           }
-        } else {
-          parserState = parser.initialState;
+          return parser.initialState;
         }
+        return parser.initialState;
+      };
 
-        // Type assertion is safe here because we're matching each parser with its expected state type
-        const result = parser.complete(
-          parserState as Parameters<typeof parser.complete>[0],
-        );
-        if (!result.success) return result;
-        for (const field in result.value) object[field] = result.value[field];
+      // For sync mode, complete synchronously
+      if (!isAsync) {
+        const object: MergeState = {};
+        for (let i = 0; i < syncParsers.length; i++) {
+          const parser = syncParsers[i];
+          const parserState = extractCompleteState(parser, i);
+          const result = parser.complete(
+            parserState as Parameters<typeof parser.complete>[0],
+          );
+          if (!result.success) return result;
+          for (const field in result.value) object[field] = result.value[field];
+        }
+        return { success: true, value: object };
       }
-      return { success: true, value: object };
+
+      // For async mode, complete asynchronously
+      return (async () => {
+        const object: MergeState = {};
+        for (let i = 0; i < parsers.length; i++) {
+          const parser = parsers[i];
+          const parserState = extractCompleteState(parser, i);
+          const result = await parser.complete(
+            parserState as Parameters<typeof parser.complete>[0],
+          );
+          if (!result.success) return result;
+          for (const field in result.value) object[field] = result.value[field];
+        }
+        return { success: true, value: object };
+      })();
     },
-    suggest(context, prefix) {
-      const suggestions = [];
-
-      // For merge parser, get suggestions from all parsers
-      for (let i = 0; i < parsers.length; i++) {
-        const parser = parsers[i];
-        let parserState: unknown;
-
-        if (parser.initialState === undefined) {
+    suggest(
+      context: ParserContext<MergeState>,
+      prefix: string,
+    ) {
+      // Helper to extract parser state for a given index
+      const extractState = (
+        p: Parser<Mode, Record<string | symbol, unknown>, unknown>,
+        i: number,
+      ): unknown => {
+        if (p.initialState === undefined) {
           const key = `__parser_${i}`;
           if (
             context.state && typeof context.state === "object" &&
             key in context.state
           ) {
-            parserState = context.state[key];
-          } else {
-            parserState = undefined;
+            return context.state[key];
           }
+          return undefined;
         } else if (
-          parser.initialState && typeof parser.initialState === "object"
+          p.initialState && typeof p.initialState === "object"
         ) {
           if (context.state && typeof context.state === "object") {
-            const extractedState: Record<string | symbol, unknown> = {};
-            for (const field in parser.initialState) {
+            const extractedState: MergeState = {};
+            for (const field in p.initialState) {
               extractedState[field] = field in context.state
                 ? context.state[field]
-                : parser.initialState[field];
+                : (p.initialState as Record<string, unknown>)[field];
             }
-            parserState = extractedState;
-          } else {
-            parserState = parser.initialState;
+            return extractedState;
           }
-        } else {
-          parserState = parser.initialState;
+          return p.initialState;
         }
+        return p.initialState;
+      };
 
-        const parserSuggestions = parser.suggest({
-          ...context,
-          state: parserState as Parameters<typeof parser.suggest>[0]["state"],
-        }, prefix);
+      if (isAsync) {
+        return (async function* () {
+          const suggestions: Suggestion[] = [];
 
-        suggestions.push(...parserSuggestions);
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            const parserState = extractState(parser, i);
+
+            const parserSuggestions = parser.suggest({
+              ...context,
+              state: parserState as Parameters<
+                typeof parser.suggest
+              >[0]["state"],
+            }, prefix);
+
+            if (parser.$mode === "async") {
+              for await (
+                const s of parserSuggestions as AsyncIterable<Suggestion>
+              ) {
+                suggestions.push(s);
+              }
+            } else {
+              suggestions.push(...(parserSuggestions as Iterable<Suggestion>));
+            }
+          }
+
+          yield* deduplicateSuggestions(suggestions);
+        })();
       }
 
-      return deduplicateSuggestions(suggestions);
+      return (function* () {
+        const suggestions: Suggestion[] = [];
+
+        for (let i = 0; i < syncParsers.length; i++) {
+          const parser = syncParsers[i];
+          const parserState = extractState(parser, i);
+
+          const parserSuggestions = parser.suggest({
+            ...context,
+            state: parserState as Parameters<typeof parser.suggest>[0]["state"],
+          }, prefix);
+
+          suggestions.push(...parserSuggestions);
+        }
+
+        yield* deduplicateSuggestions(suggestions);
+      })();
     },
     getDocFragments(
       state: DocState<Record<string | symbol, unknown>>,
@@ -3567,14 +4724,16 @@ export function merge(
  * @since 0.2.0
  */
 export function concat<
+  MA extends Mode,
+  MB extends Mode,
   TA extends readonly unknown[],
   TB extends readonly unknown[],
   TStateA,
   TStateB,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-): Parser<[...TA, ...TB], [TStateA, TStateB]>;
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+): Parser<CombineModes<readonly [MA, MB]>, [...TA, ...TB], [TStateA, TStateB]>;
 
 /**
  * Concatenates three {@link tuple} parsers into a single parser that produces
@@ -3594,6 +4753,9 @@ export function concat<
  * @since 0.2.0
  */
 export function concat<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
   TA extends readonly unknown[],
   TB extends readonly unknown[],
   TC extends readonly unknown[],
@@ -3601,10 +4763,14 @@ export function concat<
   TStateB,
   TStateC,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-): Parser<[...TA, ...TB, ...TC], [TStateA, TStateB, TStateC]>;
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+): Parser<
+  CombineModes<readonly [MA, MB, MC]>,
+  [...TA, ...TB, ...TC],
+  [TStateA, TStateB, TStateC]
+>;
 
 /**
  * Concatenates four {@link tuple} parsers into a single parser that produces
@@ -3627,6 +4793,10 @@ export function concat<
  * @since 0.2.0
  */
 export function concat<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
   TA extends readonly unknown[],
   TB extends readonly unknown[],
   TC extends readonly unknown[],
@@ -3636,11 +4806,15 @@ export function concat<
   TStateC,
   TStateD,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-): Parser<[...TA, ...TB, ...TC, ...TD], [TStateA, TStateB, TStateC, TStateD]>;
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+): Parser<
+  CombineModes<readonly [MA, MB, MC, MD]>,
+  [...TA, ...TB, ...TC, ...TD],
+  [TStateA, TStateB, TStateC, TStateD]
+>;
 
 /**
  * Concatenates five {@link tuple} parsers into a single parser that produces
@@ -3666,6 +4840,11 @@ export function concat<
  * @since 0.2.0
  */
 export function concat<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
   TA extends readonly unknown[],
   TB extends readonly unknown[],
   TC extends readonly unknown[],
@@ -3677,21 +4856,273 @@ export function concat<
   TStateD,
   TStateE,
 >(
-  a: Parser<TA, TStateA>,
-  b: Parser<TB, TStateB>,
-  c: Parser<TC, TStateC>,
-  d: Parser<TD, TStateD>,
-  e: Parser<TE, TStateE>,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
 ): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME]>,
   [...TA, ...TB, ...TC, ...TD, ...TE],
   [TStateA, TStateB, TStateC, TStateD, TStateE]
 >;
 
 export function concat(
-  ...parsers: Parser<readonly unknown[], unknown>[]
-): Parser<readonly unknown[], readonly unknown[]> {
+  ...parsers: Parser<Mode, readonly unknown[], unknown>[]
+): Parser<Mode, readonly unknown[], readonly unknown[]> {
+  // Compute combined mode: if any parser is async, the result is async
+  const combinedMode: Mode = parsers.some((p) => p.$mode === "async")
+    ? "async"
+    : "sync";
+
+  const isAsync = combinedMode === "async";
+
+  // Cast to sync parsers for sync operations
+  const syncParsers = parsers as Parser<"sync", readonly unknown[], unknown>[];
+
   const initialState = parsers.map((parser) => parser.initialState);
+
+  type ConcatContext = ParserContext<readonly unknown[]>;
+  type ConcatResult = ParserResult<readonly unknown[]>;
+
+  // Sync parse implementation
+  const parseSync = (context: ConcatContext): ConcatResult => {
+    let currentContext = context;
+    const allConsumed: string[] = [];
+    const matchedParsers = new Set<number>();
+
+    // Use the exact same logic as tuple() to avoid infinite loops
+    while (matchedParsers.size < syncParsers.length) {
+      let foundMatch = false;
+      let error: { consumed: number; error: Message } = {
+        consumed: 0,
+        error: message`No remaining parsers could match the input.`,
+      };
+
+      // Get current state array from context (may have been updated in previous iterations)
+      const stateArray = currentContext.state as unknown[];
+
+      // Create priority-ordered list of remaining parsers
+      const remainingParsers = syncParsers
+        .map((parser, index) => [parser, index] as [typeof parser, number])
+        .filter(([_, index]) => !matchedParsers.has(index))
+        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+
+      for (const [parser, index] of remainingParsers) {
+        const result = parser.parse({
+          ...currentContext,
+          state: stateArray[index],
+        });
+
+        if (result.success && result.consumed.length > 0) {
+          // Parser succeeded and consumed input - take this match
+          const newStateArray = stateArray.map((s, idx) =>
+            idx === index ? result.next.state : s
+          );
+          currentContext = {
+            ...currentContext,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: newStateArray as readonly unknown[],
+          };
+
+          allConsumed.push(...result.consumed);
+          matchedParsers.add(index);
+          foundMatch = true;
+          break; // Take the first (highest priority) match that consumes input
+        } else if (!result.success && error.consumed < result.consumed) {
+          error = result;
+        }
+      }
+
+      // If no consuming parser matched, try non-consuming ones (like optional)
+      // or mark failing optional parsers as matched
+      if (!foundMatch) {
+        for (const [parser, index] of remainingParsers) {
+          const result = parser.parse({
+            ...currentContext,
+            state: stateArray[index],
+          });
+
+          if (result.success && result.consumed.length < 1) {
+            // Parser succeeded without consuming input (like optional)
+            const newStateArray = stateArray.map((s, idx) =>
+              idx === index ? result.next.state : s
+            );
+            currentContext = {
+              ...currentContext,
+              state: newStateArray as readonly unknown[],
+            };
+
+            matchedParsers.add(index);
+            foundMatch = true;
+            break;
+          } else if (!result.success && result.consumed < 1) {
+            // Parser failed without consuming input - this could be
+            // an optional parser that doesn't match.
+            // Check if we can safely skip it.
+            // For now, mark it as matched to continue processing
+            matchedParsers.add(index);
+            foundMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundMatch) {
+        return { ...error, success: false };
+      }
+    }
+
+    return {
+      success: true,
+      next: currentContext,
+      consumed: allConsumed,
+    };
+  };
+
+  // Async parse implementation
+  const parseAsync = async (context: ConcatContext): Promise<ConcatResult> => {
+    let currentContext = context;
+    const allConsumed: string[] = [];
+    const matchedParsers = new Set<number>();
+
+    // Use the exact same logic as tuple() to avoid infinite loops
+    while (matchedParsers.size < parsers.length) {
+      let foundMatch = false;
+      let error: { consumed: number; error: Message } = {
+        consumed: 0,
+        error: message`No remaining parsers could match the input.`,
+      };
+
+      // Get current state array from context (may have been updated in previous iterations)
+      const stateArray = currentContext.state as unknown[];
+
+      // Create priority-ordered list of remaining parsers
+      const remainingParsers = parsers
+        .map((parser, index) => [parser, index] as [typeof parser, number])
+        .filter(([_, index]) => !matchedParsers.has(index))
+        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+
+      for (const [parser, index] of remainingParsers) {
+        const result = await parser.parse({
+          ...currentContext,
+          state: stateArray[index],
+        });
+
+        if (result.success && result.consumed.length > 0) {
+          // Parser succeeded and consumed input - take this match
+          const newStateArray = stateArray.map((s, idx) =>
+            idx === index ? result.next.state : s
+          );
+          currentContext = {
+            ...currentContext,
+            buffer: result.next.buffer,
+            optionsTerminated: result.next.optionsTerminated,
+            state: newStateArray as readonly unknown[],
+          };
+
+          allConsumed.push(...result.consumed);
+          matchedParsers.add(index);
+          foundMatch = true;
+          break; // Take the first (highest priority) match that consumes input
+        } else if (!result.success && error.consumed < result.consumed) {
+          error = result;
+        }
+      }
+
+      // If no consuming parser matched, try non-consuming ones (like optional)
+      // or mark failing optional parsers as matched
+      if (!foundMatch) {
+        for (const [parser, index] of remainingParsers) {
+          const result = await parser.parse({
+            ...currentContext,
+            state: stateArray[index],
+          });
+
+          if (result.success && result.consumed.length < 1) {
+            // Parser succeeded without consuming input (like optional)
+            const newStateArray = stateArray.map((s, idx) =>
+              idx === index ? result.next.state : s
+            );
+            currentContext = {
+              ...currentContext,
+              state: newStateArray as readonly unknown[],
+            };
+
+            matchedParsers.add(index);
+            foundMatch = true;
+            break;
+          } else if (!result.success && result.consumed < 1) {
+            // Parser failed without consuming input - this could be
+            // an optional parser that doesn't match.
+            // Check if we can safely skip it.
+            // For now, mark it as matched to continue processing
+            matchedParsers.add(index);
+            foundMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundMatch) {
+        return { ...error, success: false };
+      }
+    }
+
+    return {
+      success: true,
+      next: currentContext,
+      consumed: allConsumed,
+    };
+  };
+
+  type CompleteResult = ValueParserResult<readonly unknown[]>;
+
+  // Sync complete implementation
+  const completeSync = (state: readonly unknown[]): CompleteResult => {
+    const results: unknown[] = [];
+    const stateArray = state as unknown[];
+    for (let i = 0; i < syncParsers.length; i++) {
+      const parser = syncParsers[i];
+      const parserState = stateArray[i];
+      const result = parser.complete(parserState);
+      if (!result.success) return result;
+
+      // Flatten the tuple results
+      if (Array.isArray(result.value)) {
+        results.push(...result.value);
+      } else {
+        results.push(result.value);
+      }
+    }
+    return { success: true, value: results };
+  };
+
+  // Async complete implementation
+  const completeAsync = async (
+    state: readonly unknown[],
+  ): Promise<CompleteResult> => {
+    const results: unknown[] = [];
+    const stateArray = state as unknown[];
+    for (let i = 0; i < parsers.length; i++) {
+      const parser = parsers[i];
+      const parserState = stateArray[i];
+      const result = await parser.complete(parserState);
+      if (!result.success) return result;
+
+      // Flatten the tuple results
+      if (Array.isArray(result.value)) {
+        results.push(...result.value);
+      } else {
+        results.push(result.value);
+      }
+    }
+    return { success: true, value: results };
+  };
+
   return {
+    $mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: parsers.length > 0
@@ -3700,133 +5131,72 @@ export function concat(
     usage: parsers.flatMap((p) => p.usage),
     initialState,
     parse(context) {
-      let currentContext = context;
-      const allConsumed: string[] = [];
-      const matchedParsers = new Set<number>();
-
-      // Use the exact same logic as tuple() to avoid infinite loops
-      while (matchedParsers.size < parsers.length) {
-        let foundMatch = false;
-        let error: { consumed: number; error: Message } = {
-          consumed: 0,
-          error: message`No remaining parsers could match the input.`,
-        };
-
-        // Create priority-ordered list of remaining parsers
-        const remainingParsers = parsers
-          .map((parser, index) => [parser, index] as [typeof parser, number])
-          .filter(([_, index]) => !matchedParsers.has(index))
-          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
-
-        for (const [parser, index] of remainingParsers) {
-          const result = parser.parse({
-            ...currentContext,
-            state: currentContext.state[index],
-          });
-
-          if (result.success && result.consumed.length > 0) {
-            // Parser succeeded and consumed input - take this match
-            currentContext = {
-              ...currentContext,
-              buffer: result.next.buffer,
-              optionsTerminated: result.next.optionsTerminated,
-              state: currentContext.state.map((s, idx) =>
-                idx === index ? result.next.state : s
-              ),
-            };
-
-            allConsumed.push(...result.consumed);
-            matchedParsers.add(index);
-            foundMatch = true;
-            break; // Take the first (highest priority) match that consumes input
-          } else if (!result.success && error.consumed < result.consumed) {
-            error = result;
-          }
-        }
-
-        // If no consuming parser matched, try non-consuming ones (like optional)
-        // or mark failing optional parsers as matched
-        if (!foundMatch) {
-          for (const [parser, index] of remainingParsers) {
-            const result = parser.parse({
-              ...currentContext,
-              state: currentContext.state[index],
-            });
-
-            if (result.success && result.consumed.length < 1) {
-              // Parser succeeded without consuming input (like optional)
-              currentContext = {
-                ...currentContext,
-                state: currentContext.state.map((s, idx) =>
-                  idx === index ? result.next.state : s
-                ),
-              };
-
-              matchedParsers.add(index);
-              foundMatch = true;
-              break;
-            } else if (!result.success && result.consumed < 1) {
-              // Parser failed without consuming input - this could be
-              // an optional parser that doesn't match.
-              // Check if we can safely skip it.
-              // For now, mark it as matched to continue processing
-              matchedParsers.add(index);
-              foundMatch = true;
-              break;
-            }
-          }
-        }
-
-        if (!foundMatch) {
-          return { ...error, success: false };
-        }
+      if (isAsync) {
+        return parseAsync(context);
       }
-
-      return {
-        success: true,
-        next: currentContext,
-        consumed: allConsumed,
-      };
+      return parseSync(context);
     },
     complete(state) {
-      const results: unknown[] = [];
-      for (let i = 0; i < parsers.length; i++) {
-        const parser = parsers[i];
-        const parserState = state[i];
-        const result = parser.complete(parserState);
-        if (!result.success) return result;
-
-        // Flatten the tuple results
-        if (Array.isArray(result.value)) {
-          results.push(...result.value);
-        } else {
-          results.push(result.value);
-        }
+      if (isAsync) {
+        return completeAsync(state);
       }
-      return { success: true, value: results };
+      return completeSync(state);
     },
     suggest(context, prefix) {
-      const suggestions = [];
+      const stateArray = context.state as unknown[] | undefined;
 
-      // For concat parser, get suggestions from all parsers
-      for (let i = 0; i < parsers.length; i++) {
-        const parser = parsers[i];
-        const parserState = context.state && Array.isArray(context.state)
-          ? context.state[i]
-          : parser.initialState;
+      if (isAsync) {
+        return (async function* () {
+          const suggestions: Suggestion[] = [];
 
-        const parserSuggestions = parser.suggest({
-          ...context,
-          state: parserState,
-        }, prefix);
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            const parserState = stateArray && Array.isArray(stateArray)
+              ? stateArray[i]
+              : parser.initialState;
 
-        suggestions.push(...parserSuggestions);
+            const parserSuggestions = parser.suggest({
+              ...context,
+              state: parserState,
+            }, prefix);
+
+            if (parser.$mode === "async") {
+              for await (
+                const s of parserSuggestions as AsyncIterable<Suggestion>
+              ) {
+                suggestions.push(s);
+              }
+            } else {
+              suggestions.push(...(parserSuggestions as Iterable<Suggestion>));
+            }
+          }
+
+          yield* deduplicateSuggestions(suggestions);
+        })();
       }
 
-      return deduplicateSuggestions(suggestions);
+      return (function* () {
+        const suggestions: Suggestion[] = [];
+
+        for (let i = 0; i < syncParsers.length; i++) {
+          const parser = syncParsers[i];
+          const parserState = stateArray && Array.isArray(stateArray)
+            ? stateArray[i]
+            : parser.initialState;
+
+          const parserSuggestions = parser.suggest({
+            ...context,
+            state: parserState,
+          }, prefix);
+
+          suggestions.push(...parserSuggestions);
+        }
+
+        yield* deduplicateSuggestions(suggestions);
+      })();
     },
     getDocFragments(state: DocState<readonly unknown[]>, _defaultValue?) {
-      const fragments = parsers.flatMap((p, index) => {
+      const fragments = syncParsers.flatMap((p, index) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
           : { kind: "available", state: state.state[index] };
@@ -3895,11 +5265,12 @@ export function concat(
  *          but generates documentation within a labeled section.
  * @since 0.4.0
  */
-export function group<TValue, TState>(
+export function group<M extends Mode, TValue, TState>(
   label: string,
-  parser: Parser<TValue, TState>,
-): Parser<TValue, TState> {
+  parser: Parser<M, TValue, TState>,
+): Parser<M, TValue, TState> {
   return {
+    $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
@@ -4006,7 +5377,7 @@ export interface ConditionalOptions {
  */
 type ConditionalResultWithoutDefault<
   TDiscriminator extends string,
-  TBranches extends Record<string, Parser<unknown, unknown>>,
+  TBranches extends Record<string, Parser<Mode, unknown, unknown>>,
 > = {
   [K in keyof TBranches & string]: readonly [K, InferValue<TBranches[K]>];
 }[keyof TBranches & string];
@@ -4017,17 +5388,11 @@ type ConditionalResultWithoutDefault<
  */
 type ConditionalResultWithDefault<
   TDiscriminator extends string,
-  TBranches extends Record<string, Parser<unknown, unknown>>,
-  TDefault extends Parser<unknown, unknown>,
+  TBranches extends Record<string, Parser<Mode, unknown, unknown>>,
+  TDefault extends Parser<Mode, unknown, unknown>,
 > =
   | ConditionalResultWithoutDefault<TDiscriminator, TBranches>
   | readonly [undefined, InferValue<TDefault>];
-
-/**
- * Helper type to infer value type from a parser.
- * @internal
- */
-type InferValue<T> = T extends Parser<infer V, unknown> ? V : never;
 
 /**
  * Creates a conditional parser without a default branch.
@@ -4042,11 +5407,20 @@ type InferValue<T> = T extends Parser<infer V, unknown> ? V : never;
  */
 export function conditional<
   TDiscriminator extends string,
-  TBranches extends { [K in TDiscriminator]: Parser<unknown, unknown> },
+  TBranches extends { [K in TDiscriminator]: Parser<Mode, unknown, unknown> },
+  TD extends Parser<Mode, TDiscriminator, unknown>,
 >(
-  discriminator: Parser<TDiscriminator, unknown>,
+  discriminator: TD,
   branches: TBranches,
 ): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TD>,
+      ...{
+        [K in keyof TBranches]: ExtractMode<TBranches[K]>;
+      }[keyof TBranches][],
+    ]
+  >,
   ConditionalResultWithoutDefault<TDiscriminator, TBranches>,
   ConditionalState<TDiscriminator>
 >;
@@ -4067,14 +5441,24 @@ export function conditional<
  */
 export function conditional<
   TDiscriminator extends string,
-  TBranches extends { [K in TDiscriminator]: Parser<unknown, unknown> },
-  TDefault extends Parser<unknown, unknown>,
+  TBranches extends { [K in TDiscriminator]: Parser<Mode, unknown, unknown> },
+  TDefault extends Parser<Mode, unknown, unknown>,
+  TD extends Parser<Mode, TDiscriminator, unknown>,
 >(
-  discriminator: Parser<TDiscriminator, unknown>,
+  discriminator: TD,
   branches: TBranches,
   defaultBranch: TDefault,
   options?: ConditionalOptions,
 ): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TD>,
+      ExtractMode<TDefault>,
+      ...{
+        [K in keyof TBranches]: ExtractMode<TBranches[K]>;
+      }[keyof TBranches][],
+    ]
+  >,
   ConditionalResultWithDefault<TDiscriminator, TBranches, TDefault>,
   ConditionalState<TDiscriminator>
 >;
@@ -4110,11 +5494,12 @@ export function conditional<
  * @since 0.8.0
  */
 export function conditional(
-  discriminator: Parser<string, unknown>,
-  branches: Record<string, Parser<unknown, unknown>>,
-  defaultBranch?: Parser<unknown, unknown>,
+  discriminator: Parser<Mode, string, unknown>,
+  branches: Record<string, Parser<Mode, unknown, unknown>>,
+  defaultBranch?: Parser<Mode, unknown, unknown>,
   options?: ConditionalOptions,
 ): Parser<
+  Mode,
   readonly [string | undefined, unknown],
   ConditionalState<string>
 > {
@@ -4122,6 +5507,14 @@ export function conditional(
   const allBranchParsers = defaultBranch
     ? [...branchParsers.map(([_, p]) => p), defaultBranch]
     : branchParsers.map(([_, p]) => p);
+
+  // Compute combined mode
+  const combinedMode: Mode = discriminator.$mode === "async" ||
+      allBranchParsers.some((p) => p.$mode === "async")
+    ? "async"
+    : "sync";
+
+  const isAsync = combinedMode === "async";
 
   const maxPriority = Math.max(
     discriminator.priority,
@@ -4179,7 +5572,507 @@ export function conditional(
     branchState: undefined,
   };
 
+  // Helper to generate no-match error
+  const getNoMatchError = (): Message => {
+    const noMatchContext = analyzeNoMatchContext([
+      discriminator,
+      ...allBranchParsers,
+    ]);
+    return options?.errors?.noMatch
+      ? typeof options.errors.noMatch === "function"
+        ? options.errors.noMatch(noMatchContext)
+        : options.errors.noMatch
+      : generateNoMatchError(noMatchContext);
+  };
+
+  type ParseResult = ParserResult<ConditionalState<string>>;
+
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<ConditionalState<string>>,
+  ): ParseResult => {
+    const state = context.state ?? initialState;
+    const syncDiscriminator = discriminator as Parser<"sync", string, unknown>;
+    const syncBranches = branches as Record<
+      string,
+      Parser<"sync", unknown, unknown>
+    >;
+    const syncDefaultBranch = defaultBranch as
+      | Parser<"sync", unknown, unknown>
+      | undefined;
+
+    // If branch already selected, delegate to it
+    if (state.selectedBranch !== undefined) {
+      const branchParser = state.selectedBranch.kind === "default"
+        ? syncDefaultBranch!
+        : syncBranches[state.selectedBranch.key];
+
+      const branchResult = branchParser.parse({
+        ...context,
+        state: state.branchState,
+        usage: branchParser.usage,
+      });
+
+      if (branchResult.success) {
+        return {
+          success: true,
+          next: {
+            ...branchResult.next,
+            state: {
+              ...state,
+              branchState: branchResult.next.state,
+            },
+          },
+          consumed: branchResult.consumed,
+        };
+      }
+      return branchResult;
+    }
+
+    // Try to parse discriminator first
+    const discriminatorResult = syncDiscriminator.parse({
+      ...context,
+      state: state.discriminatorState,
+    });
+
+    if (
+      discriminatorResult.success && discriminatorResult.consumed.length > 0
+    ) {
+      // Complete discriminator to get the value
+      const completionResult = syncDiscriminator.complete(
+        discriminatorResult.next.state,
+      );
+
+      if (completionResult.success) {
+        const value = completionResult.value;
+        const branchParser = syncBranches[value];
+
+        if (branchParser) {
+          // Try to parse more from the branch
+          const branchParseResult = branchParser.parse({
+            ...context,
+            buffer: discriminatorResult.next.buffer,
+            optionsTerminated: discriminatorResult.next.optionsTerminated,
+            state: branchParser.initialState,
+            usage: branchParser.usage,
+          });
+
+          if (branchParseResult.success) {
+            return {
+              success: true,
+              next: {
+                ...branchParseResult.next,
+                state: {
+                  discriminatorState: discriminatorResult.next.state,
+                  discriminatorValue: value,
+                  selectedBranch: { kind: "branch", key: value },
+                  branchState: branchParseResult.next.state,
+                },
+              },
+              consumed: [
+                ...discriminatorResult.consumed,
+                ...branchParseResult.consumed,
+              ],
+            };
+          }
+
+          // Branch parse failed but discriminator succeeded
+          return {
+            success: true,
+            next: {
+              ...discriminatorResult.next,
+              state: {
+                discriminatorState: discriminatorResult.next.state,
+                discriminatorValue: value,
+                selectedBranch: { kind: "branch", key: value },
+                branchState: branchParser.initialState,
+              },
+            },
+            consumed: discriminatorResult.consumed,
+          };
+        }
+      }
+    }
+
+    // Discriminator didn't match, try default branch
+    if (syncDefaultBranch !== undefined) {
+      const defaultResult = syncDefaultBranch.parse({
+        ...context,
+        state: state.branchState ?? syncDefaultBranch.initialState,
+        usage: syncDefaultBranch.usage,
+      });
+
+      if (defaultResult.success && defaultResult.consumed.length > 0) {
+        return {
+          success: true,
+          next: {
+            ...defaultResult.next,
+            state: {
+              ...state,
+              selectedBranch: { kind: "default" },
+              branchState: defaultResult.next.state,
+            },
+          },
+          consumed: defaultResult.consumed,
+        };
+      }
+    }
+
+    // Nothing matched
+    return {
+      success: false,
+      consumed: 0,
+      error: getNoMatchError(),
+    };
+  };
+
+  // Async parse implementation
+  const parseAsync = async (
+    context: ParserContext<ConditionalState<string>>,
+  ): Promise<ParseResult> => {
+    const state = context.state ?? initialState;
+
+    // If branch already selected, delegate to it
+    if (state.selectedBranch !== undefined) {
+      const branchParser = state.selectedBranch.kind === "default"
+        ? defaultBranch!
+        : branches[state.selectedBranch.key];
+
+      const branchResult = await branchParser.parse({
+        ...context,
+        state: state.branchState,
+        usage: branchParser.usage,
+      });
+
+      if (branchResult.success) {
+        return {
+          success: true,
+          next: {
+            ...branchResult.next,
+            state: {
+              ...state,
+              branchState: branchResult.next.state,
+            },
+          },
+          consumed: branchResult.consumed,
+        };
+      }
+      return branchResult;
+    }
+
+    // Try to parse discriminator first
+    const discriminatorResult = await discriminator.parse({
+      ...context,
+      state: state.discriminatorState,
+    });
+
+    if (
+      discriminatorResult.success && discriminatorResult.consumed.length > 0
+    ) {
+      // Complete discriminator to get the value
+      const completionResult = await discriminator.complete(
+        discriminatorResult.next.state,
+      );
+
+      if (completionResult.success) {
+        const value = completionResult.value;
+        const branchParser = branches[value];
+
+        if (branchParser) {
+          // Try to parse more from the branch
+          const branchParseResult = await branchParser.parse({
+            ...context,
+            buffer: discriminatorResult.next.buffer,
+            optionsTerminated: discriminatorResult.next.optionsTerminated,
+            state: branchParser.initialState,
+            usage: branchParser.usage,
+          });
+
+          if (branchParseResult.success) {
+            return {
+              success: true,
+              next: {
+                ...branchParseResult.next,
+                state: {
+                  discriminatorState: discriminatorResult.next.state,
+                  discriminatorValue: value,
+                  selectedBranch: { kind: "branch", key: value },
+                  branchState: branchParseResult.next.state,
+                },
+              },
+              consumed: [
+                ...discriminatorResult.consumed,
+                ...branchParseResult.consumed,
+              ],
+            };
+          }
+
+          // Branch parse failed but discriminator succeeded
+          return {
+            success: true,
+            next: {
+              ...discriminatorResult.next,
+              state: {
+                discriminatorState: discriminatorResult.next.state,
+                discriminatorValue: value,
+                selectedBranch: { kind: "branch", key: value },
+                branchState: branchParser.initialState,
+              },
+            },
+            consumed: discriminatorResult.consumed,
+          };
+        }
+      }
+    }
+
+    // Discriminator didn't match, try default branch
+    if (defaultBranch !== undefined) {
+      const defaultResult = await defaultBranch.parse({
+        ...context,
+        state: state.branchState ?? defaultBranch.initialState,
+        usage: defaultBranch.usage,
+      });
+
+      if (defaultResult.success && defaultResult.consumed.length > 0) {
+        return {
+          success: true,
+          next: {
+            ...defaultResult.next,
+            state: {
+              ...state,
+              selectedBranch: { kind: "default" },
+              branchState: defaultResult.next.state,
+            },
+          },
+          consumed: defaultResult.consumed,
+        };
+      }
+    }
+
+    // Nothing matched
+    return {
+      success: false,
+      consumed: 0,
+      error: getNoMatchError(),
+    };
+  };
+
+  type CompleteResult = ValueParserResult<
+    readonly [string | undefined, unknown]
+  >;
+
+  // Sync complete implementation
+  const completeSync = (state: ConditionalState<string>): CompleteResult => {
+    const syncDefaultBranch = defaultBranch as
+      | Parser<"sync", unknown, unknown>
+      | undefined;
+    const syncBranches = branches as Record<
+      string,
+      Parser<"sync", unknown, unknown>
+    >;
+
+    // No branch selected yet
+    if (state.selectedBranch === undefined) {
+      // If we have default branch, use it
+      if (syncDefaultBranch !== undefined) {
+        const branchState = state.branchState ?? syncDefaultBranch.initialState;
+        const defaultResult = syncDefaultBranch.complete(branchState);
+        if (!defaultResult.success) {
+          return defaultResult;
+        }
+        return {
+          success: true,
+          value: [undefined, defaultResult.value] as const,
+        };
+      }
+
+      // No default branch, discriminator is required
+      return {
+        success: false,
+        error: message`Missing required discriminator option.`,
+      };
+    }
+
+    // Complete selected branch
+    const branchParser = state.selectedBranch.kind === "default"
+      ? syncDefaultBranch!
+      : syncBranches[state.selectedBranch.key];
+
+    const branchResult = branchParser.complete(state.branchState);
+
+    if (!branchResult.success) {
+      // Add context to error message
+      if (
+        state.discriminatorValue !== undefined &&
+        options?.errors?.branchError
+      ) {
+        return {
+          success: false,
+          error: options.errors.branchError(
+            state.discriminatorValue,
+            branchResult.error,
+          ),
+        };
+      }
+      return branchResult;
+    }
+
+    const discriminatorValue = state.selectedBranch.kind === "default"
+      ? undefined
+      : state.selectedBranch.key;
+
+    return {
+      success: true,
+      value: [discriminatorValue, branchResult.value] as const,
+    };
+  };
+
+  // Async complete implementation
+  const completeAsync = async (
+    state: ConditionalState<string>,
+  ): Promise<CompleteResult> => {
+    // No branch selected yet
+    if (state.selectedBranch === undefined) {
+      // If we have default branch, use it
+      if (defaultBranch !== undefined) {
+        const branchState = state.branchState ?? defaultBranch.initialState;
+        const defaultResult = await defaultBranch.complete(branchState);
+        if (!defaultResult.success) {
+          return defaultResult;
+        }
+        return {
+          success: true,
+          value: [undefined, defaultResult.value] as const,
+        };
+      }
+
+      // No default branch, discriminator is required
+      return {
+        success: false,
+        error: message`Missing required discriminator option.`,
+      };
+    }
+
+    // Complete selected branch
+    const branchParser = state.selectedBranch.kind === "default"
+      ? defaultBranch!
+      : branches[state.selectedBranch.key];
+
+    const branchResult = await branchParser.complete(state.branchState);
+
+    if (!branchResult.success) {
+      // Add context to error message
+      if (
+        state.discriminatorValue !== undefined &&
+        options?.errors?.branchError
+      ) {
+        return {
+          success: false,
+          error: options.errors.branchError(
+            state.discriminatorValue,
+            branchResult.error,
+          ),
+        };
+      }
+      return branchResult;
+    }
+
+    const discriminatorValue = state.selectedBranch.kind === "default"
+      ? undefined
+      : state.selectedBranch.key;
+
+    return {
+      success: true,
+      value: [discriminatorValue, branchResult.value] as const,
+    };
+  };
+
+  // Sync suggest implementation
+  function* suggestSync(
+    context: ParserContext<ConditionalState<string>>,
+    prefix: string,
+  ): Iterable<Suggestion> {
+    const state = context.state ?? initialState;
+    const syncDiscriminator = discriminator as Parser<"sync", string, unknown>;
+    const syncBranches = branches as Record<
+      string,
+      Parser<"sync", unknown, unknown>
+    >;
+    const syncDefaultBranch = defaultBranch as
+      | Parser<"sync", unknown, unknown>
+      | undefined;
+
+    // If no branch selected, suggest discriminator and default branch options
+    if (state.selectedBranch === undefined) {
+      // Discriminator suggestions
+      yield* syncDiscriminator.suggest(
+        { ...context, state: state.discriminatorState },
+        prefix,
+      );
+
+      // Default branch suggestions if available
+      if (syncDefaultBranch !== undefined) {
+        yield* syncDefaultBranch.suggest(
+          {
+            ...context,
+            state: state.branchState ?? syncDefaultBranch.initialState,
+          },
+          prefix,
+        );
+      }
+    } else {
+      // Delegate to selected branch
+      const branchParser = state.selectedBranch.kind === "default"
+        ? syncDefaultBranch!
+        : syncBranches[state.selectedBranch.key];
+
+      yield* branchParser.suggest(
+        { ...context, state: state.branchState },
+        prefix,
+      );
+    }
+  }
+
+  // Async suggest implementation
+  async function* suggestAsync(
+    context: ParserContext<ConditionalState<string>>,
+    prefix: string,
+  ): AsyncIterable<Suggestion> {
+    const state = context.state ?? initialState;
+
+    // If no branch selected, suggest discriminator and default branch options
+    if (state.selectedBranch === undefined) {
+      // Discriminator suggestions
+      yield* discriminator.suggest(
+        { ...context, state: state.discriminatorState },
+        prefix,
+      );
+
+      // Default branch suggestions if available
+      if (defaultBranch !== undefined) {
+        yield* defaultBranch.suggest(
+          {
+            ...context,
+            state: state.branchState ?? defaultBranch.initialState,
+          },
+          prefix,
+        );
+      }
+    } else {
+      // Delegate to selected branch
+      const branchParser = state.selectedBranch.kind === "default"
+        ? defaultBranch!
+        : branches[state.selectedBranch.key];
+
+      yield* branchParser.suggest(
+        { ...context, state: state.branchState },
+        prefix,
+      );
+    }
+  }
+
   return {
+    $mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: maxPriority,
@@ -4187,241 +6080,24 @@ export function conditional(
     initialState,
 
     parse(context) {
-      const state = context.state ?? initialState;
-
-      // If branch already selected, delegate to it
-      if (state.selectedBranch !== undefined) {
-        const branchParser = state.selectedBranch.kind === "default"
-          ? defaultBranch!
-          : branches[state.selectedBranch.key];
-
-        const branchResult = branchParser.parse({
-          ...context,
-          state: state.branchState,
-          usage: branchParser.usage, // Use only the selected branch's usage for error suggestions
-        });
-
-        if (branchResult.success) {
-          return {
-            success: true,
-            next: {
-              ...branchResult.next,
-              state: {
-                ...state,
-                branchState: branchResult.next.state,
-              },
-            },
-            consumed: branchResult.consumed,
-          };
-        }
-        return branchResult;
+      if (isAsync) {
+        return parseAsync(context);
       }
-
-      // Try to parse discriminator first
-      const discriminatorResult = discriminator.parse({
-        ...context,
-        state: state.discriminatorState,
-      });
-
-      if (
-        discriminatorResult.success && discriminatorResult.consumed.length > 0
-      ) {
-        // Complete discriminator to get the value
-        const completionResult = discriminator.complete(
-          discriminatorResult.next.state,
-        );
-
-        if (completionResult.success) {
-          const value = completionResult.value;
-          const branchParser = branches[value];
-
-          if (branchParser) {
-            // Try to parse more from the branch
-            const branchParseResult = branchParser.parse({
-              ...context,
-              buffer: discriminatorResult.next.buffer,
-              optionsTerminated: discriminatorResult.next.optionsTerminated,
-              state: branchParser.initialState,
-              usage: branchParser.usage, // Use only the selected branch's usage for error suggestions
-            });
-
-            if (branchParseResult.success) {
-              return {
-                success: true,
-                next: {
-                  ...branchParseResult.next,
-                  state: {
-                    discriminatorState: discriminatorResult.next.state,
-                    discriminatorValue: value,
-                    selectedBranch: { kind: "branch", key: value },
-                    branchState: branchParseResult.next.state,
-                  },
-                },
-                consumed: [
-                  ...discriminatorResult.consumed,
-                  ...branchParseResult.consumed,
-                ],
-              };
-            }
-
-            // Branch parse failed but discriminator succeeded
-            return {
-              success: true,
-              next: {
-                ...discriminatorResult.next,
-                state: {
-                  discriminatorState: discriminatorResult.next.state,
-                  discriminatorValue: value,
-                  selectedBranch: { kind: "branch", key: value },
-                  branchState: branchParser.initialState,
-                },
-              },
-              consumed: discriminatorResult.consumed,
-            };
-          }
-        }
-      }
-
-      // Discriminator didn't match, try default branch
-      if (defaultBranch !== undefined) {
-        const defaultResult = defaultBranch.parse({
-          ...context,
-          state: state.branchState ?? defaultBranch.initialState,
-          usage: defaultBranch.usage, // Use only the default branch's usage for error suggestions
-        });
-
-        if (defaultResult.success && defaultResult.consumed.length > 0) {
-          return {
-            success: true,
-            next: {
-              ...defaultResult.next,
-              state: {
-                ...state,
-                selectedBranch: { kind: "default" },
-                branchState: defaultResult.next.state,
-              },
-            },
-            consumed: defaultResult.consumed,
-          };
-        }
-      }
-
-      // Nothing matched
-      const noMatchContext = analyzeNoMatchContext([
-        discriminator,
-        ...allBranchParsers,
-      ]);
-      const errorMessage = options?.errors?.noMatch
-        ? typeof options.errors.noMatch === "function"
-          ? options.errors.noMatch(noMatchContext)
-          : options.errors.noMatch
-        : generateNoMatchError(noMatchContext);
-
-      return {
-        success: false,
-        consumed: 0,
-        error: errorMessage,
-      };
+      return parseSync(context);
     },
 
     complete(state) {
-      // No branch selected yet
-      if (state.selectedBranch === undefined) {
-        // If we have default branch, use it
-        if (defaultBranch !== undefined) {
-          const branchState = state.branchState ?? defaultBranch.initialState;
-          const defaultResult = defaultBranch.complete(branchState);
-          if (!defaultResult.success) {
-            return defaultResult;
-          }
-          return {
-            success: true,
-            value: [undefined, defaultResult.value] as const,
-          };
-        }
-
-        // No default branch, discriminator is required
-        return {
-          success: false,
-          error: message`Missing required discriminator option.`,
-        };
+      if (isAsync) {
+        return completeAsync(state);
       }
-
-      // Complete selected branch
-      const branchParser = state.selectedBranch.kind === "default"
-        ? defaultBranch!
-        : branches[state.selectedBranch.key];
-
-      const branchResult = branchParser.complete(state.branchState);
-
-      if (!branchResult.success) {
-        // Add context to error message
-        if (
-          state.discriminatorValue !== undefined &&
-          options?.errors?.branchError
-        ) {
-          return {
-            success: false,
-            error: options.errors.branchError(
-              state.discriminatorValue,
-              branchResult.error,
-            ),
-          };
-        }
-        return branchResult;
-      }
-
-      const discriminatorValue = state.selectedBranch.kind === "default"
-        ? undefined
-        : state.selectedBranch.key;
-
-      return {
-        success: true,
-        value: [discriminatorValue, branchResult.value] as const,
-      };
+      return completeSync(state);
     },
 
     suggest(context, prefix) {
-      const state = context.state ?? initialState;
-      const suggestions = [];
-
-      // If no branch selected, suggest discriminator and default branch options
-      if (state.selectedBranch === undefined) {
-        // Discriminator suggestions
-        suggestions.push(
-          ...discriminator.suggest(
-            { ...context, state: state.discriminatorState },
-            prefix,
-          ),
-        );
-
-        // Default branch suggestions if available
-        if (defaultBranch !== undefined) {
-          suggestions.push(
-            ...defaultBranch.suggest(
-              {
-                ...context,
-                state: state.branchState ?? defaultBranch.initialState,
-              },
-              prefix,
-            ),
-          );
-        }
-      } else {
-        // Delegate to selected branch
-        const branchParser = state.selectedBranch.kind === "default"
-          ? defaultBranch!
-          : branches[state.selectedBranch.key];
-
-        suggestions.push(
-          ...branchParser.suggest(
-            { ...context, state: state.branchState },
-            prefix,
-          ),
-        );
+      if (isAsync) {
+        return suggestAsync(context, prefix);
       }
-
-      return deduplicateSuggestions(suggestions);
+      return suggestSync(context, prefix);
     },
 
     getDocFragments(_state, _defaultValue?) {

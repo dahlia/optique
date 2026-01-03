@@ -7,7 +7,7 @@ import {
   zsh,
 } from "./completion.ts";
 import { longestMatch, object } from "./constructs.ts";
-import { formatDocPage, type ShowDefaultOptions } from "./doc.ts";
+import { type DocPage, formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import {
   commandLine,
   formatMessage,
@@ -21,10 +21,16 @@ import {
 import { multiple, optional, withDefault } from "./modifiers.ts";
 import {
   getDocPage,
+  type InferMode,
   type InferValue,
-  parse,
+  type Mode,
+  type ModeValue,
+  parseAsync,
   type Parser,
+  parseSync,
+  type Result,
   suggest,
+  suggestAsync,
 } from "./parser.ts";
 import {
   argument,
@@ -41,13 +47,15 @@ import { string, type ValueParser } from "./valueparser.ts";
  * Helper types for parser generation
  */
 interface HelpParsers {
-  readonly helpCommand: Parser<readonly string[], unknown> | null;
-  readonly helpOption: Parser<boolean, unknown> | null;
+  readonly helpCommand: Parser<"sync", readonly string[], unknown> | null;
+  readonly helpOption: Parser<"sync", boolean, unknown> | null;
 }
 
 interface VersionParsers {
-  readonly versionCommand: Parser<Record<PropertyKey, never>, unknown> | null;
-  readonly versionOption: Parser<boolean, unknown> | null;
+  readonly versionCommand:
+    | Parser<"sync", Record<PropertyKey, never>, unknown>
+    | null;
+  readonly versionOption: Parser<"sync", boolean, unknown> | null;
 }
 
 /**
@@ -111,12 +119,14 @@ function createVersionParser(
 interface CompletionParsers {
   readonly completionCommand:
     | Parser<
+      "sync",
       { shell: string | undefined; args: readonly string[] },
       unknown
     >
     | null;
   readonly completionOption:
     | Parser<
+      "sync",
       { shell: string; args: readonly string[] },
       unknown
     >
@@ -175,7 +185,11 @@ function createCompletionParser(
 `,
   };
 
-  const completionCommands: Parser<unknown, unknown>[] = [];
+  const completionCommands: Parser<
+    "sync",
+    { shell: string | undefined; args: readonly string[] },
+    unknown
+  >[] = [];
   if (name === "singular" || name === "both") {
     completionCommands.push(
       command("completion", completionInner, completionCommandConfig),
@@ -188,8 +202,13 @@ function createCompletionParser(
   }
 
   const completionCommand = (longestMatch as (
-    ...parsers: Parser<unknown, unknown>[]
+    ...parsers: Parser<
+      "sync",
+      { shell: string | undefined; args: readonly string[] },
+      unknown
+    >[]
   ) => Parser<
+    "sync",
     { shell: string | undefined; args: readonly string[] },
     unknown
   >)(...completionCommands);
@@ -204,7 +223,7 @@ function createCompletionParser(
 
   const completionOptionArgs: [
     ...OptionName[],
-    ValueParser<string>,
+    ValueParser<"sync", string>,
     OptionOptions,
   ] = [
     ...completionOptionNames,
@@ -214,7 +233,22 @@ function createCompletionParser(
     },
   ];
 
-  const completionOption = option<string>(...completionOptionArgs);
+  const completionOption = option(...completionOptionArgs);
+
+  const argsParser = withDefault(
+    multiple(
+      argument(string({ metavar: "ARG" }), {
+        description:
+          message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+      }),
+    ),
+    [] as readonly string[],
+  );
+
+  const optionParser = object({
+    shell: completionOption,
+    args: argsParser,
+  }) as Parser<"sync", { shell: string; args: readonly string[] }, unknown>;
 
   switch (mode) {
     case "command":
@@ -225,34 +259,12 @@ function createCompletionParser(
     case "option":
       return {
         completionCommand: null,
-        completionOption: object({
-          shell: completionOption,
-          args: withDefault(
-            multiple(
-              argument(string({ metavar: "ARG" }), {
-                description:
-                  message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
-              }),
-            ),
-            [] as readonly string[],
-          ),
-        }),
+        completionOption: optionParser,
       };
     case "both":
       return {
         completionCommand,
-        completionOption: object({
-          shell: completionOption,
-          args: withDefault(
-            multiple(
-              argument(string({ metavar: "ARG" }), {
-                description:
-                  message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
-              }),
-            ),
-            [] as readonly string[],
-          ),
-        }),
+        completionOption: optionParser,
       };
   }
 }
@@ -275,12 +287,12 @@ type ParsedResult =
  * Systematically combines the original parser with help, version, and completion parsers.
  */
 function combineWithHelpVersion(
-  originalParser: Parser<unknown, unknown>,
+  originalParser: Parser<Mode, unknown, unknown>,
   helpParsers: HelpParsers,
   versionParsers: VersionParsers,
   completionParsers: CompletionParsers,
-): Parser<unknown, unknown> {
-  const parsers: Parser<unknown, unknown>[] = [];
+): Parser<Mode, unknown, unknown> {
+  const parsers: Parser<Mode, unknown, unknown>[] = [];
 
   // Add options FIRST - they are more specific and should have priority
 
@@ -288,7 +300,8 @@ function combineWithHelpVersion(
   if (helpParsers.helpOption) {
     // Create a lenient help parser that accepts help flag anywhere
     // and ignores all other options/arguments
-    const lenientHelpParser: Parser<unknown, unknown> = {
+    const lenientHelpParser: Parser<"sync", unknown, unknown> = {
+      $mode: "sync",
       $valueType: [],
       $stateType: [],
       priority: 200, // Very high priority
@@ -374,12 +387,11 @@ function combineWithHelpVersion(
         return { success: true, value: state };
       },
 
-      suggest(_context, prefix) {
+      *suggest(_context, prefix) {
         // Suggest --help if it matches the prefix
         if ("--help".startsWith(prefix)) {
-          return [{ kind: "literal", text: "--help" }];
+          yield { kind: "literal", text: "--help" } as const;
         }
-        return [];
       },
 
       getDocFragments(state) {
@@ -395,7 +407,8 @@ function combineWithHelpVersion(
   if (versionParsers.versionOption) {
     // Create a lenient version parser that accepts version flag anywhere
     // and ignores all other options/arguments
-    const lenientVersionParser: Parser<unknown, unknown> = {
+    const lenientVersionParser: Parser<"sync", unknown, unknown> = {
+      $mode: "sync",
       $valueType: [],
       $stateType: [],
       priority: 200, // Very high priority
@@ -466,12 +479,11 @@ function combineWithHelpVersion(
         return { success: true, value: state };
       },
 
-      suggest(_context, prefix) {
+      *suggest(_context, prefix) {
         // Suggest --version if it matches the prefix
         if ("--version".startsWith(prefix)) {
-          return [{ kind: "literal", text: "--version" }];
+          yield { kind: "literal", text: "--version" } as const;
         }
-        return [];
       },
 
       getDocFragments(state) {
@@ -534,8 +546,8 @@ function combineWithHelpVersion(
     // Use variadic longestMatch for all parsers
     // Our lenient help/version parsers will win because they consume all input
     return (longestMatch as (
-      ...parsers: Parser<unknown, unknown>[]
-    ) => Parser<unknown, unknown>)(...parsers);
+      ...parsers: Parser<Mode, unknown, unknown>[]
+    ) => Parser<Mode, unknown, unknown>)(...parsers);
   }
 }
 
@@ -543,7 +555,7 @@ function combineWithHelpVersion(
  * Classifies the parsing result into a discriminated union for cleaner handling.
  */
 function classifyResult(
-  result: ReturnType<typeof parse>,
+  result: Result<unknown>,
   args: readonly string[],
 ): ParsedResult {
   if (!result.success) {
@@ -841,11 +853,11 @@ export interface RunOptions<THelp, TError> {
  * Handles shell completion requests.
  * @since 0.6.0
  */
-function handleCompletion<THelp, TError>(
+function handleCompletion<M extends Mode, THelp, TError>(
   completionArgs: readonly string[],
   programName: string,
-  parser: Parser<unknown, unknown>,
-  completionParser: Parser<unknown, unknown> | null,
+  parser: Parser<M, unknown, unknown>,
+  completionParser: Parser<"sync", unknown, unknown> | null,
   stdout: (text: string) => void,
   stderr: (text: string) => void,
   onCompletion: (() => THelp) | ((exitCode: number) => THelp),
@@ -855,9 +867,25 @@ function handleCompletion<THelp, TError>(
   maxWidth?: number,
   completionMode?: "command" | "option" | "both",
   completionName?: "singular" | "plural" | "both",
-): THelp | TError {
+): ModeValue<M, THelp | TError> {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
+
+  const callOnError = (code: number): TError => {
+    try {
+      return onError(code);
+    } catch {
+      return (onError as (() => TError))();
+    }
+  };
+
+  const callOnCompletion = (code: number): THelp => {
+    try {
+      return onCompletion(code);
+    } catch {
+      return (onCompletion as (() => THelp))();
+    }
+  };
 
   // Check if shell name is empty
   if (!shellName) {
@@ -871,20 +899,19 @@ function handleCompletion<THelp, TError>(
       }
     }
 
-    try {
-      return onError(1);
-    } catch {
-      return (onError as (() => TError))();
+    if (parser.$mode === "async") {
+      return Promise.resolve(callOnError(1)) as ModeValue<M, THelp | TError>;
     }
+    return callOnError(1) as ModeValue<M, THelp | TError>;
   }
 
   const shell = availableShells[shellName];
 
   if (!shell) {
     const available: MessageTerm[] = [];
-    for (const shell in availableShells) {
+    for (const name in availableShells) {
       if (available.length > 0) available.push(text(", "));
-      available.push(value(shell));
+      available.push(value(name));
     }
     stderr(
       formatMessage(
@@ -892,7 +919,10 @@ function handleCompletion<THelp, TError>(
         { colors, quotes: !colors },
       ),
     );
-    return onError(1);
+    if (parser.$mode === "async") {
+      return Promise.resolve(callOnError(1)) as ModeValue<M, THelp | TError>;
+    }
+    return callOnError(1) as ModeValue<M, THelp | TError>;
   }
 
   if (args.length === 0) {
@@ -906,20 +936,37 @@ function handleCompletion<THelp, TError>(
       shellName,
     ]);
     stdout(script);
-  } else {
-    // Provide completion suggestions
-    // Add the current (incomplete) argument to the args array for suggest()
-    const suggestions = suggest(parser, args as [string, ...string[]]);
-    for (const chunk of shell.encodeSuggestions(suggestions)) {
-      stdout(chunk);
+
+    if (parser.$mode === "async") {
+      return Promise.resolve(callOnCompletion(0)) as ModeValue<
+        M,
+        THelp | TError
+      >;
     }
+    return callOnCompletion(0) as ModeValue<M, THelp | TError>;
   }
 
-  try {
-    return onCompletion(0);
-  } catch {
-    return (onCompletion as (() => THelp))();
+  // Provide completion suggestions
+  if (parser.$mode === "async") {
+    return (async () => {
+      const suggestions = await suggestAsync(
+        parser as Parser<"async", unknown, unknown>,
+        args as [string, ...string[]],
+      );
+      for (const chunk of shell.encodeSuggestions(suggestions)) {
+        stdout(chunk);
+      }
+      return callOnCompletion(0);
+    })() as ModeValue<M, THelp | TError>;
   }
+
+  // Sync path
+  const syncParser = parser as Parser<"sync", unknown, unknown>;
+  const suggestions = suggest(syncParser, args as [string, ...string[]]);
+  for (const chunk of shell.encodeSuggestions(suggestions)) {
+    stdout(chunk);
+  }
+  return callOnCompletion(0) as ModeValue<M, THelp | TError>;
 }
 
 /**
@@ -952,8 +999,45 @@ function handleCompletion<THelp, TError>(
  * @throws {RunParserError} When parsing fails and no `onError` callback is
  *          provided.
  */
+// Overload: sync parser returns sync result
 export function runParser<
-  TParser extends Parser<unknown, unknown>,
+  TParser extends Parser<"sync", unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): InferValue<TParser>;
+
+// Overload: async parser returns Promise
+export function runParser<
+  TParser extends Parser<"async", unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): Promise<InferValue<TParser>>;
+
+// Overload: generic mode parser returns ModeValue (for internal use)
+export function runParser<
+  TParser extends Parser<Mode, unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): ModeValue<InferMode<TParser>, InferValue<TParser>>;
+
+// Implementation
+export function runParser<
+  TParser extends Parser<Mode, unknown, unknown>,
   THelp = void,
   TError = never,
 >(
@@ -961,9 +1045,9 @@ export function runParser<
   programName: string,
   args: readonly string[],
   options: RunOptions<THelp, TError> = {},
-): InferValue<TParser> {
+): ModeValue<InferMode<TParser>, InferValue<TParser>> {
   // Extract all options first
-  let {
+  const {
     colors,
     maxWidth,
     showDefault,
@@ -1058,7 +1142,7 @@ export function runParser<
         maxWidth,
         completionMode,
         completionName,
-      );
+      ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
     }
 
     // Handle completion option format: "--completion=<shell> [args...]"
@@ -1091,7 +1175,7 @@ export function runParser<
             maxWidth,
             completionMode,
             completionName,
-          );
+          ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
         } else {
           const singularMatchExact =
             completionName === "singular" || completionName === "both"
@@ -1122,7 +1206,7 @@ export function runParser<
               maxWidth,
               completionMode,
               completionName,
-            );
+            ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
           }
         }
       }
@@ -1141,183 +1225,296 @@ export function runParser<
       versionParsers,
       completionParsers,
     );
-  const result = parse(augmentedParser, args);
-  const classified = classifyResult(result, args);
 
-  switch (classified.type) {
-    case "success":
-      return classified.value;
+  // Helper function to handle parsed result
+  // Return type is InferValue<TParser> but callbacks may return THelp/TError
+  // which are typically `never` (via process.exit) or a compatible type
+  // For async parsers, this may return a Promise when help/error handling
+  // requires awaiting getDocPage.
+  const handleResult = (
+    result: Result<unknown>,
+  ): InferValue<TParser> | Promise<InferValue<TParser>> => {
+    const classified = classifyResult(result, args);
 
-    case "version":
-      stdout(versionValue);
-      try {
-        return onVersion(0);
-      } catch {
-        return (onVersion as (() => THelp))();
-      }
+    switch (classified.type) {
+      case "success":
+        return classified.value;
 
-    case "completion":
-      // This case should never be reached due to early return,
-      // but keep it for type safety
-      throw new RunParserError("Completion should be handled by early return");
-
-    case "help": {
-      // Handle help request - determine which parser to use for help generation
-      // Include completion command in help even though it's handled via early return
-      let helpGeneratorParser: Parser<unknown, unknown>;
-      const helpAsCommand = help === "command" || help === "both";
-      const versionAsCommand = version === "command" || version === "both";
-      const completionAsCommand = completion === "command" ||
-        completion === "both";
-
-      // Check if user is requesting help for a specific meta-command
-      const requestedCommand = classified.commands[0];
-      if (
-        (requestedCommand === "completion" ||
-          requestedCommand === "completions") &&
-        completionAsCommand &&
-        completionParsers.completionCommand
-      ) {
-        // User wants help for completion command specifically
-        helpGeneratorParser = completionParsers.completionCommand;
-      } else if (
-        requestedCommand === "help" && helpAsCommand &&
-        helpParsers.helpCommand
-      ) {
-        // User wants help for help command specifically
-        helpGeneratorParser = helpParsers.helpCommand;
-      } else if (
-        requestedCommand === "version" && versionAsCommand &&
-        versionParsers.versionCommand
-      ) {
-        // User wants help for version command specifically
-        helpGeneratorParser = versionParsers.versionCommand;
-      } else {
-        // General help or help for user-defined commands
-        // Collect all command parsers to include in help generation
-        const commandParsers: Parser<unknown, unknown>[] = [parser];
-
-        if (helpAsCommand) {
-          if (helpParsers.helpCommand) {
-            commandParsers.push(helpParsers.helpCommand);
-          }
+      case "version":
+        stdout(versionValue);
+        try {
+          return onVersion(0);
+        } catch {
+          return (onVersion as (() => THelp))();
         }
 
-        if (versionAsCommand) {
-          if (versionParsers.versionCommand) {
-            commandParsers.push(versionParsers.versionCommand);
-          }
-        }
+      case "completion":
+        // This case should never be reached due to early return,
+        // but keep it for type safety
+        throw new RunParserError(
+          "Completion should be handled by early return",
+        );
 
-        if (completionAsCommand) {
-          // Include completion in help even though it's handled via early return
-          if (completionParsers.completionCommand) {
-            commandParsers.push(completionParsers.completionCommand);
-          }
-        }
+      case "help": {
+        // Handle help request - determine which parser to use for help generation
+        // Include completion command in help even though it's handled via early return
+        let helpGeneratorParser: Parser<Mode, unknown, unknown>;
+        const helpAsCommand = help === "command" || help === "both";
+        const versionAsCommand = version === "command" || version === "both";
+        const completionAsCommand = completion === "command" ||
+          completion === "both";
 
-        // Use longestMatch to combine all parsers
-        if (commandParsers.length === 1) {
-          helpGeneratorParser = commandParsers[0];
-        } else if (commandParsers.length === 2) {
-          helpGeneratorParser = longestMatch(
-            commandParsers[0],
-            commandParsers[1],
-          );
+        // Check if user is requesting help for a specific meta-command
+        const requestedCommand = classified.commands[0];
+        if (
+          (requestedCommand === "completion" ||
+            requestedCommand === "completions") &&
+          completionAsCommand &&
+          completionParsers.completionCommand
+        ) {
+          // User wants help for completion command specifically
+          helpGeneratorParser = completionParsers.completionCommand;
+        } else if (
+          requestedCommand === "help" && helpAsCommand &&
+          helpParsers.helpCommand
+        ) {
+          // User wants help for help command specifically
+          helpGeneratorParser = helpParsers.helpCommand;
+        } else if (
+          requestedCommand === "version" && versionAsCommand &&
+          versionParsers.versionCommand
+        ) {
+          // User wants help for version command specifically
+          helpGeneratorParser = versionParsers.versionCommand;
         } else {
-          helpGeneratorParser = (longestMatch as (
-            ...parsers: Parser<unknown, unknown>[]
-          ) => Parser<unknown, unknown>)(...commandParsers);
-        }
-      }
+          // General help or help for user-defined commands
+          // Collect all command parsers to include in help generation
+          const commandParsers: Parser<Mode, unknown, unknown>[] = [parser];
 
-      const doc = getDocPage(
-        helpGeneratorParser,
-        classified.commands,
-      );
-      if (doc != null) {
-        // Augment the doc page with provided options
-        // But if showing help for a specific meta-command, don't override its description
-        const isMetaCommandHelp = (completionName === "singular" ||
-            completionName === "both"
-          ? requestedCommand === "completion"
-          : false) ||
-          (completionName === "plural" || completionName === "both"
-            ? requestedCommand === "completions"
-            : false) ||
-          requestedCommand === "help" ||
-          requestedCommand === "version";
-        const augmentedDoc = {
-          ...doc,
-          brief: !isMetaCommandHelp ? (brief ?? doc.brief) : doc.brief,
-          description: !isMetaCommandHelp
-            ? (description ?? doc.description)
-            : doc.description,
-          footer: !isMetaCommandHelp ? (footer ?? doc.footer) : doc.footer,
+          if (helpAsCommand) {
+            if (helpParsers.helpCommand) {
+              commandParsers.push(helpParsers.helpCommand);
+            }
+          }
+
+          if (versionAsCommand) {
+            if (versionParsers.versionCommand) {
+              commandParsers.push(versionParsers.versionCommand);
+            }
+          }
+
+          if (completionAsCommand) {
+            // Include completion in help even though it's handled via early return
+            if (completionParsers.completionCommand) {
+              commandParsers.push(completionParsers.completionCommand);
+            }
+          }
+
+          // Use longestMatch to combine all parsers
+          if (commandParsers.length === 1) {
+            helpGeneratorParser = commandParsers[0];
+          } else if (commandParsers.length === 2) {
+            helpGeneratorParser = longestMatch(
+              commandParsers[0],
+              commandParsers[1],
+            );
+          } else {
+            helpGeneratorParser = (longestMatch as (
+              ...parsers: Parser<Mode, unknown, unknown>[]
+            ) => Parser<Mode, unknown, unknown>)(...commandParsers);
+          }
+        }
+
+        // Helper function to display help and return
+        const displayHelp = (doc: DocPage | undefined): InferValue<TParser> => {
+          if (doc != null) {
+            // Augment the doc page with provided options
+            // But if showing help for a specific meta-command, don't override its description
+            const isMetaCommandHelp = (completionName === "singular" ||
+                completionName === "both"
+              ? requestedCommand === "completion"
+              : false) ||
+              (completionName === "plural" || completionName === "both"
+                ? requestedCommand === "completions"
+                : false) ||
+              requestedCommand === "help" ||
+              requestedCommand === "version";
+            const augmentedDoc = {
+              ...doc,
+              brief: !isMetaCommandHelp ? (brief ?? doc.brief) : doc.brief,
+              description: !isMetaCommandHelp
+                ? (description ?? doc.description)
+                : doc.description,
+              footer: !isMetaCommandHelp ? (footer ?? doc.footer) : doc.footer,
+            };
+            stdout(formatDocPage(programName, augmentedDoc, {
+              colors,
+              maxWidth,
+              showDefault,
+            }));
+          }
+          try {
+            return onHelp(0);
+          } catch {
+            return (onHelp as (() => THelp))();
+          }
         };
-        stdout(formatDocPage(programName, augmentedDoc, {
-          colors,
-          maxWidth,
-          showDefault,
-        }));
-      }
-      try {
-        return onHelp(0);
-      } catch {
-        return (onHelp as (() => THelp))();
-      }
-    }
 
-    case "error": {
-      // Error handling
-      if (aboveError === "help") {
-        const doc = getDocPage(
-          args.length < 1 ? augmentedParser : parser,
-          args,
+        // Get doc page - may return Promise for async parsers
+        const docOrPromise = getDocPage(
+          helpGeneratorParser,
+          classified.commands,
         );
-        if (doc == null) aboveError = "usage";
-        else {
-          // Augment the doc page with provided options
-          const augmentedDoc = {
-            ...doc,
-            brief: brief ?? doc.brief,
-            description: description ?? doc.description,
-            footer: footer ?? doc.footer,
-          };
-          stderr(formatDocPage(programName, augmentedDoc, {
-            colors,
-            maxWidth,
-            showDefault,
-          }));
+        if (docOrPromise instanceof Promise) {
+          return docOrPromise.then(displayHelp);
         }
+        return displayHelp(docOrPromise);
       }
-      if (aboveError === "usage") {
-        stderr(
-          `Usage: ${
-            indentLines(
-              formatUsage(programName, augmentedParser.usage, {
-                colors,
-                maxWidth: maxWidth == null ? undefined : maxWidth - 7,
-                expandCommands: true,
-              }),
-              7,
-            )
-          }`,
-        );
-      }
-      // classified.error is now typed as Message
-      const errorMessage = formatMessage(classified.error, {
-        colors,
-        quotes: !colors,
-      });
-      stderr(`Error: ${errorMessage}`);
-      return onError(1);
-    }
 
-    default:
-      // This shouldn't happen but TypeScript doesn't know that
-      throw new RunParserError("Unexpected parse result type");
+      case "error": {
+        // Helper function to handle error display after doc is resolved
+        const displayError = (
+          doc: DocPage | undefined,
+          currentAboveError: "help" | "usage" | "none",
+        ): InferValue<TParser> => {
+          let effectiveAboveError = currentAboveError;
+          if (effectiveAboveError === "help") {
+            if (doc == null) effectiveAboveError = "usage";
+            else {
+              // Augment the doc page with provided options
+              const augmentedDoc = {
+                ...doc,
+                brief: brief ?? doc.brief,
+                description: description ?? doc.description,
+                footer: footer ?? doc.footer,
+              };
+              stderr(formatDocPage(programName, augmentedDoc, {
+                colors,
+                maxWidth,
+                showDefault,
+              }));
+            }
+          }
+          if (effectiveAboveError === "usage") {
+            stderr(
+              `Usage: ${
+                indentLines(
+                  formatUsage(programName, augmentedParser.usage, {
+                    colors,
+                    maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                    expandCommands: true,
+                  }),
+                  7,
+                )
+              }`,
+            );
+          }
+          // classified.error is now typed as Message
+          const errorMessage = formatMessage(classified.error, {
+            colors,
+            quotes: !colors,
+          });
+          stderr(`Error: ${errorMessage}`);
+          return onError(1);
+        };
+
+        // Error handling
+        if (aboveError === "help") {
+          const parserForDoc = args.length < 1 ? augmentedParser : parser;
+          const docOrPromise = getDocPage(parserForDoc, args);
+          if (docOrPromise instanceof Promise) {
+            return docOrPromise.then((doc) => displayError(doc, aboveError));
+          }
+          return displayError(docOrPromise, aboveError);
+        }
+        return displayError(undefined, aboveError);
+      }
+
+      default:
+        // This shouldn't happen but TypeScript doesn't know that
+        throw new RunParserError("Unexpected parse result type");
+    }
+  };
+
+  // Check parser mode and use appropriate parsing function.
+  // Type assertions are needed because TypeScript cannot verify that
+  // ModeValue<InferMode<TParser>, T> resolves to Promise<T> when $mode is "async"
+  // or to T when $mode is "sync". The runtime behavior is correct.
+  if (parser.$mode === "async") {
+    return parseAsync(augmentedParser, args).then(
+      handleResult,
+    ) as unknown as ModeValue<InferMode<TParser>, InferValue<TParser>>;
+  } else {
+    const result = parseSync(
+      augmentedParser as Parser<"sync", unknown, unknown>,
+      args,
+    );
+    return handleResult(result) as ModeValue<
+      InferMode<TParser>,
+      InferValue<TParser>
+    >;
   }
+}
+
+/**
+ * Runs a synchronous command-line parser with the given options.
+ *
+ * This is a type-safe version of {@link runParser} that only accepts sync
+ * parsers. Use this when you know your parser is sync-only to get direct
+ * return values without Promise wrappers.
+ *
+ * @template TParser The sync parser type being executed.
+ * @template THelp The return type of the onHelp callback.
+ * @template TError The return type of the onError callback.
+ * @param parser The synchronous command-line parser to execute.
+ * @param programName The name of the program for help messages.
+ * @param args The command-line arguments to parse.
+ * @param options Configuration options for customizing behavior.
+ * @returns The parsed result if successful.
+ * @since 0.9.0
+ */
+export function runParserSync<
+  TParser extends Parser<"sync", unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): InferValue<TParser> {
+  return runParser(parser, programName, args, options);
+}
+
+/**
+ * Runs any command-line parser asynchronously with the given options.
+ *
+ * This function accepts parsers of any mode (sync or async) and always
+ * returns a Promise. Use this when working with parsers that may contain
+ * async value parsers.
+ *
+ * @template TParser The parser type being executed.
+ * @template THelp The return type of the onHelp callback.
+ * @template TError The return type of the onError callback.
+ * @param parser The command-line parser to execute.
+ * @param programName The name of the program for help messages.
+ * @param args The command-line arguments to parse.
+ * @param options Configuration options for customizing behavior.
+ * @returns A Promise of the parsed result if successful.
+ * @since 0.9.0
+ */
+export function runParserAsync<
+  TParser extends Parser<Mode, unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): Promise<InferValue<TParser>> {
+  const result = runParser(parser, programName, args, options);
+  return Promise.resolve(result) as Promise<InferValue<TParser>>;
 }
 
 /**

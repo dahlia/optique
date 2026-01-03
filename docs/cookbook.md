@@ -556,8 +556,9 @@ import { print, run } from "@optique/run";
 /**
  * Custom value parser for key-value pairs with configurable separator
  */
-function keyValue(separator = "="): ValueParser<[string, string]> {
+function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
+    $mode: "sync",
     metavar: `KEY${separator}VALUE`,
     parse(input: string): ValueParserResult<[string, string]> {
       const index = input.indexOf(separator);
@@ -1038,8 +1039,9 @@ import { multiple, withDefault } from "@optique/core/modifiers";
 import { argument, command, constant, flag, option } from "@optique/core/primitives";
 import { string, type ValueParser,
          type ValueParserResult } from "@optique/core/valueparser";
-function keyValue(separator = "="): ValueParser<[string, string]> {
+function keyValue(separator = "="): ValueParser<"sync", [string, string]> {
   return {
+    $mode: "sync",
     metavar: `KEY${separator}VALUE`,
     parse(input: string): ValueParserResult<[string, string]> {
       return { success: true, value: ["", ""] };
@@ -1121,10 +1123,11 @@ import type { Suggestion } from "@optique/core/parser";
 import { message } from "@optique/core/message";
 
 // Custom parser for log levels with intelligent completion
-function logLevel(): ValueParser<string> {
+function logLevel(): ValueParser<"sync", string> {
   const levels = ["error", "warn", "info", "debug", "trace"];
 
   return {
+    $mode: "sync",
     metavar: "LEVEL",
     parse(input: string): ValueParserResult<string> {
       if (levels.includes(input.toLowerCase())) {

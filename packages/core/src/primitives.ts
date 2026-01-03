@@ -6,7 +6,14 @@ import {
   optionName as eOptionName,
   optionNames as eOptionNames,
 } from "./message.ts";
-import type { DocState, Parser, Suggestion } from "./parser.ts";
+import type {
+  DocState,
+  Mode,
+  Parser,
+  ParserContext,
+  ParserResult,
+  Suggestion,
+} from "./parser.ts";
 import {
   createErrorWithSuggestions,
   DEFAULT_FIND_SIMILAR_OPTIONS,
@@ -25,10 +32,11 @@ import {
  * produces a constant value of the type {@link T}.
  * @template T The type of the constant value produced by the parser.
  */
-export function constant<const T>(value: T): Parser<T, T> {
+export function constant<const T>(value: T): Parser<"sync", T, T> {
   return {
     $valueType: [],
     $stateType: [],
+    $mode: "sync",
     priority: 0,
     usage: [],
     initialState: value,
@@ -124,8 +132,216 @@ export interface OptionErrorOptions {
 }
 
 /**
+ * Internal sync helper for option suggest functionality.
+ * @internal
+ */
+function* suggestOptionSync<T>(
+  optionNames: readonly string[],
+  valueParser: ValueParser<"sync", T> | undefined,
+  hidden: boolean,
+  context: ParserContext<
+    ValueParserResult<T | boolean> | undefined
+  >,
+  prefix: string,
+): Generator<Suggestion> {
+  if (hidden) return;
+
+  // Check for --option=value format
+  const equalsIndex = prefix.indexOf("=");
+  if (equalsIndex >= 0) {
+    // Handle --option=value completion
+    const optionPart = prefix.slice(0, equalsIndex);
+    const valuePart = prefix.slice(equalsIndex + 1);
+
+    // Check if this option matches any of our option names
+    if ((optionNames as readonly string[]).includes(optionPart)) {
+      if (valueParser && valueParser.suggest) {
+        const valueSuggestions = valueParser.suggest(valuePart);
+        // Prepend the option= part to each suggestion
+        for (const suggestion of valueSuggestions) {
+          if (suggestion.kind === "literal") {
+            yield {
+              kind: "literal",
+              text: `${optionPart}=${suggestion.text}`,
+              description: suggestion.description,
+            };
+          } else {
+            // For file suggestions, we can't easily combine with option= format
+            // so we fall back to literal suggestions
+            yield {
+              kind: "literal",
+              text: `${optionPart}=${suggestion.pattern || ""}`,
+              description: suggestion.description,
+            };
+          }
+        }
+      }
+    }
+  } else {
+    // If the prefix looks like an option prefix, suggest matching option names
+    if (
+      prefix.startsWith("--") || prefix.startsWith("-") ||
+      prefix.startsWith("/")
+    ) {
+      for (const optionName of optionNames) {
+        if (optionName.startsWith(prefix)) {
+          // Special case: if prefix is exactly "-", only suggest short options
+          if (prefix === "-" && optionName.length !== 2) {
+            continue;
+          }
+          yield { kind: "literal", text: optionName };
+        }
+      }
+    }
+
+    // Check if we should suggest values for this option
+    if (valueParser && valueParser.suggest) {
+      let shouldSuggestValues = false;
+
+      // Scenario 1: Buffer contains option name
+      if (context.buffer.length > 0) {
+        const lastToken = context.buffer[context.buffer.length - 1];
+        if ((optionNames as readonly string[]).includes(lastToken)) {
+          shouldSuggestValues = true;
+        }
+      } // Scenario 2: Empty buffer but state is undefined
+      else if (context.state === undefined && context.buffer.length === 0) {
+        shouldSuggestValues = true;
+      }
+
+      if (shouldSuggestValues) {
+        yield* valueParser.suggest(prefix);
+      }
+    }
+  }
+}
+
+/**
+ * Internal async helper for option suggest functionality.
+ * @internal
+ */
+async function* suggestOptionAsync<T>(
+  optionNames: readonly string[],
+  valueParser: ValueParser<Mode, T> | undefined,
+  hidden: boolean,
+  context: ParserContext<
+    ValueParserResult<T | boolean> | undefined
+  >,
+  prefix: string,
+): AsyncGenerator<Suggestion> {
+  if (hidden) return;
+
+  // Check for --option=value format
+  const equalsIndex = prefix.indexOf("=");
+  if (equalsIndex >= 0) {
+    // Handle --option=value completion
+    const optionPart = prefix.slice(0, equalsIndex);
+    const valuePart = prefix.slice(equalsIndex + 1);
+
+    // Check if this option matches any of our option names
+    if ((optionNames as readonly string[]).includes(optionPart)) {
+      if (valueParser && valueParser.suggest) {
+        const valueSuggestions = valueParser.suggest(valuePart);
+        // Prepend the option= part to each suggestion - handle both sync and async
+        for await (const suggestion of valueSuggestions) {
+          if (suggestion.kind === "literal") {
+            yield {
+              kind: "literal",
+              text: `${optionPart}=${suggestion.text}`,
+              description: suggestion.description,
+            };
+          } else {
+            // For file suggestions, we can't easily combine with option= format
+            yield {
+              kind: "literal",
+              text: `${optionPart}=${suggestion.pattern || ""}`,
+              description: suggestion.description,
+            };
+          }
+        }
+      }
+    }
+  } else {
+    // If the prefix looks like an option prefix, suggest matching option names
+    if (
+      prefix.startsWith("--") || prefix.startsWith("-") ||
+      prefix.startsWith("/")
+    ) {
+      for (const optionName of optionNames) {
+        if (optionName.startsWith(prefix)) {
+          // Special case: if prefix is exactly "-", only suggest short options
+          if (prefix === "-" && optionName.length !== 2) {
+            continue;
+          }
+          yield { kind: "literal", text: optionName };
+        }
+      }
+    }
+
+    // Check if we should suggest values for this option
+    if (valueParser && valueParser.suggest) {
+      let shouldSuggestValues = false;
+
+      // Scenario 1: Buffer contains option name
+      if (context.buffer.length > 0) {
+        const lastToken = context.buffer[context.buffer.length - 1];
+        if ((optionNames as readonly string[]).includes(lastToken)) {
+          shouldSuggestValues = true;
+        }
+      } // Scenario 2: Empty buffer but state is undefined
+      else if (context.state === undefined && context.buffer.length === 0) {
+        shouldSuggestValues = true;
+      }
+
+      if (shouldSuggestValues) {
+        for await (const suggestion of valueParser.suggest(prefix)) {
+          yield suggestion;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Internal sync helper for argument suggest functionality.
+ * @internal
+ */
+function* suggestArgumentSync<T>(
+  valueParser: ValueParser<"sync", T>,
+  hidden: boolean,
+  prefix: string,
+): Generator<Suggestion> {
+  if (hidden) return;
+
+  // Delegate to value parser if it has completion capabilities
+  if (valueParser.suggest) {
+    yield* valueParser.suggest(prefix);
+  }
+}
+
+/**
+ * Internal async helper for argument suggest functionality.
+ * @internal
+ */
+async function* suggestArgumentAsync<T>(
+  valueParser: ValueParser<Mode, T>,
+  hidden: boolean,
+  prefix: string,
+): AsyncGenerator<Suggestion> {
+  if (hidden) return;
+
+  // Delegate to value parser if it has completion capabilities
+  if (valueParser.suggest) {
+    for await (const suggestion of valueParser.suggest(prefix)) {
+      yield suggestion;
+    }
+  }
+}
+
+/**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-o value`, or `/option:value`.
+ * @template M The execution mode of the parser.
  * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
  *             a {@link ValueParser} that defines how to parse the value of
@@ -134,13 +350,14 @@ export interface OptionErrorOptions {
  * @returns A {@link Parser} that can parse the specified options and their
  *          values.
  */
-export function option<T>(
-  ...args: readonly [...readonly OptionName[], ValueParser<T>]
-): Parser<T, ValueParserResult<T> | undefined>;
+export function option<M extends Mode, T>(
+  ...args: readonly [...readonly OptionName[], ValueParser<M, T>]
+): Parser<M, T, ValueParserResult<T> | undefined>;
 
 /**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-o value`, or `/option:value`.
+ * @template M The execution mode of the parser.
  * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
  *             a {@link ValueParser} that defines how to parse the value of
@@ -149,9 +366,9 @@ export function option<T>(
  * @returns A {@link Parser} that can parse the specified options and their
  *          values.
  */
-export function option<T>(
-  ...args: readonly [...readonly OptionName[], ValueParser<T>, OptionOptions]
-): Parser<T, ValueParserResult<T> | undefined>;
+export function option<M extends Mode, T>(
+  ...args: readonly [...readonly OptionName[], ValueParser<M, T>, OptionOptions]
+): Parser<M, T, ValueParserResult<T> | undefined>;
 
 /**
  * Creates a parser for various styles of command-line options that do not
@@ -162,7 +379,7 @@ export function option<T>(
  */
 export function option(
   ...optionNames: readonly OptionName[]
-): Parser<boolean, ValueParserResult<boolean> | undefined>;
+): Parser<"sync", boolean, ValueParserResult<boolean> | undefined>;
 
 /**
  * Creates a parser for various styles of command-line options that take an
@@ -175,26 +392,26 @@ export function option(
  */
 export function option(
   ...args: readonly [...readonly OptionName[], OptionOptions]
-): Parser<boolean, ValueParserResult<boolean> | undefined>;
+): Parser<"sync", boolean, ValueParserResult<boolean> | undefined>;
 
-export function option<T>(
+export function option<M extends Mode, T>(
   ...args:
-    | readonly [...readonly OptionName[], ValueParser<T>, OptionOptions]
-    | readonly [...readonly OptionName[], ValueParser<T>]
+    | readonly [...readonly OptionName[], ValueParser<M, T>, OptionOptions]
+    | readonly [...readonly OptionName[], ValueParser<M, T>]
     | readonly [...readonly OptionName[], OptionOptions]
     | readonly OptionName[]
-): Parser<T | boolean, ValueParserResult<T | boolean> | undefined> {
+): Parser<M, T | boolean, ValueParserResult<T | boolean> | undefined> {
   const lastArg = args.at(-1);
   const secondLastArg = args.at(-2);
-  let valueParser: ValueParser<T> | undefined;
+  let valueParser: ValueParser<M, T> | undefined;
   let optionNames: OptionName[];
   let options: OptionOptions = {};
-  if (isValueParser(lastArg)) {
+  if (isValueParser<M, T>(lastArg)) {
     valueParser = lastArg;
     optionNames = args.slice(0, -1) as OptionName[];
   } else if (typeof lastArg === "object" && lastArg != null) {
     options = lastArg;
-    if (isValueParser(secondLastArg)) {
+    if (isValueParser<M, T>(secondLastArg)) {
       valueParser = secondLastArg;
       optionNames = args.slice(0, -2) as OptionName[];
     } else {
@@ -205,7 +422,13 @@ export function option<T>(
     optionNames = args as OptionName[];
     valueParser = undefined;
   }
-  return {
+  const mode: M = (valueParser?.$mode ?? "sync") as M;
+  const isAsync = mode === "async";
+
+  // Use 'as any' to allow both sync and async returns from parse method
+  // The actual mode is set correctly at the end via spread with $mode
+  const result = {
+    $mode: mode,
     $valueType: [],
     $stateType: [],
     priority: 10,
@@ -234,7 +457,11 @@ export function option<T>(
           : options.errors.missing)
         : message`Missing option ${eOptionNames(optionNames)}.`,
     },
-    parse(context) {
+    parse(
+      context: ParserContext<
+        ValueParserResult<T | boolean> | undefined
+      >,
+    ) {
       if (context.optionsTerminated) {
         return {
           success: false,
@@ -270,7 +497,8 @@ export function option<T>(
       // E.g., `--option value` or `/O value`
       if ((optionNames as string[]).includes(context.buffer[0])) {
         if (
-          context.state.success && (valueParser != null || context.state.value)
+          context.state?.success &&
+          (valueParser != null || context.state.value)
         ) {
           return {
             success: false,
@@ -304,12 +532,25 @@ export function option<T>(
             } requires a value, but got no value.`,
           };
         }
-        const result = valueParser.parse(context.buffer[1]);
+        const parseResultOrPromise = valueParser!.parse(context.buffer[1]);
+        if (isAsync) {
+          return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
+            (parseResult) => ({
+              success: true as const,
+              next: {
+                ...context,
+                state: parseResult,
+                buffer: context.buffer.slice(2),
+              },
+              consumed: context.buffer.slice(0, 2),
+            }),
+          );
+        }
         return {
           success: true,
           next: {
             ...context,
-            state: result,
+            state: parseResultOrPromise as ValueParserResult<T>,
             buffer: context.buffer.slice(2),
           },
           consumed: context.buffer.slice(0, 2),
@@ -324,7 +565,8 @@ export function option<T>(
       for (const prefix of prefixes) {
         if (!context.buffer[0].startsWith(prefix)) continue;
         if (
-          context.state.success && (valueParser != null || context.state.value)
+          context.state?.success &&
+          (valueParser != null || context.state.value)
         ) {
           return {
             success: false,
@@ -350,12 +592,25 @@ export function option<T>(
               } is a Boolean flag, but got a value: ${value}.`,
           };
         }
-        const result = valueParser.parse(value);
+        const parseResultOrPromise = valueParser.parse(value);
+        if (isAsync) {
+          return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
+            (parseResult) => ({
+              success: true as const,
+              next: {
+                ...context,
+                state: parseResult,
+                buffer: context.buffer.slice(1),
+              },
+              consumed: context.buffer.slice(0, 1),
+            }),
+          );
+        }
         return {
           success: true,
           next: {
             ...context,
-            state: result,
+            state: parseResultOrPromise as ValueParserResult<T>,
             buffer: context.buffer.slice(1),
           },
           consumed: context.buffer.slice(0, 1),
@@ -370,7 +625,7 @@ export function option<T>(
         for (const shortOption of shortOptions) {
           if (!context.buffer[0].startsWith(shortOption)) continue;
           if (
-            context.state.success &&
+            context.state?.success &&
             (valueParser != null || context.state.value)
           ) {
             return {
@@ -441,7 +696,9 @@ export function option<T>(
         ),
       };
     },
-    complete(state) {
+    complete(
+      state: ValueParserResult<T | boolean> | undefined,
+    ) {
       if (state == null) {
         return valueParser == null ? { success: true, value: false } : {
           success: false,
@@ -462,94 +719,33 @@ export function option<T>(
           : message`${eOptionNames(optionNames)}: ${state.error}`,
       };
     },
-    suggest(context, prefix) {
-      if (options.hidden) {
-        return [];
+    suggest(
+      context: ParserContext<
+        ValueParserResult<T | boolean> | undefined
+      >,
+      prefix: string,
+    ) {
+      // For async parsers, use async generator; for sync parsers, use sync generator
+      if (isAsync) {
+        return suggestOptionAsync(
+          optionNames,
+          valueParser,
+          options.hidden ?? false,
+          context,
+          prefix,
+        );
       }
-      const suggestions: Suggestion[] = [];
-
-      // Check for --option=value format
-      const equalsIndex = prefix.indexOf("=");
-      if (equalsIndex >= 0) {
-        // Handle --option=value completion
-        const optionPart = prefix.slice(0, equalsIndex);
-        const valuePart = prefix.slice(equalsIndex + 1);
-
-        // Check if this option matches any of our option names
-        if ((optionNames as readonly string[]).includes(optionPart)) {
-          if (valueParser && valueParser.suggest) {
-            const valueSuggestions = valueParser.suggest(valuePart);
-            // Prepend the option= part to each suggestion
-            for (const suggestion of valueSuggestions) {
-              if (suggestion.kind === "literal") {
-                suggestions.push({
-                  kind: "literal",
-                  text: `${optionPart}=${suggestion.text}`,
-                  description: suggestion.description,
-                });
-              } else {
-                // For file suggestions, we can't easily combine with option= format
-                // so we fall back to literal suggestions
-                suggestions.push({
-                  kind: "literal",
-                  text: `${optionPart}=${suggestion.pattern || ""}`,
-                  description: suggestion.description,
-                });
-              }
-            }
-          }
-        }
-      } else {
-        // If the prefix looks like an option prefix, suggest matching option names
-        if (
-          prefix.startsWith("--") || prefix.startsWith("-") ||
-          prefix.startsWith("/")
-        ) {
-          for (const optionName of optionNames) {
-            if (optionName.startsWith(prefix)) {
-              // Special case: if prefix is exactly "-", only suggest short options (single dash + single char)
-              if (prefix === "-" && optionName.length !== 2) {
-                continue;
-              }
-              suggestions.push({ kind: "literal", text: optionName });
-            }
-          }
-        }
-
-        // Check if we should suggest values for this option
-        // This happens in two scenarios:
-        // 1. The buffer contains our option name as the last token (e.g., ["-f"])
-        // 2. The parser state is undefined and we haven't yet processed any args
-        if (valueParser && valueParser.suggest) {
-          let shouldSuggestValues = false;
-
-          // Scenario 1: Buffer contains option name
-          if (context.buffer.length > 0) {
-            const lastToken = context.buffer[context.buffer.length - 1];
-            if ((optionNames as readonly string[]).includes(lastToken)) {
-              shouldSuggestValues = true;
-            }
-          } // Scenario 2: Empty buffer but state is undefined (we might be continuing from a consumed option)
-          // This happens when suggest() function has already consumed the option name
-          else if (context.state === undefined && context.buffer.length === 0) {
-            // We need more sophisticated logic here to determine if we should suggest values
-            // For now, we'll assume that if we have a value parser and no buffer,
-            // we might be in a value-expecting state
-            shouldSuggestValues = true;
-          }
-
-          if (shouldSuggestValues) {
-            const valueSuggestions = valueParser.suggest(prefix);
-            suggestions.push(...valueSuggestions);
-          }
-        }
-      }
-
-      return suggestions;
+      return suggestOptionSync(
+        optionNames,
+        valueParser as ValueParser<"sync", T> | undefined,
+        options.hidden ?? false,
+        context,
+        prefix,
+      );
     },
     getDocFragments(
       _state: DocState<ValueParserResult<T | boolean> | undefined>,
-      defaultValue?,
+      defaultValue?: T | boolean,
     ) {
       if (options.hidden) {
         return { fragments: [], description: options.description };
@@ -571,7 +767,17 @@ export function option<T>(
     [Symbol.for("Deno.customInspect")]() {
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
-  } satisfies Parser<T | boolean, ValueParserResult<T | boolean>>;
+  };
+  // Type assertion via 'unknown' needed because TypeScript's conditional type
+  // ModeValue<M, T> cannot be verified when M is a generic type parameter.
+  // At runtime, the isAsync flag ensures correct behavior:
+  // - When M = "sync": parse() returns ParserResult directly
+  // - When M = "async": parse() returns Promise<ParserResult>
+  return result as unknown as Parser<
+    M,
+    T | boolean,
+    ValueParserResult<T | boolean> | undefined
+  >;
 }
 
 /**
@@ -673,7 +879,7 @@ export function flag(
   ...args:
     | readonly [...readonly OptionName[], FlagOptions]
     | readonly OptionName[]
-): Parser<true, ValueParserResult<true> | undefined> {
+): Parser<"sync", true, ValueParserResult<true> | undefined> {
   const lastArg = args.at(-1);
   let optionNames: OptionName[];
   let options: FlagOptions = {};
@@ -690,6 +896,7 @@ export function flag(
   return {
     $valueType: [],
     $stateType: [],
+    $mode: "sync",
     priority: 10,
     usage: [{
       type: "option",
@@ -907,7 +1114,7 @@ export function flag(
     [Symbol.for("Deno.customInspect")]() {
       return `flag(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
     },
-  } satisfies Parser<true, ValueParserResult<true> | undefined>;
+  } satisfies Parser<"sync", true, ValueParserResult<true> | undefined>;
 }
 
 /**
@@ -961,6 +1168,7 @@ export interface ArgumentErrorOptions {
  * Creates a parser that expects a single argument value.
  * This parser is typically used for positional arguments
  * that are not options or flags.
+ * @template M The execution mode of the parser.
  * @template T The type of the value produced by the parser.
  * @param valueParser The {@link ValueParser} that defines how to parse
  *                    the argument value.
@@ -969,23 +1177,31 @@ export interface ArgumentErrorOptions {
  * @returns A {@link Parser} that expects a single argument value and produces
  *          the parsed value of type {@link T}.
  */
-export function argument<T>(
-  valueParser: ValueParser<T>,
+export function argument<M extends Mode, T>(
+  valueParser: ValueParser<M, T>,
   options: ArgumentOptions = {},
-): Parser<T, ValueParserResult<T> | undefined> {
+): Parser<M, T, ValueParserResult<T> | undefined> {
+  const isAsync = valueParser.$mode === "async";
+
   const optionPattern = /^--?[a-z0-9-]+$/i;
   const term: UsageTerm = {
     type: "argument",
     metavar: valueParser.metavar,
     ...(options.hidden && { hidden: true }),
   };
-  return {
+  // Use type assertion to allow both sync and async returns from parse method
+  const result = {
+    $mode: valueParser.$mode,
     $valueType: [],
     $stateType: [],
     priority: 5,
     usage: [term],
     initialState: undefined,
-    parse(context) {
+    parse(
+      context: ParserContext<
+        ValueParserResult<T> | undefined
+      >,
+    ) {
       if (context.buffer.length < 1) {
         return {
           success: false,
@@ -1036,19 +1252,33 @@ export function argument<T>(
         };
       }
 
-      const result = valueParser.parse(context.buffer[i]);
+      const parseResultOrPromise = valueParser.parse(context.buffer[i]);
+      if (isAsync) {
+        return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
+          (parseResult) => ({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(i + 1),
+              state: parseResult,
+              optionsTerminated,
+            },
+            consumed: context.buffer.slice(0, i + 1),
+          }),
+        );
+      }
       return {
         success: true,
         next: {
           ...context,
           buffer: context.buffer.slice(i + 1),
-          state: result,
+          state: parseResultOrPromise as ValueParserResult<T>,
           optionsTerminated,
         },
         consumed: context.buffer.slice(0, i + 1),
       };
     },
-    complete(state) {
+    complete(state: ValueParserResult<T> | undefined) {
       if (state == null) {
         return {
           success: false,
@@ -1067,19 +1297,25 @@ export function argument<T>(
           : message`${metavar(valueParser.metavar)}: ${state.error}`,
       };
     },
-    suggest(_context, prefix) {
-      if (options.hidden) {
-        return [];
+    suggest(
+      _context: ParserContext<
+        ValueParserResult<T> | undefined
+      >,
+      prefix: string,
+    ) {
+      // For async parsers, use async generator; for sync parsers, use sync generator
+      if (isAsync) {
+        return suggestArgumentAsync(
+          valueParser,
+          options.hidden ?? false,
+          prefix,
+        );
       }
-      const suggestions: Suggestion[] = [];
-
-      // Delegate to value parser if it has completion capabilities
-      if (valueParser.suggest) {
-        const valueSuggestions = valueParser.suggest(prefix);
-        suggestions.push(...valueSuggestions);
-      }
-
-      return suggestions;
+      return suggestArgumentSync(
+        valueParser as ValueParser<"sync", T>,
+        options.hidden ?? false,
+        prefix,
+      );
     },
     getDocFragments(
       _state: DocState<ValueParserResult<T> | undefined>,
@@ -1101,7 +1337,10 @@ export function argument<T>(
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
     },
-  } satisfies Parser<T, ValueParserResult<T> | undefined>;
+  };
+  // Type assertion via 'unknown' needed because TypeScript's conditional type
+  // ModeValue<M, T> cannot be verified when M is a generic type parameter.
+  return result as unknown as Parser<M, T, ValueParserResult<T> | undefined>;
 }
 
 /**
@@ -1186,10 +1425,89 @@ type CommandState<TState> =
   | ["matched", string] // Command matched but inner parser not started
   | ["parsing", TState]; // Command matched and inner parser active
 
+function* suggestCommandSync<T, TState>(
+  context: ParserContext<CommandState<TState>>,
+  prefix: string,
+  name: string,
+  parser: Parser<"sync", T, TState>,
+  options: CommandOptions,
+): Generator<Suggestion> {
+  if (options.hidden) {
+    return;
+  }
+
+  // Handle different command states
+  if (context.state === undefined) {
+    // Command not yet matched - suggest command name if it matches prefix
+    if (name.startsWith(prefix)) {
+      yield {
+        kind: "literal",
+        text: name,
+        ...(options.description && { description: options.description }),
+      };
+    }
+  } else if (context.state[0] === "matched") {
+    // Command matched but inner parser not started - delegate to inner parser
+    yield* parser.suggest({
+      ...context,
+      state: parser.initialState,
+    }, prefix);
+  } else if (context.state[0] === "parsing") {
+    // Command in parsing state - delegate to inner parser
+    yield* parser.suggest({
+      ...context,
+      state: context.state[1],
+    }, prefix);
+  }
+}
+
+async function* suggestCommandAsync<T, TState>(
+  context: ParserContext<CommandState<TState>>,
+  prefix: string,
+  name: string,
+  parser: Parser<Mode, T, TState>,
+  options: CommandOptions,
+): AsyncGenerator<Suggestion> {
+  if (options.hidden) {
+    return;
+  }
+
+  // Handle different command states
+  if (context.state === undefined) {
+    // Command not yet matched - suggest command name if it matches prefix
+    if (name.startsWith(prefix)) {
+      yield {
+        kind: "literal",
+        text: name,
+        ...(options.description && { description: options.description }),
+      };
+    }
+  } else if (context.state[0] === "matched") {
+    // Command matched but inner parser not started - delegate to inner parser
+    const suggestions = parser.suggest({
+      ...context,
+      state: parser.initialState,
+    }, prefix) as AsyncIterable<Suggestion>;
+    for await (const s of suggestions) {
+      yield s;
+    }
+  } else if (context.state[0] === "parsing") {
+    // Command in parsing state - delegate to inner parser
+    const suggestions = parser.suggest({
+      ...context,
+      state: context.state[1],
+    }, prefix) as AsyncIterable<Suggestion>;
+    for await (const s of suggestions) {
+      yield s;
+    }
+  }
+}
+
 /**
  * Creates a parser that matches a specific subcommand name and then applies
  * an inner parser to the remaining arguments.
  * This is useful for building CLI tools with subcommands like git, npm, etc.
+ * @template M The execution mode of the parser.
  * @template T The type of the value returned by the inner parser.
  * @template TState The type of the state used by the inner parser.
  * @param name The subcommand name to match (e.g., `"show"`, `"edit"`).
@@ -1199,12 +1517,16 @@ type CommandState<TState> =
  * @returns A {@link Parser} that matches the command name and delegates
  *          to the inner parser for the remaining arguments.
  */
-export function command<T, TState>(
+export function command<M extends Mode, T, TState>(
   name: string,
-  parser: Parser<T, TState>,
+  parser: Parser<M, T, TState>,
   options: CommandOptions = {},
-): Parser<T, CommandState<TState>> {
-  return {
+): Parser<M, T, CommandState<TState>> {
+  const isAsync = parser.$mode === "async";
+
+  // Use type assertion to allow both sync and async returns from parse method
+  const result = {
+    $mode: parser.$mode,
     $valueType: [],
     $stateType: [],
     priority: 15, // Higher than options to match commands first
@@ -1213,7 +1535,7 @@ export function command<T, TState>(
       ...parser.usage,
     ],
     initialState: undefined,
-    parse(context) {
+    parse(context: ParserContext<CommandState<TState>>) {
       // Handle different states
       if (context.state === undefined) {
         // Check if buffer starts with our command name
@@ -1279,40 +1601,50 @@ export function command<T, TState>(
           },
           consumed: context.buffer.slice(0, 1),
         };
-      } else if (context.state[0] === "matched") {
-        // Command was matched, now start the inner parser
-        const result = parser.parse({
+      } else if (
+        context.state[0] === "matched" ||
+        context.state[0] === "parsing"
+      ) {
+        // "matched": command was matched, start the inner parser
+        // "parsing": delegate to inner parser with existing state
+        const innerState = context.state[0] === "matched"
+          ? parser.initialState
+          : context.state[1];
+
+        const parseResultOrPromise = parser.parse({
           ...context,
-          state: parser.initialState,
+          state: innerState,
         });
-        if (result.success) {
-          return {
-            success: true,
-            next: {
-              ...result.next,
-              state: ["parsing", result.next.state] as ["parsing", TState],
-            },
-            consumed: result.consumed,
-          };
+
+        const wrapState = (
+          parseResult: ParserResult<TState>,
+        ) => {
+          if (parseResult.success) {
+            return {
+              success: true as const,
+              next: {
+                ...parseResult.next,
+                state: ["parsing", parseResult.next.state] as [
+                  "parsing",
+                  TState,
+                ],
+              },
+              consumed: parseResult.consumed,
+            };
+          }
+          return parseResult;
+        };
+
+        if (isAsync) {
+          return (
+            parseResultOrPromise as Promise<
+              ParserResult<TState>
+            >
+          ).then(wrapState);
         }
-        return result;
-      } else if (context.state[0] === "parsing") {
-        // Delegate to inner parser
-        const result = parser.parse({
-          ...context,
-          state: context.state[1],
-        });
-        if (result.success) {
-          return {
-            success: true,
-            next: {
-              ...result.next,
-              state: ["parsing", result.next.state] as ["parsing", TState],
-            },
-            consumed: result.consumed,
-          };
-        }
-        return result;
+        return wrapState(
+          parseResultOrPromise as ParserResult<TState>,
+        );
       }
       // Should never reach here
       return {
@@ -1321,7 +1653,7 @@ export function command<T, TState>(
         error: options.errors?.invalidState ?? message`Invalid command state.`,
       };
     },
-    complete(state) {
+    complete(state: CommandState<TState>) {
       if (typeof state === "undefined") {
         return {
           success: false,
@@ -1342,41 +1674,28 @@ export function command<T, TState>(
           message`Invalid command state during completion.`,
       };
     },
-    suggest(context, prefix) {
-      if (options.hidden) {
-        return [];
+    suggest(
+      context: ParserContext<CommandState<TState>>,
+      prefix: string,
+    ) {
+      if (isAsync) {
+        return suggestCommandAsync(
+          context,
+          prefix,
+          name,
+          parser,
+          options,
+        );
       }
-      const suggestions: Suggestion[] = [];
-
-      // Handle different command states
-      if (context.state === undefined) {
-        // Command not yet matched - suggest command name if it matches prefix
-        if (name.startsWith(prefix)) {
-          suggestions.push({
-            kind: "literal",
-            text: name,
-            ...(options.description && { description: options.description }),
-          });
-        }
-      } else if (context.state[0] === "matched") {
-        // Command matched but inner parser not started - delegate to inner parser
-        const innerSuggestions = parser.suggest({
-          ...context,
-          state: parser.initialState,
-        }, prefix);
-        suggestions.push(...innerSuggestions);
-      } else if (context.state[0] === "parsing") {
-        // Command in parsing state - delegate to inner parser
-        const innerSuggestions = parser.suggest({
-          ...context,
-          state: context.state[1],
-        }, prefix);
-        suggestions.push(...innerSuggestions);
-      }
-
-      return suggestions;
+      return suggestCommandSync(
+        context,
+        prefix,
+        name,
+        parser as Parser<"sync", T, TState>,
+        options,
+      );
     },
-    getDocFragments(state: DocState<CommandState<TState>>, defaultValue?) {
+    getDocFragments(state: DocState<CommandState<TState>>, defaultValue?: T) {
       if (options.hidden) {
         return { fragments: [], description: options.description };
       }
@@ -1397,7 +1716,10 @@ export function command<T, TState>(
       const innerState: DocState<TState> = state.state[0] === "parsing"
         ? { kind: "available", state: state.state[1] }
         : { kind: "available", state: parser.initialState };
-      const innerFragments = parser.getDocFragments(innerState, defaultValue);
+      const innerFragments = parser.getDocFragments(
+        innerState,
+        defaultValue,
+      );
       return {
         ...innerFragments,
         description: innerFragments.description ?? options.description,
@@ -1407,7 +1729,10 @@ export function command<T, TState>(
     [Symbol.for("Deno.customInspect")]() {
       return `command(${JSON.stringify(name)})`;
     },
-  } satisfies Parser<T, CommandState<TState>>;
+  };
+  // Type assertion via 'unknown' needed because TypeScript's conditional type
+  // ModeValue<M, T> cannot be verified when M is a generic type parameter.
+  return result as unknown as Parser<M, T, CommandState<TState>>;
 }
 
 /**
@@ -1498,7 +1823,7 @@ export interface PassThroughOptions {
  */
 export function passThrough(
   options: PassThroughOptions = {},
-): Parser<readonly string[], readonly string[]> {
+): Parser<"sync", readonly string[], readonly string[]> {
   const format = options.format ?? "equalsOnly";
   const optionPattern = /^-[a-z0-9-]|^--[a-z0-9-]+/i;
   const equalsOptionPattern = /^--[a-z0-9-]+=/i;
@@ -1506,6 +1831,7 @@ export function passThrough(
   return {
     $valueType: [],
     $stateType: [],
+    $mode: "sync",
     priority: -10, // Lowest priority to be tried last
     usage: [{ type: "passthrough", ...(options.hidden && { hidden: true }) }],
     initialState: [],

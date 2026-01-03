@@ -230,8 +230,9 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
 export function zod<T>(
   schema: z.Schema<T>,
   options: ZodParserOptions = {},
-): ValueParser<T> {
+): ValueParser<"sync", T> {
   return {
+    $mode: "sync",
     metavar: options.metavar ?? inferMetavar(schema),
 
     parse(input: string): ValueParserResult<T> {

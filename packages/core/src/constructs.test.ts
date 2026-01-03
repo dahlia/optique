@@ -19,8 +19,8 @@ import {
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   type InferValue,
-  parse,
   type ParserResult,
+  parseSync,
 } from "@optique/core/parser";
 import {
   argument,
@@ -56,7 +56,7 @@ describe("or", () => {
     const parser2 = option("-b");
     const orParser = or(parser1, parser2);
 
-    const result = parse(orParser, ["-a"]);
+    const result = parseSync(orParser, ["-a"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value, true);
@@ -68,7 +68,7 @@ describe("or", () => {
     const parser2 = option("-b");
     const orParser = or(parser1, parser2);
 
-    const result = parse(orParser, ["-b"]);
+    const result = parseSync(orParser, ["-b"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value, true);
@@ -80,7 +80,7 @@ describe("or", () => {
     const parser2 = option("-b");
     const orParser = or(parser1, parser2);
 
-    const result = parse(orParser, ["-c"]);
+    const result = parseSync(orParser, ["-c"]);
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "Unexpected option or subcommand");
@@ -92,7 +92,7 @@ describe("or", () => {
     const parser2 = option("-b");
     const orParser = or(parser1, parser2);
 
-    const result = parse(orParser, ["-a", "-b"]);
+    const result = parseSync(orParser, ["-a", "-b"]);
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "cannot be used together");
@@ -104,7 +104,7 @@ describe("or", () => {
     const parser2 = option("-b");
     const orParser = or(parser1, parser2);
 
-    const result = parse(orParser, ["-a"]);
+    const result = parseSync(orParser, ["-a"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value, true);
@@ -117,13 +117,13 @@ describe("or", () => {
     const parser3 = option("-c");
     const orParser = or(parser1, parser2, parser3);
 
-    const resultA = parse(orParser, ["-a"]);
+    const resultA = parseSync(orParser, ["-a"]);
     assert.ok(resultA.success);
 
-    const resultB = parse(orParser, ["-b"]);
+    const resultB = parseSync(orParser, ["-b"]);
     assert.ok(resultB.success);
 
-    const resultC = parse(orParser, ["-c"]);
+    const resultC = parseSync(orParser, ["-c"]);
     assert.ok(resultC.success);
   });
 
@@ -287,7 +287,7 @@ describe("or() - duplicate option handling", () => {
       option("-v", "--version"),
     );
 
-    const result = parse(parser, ["-v"]);
+    const result = parseSync(parser, ["-v"]);
     // Should succeed - first parser wins
     assert.ok(result.success);
     if (result.success) {
@@ -302,7 +302,7 @@ describe("or() - duplicate option handling", () => {
       object({ verify: option("-v") }),
     );
 
-    const result = parse(parser, ["-v"]);
+    const result = parseSync(parser, ["-v"]);
     // Should succeed - first matching branch wins
     assert.ok(result.success);
   });
@@ -323,7 +323,7 @@ describe("or() error customization", () => {
       },
     );
 
-    const result = parse(parser, ["deploi"]);
+    const result = parseSync(parser, ["deploi"]);
     assert.strictEqual(result.success, false);
     if (!result.success) {
       const errorMessage = formatMessage(result.error);
@@ -343,7 +343,7 @@ describe("or() error customization", () => {
       },
     );
 
-    const result = parse(parser, ["deploi"]);
+    const result = parseSync(parser, ["deploi"]);
     assert.strictEqual(result.success, false);
     if (!result.success) {
       const errorMessage = formatMessage(result.error);
@@ -369,12 +369,12 @@ describe("longestMatch()", () => {
     const parser = longestMatch(shortParser, longParser);
 
     // Short parser consumes 1 token (--help)
-    const shortResult = parse(parser, ["--help"]);
+    const shortResult = parseSync(parser, ["--help"]);
     assert.ok(shortResult.success);
     assert.equal((shortResult.value as { type: string }).type, "short");
 
     // Long parser consumes 2 tokens (list --help)
-    const longResult = parse(parser, ["list", "--help"]);
+    const longResult = parseSync(parser, ["list", "--help"]);
     assert.ok(longResult.success);
     assert.equal((longResult.value as { type: string }).type, "long");
     assert.equal((longResult.value as { cmd: string }).cmd, "list");
@@ -402,17 +402,17 @@ describe("longestMatch()", () => {
     const parser = longestMatch(parser1, parser2, parser3);
 
     // All consume 1 token, first match wins
-    const result1 = parse(parser, ["-a"]);
+    const result1 = parseSync(parser, ["-a"]);
     assert.ok(result1.success);
     assert.equal((result1.value as { type: string }).type, "one");
 
     // parser2 consumes 2 tokens
-    const result2 = parse(parser, ["-a", "-b"]);
+    const result2 = parseSync(parser, ["-a", "-b"]);
     assert.ok(result2.success);
     assert.equal((result2.value as { type: string }).type, "two");
 
     // parser3 consumes 3 tokens
-    const result3 = parse(parser, ["-a", "-b", "-c"]);
+    const result3 = parseSync(parser, ["-a", "-b", "-c"]);
     assert.ok(result3.success);
     assert.equal((result3.value as { type: string }).type, "three");
   });
@@ -451,7 +451,7 @@ describe("longestMatch()", () => {
     const parser = longestMatch(normalParser, contextualHelpParser);
 
     // Normal command parsing: add key value
-    const addResult = parse(parser, ["add", "key1", "value1"]);
+    const addResult = parseSync(parser, ["add", "key1", "value1"]);
     assert.ok(addResult.success);
     assert.equal((addResult.value as { help: boolean }).help, false);
     assert.equal(
@@ -460,7 +460,7 @@ describe("longestMatch()", () => {
     );
 
     // Context-aware help: list --help
-    const helpResult = parse(parser, ["list", "--help"]);
+    const helpResult = parseSync(parser, ["list", "--help"]);
     assert.ok(helpResult.success);
     assert.equal((helpResult.value as { help: boolean }).help, true);
     assert.deepStrictEqual(
@@ -483,7 +483,7 @@ describe("longestMatch()", () => {
     const parser = longestMatch(parser1, parser2);
 
     // Neither parser can handle this input
-    const result = parse(parser, ["-t", "value"]);
+    const result = parseSync(parser, ["-t", "value"]);
     assert.ok(!result.success);
   });
 
@@ -498,7 +498,7 @@ describe("longestMatch()", () => {
       req: option("-y", string()),
     });
     const parser = longestMatch(parser1, parser2);
-    const result = parse(parser, ["anything"]);
+    const result = parseSync(parser, ["anything"]);
     assert.ok(!result.success);
   });
 
@@ -515,21 +515,21 @@ describe("longestMatch()", () => {
 
     const parser = longestMatch(stringParser, numberParser);
 
-    const stringResult = parse(parser, ["hello"]);
+    const stringResult = parseSync(parser, ["hello"]);
     assert.ok(stringResult.success);
     assert.equal((stringResult.value as { type: string }).type, "string");
     assert.equal((stringResult.value as { value: string }).value, "hello");
 
     // For "42", both parsers could match (string and integer), but string parser
     // comes first and both consume same number of tokens, so string parser wins
-    const ambiguousResult = parse(parser, ["42"]);
+    const ambiguousResult = parseSync(parser, ["42"]);
     assert.ok(ambiguousResult.success);
     assert.equal((ambiguousResult.value as { type: string }).type, "string");
     assert.equal((ambiguousResult.value as { value: string }).value, "42");
 
     // Test with input that only integer parser can handle (non-string that parses as int)
     // Actually, let's test with more specific parsers to demonstrate type preservation
-    const numberOnlyResult = parse(parser, ["123"]);
+    const numberOnlyResult = parseSync(parser, ["123"]);
     assert.ok(numberOnlyResult.success);
     // Both could parse "123", but stringParser comes first, so it wins
     assert.equal((numberOnlyResult.value as { type: string }).type, "string");
@@ -647,17 +647,17 @@ describe("longestMatch()", () => {
     const parser = longestMatch(normalCommand, simpleHelp, contextualHelp);
 
     // Normal command
-    const testResult = parse(parser, ["test"]);
+    const testResult = parseSync(parser, ["test"]);
     assert.ok(testResult.success);
     assert.equal((testResult.value as { help: boolean }).help, false);
 
     // Global help
-    const globalHelpResult = parse(parser, ["--help"]);
+    const globalHelpResult = parseSync(parser, ["--help"]);
     assert.ok(globalHelpResult.success);
     assert.equal((globalHelpResult.value as { help: boolean }).help, true);
 
     // Contextual help (longer match)
-    const contextualHelpResult = parse(parser, ["test", "--help"]);
+    const contextualHelpResult = parseSync(parser, ["test", "--help"]);
     assert.ok(contextualHelpResult.success);
     assert.equal(
       (contextualHelpResult.value as { help: boolean }).help,
@@ -686,7 +686,7 @@ describe("longestMatch() error customization", () => {
       },
     );
 
-    const result = parse(parser, ["deploi"]);
+    const result = parseSync(parser, ["deploi"]);
     assert.strictEqual(result.success, false);
     if (!result.success) {
       const errorMessage = formatMessage(result.error);
@@ -706,7 +706,7 @@ describe("longestMatch() error customization", () => {
       },
     );
 
-    const result = parse(parser, ["deploi"]);
+    const result = parseSync(parser, ["deploi"]);
     assert.strictEqual(result.success, false);
     if (!result.success) {
       const errorMessage = formatMessage(result.error);
@@ -734,7 +734,7 @@ describe("object", () => {
       port: option("-p", integer()),
     });
 
-    const result = parse(parser, ["-v", "-p", "8080"]);
+    const result = parseSync(parser, ["-v", "-p", "8080"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
@@ -755,7 +755,7 @@ describe("object", () => {
       port: option("-p", integer({ min: 1 })),
     });
 
-    const result = parse(parser, ["-p", "0"]);
+    const result = parseSync(parser, ["-p", "0"]);
     assert.ok(!result.success);
   });
 
@@ -785,7 +785,7 @@ describe("object", () => {
       port: option("-p", integer()),
     });
 
-    const result = parse(parser, []);
+    const result = parseSync(parser, []);
     assert.ok(!result.success);
     if (!result.success) {
       assertErrorIncludes(result.error, "No matching option found");
@@ -797,7 +797,7 @@ describe("object", () => {
       watch: option("--watch"),
     });
 
-    const result = parse(parser, []);
+    const result = parseSync(parser, []);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.watch, false);
@@ -811,7 +811,7 @@ describe("object", () => {
       debug: option("--debug"),
     });
 
-    const result = parse(parser, []);
+    const result = parseSync(parser, []);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.watch, false);
@@ -826,7 +826,7 @@ describe("object", () => {
       verbose: option("--verbose"),
     });
 
-    const result = parse(parser, ["--watch"]);
+    const result = parseSync(parser, ["--watch"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.watch, true);
@@ -982,7 +982,7 @@ describe("object", () => {
         [sym2]: option("--opt2", integer()),
       });
 
-      const result = parse(parser, ["--opt1", "10", "--opt2", "20"]);
+      const result = parseSync(parser, ["--opt1", "10", "--opt2", "20"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value[sym1], 10);
@@ -997,7 +997,7 @@ describe("object", () => {
         [sym]: option("--sym", integer()),
       });
 
-      const result = parse(parser, ["--str", "5", "--sym", "15"]);
+      const result = parseSync(parser, ["--str", "5", "--sym", "15"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.strKey, 5);
@@ -1258,7 +1258,7 @@ describe("object() - duplicate option detection", () => {
       output: option("-o", "--output", string()),
     });
 
-    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    const result = parseSync(parser, ["-v", "-o", "file.txt"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
@@ -1291,7 +1291,7 @@ describe("object() - duplicate option detection", () => {
       version: option("-v", "--version"),
     }, { allowDuplicates: true });
 
-    const result = parse(parser, ["-v"]);
+    const result = parseSync(parser, ["-v"]);
     // Should succeed - first parser wins
     assert.ok(result.success);
     if (result.success) {
@@ -1307,7 +1307,7 @@ describe("object() - duplicate option detection", () => {
       debug: option("-d", "--debug"),
     });
 
-    const result = parse(parser, ["-v", "-d"]);
+    const result = parseSync(parser, ["-v", "-d"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
@@ -1350,7 +1350,7 @@ describe("tuple", () => {
       option("-v", "--verbose"),
     ]);
 
-    const result = parse(parser, ["-n", "Alice", "-v"]);
+    const result = parseSync(parser, ["-n", "Alice", "-v"]);
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value, ["Alice", true]);
@@ -1363,7 +1363,7 @@ describe("tuple", () => {
       option("-v", "--verbose"),
     ]);
 
-    const result = parse(parser, ["-n", "Bob", "-v"]);
+    const result = parseSync(parser, ["-n", "Bob", "-v"]);
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value, ["Bob", true]);
@@ -1373,7 +1373,7 @@ describe("tuple", () => {
   it("should handle empty tuple", () => {
     const parser = tuple([]);
 
-    const result = parse(parser, []);
+    const result = parseSync(parser, []);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 0);
@@ -1387,13 +1387,13 @@ describe("tuple", () => {
       option("-v", "--verbose"),
     ]);
 
-    const result1 = parse(parser, ["-n", "Alice", "-a", "30", "-v"]);
+    const result1 = parseSync(parser, ["-n", "Alice", "-a", "30", "-v"]);
     assert.ok(result1.success);
     if (result1.success) {
       assert.deepEqual(result1.value, ["Alice", 30, true]);
     }
 
-    const result2 = parse(parser, ["-n", "Bob", "-v"]);
+    const result2 = parseSync(parser, ["-n", "Bob", "-v"]);
     assert.ok(result2.success);
     if (result2.success) {
       assert.deepEqual(result2.value, ["Bob", undefined, true]);
@@ -1407,7 +1407,7 @@ describe("tuple", () => {
       option("-o", "--output", string()),
     ]);
 
-    const result = parse(parser, ["input.txt", "-v", "-o", "output.txt"]);
+    const result = parseSync(parser, ["input.txt", "-v", "-o", "output.txt"]);
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value, ["input.txt", true, "output.txt"]);
@@ -1421,7 +1421,7 @@ describe("tuple", () => {
       option("-v", "--verbose"),
     ]);
 
-    const result = parse(parser, ["file1.txt", "file2.txt", "-v"]);
+    const result = parseSync(parser, ["file1.txt", "file2.txt", "-v"]);
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value, ["file1.txt", "file2.txt", true]);
@@ -1435,7 +1435,7 @@ describe("tuple", () => {
       argument(string()),
     ]);
 
-    const result = parse(parser, ["input.txt", "-t", "json", "output.txt"]);
+    const result = parseSync(parser, ["input.txt", "-t", "json", "output.txt"]);
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value, ["input.txt", "json", "output.txt"]);
@@ -1449,7 +1449,7 @@ describe("tuple", () => {
     ]);
 
     // No arguments provided, should fail on first argument parser
-    const result = parse(parser, ["-v"]);
+    const result = parseSync(parser, ["-v"]);
     assert.ok(!result.success);
   });
 
@@ -1463,7 +1463,7 @@ describe("tuple", () => {
       argument(string({ metavar: "OUTPUT" })),
     ]);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "convert",
       "input.md",
       "-f",
@@ -1678,7 +1678,7 @@ describe("tuple() - duplicate option detection", () => {
       option("-o", "--output", string()),
     ]);
 
-    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    const result = parseSync(parser, ["-v", "-o", "file.txt"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value[0], true);
@@ -1692,7 +1692,7 @@ describe("tuple() - duplicate option detection", () => {
       option("-v", "--version"),
     ], { allowDuplicates: true });
 
-    const result = parse(parser, ["-v"]);
+    const result = parseSync(parser, ["-v"]);
     // Should succeed - first parser wins
     assert.ok(result.success);
     if (result.success) {
@@ -1760,7 +1760,7 @@ describe("merge", () => {
 
     const parser = merge(basicOptions, serverOptions);
 
-    const result = parse(parser, ["-v", "-p", "8080", "-h", "localhost"]);
+    const result = parseSync(parser, ["-v", "-p", "8080", "-h", "localhost"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
@@ -1785,7 +1785,7 @@ describe("merge", () => {
 
     const parser = merge(group1, group2, group3);
 
-    const result = parse(parser, ["-1", "test", "-2", "42", "-3"]);
+    const result = parseSync(parser, ["-1", "test", "-2", "42", "-3"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.option1, "test");
@@ -1802,7 +1802,7 @@ describe("merge", () => {
 
     const parser = merge(a, b, c, d);
 
-    const result = parse(parser, ["-a", "-b", "-c", "-d"]);
+    const result = parseSync(parser, ["-a", "-b", "-c", "-d"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.a, true);
@@ -1821,7 +1821,7 @@ describe("merge", () => {
 
     const parser = merge(a, b, c, d, e);
 
-    const result = parse(parser, ["-a", "-b", "-c", "-d", "-e"]);
+    const result = parseSync(parser, ["-a", "-b", "-c", "-d", "-e"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.a, true);
@@ -1843,7 +1843,7 @@ describe("merge", () => {
 
     const mergedParser = merge(parser1, parser2);
 
-    const result = parse(mergedParser, ["-1"]);
+    const result = parseSync(mergedParser, ["-1"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.flag1, true);
@@ -1862,7 +1862,7 @@ describe("merge", () => {
 
     const parser = merge(parser1, parser2);
 
-    const result = parse(parser, ["-p", "0", "-h", "localhost"]);
+    const result = parseSync(parser, ["-p", "0", "-h", "localhost"]);
     assert.ok(!result.success);
   });
 
@@ -1877,10 +1877,10 @@ describe("merge", () => {
 
     const parser = merge(parser1, parser2);
 
-    const invalidNumberResult = parse(parser, ["-n", "5"]);
+    const invalidNumberResult = parseSync(parser, ["-n", "5"]);
     assert.ok(!invalidNumberResult.success);
 
-    const invalidTextResult = parse(parser, ["-t", "lowercase"]);
+    const invalidTextResult = parseSync(parser, ["-t", "lowercase"]);
     assert.ok(!invalidTextResult.success);
   });
 
@@ -1900,7 +1900,7 @@ describe("merge", () => {
       Math.max(lowPriority.priority, highPriority.priority),
     );
 
-    const result = parse(parser, ["-o", "value", "argument"]);
+    const result = parseSync(parser, ["-o", "value", "argument"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.option, "value");
@@ -1926,7 +1926,7 @@ describe("merge", () => {
 
     const parser = merge(stringOptions, numberOptions, booleanOptions);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "-n",
       "test",
       "-p",
@@ -1961,7 +1961,7 @@ describe("merge", () => {
 
     const parser = merge(options, args);
 
-    const result = parse(parser, ["-v", "-o", "out.txt", "input.txt"]);
+    const result = parseSync(parser, ["-v", "-o", "out.txt", "input.txt"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
@@ -1981,13 +1981,13 @@ describe("merge", () => {
 
     const parser = merge(parser1, parser2);
 
-    const result1 = parse(parser, ["-1", "hello"]);
+    const result1 = parseSync(parser, ["-1", "hello"]);
     assert.ok(result1.success);
     if (result1.success) {
       assert.equal(result1.value.value, "hello");
     }
 
-    const result2 = parse(parser, ["-2", "42"]);
+    const result2 = parseSync(parser, ["-2", "42"]);
     assert.ok(result2.success);
     if (result2.success) {
       assert.equal(result2.value.value, 42);
@@ -2032,7 +2032,7 @@ describe("merge", () => {
     const parser = merge(parser1, parser2);
 
     // First test with actual parsing
-    const result = parse(parser, ["-1", "-p", "8080"]);
+    const result = parseSync(parser, ["-1", "-p", "8080"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.flag1, true);
@@ -2052,7 +2052,7 @@ describe("merge", () => {
     const parser = merge(parser1, parser2);
 
     // Test with actual invalid parsing
-    const result = parse(parser, ["-1", "-p", "0"]);
+    const result = parseSync(parser, ["-1", "-p", "0"]);
     assert.ok(!result.success);
   });
 
@@ -2069,7 +2069,7 @@ describe("merge", () => {
 
     const parser = or(basicMode, advancedMode);
 
-    const basicResult = parse(parser, ["-f"]);
+    const basicResult = parseSync(parser, ["-f"]);
     assert.ok(basicResult.success);
     if (basicResult.success) {
       if ("basic" in basicResult.value) {
@@ -2078,7 +2078,7 @@ describe("merge", () => {
       }
     }
 
-    const advancedResult = parse(parser, ["-v", "42"]);
+    const advancedResult = parseSync(parser, ["-v", "42"]);
     assert.ok(advancedResult.success);
     if (advancedResult.success) {
       if ("advanced" in advancedResult.value) {
@@ -2106,7 +2106,7 @@ describe("merge", () => {
 
     const parser = merge(serverOptions, logOptions, authOptions);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "-p",
       "8080",
       "-h",
@@ -2141,7 +2141,7 @@ describe("merge", () => {
 
     const parser = merge(options1, options2);
 
-    const result = parse(parser, ["-f", "--", "-not-an-option"]);
+    const result = parseSync(parser, ["-f", "--", "-not-an-option"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.flag, true);
@@ -2163,7 +2163,7 @@ describe("merge", () => {
 
     const parser = merge(group3, group4);
 
-    const result = parse(parser, ["-d", "-t", "42", "-z", "-q", "value"]);
+    const result = parseSync(parser, ["-d", "-t", "42", "-z", "-q", "value"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.type, "group34");
@@ -2186,7 +2186,7 @@ describe("merge", () => {
     const parser = merge(parser1, parser2);
 
     // Test sequential parsing
-    const result = parse(parser, ["-1", "hello", "-2", "42"]);
+    const result = parseSync(parser, ["-1", "hello", "-2", "42"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.opt1, "hello");
@@ -2227,7 +2227,7 @@ describe("merge", () => {
     const parser = merge(empty1, empty2);
 
     // Empty parsers succeed when there is no input since all parsers can complete
-    const result = parse(parser, []);
+    const result = parseSync(parser, []);
     assert.ok(result.success);
   });
 
@@ -2243,7 +2243,7 @@ describe("merge", () => {
 
     const parser = merge(required, optionalFields);
 
-    const withOptionalResult = parse(parser, ["-n", "John", "-a", "30"]);
+    const withOptionalResult = parseSync(parser, ["-n", "John", "-a", "30"]);
     assert.ok(withOptionalResult.success);
     if (withOptionalResult.success) {
       assert.equal(withOptionalResult.value.name, "John");
@@ -2251,7 +2251,7 @@ describe("merge", () => {
       assert.equal(withOptionalResult.value.email, undefined);
     }
 
-    const withoutOptionalResult = parse(parser, ["-n", "Jane"]);
+    const withoutOptionalResult = parseSync(parser, ["-n", "Jane"]);
     assert.ok(withoutOptionalResult.success);
     if (withoutOptionalResult.success) {
       assert.equal(withoutOptionalResult.value.name, "Jane");
@@ -2272,7 +2272,7 @@ describe("merge", () => {
 
     const parser = merge(single, multipleFields);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "-n",
       "MyApp",
       "-t",
@@ -2305,7 +2305,7 @@ describe("merge", () => {
 
     const parser = merge(stringParser, numberParser, booleanParser);
 
-    const result = parse(parser, ["-t", "hello", "-c", "42", "-f"]);
+    const result = parseSync(parser, ["-t", "hello", "-c", "42", "-f"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(typeof result.value.text, "string");
@@ -2503,7 +2503,7 @@ describe("merge", () => {
       });
       const parser = merge("Configuration", basicOptions, serverOptions);
 
-      const result = parse(parser, ["-v", "-p", "8080", "-h", "localhost"]);
+      const result = parseSync(parser, ["-v", "-p", "8080", "-h", "localhost"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.verbose, true);
@@ -2570,7 +2570,7 @@ describe("merge", () => {
       const p3 = object({ c: option("-c") });
 
       const parser = merge("All Options", p1, p2, p3);
-      const result = parse(parser, ["-a", "test", "-b", "42", "-c"]);
+      const result = parseSync(parser, ["-a", "test", "-b", "42", "-c"]);
 
       assert.ok(result.success);
       if (result.success) {
@@ -2606,7 +2606,7 @@ describe("merge", () => {
         p9,
       );
       const args = ["-0", "-1", "-2", "-3", "-4", "-5", "-6", "-7", "-8", "-9"];
-      const result = parse(merged, args);
+      const result = parseSync(merged, args);
 
       assert.ok(result.success);
       if (result.success) {
@@ -2678,7 +2678,7 @@ describe("merge", () => {
       );
 
       // When no flags are provided, should still parse the argument
-      const result = parse(parser, ["test"]);
+      const result = parseSync(parser, ["test"]);
       assert.ok(result.success, "Parsing should succeed");
       if (result.success) {
         assert.equal(result.value.text, "test");
@@ -2703,7 +2703,7 @@ describe("merge", () => {
       );
 
       // When --verbose is provided
-      const result1 = parse(parser, ["--verbose", "test"]);
+      const result1 = parseSync(parser, ["--verbose", "test"]);
       assert.ok(result1.success, "Parsing with --verbose should succeed");
       if (result1.success) {
         assert.equal(result1.value.text, "test");
@@ -2711,7 +2711,7 @@ describe("merge", () => {
       }
 
       // When --quiet is provided
-      const result2 = parse(parser, ["--quiet", "test"]);
+      const result2 = parseSync(parser, ["--quiet", "test"]);
       assert.ok(result2.success, "Parsing with --quiet should succeed");
       if (result2.success) {
         assert.equal(result2.value.text, "test");
@@ -2719,7 +2719,7 @@ describe("merge", () => {
       }
 
       // When multiple -v flags are provided
-      const result3 = parse(parser, ["-v", "-v", "-v", "test"]);
+      const result3 = parseSync(parser, ["-v", "-v", "-v", "test"]);
       assert.ok(result3.success, "Parsing with -v -v -v should succeed");
       if (result3.success) {
         assert.equal(result3.value.text, "test");
@@ -2760,7 +2760,7 @@ describe("merge", () => {
       );
 
       // When no option is provided
-      const result = parse(parser, ["3x3x3"]);
+      const result = parseSync(parser, ["3x3x3"]);
       assert.ok(result.success, "Parsing should succeed");
       if (result.success) {
         assert.equal(result.value.text, "3x3x3");
@@ -2786,7 +2786,7 @@ describe("merge", () => {
       );
 
       // When no flags are provided
-      const result = parse(parser, ["test"]);
+      const result = parseSync(parser, ["test"]);
       assert.ok(result.success, "Parsing should succeed");
       if (result.success) {
         assert.equal(result.value.text, "test");
@@ -2818,7 +2818,7 @@ describe("merge", () => {
     const parser = merge(globalOptions, or(sub1Command, sub2Command));
 
     // Test: sub1 with its option
-    const result1 = parse(parser, ["sub1", "-o", "foo"]);
+    const result1 = parseSync(parser, ["sub1", "-o", "foo"]);
     assert.ok(result1.success, "sub1 -o foo should parse successfully");
     if (result1.success) {
       assert.equal(result1.value.cmd, "sub1");
@@ -2827,7 +2827,7 @@ describe("merge", () => {
     }
 
     // Test: sub1 without option
-    const result2 = parse(parser, ["sub1"]);
+    const result2 = parseSync(parser, ["sub1"]);
     assert.ok(result2.success, "sub1 should parse successfully");
     if (result2.success) {
       assert.equal(result2.value.cmd, "sub1");
@@ -2835,14 +2835,14 @@ describe("merge", () => {
     }
 
     // Test: sub2
-    const result3 = parse(parser, ["sub2"]);
+    const result3 = parseSync(parser, ["sub2"]);
     assert.ok(result3.success, "sub2 should parse successfully");
     if (result3.success) {
       assert.equal(result3.value.cmd, "sub2");
     }
 
     // Test: sub1 with global option
-    const result4 = parse(parser, ["--global", "sub1", "-o", "bar"]);
+    const result4 = parseSync(parser, ["--global", "sub1", "-o", "bar"]);
     assert.ok(
       result4.success,
       "--global sub1 -o bar should parse successfully",
@@ -2952,7 +2952,7 @@ describe("merge() - duplicate option detection", () => {
     });
 
     const parser = merge(parser1, parser2);
-    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    const result = parseSync(parser, ["-v", "-o", "file.txt"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
@@ -2990,7 +2990,7 @@ describe("merge() - duplicate option detection", () => {
     });
 
     const parser = merge(parser1, parser2, { allowDuplicates: true });
-    const result = parse(parser, ["-v"]);
+    const result = parseSync(parser, ["-v"]);
     // Should succeed - first parser wins
     assert.ok(result.success);
     if (result.success) {
@@ -3058,7 +3058,7 @@ describe("concat", () => {
 
     const parser = concat(basicOptions, serverOptions);
 
-    const result = parse(parser, ["-v", "-p", "8080", "-h", "localhost"]);
+    const result = parseSync(parser, ["-v", "-p", "8080", "-h", "localhost"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 4);
@@ -3084,7 +3084,7 @@ describe("concat", () => {
 
     const parser = concat(group1, group2, group3);
 
-    const result = parse(parser, ["-1", "test", "-2", "42", "-3"]);
+    const result = parseSync(parser, ["-1", "test", "-2", "42", "-3"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 3);
@@ -3102,7 +3102,7 @@ describe("concat", () => {
 
     const parser = concat(a, b, c, d);
 
-    const result = parse(parser, ["-a", "-b", "-c", "-d"]);
+    const result = parseSync(parser, ["-a", "-b", "-c", "-d"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 4);
@@ -3122,7 +3122,7 @@ describe("concat", () => {
 
     const parser = concat(a, b, c, d, e);
 
-    const result = parse(parser, ["-a", "-b", "-c", "-d", "-e"]);
+    const result = parseSync(parser, ["-a", "-b", "-c", "-d", "-e"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 5);
@@ -3141,7 +3141,7 @@ describe("concat", () => {
 
     const parser = concat(empty1, empty2, nonEmpty);
 
-    const result = parse(parser, ["-v"]);
+    const result = parseSync(parser, ["-v"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 1);
@@ -3159,7 +3159,7 @@ describe("concat", () => {
 
     const parser = concat(short, long);
 
-    const result = parse(parser, ["-s", "-a", "test", "-b", "42", "-c"]);
+    const result = parseSync(parser, ["-s", "-a", "test", "-b", "42", "-c"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 4);
@@ -3182,7 +3182,7 @@ describe("concat", () => {
 
     const parser = concat(required, optionalFields);
 
-    const withOptionalResult = parse(parser, ["-n", "John", "-a", "30"]);
+    const withOptionalResult = parseSync(parser, ["-n", "John", "-a", "30"]);
     assert.ok(withOptionalResult.success);
     if (withOptionalResult.success) {
       assert.equal(withOptionalResult.value.length, 3);
@@ -3191,7 +3191,7 @@ describe("concat", () => {
       assert.equal(withOptionalResult.value[2], undefined);
     }
 
-    const withoutOptionalResult = parse(parser, ["-n", "Jane"]);
+    const withoutOptionalResult = parseSync(parser, ["-n", "Jane"]);
     assert.ok(withoutOptionalResult.success);
     if (withoutOptionalResult.success) {
       assert.equal(withoutOptionalResult.value.length, 3);
@@ -3213,7 +3213,7 @@ describe("concat", () => {
 
     const parser = concat(single, multipleFields);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "-n",
       "MyApp",
       "-t",
@@ -3244,7 +3244,7 @@ describe("concat", () => {
 
     const parser = concat(args, options);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "input.txt",
       "output.txt",
       "-v",
@@ -3277,7 +3277,7 @@ describe("concat", () => {
       Math.max(lowPriority.priority, highPriority.priority),
     );
 
-    const result = parse(parser, ["-o", "value", "argument"]);
+    const result = parseSync(parser, ["-o", "value", "argument"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 2);
@@ -3297,7 +3297,7 @@ describe("concat", () => {
 
     const parser = concat(parser1, parser2);
 
-    const result = parse(parser, ["-p", "0", "-h", "localhost"]);
+    const result = parseSync(parser, ["-p", "0", "-h", "localhost"]);
     assert.ok(!result.success);
   });
 
@@ -3312,10 +3312,10 @@ describe("concat", () => {
 
     const parser = concat(parser1, parser2);
 
-    const invalidNumberResult = parse(parser, ["-n", "5"]);
+    const invalidNumberResult = parseSync(parser, ["-n", "5"]);
     assert.ok(!invalidNumberResult.success);
 
-    const invalidTextResult = parse(parser, ["-t", "lowercase"]);
+    const invalidTextResult = parseSync(parser, ["-t", "lowercase"]);
     assert.ok(!invalidTextResult.success);
   });
 
@@ -3337,7 +3337,7 @@ describe("concat", () => {
 
     const parser = concat(stringTuple, numberTuple, booleanTuple);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "-n",
       "test",
       "-p",
@@ -3373,11 +3373,11 @@ describe("concat", () => {
     const parser = concat(parser1, parser2);
 
     // Test case where invalid option is provided - should fail
-    const result1 = parse(parser, ["-3"]);
+    const result1 = parseSync(parser, ["-3"]);
     assert.ok(!result1.success);
 
     // Test case where valid empty input is provided - should succeed with defaults
-    const result2 = parse(parser, []);
+    const result2 = parseSync(parser, []);
     assert.ok(result2.success);
     if (result2.success) {
       assert.equal(result2.value.length, 2);
@@ -3386,7 +3386,7 @@ describe("concat", () => {
     }
 
     // Test case where one parser consumes input
-    const result3 = parse(parser, ["-1"]);
+    const result3 = parseSync(parser, ["-1"]);
     assert.ok(result3.success);
     if (result3.success) {
       assert.equal(result3.value.length, 2);
@@ -3408,7 +3408,7 @@ describe("concat", () => {
 
     const parser = or(basicMode, advancedMode);
 
-    const basicResult = parse(parser, ["-f"]);
+    const basicResult = parseSync(parser, ["-f"]);
     assert.ok(basicResult.success);
     if (basicResult.success) {
       assert.equal(basicResult.value.length, 2);
@@ -3416,7 +3416,7 @@ describe("concat", () => {
       assert.equal(basicResult.value[1], true);
     }
 
-    const advancedResult = parse(parser, ["-v", "42"]);
+    const advancedResult = parseSync(parser, ["-v", "42"]);
     assert.ok(advancedResult.success);
     if (advancedResult.success) {
       assert.equal(advancedResult.value.length, 2);
@@ -3443,7 +3443,7 @@ describe("concat", () => {
 
     const parser = concat(authTuple, serverTuple, flagsTuple);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "-u",
       "admin",
       "-p",
@@ -3478,7 +3478,7 @@ describe("concat", () => {
 
     const parser = concat(options, args);
 
-    const result = parse(parser, ["-f", "--", "-not-an-option"]);
+    const result = parseSync(parser, ["-f", "--", "-not-an-option"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 2);
@@ -3499,7 +3499,7 @@ describe("concat", () => {
     const parser = concat(parser1, parser2);
 
     // Test sequential parsing
-    const result = parse(parser, ["-1", "hello", "-2", "42"]);
+    const result = parseSync(parser, ["-1", "hello", "-2", "42"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 2);
@@ -3520,7 +3520,7 @@ describe("concat", () => {
     const parser = concat(parser1, parser2);
 
     // Test with invalid port value
-    const result = parse(parser, ["-p", "0", "-h", "localhost"]);
+    const result = parseSync(parser, ["-p", "0", "-h", "localhost"]);
     assert.ok(!result.success); // Should fail during completion due to port validation
   });
 
@@ -3531,7 +3531,7 @@ describe("concat", () => {
     const parser = concat(empty1, empty2);
 
     // Empty parsers succeed when there is no input
-    const result = parse(parser, []);
+    const result = parseSync(parser, []);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.length, 0);
@@ -3551,7 +3551,7 @@ describe("concat", () => {
 
     const parser = concat(userInfo, preferences);
 
-    const result = parse(parser, [
+    const result = parseSync(parser, [
       "-n",
       "Alice",
       "-a",
@@ -3648,8 +3648,8 @@ describe("group", () => {
     const groupedParser = group("Server Options", baseParser);
 
     // Should have same parsing behavior
-    const result1 = parse(baseParser, ["-v", "-p", "8080"]);
-    const result2 = parse(groupedParser, ["-v", "-p", "8080"]);
+    const result1 = parseSync(baseParser, ["-v", "-p", "8080"]);
+    const result2 = parseSync(groupedParser, ["-v", "-p", "8080"]);
 
     assert.ok(result1.success);
     assert.ok(result2.success);
@@ -3703,7 +3703,7 @@ describe("group", () => {
     const groupedFormat = group("Output Format", outputFormat);
 
     // Test parsing behavior
-    const result = parse(groupedFormat, ["--json"]);
+    const result = parseSync(groupedFormat, ["--json"]);
     assert.ok(result.success);
     assert.equal(result.value, "json");
 
@@ -3726,7 +3726,7 @@ describe("group", () => {
     const groupedDebug = group("Debug Options", debugOption);
 
     // Test parsing behavior
-    const result = parse(groupedDebug, ["--debug"]);
+    const result = parseSync(groupedDebug, ["--debug"]);
     assert.ok(result.success);
     assert.equal(result.value, true);
 
@@ -3749,7 +3749,11 @@ describe("group", () => {
     const groupedFiles = group("Input Files", filesParser);
 
     // Test parsing behavior
-    const result = parse(groupedFiles, ["file1.txt", "file2.txt", "file3.txt"]);
+    const result = parseSync(groupedFiles, [
+      "file1.txt",
+      "file2.txt",
+      "file3.txt",
+    ]);
     assert.ok(result.success);
     assert.deepStrictEqual(result.value, [
       "file1.txt",
@@ -3781,7 +3785,7 @@ describe("group", () => {
 
     const outerParser = group("Outer Group", innerParser);
 
-    const result = parse(outerParser, ["--debug"]);
+    const result = parseSync(outerParser, ["--debug"]);
     assert.ok(result.success);
     assert.deepStrictEqual(result.value, { debug: true });
 
@@ -3810,7 +3814,7 @@ describe("group", () => {
 
     // Type should be inferred correctly
     type ParsedType = InferValue<typeof groupedParser>;
-    const result = parse(groupedParser, ["-c", "42", "-n", "test"]);
+    const result = parseSync(groupedParser, ["-c", "42", "-n", "test"]);
 
     assert.ok(result.success);
     const value: ParsedType = result.value;
@@ -3826,12 +3830,12 @@ describe("group", () => {
     const groupedOptions = group("Verbosity Control", appOptions);
 
     // Test parsing behavior - with flag
-    const result1 = parse(groupedOptions, ["--verbose"]);
+    const result1 = parseSync(groupedOptions, ["--verbose"]);
     assert.ok(result1.success);
     assert.deepStrictEqual(result1.value, { verbose: true });
 
     // Test parsing behavior - without flag
-    const result2 = parse(groupedOptions, []);
+    const result2 = parseSync(groupedOptions, []);
     assert.ok(result2.success);
     assert.deepStrictEqual(result2.value, { verbose: undefined });
 
@@ -3857,12 +3861,12 @@ describe("group", () => {
     const groupedServer = group("Server Configuration", serverOptions);
 
     // Test parsing behavior - with option
-    const result1 = parse(groupedServer, ["--port", "8080"]);
+    const result1 = parseSync(groupedServer, ["--port", "8080"]);
     assert.ok(result1.success);
     assert.deepStrictEqual(result1.value, { port: 8080 });
 
     // Test parsing behavior - without option (uses default)
-    const result2 = parse(groupedServer, []);
+    const result2 = parseSync(groupedServer, []);
     assert.ok(result2.success);
     assert.deepStrictEqual(result2.value, { port: 3000 });
 
@@ -3903,15 +3907,18 @@ describe("group", () => {
     const groupedOutputOptions = group("Output Options", outputOptions);
 
     // These would typically be combined in an object() parser in a real app
-    const logResult = parse(groupedLogLevel, ["--debug"]);
+    const logResult = parseSync(groupedLogLevel, ["--debug"]);
     assert.ok(logResult.success);
     assert.equal(logResult.value, "debug");
 
-    const inputResult = parse(groupedInputSource, ["file1.txt", "file2.txt"]);
+    const inputResult = parseSync(groupedInputSource, [
+      "file1.txt",
+      "file2.txt",
+    ]);
     assert.ok(inputResult.success);
     assert.deepStrictEqual(inputResult.value, ["file1.txt", "file2.txt"]);
 
-    const outputResult = parse(groupedOutputOptions, [
+    const outputResult = parseSync(groupedOutputOptions, [
       "--output",
       "result.txt",
     ]);
@@ -3979,7 +3986,7 @@ describe("group() - duplicate option detection", () => {
       }),
     );
 
-    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    const result = parseSync(parser, ["-v", "-o", "file.txt"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.verbose, true);
@@ -4018,13 +4025,13 @@ describe("conditional", () => {
         object({}),
       );
 
-      const resultA = parse(parser, ["--type", "a", "--foo", "hello"]);
+      const resultA = parseSync(parser, ["--type", "a", "--foo", "hello"]);
       assert.ok(resultA.success);
       if (resultA.success) {
         assert.deepEqual(resultA.value, ["a", { foo: "hello" }]);
       }
 
-      const resultB = parse(parser, ["--type", "b", "--bar", "42"]);
+      const resultB = parseSync(parser, ["--type", "b", "--bar", "42"]);
       assert.ok(resultB.success);
       if (resultB.success) {
         assert.deepEqual(resultB.value, ["b", { bar: 42 }]);
@@ -4041,7 +4048,7 @@ describe("conditional", () => {
         object({ defaultOpt: option("--default", string()) }),
       );
 
-      const result = parse(parser, ["--default", "value"]);
+      const result = parseSync(parser, ["--default", "value"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value, [undefined, { defaultOpt: "value" }]);
@@ -4057,7 +4064,7 @@ describe("conditional", () => {
         },
       );
 
-      const result = parse(parser, ["--foo", "hello"]);
+      const result = parseSync(parser, ["--foo", "hello"]);
       assert.ok(!result.success);
     });
 
@@ -4071,7 +4078,7 @@ describe("conditional", () => {
         object({}),
       );
 
-      const result = parse(parser, ["--mode", "fast"]);
+      const result = parseSync(parser, ["--mode", "fast"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value, ["fast", {}]);
@@ -4089,7 +4096,7 @@ describe("conditional", () => {
         object({}),
       );
 
-      const result = parse(parser, ["--type", "a"]);
+      const result = parseSync(parser, ["--type", "a"]);
       assert.ok(!result.success);
       if (!result.success) {
         assertErrorIncludes(result.error, "--required");
@@ -4106,7 +4113,7 @@ describe("conditional", () => {
         object({}),
       );
 
-      const result = parse(parser, ["--type", "invalid"]);
+      const result = parseSync(parser, ["--type", "invalid"]);
       assert.ok(!result.success);
     });
   });
@@ -4124,7 +4131,7 @@ describe("conditional", () => {
 
       type ParsedType = InferValue<typeof parser>;
 
-      const result = parse(parser, ["--format", "json", "--pretty"]);
+      const result = parseSync(parser, ["--format", "json", "--pretty"]);
       assert.ok(result.success);
 
       if (result.success) {
@@ -4190,14 +4197,14 @@ describe("complex combinator interactions", () => {
       );
 
       // Multiple -a options
-      const result1 = parse(parser, ["-a", "-a", "-a"]);
+      const result1 = parseSync(parser, ["-a", "-a", "-a"]);
       assert.ok(result1.success);
       if (result1.success) {
         assert.deepEqual(result1.value, [true, true, true]);
       }
 
       // Multiple -b options
-      const result2 = parse(parser, ["-b", "-b"]);
+      const result2 = parseSync(parser, ["-b", "-b"]);
       assert.ok(result2.success);
       if (result2.success) {
         assert.deepEqual(result2.value, [true, true]);
@@ -4210,7 +4217,7 @@ describe("complex combinator interactions", () => {
         multiple(option("-b")),
       );
 
-      const result = parse(parser, ["-a", "-b"]);
+      const result = parseSync(parser, ["-a", "-b"]);
       assert.ok(!result.success);
       if (!result.success) {
         assertErrorIncludes(result.error, "cannot be used together");
@@ -4223,13 +4230,13 @@ describe("complex combinator interactions", () => {
       const innerOr = or(option("-a"), option("-b"));
       const outerOr = or(innerOr, option("-c"));
 
-      const result1 = parse(outerOr, ["-a"]);
+      const result1 = parseSync(outerOr, ["-a"]);
       assert.ok(result1.success);
 
-      const result2 = parse(outerOr, ["-b"]);
+      const result2 = parseSync(outerOr, ["-b"]);
       assert.ok(result2.success);
 
-      const result3 = parse(outerOr, ["-c"]);
+      const result3 = parseSync(outerOr, ["-c"]);
       assert.ok(result3.success);
     });
 
@@ -4238,10 +4245,10 @@ describe("complex combinator interactions", () => {
       const level2 = or(level1, option("-c"));
       const level3 = or(level2, option("-d"));
 
-      const result1 = parse(level3, ["-a"]);
+      const result1 = parseSync(level3, ["-a"]);
       assert.ok(result1.success);
 
-      const result2 = parse(level3, ["-d"]);
+      const result2 = parseSync(level3, ["-d"]);
       assert.ok(result2.success);
     });
 
@@ -4249,7 +4256,7 @@ describe("complex combinator interactions", () => {
       const innerOr = or(option("-a"), option("-b"));
       const outerOr = or(innerOr, option("-c"));
 
-      const result = parse(outerOr, ["-a", "-c"]);
+      const result = parseSync(outerOr, ["-a", "-c"]);
       assert.ok(!result.success);
       if (!result.success) {
         assertErrorIncludes(result.error, "cannot be used together");
@@ -4266,7 +4273,7 @@ describe("complex combinator interactions", () => {
       });
 
       // All three parsers have the same default priority
-      const result = parse(parser, ["-c", "-a", "-b"]);
+      const result = parseSync(parser, ["-c", "-a", "-b"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value, {
@@ -4297,7 +4304,7 @@ describe("complex combinator interactions", () => {
         f15: option("--fifteen"),
       });
 
-      const result = parse(parser, [
+      const result = parseSync(parser, [
         "-1",
         "-3",
         "-5",
@@ -4325,7 +4332,7 @@ describe("complex combinator interactions", () => {
         c: optional(option("-c")),
       });
 
-      const result = parse(parser, []);
+      const result = parseSync(parser, []);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value, {
@@ -4353,21 +4360,21 @@ describe("complex combinator interactions", () => {
       );
 
       // First branch
-      const result1 = parse(parser, ["-a", "-b"]);
+      const result1 = parseSync(parser, ["-a", "-b"]);
       assert.ok(result1.success);
       if (result1.success) {
         assert.deepEqual(result1.value, { a: true, b: true });
       }
 
       // Second branch
-      const result2 = parse(parser, ["-c", "-d"]);
+      const result2 = parseSync(parser, ["-c", "-d"]);
       assert.ok(result2.success);
       if (result2.success) {
         assert.deepEqual(result2.value, { c: true, d: true });
       }
 
       // No input - should return undefined
-      const result3 = parse(parser, []);
+      const result3 = parseSync(parser, []);
       assert.ok(result3.success);
       if (result3.success) {
         assert.equal(result3.value, undefined);
@@ -4381,7 +4388,7 @@ describe("complex combinator interactions", () => {
       const level2 = command("level2", object({ sub: level3 }));
       const level1 = command("level1", object({ sub: level2 }));
 
-      const result = parse(
+      const result = parseSync(
         level1,
         ["level1", "level2", "level3", "level4", "level5", "-f"],
       );
@@ -4415,7 +4422,7 @@ describe("complex combinator interactions", () => {
       const parser = or(branchA, branchB);
 
       // Using options from both branches
-      const result = parse(parser, ["file.txt", "-f"]);
+      const result = parseSync(parser, ["file.txt", "-f"]);
       assert.ok(!result.success);
       if (!result.success) {
         assertErrorIncludes(result.error, "cannot be used together");
@@ -4434,11 +4441,11 @@ describe("complex combinator interactions", () => {
       const parser = or(branchA, branchB);
 
       // All from first branch
-      const result1 = parse(parser, ["-v", "file1.txt", "file2.txt"]);
+      const result1 = parseSync(parser, ["-v", "file1.txt", "file2.txt"]);
       assert.ok(result1.success);
 
       // All from second branch
-      const result2 = parse(parser, ["-q", "-f"]);
+      const result2 = parseSync(parser, ["-q", "-f"]);
       assert.ok(result2.success);
     });
   });

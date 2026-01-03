@@ -119,7 +119,7 @@ names, subcommands, or predefined values:
 
 ~~~~ typescript twoslash
 import { type Parser, suggest } from "@optique/core/parser";
-const parser = {} as unknown as Parser<unknown, unknown>;
+const parser = {} as unknown as Parser<"sync", unknown, unknown>;
 // ---cut-before---
 // Suggests: ["--format", "--input", "--help"]
 const suggestions = suggest(parser, ["--"]);
@@ -155,7 +155,7 @@ Primitive parsers provide suggestions based on their specific roles:
 import { type Parser, suggest } from "@optique/core/parser";
 import { argument, command, option } from "@optique/core/primitives";
 import { choice } from "@optique/core/valueparser";
-const parser = {} as unknown as Parser<unknown, unknown>;
+const parser = {} as unknown as Parser<"sync", unknown, unknown>;
 // ---cut-before---
 // Option parsers suggest their names
 suggest(option("-v", "--verbose"), ["--v"]);
@@ -263,8 +263,9 @@ You can implement `suggest()` methods in custom value parsers:
 // @noErrors: 2322
 import type { ValueParser } from "@optique/core/valueparser";
 // ---cut-before---
-function customParser(): ValueParser<string> {
+function customParser(): ValueParser<"sync", string> {
   return {
+    $mode: "sync",
     metavar: "CUSTOM",
     parse(input) {
       // Parsing logic...
@@ -482,7 +483,7 @@ Follow these steps to add shell completion to your CLI application:
 
 ~~~~ typescript twoslash
 import type { Parser } from "@optique/core/parser";
-const parser = {} as unknown as Parser<unknown, unknown>;
+const parser = {} as unknown as Parser<"sync", unknown, unknown>;
 // ---cut-before---
 import { run } from "@optique/run";
 

@@ -182,6 +182,62 @@ Use this approach when you need automatic help and error handling but want
 control over process behavior, or when integrating with frameworks that
 manage process lifecycle.
 
+### Explicit sync/async variants
+
+*This API is available since Optique 0.9.0.*
+
+The `runParser()` function also has explicit sync/async variants for
+mode-aware execution:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { object } from "@optique/core/constructs";
+import { runParserSync, runParserAsync } from "@optique/core/facade";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+function apiKey(): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "KEY",
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      return { success: true, value: input };
+    },
+    format: (v) => v,
+  };
+}
+// ---cut-before---
+// Sync parser - returns directly
+const syncParser = object({
+  name: option("-n", "--name", string()),
+});
+const syncResult = runParserSync(syncParser, "myapp", ["--name", "test"]);
+
+// Async parser - returns Promise
+const asyncParser = object({
+  key: option("--api-key", apiKey()),
+  name: option("-n", "--name", string()),
+});
+const asyncResult = await runParserAsync(
+  asyncParser,
+  "myapp",
+  ["--api-key", "abc123", "-n", "test"],
+);
+~~~~
+
+`runParserSync()`
+:   Only accepts sync parsers. Returns the parsed value directly.
+    Provides a compile-time error if you pass an async parser.
+
+`runParserAsync()`
+:   Accepts any parser (sync or async). Always returns a `Promise`.
+    Use this when working with parsers that may contain async value parsers.
+
+`runParser()`
+:   The generic function that automatically returns the appropriate type
+    based on the parser's mode.
+
 
 High-level execution with *@optique/run*
 ----------------------------------------
@@ -568,6 +624,211 @@ The *@optique/run* `run()` function automatically:
  -  Exits with code `0` for version requests
  -  Exits with code `1` (or custom) for parse errors
  -  Never returns on errors (always calls `process.exit()`)
+
+
+Async parser execution
+----------------------
+
+*This API is available since Optique 0.9.0.*
+
+Parsers in Optique can be either synchronous or asynchronous. The mode is
+tracked at compile time through the `$mode` property and the `Mode` type
+parameter. When any component of a parser (such as a value parser) is async,
+the entire composite parser becomes async.
+
+### Using `parseAsync()` and `suggestAsync()`
+
+For parsers that may be async, use the explicit async functions:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { object } from "@optique/core/constructs";
+import { parseAsync, suggestAsync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+// A custom async value parser
+function apiKey(): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "KEY",
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      // Validate API key against remote service
+      const response = await fetch(`https://api.example.com/validate?key=${encodeURIComponent(input)}`);
+      if (!response.ok) {
+        return { success: false, error: message`Invalid API key.` };
+      }
+      return { success: true, value: input };
+    },
+    format: (v) => v,
+  };
+}
+
+const parser = object({
+  key: option("--api-key", apiKey()),
+  name: option("-n", "--name", string()),
+});
+
+// parseAsync() returns a Promise
+const result = await parseAsync(parser, ["--api-key", "abc123", "-n", "test"]);
+
+if (result.success) {
+  console.log(`Using key for ${result.value.name}.`);
+}
+
+// suggestAsync() also returns a Promise
+const suggestions = await suggestAsync(parser, ["--"]);
+~~~~
+
+### Sync-only functions
+
+For parsers that are guaranteed to be sync, you can use the sync-only
+variants which provide direct return values without `Promise` wrappers:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { parseSync, suggestSync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+
+// A parser using only sync value parsers
+const parser = object({
+  name: option("-n", "--name", string()),
+  port: option("-p", "--port", integer()),
+});
+
+// parseSync() returns directly (no Promise)
+const result = parseSync(parser, ["--name", "server", "--port", "8080"]);
+
+// suggestSync() also returns directly
+const suggestions = suggestSync(parser, ["--"]);
+~~~~
+
+The generic `parse()` and `suggest()` functions automatically return the
+appropriate type based on the parser's mode:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const syncParser = object({
+  name: option("-n", "--name", string()),
+});
+
+// Returns Result<T> directly for sync parsers
+const result = parse(syncParser, ["--name", "test"]);
+~~~~
+
+For more details on creating async value parsers, see the
+[*Async value parsers*](./valueparsers.md#async-value-parsers) section.
+
+### Documentation page generation
+
+The `getDocPage()` function extracts documentation information from a parser
+for generating help text. Like other functions, it has sync and async variants:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { object } from "@optique/core/constructs";
+import { getDocPage, getDocPageSync, getDocPageAsync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+function apiKey(): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "KEY",
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      return { success: true, value: input };
+    },
+    format: (v) => v,
+  };
+}
+// ---cut-before---
+// Sync parser - use getDocPageSync() or getDocPage()
+const syncParser = object({
+  name: option("-n", "--name", string()),
+});
+const syncDoc = getDocPageSync(syncParser);
+const syncDoc2 = getDocPage(syncParser); // Also returns directly
+
+// Async parser - use getDocPageAsync() or await getDocPage()
+const asyncParser = object({
+  key: option("--api-key", apiKey()),
+  name: option("-n", "--name", string()),
+});
+const asyncDoc = await getDocPageAsync(asyncParser);
+const asyncDoc2 = await getDocPage(asyncParser); // Returns Promise
+~~~~
+
+`getDocPageSync()`
+:   Only accepts sync parsers. Returns `DocPage | undefined` directly.
+
+`getDocPageAsync()`
+:   Accepts any parser (sync or async). Always returns `Promise<DocPage | undefined>`.
+
+`getDocPage()`
+:   The generic function that returns the appropriate type based on the parser's
+    mode.
+
+### Using `runSync()` and `runAsync()`
+
+*This API is available since Optique 0.9.0.*
+
+The *@optique/run* package also provides explicit sync/async variants of
+the `run()` function:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+function apiKey(): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "KEY",
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      return { success: true, value: input };
+    },
+    format: (v) => v,
+  };
+}
+const args = ["--api-key", "abc123", "-n", "test"];
+// ---cut-before---
+import { run, runSync, runAsync } from "@optique/run";
+
+// Sync parser with runSync() - returns directly
+const syncParser = object({
+  name: option("-n", "--name", string()),
+});
+const syncResult = runSync(syncParser, { args });
+
+// Async parser with runAsync() - returns Promise
+const asyncParser = object({
+  key: option("--api-key", apiKey()),
+  name: option("-n", "--name", string()),
+});
+const asyncResult = await runAsync(asyncParser, { args });
+~~~~
+
+`runSync()`
+:   Only accepts sync parsers. Returns the parsed value directly.
+    Provides a compile-time error if you pass an async parser.
+
+`runAsync()`
+:   Accepts any parser (sync or async). Always returns a `Promise`.
+    Use this when working with parsers that may contain async value parsers.
+
+`run()`
+:   The generic function that automatically returns the appropriate type
+    based on the parser's mode. For sync parsers it returns directly;
+    for async parsers it returns a `Promise`.
 
 
 Type inference with `InferValue<T>`

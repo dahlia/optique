@@ -10,8 +10,15 @@ import {
   timeZone,
   zonedDateTime,
 } from "@optique/temporal";
+import { object } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
-import type { NonEmptyString } from "@optique/core/valueparser";
+import { parseAsync, parseSync } from "@optique/core/parser";
+import { argument, option } from "@optique/core/primitives";
+import type {
+  NonEmptyString,
+  ValueParser,
+  ValueParserResult,
+} from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -829,6 +836,187 @@ describe("ValueParser suggest() methods", () => {
 
       const suggestions = Array.from(parser.suggest!("Invalid/"));
       assert.equal(suggestions.length, 0);
+    });
+  });
+});
+
+// =============================================================================
+// Async Mode Integration Tests
+// =============================================================================
+
+describe("async mode integration", () => {
+  // Helper: Create an async value parser for testing
+  function asyncString(): ValueParser<"async", string> {
+    return {
+      $mode: "async",
+      metavar: "ASYNC_STRING" as NonEmptyString,
+      async parse(input: string): Promise<ValueParserResult<string>> {
+        // Simulate async operation
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return { success: true, value: input.toUpperCase() };
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+  }
+
+  describe("temporal parsers with async parsers", () => {
+    it("should have sync $mode on all temporal parsers", () => {
+      assert.equal(instant().$mode, "sync");
+      assert.equal(duration().$mode, "sync");
+      assert.equal(zonedDateTime().$mode, "sync");
+      assert.equal(plainDate().$mode, "sync");
+      assert.equal(plainTime().$mode, "sync");
+      assert.equal(plainDateTime().$mode, "sync");
+      assert.equal(plainYearMonth().$mode, "sync");
+      assert.equal(plainMonthDay().$mode, "sync");
+      assert.equal(timeZone().$mode, "sync");
+    });
+
+    it("should propagate async mode when combined with async parser", () => {
+      const parser = object({
+        date: option("--date", plainDate()),
+        name: argument(asyncString()),
+      });
+
+      assert.equal(parser.$mode, "async");
+    });
+
+    it("should remain sync when all parsers are temporal", () => {
+      const parser = object({
+        date: option("--date", plainDate()),
+        time: option("--time", plainTime()),
+        timezone: option("--tz", timeZone()),
+      });
+
+      assert.equal(parser.$mode, "sync");
+    });
+
+    it("should parse temporal with sync when no async parsers", () => {
+      const parser = object({
+        start: option("--start", plainDate()),
+        end: option("--end", plainDate()),
+      });
+
+      const result = parseSync(parser, [
+        "--start",
+        "2024-01-15",
+        "--end",
+        "2024-12-31",
+      ]);
+
+      assert.ok(result.success, `Expected success: ${JSON.stringify(result)}`);
+      if (result.success) {
+        assert.ok(result.value.start instanceof Temporal.PlainDate);
+        assert.ok(result.value.end instanceof Temporal.PlainDate);
+        assert.equal(result.value.start.toString(), "2024-01-15");
+        assert.equal(result.value.end.toString(), "2024-12-31");
+      }
+    });
+
+    it("should parse mixed temporal/async with parseAsync", async () => {
+      const parser = object({
+        date: option("--date", plainDate()),
+        name: argument(asyncString()),
+      });
+
+      const result = await parseAsync(parser, [
+        "--date",
+        "2024-06-15",
+        "test-user",
+      ]);
+
+      assert.ok(result.success, `Expected success: ${JSON.stringify(result)}`);
+      if (result.success) {
+        assert.ok(result.value.date instanceof Temporal.PlainDate);
+        assert.equal(result.value.date.toString(), "2024-06-15");
+        assert.equal(result.value.name, "TEST-USER"); // Uppercased by asyncString
+      }
+    });
+
+    it("should parse multiple temporal types with async", async () => {
+      const parser = object({
+        date: option("--date", plainDate()),
+        time: option("--time", plainTime()),
+        timezone: option("--tz", timeZone()),
+        label: argument(asyncString()),
+      });
+
+      const result = await parseAsync(parser, [
+        "--date",
+        "2024-06-15",
+        "--time",
+        "14:30:00",
+        "--tz",
+        "America/New_York",
+        "event-label",
+      ]);
+
+      assert.ok(result.success, `Expected success: ${JSON.stringify(result)}`);
+      if (result.success) {
+        assert.ok(result.value.date instanceof Temporal.PlainDate);
+        assert.ok(result.value.time instanceof Temporal.PlainTime);
+        assert.equal(result.value.timezone, "America/New_York");
+        assert.equal(result.value.label, "EVENT-LABEL");
+      }
+    });
+
+    it("should handle temporal parsing errors with async", async () => {
+      const parser = object({
+        date: option("--date", plainDate()),
+        name: argument(asyncString()),
+      });
+
+      const result = await parseAsync(parser, [
+        "--date",
+        "invalid-date",
+        "test-user",
+      ]);
+
+      assert.ok(!result.success, "Expected failure for invalid date");
+    });
+
+    it("should work with instant and duration", async () => {
+      const parser = object({
+        timestamp: option("--at", instant()),
+        timeout: option("--timeout", duration()),
+        name: argument(asyncString()),
+      });
+
+      const result = await parseAsync(parser, [
+        "--at",
+        "2024-06-15T12:00:00Z",
+        "--timeout",
+        "PT1H30M",
+        "task-name",
+      ]);
+
+      assert.ok(result.success, `Expected success: ${JSON.stringify(result)}`);
+      if (result.success) {
+        assert.ok(result.value.timestamp instanceof Temporal.Instant);
+        assert.ok(result.value.timeout instanceof Temporal.Duration);
+        assert.equal(result.value.name, "TASK-NAME");
+      }
+    });
+
+    it("should work with zonedDateTime", async () => {
+      const parser = object({
+        event: option("--event", zonedDateTime()),
+        organizer: argument(asyncString()),
+      });
+
+      const result = await parseAsync(parser, [
+        "--event",
+        "2024-06-15T12:00:00[America/New_York]",
+        "john-doe",
+      ]);
+
+      assert.ok(result.success, `Expected success: ${JSON.stringify(result)}`);
+      if (result.success) {
+        assert.ok(result.value.event instanceof Temporal.ZonedDateTime);
+        assert.equal(result.value.organizer, "JOHN-DOE");
+      }
     });
   });
 });

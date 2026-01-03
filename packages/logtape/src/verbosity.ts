@@ -99,7 +99,7 @@ const WARNING_INDEX = 2;
  */
 export function verbosity(
   options: VerbosityOptions = {},
-): Parser<LogLevel, unknown> {
+): Parser<"sync", LogLevel, unknown> {
   const short = (options.short ?? "-v") as OptionName;
   const long = (options.long ?? "--verbose") as OptionName;
   const baseLevel = options.baseLevel ?? "warning";

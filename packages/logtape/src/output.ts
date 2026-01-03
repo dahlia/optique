@@ -98,8 +98,9 @@ export interface LogOutputOptions {
  */
 function logOutputValueParser(
   options: LogOutputOptions = {},
-): ValueParser<LogOutput> {
+): ValueParser<"sync", LogOutput> {
   return {
+    $mode: "sync",
     metavar: options.metavar ?? "FILE",
     parse(input: string): ValueParserResult<LogOutput> {
       if (input === "-") {
@@ -157,7 +158,7 @@ function logOutputValueParser(
  */
 export function logOutput(
   options: LogOutputOptions = {},
-): Parser<LogOutput | undefined, unknown> {
+): Parser<"sync", LogOutput | undefined, unknown> {
   const long = (options.long ?? "--log-output") as OptionName;
   const valueParser = logOutputValueParser(options);
   const description = options.description ??
