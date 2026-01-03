@@ -181,6 +181,14 @@ const METAVAR_BRANCH: NonEmptyString = "BRANCH";
 const METAVAR_TAG: NonEmptyString = "TAG";
 const METAVAR_REMOTE: NonEmptyString = "REMOTE";
 
+/**
+ * Resolves the repository directory from the provided option or process.cwd().
+ *
+ * Note: This function does not validate that the directory exists or is
+ * accessible. Directory validation is deferred to the Git operations
+ * themselves, which will produce appropriate error messages if the directory
+ * is invalid or not a Git repository.
+ */
 function getRepoDir(dirOption: string | undefined): string {
   if (dirOption != null) {
     return dirOption;
