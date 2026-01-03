@@ -857,7 +857,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   completionArgs: readonly string[],
   programName: string,
   parser: Parser<M, unknown, unknown>,
-  completionParser: Parser<Mode, unknown, unknown> | null,
+  completionParser: Parser<"sync", unknown, unknown> | null,
   stdout: (text: string) => void,
   stderr: (text: string) => void,
   onCompletion: (() => THelp) | ((exitCode: number) => THelp),
@@ -893,10 +893,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
     // Show help for completion command if parser is available
     if (completionParser) {
-      const doc = getDocPage(
-        completionParser as Parser<"sync", unknown, unknown>,
-        ["completion"],
-      );
+      const doc = getDocPage(completionParser, ["completion"]);
       if (doc) {
         stderr(formatDocPage(programName, doc, { colors, maxWidth }));
       }
