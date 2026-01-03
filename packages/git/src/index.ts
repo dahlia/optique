@@ -29,22 +29,31 @@ export {
 } from "isomorphic-git";
 
 /**
- * Filesystem interface passed to isomorphic-git.
+ * Read-only filesystem interface passed to isomorphic-git.
  *
- * Although this package only performs read operations (validation and listing),
- * isomorphic-git's FsClient type requires write methods to be present.
- * These methods are included for type compatibility but are never called
- * by our read-only operations.
+ * This package only performs read operations (validation and listing).
+ * Write methods are implemented as stubs that throw errors if called,
+ * enforcing the read-only contract and preventing accidental writes.
  */
 const gitFs = {
   readFile: fs.readFile,
-  writeFile: fs.writeFile,
-  mkdir: fs.mkdir,
-  rmdir: fs.rmdir,
-  unlink: fs.unlink,
+  writeFile: () => {
+    throw new Error("gitFs is read-only: writeFile is disabled.");
+  },
+  mkdir: () => {
+    throw new Error("gitFs is read-only: mkdir is disabled.");
+  },
+  rmdir: () => {
+    throw new Error("gitFs is read-only: rmdir is disabled.");
+  },
+  unlink: () => {
+    throw new Error("gitFs is read-only: unlink is disabled.");
+  },
   readdir: fs.readdir,
   readlink: fs.readlink,
-  symlink: fs.symlink,
+  symlink: () => {
+    throw new Error("gitFs is read-only: symlink is disabled.");
+  },
   stat: fs.stat,
   lstat: fs.lstat,
 };
