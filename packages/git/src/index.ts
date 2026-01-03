@@ -526,6 +526,24 @@ export function gitCommit(
         };
       }
     },
+    async function* suggestCommit(dir, prefix) {
+      try {
+        const commits = await git.log({ fs: gitFs, dir, depth: 15 });
+        for (const commit of commits) {
+          if (commit.oid.startsWith(prefix)) {
+            const shortOid = commit.oid.slice(0, 7);
+            const firstLine = commit.commit.message.split("\n")[0];
+            yield {
+              kind: "literal" as const,
+              text: shortOid,
+              description: message`${firstLine}`,
+            };
+          }
+        }
+      } catch {
+        // Silently fail for suggestions
+      }
+    },
   );
 }
 
@@ -569,9 +587,10 @@ export function gitRef(
     },
     async function* suggestRef(dir, prefix) {
       try {
-        const [branches, tags] = await Promise.all([
+        const [branches, tags, commits] = await Promise.all([
           git.listBranches({ fs: gitFs, dir }),
           git.listTags({ fs: gitFs, dir }),
+          git.log({ fs: gitFs, dir, depth: 10 }),
         ]);
 
         for (const branch of branches) {
@@ -583,6 +602,18 @@ export function gitRef(
         for (const tag of tags) {
           if (tag.startsWith(prefix)) {
             yield { kind: "literal" as const, text: tag };
+          }
+        }
+
+        for (const commit of commits) {
+          if (commit.oid.startsWith(prefix)) {
+            const shortOid = commit.oid.slice(0, 7);
+            const firstLine = commit.commit.message.split("\n")[0];
+            yield {
+              kind: "literal" as const,
+              text: shortOid,
+              description: message`${firstLine}`,
+            };
           }
         }
       } catch {

@@ -332,6 +332,27 @@ describe("git parsers", { concurrency: false }, () => {
       const parser = gitCommit({ dir: testRepoDir });
       assert.equal(parser.format("abc123def456789"), "abc123def456789");
     });
+
+    it("should provide commit SHA suggestions", async () => {
+      await cleanupTestRepo();
+      await createTestRepo();
+      const parser = gitCommit({ dir: testRepoDir });
+      const suggestions: Suggestion[] = [];
+      for await (const s of parser.suggest!("")) {
+        suggestions.push(s);
+      }
+      const literals = suggestions.filter(
+        (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+      );
+      assert.ok(
+        literals.length > 0,
+        "Should suggest recent commits",
+      );
+      assert.ok(
+        literals[0].text.length === 7,
+        "Should suggest short (7-char) commit SHAs",
+      );
+    });
   });
 
   describe("gitRef()", () => {
@@ -594,6 +615,28 @@ describe("git parsers", { concurrency: false }, () => {
       assert.ok(
         literals.some((s) => s.text === "v1.0.0"),
         "Should suggest v1.0.0 tag",
+      );
+    });
+
+    it("should suggest commits for gitRef", async () => {
+      await cleanupTestRepo();
+      await createTestRepo();
+      const parser = gitRef({ dir: testRepoDir });
+      const suggestions: Suggestion[] = [];
+      for await (const s of parser.suggest!("")) {
+        suggestions.push(s);
+      }
+      const literals = suggestions.filter(
+        (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+      );
+      // Should have at least the main branch and a commit
+      assert.ok(
+        literals.some((s) => s.text === "main"),
+        "Should suggest main branch",
+      );
+      assert.ok(
+        literals.some((s) => s.text.length === 7),
+        "Should suggest short commit SHAs",
       );
     });
   });
