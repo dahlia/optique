@@ -504,15 +504,15 @@ export function gitCommit(
     options,
     metavar,
     async (dir, input, errors) => {
-      if (input.length < 4 || input.length > 40) {
+      if (!/^[0-9a-f]{4,40}$/i.test(input)) {
         if (errors?.invalidFormat) {
           return { success: false, error: errors.invalidFormat(input) };
         }
         return {
           success: false,
-          error: message`Commit ${
+          error: message`Invalid commit SHA: ${
             value(input)
-          } must be between 4 and 40 characters.`,
+          }. Commits must be 4–40 hexadecimal characters.`,
         };
       }
 
