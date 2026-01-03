@@ -73,6 +73,15 @@ export interface GitParserOptions {
    * @since 0.9.0
    */
   errors?: GitParserErrors;
+
+  /**
+   * Maximum number of recent commits to include in shell completion suggestions.
+   * Only applies to `gitCommit()` and `gitRef()` parsers.
+   * Defaults to 15.
+   *
+   * @since 0.9.0
+   */
+  suggestionDepth?: number;
 }
 
 /**
@@ -210,6 +219,9 @@ function listFailureMessage(
   return fallback;
 }
 
+/** Default depth for commit suggestions. */
+const DEFAULT_SUGGESTION_DEPTH = 15;
+
 function createAsyncValueParser(
   options: GitParserOptions | undefined,
   metavar: NonEmptyString,
@@ -221,6 +233,7 @@ function createAsyncValueParser(
   suggestFn?: (
     dir: string,
     prefix: string,
+    suggestionDepth: number,
   ) => AsyncIterable<Suggestion>,
 ): ValueParser<"async", string> {
   ensureNonEmptyString(metavar);
@@ -238,7 +251,8 @@ function createAsyncValueParser(
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       const dir = getRepoDir(options?.dir);
       if (suggestFn) {
-        yield* suggestFn(dir, prefix);
+        const depth = options?.suggestionDepth ?? DEFAULT_SUGGESTION_DEPTH;
+        yield* suggestFn(dir, prefix, depth);
       }
     },
   };
@@ -294,7 +308,7 @@ export function gitBranch(
         };
       }
     },
-    async function* suggestBranch(dir, prefix) {
+    async function* suggestBranch(dir, prefix, _depth) {
       try {
         const branches = await git.listBranches({ fs: gitFs, dir });
         for (const branch of branches) {
@@ -369,7 +383,7 @@ export function gitRemoteBranch(
         };
       }
     },
-    async function* suggestRemoteBranch(dir, prefix) {
+    async function* suggestRemoteBranch(dir, prefix, _depth) {
       try {
         const branches = await git.listBranches({ fs: gitFs, dir, remote });
         for (const branch of branches) {
@@ -428,7 +442,7 @@ export function gitTag(
         };
       }
     },
-    async function* suggestTag(dir, prefix) {
+    async function* suggestTag(dir, prefix, _depth) {
       try {
         const tags = await git.listTags({ fs: gitFs, dir });
         for (const tag of tags) {
@@ -487,7 +501,7 @@ export function gitRemote(
         };
       }
     },
-    async function* suggestRemote(dir, prefix) {
+    async function* suggestRemote(dir, prefix, _depth) {
       try {
         const remotes = await git.listRemotes({ fs: gitFs, dir });
         for (const r of remotes) {
@@ -551,9 +565,9 @@ export function gitCommit(
         };
       }
     },
-    async function* suggestCommit(dir, prefix) {
+    async function* suggestCommit(dir, prefix, depth) {
       try {
-        const commits = await git.log({ fs: gitFs, dir, depth: 15 });
+        const commits = await git.log({ fs: gitFs, dir, depth });
         for (const commit of commits) {
           if (commit.oid.startsWith(prefix)) {
             const shortOid = commit.oid.slice(0, 7);
@@ -620,12 +634,12 @@ export function gitRef(
         };
       }
     },
-    async function* suggestRef(dir, prefix) {
+    async function* suggestRef(dir, prefix, depth) {
       try {
         const [branches, tags, commits] = await Promise.all([
           git.listBranches({ fs: gitFs, dir }),
           git.listTags({ fs: gitFs, dir }),
-          git.log({ fs: gitFs, dir, depth: 10 }),
+          git.log({ fs: gitFs, dir, depth }),
         ]);
 
         for (const branch of branches) {
