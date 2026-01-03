@@ -311,24 +311,13 @@ type from `@optique/core/message`:
 
 ~~~~ typescript twoslash
 import { gitBranch } from "@optique/git";
-import { message, type Message } from "@optique/core/message";
-
-function formatChoices(choices: readonly string[]): Message {
-  let result: Message = [];
-  for (let i = 0; i < choices.length; i++) {
-    if (i > 0) {
-      result = [...result, ...message`, `];
-    }
-    result = [...result, ...message`${choices[i]}`];
-  }
-  return result;
-}
+import { message, valueSet } from "@optique/core/message";
 
 const parser = gitBranch({
   errors: {
     notFound: (input, available) =>
       message`Branch ${input} not found. Available: ${
-        available ? formatChoices(available) : "none"
+        available ? valueSet(available) : "none"
       }`,
     listFailed: (dir) =>
       message`Cannot read git repository at ${dir}`,
