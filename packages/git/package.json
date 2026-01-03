@@ -57,8 +57,9 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "isomorphic-git": "catalog:",
-    "@optique/core": "workspace:"
+    "@logtape/logtape": "catalog:",
+    "@optique/core": "workspace:",
+    "isomorphic-git": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -120,6 +120,9 @@ importers:
 
   packages/git:
     dependencies:
+      '@logtape/logtape':
+        specifier: 'catalog:'
+        version: 1.2.2
       '@optique/core':
         specifier: 'workspace:'
         version: link:../core

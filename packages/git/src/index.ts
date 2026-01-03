@@ -15,6 +15,9 @@ import {
 import * as git from "isomorphic-git";
 import * as fs from "node:fs/promises";
 import process from "node:process";
+import { getLogger } from "@logtape/logtape";
+
+const logger = getLogger(["optique", "git"]);
 
 export {
   expandOid,
@@ -299,8 +302,12 @@ export function gitBranch(
             yield { kind: "literal" as const, text: branch };
           }
         }
-      } catch {
-        // Silently fail for suggestions
+      } catch (error) {
+        logger.debug("Failed to list branches for suggestions.", {
+          dir,
+          prefix,
+          error,
+        });
       }
     },
   );
@@ -370,8 +377,13 @@ export function gitRemoteBranch(
             yield { kind: "literal" as const, text: branch };
           }
         }
-      } catch {
-        // Silently fail for suggestions
+      } catch (error) {
+        logger.debug("Failed to list remote branches for suggestions.", {
+          dir,
+          remote,
+          prefix,
+          error,
+        });
       }
     },
   );
@@ -424,8 +436,12 @@ export function gitTag(
             yield { kind: "literal" as const, text: tag };
           }
         }
-      } catch {
-        // Silently fail for suggestions
+      } catch (error) {
+        logger.debug("Failed to list tags for suggestions.", {
+          dir,
+          prefix,
+          error,
+        });
       }
     },
   );
@@ -479,8 +495,12 @@ export function gitRemote(
             yield { kind: "literal" as const, text: r.remote };
           }
         }
-      } catch {
-        // Silently fail for suggestions
+      } catch (error) {
+        logger.debug("Failed to list remotes for suggestions.", {
+          dir,
+          prefix,
+          error,
+        });
       }
     },
   );
@@ -545,8 +565,12 @@ export function gitCommit(
             };
           }
         }
-      } catch {
-        // Silently fail for suggestions
+      } catch (error) {
+        logger.debug("Failed to list commits for suggestions.", {
+          dir,
+          prefix,
+          error,
+        });
       }
     },
   );
@@ -627,8 +651,12 @@ export function gitRef(
             };
           }
         }
-      } catch {
-        // Silently fail for suggestions
+      } catch (error) {
+        logger.debug("Failed to list refs for suggestions.", {
+          dir,
+          prefix,
+          error,
+        });
       }
     },
   );
