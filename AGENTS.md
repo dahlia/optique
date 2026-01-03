@@ -124,11 +124,12 @@ Architecture
  -  *@optique/run* (*packages/run/*): CLI integration wrapper.  Provides
     process-integrated `run()` function, argument reading from `process.argv`
     or `Deno.args`, and `process.exit()` handling.
- -  *@optique/temporal* (*packages/temporal/*): Temporal/Date parsers.
+  -  *@optique/temporal* (*packages/temporal/*): Temporal/Date parsers.
      Provides parsers for date and time values.
   -  *@optique/git* (*packages/git/*): Git reference parsers. Provides async
      value parsers for validating Git references (branches, tags, commits,
      remotes) using isomorphic-git.
+
 
 ### Dual publishing
 

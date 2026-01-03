@@ -6,7 +6,7 @@
  */
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Suggestion } from "@optique/core/parser";
-import { type Message, message, text } from "@optique/core/message";
+import { type Message, message, value } from "@optique/core/message";
 import {
   ensureNonEmptyString,
   type NonEmptyString,
@@ -160,10 +160,34 @@ interface GitRemote {
 const METAVAR_BRANCH: NonEmptyString = "BRANCH";
 const METAVAR_TAG: NonEmptyString = "TAG";
 const METAVAR_REMOTE: NonEmptyString = "REMOTE";
-const _METAVAR_VALUE: NonEmptyString = "VALUE";
 
 function getRepoDir(dirOption: string | undefined): string {
   return dirOption ?? (typeof process !== "undefined" ? process.cwd() : ".");
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error &&
+    (error as { readonly code?: unknown }).code === code;
+}
+
+function listFailureMessage(
+  error: unknown,
+  dir: string,
+  errors: GitParserErrors | undefined,
+  fallback: Message,
+): Message {
+  if (errors?.listFailed) {
+    return errors.listFailed(dir);
+  }
+
+  if (
+    hasErrorCode(error, "NotAGitRepositoryError") ||
+    hasErrorCode(error, "NotFoundError")
+  ) {
+    return message`${value(dir)} is not a git repository.`;
+  }
+
+  return fallback;
 }
 
 function formatChoiceList(choices: readonly string[]): Message {
@@ -190,12 +214,13 @@ function createAsyncValueParser(
     prefix: string,
   ) => AsyncIterable<Suggestion>,
 ): ValueParser<"async", string> {
+  ensureNonEmptyString(metavar);
+
   return {
     $mode: "async",
     metavar,
     parse(input: string): Promise<ValueParserResult<string>> {
       const dir = getRepoDir(options?.dir);
-      ensureNonEmptyString(metavar);
       return parseFn(dir, input, options?.errors);
     },
     format(value: string): string {
@@ -247,18 +272,16 @@ export function gitBranch(
         return {
           success: false,
           error: message`Branch ${
-            text(input)
+            value(input)
           } does not exist. Available branches: ${formatChoiceList(branches)}`,
         };
-      } catch {
-        if (errors?.listFailed) {
-          return { success: false, error: errors.listFailed(dir) };
-        }
+      } catch (error) {
+        const fallback = message`Failed to list branches. Ensure ${
+          value(dir)
+        } is a valid git repository.`;
         return {
           success: false,
-          error: message`Failed to list branches. Ensure ${
-            text(dir)
-          } is a valid git repository.`,
+          error: listFailureMessage(error, dir, errors, fallback),
         };
       }
     },
@@ -316,20 +339,20 @@ export function gitRemoteBranch(
         return {
           success: false,
           error: message`Remote branch ${
-            text(input)
-          } does not exist on remote ${text(remote)}. Available branches: ${
+            value(input)
+          } does not exist on remote ${value(remote)}. Available branches: ${
             formatChoiceList(branches)
           }`,
         };
-      } catch {
-        if (errors?.listFailed) {
-          return { success: false, error: errors.listFailed(dir) };
-        }
+      } catch (error) {
+        const fallback =
+          message`Failed to list remote branches. Ensure remote ${
+            value(remote)
+          } exists.`;
+
         return {
           success: false,
-          error: message`Failed to list remote branches. Ensure remote ${
-            text(remote)
-          } exists.`,
+          error: listFailureMessage(error, dir, errors, fallback),
         };
       }
     },
@@ -373,19 +396,17 @@ export function gitTag(
         }
         return {
           success: false,
-          error: message`Tag ${text(input)} does not exist. Available tags: ${
+          error: message`Tag ${value(input)} does not exist. Available tags: ${
             formatChoiceList(tags)
           }`,
         };
-      } catch {
-        if (errors?.listFailed) {
-          return { success: false, error: errors.listFailed(dir) };
-        }
+      } catch (error) {
+        const fallback = message`Failed to list tags. Ensure ${
+          value(dir)
+        } is a valid git repository.`;
         return {
           success: false,
-          error: message`Failed to list tags. Ensure ${
-            text(dir)
-          } is a valid git repository.`,
+          error: listFailureMessage(error, dir, errors, fallback),
         };
       }
     },
@@ -431,18 +452,16 @@ export function gitRemote(
         return {
           success: false,
           error: message`Remote ${
-            text(input)
+            value(input)
           } does not exist. Available remotes: ${formatChoiceList(names)}`,
         };
-      } catch {
-        if (errors?.listFailed) {
-          return { success: false, error: errors.listFailed(dir) };
-        }
+      } catch (error) {
+        const fallback = message`Failed to list remotes. Ensure ${
+          value(dir)
+        } is a valid git repository.`;
         return {
           success: false,
-          error: message`Failed to list remotes. Ensure ${
-            text(dir)
-          } is a valid git repository.`,
+          error: listFailureMessage(error, dir, errors, fallback),
         };
       }
     },
@@ -487,7 +506,7 @@ export function gitCommit(
         }
         return {
           success: false,
-          error: message`Invalid commit SHA: ${text(input)}`,
+          error: message`Invalid commit SHA: ${value(input)}`,
         };
       }
 
@@ -498,7 +517,7 @@ export function gitCommit(
         return {
           success: false,
           error: message`Commit ${
-            text(input)
+            value(input)
           } must be between 4 and 40 characters.`,
         };
       }
@@ -513,7 +532,7 @@ export function gitCommit(
         return {
           success: false,
           error: message`Commit ${
-            text(input)
+            value(input)
           } does not exist. Provide a valid commit SHA.`,
         };
       }
@@ -553,7 +572,7 @@ export function gitRef(
           return {
             success: false,
             error: message`Reference ${
-              text(input)
+              value(input)
             } does not exist. Provide a valid branch, tag, or commit SHA.`,
           };
         }
@@ -561,8 +580,10 @@ export function gitRef(
     },
     async function* suggestRef(dir, prefix) {
       try {
-        const branches = await git.listBranches({ fs: gitFs, dir });
-        const tags = await git.listTags({ fs: gitFs, dir });
+        const [branches, tags] = await Promise.all([
+          git.listBranches({ fs: gitFs, dir }),
+          git.listTags({ fs: gitFs, dir }),
+        ]);
 
         for (const branch of branches) {
           if (branch.startsWith(prefix)) {

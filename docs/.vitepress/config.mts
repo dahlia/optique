@@ -177,7 +177,6 @@ export default defineConfig({
       "tsx",
       "zsh",
       "bash",
-      "zsh",
       "fish",
       "powershell",
     ],
