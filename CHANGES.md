@@ -304,7 +304,6 @@ remotes) using [isomorphic-git].  [[#71]]
     shared configuration.
  -  Added `GitParsers` interface for the factory return type.
  -  Added `GitParserOptions` interface for parser configuration.
- -  Added `FileSystem` interface for custom filesystem implementations.
  -  Added automatic shell completion suggestions for branches, tags, remotes,
     and commits.
 

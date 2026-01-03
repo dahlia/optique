@@ -91,7 +91,6 @@ const result = await parse(parser, ["main"]);
 ~~~~
 
 Options:
- -  `fs`: Custom filesystem implementation (defaults to Deno or Node.js fs)
  -  `dir`: Git repository directory (defaults to current working directory)
  -  `metavar`: Metavar name for help text (default: `"BRANCH"`)
 
@@ -218,34 +217,6 @@ The factory returns a `GitParsers` object with the following methods:
  -  `remote(options?)` - Same as `gitRemote()`
  -  `commit(options?)` - Same as `gitCommit()`
  -  `ref(options?)` - Same as `gitRef()`
-
-
-### `FileSystem` interface
-
-Custom filesystem implementations must implement this interface for use with
-Git parsers:
-
-~~~~ typescript
-import type { FileSystem } from "@optique/git";
-
-const customFs: FileSystem = {
-  async readFile(path) { /* ... */ },
-  async writeFile(path, data) { /* ... */ },
-  async mkdir(path, options) { /* ... */ },
-  async rmdir(path, options) { /* ... */ },
-  async unlink(path) { /* ... */ },
-  async readdir(path) { /* ... */ },
-  async lstat(path) { /* ... */ },
-  async stat(path) { /* ... */ },
-  async readlink(path) { /* ... */ },
-  async symlink(target, path) { /* ... */ },
-  async chmod(path, mode) { /* ... */ },
-  async chown(path, uid, gid) { /* ... */ },
-  async rename(oldPath, newPath) { /* ... */ },
-  async copyFile(srcPath, destPath) { /* ... */ },
-  async exists(path) { /* ... */ },
-};
-~~~~
 
 
 Shell completion
