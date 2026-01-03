@@ -1,0 +1,78 @@
+{
+  "name": "@optique/git",
+  "version": "0.9.0",
+  "description": "Git value parsers for Optique",
+  "keywords": [
+    "CLI",
+    "command-line",
+    "commandline",
+    "parser",
+    "git",
+    "git-reference",
+    "branch",
+    "tag",
+    "commit"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Hong Minhee",
+    "email": "hong@minhee.org",
+    "url": "https://hongminhee.org/"
+  },
+  "homepage": "https://optique.dev/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dahlia/optique.git",
+    "directory": "packages/git/"
+  },
+  "bugs": {
+    "url": "https://github.com/dahlia/optique/issues"
+  },
+  "funding": [
+    "https://github.com/sponsors/dahlia"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.2.0",
+    "deno": ">=2.3.0"
+  },
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md"
+  ],
+  "type": "module",
+  "module": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@logtape/logtape": "catalog:",
+    "@optique/core": "workspace:",
+    "isomorphic-git": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown",
+    "prepublish": "tsdown",
+    "test": "tsdown && node --experimental-transform-types --test",
+    "test:bun": "tsdown && bun test",
+    "test:deno": "deno test",
+    "test-all": "tsdown && node --experimental-transform-types --test && bun test && deno test"
+  }
+}

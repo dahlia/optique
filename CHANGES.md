@@ -285,6 +285,32 @@ To be released.
  -  All temporal value parsers now validate that `metavar` is non-empty,
     throwing a `TypeError` if an empty string is provided.  [[#63]]
 
+### @optique/git
+
+The *@optique/git* package was introduced in this release, providing
+async value parsers for validating Git references (branches, tags, commits,
+remotes) using [isomorphic-git].  [[#71], [#72]]
+
+ -  Added `gitBranch()` value parser for validating local branch names.
+ -  Added `gitRemoteBranch(remote)` value parser for validating remote branch
+    names on a specified remote.
+ -  Added `gitTag()` value parser for validating tag names.
+ -  Added `gitRemote()` value parser for validating remote names.
+ -  Added `gitCommit()` value parser for validating commit SHAs (full or
+    shortened).
+ -  Added `gitRef()` value parser for validating any Git reference (branches,
+    tags, or commits).
+ -  Added `createGitParsers()` factory function for creating parsers with
+    shared configuration.
+ -  Added `GitParsers` interface for the factory return type.
+ -  Added `GitParserOptions` interface for parser configuration.
+ -  Added automatic shell completion suggestions for branches, tags, remotes,
+    and commits.
+
+[isomorphic-git]: https://github.com/isomorphic-git/isomorphic-git
+[#71]: https://github.com/dahlia/optique/issues/71
+[#72]: https://github.com/dahlia/optique/pull/72
+
 
 Version 0.8.6
 -------------

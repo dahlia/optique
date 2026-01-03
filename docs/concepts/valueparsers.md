@@ -723,6 +723,13 @@ Error: Path existing_file.txt already exists.
 ~~~~
 
 
+Git integration
+---------------
+
+See the [Git integration](../integrations/git.md) page for documentation on
+using Git reference parsers with Optique.
+
+
 Temporal integration
 --------------------
 

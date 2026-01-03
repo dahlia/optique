@@ -124,8 +124,12 @@ Architecture
  -  *@optique/run* (*packages/run/*): CLI integration wrapper.  Provides
     process-integrated `run()` function, argument reading from `process.argv`
     or `Deno.args`, and `process.exit()` handling.
- -  *@optique/temporal* (*packages/temporal/*): Temporal/Date parsers.
-    Provides parsers for date and time values.
+  -  *@optique/temporal* (*packages/temporal/*): Temporal/Date parsers.
+     Provides parsers for date and time values.
+  -  *@optique/git* (*packages/git/*): Git reference parsers. Provides async
+     value parsers for validating Git references (branches, tags, commits,
+     remotes) using isomorphic-git.
+
 
 ### Dual publishing
 
@@ -254,6 +258,17 @@ Code style
 
  -  Functions or methods that throw exceptions must include the `@throws` tag
     in their JSDoc comments.
+
+### Cross-runtime compatibility
+
+ -  When writing code that runs across Deno, Node.js, and Bun, prefer using
+    Node.js built-in modules (e.g., `node:fs`, `node:buffer`, `node:path`,
+    `node:test`).  Deno provides compatibility layers for most Node.js
+    built-in modules, making them a practical common ground for cross-runtime
+    code.
+ -  Avoid using Deno-specific APIs (e.g., `Deno.readTextFile()`) in shared
+    library code.  Reserve Deno-specific APIs for Deno-only entry points
+    or when wrapped with runtime detection.
 
 
 Writing style

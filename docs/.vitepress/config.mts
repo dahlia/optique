@@ -64,6 +64,7 @@ const CONCEPTS = {
 const INTEGRATIONS = {
   text: "Integrations",
   items: [
+    { text: "Git", link: "/integrations/git" },
     { text: "LogTape", link: "/integrations/logtape" },
     { text: "Temporal", link: "/integrations/temporal" },
     { text: "Valibot", link: "/integrations/valibot" },
@@ -169,7 +170,16 @@ export default defineConfig({
   cleanUrls: true,
 
   markdown: {
-    languages: ["js", "jsx", "ts", "tsx"],
+    languages: [
+      "js",
+      "jsx",
+      "ts",
+      "tsx",
+      "zsh",
+      "bash",
+      "fish",
+      "powershell",
+    ],
     codeTransformers: [
       transformerTwoslash({
         twoslashOptions: {

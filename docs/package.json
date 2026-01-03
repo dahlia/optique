@@ -2,6 +2,7 @@
   "devDependencies": {
     "@logtape/logtape": "catalog:",
     "@optique/core": "workspace:",
+    "@optique/git": "workspace:",
     "@optique/logtape": "workspace:",
     "@optique/run": "workspace:",
     "@optique/temporal": "workspace:",
