@@ -46,7 +46,8 @@ function reachableUrl(): ValueParser<"async", URL> {
       } catch {
         return {
           success: false,
-          error: message`Could not reach URL: ${input}.`,
+          error:
+            message`Could not reach URL ${input}. Check network connection or DNS resolution.`,
         };
       }
 
