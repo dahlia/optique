@@ -496,18 +496,6 @@ export function gitCommit(
     options,
     metavar,
     async (dir, input, errors) => {
-      try {
-        ensureNonEmptyString(input);
-      } catch {
-        if (errors?.invalidFormat) {
-          return { success: false, error: errors.invalidFormat(input) };
-        }
-        return {
-          success: false,
-          error: message`Invalid commit SHA: ${value(input)}`,
-        };
-      }
-
       if (input.length < 4 || input.length > 40) {
         if (errors?.invalidFormat) {
           return { success: false, error: errors.invalidFormat(input) };
