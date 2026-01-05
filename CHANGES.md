@@ -10,7 +10,7 @@ To be released.
 
  -  Added sync/async mode support to `Parser` and `ValueParser` interfaces.
     The new `M extends Mode = "sync"` type parameter enables type-safe
-    distinction between synchronous and asynchronous parsers.  [[#52]]
+    distinction between synchronous and asynchronous parsers.  [[#52], [#70]]
 
     New types:
 
@@ -204,10 +204,11 @@ To be released.
 [#62]: https://github.com/dahlia/optique/issues/62
 [#63]: https://github.com/dahlia/optique/issues/63
 [#64]: https://github.com/dahlia/optique/issues/64
+[#70]: https://github.com/dahlia/optique/pull/70
 
 ### @optique/run
 
- -  Added sync/async mode support to the `run()` function.  [[#52]]
+ -  Added sync/async mode support to the `run()` function.  [[#52], [#70]]
 
     New functions for explicit mode handling:
 
