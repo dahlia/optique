@@ -3,3 +3,45 @@ bun = "1.3"
 deno = "2.3"
 node = "24"
 "npm:pnpm" = "latest"
+
+[tasks.deps]
+alias = "install"
+description = "Install all dependencies and update the lockfiles"
+run = "deno task install"
+
+[tasks.check]
+description = "Check code formatting, linting, and type checking"
+run = "deno task check"
+
+[tasks.check-versions]
+description = "Check that all subpackages have matching versions"
+usage = '''
+flag "--fix" help="Automatically fix version mismatches"
+'''
+run = '''
+if [ "${usage_fix}" = "true" ]; then
+  deno task check-versions --fix
+else
+  deno task check-versions
+fi
+'''
+
+[tasks."test:deno"]
+description = "Run the test suite using Deno"
+run = "deno task test"
+
+[tasks."test:node"]
+description = "Run the test suite using Node.js"
+run = "deno task test:node"
+
+[tasks."test:bun"]
+description = "Run the test suite using Bun"
+run = "deno task test:bun"
+
+[tasks.test]
+description = "Run the test suite across all environments"
+depends = ["check", "test:*"]
+
+[tasks.build]
+description = "Build all packages for npm publishing"
+run = "pnpm run -r build"

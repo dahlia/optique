@@ -23,7 +23,7 @@ Development commands
 --------------------
 
 This is a polyglot monorepo supporting Deno, Node.js, and Bun.
-Use [mise] to manage runtime versions.
+Use [mise] to manage runtime versions and run development tasks.
 
 [mise]: https://mise.jdx.dev/
 
@@ -34,19 +34,19 @@ npm-related tasks (building for npm publishing).
 
 > [!IMPORTANT]
 > Do *not* use npm or Yarn as package managers in this project.  Always use
-> Deno tasks (`deno task ...`) for development workflows and pnpm
-> (`pnpm run ...`) only for npm build tasks.
+> mise tasks (`mise run ...` or `mise <task>`) for development workflows.
 
 ### Installation
 
 ~~~~ bash
-deno task install
+mise install  # Install runtime tools (Deno, Node.js, Bun, pnpm)
+mise deps     # Install project dependencies
 ~~~~
 
 ### Quality checks
 
 ~~~~ bash
-deno task check  # Type check, lint, format check, and dry-run publish
+mise check       # Type check, lint, format check, and dry-run publish
 deno fmt         # Format code
 deno lint        # Run linter
 ~~~~
@@ -54,25 +54,25 @@ deno lint        # Run linter
 ### Testing
 
 ~~~~ bash
-deno task test       # Run tests with Deno (primary test environment)
-deno task test:node  # Run tests with Node.js
-deno task test:bun   # Run tests with Bun
-deno task test-all   # Run all checks and tests across all runtimes
+mise test:deno   # Run tests with Deno (primary test environment)
+mise test:node   # Run tests with Node.js
+mise test:bun    # Run tests with Bun
+mise test        # Run all checks and tests across all runtimes
 ~~~~
 
 ### Building (for npm publishing)
 
 ~~~~bash
-pnpm run -r build        # Build all packages with tsdown
+mise build       # Build all packages with tsdown
 ~~~~
 
 ### Version management
 
-All packages must share the same version.  Use the check-versions script:
+All packages must share the same version.  Use the check-versions task:
 
 ~~~~ bash
-deno task check-versions          # Check for version mismatches
-deno task check-versions --fix    # Auto-fix version mismatches
+mise check-versions          # Check for version mismatches
+mise check-versions --fix    # Auto-fix version mismatches
 ~~~~
 
 ### Adding dependencies
@@ -190,7 +190,7 @@ This project follows test-driven development (TDD) practices:
 
 ### Before committing
 
- -  *Run all tests*: Before committing any changes, run `deno task test-all` to
+ -  *Run all tests*: Before committing any changes, run `mise test` to
     ensure all tests pass across Deno, Node.js, and Bun runtimes.
 
 

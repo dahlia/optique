@@ -1,30 +1,34 @@
 name: main
-on: [push, pull_request]
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    tags:
+    - "*.*.*"
+    branches:
+    - "*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MISE_EXPERIMENTAL: true
 
 jobs:
-  test-node:
-    runs-on: ubuntu-24.04
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
-    - run: |
-        wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
-        sudo dpkg -i packages-microsoft-prod.deb
-        sudo mkdir -p /etc/apt/keyrings
-        curl -fsSL https://apt.fury.io/nushell/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
-        echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
-        sudo apt-get update
-        sudo apt-get install -y fish nushell powershell zsh
-    - uses: pnpm/action-setup@v4
-      with:
-        version: latest
-        run_install: true
-    - uses: actions/setup-node@v4
-      with:
-        node-version: latest
-    - run: pnpm run -r test
+    - uses: jdx/mise-action@v2
+    - run: mise run install
+    - run: mise run check
 
   test-deno:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
     - run: |
@@ -35,9 +39,8 @@ jobs:
         echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
         sudo apt-get update
         sudo apt-get install -y fish nushell powershell zsh
-    - uses: denoland/setup-deno@v2
-      with:
-        deno-version: v2.x
+    - uses: jdx/mise-action@v2
+    - run: mise run install
     - run: deno task test --coverage --junit-path=junit.xml
     - if: ${{ !cancelled() }}
       uses: codecov/test-results-action@v1
@@ -49,8 +52,9 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: coverage/lcov.info
 
-  test-bun:
-    runs-on: ubuntu-24.04
+  test-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
     - run: |
@@ -61,23 +65,26 @@ jobs:
         echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
         sudo apt-get update
         sudo apt-get install -y fish nushell powershell zsh
-    - uses: pnpm/action-setup@v4
-      with:
-        version: latest
-        run_install: true
-    - uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: latest
-    - run: pnpm run -r test:bun
+    - uses: jdx/mise-action@v2
+    - run: mise run install
+    - run: mise run test:node
 
-  check:
+  test-bun:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@v4
-    - uses: denoland/setup-deno@v2
-      with:
-        deno-version: v2.x
-    - run: deno task check
+    - run: |
+        wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo mkdir -p /etc/apt/keyrings
+        curl -fsSL https://apt.fury.io/nushell/gpg.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/fury-nushell.gpg
+        echo "deb https://apt.fury.io/nushell/ /" | sudo tee /etc/apt/sources.list.d/fury.list
+        sudo apt-get update
+        sudo apt-get install -y fish nushell powershell zsh
+    - uses: jdx/mise-action@v2
+    - run: mise run install
+    - run: mise run test:bun
 
   publish:
     if: github.event_name == 'push'
@@ -88,18 +95,12 @@ jobs:
       id-token: write
     steps:
     - uses: actions/checkout@v4
-    - uses: denoland/setup-deno@v2
-      with:
-        deno-version: v2.x
-    - uses: pnpm/action-setup@v4
-      with:
-        version: latest
-        run_install: true
-    - run: sudo npm install -g npm@latest && npm --version
+    - uses: jdx/mise-action@v2
+    - run: mise run install
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" == tag ]]; then
-          deno task check-versions
+          mise run check-versions
           [[ "$(jq -r '.version' packages/core/deno.json)" == "$GITHUB_REF_NAME" ]]
         else
           jq \
@@ -108,7 +109,7 @@ jobs:
             '.version = .version + "-dev." + $build + "+" + $commit' \
             packages/core/deno.json > /tmp/deno.json
           mv /tmp/deno.json packages/core/deno.json
-          deno task check-versions --fix
+          mise run check-versions --fix
         fi
     - run: |
         set -ex
@@ -143,13 +144,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
     - uses: actions/checkout@v4
-    - uses: pnpm/action-setup@v4
-      with:
-        version: latest
-        run_install: true
-    - uses: actions/setup-node@v4
-      with:
-        node-version: "24"
+    - uses: jdx/mise-action@v2
+    - run: mise run install
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
