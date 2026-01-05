@@ -707,6 +707,26 @@ export function multiple<M extends Mode, TValue, TState>(
         ? context.state.at(-1)!
         : parser.initialState;
 
+      // Extract already-selected values from completed states to exclude them
+      // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
+      const selectedValues = new Set<string>();
+      for (const s of context.state) {
+        const completed = syncParser.complete(s as TState);
+        if (completed.success) {
+          // Convert value to string for comparison with suggestion text
+          const valueStr = String(completed.value);
+          selectedValues.add(valueStr);
+        }
+      }
+
+      // Helper to filter suggestions
+      const shouldInclude = (suggestion: Suggestion) => {
+        if (suggestion.kind === "literal") {
+          return !selectedValues.has(suggestion.text);
+        }
+        return true;
+      };
+
       if (isAsync) {
         return (async function* () {
           const suggestions = parser.suggest({
@@ -714,15 +734,19 @@ export function multiple<M extends Mode, TValue, TState>(
             state: innerState,
           }, prefix) as AsyncIterable<Suggestion>;
           for await (const s of suggestions) {
-            yield s;
+            if (shouldInclude(s)) yield s;
           }
         })();
       }
       return (function* () {
-        yield* syncParser.suggest({
-          ...context,
-          state: innerState as TState,
-        }, prefix);
+        for (
+          const s of syncParser.suggest({
+            ...context,
+            state: innerState as TState,
+          }, prefix)
+        ) {
+          if (shouldInclude(s)) yield s;
+        }
       })();
     },
     getDocFragments(

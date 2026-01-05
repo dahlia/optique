@@ -346,6 +346,48 @@ describe("suggest function", () => {
         const result = suggestSync(parser, ["-i", "first.txt", "--i"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--include" }]);
       });
+
+      // Regression test for https://github.com/dahlia/optique/issues/73
+      it("should exclude already selected values from suggestions", () => {
+        const parser = multiple(argument(choice(["alpha", "beta", "gamma"])));
+
+        // When no values are selected yet, all choices should be suggested
+        const result1 = suggestSync(parser, [""]);
+        const texts1 = result1.map((s) => extractText(s)).sort();
+        deepStrictEqual(texts1, ["alpha", "beta", "gamma"]);
+
+        // After selecting "alpha", it should be excluded from suggestions
+        const result2 = suggestSync(parser, ["alpha", ""]);
+        const texts2 = result2.map((s) => extractText(s)).sort();
+        deepStrictEqual(texts2, ["beta", "gamma"]);
+
+        // After selecting "alpha" and "gamma", both should be excluded
+        const result3 = suggestSync(parser, ["alpha", "gamma", ""]);
+        const texts3 = result3.map((s) => extractText(s)).sort();
+        deepStrictEqual(texts3, ["beta"]);
+
+        // After selecting all values, no suggestions should remain
+        const result4 = suggestSync(parser, ["alpha", "beta", "gamma", ""]);
+        const texts4 = result4.map((s) => extractText(s)).sort();
+        deepStrictEqual(texts4, []);
+      });
+
+      // Regression test for https://github.com/dahlia/optique/issues/73
+      it("should exclude already selected values for options", () => {
+        const parser = multiple(
+          option("-t", "--tag", choice(["v1", "v2", "v3"])),
+        );
+
+        // When no values are selected yet, all choices should be suggested
+        const result1 = suggestSync(parser, ["-t", ""]);
+        const texts1 = result1.map((s) => extractText(s)).sort();
+        deepStrictEqual(texts1, ["v1", "v2", "v3"]);
+
+        // After selecting "v1", it should be excluded from suggestions
+        const result2 = suggestSync(parser, ["-t", "v1", "-t", ""]);
+        const texts2 = result2.map((s) => extractText(s)).sort();
+        deepStrictEqual(texts2, ["v2", "v3"]);
+      });
     });
   });
 
