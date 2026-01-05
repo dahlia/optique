@@ -71,10 +71,11 @@ They are created from `X.Y-maintenance` branches.
     git commit -m "Release 1.2.3"
     ~~~~
 
-4.  Create the tag (without `v` prefix):
+4.  Create the tag (without `v` prefix).  Always use `-m` to provide a tag
+    message to avoid opening an editor for GPG-signed tags:
 
     ~~~~ bash
-    git tag 1.2.3
+    git tag -m "Optique 1.2.3" 1.2.3
     ~~~~
 
 ### Step 2: Prepare next version
@@ -207,10 +208,11 @@ changes.  They are always created from the `main` branch with patch version 0.
     git commit -m "Release 1.3.0"
     ~~~~
 
-4.  Create the tag (without `v` prefix):
+4.  Create the tag (without `v` prefix).  Always use `-m` to provide a tag
+    message to avoid opening an editor for GPG-signed tags:
 
     ~~~~ bash
-    git tag 1.3.0
+    git tag -m "Optique 1.3.0" 1.3.0
     ~~~~
 
 ### Step 2: Prepare next version on main
@@ -318,6 +320,7 @@ Version format reference
  -  Major releases: `X.0.0` (e.g., 2.0.0, 3.0.0)
  -  Maintenance branches: `X.Y-maintenance` (e.g., 1.2-maintenance)
  -  Tags: No `v` prefix (e.g., `1.2.3`, not `v1.2.3`)
+ -  Tag messages: `Optique X.Y.Z` format (use `-m` flag to avoid editor)
 
 
 CHANGES.md format
@@ -360,7 +363,7 @@ Checklist summary
 - [ ] Check out `X.Y-maintenance` branch
 - [ ] Update *CHANGES.md* release date
 - [ ] Commit with message "Release X.Y.Z"
-- [ ] Create tag `X.Y.Z`
+- [ ] Create tag `X.Y.Z` with `-m "Optique X.Y.Z"`
 - [ ] Add next version section to *CHANGES.md*
 - [ ] Bump version in *packages/core/deno.json*
 - [ ] Run `deno task check-versions --fix`
@@ -374,7 +377,7 @@ Checklist summary
 - [ ] Check out `main` branch
 - [ ] Update *CHANGES.md* release date
 - [ ] Commit with message "Release X.Y.0"
-- [ ] Create tag `X.Y.0`
+- [ ] Create tag `X.Y.0` with `-m "Optique X.Y.0"`
 - [ ] Add next version section to *CHANGES.md*
 - [ ] Bump version in *packages/core/deno.json*
 - [ ] Run `deno task check-versions --fix`
