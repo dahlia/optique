@@ -540,10 +540,34 @@ export function multiple<TValue, TState>(
         ? context.state.at(-1)!
         : parser.initialState;
 
-      return parser.suggest({
+      const suggestions = parser.suggest({
         ...context,
         state: innerState,
       }, prefix);
+
+      // Extract already-selected values from completed states to exclude them
+      // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
+      const selectedValues = new Set<string>();
+      for (const s of context.state) {
+        const completed = parser.complete(s);
+        if (completed.success) {
+          // Convert value to string for comparison with suggestion text
+          const valueStr = String(completed.value);
+          selectedValues.add(valueStr);
+        }
+      }
+
+      // Filter out suggestions that match already-selected values
+      if (selectedValues.size > 0) {
+        return Array.from(suggestions).filter((suggestion) => {
+          if (suggestion.kind === "literal") {
+            return !selectedValues.has(suggestion.text);
+          }
+          return true;
+        });
+      }
+
+      return suggestions;
     },
     getDocFragments(state: DocState<readonly TState[]>, defaultValue?) {
       const innerState: DocState<TState> = state.kind === "unavailable"
