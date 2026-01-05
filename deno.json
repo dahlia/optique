@@ -17,6 +17,7 @@
     "temporal"
   ],
   "exclude": [
+    ".claude/",
     ".github/",
     "docs"
   ],
