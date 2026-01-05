@@ -6,6 +6,15 @@ Version 0.8.7
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `multiple()` parser suggesting already-selected values in shell
+    completion.  Previously, when using `multiple(argument(choice(...)))` or
+    similar patterns, values that had already been selected would continue
+    to appear in completion suggestions.  Now, the `suggest()` method filters
+    out values that have already been parsed, providing a cleaner completion
+    experience.  [[#73]]
+
 
 Version 0.8.6
 -------------
@@ -233,6 +242,21 @@ parsing strategies.
     package.
 
 [LogTape]: https://logtape.org/
+
+
+Version 0.7.9
+-------------
+
+Released on January 5, 2026.
+
+### @optique/core
+
+ -  Fixed `multiple()` parser suggesting already-selected values in shell
+    completion.  Previously, when using `multiple(argument(choice(...)))` or
+    similar patterns, values that had already been selected would continue
+    to appear in completion suggestions.  Now, the `suggest()` method filters
+    out values that have already been parsed, providing a cleaner completion
+    experience.  [[#73]]
 
 
 Version 0.7.8
@@ -628,6 +652,23 @@ to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
 
 [Zod]: https://zod.dev/
 [#39]: https://github.com/dahlia/optique/issues/39
+
+
+Version 0.6.11
+--------------
+
+Released on January 5, 2026.
+
+### @optique/core
+
+ -  Fixed `multiple()` parser suggesting already-selected values in shell
+    completion.  Previously, when using `multiple(argument(choice(...)))` or
+    similar patterns, values that had already been selected would continue
+    to appear in completion suggestions.  Now, the `suggest()` method filters
+    out values that have already been parsed, providing a cleaner completion
+    experience.  [[#73]]
+
+[#73]: https://github.com/dahlia/optique/issues/73
 
 
 Version 0.6.10
