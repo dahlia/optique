@@ -33,8 +33,8 @@ Before starting any release:
 3.  Run tests to ensure everything passes:
 
     ~~~~ bash
-    deno task test
-    deno check
+    mise test
+    mise check
     ~~~~
 
 
@@ -101,7 +101,7 @@ They are created from `X.Y-maintenance` branches.
 3.  Run the version sync script:
 
     ~~~~ bash
-    deno task check-versions --fix
+    mise check-versions --fix
     ~~~~
 
 4.  Commit the version bump:
@@ -147,8 +147,8 @@ branches and eventually to `main`.
     c.  Run tests to verify:
 
         ~~~~ bash
-        deno task test
-        deno check
+        mise test
+        mise check
         ~~~~
 
     d.  Complete the merge commit (use default message).
@@ -168,8 +168,8 @@ branches and eventually to `main`.
     Resolve conflicts, run tests, and push:
 
     ~~~~ bash
-    deno task test
-    deno check
+    mise test
+    mise check
     git push origin main
     ~~~~
 
@@ -237,7 +237,7 @@ changes.  They are always created from the `main` branch with patch version 0.
 3.  Run the version sync script:
 
     ~~~~ bash
-    deno task check-versions --fix
+    mise check-versions --fix
     ~~~~
 
 4.  Commit the version bump:
@@ -291,7 +291,7 @@ git push origin 1.3.0 main
 5.  Run the version sync script:
 
     ~~~~ bash
-    deno task check-versions --fix
+    mise check-versions --fix
     ~~~~
 
 6.  Commit the version bump:
@@ -363,7 +363,7 @@ Checklist summary
 - [ ] Create tag `X.Y.Z`
 - [ ] Add next version section to *CHANGES.md*
 - [ ] Bump version in *packages/core/deno.json*
-- [ ] Run `deno task check-versions --fix`
+- [ ] Run `mise check-versions --fix`
 - [ ] Commit with message "Version bump\n\n[ci skip]"
 - [ ] Push tag and branch
 - [ ] Cascade merge to newer maintenance branches (if any)
@@ -377,13 +377,13 @@ Checklist summary
 - [ ] Create tag `X.Y.0`
 - [ ] Add next version section to *CHANGES.md*
 - [ ] Bump version in *packages/core/deno.json*
-- [ ] Run `deno task check-versions --fix`
+- [ ] Run `mise check-versions --fix`
 - [ ] Commit with message "Version bump\n\n[ci skip]"
 - [ ] Push tag and `main` branch
 - [ ] Create `X.Y-maintenance` branch from tag
 - [ ] Check out maintenance branch
 - [ ] Add patch version section to *CHANGES.md*
 - [ ] Bump version to X.Y.1 in *packages/core/deno.json*
-- [ ] Run `deno task check-versions --fix`
+- [ ] Run `mise check-versions --fix`
 - [ ] Commit with message "Version bump\n\n[ci skip]"
 - [ ] Push maintenance branch
