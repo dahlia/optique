@@ -64,6 +64,7 @@ const result = parse(parser, ["--log-level=debug"]);
 ~~~~
 
 Features:
+
  -  Case-insensitive parsing (`"DEBUG"`, `"Debug"`, `"debug"` all work)
  -  Valid levels: `"trace"`, `"debug"`, `"info"`, `"warning"`, `"error"`,
     `"fatal"`
@@ -96,6 +97,7 @@ parse(parser, ["-v", "-v", "-v"]);
 ~~~~
 
 Options:
+
  -  `short`: Short option name (default: `"-v"`)
  -  `long`: Long option name (default: `"--verbose"`)
  -  `baseLevel`: Starting log level (default: `"warning"`)
@@ -121,6 +123,7 @@ parse(parser, ["--debug"]);
 ~~~~
 
 Options:
+
  -  `short`: Short option name (default: `"-d"`)
  -  `long`: Long option name (default: `"--debug"`)
  -  `debugLevel`: Level when flag is present (default: `"debug"`)
@@ -185,22 +188,26 @@ const parser3 = object({
 Configuration options vary by level type:
 
 **`level: "option"`**:
+
  -  `long`: Long option name (default: `"--log-level"`)
  -  `short`: Short option name (default: `"-l"`)
  -  `default`: Default log level (default: `"info"`)
 
 **`level: "verbosity"`**:
+
  -  `short`: Short option name (default: `"-v"`)
  -  `long`: Long option name (default: `"--verbose"`)
  -  `baseLevel`: Base log level (default: `"warning"`)
 
 **`level: "debug"`**:
+
  -  `short`: Short option name (default: `"-d"`)
  -  `long`: Long option name (default: `"--debug"`)
  -  `debugLevel`: Level when flag is present (default: `"debug"`)
  -  `normalLevel`: Level when flag is absent (default: `"info"`)
 
 Common options:
+
  -  `output.enabled`: Whether to enable log output option (default: `true`)
  -  `output.long`: Long option name for output (default: `"--log-output"`)
  -  `groupLabel`: Label for option group in help text (default:

@@ -91,6 +91,7 @@ const result = await parseAsync(parser, ["main"]);
 ~~~~
 
 Options:
+
  -  `dir`: Git repository directory (defaults to current working directory)
  -  `metavar`: Metavar name for help text (default: `"BRANCH"`)
 
@@ -211,6 +212,7 @@ const parser = object({
 ~~~~
 
 The factory returns a `GitParsers` object with the following methods:
+
  -  `branch(options?)` - Same as `gitBranch()`
  -  `remoteBranch(remote, options?)` - Same as `gitRemoteBranch()`
  -  `tag(options?)` - Same as `gitTag()`

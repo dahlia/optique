@@ -1,4 +1,7 @@
-<img src="docs/public/optique.svg" width="128" height="58" align="right">
+<!-- markdownlint-disable MD033 MD041 MD045 -->
+<img src="docs/public/optique.svg" width="128" height="58" align="right"
+  alt="Optique logo">
+<!-- markdownlint-enable MD033 MD041 MD045 -->
 
 Optique: Type-safe combinatorial CLI parser for TypeScript
 ==========================================================
@@ -168,4 +171,3 @@ The following is a list of the available packages:
 [LogTape]: https://logtape.org/
 [Temporal]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal
 [Valibot]: https://valibot.dev/
-[Zod]: https://zod.dev/

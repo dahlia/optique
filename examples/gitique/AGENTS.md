@@ -57,10 +57,10 @@ examples/gitique/
 
  -  **`src/commands/*.ts`**: Each file exports a command parser and an
     `execute*()` function.  Commands demonstrate various Optique features:
-    -  `group()` and `merge()` for organizing help text
-    -  `choice()` for enumerated values
-    -  `withDefault()` for default values
-    -  `map()` for transforming parser results
+     -  `group()` and `merge()` for organizing help text
+     -  `choice()` for enumerated values
+     -  `withDefault()` for default values
+     -  `map()` for transforming parser results
 
  -  **`src/utils/git.ts`**: Wraps es-git library for repository operations
     including `getRepository()`, `addFile()`, `createCommit()`,

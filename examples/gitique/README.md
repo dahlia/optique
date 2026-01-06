@@ -70,6 +70,7 @@ pnpm install
 # For Deno (dependencies loaded automatically)
 ~~~~
 
+
 Usage
 -----
 
@@ -213,10 +214,11 @@ source ~/.bashrc.d/gitique.bash
 gitique completion zsh > ~/.zsh/completions/_gitique
 
 # Test completion
-gitique <TAB>                    # Shows: add, commit, diff, log, reset, status, help
+gitique <TAB>                    # Shows: add, commit, diff, log, ...
 gitique add --<TAB>              # Shows: --all, --force, --verbose, --help
 gitique commit --author <TAB>    # Shows available author suggestions
 ~~~~
+
 
 Architecture
 ------------
@@ -289,8 +291,9 @@ src/
     └── formatters.ts     # Output formatting functions
 ~~~~
 
+
 Example walkthrough
-------------------
+-------------------
 
 This example demonstrates key Optique patterns in a realistic CLI application:
 
