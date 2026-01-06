@@ -2431,6 +2431,173 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("compdef _myapp myapp"));
     });
 
+    it("should support completions (plural) command", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+      let completionShown = false;
+
+      const result = run(parser, "myapp", ["completions", "bash"], {
+        completion: {
+          mode: "command",
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.equal(result, "completion-shown");
+      assert.ok(completionShown);
+      assert.ok(completionOutput.includes("function _myapp"));
+    });
+
+    it("should support --completions (plural) option", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["--completions=bash"], {
+        completion: {
+          mode: "option",
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.ok(completionOutput.includes("function _myapp"));
+    });
+
+    it("should restrict to singular name when configured", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      // Singular command should work
+      let completionShown = false;
+      run(parser, "myapp", ["completion", "bash"], {
+        completion: {
+          mode: "command",
+          name: "singular",
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
+      assert.ok(completionShown);
+
+      // Plural command should NOT work (be treated as unknown command)
+      // Since unknown command handling depends on the parser, here it should fail as 'completions' is not defined in the user parser
+      let errorCalled = false;
+      try {
+        run(parser, "myapp", ["completions", "bash"], {
+          completion: {
+            mode: "command",
+            name: "singular",
+          },
+          onError: () => {
+            errorCalled = true;
+            return "error";
+          },
+          stderr: () => {},
+        });
+      } catch {
+        // ignore
+      }
+      assert.ok(errorCalled);
+    });
+
+    it("should restrict to plural name when configured", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      // Plural command should work
+      let completionShown = false;
+      run(parser, "myapp", ["completions", "bash"], {
+        completion: {
+          mode: "command",
+          name: "plural",
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
+      assert.ok(completionShown);
+
+      // Singular command should NOT work
+      let errorCalled = false;
+      try {
+        run(parser, "myapp", ["completion", "bash"], {
+          completion: {
+            mode: "command",
+            name: "plural",
+          },
+          onError: () => {
+            errorCalled = true;
+            return "error";
+          },
+          stderr: () => {},
+        });
+      } catch {
+        // ignore
+      }
+      assert.ok(errorCalled);
+    });
+
+    it("should respect name configuration for options", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      // Plural only configuration
+      // --completions should work
+      let completionShown = false;
+      run(parser, "myapp", ["--completions=bash"], {
+        completion: {
+          mode: "option",
+          name: "plural",
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
+      assert.ok(completionShown);
+
+      // --completion should NOT work (should be treated as unknown option)
+      let errorCalled = false;
+      try {
+        run(parser, "myapp", ["--completion=bash"], {
+          completion: {
+            mode: "option",
+            name: "plural",
+          },
+          onError: () => {
+            errorCalled = true;
+            return "error";
+          },
+          stderr: () => {},
+        });
+      } catch {
+        // ignore
+      }
+      assert.ok(errorCalled);
+    });
+
     it("should use --completion in generated script when mode is 'option'", () => {
       const parser = object({
         verbose: option("--verbose"),
@@ -2529,6 +2696,106 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(
         !completionOutput.includes("'completion'"),
         "Should not include 'completion' command in generated bash script",
+      );
+    });
+
+    it("should use --completions (plural) in generated script when name is 'plural' and mode is 'option' (Issue #53)", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["--completions", "fish"], {
+        completion: { mode: "option", name: "plural" },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      // Verify the generated script uses --completions (plural), not --completion
+      assert.ok(
+        completionOutput.includes("'--completions'"),
+        "Should include '--completions' (plural) in generated script when name is 'plural'",
+      );
+      assert.ok(
+        !completionOutput.includes("'--completion'"),
+        "Should not include '--completion' (singular) in generated script when name is 'plural'",
+      );
+    });
+
+    it("should use completions (plural) command in generated script when name is 'plural' and mode is 'command' (Issue #53)", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completions", "fish"], {
+        completion: { mode: "command", name: "plural" },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      // Verify the generated script uses completions (plural), not completion
+      assert.ok(
+        completionOutput.includes("'completions'"),
+        "Should include 'completions' (plural) command in generated script when name is 'plural'",
+      );
+      assert.ok(
+        !completionOutput.includes("'completion'"),
+        "Should not include 'completion' (singular) command in generated script when name is 'plural'",
+      );
+    });
+
+    it("should use --completion (singular) in generated script when name is 'singular' and mode is 'option'", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["--completion", "fish"], {
+        completion: { mode: "option", name: "singular" },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      // Verify the generated script uses --completion (singular)
+      assert.ok(
+        completionOutput.includes("'--completion'"),
+        "Should include '--completion' (singular) in generated script when name is 'singular'",
+      );
+      assert.ok(
+        !completionOutput.includes("'--completions'"),
+        "Should not include '--completions' (plural) in generated script when name is 'singular'",
+      );
+    });
+
+    it("should use completion (singular) command in generated script when name is 'singular' and mode is 'command'", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      run(parser, "myapp", ["completion", "fish"], {
+        completion: { mode: "command", name: "singular" },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      // Verify the generated script uses completion (singular)
+      assert.ok(
+        completionOutput.includes("'completion'"),
+        "Should include 'completion' (singular) command in generated script when name is 'singular'",
+      );
+      assert.ok(
+        !completionOutput.includes("'completions'"),
+        "Should not include 'completions' (plural) command in generated script when name is 'singular'",
       );
     });
   });

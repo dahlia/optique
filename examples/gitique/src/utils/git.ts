@@ -156,13 +156,157 @@ export function resetIndex(repo: Repository): void {
 }
 
 /**
- * Gets the status of files in the working directory.
+ * Represents a file's status in the working directory.
  */
-export function getStatus(_repo: Repository): Array<{
+export interface FileStatus {
   path: string;
-  status: string;
-}> {
-  // This would require implementing status checking with es-git
-  // For now, return empty array as placeholder
-  return [];
+  status: "Added" | "Deleted" | "Modified" | "Renamed" | "Copied" | "Untracked";
+  oldPath?: string;
+  staged: boolean;
+}
+
+/**
+ * Gets the status of files in the working directory.
+ * Returns both staged and unstaged changes.
+ */
+export function getStatus(repo: Repository): FileStatus[] {
+  const results: FileStatus[] = [];
+
+  try {
+    // Get HEAD tree for comparison
+    let headTree = null;
+    try {
+      headTree = repo.head().peelToTree();
+    } catch {
+      // No HEAD exists (empty repository)
+    }
+
+    // Get all changes (staged + unstaged) using diffTreeToWorkdirWithIndex
+    // This compares HEAD tree to working directory with index
+    if (headTree) {
+      const diff = repo.diffTreeToWorkdirWithIndex(headTree);
+      for (const delta of diff.deltas()) {
+        const path = delta.newFile().path();
+        if (path === null) continue;
+
+        results.push({
+          path,
+          status: delta.status() as FileStatus["status"],
+          oldPath: delta.status() === "Renamed"
+            ? (delta.oldFile().path() ?? undefined)
+            : undefined,
+          staged: false, // We can't distinguish staged/unstaged with this method
+        });
+      }
+    } else {
+      // For empty repository, get unstaged changes only
+      const unstagedDiff = repo.diffIndexToWorkdir();
+      for (const delta of unstagedDiff.deltas()) {
+        const path = delta.newFile().path();
+        if (path === null) continue;
+
+        results.push({
+          path,
+          status: delta.status() as FileStatus["status"],
+          oldPath: delta.status() === "Renamed"
+            ? (delta.oldFile().path() ?? undefined)
+            : undefined,
+          staged: false,
+        });
+      }
+    }
+  } catch (error) {
+    throw new Error(
+      `Failed to get status: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  return results;
+}
+
+/**
+ * Options for the getDiff function.
+ */
+export interface DiffOptions {
+  cached?: boolean;
+  commit?: string;
+  paths?: string[];
+}
+
+/**
+ * Result of a diff operation.
+ */
+export interface DiffResult {
+  text: string;
+  stats: {
+    filesChanged: number;
+    insertions: number;
+    deletions: number;
+  };
+  deltas: Array<{
+    path: string;
+    oldPath?: string;
+    status: string;
+  }>;
+}
+
+/**
+ * Gets the diff of changes in the repository.
+ */
+export function getDiff(
+  repo: Repository,
+  options: DiffOptions = {},
+): DiffResult {
+  try {
+    let diff;
+
+    if (options.cached) {
+      // Staged changes: compare HEAD tree to workdir with index
+      // This shows what would be committed
+      const headTree = repo.head().peelToTree();
+      diff = repo.diffTreeToWorkdirWithIndex(headTree);
+    } else if (options.commit) {
+      // Compare with specific commit
+      const commitObj = repo.getCommit(options.commit);
+      const commitTree = commitObj.tree();
+      diff = repo.diffTreeToWorkdirWithIndex(commitTree);
+    } else {
+      // Unstaged changes: index vs workdir
+      diff = repo.diffIndexToWorkdir();
+    }
+
+    const stats = diff.stats();
+    const deltas: DiffResult["deltas"] = [];
+
+    for (const delta of diff.deltas()) {
+      const path = delta.newFile().path();
+      if (path === null) continue;
+
+      deltas.push({
+        path,
+        oldPath: delta.status() === "Renamed"
+          ? (delta.oldFile().path() ?? undefined)
+          : undefined,
+        status: delta.status(),
+      });
+    }
+
+    return {
+      text: diff.print(),
+      stats: {
+        filesChanged: Number(stats.filesChanged),
+        insertions: Number(stats.insertions),
+        deletions: Number(stats.deletions),
+      },
+      deltas,
+    };
+  } catch (error) {
+    throw new Error(
+      `Failed to get diff: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 }

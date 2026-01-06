@@ -67,6 +67,8 @@ const REFERENCES = {
     { text: "@optique/core", link: "https://jsr.io/@optique/core/doc" },
     { text: "@optique/run", link: "https://jsr.io/@optique/run/doc" },
     { text: "@optique/temporal", link: "https://jsr.io/@optique/temporal/doc" },
+    { text: "@optique/valibot", link: "https://jsr.io/@optique/valibot/doc" },
+    { text: "@optique/zod", link: "https://jsr.io/@optique/zod/doc" },
   ],
 };
 

@@ -800,6 +800,8 @@ function logLevel(): ValueParser<string> {
       }
       return {
         success: false,
+        // Note: For proper formatting of choice lists, see the "Formatting choice lists"
+        // section in the Concepts guide on Messages
         error: message`Invalid log level: ${input}. Valid levels: ${levels.join(", ")}.`,
       };
     },

@@ -25,6 +25,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: "test",
         optionsTerminated: false,
+        usage: parser.usage,
       };
       const result = Array.from(parser.suggest(context, "any"));
       deepStrictEqual(result, []);
@@ -38,6 +39,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result1 = Array.from(parser.suggest(context, "--f"));
@@ -56,6 +58,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "-"));
@@ -71,6 +74,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--output"));
@@ -83,6 +87,7 @@ describe("Parser suggest() methods", () => {
         buffer: ["--format"],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "j"));
@@ -95,6 +100,7 @@ describe("Parser suggest() methods", () => {
         buffer: ["-v"],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "something"));
@@ -107,6 +113,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--format=j"));
@@ -123,6 +130,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--format="));
@@ -142,6 +150,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "-f=y"));
@@ -158,6 +167,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--output=json"));
@@ -172,6 +182,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--f"));
@@ -187,6 +198,7 @@ describe("Parser suggest() methods", () => {
         buffer: ["-f"],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "anything"));
@@ -201,6 +213,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "st"));
@@ -216,6 +229,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "test"));
@@ -233,6 +247,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "bu"));
@@ -250,6 +265,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "deploy"));
@@ -264,6 +280,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: ["matched", "build"],
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
@@ -280,6 +297,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: ["parsing", innerParser.initialState],
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
@@ -298,6 +316,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--"));
@@ -316,6 +335,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
@@ -334,6 +354,7 @@ describe("Parser suggest() methods", () => {
           output: parser.initialState.output,
         },
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--o"));
@@ -350,6 +371,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--"));
@@ -387,10 +409,12 @@ describe("Parser suggest() methods", () => {
             buffer: [],
             state: parserA.initialState,
             optionsTerminated: false,
+            usage: parserA.usage,
           },
           consumed: [],
         }],
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--f"));
@@ -405,6 +429,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
@@ -420,6 +445,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
@@ -433,6 +459,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: undefined,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
@@ -447,6 +474,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: [innerParser.initialState],
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--v"));
@@ -462,6 +490,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--p"));
@@ -475,6 +504,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: undefined,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--u"));
@@ -490,6 +520,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--n"));
@@ -503,6 +534,7 @@ describe("Parser suggest() methods", () => {
         buffer: ["--format"],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "j"));
@@ -518,6 +550,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--f"));
@@ -536,6 +569,7 @@ describe("Parser suggest() methods", () => {
           innerParser.initialState,
         ],
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--i"));
@@ -549,6 +583,7 @@ describe("Parser suggest() methods", () => {
         buffer: [],
         state: [],
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = Array.from(parser.suggest(context, "--f"));

@@ -236,6 +236,67 @@ Without colors (with quotes):
 Invalid files: "file1.txt" "file2.txt" "file3.txt".
 ~~~~
 
+### Formatting choice lists
+
+When displaying a list of valid choices (such as in error messages for `choice()`
+value parsers), each choice should be formatted individually so they appear as
+distinct values. This differs from `values()`, which is for user-provided
+consecutive values.
+
+For choice lists, format each option separately using a loop:
+
+~~~~ typescript twoslash
+import { type Message, message } from "@optique/core/message";
+
+const choices = ["error", "warn", "info", "debug"];
+const input = "invalid";
+
+// Format each choice individually
+let choicesList: Message = [];
+for (let i = 0; i < choices.length; i++) {
+  if (i > 0) {
+    choicesList = [...choicesList, ...message`, `];
+  }
+  choicesList = [...choicesList, ...message`${choices[i]}`];
+}
+
+const errorMsg = message`Invalid log level: ${input}. Valid levels: ${choicesList}.`;
+~~~~
+
+This ensures each choice appears with proper formatting:
+
+With colors:
+
+~~~~ ansi
+Invalid log level: invalid. Valid levels: [32merror[0m, [32mwarn[0m, [32minfo[0m, [32mdebug[0m.
+~~~~
+
+Without colors:
+
+~~~~ ansi
+Invalid log level: "invalid". Valid levels: "error", "warn", "info", "debug".
+~~~~
+
+> [!NOTE]
+> Do not use `.join(", ")` for choice lists, as this concatenates all choices
+> into a single value string, losing individual formatting:
+> `"error, warn, info, debug"` instead of `"error", "warn", "info", "debug"`.
+
+> [!CAUTION] Why doesn't Optique provide a built-in choice list formatter?
+>
+> Choice list formatting varies significantly across languages and locales,
+> making it impossible to provide a language-neutral formatter. Different
+> languages require different separators and conjunctions:
+>
+> - English: `"foo", "bar", "baz", and "qux"` or `"foo", "bar", "baz", or "qux"`
+> - Japanese: `"foo"、"bar"、"baz"、"qux"` (、instead of commas)
+> - Other languages may use different punctuation, conjunctions, or ordering
+>
+> By requiring manual formatting, Optique ensures you can properly localize
+> your choice lists according to your application's language requirements.
+> For internationalized applications, consider using a library like
+> `Intl.ListFormat` to format choice lists appropriately for each locale.
+
 ### Combined examples
 
 ~~~~ typescript twoslash
@@ -381,6 +442,62 @@ function createFileError(filename: string, action: string) {
 const configError = createFileError("config.json", "read");
 const validationError = message`${errorMessages.invalidFormat("JSON")} in configuration.`;
 ~~~~
+
+
+Line break handling
+-------------------
+
+*Available since Optique 0.7.0.*
+
+The `formatMessage()` function handles line breaks in a way similar to Markdown,
+distinguishing between soft breaks (word wrap points) and hard breaks (actual
+paragraph separations):
+
+### Single newlines (`\n`)
+
+Single newlines in `text()` terms are treated as soft breaks and converted to
+spaces. This allows you to write long messages across multiple lines in source
+code while rendering them as continuous text:
+
+~~~~ typescript twoslash
+import { message, text } from "@optique/core/message";
+
+// Long message written across multiple lines
+const msg = message`This is a very long error message that\nspans multiple lines in the source code\nbut renders as continuous text.`;
+~~~~
+
+This renders as:
+
+~~~~
+This is a very long error message that spans multiple lines in the source code but renders as continuous text.
+~~~~
+
+### Double newlines (`\n\n`)
+
+Double or more consecutive newlines are treated as hard breaks, creating actual
+paragraph separations in the output:
+
+~~~~ typescript twoslash
+import { message, text } from "@optique/core/message";
+
+// Message with paragraph break
+const msg = [
+  text("First paragraph with important information."),
+  text("\n\n"),
+  text("Second paragraph with additional details.")
+];
+~~~~
+
+This renders as:
+
+~~~~
+First paragraph with important information.
+Second paragraph with additional details.
+~~~~
+
+This distinction is particularly useful for multi-part error messages, such as
+those with suggestions or help text, ensuring proper spacing between the base
+error and additional information.
 
 
 Terminal output
@@ -808,3 +925,283 @@ const logLevel = option("--log-level", string(), {
 Custom error messages integrate seamlessly with Optique's structured message
 system, ensuring consistent formatting and proper terminal output regardless
 of whether colors are enabled or disabled.
+
+
+### Suggestion message customization
+
+*Available since Optique 0.7.0.*
+
+Optique's automatic "Did you mean?" suggestions can also be customized through
+the `errors` option. This allows you to control how suggestion messages are
+formatted or disable them entirely for specific parsers.
+
+#### Option and flag parsers
+
+The `option()` and `flag()` parsers support a `noMatch` error option that
+receives both the invalid input and an array of similar valid options:
+
+~~~~ typescript twoslash
+import { option, flag } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+import { message, values } from "@optique/core/message";
+
+// Custom suggestion format
+const portOption = option("--port", integer(), {
+  errors: {
+    noMatch: (invalidOption, suggestions) =>
+      suggestions.length > 0
+        ? message`Unknown option ${invalidOption}. Try: ${values(suggestions)}`
+        : message`Unknown option ${invalidOption}.`
+  }
+});
+
+// Disable suggestions by ignoring the suggestions parameter
+const quietOption = option("--quiet", {
+  errors: {
+    noMatch: (invalidOption, _suggestions) =>
+      message`Invalid option: ${invalidOption}`
+  }
+});
+
+// Use static message (no suggestions)
+const verboseFlag = flag("--verbose", {
+  errors: {
+    noMatch: message`Please use a valid flag.`
+  }
+});
+~~~~
+
+#### Command parser
+
+The `command()` parser's `notMatched` error option now receives suggestions
+as an optional third parameter:
+
+~~~~ typescript twoslash
+import { command } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { message, values } from "@optique/core/message";
+
+const addCmd = command("add", object({}), {
+  errors: {
+    notMatched: (expected, actual, suggestions) => {
+      if (actual == null) {
+        return message`Expected ${expected} command.`;
+      }
+      if (suggestions && suggestions.length > 0) {
+        return message`Unknown command ${actual}. Similar commands: ${values(suggestions)}`;
+      }
+      return message`Unknown command ${actual}.`;
+    }
+  }
+});
+~~~~
+
+#### Combinator and object parsers
+
+The `or()`, `longestMatch()`, and `object()` parsers support a `suggestions`
+error option that customizes how suggestions are formatted. This function
+receives the array of suggestions and returns a message to append to the
+error:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { message, values, text } from "@optique/core/message";
+
+// Custom suggestion formatting
+const config = object({
+  host: option("--host", string()),
+  port: option("--port", integer())
+}, {
+  errors: {
+    suggestions: (suggestions) =>
+      suggestions.length > 0
+        ? message`Available options: ${values(suggestions)}`
+        : []
+  }
+});
+
+// Disable suggestions entirely
+const strictConfig = object({
+  host: option("--host", string()),
+  port: option("--port", integer())
+}, {
+  errors: {
+    suggestions: () => [] // Return empty message to disable suggestions
+  }
+});
+~~~~
+
+The `suggestions` formatter is called with an array of similar valid
+option/command names found through Levenshtein distance matching. You can:
+
+ -  Format suggestions differently (e.g., comma-separated instead of list)
+ -  Add additional context or help text
+ -  Filter or reorder suggestions
+ -  Return an empty array to disable suggestions
+
+~~~~ typescript twoslash
+import { or } from "@optique/core/constructs";
+import { command } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { message, optionName, text, type Message } from "@optique/core/message";
+
+const addCmd = command("add", object({}));
+const commitCmd = command("commit", object({}));
+
+const parser = or(
+  addCmd,
+  commitCmd,
+  {
+    errors: {
+      suggestions: (suggestions) => {
+        if (suggestions.length === 0) return [];
+        if (suggestions.length === 1) {
+          return message`Did you mean ${optionName(suggestions[0])}?
+            Run with ${optionName("--help")} for usage.`;
+        }
+        // Format as comma-separated list
+        let parts: Message = [text("Did you mean: ")];
+        for (let i = 0; i < suggestions.length; i++) {
+          parts = i > 0
+            ? [...parts, text(", "), optionName(suggestions[i])]
+            : [...parts, optionName(suggestions[i])];
+        }
+        return [...parts, text("?")];
+      }
+    }
+  }
+);
+~~~~
+
+Note that if you provide a custom `unexpectedInput` error, suggestions will
+not be added automatically. You must use the `suggestions` formatter if you
+want suggestions with a custom `unexpectedInput` message.
+
+
+Automatic “Did you mean?” suggestions
+-------------------------------------
+
+*Available since Optique 0.7.0.*
+
+Optique automatically provides helpful “Did you mean?” suggestions when users
+make typos in option names or command names. This feature works transparently
+without requiring any configuration—when a user enters an invalid option or
+command that's similar to a valid one, Optique suggests the correct alternative:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+const parser = object({
+  verbose: option("--verbose"),
+  version: option("--version"),
+  verify: option("--verify"),
+});
+
+run(parser, { args: ["--verbos"] });  // User typo
+~~~~
+
+This produces the error:
+
+~~~~
+Error: No matched option for `--verbos`.
+Did you mean `--verbose`?
+~~~~
+
+### How it works
+
+The suggestion system uses [Levenshtein distance] to find similar
+names among available options and commands. It automatically:
+
+ -  Compares the invalid input against all valid option and command names
+ -  Finds matches within an edit distance of 3 characters
+ -  Filters candidates by distance ratio (at most 50% of input length)
+ -  Suggests up to 3 closest matches
+ -  Uses case-insensitive comparison for better user experience
+
+[Levenshtein distance]: https://en.wikipedia.org/wiki/Levenshtein_distance
+
+### Multiple suggestions
+
+When multiple similar options exist, Optique shows all relevant suggestions:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+const parser = object({
+  verbose: option("--verbose"),
+  version: option("--version"),
+  verify: option("--verify"),
+});
+
+run(parser, { args: ["--ver"] });  // Ambiguous typo
+~~~~
+
+This produces:
+
+~~~~
+Error: No matched option for `--ver`.
+Did you mean one of these?
+  `--verify`
+  `--version`
+  `--verbose`
+~~~~
+
+### Command name suggestions
+
+The feature works equally well with subcommand names:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { command } from "@optique/core/primitives";
+
+const addCmd = command("add", object({}));
+const commitCmd = command("commit", object({}));
+const parser = or(addCmd, commitCmd);
+~~~~
+
+When a user types `comit` instead of `commit`:
+
+~~~~
+Error: Expected command commit, but got comit.
+Did you mean `commit`?
+~~~~
+
+### Suggestion thresholds
+
+Suggestions are only shown when they're likely to be helpful. Optique won't
+suggest options that are too different from what the user typed:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+const parser = object({
+  verbose: option("--verbose"),
+  quiet: option("--quiet"),
+});
+
+run(parser, { args: ["--xyz"] });  // Too different
+~~~~
+
+This produces an error without suggestions:
+
+~~~~
+Error: Unexpected option or argument: `--xyz`.
+~~~~
+
+The thresholds ensure that suggestions are relevant without overwhelming users
+with unrelated options.
+
+### Integration with error messages
+
+Suggestions are automatically appended to error messages with proper formatting,
+including appropriate line breaks for readability. They work seamlessly with
+both colored and non-colored terminal output, and integrate with custom error
+messages you may have defined.

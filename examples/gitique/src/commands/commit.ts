@@ -1,10 +1,10 @@
-import { object } from "@optique/core/constructs";
+import { group, merge, object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
-import { print, printError } from "@optique/run";
+import { printError } from "@optique/run";
 import {
   addAllFiles,
   createCommit,
@@ -18,31 +18,66 @@ import {
 } from "../utils/formatters.ts";
 
 /**
- * Configuration for the `gitique commit` command.
- * Uses Optique's object() combinator to create a type-safe configuration.
+ * Commit options for the commit command.
+ * Demonstrates Optique's group() combinator for organizing help text.
  */
-const commitOptions = object({
-  command: constant("commit" as const),
-  message: optional(option("-m", "--message", string({ metavar: "MESSAGE" }), {
-    description: message`Commit message to use for this commit`,
-  })),
-  author: optional(option("--author", string({ metavar: "AUTHOR" }), {
-    description: message`Override the commit author (format: "Name <email>")`,
-  })),
-  all: option("-a", "--all", {
-    description:
-      message`Automatically stage all modified and deleted files before committing`,
+const commitOptions = group(
+  "Commit Options",
+  object({
+    message: optional(
+      option("-m", "--message", string({ metavar: "MESSAGE" }), {
+        description: message`Commit message to use for this commit`,
+      }),
+    ),
+    all: option("-a", "--all", {
+      description:
+        message`Automatically stage all modified and deleted files before committing`,
+    }),
+    allowEmpty: option("--allow-empty", {
+      description: message`Allow creating a commit with no changes`,
+    }),
   }),
-  allowEmpty: option("--allow-empty", {
-    description: message`Allow creating a commit with no changes`,
-  }),
-});
+);
 
 /**
- * The complete `gitique commit` command parser.
+ * Author options for the commit command.
  */
-export const commitCommand = command("commit", commitOptions, {
+const authorOptions = group(
+  "Author Options",
+  object({
+    author: optional(
+      option("--author", string({ metavar: "AUTHOR" }), {
+        description:
+          message`Override the commit author (format: "Name <email>")`,
+      }),
+    ),
+  }),
+);
+
+/**
+ * The complete commit command parser.
+ * Demonstrates:
+ * - group() for organizing options in help text
+ * - merge() for combining multiple option groups
+ * - optional() for optional values
+ */
+const commitOptionsParser = merge(
+  object({ command: constant("commit" as const) }),
+  commitOptions,
+  authorOptions,
+);
+
+/**
+ * The complete `gitique commit` command parser with documentation.
+ */
+export const commitCommand = command("commit", commitOptionsParser, {
+  brief: message`Record changes to the repository`,
   description: message`Record changes to the repository with a commit`,
+  footer: message`Examples:
+  gitique commit -m "Initial commit"
+  gitique commit -a -m "Fix bug"
+  gitique commit --author "John <john@example.com>" -m "Co-authored"
+  gitique commit --allow-empty -m "Empty commit"`,
 });
 
 /**
@@ -93,7 +128,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
 
     // Stage all files if --all option is used
     if (config.all) {
-      print(message`Staging all modified and deleted files...`);
+      console.log("Staging all modified and deleted files...");
       await addAllFiles(repo);
     }
 
@@ -118,18 +153,16 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
     );
 
     // Output success message
-    print(message`${formatCommitCreated(commitOid, commitMessage)}`);
+    console.log(formatCommitCreated(commitOid, commitMessage));
 
     // Show commit details
     const commit = repo.getCommit(commitOid);
     const author = commit.author();
-    print(message`Author: ${author.name} <${author.email}>`);
-    print(message`Date: ${new Date().toISOString()}`);
+    console.log(`Author: ${author.name} <${author.email}>`);
+    console.log(`Date: ${new Date().toISOString()}`);
 
     if (config.all) {
-      print(
-        message`${formatSuccess("Changes automatically staged and committed")}`,
-      );
+      console.log(formatSuccess("Changes automatically staged and committed"));
     }
   } catch (error) {
     printError(

@@ -349,6 +349,72 @@ const flexibleConfig = or(
 );
 ~~~~
 
+### Error message customization
+
+*This feature is available since Optique 0.9.0.*
+
+The `or()` parser generates contextual error messages by analyzing what types of
+inputs are expected (options, commands, or arguments). You can customize these
+messages using the `errors.noMatch` option, which supports both static messages
+and dynamic functions for advanced use cases like internationalization:
+
+~~~~ typescript twoslash
+import { message, or } from "@optique/core";
+import { command, constant } from "@optique/core/primitives";
+// ---cut-before---
+// Static custom error message
+const parser1 = or(
+  command("add", constant("add")),
+  command("remove", constant("remove")),
+  {
+    errors: {
+      noMatch: message`Invalid command. Please use 'add' or 'remove'.`
+    }
+  }
+);
+
+// Dynamic error message for internationalization
+const parser2 = or(
+  command("add", constant("add")),
+  command("remove", constant("remove")),
+  {
+    errors: {
+      noMatch: ({ hasOptions, hasCommands, hasArguments }) => {
+        if (hasCommands && !hasOptions && !hasArguments) {
+          return message`일치하는 명령을 찾을 수 없습니다.`; // Korean
+        }
+        return message`잘못된 입력입니다.`;
+      }
+    }
+  }
+);
+~~~~
+
+The function form receives a `NoMatchContext` object with three boolean flags:
+
+ -  `hasOptions`: Whether any parsers expect options
+ -  `hasCommands`: Whether any parsers expect commands
+ -  `hasArguments`: Whether any parsers expect arguments
+
+This enables precise, context-aware error messages. For example, if all parsers
+expect only commands, you can show "No matching command found" instead of the
+generic "No matching option or command found."
+
+**Default behavior** (when no custom error is provided):
+
+| Context                          | Default error message                           |
+| -------------------------------- | ----------------------------------------------- |
+| Only arguments expected          | `Missing required argument.`                    |
+| Only commands expected           | `No matching command found.`                    |
+| Only options expected            | `No matching option found.`                     |
+| Commands and options expected    | `No matching option or command found.`          |
+| Arguments and options expected   | `No matching option or argument found.`         |
+| Arguments and commands expected  | `No matching command or argument found.`        |
+| All three types expected         | `No matching option, command, or argument found.` |
+
+The default messages automatically adapt to your parser structure, but you can
+override them for custom formatting or localization needs.
+
 
 `merge()` parser
 ----------------
@@ -1289,5 +1355,93 @@ const inputOutput = group(
 // Each group appears as a distinct section in help text,
 // making the CLI interface much more approachable
 ~~~~
+
+
+Duplicate option detection
+---------------------------
+
+Optique automatically detects and prevents duplicate option names within parser
+combinators to avoid ambiguous behavior. When the same option name appears in
+multiple fields or parsers, an error is raised at parse time.
+
+### Detected duplicates
+
+The `object()`, `tuple()`, and `merge()` combinators validate that option names
+are unique across their child parsers:
+
+~~~~ typescript twoslash
+import { object, option } from "@optique/core";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+// ❌ This will error - duplicate "-v" option
+const parser = object({
+  verbose: option("-v", "--verbose"),
+  version: option("-v", "--version"),  // Duplicate: -v
+});
+
+const result = parse(parser, ["-v"]);
+// Error: Duplicate option name `-v` found in fields: "verbose" "version".
+//        Each option name must be unique within a parser combinator.
+~~~~
+
+This applies to nested structures as well:
+
+~~~~ typescript twoslash
+import { object, option } from "@optique/core";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+// ❌ Nested duplicate detected
+const parser = object({
+  opts: object({
+    verbose: option("-v"),
+  }),
+  flags: object({
+    version: option("-v"),  // Duplicate across nested objects
+  }),
+});
+~~~~
+
+### Allowed duplicates in `or()`
+
+The `or()` combinator allows duplicate option names because branches are
+mutually exclusive—only one branch can match:
+
+~~~~ typescript twoslash
+import { or, option } from "@optique/core";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+// ✅ This is valid - branches are mutually exclusive
+const parser = or(
+  option("-v", "--verbose"),
+  option("-v", "--version"),
+);
+
+const result = parse(parser, ["-v"]);
+// First matching branch wins
+~~~~
+
+### Opting out with `allowDuplicates`
+
+For advanced use cases, you can disable duplicate detection using the
+`allowDuplicates` option:
+
+~~~~ typescript twoslash
+import { object, option } from "@optique/core";
+import { parse } from "@optique/core/parser";
+// ---cut-before---
+const parser = object({
+  verbose: option("-v", "--verbose"),
+  version: option("-v", "--version"),
+}, { allowDuplicates: true });
+
+const result = parse(parser, ["-v"]);
+// Succeeds - first parser wins
+~~~~
+
+> [!CAUTION]
+> Using `allowDuplicates` can lead to unpredictable behavior where the first
+> matching parser consumes the option and subsequent parsers receive their
+> default values. Only use this option when you fully understand the
+> implications.
 
 <!-- cSpell: ignore myapp -->

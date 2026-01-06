@@ -31,16 +31,21 @@ Gitique implements core Git commands with full type safety:
 
  -  **`add`** — Stage files for commit with `--all` and `--force` options
  -  **`commit`** — Create commits with messages, custom authors, and staging
+ -  **`diff`** — Show changes with various display modes (patch, stat, name-only)
  -  **`log`** — View commit history with filtering, formatting, and search
  -  **`reset`** — Reset repository state with soft/mixed/hard modes
+ -  **`status`** — Show working tree status in long, short, or porcelain format
 
 This example demonstrates Optique's key capabilities:
 
  -  *Command combinators*: `command()`, `or()`, `object()` for structured CLIs
+ -  *Option grouping*: `group()` and `merge()` for organized help text
  -  *Option parsing*: `option()`, `optional()`, `multiple()` with type inference
- -  *Value parsers*: `string()`, `integer()` with validation and metadata
+ -  *Value parsers*: `string()`, `integer()`, `choice()` with validation
+ -  *Default values*: `withDefault()` with automatic help text display
+ -  *Result transformation*: `map()` for shorthand flag handling
  -  *Help generation*: Automatic `--help` and `help` command support
- -  *Shell completion*: Built-in completion support for Bash and zsh
+ -  *Shell completion*: Built-in completion support for Bash, zsh, fish, and Nushell
  -  *Error handling*: User-friendly error messages with usage information
 
 
@@ -132,6 +137,43 @@ gitique log --since "2024-01-01" --until "2024-12-31"
 gitique log --grep "feature"
 ~~~~
 
+**Checking status:**
+
+~~~~ bash
+# Show full status
+gitique status
+
+# Show short format
+gitique status --short
+gitique status -s
+
+# Show machine-readable format
+gitique status --porcelain
+
+# Show branch information
+gitique status -b
+~~~~
+
+**Viewing changes:**
+
+~~~~ bash
+# Show unstaged changes
+gitique diff
+
+# Show staged changes
+gitique diff --cached
+gitique diff --staged
+
+# Show change statistics
+gitique diff --stat
+
+# Show only changed file names
+gitique diff --name-only
+
+# Show file names with status
+gitique diff --name-status
+~~~~
+
 **Resetting changes:**
 
 ~~~~ bash
@@ -171,7 +213,7 @@ source ~/.bashrc.d/gitique.bash
 gitique completion zsh > ~/.zsh/completions/_gitique
 
 # Test completion
-gitique <TAB>                    # Shows: add, commit, log, reset, help
+gitique <TAB>                    # Shows: add, commit, diff, log, reset, status, help
 gitique add --<TAB>              # Shows: --all, --force, --verbose, --help
 gitique commit --author <TAB>    # Shows available author suggestions
 ~~~~
@@ -205,8 +247,10 @@ type AddConfig = InferValue<typeof addOptions>;
 const parser = or(
   addCommand,      // InferValue = AddConfig
   commitCommand,   // InferValue = CommitConfig
+  diffCommand,     // InferValue = DiffConfig
   logCommand,      // InferValue = LogConfig
   resetCommand,    // InferValue = ResetConfig
+  statusCommand,   // InferValue = StatusConfig
 );
 
 // Type-safe command dispatch
@@ -236,8 +280,10 @@ src/
 ├── commands/
 │   ├── add.ts            # git add implementation
 │   ├── commit.ts         # git commit implementation
+│   ├── diff.ts           # git diff implementation
 │   ├── log.ts            # git log implementation
-│   └── reset.ts          # git reset implementation
+│   ├── reset.ts          # git reset implementation
+│   └── status.ts         # git status implementation
 └── utils/
     ├── git.ts            # es-git wrapper utilities
     └── formatters.ts     # Output formatting functions
@@ -274,18 +320,49 @@ const result = run(parser);
 // TypeScript infers: AddConfig | CommitConfig
 ~~~~
 
-### 2. Type-safe execution
+### 2. Option grouping with defaults
+
+~~~~ typescript
+import { group, merge, object } from "@optique/core/constructs";
+import { map, withDefault } from "@optique/core/modifiers";
+import { choice } from "@optique/core/valueparser";
+
+const formatChoices = ["oneline", "short", "medium", "full"] as const;
+
+// Group related options for organized help text
+const displayOptions = group("Display Options", object({
+  format: withDefault(
+    option("--format", choice(formatChoices)),
+    "medium" as const,
+  ),
+  oneline: option("--oneline"),
+}));
+
+// Use map() to handle shorthand flags
+const logParser = map(
+  merge(
+    object({ command: constant("log" as const) }),
+    displayOptions,
+  ),
+  (result) => ({
+    ...result,
+    format: result.oneline ? "oneline" : result.format,
+  }),
+);
+~~~~
+
+### 3. Type-safe execution
 
 ~~~~ typescript
 // Compiler ensures exhaustive handling
 switch (result.command) {
   case "add":
-    print(message`Adding ${result.files.length.toString()} files.`);
-    if (result.all) print(message`Adding all files.`);
+    console.log(`Adding ${result.files.length} files.`);
+    if (result.all) console.log("Adding all files.");
     break;
   case "commit":
-    print(message`Committing: ${result.message}.`);
-    if (result.author) print(message`Author: ${result.author}.`);
+    console.log(`Committing: ${result.message}.`);
+    if (result.author) console.log(`Author: ${result.author}.`);
     break;
   default:
     const _exhaustive: never = result; // Compilation error if missing cases
@@ -331,14 +408,18 @@ What this example teaches
 
  1. *Parser composition*: How Optique's combinators create complex, type-safe
     CLI interfaces
- 2. *Discriminated unions*: Using `constant()` parsers for type-safe command
+ 2. *Option organization*: Using `group()` and `merge()` to structure help text
+    into logical sections
+ 3. *Discriminated unions*: Using `constant()` parsers for type-safe command
     identification and dispatch
- 3. *Multi-runtime compatibility*: Single codebase supporting Deno, Node.js,
+ 4. *Default values*: Using `withDefault()` to provide defaults shown in help
+ 5. *Shorthand patterns*: Using `map()` to transform results for flag aliases
+ 6. *Multi-runtime compatibility*: Single codebase supporting Deno, Node.js,
     and Bun
- 4. *Real-world integration*: Connecting type-safe parsers with external
+ 7. *Real-world integration*: Connecting type-safe parsers with external
     libraries (es-git)
- 5. *Error handling*: Graceful error handling with user-friendly messages
- 6. *Help generation*: Automatic documentation from parser definitions
+ 8. *Error handling*: Graceful error handling with user-friendly messages
+ 9. *Help generation*: Automatic documentation from parser definitions
 
 
 Extending this example
@@ -346,7 +427,7 @@ Extending this example
 
 Potential improvements and additions:
 
- 1. *Add more commands*: `branch`, `merge`, `status`, `diff`
+ 1. *Add more commands*: `branch`, `merge`, `checkout`, `stash`
  2. *Enhanced Git integration*: More complete es-git feature usage
  3. *Configuration*: Support for Git config files and settings
  4. *Performance*: Optimize for large repositories

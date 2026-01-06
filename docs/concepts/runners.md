@@ -168,6 +168,7 @@ const result = run(parser, "myapp", ["--name", "test"], {
   },
   completion: {          // Shell completion functionality
     mode: "both",        // "command" | "option" | "both"
+    name: "plural",      // "singular" | "plural" | "both"
   },
   aboveError: "help",    // Show full help before error messages
   stderr: (text) => {    // Custom error output handler
@@ -383,7 +384,9 @@ const config = run(parser, {
 });
 ~~~~
 
-The `completion` modes control how completion is triggered:
+### Completion modes
+
+The `mode` option controls how completion is triggered:
 
 `"command"`
 :   Completion via subcommand (`myapp completion bash`)
@@ -393,6 +396,38 @@ The `completion` modes control how completion is triggered:
 
 `"both"`
 :   Both patterns supported
+
+### Naming conventions
+
+*This API is available since Optique 0.7.0.*
+
+You can configure whether to use singular (`completion`), plural (`completions`),
+or both naming conventions for the completion command and option:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { run } from "@optique/run";
+
+const parser = object({});
+
+const config = run(parser, {
+  completion: {
+    mode: "both",
+    name: "plural", // Use "completions" and "--completions"
+  }
+});
+~~~~
+
+The `name` option accepts:
+
+`"singular"`
+:   Use `completion` command and `--completion` option.
+
+`"plural"`
+:   Use `completions` command and `--completions` option.
+
+`"both"` (default)
+:   Use both singular and plural forms.
 
 Users can generate and install completion scripts:
 

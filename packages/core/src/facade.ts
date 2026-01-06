@@ -26,9 +26,16 @@ import {
   type Parser,
   suggest,
 } from "./parser.ts";
-import { argument, command, constant, flag, option } from "./primitives.ts";
-import { formatUsage } from "./usage.ts";
-import { string } from "./valueparser.ts";
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  option,
+  type OptionOptions,
+} from "./primitives.ts";
+import { formatUsage, type OptionName } from "./usage.ts";
+import { string, type ValueParser } from "./valueparser.ts";
 
 /**
  * Helper types for parser generation
@@ -123,57 +130,91 @@ function createCompletionParser(
   mode: "command" | "option" | "both",
   programName: string,
   availableShells: Record<string, ShellCompletion>,
+  name: "singular" | "plural" | "both" = "both",
 ): CompletionParsers {
   const shellList: MessageTerm[] = [];
   for (const shell in availableShells) {
     if (shellList.length > 0) shellList.push(text(", "));
     shellList.push(value(shell));
   }
-  const completionCommand = command(
-    "completion",
-    object({
-      shell: optional(
-        argument(string({ metavar: "SHELL" }), {
-          description:
-            message`Shell type (${shellList}). Generate completion script when used alone, or provide completions when followed by arguments.`,
-        }),
-      ),
-      args: multiple(
-        argument(string({ metavar: "ARG" }), {
-          description:
-            message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
-        }),
-      ),
-    }),
-    {
-      brief: message`Generate shell completion script or provide completions.`,
-      description:
-        message`Generate shell completion script or provide completions.`,
-      footer: message`Examples:
-  Bash:       ${commandLine(`eval "$(${programName} completion bash)"`)}
-  zsh:        ${commandLine(`eval "$(${programName} completion zsh)"`)}
-  fish:       ${commandLine(`eval "$(${programName} completion fish)"`)}
-  PowerShell: ${
-        commandLine(
-          `${programName} completion pwsh > ${programName}-completion.ps1; . ./${programName}-completion.ps1`,
-        )
-      }
-  Nushell:    ${
-        commandLine(
-          `${programName} completion nu | save ${programName}-completion.nu; source ./${programName}-completion.nu`,
-        )
-      }
-`,
-    },
-  );
+  const completionInner = object({
+    shell: optional(
+      argument(string({ metavar: "SHELL" }), {
+        description:
+          message`Shell type (${shellList}). Generate completion script when used alone, or provide completions when followed by arguments.`,
+      }),
+    ),
+    args: multiple(
+      argument(string({ metavar: "ARG" }), {
+        description:
+          message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+      }),
+    ),
+  });
 
-  const completionOption = option(
-    "--completion",
+  const commandName = name === "plural" ? "completions" : "completion";
+
+  const completionCommandConfig = {
+    brief: message`Generate shell completion script or provide completions.`,
+    description:
+      message`Generate shell completion script or provide completions.`,
+    footer: message`Examples:
+  Bash:       ${commandLine(`eval "$(${programName} ${commandName} bash)"`)}
+  zsh:        ${commandLine(`eval "$(${programName} ${commandName} zsh)"`)}
+  fish:       ${commandLine(`eval "$(${programName} ${commandName} fish)"`)}
+  PowerShell: ${
+      commandLine(
+        `${programName} ${commandName} pwsh > ${programName}-completion.ps1; . ./${programName}-completion.ps1`,
+      )
+    }
+  Nushell:    ${
+      commandLine(
+        `${programName} ${commandName} nu | save ${programName}-completion.nu; source ./${programName}-completion.nu`,
+      )
+    }
+`,
+  };
+
+  const completionCommands: Parser<unknown, unknown>[] = [];
+  if (name === "singular" || name === "both") {
+    completionCommands.push(
+      command("completion", completionInner, completionCommandConfig),
+    );
+  }
+  if (name === "plural" || name === "both") {
+    completionCommands.push(
+      command("completions", completionInner, completionCommandConfig),
+    );
+  }
+
+  const completionCommand = (longestMatch as (
+    ...parsers: Parser<unknown, unknown>[]
+  ) => Parser<
+    { shell: string | undefined; args: readonly string[] },
+    unknown
+  >)(...completionCommands);
+
+  const completionOptionNames: OptionName[] = [];
+  if (name === "singular" || name === "both") {
+    completionOptionNames.push("--completion");
+  }
+  if (name === "plural" || name === "both") {
+    completionOptionNames.push("--completions");
+  }
+
+  const completionOptionArgs: [
+    ...OptionName[],
+    ValueParser<string>,
+    OptionOptions,
+  ] = [
+    ...completionOptionNames,
     string({ metavar: "SHELL" }),
     {
       description: message`Generate shell completion script.`,
     },
-  );
+  ];
+
+  const completionOption = option<string>(...completionOptionArgs);
 
   switch (mode) {
     case "command":
@@ -707,6 +748,17 @@ export interface RunOptions<THelp, TError> {
     readonly mode?: "command" | "option" | "both";
 
     /**
+     * Determines whether to use singular or plural naming for completion command/option.
+     *
+     * - `"singular"`: Use `completion` / `--completion`
+     * - `"plural"`: Use `completions` / `--completions`
+     * - `"both"`: Use both singular and plural forms
+     *
+     * @default `"both"`
+     */
+    readonly name?: "singular" | "plural" | "both";
+
+    /**
      * Available shell completions. By default, includes `bash`, `fish`, `nu`,
      * `pwsh`, and `zsh`. You can provide additional custom shell completions or
      * override the defaults.
@@ -802,6 +854,7 @@ function handleCompletion<THelp, TError>(
   colors?: boolean,
   maxWidth?: number,
   completionMode?: "command" | "option" | "both",
+  completionName?: "singular" | "plural" | "both",
 ): THelp | TError {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -844,9 +897,10 @@ function handleCompletion<THelp, TError>(
 
   if (args.length === 0) {
     // Generate completion script
+    const usePlural = completionName === "plural";
     const completionArg = completionMode === "option"
-      ? "--completion"
-      : "completion";
+      ? (usePlural ? "--completions" : "--completion")
+      : (usePlural ? "completions" : "completion");
     const script = shell.generateScript(programName, [
       completionArg,
       shellName,
@@ -934,6 +988,7 @@ export function run<
 
   // Extract completion configuration
   const completionMode = options.completion?.mode ?? "both";
+  const completionName = options.completion?.name ?? "both";
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
 
   // Get available shells (defaults + user-provided)
@@ -964,7 +1019,12 @@ export function run<
   // Completion parsers for help generation only (not for actual parsing)
   const completionParsers = completion === "none"
     ? { completionCommand: null, completionOption: null }
-    : createCompletionParser(completion, programName, availableShells);
+    : createCompletionParser(
+      completion,
+      programName,
+      availableShells,
+      completionName,
+    );
 
   // Early return for completion requests (avoids parser conflicts)
   // Exception: if --help is present, let the parser handle it
@@ -974,7 +1034,13 @@ export function run<
     // Handle completion command format: "completion <shell> [args...]"
     if (
       (completionMode === "command" || completionMode === "both") &&
-      args.length >= 1 && args[0] === "completion" &&
+      args.length >= 1 &&
+      ((completionName === "singular" || completionName === "both"
+        ? args[0] === "completion"
+        : false) ||
+        (completionName === "plural" || completionName === "both"
+          ? args[0] === "completions"
+          : false)) &&
       !hasHelpOption // Let parser handle "completion --help"
     ) {
       return handleCompletion(
@@ -990,6 +1056,7 @@ export function run<
         colors,
         maxWidth,
         completionMode,
+        completionName,
       );
     }
 
@@ -997,8 +1064,17 @@ export function run<
     if (completionMode === "option" || completionMode === "both") {
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
-        if (arg.startsWith("--completion=")) {
-          const shell = arg.slice("--completion=".length);
+        const singularMatch =
+          completionName === "singular" || completionName === "both"
+            ? arg.startsWith("--completion=")
+            : false;
+        const pluralMatch =
+          completionName === "plural" || completionName === "both"
+            ? arg.startsWith("--completions=")
+            : false;
+
+        if (singularMatch || pluralMatch) {
+          const shell = arg.slice(arg.indexOf("=") + 1);
           const completionArgs = args.slice(i + 1);
           return handleCompletion(
             [shell, ...completionArgs],
@@ -1013,24 +1089,40 @@ export function run<
             colors,
             maxWidth,
             completionMode,
+            completionName,
           );
-        } else if (arg === "--completion" && i + 1 < args.length) {
-          const shell = args[i + 1];
-          const completionArgs = args.slice(i + 2);
-          return handleCompletion(
-            [shell, ...completionArgs],
-            programName,
-            parser,
-            completionParsers.completionCommand,
-            stdout,
-            stderr,
-            onCompletion,
-            onError,
-            availableShells,
-            colors,
-            maxWidth,
-            completionMode,
-          );
+        } else {
+          const singularMatchExact =
+            completionName === "singular" || completionName === "both"
+              ? arg === "--completion"
+              : false;
+          const pluralMatchExact =
+            completionName === "plural" || completionName === "both"
+              ? arg === "--completions"
+              : false;
+
+          if (
+            (singularMatchExact || pluralMatchExact) &&
+            i + 1 < args.length
+          ) {
+            const shell = args[i + 1];
+            const completionArgs = args.slice(i + 2);
+            return handleCompletion(
+              [shell, ...completionArgs],
+              programName,
+              parser,
+              completionParsers.completionCommand,
+              stdout,
+              stderr,
+              onCompletion,
+              onError,
+              availableShells,
+              colors,
+              maxWidth,
+              completionMode,
+              completionName,
+            );
+          }
         }
       }
     }
@@ -1080,7 +1172,9 @@ export function run<
       // Check if user is requesting help for a specific meta-command
       const requestedCommand = classified.commands[0];
       if (
-        requestedCommand === "completion" && completionAsCommand &&
+        (requestedCommand === "completion" ||
+          requestedCommand === "completions") &&
+        completionAsCommand &&
         completionParsers.completionCommand
       ) {
         // User wants help for completion command specifically
@@ -1143,7 +1237,13 @@ export function run<
       if (doc != null) {
         // Augment the doc page with provided options
         // But if showing help for a specific meta-command, don't override its description
-        const isMetaCommandHelp = requestedCommand === "completion" ||
+        const isMetaCommandHelp = (completionName === "singular" ||
+            completionName === "both"
+          ? requestedCommand === "completion"
+          : false) ||
+          (completionName === "plural" || completionName === "both"
+            ? requestedCommand === "completions"
+            : false) ||
           requestedCommand === "help" ||
           requestedCommand === "version";
         const augmentedDoc = {

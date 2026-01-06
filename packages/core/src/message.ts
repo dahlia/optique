@@ -330,10 +330,46 @@ export function formatMessage(
     const wordPattern = /\s*\S+\s*/g;
     for (const term of msg) {
       if (term.type === "text") {
-        while (true) {
-          const match = wordPattern.exec(term.text);
-          if (match == null) break;
-          yield { text: match[0], width: match[0].length };
+        // Handle explicit line breaks:
+        // - Single \n: treated as space (soft break, word wrap friendly)
+        // - Double \n\n or more: treated as hard line break (paragraph break)
+        if (term.text.includes("\n\n")) {
+          // Split on double newlines to find paragraph breaks
+          const paragraphs = term.text.split(/\n\n+/);
+          for (
+            let paragraphIndex = 0;
+            paragraphIndex < paragraphs.length;
+            paragraphIndex++
+          ) {
+            if (paragraphIndex > 0) {
+              // Yield hard line break with -1 as special marker
+              yield { text: "\n", width: -1 };
+            }
+
+            // Within each paragraph, replace single \n with space
+            const paragraph = paragraphs[paragraphIndex].replace(/\n/g, " ");
+            wordPattern.lastIndex = 0; // Reset regex state
+            while (true) {
+              const match = wordPattern.exec(paragraph);
+              if (match == null) break;
+              yield { text: match[0], width: match[0].length };
+            }
+          }
+        } else {
+          // Text without double newlines: replace single \n with space
+          const normalizedText = term.text.replace(/\n/g, " ");
+
+          // Handle whitespace-only text specially to preserve spaces
+          if (normalizedText.trim() === "" && normalizedText.length > 0) {
+            yield { text: " ", width: 1 };
+          } else {
+            wordPattern.lastIndex = 0;
+            while (true) {
+              const match = wordPattern.exec(normalizedText);
+              if (match == null) break;
+              yield { text: match[0], width: match[0].length };
+            }
+          }
         }
       } else if (term.type === "optionName") {
         const name = useQuotes ? `\`${term.optionName}\`` : term.optionName;
@@ -418,6 +454,14 @@ export function formatMessage(
   let output = "";
   let totalWidth = 0;
   for (const { text, width } of stream()) {
+    // Handle hard line breaks (marked with width -1)
+    if (width === -1) {
+      output += text; // Add the newline
+      totalWidth = 0; // Reset width tracking
+      continue;
+    }
+
+    // Handle automatic word wrapping
     if (options.maxWidth != null && totalWidth + width > options.maxWidth) {
       output += "\n";
       totalWidth = 0;

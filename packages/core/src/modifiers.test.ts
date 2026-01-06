@@ -42,6 +42,7 @@ describe("optional", () => {
       buffer: ["-v"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -63,6 +64,7 @@ describe("optional", () => {
       buffer: ["-n", "Alice"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -85,6 +87,7 @@ describe("optional", () => {
       buffer: ["--help"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -167,6 +170,7 @@ describe("optional", () => {
       buffer: [] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -188,6 +192,7 @@ describe("optional", () => {
       buffer: ["-v"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: true,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -208,6 +213,7 @@ describe("optional", () => {
       buffer: ["-vd"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -236,6 +242,7 @@ describe("optional", () => {
       buffer: ["-n", "test"] as readonly string[],
       state: undefined,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -474,6 +481,7 @@ describe("optional", () => {
       buffer: ["--", "positional"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -507,6 +515,7 @@ describe("withDefault", () => {
       buffer: ["-v"] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -565,6 +574,7 @@ describe("withDefault", () => {
       buffer: ["-n", "Alice"] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -590,6 +600,7 @@ describe("withDefault", () => {
       buffer: ["--help"] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -640,6 +651,7 @@ describe("withDefault", () => {
       buffer: [] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -715,6 +727,7 @@ describe("withDefault", () => {
       buffer: ["-n", "test"] as readonly string[],
       state: undefined,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -1132,6 +1145,7 @@ describe("withDefault", () => {
       buffer: ["--", "positional"] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -1196,6 +1210,7 @@ describe("map", () => {
       buffer: ["-v"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1218,6 +1233,7 @@ describe("map", () => {
       buffer: ["-n", "alice"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1239,6 +1255,7 @@ describe("map", () => {
       buffer: ["-p", "8080"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1260,6 +1277,7 @@ describe("map", () => {
       buffer: ["input.txt"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1281,6 +1299,7 @@ describe("map", () => {
       buffer: [] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1302,6 +1321,7 @@ describe("map", () => {
       buffer: ["--help"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1730,6 +1750,7 @@ describe("multiple", () => {
       buffer: ["-l", "en", "-l", "fr"] as readonly string[],
       state: multipleParser.initialState,
       optionsTerminated: false,
+      usage: multipleParser.usage,
     };
 
     let parseResult = multipleParser.parse(context);
@@ -1907,6 +1928,7 @@ describe("multiple", () => {
       buffer: ["arg1"] as readonly string[],
       state: [],
       optionsTerminated: false,
+      usage: multipleParser.usage,
     };
 
     const parseResult1 = multipleParser.parse(context1);
@@ -2250,6 +2272,7 @@ describe("multiple() error customization", () => {
       buffer: ["--flag=test"],
       state: { success: true, value: false },
       optionsTerminated: false,
+      usage: parser.usage,
     });
 
     assert.ok(!result.success);
@@ -2274,6 +2297,7 @@ describe("multiple() error customization", () => {
       buffer: ["first"],
       state: undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     });
     assert.ok(firstResult.success);
 
@@ -2282,6 +2306,7 @@ describe("multiple() error customization", () => {
       buffer: ["second"],
       state: firstResult.success ? firstResult.next.state : undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     });
 
     assert.ok(!secondResult.success);

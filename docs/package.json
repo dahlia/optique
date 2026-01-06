@@ -3,13 +3,17 @@
     "@optique/core": "workspace:",
     "@optique/run": "workspace:",
     "@optique/temporal": "workspace:",
+    "@optique/valibot": "workspace:",
+    "@optique/zod": "workspace:",
     "@shikijs/vitepress-twoslash": "^3.10.0",
     "@types/node": "catalog:",
     "markdown-it-deflist": "^3.0.0",
     "typescript": "catalog:",
+    "valibot": "catalog:",
     "vitepress": "^1.6.3",
     "vitepress-plugin-group-icons": "^1.6.3",
-    "vitepress-plugin-llms": "^1.7.3"
+    "vitepress-plugin-llms": "^1.7.3",
+    "zod": "catalog:"
   },
   "scripts": {
     "dev": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && vitepress dev",

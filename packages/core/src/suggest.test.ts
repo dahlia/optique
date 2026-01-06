@@ -537,6 +537,162 @@ describe("suggest function", () => {
     });
   });
 
+  describe("option value suggestions should not include positional argument suggestions", () => {
+    // Regression tests for https://github.com/dahlia/optique/issues/55
+    it("should only suggest option values when option is expecting a value", () => {
+      const remoteParser = {
+        metavar: "REMOTE",
+        parse(input: string) {
+          return { success: true as const, value: input };
+        },
+        format(value: string) {
+          return value;
+        },
+        *suggest(prefix: string) {
+          const gitRemotes = ["origin", "upstream"];
+          for (const option of gitRemotes) {
+            if (option.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: option };
+            }
+          }
+        },
+      };
+
+      const tagParser = {
+        metavar: "TAG",
+        parse(input: string) {
+          return { success: true as const, value: input };
+        },
+        format(value: string) {
+          return value;
+        },
+        *suggest(prefix: string) {
+          const gitTags = ["v0.1.0", "v0.1.1", "v0.2.0"];
+          for (const option of gitTags) {
+            if (option.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: option };
+            }
+          }
+        },
+      };
+
+      const parser = object({
+        remote: withDefault(option("--remote", remoteParser), "origin"),
+        tags: multiple(argument(tagParser)),
+      });
+
+      // When "--remote" is the last parsed token and we're completing its value,
+      // only remote values should be suggested, not tag values
+      const result = suggest(parser, ["git", "--remote", ""]);
+      const texts = result.map((s) => extractText(s)).sort();
+
+      // Expected: only "origin" and "upstream" (remote values)
+      // NOT: "v0.1.0", "v0.1.1", "v0.2.0" (tag values)
+      deepStrictEqual(texts, ["origin", "upstream"]);
+    });
+
+    it("should suggest both options and positional arguments when not in option value context", () => {
+      const remoteParser = {
+        metavar: "REMOTE",
+        parse(input: string) {
+          return { success: true as const, value: input };
+        },
+        format(value: string) {
+          return value;
+        },
+        *suggest(prefix: string) {
+          const gitRemotes = ["origin", "upstream"];
+          for (const option of gitRemotes) {
+            if (option.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: option };
+            }
+          }
+        },
+      };
+
+      const tagParser = {
+        metavar: "TAG",
+        parse(input: string) {
+          return { success: true as const, value: input };
+        },
+        format(value: string) {
+          return value;
+        },
+        *suggest(prefix: string) {
+          const gitTags = ["v0.1.0", "v0.1.1", "v0.2.0"];
+          for (const option of gitTags) {
+            if (option.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: option };
+            }
+          }
+        },
+      };
+
+      const parser = object({
+        remote: withDefault(option("--remote", remoteParser), "origin"),
+        tags: multiple(argument(tagParser)),
+      });
+
+      // When completing after a positional argument (not after an option expecting value),
+      // both options and positional arguments can be suggested
+      const result = suggest(parser, ["git", ""]);
+      const texts = result.map((s) => extractText(s)).sort();
+
+      // Should include tag values since we're in positional argument context
+      deepStrictEqual(texts, ["v0.1.0", "v0.1.1", "v0.2.0"]);
+    });
+
+    it("should only suggest option values for simple case without preceding arguments", () => {
+      const formatParser = {
+        metavar: "FORMAT",
+        parse(input: string) {
+          return { success: true as const, value: input };
+        },
+        format(value: string) {
+          return value;
+        },
+        *suggest(prefix: string) {
+          const formats = ["json", "yaml", "xml"];
+          for (const option of formats) {
+            if (option.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: option };
+            }
+          }
+        },
+      };
+
+      const fileParser = {
+        metavar: "FILE",
+        parse(input: string) {
+          return { success: true as const, value: input };
+        },
+        format(value: string) {
+          return value;
+        },
+        *suggest(prefix: string) {
+          const files = ["file1.txt", "file2.txt", "file3.txt"];
+          for (const option of files) {
+            if (option.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: option };
+            }
+          }
+        },
+      };
+
+      const parser = object({
+        format: option("--format", formatParser),
+        files: multiple(argument(fileParser)),
+      });
+
+      // When "--format" is expecting a value, only format values should be suggested
+      const result = suggest(parser, ["--format", ""]);
+      const texts = result.map((s) => extractText(s)).sort();
+
+      // Expected: only format values, not file values
+      deepStrictEqual(texts, ["json", "xml", "yaml"]);
+    });
+  });
+
   describe("edge cases", () => {
     it("should handle empty buffer gracefully", () => {
       const parser = option("-v", "--verbose");

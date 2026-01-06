@@ -16,7 +16,7 @@ you usually won't use it directly in browsers.
 
 
 When to use @optique/core
-------------------------
+-------------------------
 
 Use *@optique/core* instead when:
 
