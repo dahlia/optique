@@ -145,19 +145,78 @@ branches and eventually to `main`.
     b.  Resolve any conflicts (commonly in *CHANGES.md*, *deno.json*, and
         *package.json* files).
 
-    c.  Run tests to verify:
+    c.  **Copy changelog entries**: After resolving conflicts, copy the
+        changelog entries from the merged tag's version into the current
+        branch's unreleased version section.  The entries should be:
+
+         -  Grouped by package (e.g., `### @optique/core`, `### @optique/run`)
+         -  Inserted *above* any existing entries in each package section
+         -  Issue/PR reference definitions (e.g., `[#123]: ...`) should not
+            be duplicated if they already exist
+
+        For example, if merging 1.2.3 into 1.3-maintenance where 1.3.2 is
+        pending:
+
+        *Before* (1.3-maintenance):
+
+        ~~~~ markdown
+        Version 1.3.2
+        -------------
+
+        To be released.
+
+        ### @optique/run
+
+         -  Added new logging features.  [[#125]]
+
+        [#125]: https://github.com/dahlia/optique/issues/125
+        ~~~~
+
+        *Merged tag 1.2.3 contains*:
+
+        ~~~~ markdown
+        Version 1.2.3
+        -------------
+
+        Released on January 6, 2026.
+
+        ### @optique/run
+
+         -  Fixed a crash on startup.  [[#123]]
+
+        [#123]: https://github.com/dahlia/optique/issues/123
+        ~~~~
+
+        *After* (1.3-maintenance):
+
+        ~~~~ markdown
+        Version 1.3.2
+        -------------
+
+        To be released.
+
+        ### @optique/run
+
+         -  Fixed a crash on startup.  [[#123]]
+         -  Added new logging features.  [[#125]]
+
+        [#123]: https://github.com/dahlia/optique/issues/123
+        [#125]: https://github.com/dahlia/optique/issues/125
+        ~~~~
+
+    d.  Run tests to verify:
 
         ~~~~ bash
         deno task test
         deno check
         ~~~~
 
-    d.  Complete the merge commit (use default message).
+    e.  Complete the merge commit (use default message).
 
-    e.  Create a new patch release for this branch by repeating Steps 1-3
+    f.  Create a new patch release for this branch by repeating Steps 1-3
         for version 1.3.x (e.g., 1.3.1).
 
-    f.  Continue cascading to even newer maintenance branches if they exist.
+    g.  Continue cascading to even newer maintenance branches if they exist.
 
 3.  If no newer maintenance branch exists, merge to `main`:
 
@@ -173,6 +232,12 @@ branches and eventually to `main`.
     deno check
     git push origin main
     ~~~~
+
+    > [!IMPORTANT]
+    > Do *not* copy changelog entries to `main`.  The `main` branch tracks
+    > the next major/minor release, so patch release entries should not be
+    > duplicated there.  Just resolve conflicts and keep the existing
+    > unreleased section as-is.
 
 
 Major/minor releases
@@ -369,7 +434,11 @@ Checklist summary
 - [ ] Run `deno task check-versions --fix`
 - [ ] Commit with message "Version bump\n\n[ci skip]"
 - [ ] Push tag and branch
-- [ ] Cascade merge to newer maintenance branches (if any)
+- [ ] Cascade merge to newer maintenance branches (if any):
+  - [ ] Merge tag into newer branch
+  - [ ] Copy changelog entries to unreleased version (above existing entries)
+  - [ ] Run tests and complete merge commit
+  - [ ] Create patch release for that branch
 - [ ] Merge to `main` (if no newer maintenance branches)
 
 ### Major/minor release checklist
