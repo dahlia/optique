@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@logtape/logtape':
+      specifier: ^1.2.2
+      version: 1.2.2
     '@types/node':
       specifier: ^20.19.9
       version: 20.19.9
@@ -15,20 +18,38 @@ catalogs:
     typescript:
       specifier: ^5.8.3
       version: 5.8.3
+    valibot:
+      specifier: ^0.42.0
+      version: 0.42.1
+    zod:
+      specifier: ^3.25.0 || ^4.0.0
+      version: 4.1.12
 
 importers:
 
   docs:
     devDependencies:
+      '@logtape/logtape':
+        specifier: 'catalog:'
+        version: 1.2.2
       '@optique/core':
         specifier: 'workspace:'
         version: link:../packages/core
+      '@optique/logtape':
+        specifier: 'workspace:'
+        version: link:../packages/logtape
       '@optique/run':
         specifier: 'workspace:'
         version: link:../packages/run
       '@optique/temporal':
         specifier: 'workspace:'
         version: link:../packages/temporal
+      '@optique/valibot':
+        specifier: 'workspace:'
+        version: link:../packages/valibot
+      '@optique/zod':
+        specifier: 'workspace:'
+        version: link:../packages/zod
       '@shikijs/vitepress-twoslash':
         specifier: ^3.10.0
         version: 3.10.0(typescript@5.8.3)
@@ -41,6 +62,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
+      valibot:
+        specifier: 'catalog:'
+        version: 0.42.1(typescript@5.8.3)
       vitepress:
         specifier: ^1.6.3
         version: 1.6.4(@algolia/client-search@5.35.0)(@types/node@20.19.9)(postcss@8.5.6)(search-insights@2.17.3)(typescript@5.8.3)
@@ -50,6 +74,9 @@ importers:
       vitepress-plugin-llms:
         specifier: ^1.7.3
         version: 1.7.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
 
   examples/gitique:
     dependencies:
@@ -75,6 +102,25 @@ importers:
 
   packages/core:
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.9
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
+  packages/logtape:
+    dependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../core
+    devDependencies:
+      '@logtape/logtape':
+        specifier: 'catalog:'
+        version: 1.2.2
       '@types/node':
         specifier: 'catalog:'
         version: 20.19.9
@@ -119,6 +165,44 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
+
+  packages/valibot:
+    dependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.9
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+      valibot:
+        specifier: 'catalog:'
+        version: 0.42.1(typescript@5.8.3)
+
+  packages/zod:
+    dependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.9
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
 
 packages:
 
@@ -443,6 +527,9 @@ packages:
   '@js-temporal/polyfill@0.5.1':
     resolution: {integrity: sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ==}
     engines: {node: '>=12'}
+
+  '@logtape/logtape@1.2.2':
+    resolution: {integrity: sha512-yx4uj7NUXo5pOk2lljtAf7UN9oDBw9xfxSDC4jxdbfnGDGmq4iJhenWBbU9XV8ilm8AUUMYXq2nk+qvz8E21DA==}
 
   '@napi-rs/wasm-runtime@1.0.1':
     resolution: {integrity: sha512-KVlQ/jgywZpixGCKMNwxStmmbYEMyokZpCf2YuIChhfJA2uqfAKNEM8INz7zzTo55iEXfBhIIs3VqYyqzDLj8g==}
@@ -1609,6 +1696,14 @@ packages:
   unist-util-visit@5.0.0:
     resolution: {integrity: sha512-MR04uvD+07cwl/yhVuVWAtw+3GOR/knlL55Nd/wAdblk27GCVt3lqpTivy/tkJcZoNPzTwS1Y+KMojlLDhoTzg==}
 
+  valibot@0.42.1:
+    resolution: {integrity: sha512-3keXV29Ar5b//Hqi4MbSdV7lfVp6zuYLZuA9V1PvQUsXqogr+u5lvLPLk3A4f74VUXDnf/JfWMN6sB+koJ/FFw==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   vfile-message@4.0.3:
     resolution: {integrity: sha512-QTHzsGd1EhbZs4AsQ20JX1rC3cOlt/IWJruk893DfLRr57lcnOeMaWG4K0JrRta4mIJZKth2Au3mM3u03/JWKw==}
 
@@ -1695,6 +1790,9 @@ packages:
   yargs@17.7.2:
     resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
     engines: {node: '>=12'}
+
+  zod@4.1.12:
+    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -2010,6 +2108,8 @@ snapshots:
   '@js-temporal/polyfill@0.5.1':
     dependencies:
       jsbi: 4.3.2
+
+  '@logtape/logtape@1.2.2': {}
 
   '@napi-rs/wasm-runtime@1.0.1':
     dependencies:
@@ -3356,6 +3456,10 @@ snapshots:
       unist-util-is: 6.0.0
       unist-util-visit-parents: 6.0.1
 
+  valibot@0.42.1(typescript@5.8.3):
+    optionalDependencies:
+      typescript: 5.8.3
+
   vfile-message@4.0.3:
     dependencies:
       '@types/unist': 3.0.3
@@ -3486,5 +3590,7 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+
+  zod@4.1.12: {}
 
   zwitch@2.0.4: {}

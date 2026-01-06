@@ -4,9 +4,13 @@ packages:
 - docs
 
 catalog:
+  "@logtape/file": ^1.2.2
+  "@logtape/logtape": ^1.2.2
   "@types/node": ^20.19.9
   tsdown: ^0.13.0
   typescript: ^5.8.3
+  valibot: ^0.42.0
+  zod: "^3.25.0 || ^4.0.0"
 
 engineStrict: true
 nodeVersion: 20.19.0

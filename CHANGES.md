@@ -1,6 +1,665 @@
 Optique changelog
 =================
 
+Version 0.8.8
+-------------
+
+To be released.
+
+
+Version 0.8.7
+-------------
+
+Released on January 5, 2026.
+
+### @optique/core
+
+ -  Fixed `multiple()` parser suggesting already-selected values in shell
+    completion.  Previously, when using `multiple(argument(choice(...)))` or
+    similar patterns, values that had already been selected would continue
+    to appear in completion suggestions.  Now, the `suggest()` method filters
+    out values that have already been parsed, providing a cleaner completion
+    experience.  [[#73]]
+
+
+Version 0.8.6
+-------------
+
+Released on January 1, 2026.
+
+### @optique/core
+
+ -  Fixed `object()` parser ignoring symbol keys.  Previously, when using
+    symbol keys in the parser definition (e.g., `object({ [sym]: option(...) })`),
+    the symbol-keyed parsers were silently ignored because `Object.entries()`
+    and `for...in` loops do not enumerate symbol properties.  Now, the parser
+    correctly handles both string and symbol keys by using `Reflect.ownKeys()`.
+
+
+Version 0.8.5
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Fixed subcommand help display when using `merge()` with `or()`.
+    Previously, when combining parsers using `merge(..., or(...))`, the help
+    output would fail to display subcommand-specific options because `merge()`
+    did not correctly propagate the runtime state of parsers with undefined
+    initial state.  Now, the state is correctly resolved, ensuring that
+    subcommand help is generated correctly.  [[#69]]
+
+ -  Fixed subcommand help displaying incorrect usage line when using
+    `longestMatch()` with nested subcommands.  Previously, when using patterns
+    like `longestMatch(merge(globalOptions, or(sub1, sub2)), helpCommand)`,
+    the usage line in `help COMMAND` output would show all subcommand
+    alternatives instead of only the selected subcommand's usage.  Now, the
+    usage line correctly displays only the relevant subcommand.
+
+
+Version 0.8.4
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Added default descriptions for built-in `help` command argument and
+    completion option arguments. Previously, these arguments showed no help
+    text. Now they display helpful default descriptions in help output.
+
+ -  Fixed subcommand help not displaying option descriptions in some edge cases.
+    When using `help COMMAND` or `COMMAND --help`, the help output now
+    correctly passes the inner parser's initial state for documentation
+    generation when the command is matched but the inner parser hasn't started
+    yet.  Previously, it passed `unavailable` state which could cause issues
+    with parsers that depend on state for documentation.  [[#68]]
+
+### @optique/logtape
+
+ -  Added default descriptions for `verbosity()`, `debug()`, and `logOutput()`
+    parsers. Previously, these parsers showed no help text unless users
+    explicitly provided a `description` option. Now they display helpful
+    default descriptions in help output.
+
+
+Version 0.8.3
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Fixed `merge()` breaking option parsing inside subcommands when merged with
+    `or()`.  Previously, when using `merge(globalOptions, or(sub1, sub2))`,
+    options inside the subcommands would fail to parse after the subcommand was
+    selected.  For example, `sub1 -o foo` would fail with “No matching option
+    or argument found” even though `-o` was a valid option for `sub1`.  [[#67]]
+
+
+Version 0.8.2
+-------------
+
+Released on December 21, 2025.
+
+### @optique/core
+
+ -  Fixed `withDefault()` widening literal types in its default value parameter.
+    Previously, passing a literal type as the default value would cause type
+    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal types
+    are correctly preserved.  For example,
+    `withDefault(option("--format", choice(["auto", "text"])), "auto")` now
+    correctly infers `"auto" | "text"` instead of `string`.  [[#58]]
+
+
+Version 0.8.1
+-------------
+
+Released on December 16, 2025.
+
+### @optique/core
+
+ -  Fixed shell completion scripts using singular form (`completion`,
+    `--completion`) even when `completion.name` is set to `"plural"`.  Now,
+    when the name is `"plural"`, the generated scripts correctly use
+    `completions` or `--completions` instead of the singular form.  [[#53]]
+
+ -  Fixed shell completion suggestions including positional argument values
+    when completing an option that expects a value.  For example, when
+    completing `--remote ""` in a parser with both `--remote` option and
+    positional tag arguments, only the remote values are now suggested,
+    not the tag values.  [[#55]]
+
+
+Version 0.8.0
+-------------
+
+Released on December 9, 2025.
+
+### @optique/core
+
+ -  Added `conditional()` combinator for discriminated union patterns where
+    certain options depend on a discriminator option value. This enables
+    context-dependent parsing where different sets of options become valid
+    based on the discriminator selection.  [[#49]]
+
+    ~~~~ typescript
+    const parser = conditional(
+      option("--reporter", choice(["console", "junit", "html"])),
+      {
+        console: object({}),
+        junit: object({ outputFile: option("--output-file", string()) }),
+        html: object({ outputFile: option("--output-file", string()) }),
+      }
+    );
+    // Result type: ["console", {}] | ["junit", { outputFile: string }] | ...
+    ~~~~
+
+    Key features:
+
+     -  Explicit discriminator option determines which branch is selected
+     -  Tuple result `[discriminator, branchValue]` for clear type narrowing
+     -  Optional default branch for when discriminator is not provided
+     -  Clear error messages indicating which options are required for each
+        discriminator value
+
+ -  Added `literal` type to `UsageTerm` for representing fixed string values in
+    usage descriptions. Unlike metavars (which are placeholders displayed with
+    special formatting), literals are displayed as plain text. This is used
+    internally by `conditional()` to show actual discriminator values in help
+    text (e.g., `--reporter console` instead of `--reporter TYPE`).  [[#49]]
+
+ -  Added `passThrough()` parser for building wrapper CLI tools that need to
+    forward unrecognized options to an underlying tool. This parser captures
+    unknown options without validation errors, enabling legitimate wrapper/proxy
+    patterns.  [[#35]]
+
+    ~~~~ typescript
+    const parser = object({
+      debug: option("--debug"),
+      extra: passThrough(),
+    });
+
+    // mycli --debug --foo=bar --baz=qux
+    // → { debug: true, extra: ["--foo=bar", "--baz=qux"] }
+    ~~~~
+
+    Key features:
+
+     -  Three capture formats: `"equalsOnly"` (default, safest), `"nextToken"`
+        (captures `--opt val` pairs), and `"greedy"` (captures all remaining
+        tokens)
+     -  Lowest priority (−10) ensures explicit parsers always match first
+     -  Respects `--` options terminator in `"equalsOnly"` and `"nextToken"`
+        modes
+     -  Works seamlessly with `object()`, subcommands, and other combinators
+
+ -  Added `passthrough` type to `UsageTerm` for representing pass-through
+    options in usage descriptions. Displayed as `[...]` in help text.
+
+ -  Fixed `integer()` value parser to accept negative integers when using
+    `type: "number"`. Previously, the regex pattern only matched non-negative
+    integers (`/^\d+$/`), causing inputs like `-42` to be rejected as invalid.
+    The pattern has been updated to `/^-?\d+$/` to correctly handle negative
+    values. Note that `type: "bigint"` already accepted negative integers via
+    `BigInt()` conversion, so this change brings consistency between the two
+    types.
+
+[#35]: https://github.com/dahlia/optique/issues/35
+[#49]: https://github.com/dahlia/optique/issues/49
+
+### @optique/logtape
+
+The *@optique/logtape* package was introduced in this release, providing
+integration with the [LogTape] logging library. This package enables
+configuring LogTape logging through command-line arguments with various
+parsing strategies.
+
+ -  Added `logLevel()` value parser for parsing log level strings (`"trace"`,
+    `"debug"`, `"info"`, `"warning"`, `"error"`, `"fatal"`) into LogTape's
+    `LogLevel` type. Parsing is case-insensitive and provides shell completion
+    suggestions.
+
+ -  Added `verbosity()` parser for accumulating `-v` flags to determine log
+    level. Each additional `-v` flag increases verbosity: no flags → `"warning"`,
+    `-v` → `"info"`, `-vv` → `"debug"`, `-vvv` → `"trace"`.
+
+ -  Added `debug()` parser for simple `--debug`/`-d` flag that toggles between
+    normal level (`"info"`) and debug level (`"debug"`).
+
+ -  Added `logOutput()` parser for log output destination. Accepts `-` for
+    console output or a file path for file output, following CLI conventions.
+
+ -  Added `loggingOptions()` preset that combines log level and log output
+    options into a single `group()`. Uses a discriminated union configuration
+    to enforce mutually exclusive level selection methods (`"option"`,
+    `"verbosity"`, or `"debug"`).
+
+ -  Added `createLoggingConfig()` helper function that converts parsed logging
+    options into a LogTape `Config` object for use with `configure()`.
+
+ -  Added `createConsoleSink()` function for creating console sinks with
+    configurable stream selection (stdout/stderr) and level-based stream
+    resolution.
+
+ -  Added `createSink()` async function that creates LogTape sinks from
+    `LogOutput` values. File output requires the optional `@logtape/file`
+    package.
+
+[LogTape]: https://logtape.org/
+
+
+Version 0.7.9
+-------------
+
+Released on January 5, 2026.
+
+### @optique/core
+
+ -  Fixed `multiple()` parser suggesting already-selected values in shell
+    completion.  Previously, when using `multiple(argument(choice(...)))` or
+    similar patterns, values that had already been selected would continue
+    to appear in completion suggestions.  Now, the `suggest()` method filters
+    out values that have already been parsed, providing a cleaner completion
+    experience.  [[#73]]
+
+
+Version 0.7.8
+-------------
+
+Released on January 1, 2026.
+
+### @optique/core
+
+ -  Fixed `object()` parser ignoring symbol keys.  Previously, when using
+    symbol keys in the parser definition (e.g., `object({ [sym]: option(...) })`),
+    the symbol-keyed parsers were silently ignored because `Object.entries()`
+    and `for...in` loops do not enumerate symbol properties.  Now, the parser
+    correctly handles both string and symbol keys by using `Reflect.ownKeys()`.
+
+
+Version 0.7.7
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Fixed subcommand help display when using `merge()` with `or()`.
+    Previously, when combining parsers using `merge(..., or(...))`, the help
+    output would fail to display subcommand-specific options because `merge()`
+    did not correctly propagate the runtime state of parsers with undefined
+    initial state.  Now, the state is correctly resolved, ensuring that
+    subcommand help is generated correctly.  [[#69]]
+
+ -  Fixed subcommand help displaying incorrect usage line when using
+    `longestMatch()` with nested subcommands.  Previously, when using patterns
+    like `longestMatch(merge(globalOptions, or(sub1, sub2)), helpCommand)`,
+    the usage line in `help COMMAND` output would show all subcommand
+    alternatives instead of only the selected subcommand's usage.  Now, the
+    usage line correctly displays only the relevant subcommand.
+
+
+Version 0.7.6
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Added default descriptions for built-in `help` command argument and
+    completion option arguments. Previously, these arguments showed no help
+    text. Now they display helpful default descriptions in help output.
+
+ -  Fixed subcommand help not displaying option descriptions in some edge cases.
+    When using `help COMMAND` or `COMMAND --help`, the help output now
+    correctly passes the inner parser's initial state for documentation
+    generation when the command is matched but the inner parser hasn't started
+    yet.  Previously, it passed `unavailable` state which could cause issues
+    with parsers that depend on state for documentation.  [[#68]]
+
+
+Version 0.7.5
+-------------
+
+Released on December 30, 2025.
+
+### @optique/core
+
+ -  Fixed `merge()` breaking option parsing inside subcommands when merged with
+    `or()`.  Previously, when using `merge(globalOptions, or(sub1, sub2))`,
+    options inside the subcommands would fail to parse after the subcommand was
+    selected.  For example, `sub1 -o foo` would fail with “No matching option
+    or argument found” even though `-o` was a valid option for `sub1`.  [[#67]]
+
+
+Version 0.7.4
+-------------
+
+Released on December 21, 2025.
+
+### @optique/core
+
+ -  Fixed `withDefault()` widening literal types in its default value parameter.
+    Previously, passing a literal type as the default value would cause type
+    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal types
+    are correctly preserved.  For example,
+    `withDefault(option("--format", choice(["auto", "text"])), "auto")` now
+    correctly infers `"auto" | "text"` instead of `string`.  [[#58]]
+
+
+Version 0.7.3
+-------------
+
+Released on December 16, 2025.
+
+### @optique/core
+
+ -  Fixed shell completion scripts using singular form (`completion`,
+    `--completion`) even when `completion.name` is set to `"plural"`.  Now,
+    when the name is `"plural"`, the generated scripts correctly use
+    `completions` or `--completions` instead of the singular form.  [[#53]]
+
+ -  Fixed shell completion suggestions including positional argument values
+    when completing an option that expects a value.  For example, when
+    completing `--remote ""` in a parser with both `--remote` option and
+    positional tag arguments, only the remote values are now suggested,
+    not the tag values.  [[#55]]
+
+[#53]: https://github.com/dahlia/optique/issues/53
+[#55]: https://github.com/dahlia/optique/issues/55
+
+
+Version 0.7.2
+-------------
+
+Released on December 2, 2025.
+
+### @optique/core
+
+ -  Fixed `optional()` and `withDefault()` returning an error instead of the
+    expected value when the input contains only the options terminator `"--"`.
+    For example, `parse(withDefault(option("--name", string()), "Bob"), ["--"])`
+    now correctly returns `"Bob"` instead of failing with “Missing option
+    `--name`.”  [[#50]]
+
+
+Version 0.7.1
+-------------
+
+Released on December 2, 2025.
+
+### @optique/core
+
+ -  Fixed `optional()` and `withDefault()` returning an error instead of the
+    expected value when used as a standalone parser with empty input.  For
+    example, `parse(withDefault(option("--name", string()), "Bob"), [])` now
+    correctly returns `"Bob"` instead of failing with “Expected an option,
+    but got end of input.”  [[#48]]
+
+
+Version 0.7.0
+-------------
+
+Released on November 25, 2025.
+
+### @optique/core
+
+ -  Added duplicate option name detection to parser combinators. The `object()`,
+    `tuple()`, `merge()`, and `group()` combinators now validate at parse time
+    that option names are unique across their child parsers. When duplicate
+    option names are detected, parsing fails with a clear error message
+    indicating which option name is duplicated and in which fields or positions.
+    [[#37]]
+
+     -  Added `ObjectOptions.allowDuplicates` field to opt out of validation.
+     -  Added `TupleOptions` interface with `allowDuplicates` field.
+     -  Added `MergeOptions` interface with `allowDuplicates` field.
+     -  Added `tuple()` overloads accepting optional `TupleOptions` parameter.
+     -  Added `extractOptionNames()` function to `@optique/core/usage` module.
+
+ -  Changed parsing behavior: `object()`, `tuple()`, `merge()`, and `group()`
+    now reject parsers with duplicate option names by default. Previously,
+    duplicate option names would result in ambiguous parsing where the first
+    matching parser consumed the option and subsequent parsers silently received
+    default values. This breaking change prevents unintentional bugs from option
+    name conflicts.
+
+    To restore previous behavior, set `allowDuplicates: true` in options.
+    [[#37]]
+
+ -  The `or()` combinator continues to allow duplicate option names across
+    branches since alternatives are mutually exclusive.  [[#37]]
+
+ -  Added “Did you mean?” suggestion system for typos in option names and
+    command names. When users make typos in command-line arguments, Optique
+    now automatically suggests similar valid options to help them correct
+    the mistake:
+
+    ~~~~ typescript
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      version: option("--version"),
+    });
+
+    // User types: --verbos (typo)
+    const result = parse(parser, ["--verbos"]);
+    // Error: No matched option for `--verbos`.
+    // Did you mean `--verbose`?
+    ~~~~
+
+    The suggestion system uses Levenshtein distance to find similar names,
+    suggesting up to 3 alternatives when the edit distance is at most 3
+    characters and the distance ratio is at most 0.5. Comparison is
+    case-insensitive by default. Suggestions work automatically for both
+    option names and subcommand names in all error contexts (`option()`,
+    `flag()`, `command()`, `object()`, `or()`, and `longestMatch()` parsers).
+    This feature is implemented internally and requires no user configuration.
+    [[#38]]
+
+ -  Added customization support for “Did you mean?” suggestion messages.
+    All parsers that generate suggestion messages now support customizing
+    how suggestions are formatted or disabling them entirely through the
+    `errors` option:
+
+    ~~~~ typescript
+    // Custom suggestion format for option/flag parsers
+    const portOption = option("--port", integer(), {
+      errors: {
+        noMatch: (invalidOption, suggestions) =>
+          suggestions.length > 0
+            ? message`Unknown option ${invalidOption}. Try: ${values(suggestions)}`
+            : message`Unknown option ${invalidOption}.`
+      }
+    });
+
+    // Custom suggestion format for command parser
+    const addCmd = command("add", object({}), {
+      errors: {
+        notMatched: (expected, actual, suggestions) =>
+          suggestions && suggestions.length > 0
+            ? message`Unknown command ${actual}. Similar: ${values(suggestions)}`
+            : message`Expected ${expected} command.`
+      }
+    });
+
+    // Custom suggestion formatter for combinators
+    const config = object({
+      host: option("--host", string()),
+      port: option("--port", integer())
+    }, {
+      errors: {
+        suggestions: (suggestions) =>
+          suggestions.length > 0
+            ? message`Available options: ${values(suggestions)}`
+            : []
+      }
+    });
+    ~~~~
+
+    The customization system allows complete control over suggestion
+    formatting while maintaining backward compatibility. When custom error
+    messages are provided, they receive the array of suggestions and can
+    format, filter, or disable them as needed. This enables applications
+    to provide context-specific error messages that match their CLI's
+    style and user expectations.  [[#38]]
+
+     -  Extended `OptionErrorOptions` interface with `noMatch` field.
+     -  Extended `FlagErrorOptions` interface with `noMatch` field.
+     -  Extended `CommandErrorOptions.notMatched` signature to include
+        optional `suggestions` parameter.
+     -  Extended `OrErrorOptions` interface with `suggestions` field.
+     -  Extended `LongestMatchErrorOptions` interface with `suggestions` field.
+     -  Extended `ObjectErrorOptions` interface with `suggestions` field.
+
+ -  Improved `formatMessage()` line break handling to distinguish between
+    soft breaks (word wrap) and hard breaks (paragraph separation):
+
+     -  Single newlines (`\n`) are now treated as soft breaks, converted to
+        spaces for natural word wrapping. This allows long error messages to
+        be written across multiple lines in source code while rendering as
+        continuous text.
+
+     -  Double or more consecutive newlines (`\n\n+`) are treated as hard
+        breaks, creating actual paragraph separations in the output.
+
+    This change improves the readability of multi-part error messages, such
+    as those with “Did you mean?” suggestions, by ensuring proper spacing
+    between the base error and suggestions:
+
+    ~~~~
+    Error: Unexpected option or subcommand: comit.
+    Did you mean commit?
+    ~~~~
+
+    Previously, single newlines in `text()` terms would be silently dropped
+    during word wrapping, causing messages to run together without spacing.
+
+ -  Improved error messages for `or()`, `longestMatch()`, and `object()`
+    combinators to provide context-aware feedback based on expected input types.
+    Error messages now accurately reflect what's missing (options, commands, or
+    arguments) instead of showing generic "No matching option or command found"
+    for all cases. [[#45]]
+
+    ~~~~ typescript
+    // When only arguments are expected
+    const parser1 = or(argument(string()), argument(integer()));
+    // Error: Missing required argument.
+
+    // When only commands are expected
+    const parser2 = or(command("add", ...), command("remove", ...));
+    // Error: No matching command found.
+
+    // When both options and arguments are expected
+    const parser3 = object({
+      port: option("--port", integer()),
+      file: argument(string()),
+    });
+    // Error: No matching option or argument found.
+    ~~~~
+
+ -  Added function-form support for `errors.noMatch` option in `or()`,
+    `longestMatch()`, and `object()` combinators. Error messages can now be
+    dynamically generated based on context, enabling use cases like
+    internationalization:
+
+    ~~~~ typescript
+    const parser = or(
+      command("add", constant("add")),
+      command("remove", constant("remove")),
+      {
+        errors: {
+          noMatch: ({ hasOptions, hasCommands, hasArguments }) => {
+            if (hasCommands && !hasOptions && !hasArguments) {
+              return message`일치하는 명령을 찾을 수 없습니다.`; // Korean
+            }
+            return message`잘못된 입력입니다.`;
+          }
+        }
+      }
+    );
+    ~~~~
+
+    The callback receives a `NoMatchContext` object with boolean flags
+    (`hasOptions`, `hasCommands`, `hasArguments`) indicating what types of
+    inputs are expected. This allows generating language-specific or
+    context-specific error messages while maintaining backward compatibility
+    with static message form. [[#45]]
+
+     -  Added `NoMatchContext` interface.
+     -  Extended `OrErrorOptions.noMatch` to accept
+        `Message | ((context: NoMatchContext) => Message)`.
+     -  Extended `LongestMatchErrorOptions.noMatch` to accept
+        `Message | ((context: NoMatchContext) => Message)`.
+     -  Extended `ObjectErrorOptions.endOfInput` to accept
+        `Message | ((context: NoMatchContext) => Message)`.
+     -  Added `extractArgumentMetavars()` function to
+        `@optique/core/usage` module.
+
+ -  Added configuration for shell completion naming conventions. The `run()`
+    function now supports both singular (`completion`, `--completion`) and
+    plural (`completions`, `--completions`) naming styles. By default, both
+    forms are accepted (`"both"`), but this can be restricted to just one style
+    using the new `name` option in the completion configuration:
+
+    ~~~~ typescript
+    run(parser, {
+      completion: {
+        // Use "completions" and "--completions" only
+        name: "plural",
+      }
+    });
+    ~~~~
+
+    This allows CLI tools to match their preferred style guide or exist alongside
+    other commands. The help text examples automatically reflect the configured
+    naming style. [[#42]]
+
+     -  Added `name` option to `RunOptions.completion` configuration (`"singular"`,
+        `"plural"`, or `"both"`).
+
+[#37]: https://github.com/dahlia/optique/issues/37
+[#38]: https://github.com/dahlia/optique/issues/38
+[#42]: https://github.com/dahlia/optique/issues/42
+[#45]: https://github.com/dahlia/optique/issues/45
+
+### @optique/valibot
+
+The *@optique/valibot* package was introduced in this release, providing
+integration with the [Valibot] validation library. This package enables using
+Valibot schemas as value parsers, bringing Valibot's powerful validation
+capabilities with a significantly smaller bundle size (~10KB vs Zod's ~52KB)
+to command-line argument parsing. Supports Valibot version 0.42.0 and above.
+[[#40]]
+
+ -  Added `valibot()` value parser for validating command-line arguments using
+    Valibot schemas.
+ -  Added `ValibotParserOptions` interface for configuring metavar and custom
+    error messages.
+ -  Added automatic metavar inference from Valibot schema types (`STRING`,
+    `EMAIL`, `NUMBER`, `INTEGER`, `CHOICE`, etc.).
+
+[Valibot]: https://valibot.dev/
+[#40]: https://github.com/dahlia/optique/issues/40
+
+### @optique/zod
+
+The *@optique/zod* package was introduced in this release, providing
+integration with the [Zod] validation library. This package enables using
+Zod schemas as value parsers, bringing Zod's powerful validation capabilities
+to command-line argument parsing. Supports both Zod v3.25.0+ and v4.0.0+.
+[[#39]]
+
+ -  Added `zod()` value parser for validating command-line arguments using
+    Zod schemas.
+ -  Added `ZodParserOptions` interface for configuring metavar and custom
+    error messages.
+
+[Zod]: https://zod.dev/
+[#39]: https://github.com/dahlia/optique/issues/39
+
+
 Version 0.6.11
 --------------
 

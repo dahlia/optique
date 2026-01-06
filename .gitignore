@@ -6,4 +6,5 @@
 /node_modules/
 /packages/*/dist/
 /packages/*/node_modules/
+/PLAN.md
 /tmp/

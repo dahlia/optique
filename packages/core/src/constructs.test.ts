@@ -1,5 +1,7 @@
 import {
   concat,
+  conditional,
+  DuplicateOptionError,
   group,
   longestMatch,
   merge,
@@ -8,7 +10,12 @@ import {
   tuple,
 } from "@optique/core/constructs";
 import type { DocEntry, DocFragment } from "@optique/core/doc";
-import { formatMessage, type Message, message } from "@optique/core/message";
+import {
+  formatMessage,
+  type Message,
+  message,
+  text,
+} from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   type InferValue,
@@ -22,7 +29,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -269,6 +276,80 @@ describe("or", () => {
       ) as (DocFragment & { type: "section" })[];
       assert.ok(sections.length > 0);
     });
+  });
+});
+
+describe("or() - duplicate option handling", () => {
+  it("should allow duplicate option names in different branches", () => {
+    // or() allows duplicates because branches are mutually exclusive
+    const parser = or(
+      option("-v", "--verbose"),
+      option("-v", "--version"),
+    );
+
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first parser wins
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, true);
+    }
+  });
+
+  it("should allow same options in nested or branches", () => {
+    const parser = or(
+      object({ verbose: option("-v") }),
+      object({ version: option("-v") }),
+      object({ verify: option("-v") }),
+    );
+
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first matching branch wins
+    assert.ok(result.success);
+  });
+});
+
+describe("or() error customization", () => {
+  it("should use custom suggestions formatter", () => {
+    const parser = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          suggestions: (suggestions) => {
+            if (suggestions.length === 0) return [];
+            return message`Available commands: ${text(suggestions.join(", "))}`;
+          },
+        },
+      },
+    );
+
+    const result = parse(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Available commands"));
+      assert.ok(errorMessage.includes("deploy"));
+    }
+  });
+
+  it("should use custom suggestions formatter to disable suggestions", () => {
+    const parser = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          suggestions: () => [],
+        },
+      },
+    );
+
+    const result = parse(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(!errorMessage.includes("Did you mean"));
+      assert.ok(!errorMessage.includes("deploy"));
+    }
   });
 });
 
@@ -524,6 +605,7 @@ describe("longestMatch()", () => {
       buffer: ["-a", "value1", "-b", "value2"],
       optionsTerminated: false,
       state: parser.initialState,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -589,6 +671,51 @@ describe("longestMatch()", () => {
   });
 });
 
+describe("longestMatch() error customization", () => {
+  it("should use custom suggestions formatter", () => {
+    const parser = longestMatch(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          suggestions: (suggestions) => {
+            if (suggestions.length === 0) return [];
+            return message`Try one of: ${text(suggestions.join(" | "))}`;
+          },
+        },
+      },
+    );
+
+    const result = parse(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Try one of"));
+      assert.ok(errorMessage.includes("deploy"));
+    }
+  });
+
+  it("should use custom suggestions formatter to disable suggestions", () => {
+    const parser = longestMatch(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          suggestions: () => [],
+        },
+      },
+    );
+
+    const result = parse(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(!errorMessage.includes("Did you mean"));
+      assert.ok(!errorMessage.includes("deploy"));
+    }
+  });
+});
+
 describe("object", () => {
   it("should combine multiple parsers into an object", () => {
     const parser = object({
@@ -641,6 +768,7 @@ describe("object", () => {
       buffer: ["--help"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -660,7 +788,7 @@ describe("object", () => {
     const result = parse(parser, []);
     assert.ok(!result.success);
     if (!result.success) {
-      assertErrorIncludes(result.error, "Expected an option");
+      assertErrorIncludes(result.error, "No matching option found");
     }
   });
 
@@ -898,6 +1026,7 @@ describe("object() error customization", () => {
         output: undefined,
       },
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -926,6 +1055,7 @@ describe("object() error customization", () => {
         verbose: undefined,
       },
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -958,6 +1088,7 @@ describe("object() error customization", () => {
         verbose: undefined,
       },
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -987,6 +1118,7 @@ describe("object() error customization", () => {
         version: undefined,
       },
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -997,6 +1129,206 @@ describe("object() error customization", () => {
         "Unrecognized CLI option.",
       );
     }
+  });
+
+  it("should use custom suggestions formatter", () => {
+    const parser = object({
+      verbose: flag("-v", "--verbose"),
+      output: option("-o", "--output", string()),
+    }, {
+      errors: {
+        suggestions: (suggestions) => {
+          if (suggestions.length === 0) return [];
+          return message`Perhaps you meant: ${
+            text(suggestions.map((s) => `"${s}"`).join(", "))
+          }?`;
+        },
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"],
+      state: {
+        verbose: undefined,
+        output: undefined,
+      },
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Perhaps you meant"));
+      assert.ok(errorMessage.includes("--verbose"));
+    }
+  });
+
+  it("should use custom suggestions formatter to disable suggestions", () => {
+    const parser = object({
+      verbose: flag("-v", "--verbose"),
+      output: option("-o", "--output", string()),
+    }, {
+      errors: {
+        suggestions: () => [],
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"],
+      state: {
+        verbose: undefined,
+        output: undefined,
+      },
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(!errorMessage.includes("Did you mean"));
+      assert.ok(!errorMessage.includes("--verbose"));
+    }
+  });
+});
+
+describe("object() - duplicate option detection", () => {
+  // Note: Duplicate option detection now happens at construction time,
+  // not at parse time. This is a programmer error, not a user error.
+
+  it("should throw at construction time for duplicate short options", () => {
+    assert.throws(
+      () =>
+        object({
+          verbose: option("-v", "--verbose"),
+          version: option("-v", "--version"),
+        }),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-v");
+        assert.ok(error.sources.includes("verbose"));
+        assert.ok(error.sources.includes("version"));
+        return true;
+      },
+    );
+  });
+
+  it("should throw at construction time for duplicate long options", () => {
+    assert.throws(
+      () =>
+        object({
+          foo: option("--opt", "-f"),
+          bar: option("--opt", "-b"),
+        }),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "--opt");
+        assert.ok(error.sources.includes("foo"));
+        assert.ok(error.sources.includes("bar"));
+        return true;
+      },
+    );
+  });
+
+  it("should throw at construction time for duplicates across 3+ fields", () => {
+    assert.throws(
+      () =>
+        object({
+          alpha: option("-x"),
+          beta: option("-x"),
+          gamma: option("-x"),
+        }),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-x");
+        // At least 2 of the 3 sources should be in the error
+        // (order of detection may vary)
+        assert.ok(error.sources.length >= 2);
+        return true;
+      },
+    );
+  });
+
+  it("should allow non-conflicting options", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      output: option("-o", "--output", string()),
+    });
+
+    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.output, "file.txt");
+    }
+  });
+
+  it("should throw at construction time for duplicates in nested objects", () => {
+    assert.throws(
+      () =>
+        object({
+          opts: object({
+            verbose: option("-v"),
+          }),
+          flags: object({
+            version: option("-v"),
+          }),
+        }),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-v");
+        return true;
+      },
+    );
+  });
+
+  it("should allow opt-out with allowDuplicates option", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      version: option("-v", "--version"),
+    }, { allowDuplicates: true });
+
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first parser wins
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.version, false);
+    }
+  });
+
+  it("should not throw for flags with different option names", () => {
+    const parser = object({
+      verbose: option("-v", "--verbose"),
+      quiet: option("-q", "--quiet"),
+      debug: option("-d", "--debug"),
+    });
+
+    const result = parse(parser, ["-v", "-d"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.quiet, false);
+      assert.equal(result.value.debug, true);
+    }
+  });
+
+  it("should throw at construction time for duplicate aliases", () => {
+    assert.throws(
+      () =>
+        object({
+          foo: option("-f", "--foo", "--file"),
+          bar: option("-b", "--bar", "--file"),
+        }),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "--file");
+        return true;
+      },
+    );
   });
 });
 
@@ -1322,6 +1654,78 @@ describe("tuple", () => {
   });
 });
 
+describe("tuple() - duplicate option detection", () => {
+  it("should throw at construction time for duplicate short options", () => {
+    assert.throws(
+      () =>
+        tuple([
+          option("-v", "--verbose"),
+          option("-v", "--version"),
+        ]),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-v");
+        assert.ok(error.sources.includes("0"));
+        assert.ok(error.sources.includes("1"));
+        return true;
+      },
+    );
+  });
+
+  it("should allow non-conflicting options", () => {
+    const parser = tuple([
+      option("-v", "--verbose"),
+      option("-o", "--output", string()),
+    ]);
+
+    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], true);
+      assert.equal(result.value[1], "file.txt");
+    }
+  });
+
+  it("should allow opt-out with allowDuplicates option", () => {
+    const parser = tuple([
+      option("-v", "--verbose"),
+      option("-v", "--version"),
+    ], { allowDuplicates: true });
+
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first parser wins
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], true);
+      assert.equal(result.value[1], false);
+    }
+  });
+
+  it("should throw at construction time for duplicates in deeply nested structures", () => {
+    assert.throws(
+      () =>
+        object({
+          a: optional(object({
+            x: option("--opt", "-x"),
+          })),
+          b: multiple(
+            object({
+              y: option("--opt", "-y"),
+            }),
+            { min: 0 },
+          ),
+        }),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "--opt");
+        assert.ok(error.sources.includes("a"));
+        assert.ok(error.sources.includes("b"));
+        return true;
+      },
+    );
+  });
+});
+
 describe("merge", () => {
   it("should create a parser that combines multiple object parsers", () => {
     const parser1 = object({
@@ -1605,6 +2009,7 @@ describe("merge", () => {
       buffer: ["-3"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1804,6 +2209,7 @@ describe("merge", () => {
       buffer: ["--unknown"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -2340,6 +2746,7 @@ describe("merge", () => {
       buffer: ["add"],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     });
     assert.ok(result.success);
 
@@ -2377,6 +2784,106 @@ describe("merge", () => {
       e.term.type === "option" && e.term.names.includes("--verbose")
     );
     assert.ok(hasVerbose, "Should include global options");
+  });
+});
+
+describe("merge() - duplicate option detection", () => {
+  it("should throw at construction time for duplicate options", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      version: option("-v", "--version"),
+    });
+
+    assert.throws(
+      () => merge(parser1, parser2),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-v");
+        return true;
+      },
+    );
+  });
+
+  it("should allow non-conflicting merged parsers", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      output: option("-o", "--output", string()),
+    });
+
+    const parser = merge(parser1, parser2);
+    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.output, "file.txt");
+    }
+  });
+
+  it("should throw at construction time for duplicates across 3+ merged parsers", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      debug: option("-d", "--debug"),
+    });
+    const parser3 = object({
+      version: option("-v", "--version"),
+    });
+
+    assert.throws(
+      () => merge(parser1, parser2, parser3),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-v");
+        return true;
+      },
+    );
+  });
+
+  it("should allow opt-out with allowDuplicates option (2 parsers)", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      version: option("-v", "--version"),
+    });
+
+    const parser = merge(parser1, parser2, { allowDuplicates: true });
+    const result = parse(parser, ["-v"]);
+    // Should succeed - first parser wins
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.version, false);
+    }
+  });
+
+  it("should report source parsers in original argument order", () => {
+    const parser1 = object({
+      verbose: option("-v", "--verbose"),
+    });
+    const parser2 = object({
+      debug: option("-d", "--debug"),
+    });
+    const parser3 = object({
+      version: option("-v", "--version"),
+    });
+
+    assert.throws(
+      () => merge(parser1, parser2, parser3),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-v");
+        // Should report positions 0 and 2 (original argument order)
+        assert.ok(error.sources.includes("0"));
+        assert.ok(error.sources.includes("2"));
+        return true;
+      },
+    );
   });
 });
 
@@ -3304,5 +3811,498 @@ describe("group", () => {
         f.type === "section" && "title" in f && typeof f.title === "string",
     );
     assert.ok(outputSections.some((s) => s.title === "Output Options"));
+  });
+});
+
+describe("group() - duplicate option detection", () => {
+  it("should throw at construction time for duplicates in grouped object parsers", () => {
+    assert.throws(
+      () =>
+        group(
+          "Options",
+          object({
+            verbose: option("-v", "--verbose"),
+            version: option("-v", "--version"),
+          }),
+        ),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-v");
+        return true;
+      },
+    );
+  });
+
+  it("should allow non-conflicting options in grouped parsers", () => {
+    const parser = group(
+      "Options",
+      object({
+        verbose: option("-v", "--verbose"),
+        output: option("-o", "--output", string()),
+      }),
+    );
+
+    const result = parse(parser, ["-v", "-o", "file.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.output, "file.txt");
+    }
+  });
+
+  it("should throw at construction time for duplicates in grouped tuple parsers", () => {
+    assert.throws(
+      () =>
+        group(
+          "Flags",
+          tuple([
+            option("-v", "--verbose"),
+            option("-v", "--version"),
+          ]),
+        ),
+      (error: DuplicateOptionError) => {
+        assert.ok(error instanceof DuplicateOptionError);
+        assert.equal(error.optionName, "-v");
+        return true;
+      },
+    );
+  });
+});
+
+describe("conditional", () => {
+  describe("basic parsing", () => {
+    it("should select correct branch based on discriminator value", () => {
+      const parser = conditional(
+        option("--type", choice(["a", "b"])),
+        {
+          a: object({ foo: option("--foo", string()) }),
+          b: object({ bar: option("--bar", integer()) }),
+        },
+        object({}),
+      );
+
+      const resultA = parse(parser, ["--type", "a", "--foo", "hello"]);
+      assert.ok(resultA.success);
+      if (resultA.success) {
+        assert.deepEqual(resultA.value, ["a", { foo: "hello" }]);
+      }
+
+      const resultB = parse(parser, ["--type", "b", "--bar", "42"]);
+      assert.ok(resultB.success);
+      if (resultB.success) {
+        assert.deepEqual(resultB.value, ["b", { bar: 42 }]);
+      }
+    });
+
+    it("should use default branch when discriminator not provided", () => {
+      const parser = conditional(
+        option("--type", choice(["a", "b"])),
+        {
+          a: object({ foo: option("--foo", string()) }),
+          b: object({ bar: option("--bar", integer()) }),
+        },
+        object({ defaultOpt: option("--default", string()) }),
+      );
+
+      const result = parse(parser, ["--default", "value"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, [undefined, { defaultOpt: "value" }]);
+      }
+    });
+
+    it("should fail when discriminator missing and no default branch", () => {
+      const parser = conditional(
+        option("--type", choice(["a", "b"])),
+        {
+          a: object({ foo: option("--foo", string()) }),
+          b: object({ bar: option("--bar", integer()) }),
+        },
+      );
+
+      const result = parse(parser, ["--foo", "hello"]);
+      assert.ok(!result.success);
+    });
+
+    it("should work with empty branch parsers", () => {
+      const parser = conditional(
+        option("--mode", choice(["fast", "slow"])),
+        {
+          fast: object({}),
+          slow: object({}),
+        },
+        object({}),
+      );
+
+      const result = parse(parser, ["--mode", "fast"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["fast", {}]);
+      }
+    });
+  });
+
+  describe("error handling", () => {
+    it("should provide contextual error when branch option missing", () => {
+      const parser = conditional(
+        option("--type", choice(["a"])),
+        {
+          a: object({ required: option("--required", string()) }),
+        },
+        object({}),
+      );
+
+      const result = parse(parser, ["--type", "a"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "--required");
+      }
+    });
+
+    it("should fail when invalid discriminator value provided", () => {
+      const parser = conditional(
+        option("--type", choice(["a", "b"])),
+        {
+          a: object({}),
+          b: object({}),
+        },
+        object({}),
+      );
+
+      const result = parse(parser, ["--type", "invalid"]);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("type inference", () => {
+    it("should infer correct tuple union type", () => {
+      const parser = conditional(
+        option("--format", choice(["json", "xml"])),
+        {
+          json: object({ pretty: option("--pretty") }),
+          xml: object({ indent: option("--indent", integer()) }),
+        },
+        object({}),
+      );
+
+      type ParsedType = InferValue<typeof parser>;
+
+      const result = parse(parser, ["--format", "json", "--pretty"]);
+      assert.ok(result.success);
+
+      if (result.success) {
+        const [discriminator, value] = result.value;
+        if (discriminator === "json") {
+          // TypeScript should know value has 'pretty' property
+          const pretty: boolean = (value as { pretty: boolean }).pretty;
+          assert.equal(pretty, true);
+        }
+      }
+    });
+  });
+
+  describe("getDocFragments", () => {
+    it("should document discriminator and branch options", () => {
+      const parser = conditional(
+        option("--mode", choice(["fast", "slow"])),
+        {
+          fast: object({ threads: option("--threads", integer()) }),
+          slow: object({ verbose: option("--verbose") }),
+        },
+        object({}),
+      );
+
+      const fragments = parser.getDocFragments({ kind: "unavailable" });
+      assert.ok(fragments.fragments.length > 0);
+    });
+  });
+
+  describe("suggest", () => {
+    it("should suggest discriminator values before selection", () => {
+      const parser = conditional(
+        option("--type", choice(["alpha", "beta"])),
+        {
+          alpha: object({}),
+          beta: object({}),
+        },
+        object({}),
+      );
+
+      const suggestions = [...parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--type",
+      )];
+      assert.ok(
+        suggestions.some((s) => s.kind === "literal" && s.text === "--type"),
+      );
+    });
+  });
+});
+
+describe("complex combinator interactions", () => {
+  describe("or() with multiple()", () => {
+    it("should handle multiple values in or() branches", () => {
+      const parser = or(
+        multiple(option("-a")),
+        multiple(option("-b")),
+      );
+
+      // Multiple -a options
+      const result1 = parse(parser, ["-a", "-a", "-a"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.deepEqual(result1.value, [true, true, true]);
+      }
+
+      // Multiple -b options
+      const result2 = parse(parser, ["-b", "-b"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.deepEqual(result2.value, [true, true]);
+      }
+    });
+
+    it("should detect mixed options from different branches", () => {
+      const parser = or(
+        multiple(option("-a")),
+        multiple(option("-b")),
+      );
+
+      const result = parse(parser, ["-a", "-b"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "cannot be used together");
+      }
+    });
+  });
+
+  describe("nested or() combinators", () => {
+    it("should handle 2-level nested or()", () => {
+      const innerOr = or(option("-a"), option("-b"));
+      const outerOr = or(innerOr, option("-c"));
+
+      const result1 = parse(outerOr, ["-a"]);
+      assert.ok(result1.success);
+
+      const result2 = parse(outerOr, ["-b"]);
+      assert.ok(result2.success);
+
+      const result3 = parse(outerOr, ["-c"]);
+      assert.ok(result3.success);
+    });
+
+    it("should handle 3-level nested or()", () => {
+      const level1 = or(option("-a"), option("-b"));
+      const level2 = or(level1, option("-c"));
+      const level3 = or(level2, option("-d"));
+
+      const result1 = parse(level3, ["-a"]);
+      assert.ok(result1.success);
+
+      const result2 = parse(level3, ["-d"]);
+      assert.ok(result2.success);
+    });
+
+    it("should maintain mutual exclusivity across nested levels", () => {
+      const innerOr = or(option("-a"), option("-b"));
+      const outerOr = or(innerOr, option("-c"));
+
+      const result = parse(outerOr, ["-a", "-c"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "cannot be used together");
+      }
+    });
+  });
+
+  describe("object() with same priority fields", () => {
+    it("should handle multiple fields with same priority", () => {
+      const parser = object({
+        alpha: option("-a"),
+        beta: option("-b"),
+        gamma: option("-c"),
+      });
+
+      // All three parsers have the same default priority
+      const result = parse(parser, ["-c", "-a", "-b"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, {
+          alpha: true,
+          beta: true,
+          gamma: true,
+        });
+      }
+    });
+
+    it("should handle many fields in object (stress test)", () => {
+      // Create an object with 15 fields
+      const parser = object({
+        f1: option("-1"),
+        f2: option("-2"),
+        f3: option("-3"),
+        f4: option("-4"),
+        f5: option("-5"),
+        f6: option("-6"),
+        f7: option("-7"),
+        f8: option("-8"),
+        f9: option("-9"),
+        f10: option("--ten"),
+        f11: option("--eleven"),
+        f12: option("--twelve"),
+        f13: option("--thirteen"),
+        f14: option("--fourteen"),
+        f15: option("--fifteen"),
+      });
+
+      const result = parse(parser, [
+        "-1",
+        "-3",
+        "-5",
+        "-7",
+        "-9",
+        "--eleven",
+        "--thirteen",
+        "--fifteen",
+      ]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.f1, true);
+        assert.equal(result.value.f3, true);
+        assert.equal(result.value.f5, true);
+        assert.equal(result.value.f11, true);
+        assert.equal(result.value.f2, false);
+        assert.equal(result.value.f4, false);
+      }
+    });
+
+    it("should handle all optional fields with empty input", () => {
+      const parser = object({
+        a: optional(option("-a")),
+        b: optional(option("-b")),
+        c: optional(option("-c")),
+      });
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, {
+          a: undefined,
+          b: undefined,
+          c: undefined,
+        });
+      }
+    });
+  });
+
+  describe("deeply nested structures", () => {
+    it("should handle optional(or(object()))", () => {
+      const parser = optional(
+        or(
+          object({
+            a: option("-a"),
+            b: option("-b"),
+          }),
+          object({
+            c: option("-c"),
+            d: option("-d"),
+          }),
+        ),
+      );
+
+      // First branch
+      const result1 = parse(parser, ["-a", "-b"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.deepEqual(result1.value, { a: true, b: true });
+      }
+
+      // Second branch
+      const result2 = parse(parser, ["-c", "-d"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.deepEqual(result2.value, { c: true, d: true });
+      }
+
+      // No input - should return undefined
+      const result3 = parse(parser, []);
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, undefined);
+      }
+    });
+
+    it("should handle 5+ levels of command nesting", () => {
+      const level5 = command("level5", object({ flag: flag("-f") }));
+      const level4 = command("level4", object({ sub: level5 }));
+      const level3 = command("level3", object({ sub: level4 }));
+      const level2 = command("level2", object({ sub: level3 }));
+      const level1 = command("level1", object({ sub: level2 }));
+
+      const result = parse(
+        level1,
+        ["level1", "level2", "level3", "level4", "level5", "-f"],
+      );
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, {
+          sub: {
+            sub: {
+              sub: {
+                sub: {
+                  flag: true,
+                },
+              },
+            },
+          },
+        });
+      }
+    });
+  });
+
+  describe("or() branch mixing with 'cannot be used together'", () => {
+    it("should detect when options from different branches are mixed", () => {
+      const branchA = object({
+        mode: constant("add" as const),
+        files: multiple(argument(string({ metavar: "FILE" }))),
+      });
+      const branchB = object({
+        mode: constant("remove" as const),
+        force: flag("-f", "--force"),
+      });
+      const parser = or(branchA, branchB);
+
+      // Using options from both branches
+      const result = parse(parser, ["file.txt", "-f"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assertErrorIncludes(result.error, "cannot be used together");
+      }
+    });
+
+    it("should allow valid usage within single branch", () => {
+      const branchA = object({
+        verbose: flag("-v"),
+        files: multiple(argument(string({ metavar: "FILE" }))),
+      });
+      const branchB = object({
+        quiet: flag("-q"),
+        force: flag("-f"),
+      });
+      const parser = or(branchA, branchB);
+
+      // All from first branch
+      const result1 = parse(parser, ["-v", "file1.txt", "file2.txt"]);
+      assert.ok(result1.success);
+
+      // All from second branch
+      const result2 = parse(parser, ["-q", "-f"]);
+      assert.ok(result2.success);
+    });
   });
 });

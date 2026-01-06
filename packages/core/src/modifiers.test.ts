@@ -42,6 +42,7 @@ describe("optional", () => {
       buffer: ["-v"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -63,6 +64,7 @@ describe("optional", () => {
       buffer: ["-n", "Alice"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -85,6 +87,7 @@ describe("optional", () => {
       buffer: ["--help"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -167,6 +170,7 @@ describe("optional", () => {
       buffer: [] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -188,6 +192,7 @@ describe("optional", () => {
       buffer: ["-v"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: true,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -208,6 +213,7 @@ describe("optional", () => {
       buffer: ["-vd"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -236,6 +242,7 @@ describe("optional", () => {
       buffer: ["-n", "test"] as readonly string[],
       state: undefined,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -474,6 +481,7 @@ describe("optional", () => {
       buffer: ["--", "positional"] as readonly string[],
       state: optionalParser.initialState,
       optionsTerminated: false,
+      usage: optionalParser.usage,
     };
 
     const parseResult = optionalParser.parse(context);
@@ -507,6 +515,7 @@ describe("withDefault", () => {
       buffer: ["-v"] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -565,6 +574,7 @@ describe("withDefault", () => {
       buffer: ["-n", "Alice"] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -590,6 +600,7 @@ describe("withDefault", () => {
       buffer: ["--help"] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -640,6 +651,7 @@ describe("withDefault", () => {
       buffer: [] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -715,6 +727,7 @@ describe("withDefault", () => {
       buffer: ["-n", "test"] as readonly string[],
       state: undefined,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -1132,6 +1145,7 @@ describe("withDefault", () => {
       buffer: ["--", "positional"] as readonly string[],
       state: defaultParser.initialState,
       optionsTerminated: false,
+      usage: defaultParser.usage,
     };
 
     const parseResult = defaultParser.parse(context);
@@ -1196,6 +1210,7 @@ describe("map", () => {
       buffer: ["-v"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1218,6 +1233,7 @@ describe("map", () => {
       buffer: ["-n", "alice"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1239,6 +1255,7 @@ describe("map", () => {
       buffer: ["-p", "8080"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1260,6 +1277,7 @@ describe("map", () => {
       buffer: ["input.txt"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1281,6 +1299,7 @@ describe("map", () => {
       buffer: [] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1302,6 +1321,7 @@ describe("map", () => {
       buffer: ["--help"] as readonly string[],
       state: mappedParser.initialState,
       optionsTerminated: false,
+      usage: mappedParser.usage,
     };
 
     const parseResult = mappedParser.parse(context);
@@ -1730,6 +1750,7 @@ describe("multiple", () => {
       buffer: ["-l", "en", "-l", "fr"] as readonly string[],
       state: multipleParser.initialState,
       optionsTerminated: false,
+      usage: multipleParser.usage,
     };
 
     let parseResult = multipleParser.parse(context);
@@ -1907,6 +1928,7 @@ describe("multiple", () => {
       buffer: ["arg1"] as readonly string[],
       state: [],
       optionsTerminated: false,
+      usage: multipleParser.usage,
     };
 
     const parseResult1 = multipleParser.parse(context1);
@@ -2250,6 +2272,7 @@ describe("multiple() error customization", () => {
       buffer: ["--flag=test"],
       state: { success: true, value: false },
       optionsTerminated: false,
+      usage: parser.usage,
     });
 
     assert.ok(!result.success);
@@ -2274,6 +2297,7 @@ describe("multiple() error customization", () => {
       buffer: ["first"],
       state: undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     });
     assert.ok(firstResult.success);
 
@@ -2282,6 +2306,7 @@ describe("multiple() error customization", () => {
       buffer: ["second"],
       state: firstResult.success ? firstResult.next.state : undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     });
 
     assert.ok(!secondResult.success);
@@ -2291,5 +2316,234 @@ describe("multiple() error customization", () => {
         'Argument "STRING" was already provided.',
       );
     }
+  });
+});
+
+describe("state management edge cases", () => {
+  describe("inner parser succeeds without consuming", () => {
+    it("should handle optional(constant()) - inner succeeds without consuming", () => {
+      // constant() always succeeds without consuming any input
+      const parser = optional(constant("fixed-value"));
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        // Should return the constant value, not undefined
+        assert.equal(result.value, "fixed-value");
+      }
+    });
+
+    it("should handle withDefault(constant()) - inner succeeds without consuming", () => {
+      const parser = withDefault(constant("inner-value"), "default-value");
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        // constant() succeeds, so we get inner value, not default
+        assert.equal(result.value, "inner-value");
+      }
+    });
+
+    it("should handle state unwrapping when inner parser succeeds with no consume", () => {
+      // Test that state is properly unwrapped in complete()
+      const parser = optional(constant(42));
+
+      const context = {
+        buffer: [] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const parseResult = parser.parse(context);
+      assert.ok(parseResult.success);
+      if (parseResult.success) {
+        const completeResult = parser.complete(parseResult.next.state);
+        assert.ok(completeResult.success);
+        if (completeResult.success) {
+          assert.equal(completeResult.value, 42);
+        }
+      }
+    });
+  });
+
+  describe("optionsTerminated propagation", () => {
+    it("should propagate optionsTerminated through optional()", () => {
+      const parser = optional(argument(string()));
+
+      // With optionsTerminated = true, arguments should work
+      const context = {
+        buffer: ["--looks-like-option"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        // Should consume the argument even though it looks like an option
+        assert.deepEqual(result.consumed, ["--looks-like-option"]);
+        assert.deepEqual(result.next.buffer, []);
+        // optionsTerminated should be preserved in next context
+        assert.equal(result.next.optionsTerminated, true);
+      }
+    });
+
+    it("should propagate optionsTerminated through withDefault()", () => {
+      const parser = withDefault(argument(string()), "default");
+
+      // With optionsTerminated = true
+      const context = {
+        buffer: ["-arg"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        // Should consume the argument even though it starts with -
+        assert.deepEqual(result.consumed, ["-arg"]);
+        assert.equal(result.next.optionsTerminated, true);
+      }
+    });
+
+    it("should propagate optionsTerminated through multiple()", () => {
+      const parser = multiple(argument(string()));
+
+      const context = {
+        buffer: ["--arg1", "--arg2"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      };
+
+      // First parse
+      const result1 = parser.parse(context);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.deepEqual(result1.consumed, ["--arg1"]);
+        assert.equal(result1.next.optionsTerminated, true);
+
+        // Second parse
+        const result2 = parser.parse(result1.next);
+        assert.ok(result2.success);
+        if (result2.success) {
+          assert.deepEqual(result2.consumed, ["--arg2"]);
+          assert.equal(result2.next.optionsTerminated, true);
+        }
+      }
+    });
+  });
+
+  describe("constant() with optional()", () => {
+    // Note: In object() context, optional(constant()) returns undefined
+    // because object() doesn't call parse() on parsers that can't consume
+    // any more input. This is expected behavior - constant() is typically
+    // used for discriminated unions, not for default values in object().
+    // Use withDefault() instead for default values.
+    it("should return undefined in object() context (documents current behavior)", () => {
+      const parser = object({
+        mode: optional(constant("default-mode" as const)),
+        verbose: optional(option("-v")),
+      });
+
+      // Empty input - optional returns undefined because constant() is never
+      // tried (it can't consume anything)
+      const result1 = parse(parser, []);
+      assert.ok(result1.success);
+      if (result1.success) {
+        // This documents current behavior - mode is undefined, not "default-mode"
+        assert.equal(result1.value.mode, undefined);
+        assert.equal(result1.value.verbose, undefined);
+      }
+
+      // With verbose flag
+      const result2 = parse(parser, ["-v"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value.mode, undefined);
+        assert.equal(result2.value.verbose, true);
+      }
+    });
+
+    it("should return constant value when used standalone (not in object)", () => {
+      // When used standalone with parse(), optional(constant()) works as expected
+      const parser = optional(constant("fixed-value"));
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "fixed-value");
+      }
+    });
+
+    it("should handle map(optional(constant()))", () => {
+      const parser = map(
+        optional(constant(10)),
+        (value) => value ?? 0,
+      );
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        // constant() succeeds, so we get 10, not 0
+        assert.equal(result.value, 10);
+      }
+    });
+  });
+
+  describe("nested state management", () => {
+    it("should handle optional(optional()) correctly", () => {
+      const parser = optional(optional(option("-v")));
+
+      // With -v
+      const result1 = parse(parser, ["-v"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, true);
+      }
+
+      // Without -v - outer optional wraps inner optional's undefined
+      const result2 = parse(parser, []);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, undefined);
+      }
+    });
+
+    it("should handle multiple(optional())", () => {
+      const parser = multiple(optional(option("-v")));
+
+      // This creates an array of optional values
+      const context = {
+        buffer: ["-v"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.consumed, ["-v"]);
+      }
+    });
+
+    it("should handle withDefault(withDefault())", () => {
+      const inner = withDefault(option("-v"), false);
+      const outer = withDefault(inner, false);
+
+      // No input - should use outer default
+      const result = parse(outer, []);
+      assert.ok(result.success);
+      if (result.success) {
+        // Inner withDefault makes option return false when not present
+        // Outer withDefault doesn't change that
+        assert.equal(result.value, false);
+      }
+    });
   });
 });

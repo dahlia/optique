@@ -655,7 +655,7 @@ normally:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
-import { message } from "@optique/core/message";
+import { message, values } from "@optique/core/message";
 import { multiple } from "@optique/core/modifiers";
 import { argument, option } from "@optique/core/primitives";
 import { path, print, run } from "@optique/run";
@@ -719,7 +719,7 @@ if (config.headers.length > 0) {
   });
 }
 
-print(message`Tags: ${config.tags.join(", ")}.`);
+print(message`Tags: ${values(config.tags)}.`);
 //                          ^?
 
 ~~~~

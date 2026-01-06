@@ -94,6 +94,7 @@ export interface RunOptions {
    */
   readonly completion?: "command" | "option" | "both" | {
     readonly mode?: "command" | "option" | "both";
+    readonly name?: "singular" | "plural" | "both";
     readonly shells?: Record<string, ShellCompletion>;
   };
 
@@ -246,6 +247,9 @@ export function run<T extends Parser<unknown, unknown>>(
         ? completion
         : (completion.mode ?? "both"),
       shells: typeof completion === "string" ? undefined : completion.shells,
+      name: typeof completion === "string"
+        ? "both"
+        : (completion.name ?? "both"),
       onShow: () => process.exit(0) as never,
     }
     : undefined;

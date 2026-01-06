@@ -115,6 +115,33 @@ export type UsageTerm =
      * arguments, options, commands, or other usage terms.
      */
     readonly terms: readonly Usage[];
+  }
+  /**
+   * A literal term, which represents a fixed string value in the command-line
+   * usage. Unlike metavars which are placeholders for user-provided values,
+   * literals represent exact strings that must be typed as-is.
+   * @since 0.8.0
+   */
+  | {
+    /**
+     * The type of the term, which is always `"literal"` for this term.
+     */
+    readonly type: "literal";
+    /**
+     * The literal value that must be provided exactly as written.
+     */
+    readonly value: string;
+  }
+  /**
+   * A pass-through term, which represents unrecognized options that are
+   * collected and passed through to an underlying tool or command.
+   * @since 0.8.0
+   */
+  | {
+    /**
+     * The type of the term, which is always `"passthrough"` for this term.
+     */
+    readonly type: "passthrough";
   };
 
 /**
@@ -124,6 +151,135 @@ export type UsageTerm =
  * optional components, as well as any exclusive groups of terms.
  */
 export type Usage = readonly UsageTerm[];
+
+/**
+ * Extracts all option names from a usage description.
+ *
+ * This function recursively traverses a {@link Usage} tree and collects all
+ * option names defined within it, including those nested inside optional,
+ * multiple, and exclusive terms.
+ *
+ * @param usage The usage description to extract option names from.
+ * @returns A set containing all option names found in the usage description.
+ *
+ * @example
+ * ```typescript
+ * const usage: Usage = [
+ *   { type: "option", names: ["--verbose", "-v"] },
+ *   { type: "option", names: ["--quiet", "-q"] },
+ * ];
+ * const names = extractOptionNames(usage);
+ * // names = Set(["--verbose", "-v", "--quiet", "-q"])
+ * ```
+ */
+export function extractOptionNames(usage: Usage): Set<string> {
+  const names = new Set<string>();
+
+  function traverseUsage(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      if (term.type === "option") {
+        for (const name of term.names) {
+          names.add(name);
+        }
+      } else if (term.type === "optional" || term.type === "multiple") {
+        traverseUsage(term.terms);
+      } else if (term.type === "exclusive") {
+        for (const exclusiveUsage of term.terms) {
+          traverseUsage(exclusiveUsage);
+        }
+      }
+    }
+  }
+
+  traverseUsage(usage);
+  return names;
+}
+
+/**
+ * Extracts all command names from a Usage array.
+ *
+ * This function recursively traverses the usage structure and collects
+ * all command names, similar to {@link extractOptionNames}.
+ *
+ * @param usage The usage structure to extract command names from
+ * @returns A Set of all command names found in the usage structure
+ *
+ * @example
+ * ```typescript
+ * const usage: Usage = [
+ *   { type: "command", name: "build" },
+ *   { type: "command", name: "test" },
+ * ];
+ * const names = extractCommandNames(usage);
+ * // names = Set(["build", "test"])
+ * ```
+ * @since 0.7.0
+ */
+export function extractCommandNames(usage: Usage): Set<string> {
+  const names = new Set<string>();
+
+  function traverseUsage(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      if (term.type === "command") {
+        names.add(term.name);
+      } else if (term.type === "optional" || term.type === "multiple") {
+        traverseUsage(term.terms);
+      } else if (term.type === "exclusive") {
+        for (const exclusiveUsage of term.terms) {
+          traverseUsage(exclusiveUsage);
+        }
+      }
+    }
+  }
+
+  traverseUsage(usage);
+  return names;
+}
+
+/**
+ * Extracts all argument metavars from a Usage array.
+ *
+ * This function recursively traverses the usage structure and collects
+ * all argument metavariable names, similar to {@link extractOptionNames}
+ * and {@link extractCommandNames}.
+ *
+ * @param usage The usage structure to extract argument metavars from.
+ * @returns A Set of all argument metavars found in the usage structure.
+ *
+ * @example
+ * ```typescript
+ * const usage: Usage = [
+ *   { type: "argument", metavar: "FILE" },
+ *   { type: "argument", metavar: "OUTPUT" },
+ * ];
+ * const metavars = extractArgumentMetavars(usage);
+ * // metavars = Set(["FILE", "OUTPUT"])
+ * ```
+ * @since 0.9.0
+ */
+export function extractArgumentMetavars(usage: Usage): Set<string> {
+  const metavars = new Set<string>();
+
+  function traverseUsage(terms: Usage): void {
+    if (!terms || !Array.isArray(terms)) return;
+    for (const term of terms) {
+      if (term.type === "argument") {
+        metavars.add(term.metavar);
+      } else if (term.type === "optional" || term.type === "multiple") {
+        traverseUsage(term.terms);
+      } else if (term.type === "exclusive") {
+        for (const exclusiveUsage of term.terms) {
+          traverseUsage(exclusiveUsage);
+        }
+      }
+    }
+  }
+
+  traverseUsage(usage);
+  return metavars;
+}
 
 /**
  * Options for formatting usage descriptions.
@@ -462,6 +618,19 @@ function* formatUsageTermInternal(
         width: 1,
       };
     }
+  } else if (term.type === "literal") {
+    // Literal values are displayed as-is without special formatting
+    yield {
+      text: term.value,
+      width: term.value.length,
+    };
+  } else if (term.type === "passthrough") {
+    // Pass-through options are displayed with a special format
+    const text = "[...]";
+    yield {
+      text: options?.colors ? `\x1b[2m${text}\x1b[0m` : text, // Dim
+      width: text.length,
+    };
   } else {
     throw new TypeError(
       `Unknown usage term type: ${term["type"]}.`,

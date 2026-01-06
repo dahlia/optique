@@ -378,13 +378,45 @@ const config = run(parser, { completion: "both" });
 The `mode` option controls how completion is triggered:
 
 `"command"`
-:   Completion via subcommand only (`myapp completion bash`)
+:   Completion via subcommand (`myapp completion bash`)
 
 `"option"`
-:   Completion via option only (`myapp --completion bash`)
+:   Completion via option (`myapp --completion bash`)
 
 `"both"`
 :   Both command and option patterns supported
+
+### Naming conventions
+
+*This API is available since Optique 0.7.0.*
+
+You can configure whether to use singular (`completion`), plural (`completions`),
+or both naming conventions for the completion command and option:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { run } from "@optique/run";
+
+const parser = object({});
+
+const config = run(parser, {
+  completion: {
+    mode: "both",
+    name: "plural", // Use "completions" and "--completions"
+  }
+});
+~~~~
+
+The `name` option accepts:
+
+`"singular"`
+:   Use `completion` command and `--completion` option.
+
+`"plural"`
+:   Use `completions` command and `--completions` option.
+
+`"both"` (default)
+:   Use both singular and plural forms.
 
 ### Automatic handling
 

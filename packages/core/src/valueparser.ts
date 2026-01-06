@@ -162,18 +162,18 @@ export function isValueParser<T>(object: unknown): object is ValueParser<T> {
  * This parser validates that the input string matches one of
  * the specified values. If the input does not match any of the values,
  * it returns an error message indicating the valid options.
- * @param values An array of valid string values that this parser can accept.
+ * @param choices An array of valid string values that this parser can accept.
  * @param options Configuration options for the choice parser.
  * @returns A {@link ValueParser} that checks if the input matches one of the
  *          specified values.
  */
 export function choice<const T extends string>(
-  values: readonly T[],
+  choices: readonly T[],
   options: ChoiceOptions = {},
 ): ValueParser<T> {
   const normalizedValues = options.caseInsensitive
-    ? values.map((v) => v.toLowerCase())
-    : values as readonly string[];
+    ? choices.map((v) => v.toLowerCase())
+    : choices as readonly string[];
   return {
     metavar: options.metavar ?? "TYPE",
     parse(input: string): ValueParserResult<T> {
@@ -182,16 +182,24 @@ export function choice<const T extends string>(
         : input;
       const index = normalizedValues.indexOf(normalizedInput);
       if (index < 0) {
+        // Format choices as "a", "b", "c" instead of "a, b, c"
+        let choicesList: Message = [];
+        for (let i = 0; i < choices.length; i++) {
+          if (i > 0) {
+            choicesList = [...choicesList, ...message`, `];
+          }
+          choicesList = [...choicesList, ...message`${choices[i]}`];
+        }
         return {
           success: false,
           error: options.errors?.invalidChoice
             ? (typeof options.errors.invalidChoice === "function"
-              ? options.errors.invalidChoice(input, values)
+              ? options.errors.invalidChoice(input, choices)
               : options.errors.invalidChoice)
-            : message`Expected one of ${values.join(", ")}, but got ${input}.`,
+            : message`Expected one of ${choicesList}, but got ${input}.`,
         };
       }
-      return { success: true, value: values[index] };
+      return { success: true, value: choices[index] };
     },
     format(value: T): string {
       return value;
@@ -201,7 +209,7 @@ export function choice<const T extends string>(
         ? prefix.toLowerCase()
         : prefix;
 
-      return values
+      return choices
         .filter((value) => {
           const normalizedValue = options.caseInsensitive
             ? value.toLowerCase()
@@ -470,7 +478,7 @@ export function integer(
   return {
     metavar: options?.metavar ?? "INTEGER",
     parse(input: string): ValueParserResult<number> {
-      if (!input.match(/^\d+$/)) {
+      if (!input.match(/^-?\d+$/)) {
         return {
           success: false,
           error: options?.errors?.invalidInteger

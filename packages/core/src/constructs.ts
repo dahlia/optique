@@ -10,7 +10,49 @@ import type {
   Parser,
   ParserContext,
   ParserResult,
+  Suggestion,
 } from "./parser.ts";
+import {
+  createErrorWithSuggestions,
+  deduplicateSuggestions,
+} from "./suggestion.ts";
+import {
+  extractArgumentMetavars,
+  extractCommandNames,
+  extractOptionNames,
+  type Usage,
+  type UsageTerm,
+} from "./usage.ts";
+
+/**
+ * Checks if the given token is an option name that requires a value
+ * (i.e., has a metavar) within the given usage terms.
+ * @param usage The usage terms to search through.
+ * @param token The token to check.
+ * @returns `true` if the token is an option that requires a value, `false` otherwise.
+ */
+function isOptionRequiringValue(usage: Usage, token: string): boolean {
+  function traverse(terms: Usage): boolean {
+    if (!terms || !Array.isArray(terms)) return false;
+    for (const term of terms) {
+      if (term.type === "option") {
+        // Option requires a value if it has a metavar
+        if (term.metavar && term.names.includes(token)) {
+          return true;
+        }
+      } else if (term.type === "optional" || term.type === "multiple") {
+        if (traverse(term.terms)) return true;
+      } else if (term.type === "exclusive") {
+        for (const exclusiveUsage of term.terms) {
+          if (traverse(exclusiveUsage)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  return traverse(usage);
+}
 import type { ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -25,20 +67,336 @@ export interface OrOptions {
 }
 
 /**
+ * Context information about what types of inputs are expected,
+ * used for generating contextual error messages.
+ * @since 0.9.0
+ */
+export interface NoMatchContext {
+  /**
+   * Whether any of the parsers expect options.
+   */
+  readonly hasOptions: boolean;
+
+  /**
+   * Whether any of the parsers expect commands.
+   */
+  readonly hasCommands: boolean;
+
+  /**
+   * Whether any of the parsers expect arguments.
+   */
+  readonly hasArguments: boolean;
+}
+
+/**
  * Options for customizing error messages in the {@link or} parser.
  * @since 0.5.0
  */
 export interface OrErrorOptions {
   /**
    * Custom error message when no parser matches.
+   * Can be a static message or a function that receives context about what
+   * types of inputs are expected, allowing for more precise error messages.
+   *
+   * @example
+   * ```typescript
+   * // Static message (overrides all cases)
+   * { noMatch: message`Invalid input.` }
+   *
+   * // Dynamic message based on context (for i18n, etc.)
+   * {
+   *   noMatch: ({ hasOptions, hasCommands, hasArguments }) => {
+   *     if (hasArguments && !hasOptions && !hasCommands) {
+   *       return message`인수가 필요합니다.`; // Korean: "Argument required"
+   *     }
+   *     // ... other cases
+   *   }
+   * }
+   * ```
+   * @since 0.9.0 - Function form added
    */
-  noMatch?: Message;
+  noMatch?: Message | ((context: NoMatchContext) => Message);
 
   /**
    * Custom error message for unexpected input.
    * Can be a static message or a function that receives the unexpected token.
    */
   unexpectedInput?: Message | ((token: string) => Message);
+
+  /**
+   * Custom function to format suggestion messages.
+   * If provided, this will be used instead of the default "Did you mean?"
+   * formatting. The function receives an array of similar valid options/commands
+   * and should return a formatted message to append to the error.
+   *
+   * @param suggestions Array of similar valid option/command names
+   * @returns Formatted message to append to the error (can be empty array for no suggestions)
+   * @since 0.7.0
+   */
+  suggestions?: (suggestions: readonly string[]) => Message;
+}
+
+/**
+ * Extracts required (non-optional) usage terms from a usage array.
+ * @param usage The usage to extract required terms from
+ * @returns Usage containing only required (non-optional) terms
+ */
+function extractRequiredUsage(usage: Usage): Usage {
+  const required: UsageTerm[] = [];
+
+  for (const term of usage) {
+    if (term.type === "optional") {
+      // Skip optional terms
+      continue;
+    } else if (term.type === "exclusive") {
+      // For exclusive terms, recursively extract required usage from each branch
+      const requiredBranches = term.terms
+        .map((branch) => extractRequiredUsage(branch))
+        .filter((branch) => branch.length > 0);
+      if (requiredBranches.length > 0) {
+        required.push({ type: "exclusive", terms: requiredBranches });
+      }
+    } else if (term.type === "multiple") {
+      // For multiple terms, only include if min > 0 (required)
+      if (term.min > 0) {
+        const requiredTerms = extractRequiredUsage(term.terms);
+        if (requiredTerms.length > 0) {
+          required.push({
+            type: "multiple",
+            terms: requiredTerms,
+            min: term.min,
+          });
+        }
+      }
+    } else {
+      // Include other terms (argument, option, command) as-is
+      required.push(term);
+    }
+  }
+
+  return required;
+}
+
+/**
+ * Analyzes parsers to determine what types of inputs are expected.
+ * @param parsers The parsers being combined
+ * @returns Context about what types of inputs are expected
+ */
+function analyzeNoMatchContext(
+  parsers: Parser<unknown, unknown>[],
+): NoMatchContext {
+  // Collect usage information from all child parsers
+  const combinedUsage = [
+    { type: "exclusive" as const, terms: parsers.map((p) => p.usage) },
+  ];
+
+  // Extract only required (non-optional) terms for more accurate error messages
+  const requiredUsage = extractRequiredUsage(combinedUsage);
+
+  return {
+    hasOptions: extractOptionNames(requiredUsage).size > 0,
+    hasCommands: extractCommandNames(requiredUsage).size > 0,
+    hasArguments: extractArgumentMetavars(requiredUsage).size > 0,
+  };
+}
+
+/**
+ * Error class thrown when duplicate option names are detected during parser
+ * construction. This is a programmer error, not a user error.
+ */
+export class DuplicateOptionError extends Error {
+  constructor(
+    public readonly optionName: string,
+    public readonly sources: readonly (string | symbol)[],
+  ) {
+    const sourceNames = sources.map((s) =>
+      typeof s === "symbol" ? s.description ?? s.toString() : s
+    );
+    super(
+      `Duplicate option name "${optionName}" found in fields: ` +
+        `${sourceNames.join(", ")}. Each option name must be unique within a ` +
+        `parser combinator.`,
+    );
+    this.name = "DuplicateOptionError";
+  }
+}
+
+/**
+ * Checks for duplicate option names across parser sources and throws an error
+ * if duplicates are found. This should be called at construction time.
+ * @param parserSources Array of [source, usage] tuples
+ * @throws DuplicateOptionError if duplicate option names are found
+ */
+function checkDuplicateOptionNames(
+  parserSources: ReadonlyArray<readonly [string | symbol, Usage]>,
+): void {
+  const optionNameSources = new Map<string, (string | symbol)[]>();
+
+  for (const [source, usage] of parserSources) {
+    const names = extractOptionNames(usage);
+    for (const name of names) {
+      if (!optionNameSources.has(name)) {
+        optionNameSources.set(name, []);
+      }
+      optionNameSources.get(name)!.push(source);
+    }
+  }
+
+  // Check for duplicates
+  for (const [name, sources] of optionNameSources) {
+    if (sources.length > 1) {
+      throw new DuplicateOptionError(name, sources);
+    }
+  }
+}
+
+/**
+ * Generates a contextual error message based on what types of inputs
+ * the parsers expect (options, commands, or arguments).
+ * @param context Context about what types of inputs are expected
+ * @returns An appropriate error message
+ */
+function generateNoMatchError(context: NoMatchContext): Message {
+  const { hasOptions, hasCommands, hasArguments } = context;
+
+  // Generate specific message based on what's expected
+  if (hasArguments && !hasOptions && !hasCommands) {
+    return message`Missing required argument.`;
+  } else if (hasCommands && !hasOptions && !hasArguments) {
+    return message`No matching command found.`;
+  } else if (hasOptions && !hasCommands && !hasArguments) {
+    return message`No matching option found.`;
+  } else if (hasCommands && hasOptions && !hasArguments) {
+    return message`No matching option or command found.`;
+  } else if (hasArguments && hasOptions && !hasCommands) {
+    return message`No matching option or argument found.`;
+  } else if (hasArguments && hasCommands && !hasOptions) {
+    return message`No matching command or argument found.`;
+  } else {
+    // All three types present
+    return message`No matching option, command, or argument found.`;
+  }
+}
+
+/**
+ * Shared state type for or() and longestMatch() combinators.
+ * @internal
+ */
+type ExclusiveState = undefined | [number, ParserResult<unknown>];
+
+/**
+ * Options type for exclusive combinators (or/longestMatch).
+ * @internal
+ */
+interface ExclusiveErrorOptions {
+  noMatch?: Message | ((context: NoMatchContext) => Message);
+  unexpectedInput?: Message | ((token: string) => Message);
+  suggestions?: (suggestions: readonly string[]) => Message;
+}
+
+/**
+ * Creates a complete() method shared by or() and longestMatch().
+ * @internal
+ */
+function createExclusiveComplete(
+  parsers: Parser<unknown, unknown>[],
+  options: { errors?: ExclusiveErrorOptions } | undefined,
+  noMatchContext: NoMatchContext,
+): (state: ExclusiveState) => ValueParserResult<unknown> {
+  return (state) => {
+    if (state == null) {
+      return {
+        success: false,
+        error: getNoMatchError(options, noMatchContext),
+      };
+    }
+    const [i, result] = state;
+    if (result.success) return parsers[i].complete(result.next.state);
+    return { success: false, error: result.error };
+  };
+}
+
+/**
+ * Creates a suggest() method shared by or() and longestMatch().
+ * @internal
+ */
+function createExclusiveSuggest(
+  parsers: Parser<unknown, unknown>[],
+): (context: ParserContext<ExclusiveState>, prefix: string) => Suggestion[] {
+  return (context, prefix) => {
+    const suggestions: Suggestion[] = [];
+
+    if (context.state == null) {
+      // No parser has been selected yet, get suggestions from all parsers
+      for (const parser of parsers) {
+        const parserSuggestions = parser.suggest({
+          ...context,
+          state: parser.initialState,
+        }, prefix);
+        suggestions.push(...parserSuggestions);
+      }
+    } else {
+      // A parser has been selected, delegate to that parser
+      const [index, parserResult] = context.state;
+      if (parserResult.success) {
+        const parserSuggestions = parsers[index].suggest({
+          ...context,
+          state: parserResult.next.state,
+        }, prefix);
+        suggestions.push(...parserSuggestions);
+      }
+    }
+
+    return deduplicateSuggestions(suggestions);
+  };
+}
+
+/**
+ * Gets the no-match error, either from custom options or default.
+ * Shared by or() and longestMatch().
+ * @internal
+ */
+function getNoMatchError(
+  options: { errors?: ExclusiveErrorOptions } | undefined,
+  noMatchContext: NoMatchContext,
+): Message {
+  const customNoMatch = options?.errors?.noMatch;
+  return customNoMatch
+    ? (typeof customNoMatch === "function"
+      ? customNoMatch(noMatchContext)
+      : customNoMatch)
+    : generateNoMatchError(noMatchContext);
+}
+
+/**
+ * Creates default error for parse() method when buffer is not empty.
+ * Shared by or() and longestMatch().
+ * @internal
+ */
+function createUnexpectedInputError(
+  token: string,
+  usage: Usage,
+  options: { errors?: ExclusiveErrorOptions } | undefined,
+): Message {
+  const defaultMsg = message`Unexpected option or subcommand: ${
+    eOptionName(token)
+  }.`;
+
+  // If custom error is provided, use it
+  if (options?.errors?.unexpectedInput != null) {
+    return typeof options.errors.unexpectedInput === "function"
+      ? options.errors.unexpectedInput(token)
+      : options.errors.unexpectedInput;
+  }
+
+  // Otherwise, add suggestions to the default message
+  return createErrorWithSuggestions(
+    defaultMsg,
+    token,
+    usage,
+    "both",
+    options?.errors?.suggestions,
+  );
 }
 
 /**
@@ -566,45 +924,29 @@ export function or(
     parsers = args as Parser<unknown, unknown>[];
     options = undefined;
   }
+
+  // Analyze context once for error message generation
+  const noMatchContext = analyzeNoMatchContext(parsers);
+
   return {
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
     initialState: undefined,
-    complete(
-      state: undefined | [number, ParserResult<unknown>],
-    ): ValueParserResult<unknown> {
-      if (state == null) {
-        return {
-          success: false,
-          error: options?.errors?.noMatch ??
-            message`No matching option or command found.`,
-        };
-      }
-      const [i, result] = state;
-      if (result.success) return parsers[i].complete(result.next.state);
-      return { success: false, error: result.error };
-    },
+    complete: createExclusiveComplete(parsers, options, noMatchContext),
     parse(
       context: ParserContext<[number, ParserResult<unknown>]>,
     ): ParserResult<[number, ParserResult<unknown>]> {
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length < 1
-          ? (options?.errors?.noMatch ??
-            message`No matching option or command found.`)
-          : (() => {
-            const token = context.buffer[0];
-            const defaultMsg = message`Unexpected option or subcommand: ${
-              eOptionName(token)
-            }.`;
-            return options?.errors?.unexpectedInput != null
-              ? (typeof options.errors.unexpectedInput === "function"
-                ? options.errors.unexpectedInput(token)
-                : options.errors.unexpectedInput)
-              : defaultMsg;
-          })(),
+          ? getNoMatchError(options, noMatchContext)
+          : createUnexpectedInputError(
+            context.buffer[0],
+            context.usage,
+            options,
+          ),
       };
       const orderedParsers = parsers.map((p, i) =>
         [p, i] as [Parser<unknown, unknown>, number]
@@ -646,45 +988,7 @@ export function or(
       }
       return { ...error, success: false };
     },
-    suggest(context, prefix) {
-      const suggestions = [];
-
-      if (context.state == null) {
-        // No parser has been selected yet, get suggestions from all parsers
-        for (const parser of parsers) {
-          const parserSuggestions = parser.suggest({
-            ...context,
-            state: parser.initialState,
-          }, prefix);
-          suggestions.push(...parserSuggestions);
-        }
-      } else {
-        // A parser has been selected, delegate to that parser
-        const [index, parserResult] = context.state;
-        if (parserResult.success) {
-          const parserSuggestions = parsers[index].suggest({
-            ...context,
-            state: parserResult.next.state,
-          }, prefix);
-          suggestions.push(...parserSuggestions);
-        }
-      }
-
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
-    },
+    suggest: createExclusiveSuggest(parsers),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
@@ -750,14 +1054,45 @@ export interface LongestMatchOptions {
 export interface LongestMatchErrorOptions {
   /**
    * Custom error message when no parser matches.
+   * Can be a static message or a function that receives context about what
+   * types of inputs are expected, allowing for more precise error messages.
+   *
+   * @example
+   * ```typescript
+   * // Static message (overrides all cases)
+   * { noMatch: message`Invalid input.` }
+   *
+   * // Dynamic message based on context (for i18n, etc.)
+   * {
+   *   noMatch: ({ hasOptions, hasCommands, hasArguments }) => {
+   *     if (hasArguments && !hasOptions && !hasCommands) {
+   *       return message`引数が必要です。`; // Japanese: "Argument required"
+   *     }
+   *     // ... other cases
+   *   }
+   * }
+   * ```
+   * @since 0.9.0 - Function form added
    */
-  noMatch?: Message;
+  noMatch?: Message | ((context: NoMatchContext) => Message);
 
   /**
    * Custom error message for unexpected input.
    * Can be a static message or a function that receives the unexpected token.
    */
   unexpectedInput?: Message | ((token: string) => Message);
+
+  /**
+   * Custom function to format suggestion messages.
+   * If provided, this will be used instead of the default "Did you mean?"
+   * formatting. The function receives an array of similar valid options/commands
+   * and should return a formatted message to append to the error.
+   *
+   * @param suggestions Array of similar valid option/command names
+   * @returns Formatted message to append to the error (can be empty array for no suggestions)
+   * @since 0.7.0
+   */
+  suggestions?: (suggestions: readonly string[]) => Message;
 }
 
 /**
@@ -951,26 +1286,17 @@ export function longestMatch(
     parsers = args as Parser<unknown, unknown>[];
     options = undefined;
   }
+
+  // Analyze context once for error message generation
+  const noMatchContext = analyzeNoMatchContext(parsers);
+
   return {
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
     usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
     initialState: undefined,
-    complete(
-      state: undefined | [number, ParserResult<unknown>],
-    ): ValueParserResult<unknown> {
-      if (state == null) {
-        return {
-          success: false,
-          error: options?.errors?.noMatch ??
-            message`No matching option or command found.`,
-        };
-      }
-      const [i, result] = state;
-      if (result.success) return parsers[i].complete(result.next.state);
-      return { success: false, error: result.error };
-    },
+    complete: createExclusiveComplete(parsers, options, noMatchContext),
     parse(
       context: ParserContext<[number, ParserResult<unknown>]>,
     ): ParserResult<[number, ParserResult<unknown>]> {
@@ -982,19 +1308,12 @@ export function longestMatch(
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length < 1
-          ? (options?.errors?.noMatch ??
-            message`No matching option or command found.`)
-          : (() => {
-            const token = context.buffer[0];
-            const defaultMsg = message`Unexpected option or subcommand: ${
-              eOptionName(token)
-            }.`;
-            return options?.errors?.unexpectedInput != null
-              ? (typeof options.errors.unexpectedInput === "function"
-                ? options.errors.unexpectedInput(token)
-                : options.errors.unexpectedInput)
-              : defaultMsg;
-          })(),
+          ? getNoMatchError(options, noMatchContext)
+          : createUnexpectedInputError(
+            context.buffer[0],
+            context.usage,
+            options,
+          ),
       };
 
       // Try all parsers and find the one with longest match
@@ -1033,50 +1352,13 @@ export function longestMatch(
 
       return { ...error, success: false };
     },
-    suggest(context, prefix) {
-      const suggestions = [];
-
-      if (context.state == null) {
-        // No parser has been selected yet, get suggestions from all parsers
-        for (const parser of parsers) {
-          const parserSuggestions = parser.suggest({
-            ...context,
-            state: parser.initialState,
-          }, prefix);
-          suggestions.push(...parserSuggestions);
-        }
-      } else {
-        // A parser has been selected, delegate to that parser
-        const [index, parserResult] = context.state;
-        if (parserResult.success) {
-          const parserSuggestions = parsers[index].suggest({
-            ...context,
-            state: parserResult.next.state,
-          }, prefix);
-          suggestions.push(...parserSuggestions);
-        }
-      }
-
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
-    },
+    suggest: createExclusiveSuggest(parsers),
     getDocFragments(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
     ) {
       let description: Message | undefined;
+      let footer: Message | undefined;
       let fragments: readonly DocFragment[];
 
       if (state.kind === "unavailable" || state.state == null) {
@@ -1091,6 +1373,7 @@ export function longestMatch(
             { kind: "available", state: result.next.state },
           );
           description = docResult.description;
+          footer = docResult.footer;
           fragments = docResult.fragments;
         } else {
           fragments = parsers.flatMap((p) =>
@@ -1099,7 +1382,7 @@ export function longestMatch(
         }
       }
 
-      return { description, fragments };
+      return { description, fragments, footer };
     },
   };
 }
@@ -1113,6 +1396,15 @@ export interface ObjectOptions {
    * Error messages customization.
    */
   readonly errors?: ObjectErrorOptions;
+
+  /**
+   * When `true`, allows duplicate option names across different fields.
+   * By default (`false`), duplicate option names will cause a parse error.
+   *
+   * @default `false`
+   * @since 0.7.0
+   */
+  readonly allowDuplicates?: boolean;
 }
 
 /**
@@ -1127,8 +1419,39 @@ export interface ObjectErrorOptions {
 
   /**
    * Error message when end of input is reached unexpectedly.
+   * Can be a static message or a function that receives context about what
+   * types of inputs are expected, allowing for more precise error messages.
+   *
+   * @example
+   * ```typescript
+   * // Static message (overrides all cases)
+   * { endOfInput: message`Invalid input.` }
+   *
+   * // Dynamic message based on context (for i18n, etc.)
+   * {
+   *   endOfInput: ({ hasOptions, hasCommands, hasArguments }) => {
+   *     if (hasArguments && !hasOptions && !hasCommands) {
+   *       return message`Argument manquant.`; // French: "Missing argument"
+   *     }
+   *     // ... other cases
+   *   }
+   * }
+   * ```
+   * @since 0.9.0 - Function form added
    */
-  readonly endOfInput?: Message;
+  readonly endOfInput?: Message | ((context: NoMatchContext) => Message);
+
+  /**
+   * Custom function to format suggestion messages.
+   * If provided, this will be used instead of the default "Did you mean?"
+   * formatting. The function receives an array of similar valid options/commands
+   * and should return a formatted message to append to the error.
+   *
+   * @param suggestions Array of similar valid option/command names
+   * @returns Formatted message to append to the error (can be empty array for no suggestions)
+   * @since 0.7.0
+   */
+  readonly suggestions?: (suggestions: readonly string[]) => Message;
 }
 
 /**
@@ -1282,6 +1605,20 @@ export function object<
   for (const key of parserKeys) {
     initialState[key as string | symbol] = parsers[key].initialState;
   }
+
+  // Check for duplicate option names at construction time unless explicitly allowed
+  if (!options.allowDuplicates) {
+    checkDuplicateOptionNames(
+      parserPairs.map(([field, parser]) =>
+        [field as string | symbol, parser.usage] as const
+      ),
+    );
+  }
+
+  // Analyze context once for error message generation
+  const noMatchContext = analyzeNoMatchContext(
+    parserKeys.map((k) => parsers[k]),
+  );
   return {
     $valueType: [],
     $stateType: [],
@@ -1293,20 +1630,74 @@ export function object<
         : never;
     },
     parse(context) {
+      // Check for duplicate option names unless explicitly allowed
+      if (!options.allowDuplicates) {
+        const optionNameSources = new Map<string, (string | symbol)[]>();
+
+        for (const [field, parser] of parserPairs) {
+          const names = extractOptionNames(parser.usage);
+          for (const name of names) {
+            if (!optionNameSources.has(name)) {
+              optionNameSources.set(name, []);
+            }
+            optionNameSources.get(name)!.push(field as string | symbol);
+          }
+        }
+
+        // Check for duplicates
+        for (const [name, sources] of optionNameSources) {
+          if (sources.length > 1) {
+            return {
+              success: false,
+              consumed: 0,
+              error: message`Duplicate option name ${
+                eOptionName(
+                  name,
+                )
+              } found in fields: ${
+                values(
+                  sources.map((s) =>
+                    typeof s === "symbol" ? s.description ?? s.toString() : s
+                  ),
+                )
+              }. Each option name must be unique within a parser combinator.`,
+            };
+          }
+        }
+      }
+
       let error: { consumed: number; error: Message } = {
         consumed: 0,
         error: context.buffer.length > 0
           ? (() => {
             const token = context.buffer[0];
             const customMessage = options.errors?.unexpectedInput;
-            return customMessage
-              ? (typeof customMessage === "function"
+
+            // If custom error message is provided, use it
+            if (customMessage) {
+              return typeof customMessage === "function"
                 ? customMessage(token)
-                : customMessage)
-              : message`Unexpected option or argument: ${token}.`;
+                : customMessage;
+            }
+
+            // Generate default error with suggestions
+            const baseError = message`Unexpected option or argument: ${token}.`;
+            return createErrorWithSuggestions(
+              baseError,
+              token,
+              context.usage,
+              "both",
+              options.errors?.suggestions,
+            );
           })()
-          : (options.errors?.endOfInput ??
-            message`Expected an option or argument, but got end of input.`),
+          : (() => {
+            const customEndOfInput = options.errors?.endOfInput;
+            return customEndOfInput
+              ? (typeof customEndOfInput === "function"
+                ? customEndOfInput(noMatchContext)
+                : customEndOfInput)
+              : generateNoMatchError(noMatchContext);
+          })(),
       };
 
       // Try greedy parsing: attempt to consume as many fields as possible
@@ -1404,7 +1795,33 @@ export function object<
     suggest(context, prefix) {
       const suggestions = [];
 
-      // Try getting suggestions from each parser based on their priority
+      // Check if the last token in the buffer is an option that requires a value.
+      // If so, only suggest values for that specific option parser, not all parsers.
+      // This prevents positional argument suggestions from appearing when completing
+      // an option value.
+      // See: https://github.com/dahlia/optique/issues/55
+      if (context.buffer.length > 0) {
+        const lastToken = context.buffer[context.buffer.length - 1];
+
+        // Find if any parser has this token as an option requiring a value
+        for (const [field, parser] of parserPairs) {
+          if (isOptionRequiringValue(parser.usage, lastToken)) {
+            // Only get suggestions from the parser that owns this option
+            const fieldState =
+              (context.state && typeof context.state === "object" &&
+                  field in context.state)
+                ? context.state[field]
+                : parser.initialState;
+
+            return Array.from(parser.suggest({
+              ...context,
+              state: fieldState,
+            }, prefix));
+          }
+        }
+      }
+
+      // Default behavior: try getting suggestions from each parser
       for (const [field, parser] of parserPairs) {
         const fieldState =
           (context.state && typeof context.state === "object" &&
@@ -1420,20 +1837,7 @@ export function object<
         suggestions.push(...fieldSuggestions);
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(
       state: DocState<{ readonly [K in keyof T]: unknown }>,
@@ -1463,12 +1867,28 @@ export function object<
 }
 
 /**
+ * Options for the {@link tuple} parser.
+ * @since 0.7.0
+ */
+export interface TupleOptions {
+  /**
+   * When `true`, allows duplicate option names across different parsers.
+   * By default (`false`), duplicate option names will cause a parse error.
+   *
+   * @default `false`
+   * @since 0.7.0
+   */
+  readonly allowDuplicates?: boolean;
+}
+
+/**
  * Creates a parser that combines multiple parsers into a sequential tuple parser.
  * The parsers are applied in the order they appear in the array, and all must
  * succeed for the tuple parser to succeed.
  * @template T A readonly array type where each element is a {@link Parser}.
  * @param parsers An array of parsers that will be applied sequentially
  *                to create a tuple of their results.
+ * @param options Optional configuration for the tuple parser.
  * @returns A {@link Parser} that produces a readonly tuple with the same length
  *          as the input array, where each element is the result of the
  *          corresponding parser.
@@ -1477,6 +1897,7 @@ export function tuple<
   const T extends readonly Parser<unknown, unknown>[],
 >(
   parsers: T,
+  options?: TupleOptions,
 ): Parser<
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -1496,6 +1917,7 @@ export function tuple<
  *              documentation and error messages.
  * @param parsers An array of parsers that will be applied sequentially
  *                to create a tuple of their results.
+ * @param options Optional configuration for the tuple parser.
  * @returns A {@link Parser} that produces a readonly tuple with the same length
  *          as the input array, where each element is the result of the
  *          corresponding parser.
@@ -1505,6 +1927,7 @@ export function tuple<
 >(
   label: string,
   parsers: T,
+  options?: TupleOptions,
 ): Parser<
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -1520,7 +1943,8 @@ export function tuple<
   const T extends readonly Parser<unknown, unknown>[],
 >(
   labelOrParsers: string | T,
-  maybeParsers?: T,
+  maybeParsersOrOptions?: T | TupleOptions,
+  maybeOptions?: TupleOptions,
 ): Parser<
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
@@ -1528,9 +1952,27 @@ export function tuple<
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
     : undefined;
-  const parsers = typeof labelOrParsers === "string"
-    ? maybeParsers!
-    : labelOrParsers;
+
+  let parsers: T;
+  let options: TupleOptions = {};
+
+  if (typeof labelOrParsers === "string") {
+    // tuple(label, parsers) or tuple(label, parsers, options)
+    parsers = maybeParsersOrOptions as T;
+    options = maybeOptions ?? {};
+  } else {
+    // tuple(parsers) or tuple(parsers, options)
+    parsers = labelOrParsers;
+    options = (maybeParsersOrOptions as TupleOptions) ?? {};
+  }
+
+  // Check for duplicate option names at construction time unless explicitly allowed
+  if (!options.allowDuplicates) {
+    checkDuplicateOptionNames(
+      parsers.map((parser, index) => [String(index), parser.usage] as const),
+    );
+  }
+
   return {
     $valueType: [],
     $stateType: [],
@@ -1679,20 +2121,7 @@ export function tuple<
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(
       state: DocState<{ readonly [K in keyof T]: unknown }>,
@@ -1753,6 +2182,21 @@ type ExtractObjectTypes<P> = P extends Parser<infer V, unknown>
   : never;
 
 /**
+ * Options for the {@link merge} parser.
+ * @since 0.7.0
+ */
+export interface MergeOptions {
+  /**
+   * When `true`, allows duplicate option names across merged parsers.
+   * By default (`false`), duplicate option names will cause a parse error.
+   *
+   * @default `false`
+   * @since 0.7.0
+   */
+  readonly allowDuplicates?: boolean;
+}
+
+/**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
  * It is useful for combining multiple {@link object} parsers so that
  * the unified parser produces a single object containing all the values
@@ -1771,6 +2215,33 @@ export function merge<
 >(
   a: ExtractObjectTypes<TA> extends never ? never : TA,
   b: ExtractObjectTypes<TB> extends never ? never : TB,
+): Parser<
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>,
+  Record<string | symbol, unknown>
+>;
+
+/**
+ * Merges multiple {@link object} parsers into a single {@link object} parser.
+ * It is useful for combining multiple {@link object} parsers so that
+ * the unified parser produces a single object containing all the values
+ * from the individual parsers while separating the fields into multiple
+ * groups.
+ * @template TA The type of the first parser.
+ * @template TB The type of the second parser.
+ * @param a The first {@link object} parser to merge.
+ * @param b The second {@link object} parser to merge.
+ * @param options Optional configuration for the merge parser.
+ * @return A new {@link object} parser that combines the values and states
+ *         of the two parsers into a single object.
+ */
+export function merge<
+  TA extends Parser<unknown, unknown>,
+  TB extends Parser<unknown, unknown>,
+>(
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  options: MergeOptions,
 ): Parser<
   & ExtractObjectTypes<TA>
   & ExtractObjectTypes<TB>,
@@ -2705,33 +3176,65 @@ export function merge<
   >;
 
 export function merge(
-  ...args: [
-    string,
-    ...Parser<
+  ...args:
+    | [
+      string,
+      ...Parser<
+        Record<string | symbol, unknown>,
+        Record<string | symbol, unknown>
+      >[],
+    ]
+    | Parser<
       Record<string | symbol, unknown>,
       Record<string | symbol, unknown>
-    >[],
-  ] | Parser<
-    Record<string | symbol, unknown>,
-    Record<string | symbol, unknown>
-  >[]
+    >[]
+    | [
+      ...Parser<
+        Record<string | symbol, unknown>,
+        Record<string | symbol, unknown>
+      >[],
+      MergeOptions,
+    ]
 ): Parser<
   Record<string | symbol, unknown>,
   Record<string | symbol, unknown>
 > {
   // Check if first argument is a label
   const label = typeof args[0] === "string" ? args[0] : undefined;
-  let parsers = typeof args[0] === "string"
-    ? args.slice(1) as Parser<
-      Record<string | symbol, unknown>,
-      Record<string | symbol, unknown>
-    >[]
-    : args as Parser<
-      Record<string | symbol, unknown>,
-      Record<string | symbol, unknown>
-    >[];
 
-  parsers = parsers.toSorted((a, b) => b.priority - a.priority);
+  // Check if last argument is options
+  const lastArg = args[args.length - 1];
+  const options: MergeOptions = (lastArg && typeof lastArg === "object" &&
+      !("parse" in lastArg) && !("complete" in lastArg))
+    ? lastArg as MergeOptions
+    : {};
+
+  // Extract parsers (excluding label and options)
+  const startIndex = typeof args[0] === "string" ? 1 : 0;
+  const endIndex = (lastArg && typeof lastArg === "object" &&
+      !("parse" in lastArg) && !("complete" in lastArg))
+    ? args.length - 1
+    : args.length;
+
+  const rawParsers = args.slice(startIndex, endIndex) as Parser<
+    Record<string | symbol, unknown>,
+    Record<string | symbol, unknown>
+  >[];
+
+  // Keep track of original indices before sorting
+  const withIndex = rawParsers.map((p, i) => [p, i] as const);
+  const sorted = withIndex.toSorted(([a], [b]) => b.priority - a.priority);
+  const parsers = sorted.map(([p]) => p);
+
+  // Check for duplicate option names at construction time unless explicitly allowed
+  if (!options.allowDuplicates) {
+    checkDuplicateOptionNames(
+      sorted.map(([parser, originalIndex]) =>
+        [String(originalIndex), parser.usage] as const
+      ),
+    );
+  }
+
   const initialState: Record<string | symbol, unknown> = {};
   for (const parser of parsers) {
     if (parser.initialState && typeof parser.initialState === "object") {
@@ -2910,20 +3413,7 @@ export function merge(
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(
       state: DocState<Record<string | symbol, unknown>>,
@@ -3291,20 +3781,7 @@ export function concat(
         suggestions.push(...parserSuggestions);
       }
 
-      // Remove duplicates by text/pattern
-      const seen = new Set<string>();
-      return suggestions.filter((suggestion) => {
-        const key = suggestion.kind === "literal"
-          ? suggestion.text
-          : `__FILE__:${suggestion.type}:${
-            suggestion.extensions?.join(",")
-          }:${suggestion.pattern}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
+      return deduplicateSuggestions(suggestions);
     },
     getDocFragments(state: DocState<readonly unknown[]>, _defaultValue?) {
       const fragments = parsers.flatMap((p, index) => {
@@ -3426,6 +3903,547 @@ export function group<TValue, TState>(
           { type: "section", ...labeledSection },
         ],
       };
+    },
+  };
+}
+
+/**
+ * Tagged union type representing which branch is selected.
+ * Uses tagged union to avoid collision with discriminator values.
+ * @internal
+ */
+type SelectedBranch<TDiscriminator extends string> =
+  | { readonly kind: "branch"; readonly key: TDiscriminator }
+  | { readonly kind: "default" };
+
+/**
+ * State type for the conditional parser.
+ * @internal
+ */
+interface ConditionalState<TDiscriminator extends string> {
+  readonly discriminatorState: unknown;
+  readonly discriminatorValue: TDiscriminator | undefined;
+  readonly selectedBranch: SelectedBranch<TDiscriminator> | undefined;
+  readonly branchState: unknown;
+}
+
+/**
+ * Options for customizing error messages in the {@link conditional} combinator.
+ * @since 0.8.0
+ */
+export interface ConditionalErrorOptions {
+  /**
+   * Custom error message when branch parser fails.
+   * Receives the discriminator value for context.
+   */
+  branchError?: (
+    discriminatorValue: string | undefined,
+    error: Message,
+  ) => Message;
+
+  /**
+   * Custom error message for no matching input.
+   */
+  noMatch?: Message | ((context: NoMatchContext) => Message);
+}
+
+/**
+ * Options for customizing the {@link conditional} combinator behavior.
+ * @since 0.8.0
+ */
+export interface ConditionalOptions {
+  /**
+   * Custom error messages.
+   */
+  errors?: ConditionalErrorOptions;
+}
+
+/**
+ * Helper type to infer result type without default branch.
+ * @internal
+ */
+type ConditionalResultWithoutDefault<
+  TDiscriminator extends string,
+  TBranches extends Record<string, Parser<unknown, unknown>>,
+> = {
+  [K in keyof TBranches & string]: readonly [K, InferValue<TBranches[K]>];
+}[keyof TBranches & string];
+
+/**
+ * Helper type to infer result type with default branch.
+ * @internal
+ */
+type ConditionalResultWithDefault<
+  TDiscriminator extends string,
+  TBranches extends Record<string, Parser<unknown, unknown>>,
+  TDefault extends Parser<unknown, unknown>,
+> =
+  | ConditionalResultWithoutDefault<TDiscriminator, TBranches>
+  | readonly [undefined, InferValue<TDefault>];
+
+/**
+ * Helper type to infer value type from a parser.
+ * @internal
+ */
+type InferValue<T> = T extends Parser<infer V, unknown> ? V : never;
+
+/**
+ * Creates a conditional parser without a default branch.
+ * The discriminator option is required; parsing fails if not provided.
+ *
+ * @template TDiscriminator The string literal union type of discriminator values.
+ * @template TBranches Record mapping discriminator values to branch parsers.
+ * @param discriminator Parser for the discriminator option (typically using choice()).
+ * @param branches Object mapping each discriminator value to its branch parser.
+ * @returns A parser that produces a tuple `[discriminatorValue, branchResult]`.
+ * @since 0.8.0
+ */
+export function conditional<
+  TDiscriminator extends string,
+  TBranches extends { [K in TDiscriminator]: Parser<unknown, unknown> },
+>(
+  discriminator: Parser<TDiscriminator, unknown>,
+  branches: TBranches,
+): Parser<
+  ConditionalResultWithoutDefault<TDiscriminator, TBranches>,
+  ConditionalState<TDiscriminator>
+>;
+
+/**
+ * Creates a conditional parser with a default branch.
+ * The default branch is used when the discriminator option is not provided.
+ *
+ * @template TDiscriminator The string literal union type of discriminator values.
+ * @template TBranches Record mapping discriminator values to branch parsers.
+ * @template TDefault The default branch parser type.
+ * @param discriminator Parser for the discriminator option (typically using choice()).
+ * @param branches Object mapping each discriminator value to its branch parser.
+ * @param defaultBranch Parser to use when discriminator is not provided.
+ * @param options Optional configuration for error messages.
+ * @returns A parser that produces a tuple `[discriminatorValue | undefined, branchResult]`.
+ * @since 0.8.0
+ */
+export function conditional<
+  TDiscriminator extends string,
+  TBranches extends { [K in TDiscriminator]: Parser<unknown, unknown> },
+  TDefault extends Parser<unknown, unknown>,
+>(
+  discriminator: Parser<TDiscriminator, unknown>,
+  branches: TBranches,
+  defaultBranch: TDefault,
+  options?: ConditionalOptions,
+): Parser<
+  ConditionalResultWithDefault<TDiscriminator, TBranches, TDefault>,
+  ConditionalState<TDiscriminator>
+>;
+
+/**
+ * Creates a conditional parser that selects different branch parsers based on
+ * a discriminator option value. This enables discriminated union patterns where
+ * certain options are only required or available when a specific discriminator
+ * value is selected.
+ *
+ * The result type is a tuple: `[discriminatorValue, branchResult]`
+ *
+ * @example
+ * ```typescript
+ * // Basic conditional parsing
+ * const parser = conditional(
+ *   option("--reporter", choice(["console", "junit"])),
+ *   {
+ *     console: object({}),
+ *     junit: object({ outputFile: option("--output-file", string()) }),
+ *   },
+ *   object({}) // default when --reporter is not provided
+ * );
+ *
+ * const result = parse(parser, ["--reporter", "junit", "--output-file", "out.xml"]);
+ * // result.value = ["junit", { outputFile: "out.xml" }]
+ *
+ * // Without --reporter, uses default branch:
+ * const defaultResult = parse(parser, []);
+ * // defaultResult.value = [undefined, {}]
+ * ```
+ *
+ * @since 0.8.0
+ */
+export function conditional(
+  discriminator: Parser<string, unknown>,
+  branches: Record<string, Parser<unknown, unknown>>,
+  defaultBranch?: Parser<unknown, unknown>,
+  options?: ConditionalOptions,
+): Parser<
+  readonly [string | undefined, unknown],
+  ConditionalState<string>
+> {
+  const branchParsers = Object.entries(branches);
+  const allBranchParsers = defaultBranch
+    ? [...branchParsers.map(([_, p]) => p), defaultBranch]
+    : branchParsers.map(([_, p]) => p);
+
+  const maxPriority = Math.max(
+    discriminator.priority,
+    ...allBranchParsers.map((p) => p.priority),
+  );
+
+  // Helper to replace metavar with literal value after the option in usage
+  function appendLiteralToUsage(usage: Usage, literalValue: string): Usage {
+    const result: UsageTerm[] = [];
+    for (const term of usage) {
+      if (term.type === "option" && term.metavar !== undefined) {
+        // Add option without metavar, then add a literal term
+        const { metavar: _, ...optionWithoutMetavar } = term;
+        result.push(optionWithoutMetavar);
+        result.push({ type: "literal", value: literalValue });
+      } else if (term.type === "optional") {
+        result.push({
+          ...term,
+          terms: appendLiteralToUsage(term.terms, literalValue),
+        });
+      } else if (term.type === "multiple") {
+        result.push({
+          ...term,
+          terms: appendLiteralToUsage(term.terms, literalValue),
+        });
+      } else if (term.type === "exclusive") {
+        result.push({
+          ...term,
+          terms: term.terms.map((t) => appendLiteralToUsage(t, literalValue)),
+        });
+      } else {
+        result.push(term);
+      }
+    }
+    return result;
+  }
+
+  // Build usage: discriminator (with literal value) + exclusive branches
+  const branchUsages: Usage[] = branchParsers.map(([key, p]) => [
+    ...appendLiteralToUsage(discriminator.usage, key),
+    ...p.usage,
+  ]);
+  if (defaultBranch) {
+    branchUsages.push(defaultBranch.usage);
+  }
+
+  const usage: Usage = branchUsages.length > 1
+    ? [{ type: "exclusive", terms: branchUsages }]
+    : branchUsages[0] ?? [];
+
+  const initialState: ConditionalState<string> = {
+    discriminatorState: discriminator.initialState,
+    discriminatorValue: undefined,
+    selectedBranch: undefined,
+    branchState: undefined,
+  };
+
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: maxPriority,
+    usage,
+    initialState,
+
+    parse(context) {
+      const state = context.state ?? initialState;
+
+      // If branch already selected, delegate to it
+      if (state.selectedBranch !== undefined) {
+        const branchParser = state.selectedBranch.kind === "default"
+          ? defaultBranch!
+          : branches[state.selectedBranch.key];
+
+        const branchResult = branchParser.parse({
+          ...context,
+          state: state.branchState,
+          usage: branchParser.usage, // Use only the selected branch's usage for error suggestions
+        });
+
+        if (branchResult.success) {
+          return {
+            success: true,
+            next: {
+              ...branchResult.next,
+              state: {
+                ...state,
+                branchState: branchResult.next.state,
+              },
+            },
+            consumed: branchResult.consumed,
+          };
+        }
+        return branchResult;
+      }
+
+      // Try to parse discriminator first
+      const discriminatorResult = discriminator.parse({
+        ...context,
+        state: state.discriminatorState,
+      });
+
+      if (
+        discriminatorResult.success && discriminatorResult.consumed.length > 0
+      ) {
+        // Complete discriminator to get the value
+        const completionResult = discriminator.complete(
+          discriminatorResult.next.state,
+        );
+
+        if (completionResult.success) {
+          const value = completionResult.value;
+          const branchParser = branches[value];
+
+          if (branchParser) {
+            // Try to parse more from the branch
+            const branchParseResult = branchParser.parse({
+              ...context,
+              buffer: discriminatorResult.next.buffer,
+              optionsTerminated: discriminatorResult.next.optionsTerminated,
+              state: branchParser.initialState,
+              usage: branchParser.usage, // Use only the selected branch's usage for error suggestions
+            });
+
+            if (branchParseResult.success) {
+              return {
+                success: true,
+                next: {
+                  ...branchParseResult.next,
+                  state: {
+                    discriminatorState: discriminatorResult.next.state,
+                    discriminatorValue: value,
+                    selectedBranch: { kind: "branch", key: value },
+                    branchState: branchParseResult.next.state,
+                  },
+                },
+                consumed: [
+                  ...discriminatorResult.consumed,
+                  ...branchParseResult.consumed,
+                ],
+              };
+            }
+
+            // Branch parse failed but discriminator succeeded
+            return {
+              success: true,
+              next: {
+                ...discriminatorResult.next,
+                state: {
+                  discriminatorState: discriminatorResult.next.state,
+                  discriminatorValue: value,
+                  selectedBranch: { kind: "branch", key: value },
+                  branchState: branchParser.initialState,
+                },
+              },
+              consumed: discriminatorResult.consumed,
+            };
+          }
+        }
+      }
+
+      // Discriminator didn't match, try default branch
+      if (defaultBranch !== undefined) {
+        const defaultResult = defaultBranch.parse({
+          ...context,
+          state: state.branchState ?? defaultBranch.initialState,
+          usage: defaultBranch.usage, // Use only the default branch's usage for error suggestions
+        });
+
+        if (defaultResult.success && defaultResult.consumed.length > 0) {
+          return {
+            success: true,
+            next: {
+              ...defaultResult.next,
+              state: {
+                ...state,
+                selectedBranch: { kind: "default" },
+                branchState: defaultResult.next.state,
+              },
+            },
+            consumed: defaultResult.consumed,
+          };
+        }
+      }
+
+      // Nothing matched
+      const noMatchContext = analyzeNoMatchContext([
+        discriminator,
+        ...allBranchParsers,
+      ]);
+      const errorMessage = options?.errors?.noMatch
+        ? typeof options.errors.noMatch === "function"
+          ? options.errors.noMatch(noMatchContext)
+          : options.errors.noMatch
+        : generateNoMatchError(noMatchContext);
+
+      return {
+        success: false,
+        consumed: 0,
+        error: errorMessage,
+      };
+    },
+
+    complete(state) {
+      // No branch selected yet
+      if (state.selectedBranch === undefined) {
+        // If we have default branch, use it
+        if (defaultBranch !== undefined) {
+          const branchState = state.branchState ?? defaultBranch.initialState;
+          const defaultResult = defaultBranch.complete(branchState);
+          if (!defaultResult.success) {
+            return defaultResult;
+          }
+          return {
+            success: true,
+            value: [undefined, defaultResult.value] as const,
+          };
+        }
+
+        // No default branch, discriminator is required
+        return {
+          success: false,
+          error: message`Missing required discriminator option.`,
+        };
+      }
+
+      // Complete selected branch
+      const branchParser = state.selectedBranch.kind === "default"
+        ? defaultBranch!
+        : branches[state.selectedBranch.key];
+
+      const branchResult = branchParser.complete(state.branchState);
+
+      if (!branchResult.success) {
+        // Add context to error message
+        if (
+          state.discriminatorValue !== undefined &&
+          options?.errors?.branchError
+        ) {
+          return {
+            success: false,
+            error: options.errors.branchError(
+              state.discriminatorValue,
+              branchResult.error,
+            ),
+          };
+        }
+        return branchResult;
+      }
+
+      const discriminatorValue = state.selectedBranch.kind === "default"
+        ? undefined
+        : state.selectedBranch.key;
+
+      return {
+        success: true,
+        value: [discriminatorValue, branchResult.value] as const,
+      };
+    },
+
+    suggest(context, prefix) {
+      const state = context.state ?? initialState;
+      const suggestions = [];
+
+      // If no branch selected, suggest discriminator and default branch options
+      if (state.selectedBranch === undefined) {
+        // Discriminator suggestions
+        suggestions.push(
+          ...discriminator.suggest(
+            { ...context, state: state.discriminatorState },
+            prefix,
+          ),
+        );
+
+        // Default branch suggestions if available
+        if (defaultBranch !== undefined) {
+          suggestions.push(
+            ...defaultBranch.suggest(
+              {
+                ...context,
+                state: state.branchState ?? defaultBranch.initialState,
+              },
+              prefix,
+            ),
+          );
+        }
+      } else {
+        // Delegate to selected branch
+        const branchParser = state.selectedBranch.kind === "default"
+          ? defaultBranch!
+          : branches[state.selectedBranch.key];
+
+        suggestions.push(
+          ...branchParser.suggest(
+            { ...context, state: state.branchState },
+            prefix,
+          ),
+        );
+      }
+
+      return deduplicateSuggestions(suggestions);
+    },
+
+    getDocFragments(_state, _defaultValue?) {
+      const fragments: DocFragment[] = [];
+
+      // Add discriminator documentation
+      const discriminatorFragments = discriminator.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      fragments.push(...discriminatorFragments.fragments);
+
+      // Add branch-specific documentation
+      for (const [key, branchParser] of branchParsers) {
+        const branchFragments = branchParser.getDocFragments(
+          { kind: "unavailable" },
+          undefined,
+        );
+
+        const entries: DocEntry[] = branchFragments.fragments
+          .filter((f): f is DocEntry & { type: "entry" } => f.type === "entry");
+
+        // Also collect entries from sections
+        for (const fragment of branchFragments.fragments) {
+          if (fragment.type === "section") {
+            entries.push(...fragment.entries);
+          }
+        }
+
+        if (entries.length > 0) {
+          fragments.push({
+            type: "section",
+            title: `Options when ${key}`,
+            entries,
+          });
+        }
+      }
+
+      // Add default branch documentation if present
+      if (defaultBranch !== undefined) {
+        const defaultFragments = defaultBranch.getDocFragments(
+          { kind: "unavailable" },
+          undefined,
+        );
+
+        const entries: DocEntry[] = defaultFragments.fragments
+          .filter((f): f is DocEntry & { type: "entry" } => f.type === "entry");
+
+        for (const fragment of defaultFragments.fragments) {
+          if (fragment.type === "section") {
+            entries.push(...fragment.entries);
+          }
+        }
+
+        if (entries.length > 0) {
+          fragments.push({
+            type: "section",
+            title: "Default options",
+            entries,
+          });
+        }
+      }
+
+      return { fragments };
     },
   };
 }

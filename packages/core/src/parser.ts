@@ -129,6 +129,15 @@ export interface ParserContext<TState> {
    * that no further options should be processed.
    */
   readonly optionsTerminated: boolean;
+
+  /**
+   * Usage information for the entire parser tree.
+   * Used to provide better error messages with suggestions for typos.
+   * When a parser encounters an invalid option or command, it can use
+   * this information to suggest similar valid options.
+   * @since 0.7.0
+   */
+  readonly usage: Usage;
 }
 
 /**
@@ -278,6 +287,7 @@ export function parse<T>(
     buffer: args,
     optionsTerminated: false,
     state: parser.initialState,
+    usage: parser.usage,
   };
   do {
     const result = parser.parse(context);
@@ -292,7 +302,7 @@ export function parse<T>(
     if (
       context.buffer.length > 0 &&
       context.buffer.length === previousBuffer.length &&
-      context.buffer[0] === previousBuffer[0]
+      context.buffer.every((item, i) => item === previousBuffer[i])
     ) {
       return {
         success: false,
@@ -345,6 +355,7 @@ export function suggest<T>(
     buffer: allButLast,
     optionsTerminated: false,
     state: parser.initialState,
+    usage: parser.usage,
   };
 
   // Parse up to the prefix
@@ -362,7 +373,7 @@ export function suggest<T>(
     if (
       context.buffer.length > 0 &&
       context.buffer.length === previousBuffer.length &&
-      context.buffer[0] === previousBuffer[0]
+      context.buffer.every((item, i) => item === previousBuffer[i])
     ) {
       return [];
     }
@@ -449,6 +460,7 @@ export function getDocPage(
     buffer: args,
     optionsTerminated: false,
     state: parser.initialState,
+    usage: parser.usage,
   };
   do {
     const result = parser.parse(context);
@@ -475,14 +487,22 @@ export function getDocPage(
   const usage = [...normalizeUsage(parser.usage)];
   let i = 0;
   for (const arg of args) {
+    if (i >= usage.length) break;
     const term = usage[i];
-    if (usage.length > i && term.type === "exclusive") {
+    if (term.type === "exclusive") {
       const found = findCommandInExclusive(term, arg);
       if (found) {
+        // Splice replaces 1 element with found terms, so the next position
+        // should skip over all inserted elements
         usage.splice(i, 1, ...found);
+        i += found.length;
+      } else {
+        // If no match found in exclusive, just move to next position
+        i++;
       }
+    } else {
+      i++;
     }
-    i++;
   }
   return {
     usage,

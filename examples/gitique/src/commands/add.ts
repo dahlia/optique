@@ -1,9 +1,9 @@
-import { object } from "@optique/core/constructs";
+import { group, merge, object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { message } from "@optique/core/message";
-import { path, print, printError } from "@optique/run";
+import { path, printError } from "@optique/run";
 import { addAllFiles, addFile, getRepository } from "../utils/git.ts";
 import {
   formatAddedFile,
@@ -12,32 +12,65 @@ import {
 } from "../utils/formatters.ts";
 
 /**
- * Configuration for the `gitique add` command.
- * Uses Optique's type system to ensure type-safe command parsing.
+ * Staging options for the add command.
+ * Demonstrates Optique's group() combinator for organizing help text.
  */
-const addOptions = object({
-  command: constant("add" as const),
-  all: option("-A", "--all", {
-    description: message`Add all files in the working directory to the index`,
+const stagingOptions = group(
+  "Staging Options",
+  object({
+    all: option("-A", "--all", {
+      description: message`Add all files in the working directory to the index`,
+    }),
+    force: option("-f", "--force", {
+      description:
+        message`Force adding files, even if they would normally be ignored`,
+    }),
   }),
-  force: option("-f", "--force", {
-    description:
-      message`Force adding files, even if they would normally be ignored`,
-  }),
-  verbose: option("-v", "--verbose", {
-    description: message`Show detailed output during the add operation`,
-  }),
-  files: multiple(argument(path({ metavar: "FILE" }), {
-    description: message`Files to add to the index`,
-  })),
-});
+);
 
 /**
- * The complete `gitique add` command parser.
- * Combines the command name with options and arguments.
+ * Output options for the add command.
  */
-export const addCommand = command("add", addOptions, {
+const outputOptions = group(
+  "Output Options",
+  object({
+    verbose: option("-v", "--verbose", {
+      description: message`Show detailed output during the add operation`,
+    }),
+  }),
+);
+
+/**
+ * The complete add command parser.
+ * Demonstrates:
+ * - group() for organizing options in help text
+ * - merge() for combining multiple option groups
+ * - multiple() for variadic positional arguments
+ */
+const addOptionsParser = merge(
+  object({ command: constant("add" as const) }),
+  stagingOptions,
+  outputOptions,
+  object({
+    files: multiple(
+      argument(path({ metavar: "FILE" }), {
+        description: message`Files to add to the index`,
+      }),
+    ),
+  }),
+);
+
+/**
+ * The complete `gitique add` command parser with documentation.
+ */
+export const addCommand = command("add", addOptionsParser, {
+  brief: message`Add file contents to the index`,
   description: message`Add file contents to the index for the next commit`,
+  footer: message`Examples:
+  gitique add .              Add all files in current directory
+  gitique add -A             Add all files (including deletions)
+  gitique add file1.ts       Add a specific file
+  gitique add -v *.ts        Add files with verbose output`,
 });
 
 /**
@@ -58,17 +91,13 @@ export async function executeAdd(config: AddConfig): Promise<void> {
     if (config.all) {
       // Add all files (equivalent to `git add .`)
       if (config.verbose) {
-        print(message`Adding all files to the index...`);
+        console.log("Adding all files to the index...");
       }
 
       addAllFiles(repo);
 
       if (config.verbose) {
-        print(
-          message`${
-            formatSuccess("Successfully added all files to the index")
-          }`,
-        );
+        console.log(formatSuccess("Successfully added all files to the index"));
       }
     } else if (config.files.length > 0) {
       // Add specific files
@@ -77,7 +106,7 @@ export async function executeAdd(config: AddConfig): Promise<void> {
           addFile(repo, file);
 
           if (config.verbose) {
-            print(message`${formatAddedFile(file)}`);
+            console.log(formatAddedFile(file));
           }
         } catch (error) {
           printError(
@@ -94,12 +123,10 @@ export async function executeAdd(config: AddConfig): Promise<void> {
       }
 
       if (config.verbose) {
-        print(
-          message`${
-            formatSuccess(
-              `Successfully added ${config.files.length} file(s) to the index`,
-            )
-          }`,
+        console.log(
+          formatSuccess(
+            `Successfully added ${config.files.length} file(s) to the index`,
+          ),
         );
       }
     } else {

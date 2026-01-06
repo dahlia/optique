@@ -144,20 +144,17 @@ describe("integer", () => {
       const result2 = parser.parse("12.34");
       assert.ok(!result2.success);
 
-      const result3 = parser.parse("-42");
+      const result3 = parser.parse("42.0");
       assert.ok(!result3.success);
 
-      const result4 = parser.parse("42.0");
+      const result4 = parser.parse("1e5");
       assert.ok(!result4.success);
 
-      const result5 = parser.parse("1e5");
+      const result5 = parser.parse("");
       assert.ok(!result5.success);
 
-      const result6 = parser.parse("");
+      const result6 = parser.parse("  42  ");
       assert.ok(!result6.success);
-
-      const result7 = parser.parse("  42  ");
-      assert.ok(!result7.success);
     });
 
     it("should enforce minimum constraint", () => {
@@ -649,7 +646,9 @@ describe("choice", () => {
           result1.error,
           [
             { type: "text", text: "Expected one of " },
-            { type: "value", value: "yes, no" },
+            { type: "value", value: "yes" },
+            { type: "text", text: ", " },
+            { type: "value", value: "no" },
             { type: "text", text: ", but got " },
             { type: "value", value: "maybe" },
             { type: "text", text: "." },
@@ -900,7 +899,11 @@ describe("choice", () => {
           result.error,
           [
             { type: "text", text: "Expected one of " },
-            { type: "value", value: "alpha, beta, gamma" },
+            { type: "value", value: "alpha" },
+            { type: "text", text: ", " },
+            { type: "value", value: "beta" },
+            { type: "text", text: ", " },
+            { type: "value", value: "gamma" },
             { type: "text", text: ", but got " },
             { type: "value", value: "delta" },
             { type: "text", text: "." },
@@ -938,7 +941,6 @@ describe("choice", () => {
           result.error,
           [
             { type: "text", text: "Expected one of " },
-            { type: "value", value: "" },
             { type: "text", text: ", but got " },
             { type: "value", value: "anything" },
             { type: "text", text: "." },
@@ -957,7 +959,9 @@ describe("choice", () => {
           result.error,
           [
             { type: "text", text: "Expected one of " },
-            { type: "value", value: "YES, NO" },
+            { type: "value", value: "YES" },
+            { type: "text", text: ", " },
+            { type: "value", value: "NO" },
             { type: "text", text: ", but got " },
             { type: "value", value: "maybe" },
             { type: "text", text: "." },
@@ -978,7 +982,11 @@ describe("choice", () => {
           result.error,
           [
             { type: "text", text: "Expected one of " },
-            { type: "value", value: "High, Medium, Low" },
+            { type: "value", value: "High" },
+            { type: "text", text: ", " },
+            { type: "value", value: "Medium" },
+            { type: "text", text: ", " },
+            { type: "value", value: "Low" },
             { type: "text", text: ", but got " },
             { type: "value", value: "none" },
             { type: "text", text: "." },
@@ -3310,6 +3318,256 @@ describe("ValueParser suggest() methods", () => {
       const suggestions = Array.from(parser.suggest!("xyz"));
       assert.equal(suggestions.length, 0);
     });
+  });
+});
+
+describe("string", () => {
+  describe("basic parsing", () => {
+    it("should parse any string without options", () => {
+      const parser = string();
+
+      const result1 = parser.parse("hello");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "hello");
+      }
+
+      const result2 = parser.parse("123");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "123");
+      }
+    });
+
+    it("should parse empty string", () => {
+      const parser = string();
+
+      const result = parser.parse("");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "");
+      }
+    });
+
+    it("should parse strings with unicode characters", () => {
+      const parser = string();
+
+      const result1 = parser.parse("hello 세계");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "hello 세계");
+      }
+
+      const result2 = parser.parse("日本語");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "日本語");
+      }
+
+      const result3 = parser.parse("émojis: 🎉🚀");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, "émojis: 🎉🚀");
+      }
+    });
+
+    it("should parse strings with special characters", () => {
+      const parser = string();
+
+      const result1 = parser.parse("hello\nworld");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, "hello\nworld");
+      }
+
+      const result2 = parser.parse("tab\there");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, "tab\there");
+      }
+    });
+  });
+
+  describe("pattern matching", () => {
+    it("should accept strings matching pattern", () => {
+      const parser = string({ pattern: /^[a-z]+$/ });
+
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "hello");
+      }
+    });
+
+    it("should reject strings not matching pattern", () => {
+      const parser = string({ pattern: /^[a-z]+$/ });
+
+      const result = parser.parse("Hello123");
+      assert.ok(!result.success);
+    });
+
+    it("should handle pattern with empty string", () => {
+      const parser = string({ pattern: /^$/ });
+
+      const result1 = parser.parse("");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("non-empty");
+      assert.ok(!result2.success);
+    });
+  });
+});
+
+describe("integer edge cases", () => {
+  describe("number parser edge cases", () => {
+    it("should handle leading zeros", () => {
+      const parser = integer({});
+
+      const result1 = parser.parse("007");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 7);
+      }
+
+      const result2 = parser.parse("00123");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 123);
+      }
+    });
+
+    it("should handle Number.MAX_SAFE_INTEGER boundary", () => {
+      const parser = integer({});
+
+      const result1 = parser.parse(Number.MAX_SAFE_INTEGER.toString());
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, Number.MAX_SAFE_INTEGER);
+      }
+
+      // Note: Values beyond MAX_SAFE_INTEGER may lose precision
+      const result2 = parser.parse("9007199254740993"); // MAX_SAFE_INTEGER + 2
+      assert.ok(result2.success);
+      // Precision may be lost
+    });
+
+    it("should accept negative integers", () => {
+      const parser = integer({});
+
+      const result = parser.parse("-42");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, -42);
+      }
+    });
+  });
+
+  describe("bigint parser edge cases", () => {
+    it("should handle leading zeros", () => {
+      const parser = integer({ type: "bigint" });
+
+      const result = parser.parse("007");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, 7n);
+      }
+    });
+
+    it("should handle extremely large numbers", () => {
+      const parser = integer({ type: "bigint" });
+      const veryLarge =
+        "123456789012345678901234567890123456789012345678901234567890";
+
+      const result = parser.parse(veryLarge);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, BigInt(veryLarge));
+      }
+    });
+
+    it("should handle negative zero", () => {
+      const parser = integer({ type: "bigint" });
+
+      const result = parser.parse("-0");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, 0n);
+      }
+    });
+  });
+});
+
+describe("float edge cases", () => {
+  it("should handle very large exponents", () => {
+    const parser = float({});
+
+    const result1 = parser.parse("1e308");
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value, 1e308);
+    }
+
+    const result2 = parser.parse("1e-308");
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value, 1e-308);
+    }
+  });
+
+  // Note: Currently, numeric strings that overflow to Infinity are NOT rejected
+  // even when allowInfinity is false. This is the current behavior.
+  // Only literal "Infinity" strings are controlled by allowInfinity.
+  it("should accept values that overflow to Infinity (current behavior)", () => {
+    const parser = float({});
+
+    // 1e309 is beyond the range of a JavaScript number and becomes Infinity
+    const result = parser.parse("1e309");
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, Infinity);
+    }
+  });
+
+  it("should accept values that become Infinity when allowInfinity is true", () => {
+    const parser = float({ allowInfinity: true });
+
+    const result = parser.parse("1e309");
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, Infinity);
+    }
+  });
+
+  it("should handle negative zero", () => {
+    const parser = float({});
+
+    const result = parser.parse("-0");
+    assert.ok(result.success);
+    if (result.success) {
+      // Note: Object.is can distinguish -0 from 0
+      assert.ok(Object.is(result.value, -0));
+    }
+  });
+
+  it("should handle subnormal numbers", () => {
+    const parser = float({});
+
+    // Smallest positive subnormal number
+    const result = parser.parse("5e-324");
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, 5e-324);
+    }
+  });
+
+  it("should handle numbers very close to zero", () => {
+    const parser = float({});
+
+    const result = parser.parse("0.0000000001");
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, 0.0000000001);
+    }
   });
 });
 

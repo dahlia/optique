@@ -7,7 +7,13 @@ import {
   optionNames as eOptionNames,
 } from "./message.ts";
 import type { DocState, Parser, Suggestion } from "./parser.ts";
+import {
+  createErrorWithSuggestions,
+  DEFAULT_FIND_SIMILAR_OPTIONS,
+  findSimilar,
+} from "./suggestion.ts";
 import type { OptionName, UsageTerm } from "./usage.ts";
+import { extractCommandNames, extractOptionNames } from "./usage.ts";
 import {
   isValueParser,
   type ValueParser,
@@ -95,6 +101,18 @@ export interface OptionErrorOptions {
    * Can be a static message or a function that receives the value.
    */
   unexpectedValue?: Message | ((value: string) => Message);
+
+  /**
+   * Custom error message when no matching option is found.
+   * Can be a static message or a function that receives:
+   * - invalidOption: The invalid option name that was provided
+   * - suggestions: Array of similar valid option names (can be empty)
+   *
+   * @since 0.7.0
+   */
+  noMatch?:
+    | Message
+    | ((invalidOption: string, suggestions: readonly string[]) => Message);
 }
 
 /**
@@ -248,7 +266,9 @@ export function option<T>(
               ? (typeof options.errors.duplicate === "function"
                 ? options.errors.duplicate(context.buffer[0])
                 : options.errors.duplicate)
-              : message`${context.buffer[0]} cannot be used multiple times.`,
+              : message`${
+                eOptionName(context.buffer[0])
+              } cannot be used multiple times.`,
           };
         }
         if (valueParser == null) {
@@ -367,12 +387,45 @@ export function option<T>(
         }
       }
 
+      // Find similar options from context usage and suggest them
+      const invalidOption = context.buffer[0];
+
+      // Check if custom noMatch error is provided
+      if (options.errors?.noMatch) {
+        const candidates = new Set<string>();
+        for (const name of extractOptionNames(context.usage)) {
+          candidates.add(name);
+        }
+        const suggestions = findSimilar(
+          invalidOption,
+          candidates,
+          DEFAULT_FIND_SIMILAR_OPTIONS,
+        );
+
+        const errorMessage = typeof options.errors.noMatch === "function"
+          ? options.errors.noMatch(invalidOption, suggestions)
+          : options.errors.noMatch;
+
+        return {
+          success: false,
+          consumed: 0,
+          error: errorMessage,
+        };
+      }
+
+      const baseError = message`No matched option for ${
+        eOptionName(invalidOption)
+      }.`;
+
       return {
         success: false,
         consumed: 0,
-        error: message`No matched option for ${
-          eOptionName(context.buffer[0])
-        }.`,
+        error: createErrorWithSuggestions(
+          baseError,
+          invalidOption,
+          context.usage,
+          "option",
+        ),
       };
     },
     complete(state) {
@@ -544,6 +597,18 @@ export interface FlagErrorOptions {
    * Can be a static message or a function that receives the token.
    */
   duplicate?: Message | ((token: string) => Message);
+
+  /**
+   * Custom error message when no matching flag is found.
+   * Can be a static message or a function that receives:
+   * - invalidOption: The invalid option name that was provided
+   * - suggestions: Array of similar valid option names (can be empty)
+   *
+   * @since 0.7.0
+   */
+  noMatch?:
+    | Message
+    | ((invalidOption: string, suggestions: readonly string[]) => Message);
 }
 
 /**
@@ -712,12 +777,45 @@ export function flag(
         };
       }
 
+      // Find similar options from context usage and suggest them
+      const invalidOption = context.buffer[0];
+
+      // Check if custom noMatch error is provided
+      if (options.errors?.noMatch) {
+        const candidates = new Set<string>();
+        for (const name of extractOptionNames(context.usage)) {
+          candidates.add(name);
+        }
+        const suggestions = findSimilar(
+          invalidOption,
+          candidates,
+          DEFAULT_FIND_SIMILAR_OPTIONS,
+        );
+
+        const errorMessage = typeof options.errors.noMatch === "function"
+          ? options.errors.noMatch(invalidOption, suggestions)
+          : options.errors.noMatch;
+
+        return {
+          success: false,
+          consumed: 0,
+          error: errorMessage,
+        };
+      }
+
+      const baseError = message`No matched option for ${
+        eOptionName(invalidOption)
+      }.`;
+
       return {
         success: false,
         consumed: 0,
-        error: message`No matched option for ${
-          eOptionName(context.buffer[0])
-        }.`,
+        error: createErrorWithSuggestions(
+          baseError,
+          invalidOption,
+          context.usage,
+          "option",
+        ),
       };
     },
     complete(state) {
@@ -995,10 +1093,18 @@ export interface CommandOptions {
 export interface CommandErrorOptions {
   /**
    * Error message when command is expected but not found.
+   * Since version 0.7.0, the function signature now includes suggestions:
+   * - expected: The expected command name
+   * - actual: The actual input (or null if no input)
+   * - suggestions: Array of similar valid command names (can be empty)
    */
   readonly notMatched?:
     | Message
-    | ((expected: string, actual: string | null) => Message);
+    | ((
+      expected: string,
+      actual: string | null,
+      suggestions?: readonly string[],
+    ) => Message);
 
   /**
    * Error message when command was not matched during completion.
@@ -1050,16 +1156,54 @@ export function command<T, TState>(
         // Check if buffer starts with our command name
         if (context.buffer.length < 1 || context.buffer[0] !== name) {
           const actual = context.buffer.length > 0 ? context.buffer[0] : null;
-          const errorMessage = options.errors?.notMatched ??
-            message`Expected command ${eOptionName(name)}, but got ${
-              actual ?? "end of input"
-            }.`;
+
+          // If custom error is provided, use it
+          if (options.errors?.notMatched) {
+            const errorMessage = options.errors.notMatched;
+
+            // Calculate suggestions for custom error
+            const candidates = new Set<string>();
+            for (const cmdName of extractCommandNames(context.usage)) {
+              candidates.add(cmdName);
+            }
+            const suggestions = actual
+              ? findSimilar(actual, candidates, DEFAULT_FIND_SIMILAR_OPTIONS)
+              : [];
+
+            return {
+              success: false,
+              consumed: 0,
+              error: typeof errorMessage === "function"
+                ? errorMessage(name, actual, suggestions)
+                : errorMessage,
+            };
+          }
+
+          // Generate default error with suggestions
+          if (actual == null) {
+            return {
+              success: false,
+              consumed: 0,
+              error: message`Expected command ${
+                eOptionName(name)
+              }, but got end of input.`,
+            };
+          }
+
+          // Find similar command names
+          const baseError = message`Expected command ${
+            eOptionName(name)
+          }, but got ${actual}.`;
+
           return {
             success: false,
             consumed: 0,
-            error: typeof errorMessage === "function"
-              ? errorMessage(name, actual)
-              : errorMessage,
+            error: createErrorWithSuggestions(
+              baseError,
+              actual,
+              context.usage,
+              "command",
+            ),
           };
         }
         // Command matched, consume it and move to "matched" state
@@ -1195,4 +1339,237 @@ export function command<T, TState>(
       return `command(${JSON.stringify(name)})`;
     },
   } satisfies Parser<T, CommandState<TState>>;
+}
+
+/**
+ * Format options for how {@link passThrough} captures options.
+ * @since 0.8.0
+ */
+export type PassThroughFormat = "equalsOnly" | "nextToken" | "greedy";
+
+/**
+ * Options for the {@link passThrough} parser.
+ * @since 0.8.0
+ */
+export interface PassThroughOptions {
+  /**
+   * How to capture option values:
+   *
+   * - `"equalsOnly"`: Only capture `--opt=val` format (default, safest).
+   *   Values with spaces (`--opt val`) are not captured.
+   *
+   * - `"nextToken"`: Capture `--opt` and its value as separate tokens
+   *   (`--opt val`). The next token is captured if it doesn't start with `-`.
+   *
+   * - `"greedy"`: Capture *all* remaining tokens from first unrecognized token.
+   *   This is useful for wrapper/proxy tools that pass everything through.
+   *
+   * @default `"equalsOnly"`
+   */
+  readonly format?: PassThroughFormat;
+
+  /**
+   * A description of what pass-through options are used for.
+   */
+  readonly description?: Message;
+}
+
+/**
+ * Creates a parser that collects unrecognized options and passes them through.
+ * This is useful for building wrapper CLI tools that need to forward unknown
+ * options to an underlying tool.
+ *
+ * **Important**: This parser intentionally weakens Optique's strict parsing
+ * philosophy where "all input must be recognized." The benefit is enabling
+ * legitimate wrapper/proxy tool patterns, but the trade-off is that typos
+ * in pass-through options won't be caught.
+ *
+ * @param options Configuration for how to capture options.
+ * @returns A {@link Parser} that captures unrecognized options as an array
+ *          of strings.
+ *
+ * @example
+ * ```typescript
+ * // Default format: only captures --opt=val
+ * const parser = object({
+ *   debug: option("--debug"),
+ *   extra: passThrough(),
+ * });
+ *
+ * // mycli --debug --foo=bar --baz=qux
+ * // → { debug: true, extra: ["--foo=bar", "--baz=qux"] }
+ *
+ * // nextToken format: captures --opt val pairs
+ * const parser = object({
+ *   debug: option("--debug"),
+ *   extra: passThrough({ format: "nextToken" }),
+ * });
+ *
+ * // mycli --debug --foo bar
+ * // → { debug: true, extra: ["--foo", "bar"] }
+ *
+ * // greedy format: captures all remaining tokens
+ * const parser = command("exec", object({
+ *   container: argument(string()),
+ *   args: passThrough({ format: "greedy" }),
+ * }));
+ *
+ * // myproxy exec mycontainer --verbose -it bash
+ * // → { container: "mycontainer", args: ["--verbose", "-it", "bash"] }
+ * ```
+ *
+ * @since 0.8.0
+ */
+export function passThrough(
+  options: PassThroughOptions = {},
+): Parser<readonly string[], readonly string[]> {
+  const format = options.format ?? "equalsOnly";
+  const optionPattern = /^-[a-z0-9-]|^--[a-z0-9-]+/i;
+  const equalsOptionPattern = /^--[a-z0-9-]+=/i;
+
+  return {
+    $valueType: [],
+    $stateType: [],
+    priority: -10, // Lowest priority to be tried last
+    usage: [{ type: "passthrough" }],
+    initialState: [],
+
+    parse(context) {
+      if (context.buffer.length < 1) {
+        return {
+          success: false,
+          consumed: 0,
+          error: message`No input to pass through.`,
+        };
+      }
+
+      const token = context.buffer[0];
+
+      if (format === "greedy") {
+        // Greedy mode: capture ALL remaining tokens
+        const captured = [...context.buffer];
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: [],
+            state: [...context.state, ...captured],
+          },
+          consumed: captured,
+        };
+      }
+
+      // For equalsOnly and nextToken, don't capture after options terminator
+      if (context.optionsTerminated) {
+        return {
+          success: false,
+          consumed: 0,
+          error:
+            message`Options terminated; cannot capture pass-through options.`,
+        };
+      }
+
+      if (format === "equalsOnly") {
+        // Only capture --opt=val format
+        if (!equalsOptionPattern.test(token)) {
+          return {
+            success: false,
+            consumed: 0,
+            error: message`Expected --option=value format, but got: ${token}.`,
+          };
+        }
+
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: [...context.state, token],
+          },
+          consumed: [token],
+        };
+      }
+
+      if (format === "nextToken") {
+        // Must start with an option-like token
+        if (!optionPattern.test(token)) {
+          return {
+            success: false,
+            consumed: 0,
+            error: message`Expected option, but got: ${token}.`,
+          };
+        }
+
+        // Check for --opt=val format (already includes value)
+        if (token.includes("=")) {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: [...context.state, token],
+            },
+            consumed: [token],
+          };
+        }
+
+        // Check if next token is a value (doesn't start with -)
+        const nextToken = context.buffer[1];
+        if (nextToken !== undefined && !optionPattern.test(nextToken)) {
+          // Capture both the option and its value
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(2),
+              state: [...context.state, token, nextToken],
+            },
+            consumed: [token, nextToken],
+          };
+        }
+
+        // No value follows, just capture the option
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: [...context.state, token],
+          },
+          consumed: [token],
+        };
+      }
+
+      // Should never reach here
+      return {
+        success: false,
+        consumed: 0,
+        error: message`Unknown passThrough format: ${format}.`,
+      };
+    },
+
+    complete(state) {
+      return { success: true, value: state };
+    },
+
+    suggest(_context, _prefix) {
+      // passThrough cannot suggest specific values since it captures unknown options
+      return [];
+    },
+
+    getDocFragments(_state, _defaultValue?) {
+      return {
+        fragments: [{
+          type: "entry",
+          term: { type: "passthrough" },
+          description: options.description,
+        }],
+        description: options.description,
+      };
+    },
+
+    [Symbol.for("Deno.customInspect")]() {
+      return `passThrough(${format})`;
+    },
+  };
 }

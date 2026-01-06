@@ -680,3 +680,129 @@ describe("integration tests", () => {
     );
   });
 });
+
+describe("formatMessage - explicit line breaks", () => {
+  it("should treat single newline as space (soft break)", () => {
+    const msg: Message = [
+      { type: "text", text: "Line 1." },
+      { type: "text", text: "\n" },
+      { type: "text", text: "Line 2." },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    // Single newline is converted to space
+    assert.equal(formatted, "Line 1. Line 2.");
+  });
+
+  it("should treat single newline within text as space", () => {
+    const msg: Message = [
+      { type: "text", text: "Line 1.\nLine 2." },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    // Single newline is converted to space
+    assert.equal(formatted, "Line 1. Line 2.");
+  });
+
+  it("should treat double newline as hard break", () => {
+    const msg: Message = [
+      { type: "text", text: "Para 1.\n\nPara 2." },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    // Double newline creates actual line break
+    assert.equal(formatted, "Para 1.\nPara 2.");
+  });
+
+  it("should handle multiple double newlines", () => {
+    const msg: Message = [
+      { type: "text", text: "A\n\nB\n\nC" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    assert.equal(formatted, "A\nB\nC");
+  });
+
+  it("should handle triple+ newlines as single hard break", () => {
+    const msg: Message = [
+      { type: "text", text: "Line 1\n\n\nLine 2" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    // Triple newlines still treated as single hard break
+    assert.equal(formatted, "Line 1\nLine 2");
+  });
+
+  it("should handle double newline with option names", () => {
+    const msg: Message = [
+      { type: "text", text: "No matched option for " },
+      { type: "optionName", optionName: "--verbos" },
+      { type: "text", text: "." },
+      { type: "text", text: "\n\n" },
+      { type: "text", text: "Did you mean " },
+      { type: "optionName", optionName: "--verbose" },
+      { type: "text", text: "?" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    assert.ok(formatted.includes("\n"));
+    assert.ok(formatted.includes("--verbos"));
+    assert.ok(formatted.includes("--verbose"));
+    const lines = formatted.split("\n");
+    assert.equal(lines.length, 2);
+  });
+
+  it("should reset width tracking after hard line break", () => {
+    const msg: Message = [
+      { type: "text", text: "Short.\n\nThis is a much longer second line." },
+    ];
+    const formatted = formatMessage(msg, { quotes: false, maxWidth: 50 });
+
+    const lines = formatted.split("\n");
+    assert.equal(lines.length, 2);
+    assert.ok(lines[0].startsWith("Short."));
+    assert.ok(lines[1].includes("This is a much longer second line."));
+  });
+
+  it("should normalize single newlines in long text", () => {
+    const msg: Message = [
+      {
+        type: "text",
+        text: "This is a\nvery long\nsentence that\nspans multiple\nlines.",
+      },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    // All single newlines become spaces
+    assert.equal(
+      formatted,
+      "This is a very long sentence that spans multiple lines.",
+    );
+  });
+
+  it("should handle mixed single and double newlines", () => {
+    const msg: Message = [
+      {
+        type: "text",
+        text:
+          "Para 1 line 1.\nPara 1 line 2.\n\nPara 2 line 1.\nPara 2 line 2.",
+      },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    assert.equal(
+      formatted,
+      "Para 1 line 1. Para 1 line 2.\nPara 2 line 1. Para 2 line 2.",
+    );
+  });
+
+  it("should handle empty paragraphs (multiple consecutive double newlines)", () => {
+    const msg: Message = [
+      { type: "text", text: "Line 1\n\n\n\nLine 2" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    // Multiple double newlines still create single hard break
+    assert.equal(formatted, "Line 1\nLine 2");
+  });
+});

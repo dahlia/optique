@@ -1,4 +1,12 @@
-import { object, or, tuple } from "@optique/core/constructs";
+import {
+  conditional,
+  group,
+  longestMatch,
+  merge,
+  object,
+  or,
+  tuple,
+} from "@optique/core/constructs";
 import type { DocEntry } from "@optique/core/doc";
 import {
   formatMessage,
@@ -6,15 +14,16 @@ import {
   message,
   text,
 } from "@optique/core/message";
-import { multiple, optional } from "@optique/core/modifiers";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   argument,
   command,
   constant,
   flag,
   option,
+  passThrough,
 } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import { type InferValue, parse } from "@optique/core/parser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -38,6 +47,7 @@ describe("constant", () => {
       buffer: ["--option", "value"] as readonly string[],
       state: "hello" as const,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -156,6 +166,7 @@ describe("option", () => {
         buffer: ["-v"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -179,6 +190,7 @@ describe("option", () => {
         buffer: ["--verbose"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -202,6 +214,7 @@ describe("option", () => {
         buffer: ["-v"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
       const result1 = parser.parse(context1);
       assert.ok(result1.success);
@@ -213,6 +226,7 @@ describe("option", () => {
         buffer: ["--verbose"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
       const result2 = parser.parse(context2);
       assert.ok(result2.success);
@@ -227,6 +241,7 @@ describe("option", () => {
         buffer: ["-v"] as readonly string[],
         state: { success: true as const, value: true },
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -243,6 +258,7 @@ describe("option", () => {
         buffer: ["-vd"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -266,6 +282,7 @@ describe("option", () => {
         buffer: ["-v"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: true,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -282,6 +299,7 @@ describe("option", () => {
         buffer: ["--"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -299,6 +317,7 @@ describe("option", () => {
         buffer: [] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -317,6 +336,7 @@ describe("option", () => {
         buffer: ["--port", "8080"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -340,6 +360,7 @@ describe("option", () => {
         buffer: ["--port=8080"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -363,6 +384,7 @@ describe("option", () => {
         buffer: ["/P:8080"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -384,6 +406,7 @@ describe("option", () => {
         buffer: ["--port"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -400,6 +423,7 @@ describe("option", () => {
         buffer: ["--verbose=true"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -416,6 +440,7 @@ describe("option", () => {
         buffer: ["--name", "Alice"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -437,6 +462,7 @@ describe("option", () => {
         buffer: ["--port", "invalid"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -456,6 +482,7 @@ describe("option", () => {
       buffer: ["--help"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -621,6 +648,7 @@ describe("option() error customization", () => {
       buffer: ["--verbose"],
       state: undefined,
       optionsTerminated: true,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -646,6 +674,7 @@ describe("option() error customization", () => {
       buffer: ["--verbose"],
       state: { success: true, value: true } as const,
       optionsTerminated: false,
+      usage: parser.usage,
     };
     const result = parser.parse(context);
     assert.strictEqual(result.success, false);
@@ -677,6 +706,95 @@ describe("option() error customization", () => {
       assert.ok(errorMessage.includes("Invalid port number:"));
     }
   });
+
+  it("should use custom noMatch error with static message", () => {
+    const innerParser = object({
+      verbose: option("--verbose", "--debug"),
+    });
+    const parser = option("--help", {
+      errors: {
+        noMatch: message`The --help option is required in this context.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The --help option is required in this context.",
+      );
+    }
+  });
+
+  it("should use custom noMatch error with function", () => {
+    const innerParser = object({
+      verbose: option("--verbose", "--debug"),
+    });
+    const parser = option("--help", {
+      errors: {
+        noMatch: (invalidOption, suggestions) => {
+          if (suggestions.length > 0) {
+            return message`Option ${text(invalidOption)} not recognized. Try: ${
+              text(suggestions.join(", "))
+            }`;
+          }
+          return message`Option ${text(invalidOption)} not recognized.`;
+        },
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("--verbos"));
+      assert.ok(
+        errorMessage.includes("--verbose") || errorMessage.includes("--debug"),
+      );
+    }
+  });
+
+  it("should use custom noMatch error to disable suggestions", () => {
+    const innerParser = object({
+      verbose: option("--verbose"),
+    });
+    const parser = option("--help", {
+      errors: {
+        noMatch: (invalidOption) =>
+          message`Invalid option: ${text(invalidOption)}`,
+      },
+    });
+
+    const context = {
+      buffer: ["--verbos"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.strictEqual(errorMessage, "Invalid option: --verbos");
+      assert.ok(!errorMessage.includes("Did you mean"));
+    }
+  });
 });
 
 describe("flag", () => {
@@ -687,6 +805,7 @@ describe("flag", () => {
         buffer: ["-f"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -706,6 +825,7 @@ describe("flag", () => {
         buffer: ["--force"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -725,6 +845,7 @@ describe("flag", () => {
         buffer: ["-f"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
       let result = parser.parse(context);
       assert.ok(result.success);
@@ -734,6 +855,7 @@ describe("flag", () => {
         buffer: ["--force"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
       result = parser.parse(context);
       assert.ok(result.success);
@@ -785,6 +907,7 @@ describe("flag", () => {
         buffer: ["--force=true"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -802,6 +925,7 @@ describe("flag", () => {
         buffer: ["-f"] as readonly string[],
         state: { success: true as const, value: true as const },
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -818,6 +942,7 @@ describe("flag", () => {
         buffer: ["-fd"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -837,6 +962,7 @@ describe("flag", () => {
         buffer: ["-f"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: true,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -853,6 +979,7 @@ describe("flag", () => {
         buffer: ["--"] as readonly string[],
         state: parser.initialState,
         optionsTerminated: false,
+        usage: parser.usage,
       };
 
       const result = parser.parse(context);
@@ -1000,6 +1127,7 @@ describe("flag() error customization", () => {
       buffer: ["--force"],
       state: undefined,
       optionsTerminated: true,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1024,6 +1152,7 @@ describe("flag() error customization", () => {
       buffer: ["--force"],
       state: { success: true, value: true } as const,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1033,6 +1162,66 @@ describe("flag() error customization", () => {
         formatMessage(result.error),
         "The flag --force was already specified.",
       );
+    }
+  });
+
+  it("should use custom noMatch error with static message", () => {
+    const innerParser = object({
+      force: flag("--force", "--yes"),
+    });
+    const parser = flag("--help", {
+      errors: {
+        noMatch: message`The --help flag is required here.`,
+      },
+    });
+
+    const context = {
+      buffer: ["--forc"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "The --help flag is required here.",
+      );
+    }
+  });
+
+  it("should use custom noMatch error with function", () => {
+    const innerParser = object({
+      force: flag("--force"),
+    });
+    const parser = flag("--help", {
+      errors: {
+        noMatch: (invalidOption, suggestions) => {
+          if (suggestions.length > 0) {
+            return message`Flag ${text(invalidOption)} unknown. Did you mean ${
+              text(suggestions[0])
+            }?`;
+          }
+          return message`Flag ${text(invalidOption)} unknown.`;
+        },
+      },
+    });
+
+    const context = {
+      buffer: ["--forc"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: innerParser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("--forc"));
+      assert.ok(errorMessage.includes("--force"));
     }
   });
 });
@@ -1051,6 +1240,7 @@ describe("argument", () => {
       buffer: ["myfile.txt"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1071,6 +1261,7 @@ describe("argument", () => {
       buffer: ["42"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1091,6 +1282,7 @@ describe("argument", () => {
       buffer: [] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1107,6 +1299,7 @@ describe("argument", () => {
       buffer: ["invalid"] as readonly string[],
       state: parser.initialState,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1269,6 +1462,7 @@ describe("argument() error customization", () => {
       buffer: [],
       state: undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1867,6 +2061,7 @@ describe("command() error customization", () => {
       buffer: ["build"],
       state: undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1894,6 +2089,7 @@ describe("command() error customization", () => {
       buffer: ["build"],
       state: undefined,
       optionsTerminated: false,
+      usage: parser.usage,
     };
 
     const result = parser.parse(context);
@@ -1945,6 +2141,73 @@ describe("command() error customization", () => {
         formatMessage(result.error),
         "Command state is corrupted.",
       );
+    }
+  });
+
+  it("should use custom notMatched error with suggestions parameter", () => {
+    const parserWithSuggestions = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+    );
+    const parser = command("deploy", argument(string()), {
+      errors: {
+        notMatched: (expected, actual, suggestions) => {
+          if (suggestions && suggestions.length > 0) {
+            return message`Expected "${expected}", got "${
+              actual ?? "nothing"
+            }". Did you mean ${text(suggestions.join(" or "))}?`;
+          }
+          return message`Expected "${expected}", got "${actual ?? "nothing"}".`;
+        },
+      },
+    });
+
+    const context = {
+      buffer: ["deploi"],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parserWithSuggestions.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("deploi"));
+      assert.ok(errorMessage.includes("deploy"));
+    }
+  });
+
+  it("should use custom notMatched to disable suggestions", () => {
+    const parserWithSuggestions = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+    );
+    const parser = command("deploy", argument(string()), {
+      errors: {
+        notMatched: (expected, actual) =>
+          message`Command mismatch: expected ${expected}, got ${
+            actual ?? "nothing"
+          }.`,
+      },
+    });
+
+    const context = {
+      buffer: ["deploi"],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parserWithSuggestions.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.strictEqual(
+        errorMessage,
+        'Command mismatch: expected "deploy", got "deploi".',
+      );
+      assert.ok(!errorMessage.includes("Did you mean"));
     }
   });
 });
@@ -2176,5 +2439,1069 @@ describe("command() with brief option", () => {
       detailFragments.footer,
       message`Examples:\n  myapp restore backup.tar.gz\n  myapp restore --verify backup.tar.gz`,
     );
+  });
+});
+
+describe("passThrough", () => {
+  describe("equalsOnly format (default)", () => {
+    it("should capture --opt=val format options", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["--foo=bar"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--foo=bar"]);
+        assert.deepEqual(result.next.buffer, []);
+        assert.deepEqual(result.consumed, ["--foo=bar"]);
+      }
+    });
+
+    it("should capture multiple --opt=val options", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["--baz=qux"] as readonly string[],
+        state: ["--foo=bar"],
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--foo=bar", "--baz=qux"]);
+        assert.deepEqual(result.next.buffer, []);
+      }
+    });
+
+    it("should not capture options in --opt val format", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["--foo", "bar"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+    });
+
+    it("should not capture standalone options without values", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["--verbose"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+    });
+
+    it("should not capture non-option arguments", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["file.txt"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+    });
+
+    it("should complete successfully with captured options", () => {
+      const parser = passThrough();
+      const result = parser.complete(["--foo=bar", "--baz=qux"]);
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["--foo=bar", "--baz=qux"]);
+      }
+    });
+
+    it("should complete with empty array when no options captured", () => {
+      const parser = passThrough();
+      const result = parser.complete([]);
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, []);
+      }
+    });
+  });
+
+  describe("nextToken format", () => {
+    it("should capture --opt and its next non-option value", () => {
+      const parser = passThrough({ format: "nextToken" });
+      const context = {
+        buffer: ["--foo", "bar"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--foo", "bar"]);
+        assert.deepEqual(result.next.buffer, []);
+        assert.deepEqual(result.consumed, ["--foo", "bar"]);
+      }
+    });
+
+    it("should capture --opt=val format options", () => {
+      const parser = passThrough({ format: "nextToken" });
+      const context = {
+        buffer: ["--foo=bar"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--foo=bar"]);
+        assert.deepEqual(result.next.buffer, []);
+      }
+    });
+
+    it("should not capture next token if it looks like an option", () => {
+      const parser = passThrough({ format: "nextToken" });
+      const context = {
+        buffer: ["--foo", "--bar"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--foo"]);
+        assert.deepEqual(result.next.buffer, ["--bar"]);
+        assert.deepEqual(result.consumed, ["--foo"]);
+      }
+    });
+
+    it("should capture standalone option when no value follows", () => {
+      const parser = passThrough({ format: "nextToken" });
+      const context = {
+        buffer: ["--verbose"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--verbose"]);
+        assert.deepEqual(result.next.buffer, []);
+      }
+    });
+
+    it("should not capture non-option arguments", () => {
+      const parser = passThrough({ format: "nextToken" });
+      const context = {
+        buffer: ["file.txt"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("greedy format", () => {
+    it("should capture all remaining tokens from first unrecognized option", () => {
+      const parser = passThrough({ format: "greedy" });
+      const context = {
+        buffer: ["--foo", "bar", "--baz", "qux"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, [
+          "--foo",
+          "bar",
+          "--baz",
+          "qux",
+        ]);
+        assert.deepEqual(result.next.buffer, []);
+        assert.deepEqual(result.consumed, ["--foo", "bar", "--baz", "qux"]);
+      }
+    });
+
+    it("should capture non-option arguments when they come first", () => {
+      const parser = passThrough({ format: "greedy" });
+      const context = {
+        buffer: ["file.txt", "--verbose"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["file.txt", "--verbose"]);
+        assert.deepEqual(result.next.buffer, []);
+      }
+    });
+
+    it("should fail on empty buffer", () => {
+      const parser = passThrough({ format: "greedy" });
+      const context = {
+        buffer: [] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("priority", () => {
+    it("should have lowest priority (-10) to be tried last", () => {
+      const parser = passThrough();
+      assert.equal(parser.priority, -10);
+    });
+  });
+
+  describe("usage", () => {
+    it("should have passthrough usage term", () => {
+      const parser = passThrough();
+      assert.deepEqual(parser.usage, [{ type: "passthrough" }]);
+    });
+  });
+
+  describe("integration with object()", () => {
+    it("should collect unrecognized options while explicit options are parsed", () => {
+      const parser = object({
+        debug: option("--debug"),
+        extra: passThrough(),
+      });
+
+      const result = parse(parser, ["--debug", "--foo=bar", "--baz=qux"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.deepEqual(result.value.extra, ["--foo=bar", "--baz=qux"]);
+      }
+    });
+
+    it("should work with nextToken format in object()", () => {
+      const parser = object({
+        debug: option("--debug"),
+        extra: passThrough({ format: "nextToken" }),
+      });
+
+      const result = parse(parser, ["--debug", "--foo", "bar"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.deepEqual(result.value.extra, ["--foo", "bar"]);
+      }
+    });
+
+    it("should work with greedy format in subcommand", () => {
+      const parser = or(
+        command(
+          "exec",
+          object({
+            action: constant("exec"),
+            container: argument(string()),
+            args: passThrough({ format: "greedy" }),
+          }),
+        ),
+        command(
+          "local",
+          object({
+            action: constant("local"),
+            port: option("--port", integer()),
+          }),
+        ),
+      );
+
+      const result = parse(parser, [
+        "exec",
+        "mycontainer",
+        "--verbose",
+        "-it",
+        "bash",
+      ]);
+      assert.ok(result.success);
+      if (result.success && result.value.action === "exec") {
+        assert.equal(result.value.container, "mycontainer");
+        assert.deepEqual(result.value.args, ["--verbose", "-it", "bash"]);
+      }
+    });
+  });
+
+  describe("with options terminator (--)", () => {
+    it("should not capture options after -- in equalsOnly mode", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["--foo=bar"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+    });
+
+    it("should not capture options after -- in nextToken mode", () => {
+      const parser = passThrough({ format: "nextToken" });
+      const context = {
+        buffer: ["--foo", "bar"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+    });
+
+    it("should still capture in greedy mode after --", () => {
+      const parser = passThrough({ format: "greedy" });
+      const context = {
+        buffer: ["--foo", "bar"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--foo", "bar"]);
+      }
+    });
+  });
+
+  describe("getDocFragments", () => {
+    it("should return entry with passthrough description", () => {
+      const parser = passThrough();
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: [],
+      });
+
+      assert.ok(fragments.fragments.length > 0);
+      const entry = fragments.fragments[0];
+      assert.equal(entry.type, "entry");
+    });
+
+    it("should include custom description if provided", () => {
+      const parser = passThrough({
+        description: message`Extra options to pass to the underlying tool`,
+      });
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: [],
+      });
+
+      assert.ok(fragments.fragments.length > 0);
+      const entry = fragments.fragments[0];
+      if (entry.type === "entry") {
+        assert.deepEqual(
+          entry.description,
+          message`Extra options to pass to the underlying tool`,
+        );
+      }
+    });
+  });
+
+  describe("suggest", () => {
+    it("should return empty array as passThrough cannot suggest specific values", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: [] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const suggestions = parser.suggest(context, "--");
+      assert.deepEqual([...suggestions], []);
+    });
+  });
+
+  describe("with optional() modifier", () => {
+    it("should return undefined when no pass-through options provided", () => {
+      const parser = object({
+        debug: option("--debug"),
+        extra: optional(passThrough()),
+      });
+
+      const result = parse(parser, ["--debug"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.equal(result.value.extra, undefined);
+      }
+    });
+
+    it("should return captured options when provided", () => {
+      const parser = object({
+        debug: option("--debug"),
+        extra: optional(passThrough()),
+      });
+
+      const result = parse(parser, ["--debug", "--foo=bar"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.deepEqual(result.value.extra, ["--foo=bar"]);
+      }
+    });
+
+    it("should work with optional passThrough in greedy mode", () => {
+      const parser = object({
+        cmd: argument(string()),
+        args: optional(passThrough({ format: "greedy" })),
+      });
+
+      const result = parse(parser, ["mycommand"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.cmd, "mycommand");
+        assert.equal(result.value.args, undefined);
+      }
+    });
+  });
+
+  describe("with withDefault() modifier", () => {
+    it("should return default value when no pass-through options provided", () => {
+      const parser = object({
+        debug: option("--debug"),
+        extra: withDefault(passThrough(), ["--default=value"]),
+      });
+
+      const result = parse(parser, ["--debug"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.deepEqual(result.value.extra, ["--default=value"]);
+      }
+    });
+
+    it("should return captured options when provided", () => {
+      const parser = object({
+        debug: option("--debug"),
+        extra: withDefault(passThrough(), ["--default=value"]),
+      });
+
+      const result = parse(parser, ["--debug", "--foo=bar"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.deepEqual(result.value.extra, ["--foo=bar"]);
+      }
+    });
+
+    it("should work with function-based default", () => {
+      let defaultCalled = false;
+      const parser = object({
+        extra: withDefault(passThrough(), () => {
+          defaultCalled = true;
+          return ["--computed=default"];
+        }),
+      });
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      assert.ok(defaultCalled);
+      if (result.success) {
+        assert.deepEqual(result.value.extra, ["--computed=default"]);
+      }
+    });
+  });
+
+  describe("with map() modifier", () => {
+    it("should transform captured options", () => {
+      const parser = object({
+        debug: option("--debug"),
+        extra: map(passThrough(), (opts) => opts.length),
+      });
+
+      const result = parse(parser, ["--debug", "--foo=bar", "--baz=qux"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.equal(result.value.extra, 2);
+      }
+    });
+
+    it("should transform to object structure", () => {
+      const parser = object({
+        extra: map(passThrough(), (opts) => {
+          const result: Record<string, string> = {};
+          for (const opt of opts) {
+            const [key, value] = opt.slice(2).split("=");
+            result[key] = value;
+          }
+          return result;
+        }),
+      });
+
+      const result = parse(parser, ["--foo=bar", "--baz=qux"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value.extra, { foo: "bar", baz: "qux" });
+      }
+    });
+
+    it("should work with greedy format transformation", () => {
+      const parser = object({
+        args: map(passThrough({ format: "greedy" }), (args) => args.join(" ")),
+      });
+
+      const result = parse(parser, ["--verbose", "-it", "bash"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.args, "--verbose -it bash");
+      }
+    });
+  });
+
+  describe("with merge() combinator", () => {
+    it("should merge passThrough with other parsers", () => {
+      const parser = merge(
+        object({
+          debug: option("--debug"),
+        }),
+        object({
+          extra: passThrough(),
+        }),
+      );
+
+      const result = parse(parser, ["--debug", "--foo=bar"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.deepEqual(result.value.extra, ["--foo=bar"]);
+      }
+    });
+
+    it("should work with multiple merged objects containing passThrough", () => {
+      const parser = merge(
+        object({
+          verbose: option("-v", "--verbose"),
+        }),
+        object({
+          config: option("-c", "--config", string()),
+        }),
+        object({
+          extra: passThrough(),
+        }),
+      );
+
+      const result = parse(parser, [
+        "-v",
+        "--config",
+        "file.json",
+        "--foo=bar",
+      ]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.verbose, true);
+        assert.equal(result.value.config, "file.json");
+        assert.deepEqual(result.value.extra, ["--foo=bar"]);
+      }
+    });
+  });
+
+  describe("with tuple() combinator", () => {
+    it("should work in tuple position", () => {
+      const parser = tuple([
+        option("--debug"),
+        passThrough(),
+      ]);
+
+      const result = parse(parser, ["--debug", "--foo=bar", "--baz=qux"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, [true, ["--foo=bar", "--baz=qux"]]);
+      }
+    });
+
+    it("should work with greedy format in tuple", () => {
+      const parser = tuple([
+        argument(string()),
+        passThrough({ format: "greedy" }),
+      ]);
+
+      const result = parse(parser, ["mycommand", "--verbose", "-it"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["mycommand", ["--verbose", "-it"]]);
+      }
+    });
+  });
+
+  describe("with or() combinator", () => {
+    it("should work in alternative branches", () => {
+      const parser = or(
+        object({
+          mode: constant("wrapper"),
+          extra: passThrough(),
+        }),
+        object({
+          mode: constant("direct"),
+          file: argument(string()),
+        }),
+      );
+
+      const result1 = parse(parser, ["--foo=bar", "--baz=qux"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value.mode, "wrapper");
+        if (result1.value.mode === "wrapper") {
+          assert.deepEqual(result1.value.extra, ["--foo=bar", "--baz=qux"]);
+        }
+      }
+
+      const result2 = parse(parser, ["myfile.txt"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value.mode, "direct");
+        if (result2.value.mode === "direct") {
+          assert.equal(result2.value.file, "myfile.txt");
+        }
+      }
+    });
+
+    it("should prioritize explicit options over passThrough in or()", () => {
+      const parser = or(
+        object({
+          mode: constant("explicit"),
+          debug: flag("--debug"),
+        }),
+        object({
+          mode: constant("passthrough"),
+          extra: passThrough(),
+        }),
+      );
+
+      // --debug should match the explicit parser, not passThrough
+      const result = parse(parser, ["--debug"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.mode, "explicit");
+      }
+    });
+  });
+
+  describe("with longestMatch() combinator", () => {
+    it("should work with longestMatch for ambiguous inputs", () => {
+      const parser = longestMatch(
+        object({
+          mode: constant("local"),
+          port: option("-p", "--port", integer()),
+        }),
+        object({
+          mode: constant("proxy"),
+          extra: passThrough({ format: "nextToken" }),
+        }),
+      );
+
+      // -p 8080 should match local mode (longest match)
+      const result1 = parse(parser, ["-p", "8080"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value.mode, "local");
+      }
+
+      // --unknown value should match proxy mode
+      const result2 = parse(parser, ["--unknown", "value"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value.mode, "proxy");
+        if (result2.value.mode === "proxy") {
+          assert.deepEqual(result2.value.extra, ["--unknown", "value"]);
+        }
+      }
+    });
+  });
+
+  describe("with conditional() combinator", () => {
+    it("should work with conditional branches", () => {
+      const parser = conditional(
+        option("--mode", choice(["local", "proxy"])),
+        {
+          local: object({
+            port: option("-p", "--port", integer()),
+          }),
+          proxy: object({
+            extra: passThrough({ format: "nextToken" }),
+          }),
+        },
+      );
+
+      const result1 = parse(parser, ["--mode", "local", "-p", "8080"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.deepEqual(result1.value, ["local", { port: 8080 }]);
+      }
+
+      const result2 = parse(parser, ["--mode", "proxy", "--foo", "bar"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.deepEqual(result2.value, ["proxy", { extra: ["--foo", "bar"] }]);
+      }
+    });
+  });
+
+  describe("with group() combinator", () => {
+    it("should work in grouped documentation", () => {
+      const parser = object({
+        debug: option("--debug"),
+        extra: group(
+          "Pass-through options",
+          passThrough({
+            description: message`Options forwarded to the underlying tool`,
+          }),
+        ),
+      });
+
+      const result = parse(parser, ["--debug", "--foo=bar"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.debug, true);
+        assert.deepEqual(result.value.extra, ["--foo=bar"]);
+      }
+    });
+  });
+
+  describe("priority with mixed parsers", () => {
+    it("should correctly order parsing with commands, options, arguments, and passThrough", () => {
+      const parser = or(
+        command(
+          "run",
+          object({
+            action: constant("run"),
+            verbose: option("-v", "--verbose"),
+            file: argument(string()),
+            extra: passThrough(),
+          }),
+        ),
+        object({
+          action: constant("default"),
+          extra: passThrough({ format: "greedy" }),
+        }),
+      );
+
+      // Command should match first
+      const result1 = parse(parser, ["run", "-v", "file.txt", "--foo=bar"]);
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value.action, "run");
+        if (result1.value.action === "run") {
+          assert.equal(result1.value.verbose, true);
+          assert.equal(result1.value.file, "file.txt");
+          assert.deepEqual(result1.value.extra, ["--foo=bar"]);
+        }
+      }
+
+      // Default should catch everything else
+      const result2 = parse(parser, ["--unknown", "args"]);
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value.action, "default");
+        if (result2.value.action === "default") {
+          assert.deepEqual(result2.value.extra, ["--unknown", "args"]);
+        }
+      }
+    });
+
+    it("should try all explicit parsers before passThrough", () => {
+      const parser = object({
+        verbose: option("-v", "--verbose"),
+        debug: option("-d", "--debug"),
+        config: option("-c", "--config", string()),
+        file: argument(string()),
+        extra: passThrough(),
+      });
+
+      const result = parse(parser, [
+        "-v",
+        "-d",
+        "-c",
+        "config.json",
+        "input.txt",
+        "--unknown=option",
+        "--another=one",
+      ]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.verbose, true);
+        assert.equal(result.value.debug, true);
+        assert.equal(result.value.config, "config.json");
+        assert.equal(result.value.file, "input.txt");
+        assert.deepEqual(result.value.extra, [
+          "--unknown=option",
+          "--another=one",
+        ]);
+      }
+    });
+  });
+
+  describe("short option formats", () => {
+    it("should capture short options in equalsOnly mode", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["-x=value"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      // equalsOnly should reject single-dash options without double-dash
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+    });
+
+    it("should capture short options in nextToken mode", () => {
+      const parser = passThrough({ format: "nextToken" });
+      const context = {
+        buffer: ["-x", "value"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["-x", "value"]);
+      }
+    });
+
+    it("should capture bundled short options in nextToken mode", () => {
+      const parser = passThrough({ format: "nextToken" });
+      const context = {
+        buffer: ["-abc"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["-abc"]);
+      }
+    });
+
+    it("should capture all short options in greedy mode", () => {
+      const parser = passThrough({ format: "greedy" });
+      const context = {
+        buffer: ["-x", "-y", "-z", "value"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["-x", "-y", "-z", "value"]);
+      }
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle empty input gracefully", () => {
+      const parser = object({
+        extra: optional(passThrough()),
+      });
+
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.extra, undefined);
+      }
+    });
+
+    it("should handle input with only options terminator", () => {
+      const parser = object({
+        extra: optional(passThrough()),
+        files: multiple(argument(string())),
+      });
+
+      const result = parse(parser, ["--", "--not-an-option"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.extra, undefined);
+        assert.deepEqual(result.value.files, ["--not-an-option"]);
+      }
+    });
+
+    it("should handle multiple consecutive = signs in value", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["--key=value=with=equals"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--key=value=with=equals"]);
+      }
+    });
+
+    it("should handle empty value after equals", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["--key="] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--key="]);
+      }
+    });
+
+    it("should handle options with numeric names", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ["--123=value"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ["--123=value"]);
+      }
+    });
+
+    it("should handle very long option names and values", () => {
+      const longName = "--" + "a".repeat(100);
+      const longValue = "b".repeat(1000);
+      const parser = passThrough();
+      const context = {
+        buffer: [`${longName}=${longValue}`] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, [`${longName}=${longValue}`]);
+      }
+    });
+
+    it("should handle special characters in values", () => {
+      const parser = passThrough();
+      const context = {
+        buffer: ['--json={"key": "value"}'] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, ['--json={"key": "value"}']);
+      }
+    });
+
+    it("should work when passThrough is the only parser", () => {
+      const parser = passThrough({ format: "greedy" });
+
+      const result = parse(parser, ["--foo", "bar", "--baz"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["--foo", "bar", "--baz"]);
+      }
+    });
+  });
+
+  describe("multiple passThrough usage", () => {
+    it("should work with passThrough in different subcommands", () => {
+      const parser = or(
+        command(
+          "build",
+          object({
+            action: constant("build"),
+            buildArgs: passThrough(),
+          }),
+        ),
+        command(
+          "test",
+          object({
+            action: constant("test"),
+            testArgs: passThrough(),
+          }),
+        ),
+      );
+
+      const result1 = parse(parser, ["build", "--optimize=true"]);
+      assert.ok(result1.success);
+      if (result1.success && result1.value.action === "build") {
+        assert.deepEqual(result1.value.buildArgs, ["--optimize=true"]);
+      }
+
+      const result2 = parse(parser, ["test", "--coverage=true"]);
+      assert.ok(result2.success);
+      if (result2.success && result2.value.action === "test") {
+        assert.deepEqual(result2.value.testArgs, ["--coverage=true"]);
+      }
+    });
+  });
+
+  describe("interaction with multiple()", () => {
+    it("should not be useful with multiple() since passThrough already collects", () => {
+      // This test documents the expected behavior - multiple() on passThrough
+      // doesn't make semantic sense since passThrough already collects multiple items
+      const parser = object({
+        extra: passThrough(),
+      });
+
+      const result = parse(parser, ["--foo=bar", "--baz=qux", "--third=one"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value.extra, [
+          "--foo=bar",
+          "--baz=qux",
+          "--third=one",
+        ]);
+      }
+    });
   });
 });
