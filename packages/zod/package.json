@@ -1,6 +1,6 @@
 {
   "name": "@optique/zod",
-  "version": "0.7.9",
+  "version": "0.7.10",
   "description": "Zod value parsers for Optique",
   "keywords": [
     "CLI",
