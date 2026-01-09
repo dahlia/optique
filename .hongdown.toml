@@ -1,0 +1,2 @@
+include = ["*.md", "**/*.md"]
+exclude = [".git/**", "**/node_modules/**", "**/dist/**"]

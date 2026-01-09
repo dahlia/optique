@@ -29,7 +29,7 @@ possibilities other libraries simply can't achieve.
 
 
 Complex option constraints made simple
----------------------------------------
+--------------------------------------
 
 To understand what makes Optique truly unique, consider a challenge that
 stumps most CLI libraries: expressing complex relationships between option
@@ -173,7 +173,7 @@ constraints are the parser—clear, type-safe, and impossible to get wrong.
 
 
 Natural parser composition
----------------------------
+--------------------------
 
 Beyond complex constraints, Optique excels at the more common challenge of
 sharing option sets across multiple commands. While other libraries handle
@@ -209,18 +209,19 @@ const deployParser = merge(CommonOptions, DeployOptions);
 // Natural composition with preserved type information
 ~~~~
 
-The difference becomes more pronounced as your CLI grows. With configuration-based
-libraries, shared logic requires increasingly complex abstractions. With Optique,
-you just compose functions—the same way you'd compose any other logic in your
-application.
+The difference becomes more pronounced as your CLI grows. With
+configuration-based libraries, shared logic requires increasingly complex
+abstractions. With Optique, you just compose functions—the same way you'd
+compose any other logic in your application.
 
 
 Parser combinators in practice
--------------------------------
+------------------------------
 
-The power of Optique's approach becomes clear when building real CLI applications.
-Consider a deployment tool that needs different option sets for different
-environments, with some options shared and others specific to each context.
+The power of Optique's approach becomes clear when building real CLI
+applications. Consider a deployment tool that needs different option sets for
+different environments, with some options shared and others specific to each
+context.
 
 ~~~~ typescript twoslash
 import { merge, object, or } from "@optique/core/constructs";
@@ -421,7 +422,7 @@ aren't available with configuration-based approaches.
 
 
 Starting with Optique
-----------------------
+---------------------
 
 Understanding Optique means understanding that CLI parsers can be more than
 configurations—they can be composable functions that naturally combine to

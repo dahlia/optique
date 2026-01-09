@@ -154,6 +154,7 @@ branches and eventually to `main`.
          -  Issue/PR reference definitions (e.g., `[#123]: ...`) should not
             be duplicated if they already exist
 
+
         For example, if merging 1.2.3 into 1.3-maintenance where 1.3.2 is
         pending:
 
@@ -232,6 +233,7 @@ branches and eventually to `main`.
     mise check
     git push origin main
     ~~~~
+
 
     > [!IMPORTANT]
     > Do *not* copy changelog entries to `main`.  The `main` branch tracks
@@ -425,37 +427,37 @@ Checklist summary
 
 ### Patch release checklist
 
-- [ ] Check out `X.Y-maintenance` branch
-- [ ] Update *CHANGES.md* release date
-- [ ] Commit with message "Release X.Y.Z"
-- [ ] Create tag `X.Y.Z` with `-m "Optique X.Y.Z"`
-- [ ] Add next version section to *CHANGES.md*
-- [ ] Bump version in *packages/core/deno.json*
-- [ ] Run `mise check-versions --fix`
-- [ ] Commit with message "Version bump\n\n[ci skip]"
-- [ ] Push tag and branch
-- [ ] Cascade merge to newer maintenance branches (if any):
-  - [ ] Merge tag into newer branch
-  - [ ] Copy changelog entries to unreleased version (above existing entries)
-  - [ ] Run tests and complete merge commit
-  - [ ] Create patch release for that branch
-- [ ] Merge to `main` (if no newer maintenance branches)
+ -  [ ] Check out `X.Y-maintenance` branch
+ -  [ ] Update *CHANGES.md* release date
+ -  [ ] Commit with message "Release X.Y.Z"
+ -  [ ] Create tag `X.Y.Z` with `-m "Optique X.Y.Z"`
+ -  [ ] Add next version section to *CHANGES.md*
+ -  [ ] Bump version in *packages/core/deno.json*
+ -  [ ] Run `mise check-versions --fix`
+ -  [ ] Commit with message `Version bump\n\n[ci skip]`
+ -  [ ] Push tag and branch
+ -  [ ] Cascade merge to newer maintenance branches (if any):
+     -  [ ] Merge tag into newer branch
+     -  [ ] Copy changelog entries to unreleased version (above existing entries)
+     -  [ ] Run tests and complete merge commit
+     -  [ ] Create patch release for that branch
+ -  [ ] Merge to `main` (if no newer maintenance branches)
 
 ### Major/minor release checklist
 
-- [ ] Check out `main` branch
-- [ ] Update *CHANGES.md* release date
-- [ ] Commit with message "Release X.Y.0"
-- [ ] Create tag `X.Y.0` with `-m "Optique X.Y.0"`
-- [ ] Add next version section to *CHANGES.md*
-- [ ] Bump version in *packages/core/deno.json*
-- [ ] Run `mise check-versions --fix`
-- [ ] Commit with message "Version bump\n\n[ci skip]"
-- [ ] Push tag and `main` branch
-- [ ] Create `X.Y-maintenance` branch from tag
-- [ ] Check out maintenance branch
-- [ ] Add patch version section to *CHANGES.md*
-- [ ] Bump version to X.Y.1 in *packages/core/deno.json*
-- [ ] Run `mise check-versions --fix`
-- [ ] Commit with message "Version bump\n\n[ci skip]"
-- [ ] Push maintenance branch
+ -  [ ] Check out `main` branch
+ -  [ ] Update *CHANGES.md* release date
+ -  [ ] Commit with message "Release X.Y.0"
+ -  [ ] Create tag `X.Y.0` with `-m "Optique X.Y.0"`
+ -  [ ] Add next version section to *CHANGES.md*
+ -  [ ] Bump version in *packages/core/deno.json*
+ -  [ ] Run `mise check-versions --fix`
+ -  [ ] Commit with message `Version bump\n\n[ci skip]`
+ -  [ ] Push tag and `main` branch
+ -  [ ] Create `X.Y-maintenance` branch from tag
+ -  [ ] Check out maintenance branch
+ -  [ ] Add patch version section to *CHANGES.md*
+ -  [ ] Bump version to X.Y.1 in *packages/core/deno.json*
+ -  [ ] Run `mise check-versions --fix`
+ -  [ ] Commit with message `Version bump\n\n[ci skip]`
+ -  [ ] Push maintenance branch

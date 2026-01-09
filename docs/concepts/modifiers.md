@@ -18,7 +18,8 @@ modifiers.
 The power of modifying combinators lies in their composability. You can chain
 them together to create sophisticated parsing behavior while maintaining full
 type safety. TypeScript automatically infers how each modifier affects
-the result type, so you get complete type information without manual annotations.
+the result type, so you get complete type information without manual
+annotations.
 
 Each modifier preserves the original parser's essential characteristics—like
 priority and usage information—while extending its behavior. This ensures that
@@ -54,9 +55,9 @@ const parser = object({
 
 ### Type transformation
 
-The `optional()` modifier transforms the result type from `T` to `T | undefined`.
-This forces you to handle the case where the value might not be present,
-preventing runtime errors from assuming values exist:
+The `optional()` modifier transforms the result type from `T` to
+`T | undefined`. This forces you to handle the case where the value might not
+be present, preventing runtime errors from assuming values exist:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -165,8 +166,9 @@ const parser = object({
 
 ### Union type patterns
 
-When the default value is a different type from the parser result, `withDefault()`
-creates a union type. This is particularly useful for conditional CLI structures:
+When the default value is a different type from the parser result,
+`withDefault()` creates a union type. This is particularly useful for
+conditional CLI structures:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -419,8 +421,8 @@ if (config.success) {
 
 ### Dependent options with union types
 
-A powerful pattern uses `withDefault()` with different types to create conditional
-CLI structures where options depend on flags:
+A powerful pattern uses `withDefault()` with different types to create
+conditional CLI structures where options depend on flags:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";

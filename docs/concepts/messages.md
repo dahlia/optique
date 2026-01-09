@@ -45,6 +45,7 @@ const error =
 const optionError = message`Option ${optionName("--port")} requires a valid number.`;
 ~~~~
 
+
 Message components
 ------------------
 
@@ -59,7 +60,8 @@ Plain text appears as normal text without any special formatting.
 ### Values
 
 User-provided input that should be clearly distinguished from other text.
-Values are automatically styled with highlighting and quotes to make them stand out:
+Values are automatically styled with highlighting and quotes to make them stand
+out:
 
 ~~~~ typescript twoslash
 import { message } from "@optique/core/message";
@@ -223,7 +225,6 @@ const invalidArgs = ["file1.txt", "file2.txt", "file3.txt"];
 const errorMsg = message`Invalid files: ${values(invalidArgs)}.`;
 ~~~~
 
-
 With colors (no quotes):
 
 ~~~~ ansi
@@ -379,6 +380,7 @@ const userInput: string = "invalid-port";
 const error = message`Invalid port ${userInput}.`;
 ~~~~
 
+
 Explicit component creation
 ---------------------------
 
@@ -409,6 +411,7 @@ const valuesMessage = message`Invalid values: ${values(args)}.`;
 // Metavariable in error context
 const typeError = message`Expected ${metavar("STRING")}, got ${metavar("NUMBER")}.`;
 ~~~~
+
 
 Message composition
 -------------------
@@ -907,10 +910,10 @@ const timezone = option("--timezone", timeZone({
 When customizing error messages, follow these patterns for consistent and
 helpful user experience:
 
- 1. *Be specific*: Include the problematic input value when possible
- 2. *Provide context*: Reference the specific option or command involved
- 3. *Suggest solutions*: Mention valid alternatives or corrective actions
- 4. *Use consistent styling*: Apply proper component types for CLI elements
+1.  *Be specific*: Include the problematic input value when possible
+2.  *Provide context*: Reference the specific option or command involved
+3.  *Suggest solutions*: Mention valid alternatives or corrective actions
+4.  *Use consistent styling*: Apply proper component types for CLI elements
 
 ~~~~ typescript twoslash
 import { option } from "@optique/core/primitives";
@@ -941,7 +944,6 @@ const logLevel = option("--log-level", string(), {
 Custom error messages integrate seamlessly with Optique's structured message
 system, ensuring consistent formatting and proper terminal output regardless
 of whether colors are enabled or disabled.
-
 
 ### Suggestion message customization
 
@@ -1101,10 +1103,11 @@ Automatic “Did you mean?” suggestions
 
 *Available since Optique 0.7.0.*
 
-Optique automatically provides helpful “Did you mean?” suggestions when users
-make typos in option names or command names. This feature works transparently
-without requiring any configuration—when a user enters an invalid option or
-command that's similar to a valid one, Optique suggests the correct alternative:
+Optique automatically provides helpful “Did you mean?” suggestions when
+users make typos in option names or command names. This feature works
+transparently without requiring any configuration—when a user enters an
+invalid option or command that's similar to a valid one, Optique suggests the
+correct alternative:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";

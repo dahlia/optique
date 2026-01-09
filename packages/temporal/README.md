@@ -1,5 +1,5 @@
 @optique/temporal
-================
+=================
 
 > [!WARNING]
 > The API is stabilizing, but may change before the 1.0 release.

@@ -20,7 +20,7 @@ from argument extraction to process exit codes.
 
 
 Low-level parsing with `parse()`
----------------------------------
+--------------------------------
 
 The `parse()` function from `@optique/core/parser` provides the most basic
 parsing operation. It takes a parser and an array of string arguments, returning
@@ -136,9 +136,11 @@ console.log(`Starting ${config.name} on port ${config.port}.`);
 This approach automatically handles:
 
  -  *Help generation*: Creates formatted help text from parser structure
- -  *Version display*: Shows version information via `--version` or `version` command
+ -  *Version display*: Shows version information via `--version` or `version`
+    command
  -  *Error formatting*: Shows clear error messages with usage information
- -  *Option parsing*: Recognizes `--help`/`--version` flags and `help`/`version` subcommands
+ -  *Option parsing*: Recognizes `--help`/`--version` flags and `help`/`version`
+    subcommands
  -  *Usage display*: Shows command syntax when errors occur
 
 The `RunOptions` interface provides extensive customization:
@@ -457,8 +459,9 @@ The `mode` option controls how completion is triggered:
 
 *This API is available since Optique 0.7.0.*
 
-You can configure whether to use singular (`completion`), plural (`completions`),
-or both naming conventions for the completion command and option:
+You can configure whether to use singular (`completion`), plural
+(`completions`), or both naming conventions for the completion command and
+option:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -611,9 +614,10 @@ For more information, visit: https://example.com/docs
 Report bugs at: https://github.com/user/myapp/issues
 ~~~~
 
-These same fields also appear when errors are displayed with `aboveError: "help"`,
-providing context even when parsing fails. The user-provided documentation takes
-precedence over any documentation generated from parser structure.
+These same fields also appear when errors are displayed with
+`aboveError: "help"`, providing context even when parsing fails. The
+user-provided documentation takes precedence over any documentation generated
+from parser structure.
 
 ### Error handling behavior
 
@@ -769,7 +773,8 @@ const asyncDoc2 = await getDocPage(asyncParser); // Returns Promise
 :   Only accepts sync parsers. Returns `DocPage | undefined` directly.
 
 `getDocPageAsync()`
-:   Accepts any parser (sync or async). Always returns `Promise<DocPage | undefined>`.
+:   Accepts any parser (sync or async). Always returns
+    `Promise<DocPage | undefined>`.
 
 `getDocPage()`
 :   The generic function that returns the appropriate type based on the parser's

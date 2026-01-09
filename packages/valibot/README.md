@@ -183,6 +183,9 @@ If you need async validation, perform it after parsing the CLI arguments.
 For more resources
 ------------------
 
- -  [Optique documentation](https://optique.dev/)
- -  [Valibot documentation](https://valibot.dev/)
+ -  [Optique documentation]
+ -  [Valibot documentation]
  -  [Examples directory](/examples/)
+
+[Optique documentation]: https://optique.dev/
+[Valibot documentation]: https://valibot.dev/

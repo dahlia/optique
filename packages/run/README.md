@@ -113,10 +113,9 @@ The completion system automatically provides intelligent suggestions for:
 
 For more details, see the [completion guide].
 
-[completion guide]: https://optique.dev/concepts/completion
-
----
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 For more resources, see the [docs] and the [*examples/*](/examples/) directory.
 
+[completion guide]: https://optique.dev/concepts/completion
 [docs]: https://optique.dev/

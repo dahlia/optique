@@ -95,7 +95,6 @@ Options:
  -  `dir`: Git repository directory (defaults to current working directory)
  -  `metavar`: Metavar name for help text (default: `"BRANCH"`)
 
-
 ### `gitRemoteBranch(remote, options?)`
 
 A value parser for remote branch names. Validates that the input matches an
@@ -113,7 +112,6 @@ const parser = object({
 const result = await parseAsync(parser, ["--branch=main"]);
 // Valid remote branch on origin
 ~~~~
-
 
 ### `gitTag(options?)`
 
@@ -133,7 +131,6 @@ const result = await parseAsync(parser, ["--tag=v1.0.0"]);
 // Valid tag
 ~~~~
 
-
 ### `gitRemote(options?)`
 
 A value parser for remote names. Validates that the input matches an existing
@@ -151,7 +148,6 @@ const parser = object({
 const result = await parseAsync(parser, ["--remote=origin"]);
 // Valid remote
 ~~~~
-
 
 ### `gitCommit(options?)`
 
@@ -171,7 +167,6 @@ const result = await parseAsync(parser, ["--commit=abc1234"]);
 // Valid commit SHA
 ~~~~
 
-
 ### `gitRef(options?)`
 
 A value parser for any Git reference (branches, tags, or commits). Validates
@@ -189,7 +184,6 @@ const parser = object({
 const result = await parseAsync(parser, ["--ref=v1.0.0"]);
 // Valid branch, tag, or commit
 ~~~~
-
 
 ### `createGitParsers(options?)`
 

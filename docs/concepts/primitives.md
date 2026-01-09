@@ -231,7 +231,7 @@ Dependent options
     import { object } from "@optique/core/constructs";
     import { withDefault } from "@optique/core/modifiers";
     import { flag, option } from "@optique/core/primitives";
-
+    
     // When --advanced is not provided, parser fails and defaults are used
     const parser = withDefault(
       object({
@@ -256,7 +256,7 @@ Mode selection
       batch: optional(flag("-b", "--batch")),
       daemon: optional(flag("-d", "--daemon"))
     });
-
+    
     // At most one mode can be selected, enforced by application logic
     ~~~~
 
@@ -283,7 +283,8 @@ consistent option handling.
 The `argument()` parser handles positional arguments—values that appear in
 specific positions on the command line without option flags.
 Positional arguments are essential for intuitive CLI design, as users expect
-commands like `cp source.txt dest.txt` rather than `cp --source source.txt
+commands like `cp source.txt dest.txt` rather than
+`cp --source source.txt
 --dest dest.txt`.
 
 ~~~~ typescript twoslash
@@ -468,8 +469,8 @@ to forward unknown options to an underlying tool or command.
 > [!CAUTION]
 > *Consider alternatives before using `passThrough()`.* This parser
 > intentionally weakens Optique's strict parsing philosophy where “all input
-> must be recognized.” While it enables legitimate wrapper/proxy tool patterns,
-> it comes with significant trade-offs:
+> must be recognized.” While it enables legitimate wrapper/proxy tool
+> patterns, it comes with significant trade-offs:
 >
 >  -  Typos in pass-through options won't be caught
 >  -  No type safety for forwarded options
@@ -581,8 +582,9 @@ options going to `passThrough()`.
 
 ### Options terminator
 
-The `passThrough()` parser respects the `--` options terminator in `"equalsOnly"`
-and `"nextToken"` modes. After `--`, options are no longer captured:
+The `passThrough()` parser respects the `--` options terminator in
+`"equalsOnly"` and `"nextToken"` modes. After `--`, options are no longer
+captured:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -661,7 +663,8 @@ messages that help users understand what went wrong:
 }
 ~~~~
 
-The error messages are designed to be user-friendly while providing enough detail for developers to understand parsing failures.
+The error messages are designed to be user-friendly while providing enough
+detail for developers to understand parsing failures.
 
 
 Working with primitive parsers
@@ -830,6 +833,8 @@ myapp --trace-internal       # Hidden debug flag
 myapp experimental-deploy    # Hidden command
 ~~~~
 
-These patterns demonstrate how primitive parsers serve as the foundation for more complex CLI structures, providing the building blocks that higher-level combinators orchestrate into complete parsing solutions.
+These patterns demonstrate how primitive parsers serve as the foundation for
+more complex CLI structures, providing the building blocks that higher-level
+combinators orchestrate into complete parsing solutions.
 
 <!-- cSpell: ignore myapp mydb -->

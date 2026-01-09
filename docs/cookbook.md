@@ -98,12 +98,12 @@ The key insight here is using [`or()`](./concepts/constructs.md#or-parser)
 to create a discriminated union of different command parsers.
 Each [`command()`](./concepts/primitives.md#command-parser) parser:
 
- 1. *Matches a specific keyword* (`"add"`, `"remove"`, etc.) as the first
+1.  *Matches a specific keyword* (`"add"`, `"remove"`, etc.) as the first
     argument
- 2. *Provides a unique type tag* using
+2.  *Provides a unique type tag* using
     [`constant()`](./concepts/primitives.md#constant-parser) to distinguish
     commands in the result type
- 3. *Defines command-specific arguments* that only apply to that particular
+3.  *Defines command-specific arguments* that only apply to that particular
     command
 
 The `constant("add")` pattern is crucial because it creates a literal type that
@@ -305,8 +305,9 @@ const result2 = run(outputModeWithDefault);
 console.debug(result1, result2);
 ~~~~
 
-This pattern differs from the basic [mutually exclusive flags](#mutually-exclusive-flags)
-pattern in an important way:
+This pattern differs from the basic
+[mutually exclusive flags](#mutually-exclusive-flags) pattern in an important
+way:
 
  -  *Without wrapper*: `or(A, B)` requires at least one to match—parsing fails
     if neither is provided
@@ -427,8 +428,9 @@ const result = run(reporterParser);
 // The result type is a tuple union based on the discriminator value.
 ~~~~
 
-This pattern is different from using [`or()`](./concepts/constructs.md#or-parser)
-with [`constant()`](./concepts/primitives.md#constant-parser) because:
+This pattern is different from using
+[`or()`](./concepts/constructs.md#or-parser) with
+[`constant()`](./concepts/primitives.md#constant-parser) because:
 
  -  *Explicit discriminator*: The user provides `--reporter junit` rather than
     inferring mode from which options are present
@@ -833,10 +835,11 @@ const result = run(configParser);
 console.debug(result);
 ~~~~
 
-This pattern leverages the fact that [`option()`](./concepts/primitives.md#option-parser)
-without a value parser creates a Boolean flag that produces `false` when absent
-and `true` when present. The [`map()`](./concepts/modifiers.md#map-parser)
-combinator inverts this behavior:
+This pattern leverages the fact that
+[`option()`](./concepts/primitives.md#option-parser) without a value parser
+creates a Boolean flag that produces `false` when absent and `true` when
+present. The [`map()`](./concepts/modifiers.md#map-parser) combinator inverts
+this behavior:
 
 When `--no-code-fence` is provided
 :   `option()` produces `true` → `map()` inverts to `false`
@@ -912,8 +915,9 @@ Pass-through options for wrapper CLIs
 *This API is available since Optique 0.8.0.*
 
 When building wrapper tools that need to forward unknown options to an
-underlying command, the [`passThrough()`](./concepts/primitives.md#passthrough-parser)
-parser captures unrecognized options without validation errors.
+underlying command, the
+[`passThrough()`](./concepts/primitives.md#passthrough-parser) parser captures
+unrecognized options without validation errors.
 
 ### Basic wrapper pattern
 
@@ -1271,6 +1275,7 @@ myapp server --env <TAB>       # Shows: dev, staging, prod
 myapp build <TAB>              # Shows: web, mobile, desktop
 ~~~~
 
+
 Hidden and deprecated options
 -----------------------------
 
@@ -1359,7 +1364,7 @@ const commands = or(
 Hidden commands work normally but don't appear in command listings or
 get suggested in “Did you mean?” errors.
 
--------------------------------------------------------------------------------
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 The patterns in this cookbook provide the building blocks for creating
 CLI interfaces that are both powerful and type-safe, with clear separation

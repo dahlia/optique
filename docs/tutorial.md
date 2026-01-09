@@ -6,7 +6,7 @@ description: >-
 ---
 
 Optique tutorial: Build type-safe CLIs step by step
-====================================================
+===================================================
 
 Optique is a type-safe combinatorial CLI parser that makes building command-line
 interfaces both powerful and predictable. Unlike traditional CLI parsers that
@@ -508,7 +508,6 @@ print(message`Running in ${"port" in config ? 'server' : 'client'} mode.`);
 > [optional mutually exclusive flags](./cookbook.md#optional-mutually-exclusive-flags)
 > pattern in the cookbook for details.
 
-
 ### Discriminated unions with `constant()`
 
 The previous example creates a union type, but TypeScript can't yet distinguish
@@ -931,10 +930,10 @@ creating reusable, composable option groups.
 
 The [`merge()`](./concepts/constructs.md#merge-parser) combinator is the key to
 building modular CLI applications. It allows you to define option groups once
-and reuse them across different commands, while maintaining complete type safety.
-This approach promotes consistency across your CLI—users learn the database
-options once and can apply that knowledge to any command that needs database
-access.
+and reuse them across different commands, while maintaining complete type
+safety. This approach promotes consistency across your CLI—users learn the
+database options once and can apply that knowledge to any command that needs
+database access.
 
 ### Reusable option groups with `merge()`
 

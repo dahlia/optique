@@ -377,7 +377,7 @@ Metavar defaults
 Each parser uses an appropriate default metavar for help text:
 
 | Parser              | Default metavar |
-|---------------------|-----------------|
+| ------------------- | --------------- |
 | `gitBranch()`       | `"BRANCH"`      |
 | `gitTag()`          | `"TAG"`         |
 | `gitRemote()`       | `"REMOTE"`      |

@@ -391,8 +391,9 @@ The `mode` option controls how completion is triggered:
 
 *This API is available since Optique 0.7.0.*
 
-You can configure whether to use singular (`completion`), plural (`completions`),
-or both naming conventions for the completion command and option:
+You can configure whether to use singular (`completion`), plural
+(`completions`), or both naming conventions for the completion command and
+option:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -573,7 +574,7 @@ For published CLI tools, consider:
 
  -  Including completion installation instructions in your *README*
  -  Providing install scripts that automatically set up completion
- -  Supporting common completion directories (*/etc/bash_completion.d/*,
+ -  Supporting common completion directories (*/etc/bash\_completion.d/*,
     */usr/share/zsh/site-functions/*)
  -  Documenting completion setup in your help text
 

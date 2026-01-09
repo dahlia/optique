@@ -166,7 +166,7 @@ If you need async validation, perform it after parsing the CLI arguments.
 
 
 Zod version compatibility
---------------------------
+-------------------------
 
 This package supports both Zod v3 (3.25.0+) and Zod v4 (4.0.0+). The basic
 functionality works identically in both versions.
@@ -194,6 +194,9 @@ pnpm run test:all-versions
 For more resources
 ------------------
 
- -  [Optique documentation](https://optique.dev/)
- -  [Zod documentation](https://zod.dev/)
+ -  [Optique documentation]
+ -  [Zod documentation]
  -  [Examples directory](/examples/)
+
+[Optique documentation]: https://optique.dev/
+[Zod documentation]: https://zod.dev/

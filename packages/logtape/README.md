@@ -70,7 +70,6 @@ Features:
     `"fatal"`
  -  Provides suggestions for shell completion
 
-
 ### `verbosity()`
 
 A parser for accumulating `-v` flags to determine log level.
@@ -102,7 +101,6 @@ Options:
  -  `long`: Long option name (default: `"--verbose"`)
  -  `baseLevel`: Starting log level (default: `"warning"`)
 
-
 ### `debug()`
 
 A simple boolean flag parser for enabling debug logging.
@@ -129,7 +127,6 @@ Options:
  -  `debugLevel`: Level when flag is present (default: `"debug"`)
  -  `normalLevel`: Level when flag is absent (default: `"info"`)
 
-
 ### `logOutput()`
 
 A parser for log output destination. Accepts `-` for console output or a file
@@ -154,7 +151,6 @@ const result2 = parse(parser, ["--log-output=/var/log/app.log"]);
 // Create a LogTape sink from the output
 const sink = await createSink(result1.value.output);
 ~~~~
-
 
 ### `loggingOptions()`
 
@@ -213,7 +209,6 @@ Common options:
  -  `groupLabel`: Label for option group in help text (default:
     `"Logging options"`)
 
-
 ### `createLoggingConfig()`
 
 Converts parsed logging options into a LogTape configuration object.
@@ -240,7 +235,6 @@ if (result.success) {
 }
 ~~~~
 
-
 ### `createConsoleSink()`
 
 Creates a console sink with configurable stream selection.
@@ -260,7 +254,6 @@ const sink3 = createConsoleSink({
     level === "error" || level === "fatal" ? "stderr" : "stdout",
 });
 ~~~~
-
 
 ### `createSink()`
 

@@ -210,7 +210,8 @@ messages for invalid formats and out-of-range values.
 
 The `choice()` parser creates type-safe enumerations by restricting input to
 one of several predefined string values. This is perfect for options like log
-levels, output formats, or operation modes where only specific values make sense.
+levels, output formats, or operation modes where only specific values make
+sense.
 
 ~~~~ typescript twoslash
 import { choice } from "@optique/core/valueparser";
@@ -241,7 +242,8 @@ const level = choice(["debug", "info", "warn", "error"]);
 
 ### Case sensitivity
 
-By default, matching is case-sensitive. Set `caseInsensitive: true` to accept variations:
+By default, matching is case-sensitive. Set `caseInsensitive: true` to accept
+variations:
 
 ~~~~ typescript twoslash
 import { choice } from "@optique/core/valueparser";
@@ -443,7 +445,8 @@ if (result.success) {
 }
 ~~~~
 
-The parser uses `"LOCALE"` as its default metavar and provides clear error messages for invalid locale identifiers.
+The parser uses `"LOCALE"` as its default metavar and provides clear error
+messages for invalid locale identifiers.
 
 
 `uuid()` parser
@@ -475,8 +478,8 @@ const trackingId = uuid({
 
 ### UUID format validation
 
-The parser validates the standard UUID format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
-where each `x` is a hexadecimal digit:
+The parser validates the standard UUID format:
+`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` where each `x` is a hexadecimal digit:
 
 ~~~~
 # Valid UUID formats
@@ -510,7 +513,8 @@ const invalidV1 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 ### UUID type safety
 
-The parser returns a branded `Uuid` type rather than a plain string, providing additional compile-time safety:
+The parser returns a branded `Uuid` type rather than a plain string, providing
+additional compile-time safety:
 
 ~~~~ typescript twoslash
 // @errors: 2345

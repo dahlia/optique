@@ -276,8 +276,8 @@ The parser accepts month-day format:
 `timeZone()` parser
 -------------------
 
-The `timeZone()` parser validates IANA Time Zone Database identifiers and returns
-a branded `TimeZone` string type for type safety:
+The `timeZone()` parser validates IANA Time Zone Database identifiers and
+returns a branded `TimeZone` string type for type safety:
 
 ~~~~ typescript twoslash
 import { timeZone } from "@optique/temporal";

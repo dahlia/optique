@@ -30,6 +30,7 @@ Released on January 6, 2026.
         element is `"async"`, otherwise `"sync"`.
      -  `InferMode<P>`: Extracts the mode from a parser type.
 
+
     All parsers now include a `$mode` property indicating their execution mode.
     Combinators automatically propagate modes from their constituent parsers,
     resulting in `"async"` mode if any child parser is async.
@@ -44,6 +45,7 @@ Released on January 6, 2026.
      -  `getDocPageAsync()`: Gets documentation page from any parser as a Promise.
      -  `runParserSync()`: Runs a sync-only parser, returning the result directly.
      -  `runParserAsync()`: Runs any parser, returning a Promise of the result.
+
 
     This change is backward compatible.  Existing code continues to work
     unchanged as all parsers default to sync mode.
@@ -180,9 +182,9 @@ Released on January 6, 2026.
 
  -  Added `valueSet()` function for formatting choice lists with locale-aware
     separators.  This function uses `Intl.ListFormat` to format lists according
-    to locale conventions with appropriate conjunctions like “and” or “or”,
-    making it suitable for error messages in `choice()` value parsers and
-    similar contexts.
+    to locale conventions with appropriate conjunctions like “and” or
+    “or”, making it suitable for error messages in `choice()` value parsers
+    and similar contexts.
 
     ~~~~ typescript
     import { message, valueSet } from "@optique/core/message";
@@ -224,6 +226,7 @@ Released on January 6, 2026.
         directly.
      -  `runAsync()`: Runs with any parser, returning a `Promise` of the parsed
         value.
+
 
     The existing `run()` function continues to work unchanged for sync parsers.
     For async parsers, use `runAsync()` or `await run()`.
@@ -335,6 +338,8 @@ Released on January 5, 2026.
     out values that have already been parsed, providing a cleaner completion
     experience.  [[#73]]
 
+[#73]: https://github.com/dahlia/optique/issues/73
+
 
 Version 0.8.6
 -------------
@@ -344,10 +349,11 @@ Released on January 1, 2026.
 ### @optique/core
 
  -  Fixed `object()` parser ignoring symbol keys.  Previously, when using
-    symbol keys in the parser definition (e.g., `object({ [sym]: option(...) })`),
-    the symbol-keyed parsers were silently ignored because `Object.entries()`
-    and `for...in` loops do not enumerate symbol properties.  Now, the parser
-    correctly handles both string and symbol keys by using `Reflect.ownKeys()`.
+    symbol keys in the parser definition (e.g.,
+    `object({ [sym]: option(...) })`), the symbol-keyed parsers were silently
+    ignored because `Object.entries()` and `for...in` loops do not enumerate
+    symbol properties.  Now, the parser correctly handles both string and
+    symbol keys by using `Reflect.ownKeys()`.
 
 
 Version 0.8.5
@@ -371,6 +377,8 @@ Released on December 30, 2025.
     alternatives instead of only the selected subcommand's usage.  Now, the
     usage line correctly displays only the relevant subcommand.
 
+[#69]: https://github.com/dahlia/optique/issues/69
+
 
 Version 0.8.4
 -------------
@@ -389,6 +397,8 @@ Released on December 30, 2025.
     generation when the command is matched but the inner parser hasn't started
     yet.  Previously, it passed `unavailable` state which could cause issues
     with parsers that depend on state for documentation.  [[#68]]
+
+[#68]: https://github.com/dahlia/optique/issues/68
 
 ### @optique/logtape
 
@@ -409,7 +419,10 @@ Released on December 30, 2025.
     `or()`.  Previously, when using `merge(globalOptions, or(sub1, sub2))`,
     options inside the subcommands would fail to parse after the subcommand was
     selected.  For example, `sub1 -o foo` would fail with “No matching option
-    or argument found” even though `-o` was a valid option for `sub1`.  [[#67]]
+    or argument found” even though `-o` was a valid option for `sub1`.
+    [[#67]]
+
+[#67]: https://github.com/dahlia/optique/issues/67
 
 
 Version 0.8.2
@@ -421,10 +434,12 @@ Released on December 21, 2025.
 
  -  Fixed `withDefault()` widening literal types in its default value parameter.
     Previously, passing a literal type as the default value would cause type
-    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal types
-    are correctly preserved.  For example,
+    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal
+    types are correctly preserved.  For example,
     `withDefault(option("--format", choice(["auto", "text"])), "auto")` now
     correctly infers `"auto" | "text"` instead of `string`.  [[#58]]
+
+[#58]: https://github.com/dahlia/optique/issues/58
 
 
 Version 0.8.1
@@ -444,6 +459,9 @@ Released on December 16, 2025.
     completing `--remote ""` in a parser with both `--remote` option and
     positional tag arguments, only the remote values are now suggested,
     not the tag values.  [[#55]]
+
+[#53]: https://github.com/dahlia/optique/issues/53
+[#55]: https://github.com/dahlia/optique/issues/55
 
 
 Version 0.8.0
@@ -536,8 +554,8 @@ parsing strategies.
     suggestions.
 
  -  Added `verbosity()` parser for accumulating `-v` flags to determine log
-    level. Each additional `-v` flag increases verbosity: no flags → `"warning"`,
-    `-v` → `"info"`, `-vv` → `"debug"`, `-vvv` → `"trace"`.
+    level. Each additional `-v` flag increases verbosity: no flags →
+    `"warning"`, `-v` → `"info"`, `-vv` → `"debug"`, `-vvv` → `"trace"`.
 
  -  Added `debug()` parser for simple `--debug`/`-d` flag that toggles between
     normal level (`"info"`) and debug level (`"debug"`).
@@ -587,10 +605,11 @@ Released on January 1, 2026.
 ### @optique/core
 
  -  Fixed `object()` parser ignoring symbol keys.  Previously, when using
-    symbol keys in the parser definition (e.g., `object({ [sym]: option(...) })`),
-    the symbol-keyed parsers were silently ignored because `Object.entries()`
-    and `for...in` loops do not enumerate symbol properties.  Now, the parser
-    correctly handles both string and symbol keys by using `Reflect.ownKeys()`.
+    symbol keys in the parser definition (e.g.,
+    `object({ [sym]: option(...) })`), the symbol-keyed parsers were silently
+    ignored because `Object.entries()` and `for...in` loops do not enumerate
+    symbol properties.  Now, the parser correctly handles both string and
+    symbol keys by using `Reflect.ownKeys()`.
 
 
 Version 0.7.7
@@ -645,7 +664,8 @@ Released on December 30, 2025.
     `or()`.  Previously, when using `merge(globalOptions, or(sub1, sub2))`,
     options inside the subcommands would fail to parse after the subcommand was
     selected.  For example, `sub1 -o foo` would fail with “No matching option
-    or argument found” even though `-o` was a valid option for `sub1`.  [[#67]]
+    or argument found” even though `-o` was a valid option for `sub1`.
+    [[#67]]
 
 
 Version 0.7.4
@@ -657,8 +677,8 @@ Released on December 21, 2025.
 
  -  Fixed `withDefault()` widening literal types in its default value parameter.
     Previously, passing a literal type as the default value would cause type
-    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal types
-    are correctly preserved.  For example,
+    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal
+    types are correctly preserved.  For example,
     `withDefault(option("--format", choice(["auto", "text"])), "auto")` now
     correctly infers `"auto" | "text"` instead of `string`.  [[#58]]
 
@@ -681,9 +701,6 @@ Released on December 16, 2025.
     positional tag arguments, only the remote values are now suggested,
     not the tag values.  [[#55]]
 
-[#53]: https://github.com/dahlia/optique/issues/53
-[#55]: https://github.com/dahlia/optique/issues/55
-
 
 Version 0.7.2
 -------------
@@ -698,6 +715,8 @@ Released on December 2, 2025.
     now correctly returns `"Bob"` instead of failing with “Missing option
     `--name`.”  [[#50]]
 
+[#50]: https://github.com/dahlia/optique/issues/50
+
 
 Version 0.7.1
 -------------
@@ -711,6 +730,8 @@ Released on December 2, 2025.
     example, `parse(withDefault(option("--name", string()), "Bob"), [])` now
     correctly returns `"Bob"` instead of failing with “Expected an option,
     but got end of input.”  [[#48]]
+
+[#48]: https://github.com/dahlia/optique/issues/48
 
 
 Version 0.7.0
@@ -837,6 +858,7 @@ Released on November 25, 2025.
 
      -  Double or more consecutive newlines (`\n\n+`) are treated as hard
         breaks, creating actual paragraph separations in the output.
+
 
     This change improves the readability of multi-part error messages, such
     as those with “Did you mean?” suggestions, by ensuring proper spacing
@@ -988,8 +1010,6 @@ Released on January 5, 2026.
     out values that have already been parsed, providing a cleaner completion
     experience.  [[#73]]
 
-[#73]: https://github.com/dahlia/optique/issues/73
-
 
 Version 0.6.10
 --------------
@@ -999,10 +1019,11 @@ Released on January 1, 2026.
 ### @optique/core
 
  -  Fixed `object()` parser ignoring symbol keys.  Previously, when using
-    symbol keys in the parser definition (e.g., `object({ [sym]: option(...) })`),
-    the symbol-keyed parsers were silently ignored because `Object.entries()`
-    and `for...in` loops do not enumerate symbol properties.  Now, the parser
-    correctly handles both string and symbol keys by using `Reflect.ownKeys()`.
+    symbol keys in the parser definition (e.g.,
+    `object({ [sym]: option(...) })`), the symbol-keyed parsers were silently
+    ignored because `Object.entries()` and `for...in` loops do not enumerate
+    symbol properties.  Now, the parser correctly handles both string and
+    symbol keys by using `Reflect.ownKeys()`.
 
 
 Version 0.6.9
@@ -1026,8 +1047,6 @@ Released on December 30, 2025.
     alternatives instead of only the selected subcommand's usage.  Now, the
     usage line correctly displays only the relevant subcommand.
 
-[#69]: https://github.com/dahlia/optique/issues/69
-
 
 Version 0.6.8
 -------------
@@ -1047,8 +1066,6 @@ Released on December 30, 2025.
     yet.  Previously, it passed `unavailable` state which could cause issues
     with parsers that depend on state for documentation.  [[#68]]
 
-[#68]: https://github.com/dahlia/optique/issues/68
-
 
 Version 0.6.7
 -------------
@@ -1061,9 +1078,8 @@ Released on December 30, 2025.
     `or()`.  Previously, when using `merge(globalOptions, or(sub1, sub2))`,
     options inside the subcommands would fail to parse after the subcommand was
     selected.  For example, `sub1 -o foo` would fail with “No matching option
-    or argument found” even though `-o` was a valid option for `sub1`.  [[#67]]
-
-[#67]: https://github.com/dahlia/optique/issues/67
+    or argument found” even though `-o` was a valid option for `sub1`.
+    [[#67]]
 
 
 Version 0.6.6
@@ -1075,12 +1091,10 @@ Released on December 21, 2025.
 
  -  Fixed `withDefault()` widening literal types in its default value parameter.
     Previously, passing a literal type as the default value would cause type
-    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal types
-    are correctly preserved.  For example,
+    widening (e.g., `"auto"` → `string`, `42` → `number`).  Now literal
+    types are correctly preserved.  For example,
     `withDefault(option("--format", choice(["auto", "text"])), "auto")` now
     correctly infers `"auto" | "text"` instead of `string`.  [[#58]]
-
-[#58]: https://github.com/dahlia/optique/issues/58
 
 
 Version 0.6.5
@@ -1096,8 +1110,6 @@ Released on December 2, 2025.
     now correctly returns `"Bob"` instead of failing with “Missing option
     `--name`.”  [[#50]]
 
-[#50]: https://github.com/dahlia/optique/issues/50
-
 
 Version 0.6.4
 -------------
@@ -1111,8 +1123,6 @@ Rleased on December 2, 2025.
     example, `parse(withDefault(option("--name", string()), "Bob"), [])` now
     correctly returns `"Bob"` instead of failing with “Expected an option,
     but got end of input.”  [[#48]]
-
-[#48]: https://github.com/dahlia/optique/issues/48
 
 
 Version 0.6.3
@@ -1141,6 +1151,8 @@ Released on October 27, 2025.
     `"require"` type paths for submodules were incorrectly pointing to
     `"*.cts"` files instead of `"*.d.cts"` files, causing type resolution
     issues when importing submodules in CommonJS environments.  [[#36]]
+
+[#36]: https://github.com/dahlia/optique/issues/36
 
 ### @optique/run
 
@@ -1244,8 +1256,6 @@ Released on October 27, 2025.
     `"*.cts"` files instead of `"*.d.cts"` files, causing type resolution
     issues when importing submodules in CommonJS environments.  [[#36]]
 
-[#36]: https://github.com/dahlia/optique/issues/36
-
 
 Version 0.5.2
 -------------
@@ -1287,9 +1297,10 @@ Released on September 23, 2025.
 ### @optique/core
 
  -  Refactored parser modules for better code organization by splitting the large
-    `@optique/core/parser` module into focused, specialized modules. This improves
-    maintainability, reduces module size, and provides clearer separation of
-    concerns. All changes maintain full backward compatibility through re-exports.
+    `@optique/core/parser` module into focused, specialized modules. This
+    improves maintainability, reduces module size, and provides clearer
+    separation of concerns. All changes maintain full backward compatibility
+    through re-exports.
 
      -  *Primitive parsers*: Moved primitive parsers (`constant()`, `option()`,
         `flag()`, `argument()`, `command()`) and their related types to
@@ -1303,14 +1314,15 @@ Released on September 23, 2025.
 
      -  *Construct combinators*: Moved parser combinators (`object()`,
         `tuple()`, `or()`, `merge()`, `concat()`, `longestMatch()`, `group()`)
-        and their related types to a dedicated `@optique/core/constructs` module.
-        These combinator functions that compose and combine parsers are now
-        organized in a separate module.
+        and their related types to a dedicated `@optique/core/constructs`
+        module. These combinator functions that compose and combine parsers are
+        now organized in a separate module.
+
 
     For backward compatibility, all functions continue to be re-exported from
     `@optique/core/parser`, so existing code will work unchanged. However, the
-    recommended approach going forward is to import directly from the specialized
-    modules:
+    recommended approach going forward is to import directly from the
+    specialized modules:
 
     ~~~~ typescript
     // Recommended: import directly from specialized modules
@@ -1365,10 +1377,11 @@ Released on September 23, 2025.
     ~~~~
 
  -  Added custom help display messages for `withDefault()` parsers. The
-    `withDefault()` modifier now accepts an optional third parameter to customize
-    how default values are displayed in help text. This allows showing descriptive
-    text instead of actual default values, which is particularly useful for
-    environment variables, computed defaults, or sensitive information.  [[#19]]
+    `withDefault()` modifier now accepts an optional third parameter to
+    customize how default values are displayed in help text. This allows
+    showing descriptive text instead of actual default values, which is
+    particularly useful for environment variables, computed defaults, or
+    sensitive information.  [[#19]]
 
     ~~~~ typescript
     import { message, envVar } from "@optique/core/message";
@@ -1492,7 +1505,8 @@ Released on September 23, 2025.
 
      -  Improved default messages: Default error messages have been improved
         to be more user-friendly, changing generic messages like “No parser
-        matched” to specific ones like “No matching option or command found.”
+        matched” to specific ones like “No matching option or command
+        found.”
 
      -  Backward compatibility: All error customization is optional and
         maintains full backward compatibility. Existing code continues to work
@@ -1589,6 +1603,8 @@ Released on September 18, 2025.
     were combined with `or()`. Now `--help` correctly shows help for the
     specific subcommand being used.  [[#26]]
 
+[#26]: https://github.com/dahlia/optique/issues/26
+
 
 Version 0.4.3
 -------------
@@ -1600,8 +1616,8 @@ Released on September 16, 2025.
  -  Fixed timezone identifier validation failure in Deno 2.5.0. The `timeZone()`
     parser now works correctly with all supported timezones by removing explicit
     zero values for hour, minute, and second fields when creating validation
-    `ZonedDateTime` objects. This addresses a regression in Deno 2.5.0's Temporal
-    API implementation that rejected zero values for time fields.
+    `ZonedDateTime` objects. This addresses a regression in Deno 2.5.0's
+    Temporal API implementation that rejected zero values for time fields.
 
 
 Version 0.4.2
@@ -1615,6 +1631,8 @@ Released on September 10, 2025.
     properly versioned, causing installations to use outdated stable versions
     instead of matching development versions. This resolves type errors and
     message formatting issues when using dev versions.  [[#22]]
+
+[#22]: https://github.com/dahlia/optique/issues/22
 
 
 Version 0.4.1
@@ -1631,6 +1649,8 @@ Released on September 8, 2025.
     in red, causing ANSI reset codes in formatted option names to interrupt
     the error coloring. This change ensures consistent output formatting
     across all JavaScript runtimes.  [[#20]]
+
+[#20]: https://github.com/dahlia/optique/issues/20
 
 
 Version 0.4.0
@@ -1684,8 +1704,8 @@ Released on September 6, 2025.
 
     Unlike `merge()` and `object()` which have built-in label support, `group()`
     can be used with any parser type (`or()`, `flag()`, `multiple()`, etc.) that
-    doesn't natively support labeling. This enables clean code organization while
-    maintaining well-structured help text.  [[#12]]
+    doesn't natively support labeling. This enables clean code organization
+    while maintaining well-structured help text.  [[#12]]
 
  -  Improved type safety for `merge()` combinator by enforcing stricter
     parameter constraints. The function now rejects parsers that return
@@ -1721,6 +1741,7 @@ Released on September 6, 2025.
         flags after `--` from being interpreted as options
      -  Improved handling of multiple identical flags
         (e.g., `--version --version`)
+
 
     The public API remains unchanged - existing `run()` usage continues to work
     identically while benefiting from more robust edge case handling.  [[#13]]
@@ -1874,8 +1895,6 @@ Released on September 8, 2025.
     in red, causing ANSI reset codes in formatted option names to interrupt
     the error coloring. This change ensures consistent output formatting
     across all JavaScript runtimes.  [[#20]]
-
-[#20]: https://github.com/dahlia/optique/issues/20
 
 
 Version 0.3.0
@@ -2036,6 +2055,7 @@ Released on August 29, 2025.
         configuration.
      -  Added `Printer` type for custom printer functions.
 
+
     All output functions automatically detect terminal capabilities (colors,
     width) and format structured messages consistently across different
     environments.
@@ -2085,8 +2105,6 @@ Released on September 9, 2025.
     properly versioned, causing installations to use outdated stable versions
     instead of matching development versions. This resolves type errors and
     message formatting issues when using dev versions.  [[#22]]
-
-[#22]: https://github.com/dahlia/optique/issues/22
 
 
 Version 0.1.1

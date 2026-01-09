@@ -4,7 +4,6 @@
     "examples/*"
   ],
   "imports": {
-    "@hongminhee/markdownlint-rules": "jsr:@hongminhee/markdownlint-rules@^0.2.2",
     "@logtape/logtape": "jsr:@logtape/logtape@^1.2.2",
     "@std/fs": "jsr:@std/fs@^1.0.19",
     "@std/path": "jsr:@std/path@^1.1.1",
@@ -36,12 +35,14 @@
   },
   "tasks": {
     "check-versions": "deno run --allow-read --allow-write scripts/check_versions.ts",
+    "hongdown": "deno run -A npm:hongdown@0.1.0-dev.25",
     "check": {
       "dependencies": [
         "check-versions"
       ],
-      "command": "deno check && deno lint && deno fmt --check && deno run -A npm:markdownlint-cli2 '*.md' '.claude/**/*.md' 'packages/**/*.md' 'examples/**/*.md' && deno publish --dry-run --allow-dirty"
+      "command": "deno check && deno lint && deno fmt --check && deno task hongdown --check && deno publish --dry-run --allow-dirty"
     },
+    "fmt": "deno fmt && deno task hongdown --write",
     "install": {
       "dependencies": [
         "hooks:install"

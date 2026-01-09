@@ -150,12 +150,12 @@ parse(parser, ["-v", "-v", "-v", "-v"]);
 
 With the default `baseLevel: "warning"`:
 
-| Flags | Level |
-|-------|-------|
-| (none) | `"warning"` |
-| `-v` | `"info"` |
-| `-vv` | `"debug"` |
-| `-vvv`+ | `"trace"` |
+| Flags   | Level       |
+| ------- | ----------- |
+| (none)  | `"warning"` |
+| `-v`    | `"info"`    |
+| `-vv`   | `"debug"`   |
+| `-vvv`+ | `"trace"`   |
 
 ### Options
 
@@ -171,13 +171,13 @@ const level = verbosity({
 
 With `baseLevel: "error"`:
 
-| Flags | Level |
-|-------|-------|
-| (none) | `"error"` |
-| `-v` | `"warning"` |
-| `-vv` | `"info"` |
-| `-vvv` | `"debug"` |
-| `-vvvv`+ | `"trace"` |
+| Flags    | Level       |
+| -------- | ----------- |
+| (none)   | `"error"`   |
+| `-v`     | `"warning"` |
+| `-vv`    | `"info"`    |
+| `-vvv`   | `"debug"`   |
+| `-vvvv`+ | `"trace"`   |
 
 
 Debug flag parser
@@ -283,11 +283,11 @@ const result = parse(parser, ["--log-level=debug", "--log-output=-"]);
 
 Configuration options for `level: "option"`:
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `long` | `"--log-level"` | Long option name |
-| `short` | `"-l"` | Short option name |
-| `default` | `"info"` | Default log level |
+| Option    | Default         | Description       |
+| --------- | --------------- | ----------------- |
+| `long`    | `"--log-level"` | Long option name  |
+| `short`   | `"-l"`          | Short option name |
+| `default` | `"info"`        | Default log level |
 
 ### Using verbosity flags
 
@@ -306,11 +306,11 @@ const result = parse(parser, ["-v", "-v", "--log-output=-"]);
 
 Configuration options for `level: "verbosity"`:
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `short` | `"-v"` | Short option name |
-| `long` | `"--verbose"` | Long option name |
-| `baseLevel` | `"warning"` | Base log level |
+| Option      | Default       | Description       |
+| ----------- | ------------- | ----------------- |
+| `short`     | `"-v"`        | Short option name |
+| `long`      | `"--verbose"` | Long option name  |
+| `baseLevel` | `"warning"`   | Base log level    |
 
 ### Using debug flag
 
@@ -329,22 +329,22 @@ const result = parse(parser, ["--debug"]);
 
 Configuration options for `level: "debug"`:
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `short` | `"-d"` | Short option name |
-| `long` | `"--debug"` | Long option name |
-| `debugLevel` | `"debug"` | Level when flag is present |
-| `normalLevel` | `"info"` | Level when flag is absent |
+| Option        | Default     | Description                |
+| ------------- | ----------- | -------------------------- |
+| `short`       | `"-d"`      | Short option name          |
+| `long`        | `"--debug"` | Long option name           |
+| `debugLevel`  | `"debug"`   | Level when flag is present |
+| `normalLevel` | `"info"`    | Level when flag is absent  |
 
 ### Common options
 
 All three modes share these options:
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `output.enabled` | `true` | Enable `--log-output` option |
-| `output.long` | `"--log-output"` | Long option name for output |
-| `groupLabel` | `"Logging options"` | Help text group label |
+| Option           | Default             | Description                  |
+| ---------------- | ------------------- | ---------------------------- |
+| `output.enabled` | `true`              | Enable `--log-output` option |
+| `output.long`    | `"--log-output"`    | Long option name for output  |
+| `groupLabel`     | `"Logging options"` | Help text group label        |
 
 
 Creating LogTape configuration

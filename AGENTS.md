@@ -13,10 +13,11 @@ Haskell's [optparse-applicative] and TypeScript's [Zod].  It provides a
 functional approach to building command-line interfaces using composable
 parsers with full type safety.
 
-This project is hosted on GitHub at [dahlia/optique](https://github.com/dahlia/optique).
+This project is hosted on GitHub at [dahlia/optique].
 
 [optparse-applicative]: https://github.com/pcapriotti/optparse-applicative
 [Zod]: https://zod.dev/
+[dahlia/optique]: https://github.com/dahlia/optique
 
 
 Development commands
@@ -62,7 +63,7 @@ mise test        # Run all checks and tests across all runtimes
 
 ### Building (for npm publishing)
 
-~~~~bash
+~~~~ bash
 mise build       # Build all packages with tsdown
 ~~~~
 
@@ -130,7 +131,6 @@ Architecture
     value parsers for validating Git references (branches, tags, commits,
     remotes) using isomorphic-git.
 
-
 ### Dual publishing
 
 Each package is published to both JSR (Deno) and npm (Node.js/Bun):
@@ -172,10 +172,13 @@ This project follows test-driven development (TDD) practices:
 
  -  Do not use Conventional Commits (no `fix:`, `feat:`, etc. prefixes).
     Keep the first line under 50 characters when possible.
+
  -  Focus on *why* the change was made, not just *what* changed.
+
  -  When referencing issues or PRs, use permalink URLs instead of just
     numbers (e.g., `#123`).  This preserves context if the repository
     is moved later.
+
  -  When listing items after a colon, add a blank line after the colon:
 
     ~~~~
@@ -216,6 +219,7 @@ Code style
 
  -  All exported APIs must have JSDoc comments describing their purpose,
     parameters, and return values.
+
  -  For APIs added in a specific version, include the `@since` tag with the
     version number:
 
@@ -243,6 +247,7 @@ Code style
 
  -  Prefer specific error types over generic `Error`.  Use built-in types
     like `TypeError`, `RangeError`, or `SyntaxError` when appropriate.
+
  -  End error messages with a period:
 
     ~~~~ typescript
@@ -329,7 +334,9 @@ documentation:
 ### Lists
 
  -  Use ` -  ` (space-hyphen-two spaces) for unordered list items
+
  -  Indent nested items with 4 spaces
+
  -  Align continuation text with the item content:
 
     ~~~~
@@ -341,6 +348,7 @@ documentation:
 ### Code blocks
 
  -  Use four tildes (`~~~~`) for code fences instead of backticks
+
  -  Always specify the language identifier:
 
     ~~~~~
@@ -361,6 +369,7 @@ documentation:
 
  -  Use reference-style links placed at the *end of each section*
     (not at document end)
+
  -  Format reference links with consistent spacing:
 
     ~~~~
@@ -411,7 +420,6 @@ VitePress documentation
 The *docs/* directory contains VitePress documentation with additional features
 beyond standard Markdown.
 
-
 ### Twoslash code blocks
 
 Use the `twoslash` modifier to enable TypeScript type checking and hover
@@ -424,7 +432,6 @@ import { run, command, option } from "@optique/run";
 const cmd = command("hello", () => "Hello world");
 ~~~~
 ~~~~~
-
 
 ### Fixture variables
 
@@ -457,7 +464,6 @@ const config = await fetchConfig();
 ~~~~
 ~~~~~
 
-
 ### Definition lists
 
 VitePress supports definition lists for documenting terms, options,
@@ -474,13 +480,12 @@ or properties:
 This renders as a formatted definition list with the term on one line
 and the description indented below.
 
-
 ### Code groups
 
 Use code groups to show the same content for different package managers
 or environments:
 
-~~~~
+~~~~~
 ::: code-group
 
 ~~~~ bash [Deno]
@@ -496,8 +501,7 @@ pnpm add @optique/run
 ~~~~
 
 :::
-~~~~
-
+~~~~~
 
 ### Links
 
@@ -506,7 +510,6 @@ pnpm add @optique/run
     `[text](./path/to/file.md)`) instead of reference-style links.
  -  *Relative paths*: Always use relative paths for internal links.
  -  *File extensions*: Include the `.md` extension in internal link paths.
-
 
 ### Building documentation
 

@@ -329,7 +329,8 @@ const gitLike = or(
 
 ### Alternative parsing strategies
 
-You can also use `or()` for different parsing approaches of the same logical concept:
+You can also use `or()` for different parsing approaches of the same logical
+concept:
 
 ~~~~ typescript twoslash
 import { object, or } from "@optique/core/constructs";
@@ -425,7 +426,6 @@ const verbosityLevel = withDefault(
 // --quiet → "quiet"
 ~~~~
 
-
 ### Error message customization
 
 *This feature is available since Optique 0.9.0.*
@@ -479,15 +479,15 @@ generic "No matching option or command found."
 
 **Default behavior** (when no custom error is provided):
 
-| Context                          | Default error message                           |
-| -------------------------------- | ----------------------------------------------- |
-| Only arguments expected          | `Missing required argument.`                    |
-| Only commands expected           | `No matching command found.`                    |
-| Only options expected            | `No matching option found.`                     |
-| Commands and options expected    | `No matching option or command found.`          |
-| Arguments and options expected   | `No matching option or argument found.`         |
-| Arguments and commands expected  | `No matching command or argument found.`        |
-| All three types expected         | `No matching option, command, or argument found.` |
+| Context                         | Default error message                             |
+| ------------------------------- | ------------------------------------------------- |
+| Only arguments expected         | `Missing required argument.`                      |
+| Only commands expected          | `No matching command found.`                      |
+| Only options expected           | `No matching option found.`                       |
+| Commands and options expected   | `No matching option or command found.`            |
+| Arguments and options expected  | `No matching option or argument found.`           |
+| Arguments and commands expected | `No matching command or argument found.`          |
+| All three types expected        | `No matching option, command, or argument found.` |
 
 The default messages automatically adapt to your parser structure, but you can
 override them for custom formatting or localization needs.
@@ -1480,13 +1480,13 @@ if (result.success) {
 The `conditional()` parser provides a more structured alternative to `or()`
 for discriminated union patterns:
 
-| Feature                     | `or()`                        | `conditional()`                     |
-| --------------------------- | ----------------------------- | ----------------------------------- |
-| Discriminator               | Manual with `constant()`      | Explicit discriminator option       |
-| Branch selection            | First matching parser         | Based on discriminator value        |
-| Result type                 | Union of branch types         | Tuple `[discriminator, branchType]` |
-| Default handling            | Via parser ordering           | Explicit default branch             |
-| Type narrowing              | Via discriminator field       | Via tuple first element             |
+| Feature          | `or()`                   | `conditional()`                     |
+| ---------------- | ------------------------ | ----------------------------------- |
+| Discriminator    | Manual with `constant()` | Explicit discriminator option       |
+| Branch selection | First matching parser    | Based on discriminator value        |
+| Result type      | Union of branch types    | Tuple `[discriminator, branchType]` |
+| Default handling | Via parser ordering      | Explicit default branch             |
+| Type narrowing   | Via discriminator field  | Via tuple first element             |
 
 Use `conditional()` when you have an explicit discriminator option that
 determines which set of options is valid. Use `or()` for more general
@@ -1621,7 +1621,8 @@ const serverSettings = group(
 
 ### Help text organization
 
-The primary benefit of `group()` is organizing help output into logical sections:
+The primary benefit of `group()` is organizing help output into logical
+sections:
 
 ~~~~ ansi
 Usage: [1mmyapp[0m [2m([0m[3m--debug[0m | [3m--verbose[0m | [3m--quiet[0m[2m)[0m [2m[[0m[3m--output[0m [4m[2mPATH[0m[2m][0m [3m--debug-mode[0m [2m[[0m[3m--port[0m [4m[2mINTEGER[0m [3m--host[0m [4m[2mSTRING[0m[2m][0m [4mFILE[0m[2m...[0m
@@ -1737,7 +1738,7 @@ const inputOutput = group(
 
 
 Duplicate option detection
----------------------------
+--------------------------
 
 Optique automatically detects and prevents duplicate option names within parser
 combinators to avoid ambiguous behavior. When the same option name appears in

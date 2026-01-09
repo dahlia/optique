@@ -1,7 +1,6 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@hongminhee/markdownlint-rules@~0.2.2": "0.2.2",
     "jsr:@logtape/logtape@^1.2.2": "1.2.2",
     "jsr:@std/fs@^1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.9": "1.0.9",
@@ -10,20 +9,18 @@
     "npm:@js-temporal/polyfill@~0.5.1": "0.5.1",
     "npm:@types/node@^20.19.9": "20.19.9",
     "npm:es-git@0.4": "0.4.0",
+    "npm:hongdown@0.1.0-dev.21": "0.1.0-dev.21",
+    "npm:hongdown@0.1.0-dev.22": "0.1.0-dev.22",
+    "npm:hongdown@0.1.0-dev.23": "0.1.0-dev.23",
+    "npm:hongdown@0.1.0-dev.24": "0.1.0-dev.24",
+    "npm:hongdown@0.1.0-dev.25": "0.1.0-dev.25",
     "npm:isomorphic-git@^1.36.1": "1.36.1",
     "npm:markdownlint-cli2@*": "0.20.0",
-    "npm:markdownlint@0.37": "0.37.4",
     "npm:tsdown@0.13": "0.13.0_typescript@5.8.3_rolldown@1.0.0-beta.29",
     "npm:typescript@^5.8.3": "5.8.3",
     "npm:zod@4": "4.1.12"
   },
   "jsr": {
-    "@hongminhee/markdownlint-rules@0.2.2": {
-      "integrity": "e9732e0b3fcf12152fe4587465dd383d4e6f339d9bad570b10d73bdc2b6135dc",
-      "dependencies": [
-        "npm:markdownlint"
-      ]
-    },
     "@logtape/logtape@1.2.2": {
       "integrity": "628fa8d52245aa1c81fd3af91622b621c1974fc8be71afb7574cd256b6aff953"
     },
@@ -224,6 +221,156 @@
     },
     "@esbuild/win32-x64@0.25.8": {
       "integrity": "sha512-cn3Yr7+OaaZq1c+2pe+8yxC8E144SReCQjN6/2ynubzYjvyqZjTXfQJpAcQpsdJq3My7XADANiYGHoFC69pLQw==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/darwin-arm64@0.1.0-dev.21": {
+      "integrity": "sha512-GmBbC41gyvXi7EXYbWQKwLAG15cty+y7rwltjMTSbaWzQjNCZIf0IAEqdMIj+pUJyix+vrrKn4ceZ1NIdF9Y2g==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/darwin-arm64@0.1.0-dev.22": {
+      "integrity": "sha512-37UaDBGZNqfuZyFW32MrzZKp1Gqy6ztJiQNuqCHVuIE1IuaqM+9B0TbPF3MP8wEci3gXRD4MZvOGD608eZC9lw==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/darwin-arm64@0.1.0-dev.23": {
+      "integrity": "sha512-R4K1twPh7m/wROYgPxVtN/gAjjT1cEQcaY1ZxG/hCQGYZOdd796/OgH1a65768+asSB8zLlsB18ZXqm7iXOGjg==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/darwin-arm64@0.1.0-dev.24": {
+      "integrity": "sha512-6Z1a4/G9jIwipI95WUGhcB7Joqt8svlDsuJUNpwKWtbl4yWxEmIiBqdTJJb/hXTZFTTbbEwqQlTMEgOnZil0sw==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/darwin-arm64@0.1.0-dev.25": {
+      "integrity": "sha512-X8JdVyySoWWAR05C9lM/jb4fX5VeXRykAKFdqJS+iSqO4tyZxiR595TGUHsqBGtCdBAaixVklGeURQcO63AFiQ==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/darwin-x64@0.1.0-dev.21": {
+      "integrity": "sha512-v8JCi1MS8vK+ry7VjEwID3WrZfhy3TARrnTUi6Jf881aOSmA2HmChGKytAwdtWqYgVvtjWDqxQgL6wp1/wn2xg==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/darwin-x64@0.1.0-dev.22": {
+      "integrity": "sha512-tUrA8OE73pX0ZhP2+nH6QigImyfwPv+k4mvlwG/19kPVGxT2CDlZmi9wVn56UNx5PdhqcVcdo+hXJyydDfr5Uw==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/darwin-x64@0.1.0-dev.23": {
+      "integrity": "sha512-Quo5+OIfRJLzvVN2w9O1phbcsDuJ383HUFFTquPLnggVfUQrM/ddXehMWDx8A7jQ9QaWhAdDCNn1u6FGlwvBFQ==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/darwin-x64@0.1.0-dev.24": {
+      "integrity": "sha512-1FuxjAc6T/KLXX+clU7QRYchu6R/PGewtu7ZHFh+QPKnenxLEqCLBC7W8D2TD3T3q8Uaka6WCr9Lxk+YU8yeWA==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/darwin-x64@0.1.0-dev.25": {
+      "integrity": "sha512-BAnqIKlhzyZR1PoQCPNbxQpMP9c/WMfO+R9NoJxHGrMmXdQnW6dI58fNA4G6Hw9kpBRgRpRPCYppfi387CksIA==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/linux-arm64@0.1.0-dev.21": {
+      "integrity": "sha512-GRHHWpYg+cU2tVkWYi0LyqLOIShBmCyl2GjQRmc5JE2wmU7YkuNs1qpwwdKPv848abDmBNtzoZ5eoUd2KtyiSw==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/linux-arm64@0.1.0-dev.22": {
+      "integrity": "sha512-2HiJ7klGfuuheBfXsAJ3LAr1kSt1YaOV/N3zHWP4M12YC43FFKaVhlwFg/pPbUDkAZaCfihY2mR1RoJrjmJWHw==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/linux-arm64@0.1.0-dev.23": {
+      "integrity": "sha512-bSLTmbyWkQq+UBt3zg0wIVx9uOoDPdMv70Nc/eOshWVKbk5uitTzVVJpIa6KXRTrBcnhkFqKHfCDoP1m5+FcVA==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/linux-arm64@0.1.0-dev.24": {
+      "integrity": "sha512-0uMNRHINT68OxfMoI0yH3byfBHZk+OrYoVOWS6o0qK7iUurPlDF1OnHkUF0ZCc5yIliPUM7ScjV2fJn9PwyWjQ==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/linux-arm64@0.1.0-dev.25": {
+      "integrity": "sha512-s0iTgt7W9LiHN9dgu+iYJbkdT6Niw67Jd2X6OzN3xHDjjtn42qCBMHw4VjJvsGX0IUkp7H/qwVAVGwNXPzCqqw==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/linux-x64@0.1.0-dev.21": {
+      "integrity": "sha512-Eg6mFwdW18JivmiwWsc/c6I3yNmLg5RpSPcW3mvOXyy6BSJOiqhv/Dg15CwGZUQlUoTjf5mff+sh1WqGOfl4iA==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/linux-x64@0.1.0-dev.22": {
+      "integrity": "sha512-7WeSPKF0y1Oe+/I0h4sIuPHszJXp7YIBpOpug0szLYOANS+jjGzuXjWRlkLBXIzPM4xwVW9FgCraIPtcVaJtSw==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/linux-x64@0.1.0-dev.23": {
+      "integrity": "sha512-YikbFfsuFpbr/1L+ws0lis1Sfs5lHT7TzzEhDZ4RD94evmk4f9FhDs9NEXswhZvPiCLDKgR7RlMSixCtMNWbdg==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/linux-x64@0.1.0-dev.24": {
+      "integrity": "sha512-9H+fcim64uYLj//LerQWh2sv74I4kyJFAIIfwaPhebEr1Kz1lGc940GWcX7zclj79QdeYsZa2KKZH0jsVecrlA==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/linux-x64@0.1.0-dev.25": {
+      "integrity": "sha512-nvaCwLlgY0FdZt8TmCl3PsabE+wR8gzZWK93DW/af5toAJdxxysBSQYnxVr+W2dFk2wl6ZnhnFowqKNwsPvO/Q==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/win32-arm64@0.1.0-dev.21": {
+      "integrity": "sha512-RCn9MCn5YVQyaNoNO935FOTXFtISs88p2iKht92MxVSw5iV1zcCNDOiGS4WklfDjjmjOAmCN9JE/MFfxTD+gfg==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/win32-arm64@0.1.0-dev.22": {
+      "integrity": "sha512-LFDdUnRO4mZcCanWGvMWVmyU2vdnY7tYNXfSmEVPrxHYPkvfLFEDz8dEh429yBPAUDfre5QvUsvfwkRi2GCvsQ==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/win32-arm64@0.1.0-dev.23": {
+      "integrity": "sha512-pqW8dFdSEt2QI9qsTsfhFSxSZDcNOFuSNJ+rs5b7Nbztw+lJ+YN/2AfbEQPQQ3ZsqLdvjIKacFe2jI/7qiFZTQ==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/win32-arm64@0.1.0-dev.24": {
+      "integrity": "sha512-YWhalYYHWvEgA12C5JGTAh9H3C/XBqvhQ2KGWm9U0ygffPbfG+m+uw13/5FrB0meG+5Z9eO/hK5lVu9za9hQiA==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/win32-arm64@0.1.0-dev.25": {
+      "integrity": "sha512-s4nelwPMOeJG+HN6TrGUafZtK9OUnnhpM+OMjKWHpOis82zg67XAyVqieEi+gHacyHruDS5Gf/pCEv07HeCsqg==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
+    "@hongdown/win32-x64@0.1.0-dev.21": {
+      "integrity": "sha512-iSBwntyFpo6lBKKLeLe5YgDNy11A1JcbyFi4ite9yaTmdyvoGkCLXwSNAD2TKs+4ELGi5tPiQ+Xra9Vkfj1XkA==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/win32-x64@0.1.0-dev.22": {
+      "integrity": "sha512-mgWf1ft+RUpPE1rwfxz6whfdA3R0EYIRw+rTdWFKO3+Td2ylusDKZhi1gs2hU7KlXkcYpUee+GwmqJTeQH4iJA==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/win32-x64@0.1.0-dev.23": {
+      "integrity": "sha512-BSqRva/DDZ+oxPH492zfri/CO5gxhGET5EUChXAZp6o+9tQn88AA2t1PqwQUdb0RwADaFO2mcr22+xs6vcA9GQ==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/win32-x64@0.1.0-dev.24": {
+      "integrity": "sha512-JLr4tqdB9D/gqhXJmAdrdokh0cwclgHaYLcSnBS4fY6IlVmsZhbxUFSEo61CeAiHdCyAT8QED/YCxKxbM+dpmQ==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/win32-x64@0.1.0-dev.25": {
+      "integrity": "sha512-XLuVlnWGer7mzKe6WpmufUKLSBDNIVTjxh9zE8GsUJhGarK8hC8WJn6z8GzQIOJ6Gh7xUSpQVD+MYJIQbqd1lw==",
       "os": ["win32"],
       "cpu": ["x64"]
     },
@@ -757,6 +904,66 @@
         "function-bind"
       ]
     },
+    "hongdown@0.1.0-dev.21": {
+      "integrity": "sha512-m4OHj4M3+n6J5dIN9InJCbHCIScc3le7RZw84rfH/PyXZfGhplz5kbr6OAMyH69ejrirqQdqG18cqkbU7pkFmg==",
+      "optionalDependencies": [
+        "@hongdown/darwin-arm64@0.1.0-dev.21",
+        "@hongdown/darwin-x64@0.1.0-dev.21",
+        "@hongdown/linux-arm64@0.1.0-dev.21",
+        "@hongdown/linux-x64@0.1.0-dev.21",
+        "@hongdown/win32-arm64@0.1.0-dev.21",
+        "@hongdown/win32-x64@0.1.0-dev.21"
+      ],
+      "bin": true
+    },
+    "hongdown@0.1.0-dev.22": {
+      "integrity": "sha512-xnQpjnhep1AxM0vG7DkAu3phqNYgxRGa4PxXnbVaG2aGgl04FFJV0nd4MRHo+b5mUZ+x82vfItXwzzFvh6B3Mw==",
+      "optionalDependencies": [
+        "@hongdown/darwin-arm64@0.1.0-dev.22",
+        "@hongdown/darwin-x64@0.1.0-dev.22",
+        "@hongdown/linux-arm64@0.1.0-dev.22",
+        "@hongdown/linux-x64@0.1.0-dev.22",
+        "@hongdown/win32-arm64@0.1.0-dev.22",
+        "@hongdown/win32-x64@0.1.0-dev.22"
+      ],
+      "bin": true
+    },
+    "hongdown@0.1.0-dev.23": {
+      "integrity": "sha512-36OUMxibZoM/NcT/dWTETK232uS/vk5kuKzfM23MliecUINUfZ8eyVgGhD2qkFrYe753Og4aiHDZx6NsbuDyzg==",
+      "optionalDependencies": [
+        "@hongdown/darwin-arm64@0.1.0-dev.23",
+        "@hongdown/darwin-x64@0.1.0-dev.23",
+        "@hongdown/linux-arm64@0.1.0-dev.23",
+        "@hongdown/linux-x64@0.1.0-dev.23",
+        "@hongdown/win32-arm64@0.1.0-dev.23",
+        "@hongdown/win32-x64@0.1.0-dev.23"
+      ],
+      "bin": true
+    },
+    "hongdown@0.1.0-dev.24": {
+      "integrity": "sha512-N6iLm80VZGMu0A4rJduG401cS0FQ4ygZEAbeBrgLNy++ILOMoCbm2WT+j4OnMmx9FyQhp0w73Zw89g54tRs4Jw==",
+      "optionalDependencies": [
+        "@hongdown/darwin-arm64@0.1.0-dev.24",
+        "@hongdown/darwin-x64@0.1.0-dev.24",
+        "@hongdown/linux-arm64@0.1.0-dev.24",
+        "@hongdown/linux-x64@0.1.0-dev.24",
+        "@hongdown/win32-arm64@0.1.0-dev.24",
+        "@hongdown/win32-x64@0.1.0-dev.24"
+      ],
+      "bin": true
+    },
+    "hongdown@0.1.0-dev.25": {
+      "integrity": "sha512-V81BlyiLJmDCHtBmnzngGgRAfnuiDHDwyQnhv0vF/m1EsZMC09nS4xLUHDt/DDF6sQmZ4qkSCROwa0u6clCuKQ==",
+      "optionalDependencies": [
+        "@hongdown/darwin-arm64@0.1.0-dev.25",
+        "@hongdown/darwin-x64@0.1.0-dev.25",
+        "@hongdown/linux-arm64@0.1.0-dev.25",
+        "@hongdown/linux-x64@0.1.0-dev.25",
+        "@hongdown/win32-arm64@0.1.0-dev.25",
+        "@hongdown/win32-x64@0.1.0-dev.25"
+      ],
+      "bin": true
+    },
     "hookable@5.5.3": {
       "integrity": "sha512-Yc+BQe8SvoXH1643Qez1zqLRmbA5rCL+sSmk6TVos0LWVfNIB7PGncdlId77WzLGSIB5KaWgTaNTs2lNVEI6VQ=="
     },
@@ -888,37 +1095,23 @@
         "js-yaml",
         "jsonc-parser",
         "markdown-it",
-        "markdownlint@0.40.0",
+        "markdownlint",
         "markdownlint-cli2-formatter-default",
         "micromatch"
       ],
       "bin": true
     },
-    "markdownlint@0.37.4": {
-      "integrity": "sha512-u00joA/syf3VhWh6/ybVFkib5Zpj2e5KB/cfCei8fkSRuums6nyisTWGqjTWIOFoFwuXoTBQQiqlB4qFKp8ncQ==",
-      "dependencies": [
-        "markdown-it",
-        "micromark@4.0.1",
-        "micromark-core-commonmark@2.0.2",
-        "micromark-extension-directive@3.0.2",
-        "micromark-extension-gfm-autolink-literal",
-        "micromark-extension-gfm-footnote",
-        "micromark-extension-gfm-table@2.1.0",
-        "micromark-extension-math",
-        "micromark-util-types@2.0.1"
-      ]
-    },
     "markdownlint@0.40.0": {
       "integrity": "sha512-UKybllYNheWac61Ia7T6fzuQNDZimFIpCg2w6hHjgV1Qu0w1TV0LlSgryUGzM0bkKQCBhy2FDhEELB73Kb0kAg==",
       "dependencies": [
-        "micromark@4.0.2",
-        "micromark-core-commonmark@2.0.3",
-        "micromark-extension-directive@4.0.0",
+        "micromark",
+        "micromark-core-commonmark",
+        "micromark-extension-directive",
         "micromark-extension-gfm-autolink-literal",
         "micromark-extension-gfm-footnote",
-        "micromark-extension-gfm-table@2.1.1",
+        "micromark-extension-gfm-table",
         "micromark-extension-math",
-        "micromark-util-types@2.0.2",
+        "micromark-util-types",
         "string-width"
       ]
     },
@@ -930,27 +1123,6 @@
     },
     "merge2@1.4.1": {
       "integrity": "sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg=="
-    },
-    "micromark-core-commonmark@2.0.2": {
-      "integrity": "sha512-FKjQKbxd1cibWMM1P9N+H8TwlgGgSkWZMmfuVucLCHaYqeSvJ0hFeHsIa65pA2nYbes0f8LDHPMrd9X7Ujxg9w==",
-      "dependencies": [
-        "decode-named-character-reference",
-        "devlop",
-        "micromark-factory-destination",
-        "micromark-factory-label",
-        "micromark-factory-space",
-        "micromark-factory-title",
-        "micromark-factory-whitespace",
-        "micromark-util-character",
-        "micromark-util-chunked",
-        "micromark-util-classify-character",
-        "micromark-util-html-tag-name",
-        "micromark-util-normalize-identifier",
-        "micromark-util-resolve-all",
-        "micromark-util-subtokenize",
-        "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
-      ]
     },
     "micromark-core-commonmark@2.0.3": {
       "integrity": "sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==",
@@ -970,19 +1142,7 @@
         "micromark-util-resolve-all",
         "micromark-util-subtokenize",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
-      ]
-    },
-    "micromark-extension-directive@3.0.2": {
-      "integrity": "sha512-wjcXHgk+PPdmvR58Le9d7zQYWy+vKEU9Se44p2CrCDPiLr2FMyiT4Fyb5UFKFC66wGB3kPlgD7q3TnoqPS7SZA==",
-      "dependencies": [
-        "devlop",
-        "micromark-factory-space",
-        "micromark-factory-whitespace",
-        "micromark-util-character",
-        "micromark-util-symbol",
-        "micromark-util-types@2.0.2",
-        "parse-entities"
+        "micromark-util-types"
       ]
     },
     "micromark-extension-directive@4.0.0": {
@@ -993,7 +1153,7 @@
         "micromark-factory-whitespace",
         "micromark-util-character",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2",
+        "micromark-util-types",
         "parse-entities"
       ]
     },
@@ -1003,30 +1163,20 @@
         "micromark-util-character",
         "micromark-util-sanitize-uri",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-extension-gfm-footnote@2.1.0": {
       "integrity": "sha512-/yPhxI1ntnDNsiHtzLKYnE3vf9JZ6cAisqVDauhp4CEHxlb4uoOTxOCJ+9s51bIB8U1N1FJ1RXOKTIlD5B/gqw==",
       "dependencies": [
         "devlop",
-        "micromark-core-commonmark@2.0.3",
+        "micromark-core-commonmark",
         "micromark-factory-space",
         "micromark-util-character",
         "micromark-util-normalize-identifier",
         "micromark-util-sanitize-uri",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
-      ]
-    },
-    "micromark-extension-gfm-table@2.1.0": {
-      "integrity": "sha512-Ub2ncQv+fwD70/l4ou27b4YzfNaCJOvyX4HxXU15m7mpYY+rjuWzsLIPZHJL253Z643RpbcP1oeIJlQ/SKW67g==",
-      "dependencies": [
-        "devlop",
-        "micromark-factory-space",
-        "micromark-util-character",
-        "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-extension-gfm-table@2.1.1": {
@@ -1036,7 +1186,7 @@
         "micromark-factory-space",
         "micromark-util-character",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-extension-math@3.1.0": {
@@ -1048,7 +1198,7 @@
         "micromark-factory-space",
         "micromark-util-character",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-factory-destination@2.0.1": {
@@ -1056,7 +1206,7 @@
       "dependencies": [
         "micromark-util-character",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-factory-label@2.0.1": {
@@ -1065,14 +1215,14 @@
         "devlop",
         "micromark-util-character",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-factory-space@2.0.1": {
       "integrity": "sha512-zRkxjtBxxLd2Sc0d+fbnEunsTj46SWXgXciZmHq0kDYGnck/ZSGj9/wULTV95uoeYiK5hRXP2mJ98Uo4cq/LQg==",
       "dependencies": [
         "micromark-util-character",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-factory-title@2.0.1": {
@@ -1081,7 +1231,7 @@
         "micromark-factory-space",
         "micromark-util-character",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-factory-whitespace@2.0.1": {
@@ -1090,14 +1240,14 @@
         "micromark-factory-space",
         "micromark-util-character",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-util-character@2.1.1": {
       "integrity": "sha512-wv8tdUTJ3thSFFFJKtpYKOYiGP2+v96Hvk4Tu8KpCAsTMs6yi+nVmGh1syvSCsaxz45J6Jbw+9DD6g97+NV67Q==",
       "dependencies": [
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-util-chunked@2.0.1": {
@@ -1111,14 +1261,14 @@
       "dependencies": [
         "micromark-util-character",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-util-combine-extensions@2.0.1": {
       "integrity": "sha512-OnAnH8Ujmy59JcyZw8JSbK9cGpdVY44NKgSM7E9Eh7DiLS2E9RNQf0dONaGDzEG9yjEl5hcqeIsj4hfRkLH/Bg==",
       "dependencies": [
         "micromark-util-chunked",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-util-decode-numeric-character-reference@2.0.2": {
@@ -1142,7 +1292,7 @@
     "micromark-util-resolve-all@2.0.1": {
       "integrity": "sha512-VdQyxFWFT2/FGJgwQnJYbe1jjQoNTS4RjglmSjTUlpUMa95Htx9NHeYW4rGDJzbjvCsl9eLjMQwGeElsqmzcHg==",
       "dependencies": [
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-util-sanitize-uri@2.0.1": {
@@ -1159,39 +1309,14 @@
         "devlop",
         "micromark-util-chunked",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromark-util-symbol@2.0.1": {
       "integrity": "sha512-vs5t8Apaud9N28kgCrRUdEed4UJ+wWNvicHLPxCa9ENlYuAY31M0ETy5y1vA33YoNPDFTghEbnh6efaE8h4x0Q=="
     },
-    "micromark-util-types@2.0.1": {
-      "integrity": "sha512-534m2WhVTddrcKVepwmVEVnUAmtrx9bfIjNoQHRqfnvdaHQiFytEhJoTgpWJvDEXCO5gLTQh3wYC1PgOJA4NSQ=="
-    },
     "micromark-util-types@2.0.2": {
       "integrity": "sha512-Yw0ECSpJoViF1qTU4DC6NwtC4aWGt1EkzaQB8KPPyCRR8z9TWeV0HbEFGTO+ZY1wB22zmxnJqhPyTpOVCpeHTA=="
-    },
-    "micromark@4.0.1": {
-      "integrity": "sha512-eBPdkcoCNvYcxQOAKAlceo5SNdzZWfF+FcSupREAzdAh9rRmE239CEQAiTwIgblwnoM8zzj35sZ5ZwvSEOF6Kw==",
-      "dependencies": [
-        "@types/debug",
-        "debug",
-        "decode-named-character-reference",
-        "devlop",
-        "micromark-core-commonmark@2.0.3",
-        "micromark-factory-space",
-        "micromark-util-character",
-        "micromark-util-chunked",
-        "micromark-util-combine-extensions",
-        "micromark-util-decode-numeric-character-reference",
-        "micromark-util-encode",
-        "micromark-util-normalize-identifier",
-        "micromark-util-resolve-all",
-        "micromark-util-sanitize-uri",
-        "micromark-util-subtokenize",
-        "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
-      ]
     },
     "micromark@4.0.2": {
       "integrity": "sha512-zpe98Q6kvavpCr1NPVSCMebCKfD7CA2NqZ+rykeNhONIJBpc1tFKt9hucLGwha3jNTNI8lHpctWJWoimVF4PfA==",
@@ -1200,7 +1325,7 @@
         "debug",
         "decode-named-character-reference",
         "devlop",
-        "micromark-core-commonmark@2.0.3",
+        "micromark-core-commonmark",
         "micromark-factory-space",
         "micromark-util-character",
         "micromark-util-chunked",
@@ -1212,7 +1337,7 @@
         "micromark-util-sanitize-uri",
         "micromark-util-subtokenize",
         "micromark-util-symbol",
-        "micromark-util-types@2.0.2"
+        "micromark-util-types"
       ]
     },
     "micromatch@4.0.8": {
@@ -1518,7 +1643,6 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@hongminhee/markdownlint-rules@~0.2.2",
       "jsr:@logtape/logtape@^1.2.2",
       "jsr:@std/fs@^1.0.19",
       "jsr:@std/path@^1.1.1",

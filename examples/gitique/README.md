@@ -1,5 +1,5 @@
 Gitique: Git CLI built with Optique
-=====================================
+===================================
 
 > [!CAUTION]
 > This is an example project for demonstration purposes.
@@ -409,20 +409,20 @@ Key technologies
 What this example teaches
 -------------------------
 
- 1. *Parser composition*: How Optique's combinators create complex, type-safe
+1.  *Parser composition*: How Optique's combinators create complex, type-safe
     CLI interfaces
- 2. *Option organization*: Using `group()` and `merge()` to structure help text
+2.  *Option organization*: Using `group()` and `merge()` to structure help text
     into logical sections
- 3. *Discriminated unions*: Using `constant()` parsers for type-safe command
+3.  *Discriminated unions*: Using `constant()` parsers for type-safe command
     identification and dispatch
- 4. *Default values*: Using `withDefault()` to provide defaults shown in help
- 5. *Shorthand patterns*: Using `map()` to transform results for flag aliases
- 6. *Multi-runtime compatibility*: Single codebase supporting Deno, Node.js,
+4.  *Default values*: Using `withDefault()` to provide defaults shown in help
+5.  *Shorthand patterns*: Using `map()` to transform results for flag aliases
+6.  *Multi-runtime compatibility*: Single codebase supporting Deno, Node.js,
     and Bun
- 7. *Real-world integration*: Connecting type-safe parsers with external
+7.  *Real-world integration*: Connecting type-safe parsers with external
     libraries (es-git)
- 8. *Error handling*: Graceful error handling with user-friendly messages
- 9. *Help generation*: Automatic documentation from parser definitions
+8.  *Error handling*: Graceful error handling with user-friendly messages
+9.  *Help generation*: Automatic documentation from parser definitions
 
 
 Extending this example
@@ -430,12 +430,12 @@ Extending this example
 
 Potential improvements and additions:
 
- 1. *Add more commands*: `branch`, `merge`, `checkout`, `stash`
- 2. *Enhanced Git integration*: More complete es-git feature usage
- 3. *Configuration*: Support for Git config files and settings
- 4. *Performance*: Optimize for large repositories
- 5. *Testing*: Add comprehensive test suite
- 6. *Documentation*: Generate docs from Optique parser definitions
+1.  *Add more commands*: `branch`, `merge`, `checkout`, `stash`
+2.  *Enhanced Git integration*: More complete es-git feature usage
+3.  *Configuration*: Support for Git config files and settings
+4.  *Performance*: Optimize for large repositories
+5.  *Testing*: Add comprehensive test suite
+6.  *Documentation*: Generate docs from Optique parser definitions
 
 
 Credits
