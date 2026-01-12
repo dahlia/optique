@@ -2796,4 +2796,121 @@ describe("conditional() with dependencies", () => {
       assert.equal((result2.value[1] as { name: string }).name, "default-app");
     }
   });
+
+  test("nested dependencies within conditional branches", async () => {
+    // Each branch has its own dependency chain independent of the discriminator
+    const jsonStyleParser = dependency(choice(["array", "object"] as const));
+    const jsonDetailParser = jsonStyleParser.derive({
+      metavar: "JSON_DETAIL",
+      factory: (style: "array" | "object") =>
+        choice(
+          style === "array"
+            ? (["flat", "nested"] as const)
+            : (["shallow", "deep"] as const),
+        ),
+      defaultValue: () => "array" as const,
+    });
+
+    const xmlStyleParser = dependency(
+      choice(["element", "attribute"] as const),
+    );
+    const xmlDetailParser = xmlStyleParser.derive({
+      metavar: "XML_DETAIL",
+      factory: (style: "element" | "attribute") =>
+        choice(
+          style === "element"
+            ? (["verbose", "compact"] as const)
+            : (["full", "minimal"] as const),
+        ),
+      defaultValue: () => "element" as const,
+    });
+
+    const parser = conditional(
+      option("--format", choice(["json", "xml"] as const)),
+      {
+        json: object({
+          style: option("--style", jsonStyleParser),
+          detail: option("--detail", jsonDetailParser),
+        }),
+        xml: object({
+          style: option("--style", xmlStyleParser),
+          detail: option("--detail", xmlDetailParser),
+        }),
+      },
+    );
+
+    // Test json branch with object style
+    const result1 = await parseAsync(parser, [
+      "--format",
+      "json",
+      "--style",
+      "object",
+      "--detail",
+      "deep",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value[0], "json");
+      assert.equal(result1.value[1].style, "object");
+      assert.equal(result1.value[1].detail, "deep");
+    }
+
+    // Test xml branch with attribute style
+    const result2 = await parseAsync(parser, [
+      "--format",
+      "xml",
+      "--style",
+      "attribute",
+      "--detail",
+      "minimal",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value[0], "xml");
+      assert.equal(result2.value[1].style, "attribute");
+      assert.equal(result2.value[1].detail, "minimal");
+    }
+  });
+
+  test("deeply nested conditional with dependencies", async () => {
+    const modeParser = dependency(choice(["fast", "safe"] as const));
+    const levelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "fast" | "safe") =>
+        choice(mode === "fast" ? (["1", "2"] as const) : (["3", "4"] as const)),
+      defaultValue: () => "fast" as const,
+    });
+
+    // Nested conditional: outer discriminator determines branch,
+    // inner branch has its own dependency chain
+    const parser = conditional(
+      option("--type", choice(["a", "b"] as const)),
+      {
+        a: object({
+          mode: option("--mode", modeParser),
+          level: option("--level", levelParser),
+        }),
+        b: object({
+          name: option("--name", string()),
+        }),
+      },
+    );
+
+    // Test type 'a' with safe mode
+    const result1 = await parseAsync(parser, [
+      "--type",
+      "a",
+      "--mode",
+      "safe",
+      "--level",
+      "4",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value[0], "a");
+      const branch = result1.value[1] as { mode: string; level: string };
+      assert.equal(branch.mode, "safe");
+      assert.equal(branch.level, "4");
+    }
+  });
 });
