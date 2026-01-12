@@ -30,7 +30,6 @@ Released on January 6, 2026.
         element is `"async"`, otherwise `"sync"`.
      -  `InferMode<P>`: Extracts the mode from a parser type.
 
-
     All parsers now include a `$mode` property indicating their execution mode.
     Combinators automatically propagate modes from their constituent parsers,
     resulting in `"async"` mode if any child parser is async.
@@ -45,7 +44,6 @@ Released on January 6, 2026.
      -  `getDocPageAsync()`: Gets documentation page from any parser as a Promise.
      -  `runParserSync()`: Runs a sync-only parser, returning the result directly.
      -  `runParserAsync()`: Runs any parser, returning a Promise of the result.
-
 
     This change is backward compatible.  Existing code continues to work
     unchanged as all parsers default to sync mode.
@@ -226,7 +224,6 @@ Released on January 6, 2026.
         directly.
      -  `runAsync()`: Runs with any parser, returning a `Promise` of the parsed
         value.
-
 
     The existing `run()` function continues to work unchanged for sync parsers.
     For async parsers, use `runAsync()` or `await run()`.
@@ -859,7 +856,6 @@ Released on November 25, 2025.
      -  Double or more consecutive newlines (`\n\n+`) are treated as hard
         breaks, creating actual paragraph separations in the output.
 
-
     This change improves the readability of multi-part error messages, such
     as those with “Did you mean?” suggestions, by ensuring proper spacing
     between the base error and suggestions:
@@ -1318,7 +1314,6 @@ Released on September 23, 2025.
         module. These combinator functions that compose and combine parsers are
         now organized in a separate module.
 
-
     For backward compatibility, all functions continue to be re-exported from
     `@optique/core/parser`, so existing code will work unchanged. However, the
     recommended approach going forward is to import directly from the
@@ -1742,7 +1737,6 @@ Released on September 6, 2025.
      -  Improved handling of multiple identical flags
         (e.g., `--version --version`)
 
-
     The public API remains unchanged - existing `run()` usage continues to work
     identically while benefiting from more robust edge case handling.  [[#13]]
 
@@ -2054,7 +2048,6 @@ Released on August 29, 2025.
      -  Added `PrintOptions` and `PrintErrorOptions` interfaces for type-safe
         configuration.
      -  Added `Printer` type for custom printer functions.
-
 
     All output functions automatically detect terminal capabilities (colors,
     width) and format structured messages consistently across different

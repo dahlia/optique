@@ -231,7 +231,7 @@ Dependent options
     import { object } from "@optique/core/constructs";
     import { withDefault } from "@optique/core/modifiers";
     import { flag, option } from "@optique/core/primitives";
-    
+
     // When --advanced is not provided, parser fails and defaults are used
     const parser = withDefault(
       object({
@@ -256,7 +256,7 @@ Mode selection
       batch: optional(flag("-b", "--batch")),
       daemon: optional(flag("-d", "--daemon"))
     });
-    
+
     // At most one mode can be selected, enforced by application logic
     ~~~~
 
@@ -284,8 +284,7 @@ The `argument()` parser handles positional arguments—values that appear in
 specific positions on the command line without option flags.
 Positional arguments are essential for intuitive CLI design, as users expect
 commands like `cp source.txt dest.txt` rather than
-`cp --source source.txt
---dest dest.txt`.
+`cp --source source.txt --dest dest.txt`.
 
 ~~~~ typescript twoslash
 import { argument } from "@optique/core/primitives";
