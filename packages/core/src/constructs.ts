@@ -2194,11 +2194,45 @@ function resolveDeferred(
   // Check if this is a DeferredParseState - resolve it
   if (isDeferredParseState(state)) {
     const deferredState = state as DeferredParseState<unknown>;
-    const depId = deferredState.dependencyId;
+    const parser = deferredState.parser;
 
+    // Check if this parser has multiple dependencies (from deriveFrom)
+    const depIds = deferredState.dependencyIds;
+    if (depIds && depIds.length > 0) {
+      // Multi-dependency case: collect all dependency values in order
+      const dependencyValues: unknown[] = [];
+      let allDepsAvailable = true;
+
+      for (const depId of depIds) {
+        if (registry.has(depId)) {
+          dependencyValues.push(registry.get(depId));
+        } else {
+          allDepsAvailable = false;
+          break;
+        }
+      }
+
+      if (allDepsAvailable) {
+        const reParseResult = parser[ParseWithDependency](
+          deferredState.rawInput,
+          dependencyValues,
+        );
+
+        // Handle sync vs async result
+        if (reParseResult instanceof Promise) {
+          // For async, use preliminary result (will be handled by async version)
+          return deferredState.preliminaryResult;
+        }
+        return reParseResult;
+      }
+      // Not all dependencies available, use preliminary result
+      return deferredState.preliminaryResult;
+    }
+
+    // Single dependency case (from derive)
+    const depId = deferredState.dependencyId;
     if (registry.has(depId)) {
       const dependencyValue = registry.get(depId);
-      const parser = deferredState.parser;
       const reParseResult = parser[ParseWithDependency](
         deferredState.rawInput,
         dependencyValue,
@@ -2276,11 +2310,41 @@ async function resolveDeferredAsync(
   // Check if this is a DeferredParseState - resolve it
   if (isDeferredParseState(state)) {
     const deferredState = state as DeferredParseState<unknown>;
-    const depId = deferredState.dependencyId;
+    const parser = deferredState.parser;
 
+    // Check if this parser has multiple dependencies (from deriveFrom)
+    const depIds = deferredState.dependencyIds;
+    if (depIds && depIds.length > 0) {
+      // Multi-dependency case: collect all dependency values in order
+      const dependencyValues: unknown[] = [];
+      let allDepsAvailable = true;
+
+      for (const depId of depIds) {
+        if (registry.has(depId)) {
+          dependencyValues.push(registry.get(depId));
+        } else {
+          allDepsAvailable = false;
+          break;
+        }
+      }
+
+      if (allDepsAvailable) {
+        const reParseResult = parser[ParseWithDependency](
+          deferredState.rawInput,
+          dependencyValues,
+        );
+
+        // Handle both sync and async results
+        return Promise.resolve(reParseResult);
+      }
+      // Not all dependencies available, use preliminary result
+      return deferredState.preliminaryResult;
+    }
+
+    // Single dependency case (from derive)
+    const depId = deferredState.dependencyId;
     if (registry.has(depId)) {
       const dependencyValue = registry.get(depId);
-      const parser = deferredState.parser;
       const reParseResult = parser[ParseWithDependency](
         deferredState.rawInput,
         dependencyValue,
@@ -4725,22 +4789,26 @@ export function merge(
       // Helper function to extract parser state for completion
       const extractCompleteState = (
         parser: Parser<Mode, MergeState, MergeState>,
+        resolvedState: MergeState,
         index: number,
       ): unknown => {
         if (parser.initialState === undefined) {
           const key = `__parser_${index}`;
-          if (state && typeof state === "object" && key in state) {
-            return state[key];
+          if (
+            resolvedState && typeof resolvedState === "object" &&
+            key in resolvedState
+          ) {
+            return resolvedState[key];
           }
           return undefined;
         } else if (
           parser.initialState && typeof parser.initialState === "object"
         ) {
-          if (state && typeof state === "object") {
+          if (resolvedState && typeof resolvedState === "object") {
             const extractedState: MergeState = {};
             for (const field in parser.initialState) {
-              extractedState[field] = field in state
-                ? state[field]
+              extractedState[field] = field in resolvedState
+                ? resolvedState[field]
                 : parser.initialState[field];
             }
             return extractedState;
@@ -4752,10 +4820,15 @@ export function merge(
 
       // For sync mode, complete synchronously
       if (!isAsync) {
+        // Resolve deferred parse states across the entire merged state first.
+        // This ensures dependencies from one merged parser are available to
+        // derived parsers in other merged parsers.
+        const resolvedState = resolveDeferredParseStates(state);
+
         const object: MergeState = {};
         for (let i = 0; i < syncParsers.length; i++) {
           const parser = syncParsers[i];
-          const parserState = extractCompleteState(parser, i);
+          const parserState = extractCompleteState(parser, resolvedState, i);
           const result = parser.complete(
             parserState as Parameters<typeof parser.complete>[0],
           );
@@ -4767,10 +4840,15 @@ export function merge(
 
       // For async mode, complete asynchronously
       return (async () => {
+        // Resolve deferred parse states across the entire merged state first.
+        // This ensures dependencies from one merged parser are available to
+        // derived parsers in other merged parsers.
+        const resolvedState = await resolveDeferredParseStatesAsync(state);
+
         const object: MergeState = {};
         for (let i = 0; i < parsers.length; i++) {
           const parser = parsers[i];
-          const parserState = extractCompleteState(parser, i);
+          const parserState = extractCompleteState(parser, resolvedState, i);
           const result = await parser.complete(
             parserState as Parameters<typeof parser.complete>[0],
           );

@@ -32,6 +32,15 @@ export const DependencyId: unique symbol = Symbol.for(
 );
 
 /**
+ * A unique symbol used to store multiple dependency IDs on derived parsers
+ * that depend on multiple sources (created via {@link deriveFrom}).
+ * @since 0.10.0
+ */
+export const DependencyIds: unique symbol = Symbol.for(
+  "@optique/core/dependency/DependencyIds",
+);
+
+/**
  * A unique symbol used to access the parseWithDependency method on derived parsers.
  * @since 0.10.0
  */
@@ -398,9 +407,20 @@ export interface DerivedValueParser<
 
   /**
    * The unique identifier of the dependency source this parser depends on.
+   * For parsers created with {@link deriveFrom} that have multiple dependencies,
+   * this is set to the first dependency's ID for backwards compatibility.
    * @internal
    */
   readonly [DependencyId]: symbol;
+
+  /**
+   * The unique identifiers of all dependency sources this parser depends on.
+   * Present only for parsers created with {@link deriveFrom} that have multiple
+   * dependencies. If present, this takes precedence over {@link DependencyId}
+   * during dependency resolution.
+   * @internal
+   */
+  readonly [DependencyIds]?: readonly symbol[];
 
   /**
    * Parses the input using the actual dependency value instead of the default.
@@ -698,11 +718,15 @@ function createSyncDerivedFromParser<
   sourceId: symbol,
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<"sync", T, DependencyValues<Deps>> {
+  // Collect all dependency IDs for multi-dependency resolution
+  const allDependencyIds = options.dependencies.map((dep) => dep[DependencyId]);
+
   return {
     $mode: "sync",
     metavar: options.metavar,
     [DerivedValueParserMarker]: true,
     [DependencyId]: sourceId,
+    [DependencyIds]: allDependencyIds,
 
     parse(input: string): ValueParserResult<T> {
       const sourceValues = options.defaultValues();
@@ -753,11 +777,15 @@ function createAsyncDerivedFromParserFromAsyncFactory<
   sourceId: symbol,
   options: DeriveFromAsyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
+  // Collect all dependency IDs for multi-dependency resolution
+  const allDependencyIds = options.dependencies.map((dep) => dep[DependencyId]);
+
   return {
     $mode: "async",
     metavar: options.metavar,
     [DerivedValueParserMarker]: true,
     [DependencyId]: sourceId,
+    [DependencyIds]: allDependencyIds,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       const sourceValues = options.defaultValues();
@@ -810,11 +838,15 @@ function createAsyncDerivedFromParserFromSyncFactory<
   sourceId: symbol,
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
+  // Collect all dependency IDs for multi-dependency resolution
+  const allDependencyIds = options.dependencies.map((dep) => dep[DependencyId]);
+
   return {
     $mode: "async",
     metavar: options.metavar,
     [DerivedValueParserMarker]: true,
     [DependencyId]: sourceId,
+    [DependencyIds]: allDependencyIds,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       const sourceValues = options.defaultValues();
@@ -1071,9 +1103,15 @@ export interface DeferredParseState<T = unknown> {
   readonly parser: DerivedValueParser<Mode, T, unknown>;
 
   /**
-   * The dependency ID that this parser depends on.
+   * The dependency ID that this parser depends on (for single-dependency parsers).
    */
   readonly dependencyId: symbol;
+
+  /**
+   * The dependency IDs that this parser depends on (for multi-dependency parsers).
+   * If present, this is used instead of `dependencyId`.
+   */
+  readonly dependencyIds?: readonly symbol[];
 
   /**
    * The preliminary parse result using the default dependency value.
@@ -1115,11 +1153,19 @@ export function createDeferredParseState<T, S>(
   parser: DerivedValueParser<Mode, T, S>,
   preliminaryResult: ValueParserResult<T>,
 ): DeferredParseState<T> {
+  // Check if parser has multiple dependency IDs (from deriveFrom)
+  const multipleIds = DependencyIds in parser
+    ? (parser as unknown as { [DependencyIds]: readonly symbol[] })[
+      DependencyIds
+    ]
+    : undefined;
+
   return {
     [DeferredParseMarker]: true,
     rawInput,
     parser: parser as DerivedValueParser<Mode, T, unknown>,
     dependencyId: parser[DependencyId],
+    dependencyIds: multipleIds,
     preliminaryResult,
   };
 }
