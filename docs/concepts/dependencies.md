@@ -182,6 +182,45 @@ The dependency resolution happens automatically in `object().complete()`,
 so you don't need any special handling beyond using the dependency source
 and derived parser together.
 
+Dependencies also work across parser combinators like `merge()` and `concat()`.
+For example, you can have the dependency source in one `object()` and the
+derived parser in another, then combine them with `merge()`:
+
+~~~~ typescript twoslash
+import { dependency } from "@optique/core/dependency";
+import { merge, object } from "@optique/core/constructs";
+import { parseSync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice, string } from "@optique/core/valueparser";
+
+const modeParser = dependency(choice(["dev", "prod"] as const));
+const logLevelParser = modeParser.derive({
+  metavar: "LEVEL",
+  factory: (mode) =>
+    choice(mode === "dev"
+      ? ["debug", "info", "warn", "error"]
+      : ["warn", "error"]),
+  defaultValue: () => "dev" as const,
+});
+// ---cut-before---
+// Dependency source and derived parser in separate objects
+const parser = merge(
+  object({ mode: option("--mode", modeParser) }),
+  object({
+    logLevel: option("--log-level", logLevelParser),
+    name: option("--name", string()),
+  }),
+);
+
+// Dependencies are resolved across merged objects
+const result = parseSync(parser, [
+  "--mode", "prod",
+  "--log-level", "warn",
+  "--name", "app"
+]);
+// result.value = { mode: "prod", logLevel: "warn", name: "app" }
+~~~~
+
 
 Option ordering independence
 ----------------------------
@@ -377,6 +416,3 @@ The current dependency implementation has some limitations to be aware of:
 
  -  *No nested dependencies*: A derived parser cannot itself be used as a
     dependency source. Dependencies form a single level of relationships.
-
- -  *Single object scope*: Dependencies are resolved within a single `object()`
-    combinator. Cross-object dependencies are not supported.
