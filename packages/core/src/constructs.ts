@@ -2091,6 +2091,19 @@ function* suggestObjectSync<
   prefix: string,
   parserPairs: [string | symbol, Parser<"sync", unknown, unknown>][],
 ): Generator<Suggestion> {
+  // Build dependency registry from all parsed fields
+  const registry = context.dependencyRegistry instanceof DependencyRegistry
+    ? context.dependencyRegistry
+    : new DependencyRegistry();
+
+  // Collect dependency values from the current state
+  if (context.state && typeof context.state === "object") {
+    collectDependencies(context.state, registry);
+  }
+
+  // Create context with dependency registry for child parsers
+  const contextWithRegistry = { ...context, dependencyRegistry: registry };
+
   // Check if the last token in the buffer is an option that requires a value.
   // If so, only suggest values for that specific option parser, not all parsers.
   // This prevents positional argument suggestions from appearing when completing
@@ -2108,7 +2121,10 @@ function* suggestObjectSync<
             ? (context.state as Record<string | symbol, unknown>)[field]
             : parser.initialState;
 
-        yield* parser.suggest({ ...context, state: fieldState }, prefix);
+        yield* parser.suggest(
+          { ...contextWithRegistry, state: fieldState },
+          prefix,
+        );
         return;
       }
     }
@@ -2123,7 +2139,7 @@ function* suggestObjectSync<
       : parser.initialState;
 
     const fieldSuggestions = parser.suggest({
-      ...context,
+      ...contextWithRegistry,
       state: fieldState,
     }, prefix);
 
@@ -2144,6 +2160,19 @@ async function* suggestObjectAsync<
   prefix: string,
   parserPairs: readonly [string | symbol, Parser<Mode, unknown, unknown>][],
 ): AsyncGenerator<Suggestion> {
+  // Build dependency registry from all parsed fields
+  const registry = context.dependencyRegistry instanceof DependencyRegistry
+    ? context.dependencyRegistry
+    : new DependencyRegistry();
+
+  // Collect dependency values from the current state
+  if (context.state && typeof context.state === "object") {
+    collectDependencies(context.state, registry);
+  }
+
+  // Create context with dependency registry for child parsers
+  const contextWithRegistry = { ...context, dependencyRegistry: registry };
+
   // Check if the last token in the buffer is an option that requires a value.
   if (context.buffer.length > 0) {
     const lastToken = context.buffer[context.buffer.length - 1];
@@ -2159,7 +2188,7 @@ async function* suggestObjectAsync<
             : parser.initialState;
 
         const suggestions = parser.suggest(
-          { ...context, state: fieldState },
+          { ...contextWithRegistry, state: fieldState },
           prefix,
         ) as AsyncIterable<Suggestion>;
         for await (const s of suggestions) {
@@ -2179,7 +2208,7 @@ async function* suggestObjectAsync<
       : parser.initialState;
 
     const fieldSuggestions = parser.suggest(
-      { ...context, state: fieldState },
+      { ...contextWithRegistry, state: fieldState },
       prefix,
     );
 
@@ -2282,34 +2311,35 @@ function resolveDeferred(
     // Check if this parser has multiple dependencies (from deriveFrom)
     const depIds = deferredState.dependencyIds;
     if (depIds && depIds.length > 0) {
-      // Multi-dependency case: collect all dependency values in order
+      // Multi-dependency case: collect all dependency values in order,
+      // using default values for missing dependencies
+      const defaults = deferredState.defaultValues;
       const dependencyValues: unknown[] = [];
-      let allDepsAvailable = true;
 
-      for (const depId of depIds) {
+      for (let i = 0; i < depIds.length; i++) {
+        const depId = depIds[i];
         if (registry.has(depId)) {
           dependencyValues.push(registry.get(depId));
+        } else if (defaults && i < defaults.length) {
+          // Use the default value for this missing dependency
+          dependencyValues.push(defaults[i]);
         } else {
-          allDepsAvailable = false;
-          break;
-        }
-      }
-
-      if (allDepsAvailable) {
-        const reParseResult = parser[ParseWithDependency](
-          deferredState.rawInput,
-          dependencyValues,
-        );
-
-        // Handle sync vs async result
-        if (reParseResult instanceof Promise) {
-          // For async, use preliminary result (will be handled by async version)
+          // No default available, fall back to preliminary result
           return deferredState.preliminaryResult;
         }
-        return reParseResult;
       }
-      // Not all dependencies available, use preliminary result
-      return deferredState.preliminaryResult;
+
+      const reParseResult = parser[ParseWithDependency](
+        deferredState.rawInput,
+        dependencyValues,
+      );
+
+      // Handle sync vs async result
+      if (reParseResult instanceof Promise) {
+        // For async, use preliminary result (will be handled by async version)
+        return deferredState.preliminaryResult;
+      }
+      return reParseResult;
     }
 
     // Single dependency case (from derive)
@@ -2397,30 +2427,31 @@ async function resolveDeferredAsync(
     // Check if this parser has multiple dependencies (from deriveFrom)
     const depIds = deferredState.dependencyIds;
     if (depIds && depIds.length > 0) {
-      // Multi-dependency case: collect all dependency values in order
+      // Multi-dependency case: collect all dependency values in order,
+      // using default values for missing dependencies
+      const defaults = deferredState.defaultValues;
       const dependencyValues: unknown[] = [];
-      let allDepsAvailable = true;
 
-      for (const depId of depIds) {
+      for (let i = 0; i < depIds.length; i++) {
+        const depId = depIds[i];
         if (registry.has(depId)) {
           dependencyValues.push(registry.get(depId));
+        } else if (defaults && i < defaults.length) {
+          // Use the default value for this missing dependency
+          dependencyValues.push(defaults[i]);
         } else {
-          allDepsAvailable = false;
-          break;
+          // No default available, fall back to preliminary result
+          return deferredState.preliminaryResult;
         }
       }
 
-      if (allDepsAvailable) {
-        const reParseResult = parser[ParseWithDependency](
-          deferredState.rawInput,
-          dependencyValues,
-        );
+      const reParseResult = parser[ParseWithDependency](
+        deferredState.rawInput,
+        dependencyValues,
+      );
 
-        // Handle both sync and async results
-        return Promise.resolve(reParseResult);
-      }
-      // Not all dependencies available, use preliminary result
-      return deferredState.preliminaryResult;
+      // Handle both sync and async results
+      return Promise.resolve(reParseResult);
     }
 
     // Single dependency case (from derive)

@@ -41,11 +41,29 @@ export const DependencyIds: unique symbol = Symbol.for(
 );
 
 /**
+ * A unique symbol used to store the default values function on derived parsers.
+ * This is used during partial dependency resolution to fill in missing values.
+ * @since 0.10.0
+ */
+export const DefaultValues: unique symbol = Symbol.for(
+  "@optique/core/dependency/DefaultValues",
+);
+
+/**
  * A unique symbol used to access the parseWithDependency method on derived parsers.
  * @since 0.10.0
  */
 export const ParseWithDependency: unique symbol = Symbol.for(
   "@optique/core/dependency/ParseWithDependency",
+);
+
+/**
+ * A unique symbol used to access the suggestWithDependency method on derived parsers.
+ * This method generates suggestions using the provided dependency values instead of defaults.
+ * @since 0.10.0
+ */
+export const SuggestWithDependency: unique symbol = Symbol.for(
+  "@optique/core/dependency/SuggestWithDependency",
 );
 
 /**
@@ -423,6 +441,13 @@ export interface DerivedValueParser<
   readonly [DependencyIds]?: readonly symbol[];
 
   /**
+   * The default values function for this parser's dependencies.
+   * Used during partial dependency resolution to fill in missing values.
+   * @internal
+   */
+  readonly [DefaultValues]?: () => readonly unknown[];
+
+  /**
    * Parses the input using the actual dependency value instead of the default.
    * This method is used during dependency resolution in `complete()`.
    *
@@ -435,6 +460,20 @@ export interface DerivedValueParser<
     input: string,
     dependencyValue: S,
   ) => ValueParserResult<T> | Promise<ValueParserResult<T>>;
+
+  /**
+   * Generates suggestions using the provided dependency value instead of the default.
+   * This method is used during shell completion when dependency sources have been parsed.
+   *
+   * @param prefix The input prefix to filter suggestions.
+   * @param dependencyValue The resolved dependency value.
+   * @returns An iterable of suggestions.
+   * @internal
+   */
+  readonly [SuggestWithDependency]?: (
+    prefix: string,
+    dependencyValue: S,
+  ) => Iterable<Suggestion> | AsyncIterable<Suggestion>;
 }
 
 /**
@@ -727,6 +766,7 @@ function createSyncDerivedFromParser<
     [DerivedValueParserMarker]: true,
     [DependencyId]: sourceId,
     [DependencyIds]: allDependencyIds,
+    [DefaultValues]: options.defaultValues,
 
     parse(input: string): ValueParserResult<T> {
       const sourceValues = options.defaultValues();
@@ -769,6 +809,27 @@ function createSyncDerivedFromParser<
         yield* derivedParser.suggest(prefix);
       }
     },
+
+    *[SuggestWithDependency](
+      prefix: string,
+      dependencyValue: DependencyValues<Deps>,
+    ): Iterable<Suggestion> {
+      let derivedParser;
+      try {
+        derivedParser = options.factory(
+          ...(dependencyValue as DependencyValues<Deps>),
+        );
+      } catch {
+        // If factory fails, fall back to default
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      }
+      if (derivedParser.suggest) {
+        yield* derivedParser.suggest(prefix);
+      }
+    },
   };
 }
 
@@ -792,6 +853,7 @@ function createAsyncDerivedFromParserFromAsyncFactory<
     [DerivedValueParserMarker]: true,
     [DependencyId]: sourceId,
     [DependencyIds]: allDependencyIds,
+    [DefaultValues]: options.defaultValues,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       const sourceValues = options.defaultValues();
@@ -839,6 +901,29 @@ function createAsyncDerivedFromParserFromAsyncFactory<
         }
       }
     },
+
+    async *[SuggestWithDependency](
+      prefix: string,
+      dependencyValue: DependencyValues<Deps>,
+    ): AsyncIterable<Suggestion> {
+      let derivedParser;
+      try {
+        derivedParser = options.factory(
+          ...(dependencyValue as DependencyValues<Deps>),
+        );
+      } catch {
+        // If factory fails, fall back to default
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      }
+      if (derivedParser.suggest) {
+        for await (const suggestion of derivedParser.suggest(prefix)) {
+          yield suggestion;
+        }
+      }
+    },
   };
 }
 
@@ -862,6 +947,7 @@ function createAsyncDerivedFromParserFromSyncFactory<
     [DerivedValueParserMarker]: true,
     [DependencyId]: sourceId,
     [DependencyIds]: allDependencyIds,
+    [DefaultValues]: options.defaultValues,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       const sourceValues = options.defaultValues();
@@ -903,6 +989,27 @@ function createAsyncDerivedFromParserFromSyncFactory<
       const derivedParser = options.factory(
         ...(sourceValues as DependencyValues<Deps>),
       );
+      if (derivedParser.suggest) {
+        yield* derivedParser.suggest(prefix);
+      }
+    },
+
+    *[SuggestWithDependency](
+      prefix: string,
+      dependencyValue: DependencyValues<Deps>,
+    ): Iterable<Suggestion> {
+      let derivedParser;
+      try {
+        derivedParser = options.factory(
+          ...(dependencyValue as DependencyValues<Deps>),
+        );
+      } catch {
+        // If factory fails, fall back to default
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      }
       if (derivedParser.suggest) {
         yield* derivedParser.suggest(prefix);
       }
@@ -1000,6 +1107,22 @@ function createSyncDerivedParser<S, T>(
         yield* derivedParser.suggest(prefix);
       }
     },
+
+    *[SuggestWithDependency](
+      prefix: string,
+      dependencyValue: S,
+    ): Iterable<Suggestion> {
+      let derivedParser;
+      try {
+        derivedParser = options.factory(dependencyValue);
+      } catch {
+        // If factory fails, fall back to default
+        derivedParser = options.factory(options.defaultValue());
+      }
+      if (derivedParser.suggest) {
+        yield* derivedParser.suggest(prefix);
+      }
+    },
   };
 }
 
@@ -1049,6 +1172,24 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       const sourceValue = options.defaultValue();
       const derivedParser = options.factory(sourceValue);
+      if (derivedParser.suggest) {
+        for await (const suggestion of derivedParser.suggest(prefix)) {
+          yield suggestion;
+        }
+      }
+    },
+
+    async *[SuggestWithDependency](
+      prefix: string,
+      dependencyValue: S,
+    ): AsyncIterable<Suggestion> {
+      let derivedParser;
+      try {
+        derivedParser = options.factory(dependencyValue);
+      } catch {
+        // If factory fails, fall back to default
+        derivedParser = options.factory(options.defaultValue());
+      }
       if (derivedParser.suggest) {
         for await (const suggestion of derivedParser.suggest(prefix)) {
           yield suggestion;
@@ -1108,6 +1249,22 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
         yield* derivedParser.suggest(prefix);
       }
     },
+
+    *[SuggestWithDependency](
+      prefix: string,
+      dependencyValue: S,
+    ): Iterable<Suggestion> {
+      let derivedParser;
+      try {
+        derivedParser = options.factory(dependencyValue);
+      } catch {
+        // If factory fails, fall back to default
+        derivedParser = options.factory(options.defaultValue());
+      }
+      if (derivedParser.suggest) {
+        yield* derivedParser.suggest(prefix);
+      }
+    },
   };
 }
 
@@ -1162,6 +1319,13 @@ export interface DeferredParseState<T = unknown> {
   readonly dependencyIds?: readonly symbol[];
 
   /**
+   * The default values to use for dependencies that are not provided.
+   * For multi-dependency parsers, this is a tuple of default values in order.
+   * For single-dependency parsers, this is the single default value.
+   */
+  readonly defaultValues?: readonly unknown[];
+
+  /**
    * The preliminary parse result using the default dependency value.
    * This is used as a fallback if dependency resolution is not needed
    * or if the dependency was not provided.
@@ -1208,12 +1372,22 @@ export function createDeferredParseState<T, S>(
     ]
     : undefined;
 
+  // Get the default values if available
+  const defaultValuesFn = DefaultValues in parser
+    ? (parser as unknown as { [DefaultValues]: () => readonly unknown[] })[
+      DefaultValues
+    ]
+    : undefined;
+
+  const defaultVals = defaultValuesFn ? defaultValuesFn() : undefined;
+
   return {
     [DeferredParseMarker]: true,
     rawInput,
     parser: parser as DerivedValueParser<Mode, T, unknown>,
     dependencyId: parser[DependencyId],
     dependencyIds: multipleIds,
+    defaultValues: defaultVals,
     preliminaryResult,
   };
 }

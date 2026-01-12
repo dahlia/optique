@@ -3198,3 +3198,535 @@ describe("conditional() with dependencies", () => {
     }
   });
 });
+
+// =============================================================================
+// deriveFrom() with partially provided dependencies
+// =============================================================================
+
+describe("deriveFrom() with partially provided dependencies", () => {
+  test("optional dependency sources - only first provided", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const regionParser = dependency(choice(["us", "eu"] as const));
+    const tierParser = dependency(choice(["free", "paid"] as const));
+
+    const endpointParser = deriveFrom({
+      metavar: "ENDPOINT",
+      dependencies: [envParser, regionParser, tierParser] as const,
+      factory: (
+        env: "dev" | "prod",
+        region: "us" | "eu",
+        tier: "free" | "paid",
+      ) => {
+        const base = env === "dev" ? "dev" : "api";
+        const suffix = tier === "paid" ? "-premium" : "";
+        return choice([`${base}.${region}.example.com${suffix}`] as const);
+      },
+      defaultValues: () => ["dev", "us", "free"] as const,
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      region: optional(option("--region", regionParser)),
+      tier: optional(option("--tier", tierParser)),
+      endpoint: option("--endpoint", endpointParser),
+    });
+
+    // Only --env is provided, region and tier use defaults from defaultValues
+    const result = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--endpoint",
+      "api.us.example.com",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.env, "prod");
+      assert.equal(result.value.region, undefined);
+      assert.equal(result.value.tier, undefined);
+      assert.equal(result.value.endpoint, "api.us.example.com");
+    }
+  });
+
+  test("optional dependency sources - only last provided", async () => {
+    const a = dependency(choice(["a1", "a2"] as const));
+    const b = dependency(choice(["b1", "b2"] as const));
+    const c = dependency(choice(["c1", "c2"] as const));
+
+    const derivedParser = deriveFrom({
+      metavar: "DERIVED",
+      dependencies: [a, b, c] as const,
+      factory: (av, bv, cv) => choice([`${av}-${bv}-${cv}`] as const),
+      defaultValues: () => ["a1", "b1", "c1"] as const,
+    });
+
+    const parser = object({
+      a: optional(option("--a", a)),
+      b: optional(option("--b", b)),
+      c: option("--c", c), // Only c is required
+      derived: option("--derived", derivedParser),
+    });
+
+    // Only --c is provided, a and b use defaults
+    const result = await parseAsync(parser, [
+      "--c",
+      "c2",
+      "--derived",
+      "a1-b1-c2",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, undefined);
+      assert.equal(result.value.b, undefined);
+      assert.equal(result.value.c, "c2");
+      assert.equal(result.value.derived, "a1-b1-c2");
+    }
+  });
+
+  test("optional dependency sources - middle one provided", async () => {
+    const x = dependency(choice(["x1", "x2"] as const));
+    const y = dependency(choice(["y1", "y2"] as const));
+    const z = dependency(choice(["z1", "z2"] as const));
+
+    const derivedParser = deriveFrom({
+      metavar: "XYZ",
+      dependencies: [x, y, z] as const,
+      factory: (xv, yv, zv) => choice([`${xv}-${yv}-${zv}`] as const),
+      defaultValues: () => ["x1", "y1", "z1"] as const,
+    });
+
+    const parser = object({
+      x: optional(option("--x", x)),
+      y: option("--y", y), // Only y is required
+      z: optional(option("--z", z)),
+      derived: option("--derived", derivedParser),
+    });
+
+    // Only --y is provided
+    const result = await parseAsync(parser, [
+      "--y",
+      "y2",
+      "--derived",
+      "x1-y2-z1",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.x, undefined);
+      assert.equal(result.value.y, "y2");
+      assert.equal(result.value.z, undefined);
+      assert.equal(result.value.derived, "x1-y2-z1");
+    }
+  });
+
+  test("optional dependency sources - none provided (all use defaults)", async () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+
+    const configParser = deriveFrom({
+      metavar: "CONFIG",
+      dependencies: [env, region] as const,
+      factory: (e, r) => choice([`${e}-${r}.json`] as const),
+      defaultValues: () => ["dev", "us"] as const,
+    });
+
+    const parser = object({
+      env: optional(option("--env", env)),
+      region: optional(option("--region", region)),
+      config: option("--config", configParser),
+    });
+
+    // No dependency sources provided, all use defaults
+    const result = await parseAsync(parser, ["--config", "dev-us.json"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.env, undefined);
+      assert.equal(result.value.region, undefined);
+      assert.equal(result.value.config, "dev-us.json");
+    }
+  });
+
+  test("withDefault dependency sources - mixed with optional", async () => {
+    const format = dependency(choice(["json", "yaml"] as const));
+    const compression = dependency(choice(["none", "gzip", "bzip2"] as const));
+    const encoding = dependency(choice(["utf8", "utf16"] as const));
+
+    const outputParser = deriveFrom({
+      metavar: "OUTPUT",
+      dependencies: [format, compression, encoding] as const,
+      factory: (f, c, e) => {
+        const ext = f === "json" ? "json" : "yaml";
+        const compExt = c === "none" ? "" : `.${c}`;
+        return choice([`output-${e}.${ext}${compExt}`] as const);
+      },
+      defaultValues: () => ["json", "none", "utf8"] as const,
+    });
+
+    const parser = object({
+      format: withDefault(option("--format", format), "yaml" as const),
+      compression: optional(option("--compression", compression)),
+      encoding: withDefault(option("--encoding", encoding), "utf16" as const),
+      output: option("--output", outputParser),
+    });
+
+    // format uses withDefault "yaml", compression is not provided (uses deriveFrom default "none"),
+    // encoding uses withDefault "utf16"
+    const result = await parseAsync(parser, [
+      "--output",
+      "output-utf16.yaml",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.format, "yaml");
+      assert.equal(result.value.compression, undefined);
+      assert.equal(result.value.encoding, "utf16");
+      assert.equal(result.value.output, "output-utf16.yaml");
+    }
+  });
+
+  test("partial dependencies across merge() boundaries", async () => {
+    const dbType = dependency(choice(["postgres", "mysql"] as const));
+    const cacheType = dependency(choice(["redis", "memcached"] as const));
+
+    const connectionParser = deriveFrom({
+      metavar: "CONN",
+      dependencies: [dbType, cacheType] as const,
+      factory: (db, cache) => {
+        const dbPort = db === "postgres" ? "5432" : "3306";
+        const cachePort = cache === "redis" ? "6379" : "11211";
+        return choice([`${db}:${dbPort}-${cache}:${cachePort}`] as const);
+      },
+      defaultValues: () => ["postgres", "redis"] as const,
+    });
+
+    const parser = merge(
+      object({
+        dbType: optional(option("--db-type", dbType)),
+      }),
+      object({
+        cacheType: option("--cache-type", cacheType),
+        connection: option("--connection", connectionParser),
+      }),
+    );
+
+    // Only cacheType provided, dbType uses default
+    const result = await parseAsync(parser, [
+      "--cache-type",
+      "memcached",
+      "--connection",
+      "postgres:5432-memcached:11211",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.dbType, undefined);
+      assert.equal(result.value.cacheType, "memcached");
+      assert.equal(result.value.connection, "postgres:5432-memcached:11211");
+    }
+  });
+
+  test("partial dependencies with derived parser validation failure", async () => {
+    // When some dependencies use defaults, the derived parser should still
+    // validate against the combination of provided and default values
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu", "ap"] as const));
+
+    const serverParser = deriveFrom({
+      metavar: "SERVER",
+      dependencies: [env, region] as const,
+      factory: (e, r) => {
+        // Only certain combinations are valid
+        if (e === "dev") return choice(["localhost"] as const);
+        // prod has region-specific servers
+        if (r === "us") return choice(["prod-us-1", "prod-us-2"] as const);
+        if (r === "eu") return choice(["prod-eu-1"] as const);
+        return choice(["prod-ap-1"] as const);
+      },
+      defaultValues: () => ["dev", "us"] as const,
+    });
+
+    const parser = object({
+      env: optional(option("--env", env)),
+      region: option("--region", region),
+      server: option("--server", serverParser),
+    });
+
+    // env not provided (defaults to "dev"), but region is "eu"
+    // With default env="dev", only "localhost" is valid
+    const result1 = await parseAsync(parser, [
+      "--region",
+      "eu",
+      "--server",
+      "localhost",
+    ]);
+    assert.ok(result1.success);
+
+    // Try to use a prod server with default env="dev" - should fail
+    const result2 = await parseAsync(parser, [
+      "--region",
+      "eu",
+      "--server",
+      "prod-eu-1",
+    ]);
+    assert.ok(!result2.success);
+
+    // Explicitly set env="prod", now prod-eu-1 should work
+    const result3 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--region",
+      "eu",
+      "--server",
+      "prod-eu-1",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.env, "prod");
+      assert.equal(result3.value.region, "eu");
+      assert.equal(result3.value.server, "prod-eu-1");
+    }
+  });
+});
+
+// =============================================================================
+// suggestAsync() with derived parsers and provided dependencies
+// =============================================================================
+
+describe("suggestAsync() with derived parsers and provided dependencies", () => {
+  test("suggestions use provided dependency value instead of default", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "trace", "verbose"] as const)
+            : (["info", "warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // When --mode prod is provided, suggestions for --log-level should be
+    // prod-specific values (info, warn, error), not dev values (debug, trace)
+    const completions = await suggestAsync(parser, [
+      "--mode",
+      "prod",
+      "--log-level",
+      "",
+    ]);
+    const values = completions.map((c) => (c.kind === "literal" ? c.text : ""));
+
+    // Should have prod values
+    assert.ok(
+      values.includes("info"),
+      `Expected 'info', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      values.includes("warn"),
+      `Expected 'warn', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      values.includes("error"),
+      `Expected 'error', got: ${values.join(", ")}`,
+    );
+
+    // Should NOT have dev values
+    assert.ok(
+      !values.includes("debug"),
+      `Should not include 'debug', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      !values.includes("trace"),
+      `Should not include 'trace', got: ${values.join(", ")}`,
+    );
+  });
+
+  test("suggestions use default when dependency not yet provided", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "trace"] as const)
+            : (["info", "warn"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // When --mode is not provided yet, suggestions should use default "dev"
+    const completions = await suggestAsync(parser, ["--log-level", ""]);
+    const values = completions.map((c) => (c.kind === "literal" ? c.text : ""));
+
+    // Should have dev values (default)
+    assert.ok(
+      values.includes("debug") || values.includes("trace"),
+      `Expected dev values, got: ${values.join(", ")}`,
+    );
+  });
+
+  test("suggestions with deriveFrom and multiple dependencies", async () => {
+    const envParser = dependency(choice(["dev", "staging", "prod"] as const));
+    const regionParser = dependency(choice(["us", "eu", "ap"] as const));
+
+    const endpointParser = deriveFrom({
+      metavar: "ENDPOINT",
+      dependencies: [envParser, regionParser] as const,
+      factory: (env, region) => {
+        if (env === "dev") {
+          return choice([`localhost-${region}`] as const);
+        }
+        return choice(
+          [
+            `${env}-${region}-1.example.com`,
+            `${env}-${region}-2.example.com`,
+          ] as const,
+        );
+      },
+      defaultValues: () => ["dev", "us"] as const,
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      region: option("--region", regionParser),
+      endpoint: option("--endpoint", endpointParser),
+    });
+
+    // With both dependencies provided
+    const completions = await suggestAsync(parser, [
+      "--env",
+      "prod",
+      "--region",
+      "eu",
+      "--endpoint",
+      "",
+    ]);
+    const values = completions.map((c) => (c.kind === "literal" ? c.text : ""));
+
+    assert.ok(
+      values.includes("prod-eu-1.example.com"),
+      `Expected 'prod-eu-1.example.com', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      values.includes("prod-eu-2.example.com"),
+      `Expected 'prod-eu-2.example.com', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      !values.includes("localhost-us"),
+      `Should not include 'localhost-us', got: ${values.join(", ")}`,
+    );
+  });
+
+  test("suggestions with partial dependencies provided", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const regionParser = dependency(choice(["us", "eu"] as const));
+
+    const configParser = deriveFrom({
+      metavar: "CONFIG",
+      dependencies: [envParser, regionParser] as const,
+      factory: (env, region) =>
+        choice([`config-${env}-${region}.json`] as const),
+      defaultValues: () => ["dev", "us"] as const,
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      region: optional(option("--region", regionParser)),
+      config: option("--config", configParser),
+    });
+
+    // Only --env provided, region uses default "us"
+    const completions = await suggestAsync(parser, [
+      "--env",
+      "prod",
+      "--config",
+      "",
+    ]);
+    const values = completions.map((c) => (c.kind === "literal" ? c.text : ""));
+
+    assert.ok(
+      values.includes("config-prod-us.json"),
+      `Expected 'config-prod-us.json', got: ${values.join(", ")}`,
+    );
+  });
+
+  test("suggestions with async derived parser", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const asyncLogLevelParser = modeParser.deriveAsync({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? (["debug", "trace"] as const)
+            : (["info", "warn"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", asyncLogLevelParser),
+    });
+
+    // When --mode prod is provided
+    const completions = await suggestAsync(parser, [
+      "--mode",
+      "prod",
+      "--log-level",
+      "",
+    ]);
+    const values = completions.map((c) => (c.kind === "literal" ? c.text : ""));
+
+    assert.ok(
+      values.includes("info"),
+      `Expected 'info', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      values.includes("warn"),
+      `Expected 'warn', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      !values.includes("debug"),
+      `Should not include 'debug', got: ${values.join(", ")}`,
+    );
+  });
+
+  test("suggestions with --option=value format", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "trace"] as const)
+            : (["info", "warn"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Using --option=value format
+    const completions = await suggestAsync(parser, [
+      "--mode",
+      "prod",
+      "--log-level=",
+    ]);
+    const values = completions.map((c) => (c.kind === "literal" ? c.text : ""));
+
+    assert.ok(
+      values.some((v) => v.includes("info")),
+      `Expected value containing 'info', got: ${values.join(", ")}`,
+    );
+  });
+});

@@ -2,8 +2,10 @@ import {
   createDeferredParseState,
   createDependencySourceState,
   createPendingDependencySourceState,
+  DefaultValues,
   type DeferredParseState,
   DependencyId,
+  DependencyIds,
   type DependencySourceState,
   type DerivedValueParser,
   isDeferredParseState,
@@ -12,6 +14,7 @@ import {
   isDerivedValueParser,
   isPendingDependencySourceState,
   type PendingDependencySourceState,
+  SuggestWithDependency,
 } from "./dependency.ts";
 import type { DocFragment } from "./doc.ts";
 
@@ -185,6 +188,76 @@ export interface OptionErrorOptions {
 }
 
 /**
+ * Internal helper to get suggestions from a value parser, using dependency values
+ * if the parser is a derived parser and dependency values are available.
+ * @internal
+ */
+function* getSuggestionsWithDependency<T>(
+  valueParser: ValueParser<"sync", T>,
+  prefix: string,
+  dependencyRegistry: unknown,
+): Generator<Suggestion> {
+  if (!valueParser.suggest) return;
+
+  // Check if this is a derived parser with SuggestWithDependency
+  if (
+    isDerivedValueParser(valueParser) && SuggestWithDependency in valueParser
+  ) {
+    const derived = valueParser as DerivedValueParser<"sync", T, unknown>;
+    const suggestWithDep = derived[SuggestWithDependency];
+
+    if (suggestWithDep && dependencyRegistry) {
+      // Get dependency values from registry
+      const depIds = DependencyIds in derived
+        ? (derived as unknown as { [DependencyIds]: readonly symbol[] })[
+          DependencyIds
+        ]
+        : [derived[DependencyId]];
+
+      const defaults = DefaultValues in derived
+        ? (derived as unknown as { [DefaultValues]: () => readonly unknown[] })
+          [DefaultValues]?.()
+        : undefined;
+
+      const registry = dependencyRegistry as {
+        has(id: symbol): boolean;
+        get<V>(id: symbol): V | undefined;
+      };
+
+      // Collect dependency values, using defaults for missing ones
+      const dependencyValues: unknown[] = [];
+      let hasAnyValue = false;
+
+      for (let i = 0; i < depIds.length; i++) {
+        const depId = depIds[i];
+        if (registry.has(depId)) {
+          dependencyValues.push(registry.get(depId));
+          hasAnyValue = true;
+        } else if (defaults && i < defaults.length) {
+          dependencyValues.push(defaults[i]);
+        } else {
+          // Can't resolve, fall back to default suggest
+          yield* valueParser.suggest(prefix);
+          return;
+        }
+      }
+
+      // If we have at least one actual value (not just defaults), use SuggestWithDependency
+      if (hasAnyValue) {
+        const depValue = depIds.length === 1
+          ? dependencyValues[0]
+          : dependencyValues;
+        yield* suggestWithDep(prefix, depValue) as Iterable<Suggestion>;
+        return;
+      }
+    }
+  }
+
+  // Fall back to default suggest
+  yield* valueParser.suggest(prefix);
+}
+
+/**
  * Internal sync helper for option suggest functionality.
  * @internal
  */
@@ -209,7 +282,11 @@ function* suggestOptionSync<T>(
     // Check if this option matches any of our option names
     if ((optionNames as readonly string[]).includes(optionPart)) {
       if (valueParser && valueParser.suggest) {
-        const valueSuggestions = valueParser.suggest(valuePart);
+        const valueSuggestions = getSuggestionsWithDependency(
+          valueParser,
+          valuePart,
+          context.dependencyRegistry,
+        );
         // Prepend the option= part to each suggestion
         for (const suggestion of valueSuggestions) {
           if (suggestion.kind === "literal") {
@@ -263,9 +340,94 @@ function* suggestOptionSync<T>(
       }
 
       if (shouldSuggestValues) {
-        yield* valueParser.suggest(prefix);
+        yield* getSuggestionsWithDependency(
+          valueParser,
+          prefix,
+          context.dependencyRegistry,
+        );
       }
     }
+  }
+}
+
+/**
+ * Internal async helper to get suggestions from a value parser, using dependency values
+ * if the parser is a derived parser and dependency values are available.
+ * @internal
+ */
+async function* getSuggestionsWithDependencyAsync<T>(
+  valueParser: ValueParser<Mode, T>,
+  prefix: string,
+  dependencyRegistry: unknown,
+): AsyncGenerator<Suggestion> {
+  if (!valueParser.suggest) return;
+
+  // Check if this is a derived parser with SuggestWithDependency
+  if (
+    isDerivedValueParser(valueParser) && SuggestWithDependency in valueParser
+  ) {
+    const derived = valueParser as DerivedValueParser<Mode, T, unknown>;
+    const suggestWithDep = derived[SuggestWithDependency];
+
+    if (suggestWithDep && dependencyRegistry) {
+      // Get dependency values from registry
+      const depIds = DependencyIds in derived
+        ? (derived as unknown as { [DependencyIds]: readonly symbol[] })[
+          DependencyIds
+        ]
+        : [derived[DependencyId]];
+
+      const defaults = DefaultValues in derived
+        ? (derived as unknown as { [DefaultValues]: () => readonly unknown[] })
+          [DefaultValues]?.()
+        : undefined;
+
+      const registry = dependencyRegistry as {
+        has(id: symbol): boolean;
+        get<V>(id: symbol): V | undefined;
+      };
+
+      // Collect dependency values, using defaults for missing ones
+      const dependencyValues: unknown[] = [];
+      let hasAnyValue = false;
+
+      for (let i = 0; i < depIds.length; i++) {
+        const depId = depIds[i];
+        if (registry.has(depId)) {
+          dependencyValues.push(registry.get(depId));
+          hasAnyValue = true;
+        } else if (defaults && i < defaults.length) {
+          dependencyValues.push(defaults[i]);
+        } else {
+          // Can't resolve, fall back to default suggest
+          for await (const suggestion of valueParser.suggest(prefix)) {
+            yield suggestion;
+          }
+          return;
+        }
+      }
+
+      // If we have at least one actual value (not just defaults), use SuggestWithDependency
+      if (hasAnyValue) {
+        const depValue = depIds.length === 1
+          ? dependencyValues[0]
+          : dependencyValues;
+        for await (
+          const suggestion of suggestWithDep(
+            prefix,
+            depValue,
+          ) as AsyncIterable<Suggestion>
+        ) {
+          yield suggestion;
+        }
+        return;
+      }
+    }
+  }
+
+  // Fall back to default suggest
+  for await (const suggestion of valueParser.suggest(prefix)) {
+    yield suggestion;
   }
 }
 
@@ -294,7 +456,11 @@ async function* suggestOptionAsync<T>(
     // Check if this option matches any of our option names
     if ((optionNames as readonly string[]).includes(optionPart)) {
       if (valueParser && valueParser.suggest) {
-        const valueSuggestions = valueParser.suggest(valuePart);
+        const valueSuggestions = getSuggestionsWithDependencyAsync(
+          valueParser,
+          valuePart,
+          context.dependencyRegistry,
+        );
         // Prepend the option= part to each suggestion - handle both sync and async
         for await (const suggestion of valueSuggestions) {
           if (suggestion.kind === "literal") {
@@ -347,7 +513,13 @@ async function* suggestOptionAsync<T>(
       }
 
       if (shouldSuggestValues) {
-        for await (const suggestion of valueParser.suggest(prefix)) {
+        for await (
+          const suggestion of getSuggestionsWithDependencyAsync(
+            valueParser,
+            prefix,
+            context.dependencyRegistry,
+          )
+        ) {
           yield suggestion;
         }
       }
