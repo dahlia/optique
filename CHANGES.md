@@ -8,6 +8,50 @@ Version 0.10.0
 
 To be released.
 
+### @optique/core
+
+ -  Added inter-option dependency support via `@optique/core/dependency` module.
+    This allows one option's valid values to depend on another option's parsed
+    value, enabling dynamic validation and context-aware shell completion.
+
+    New exports:
+
+     -  `dependency()`: Creates a dependency source from an existing value parser.
+     -  `deriveFrom()`: Creates a derived parser from multiple dependency sources.
+     -  `DependencySource<M, T>`: A value parser that can be referenced by other
+        parsers.
+     -  `DerivedValueParser<M, T>`: A value parser whose behavior depends on
+        other parsers' values.
+
+    The dependency system uses deferred parsing: dependent options store their
+    raw input during initial parsing, then re-validate using actual dependency
+    values after all options are collected.
+
+    ~~~~ typescript
+    import { dependency } from "@optique/core/dependency";
+    import { choice } from "@optique/core/valueparser";
+
+    // Create a dependency source
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    // Create a derived parser that depends on the mode
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode) => {
+        if (mode === "dev") {
+          return choice(["debug", "info", "warn", "error"]);
+        } else {
+          return choice(["warn", "error"]);
+        }
+      },
+      defaultValue: () => "dev" as const,
+    });
+    ~~~~
+
+    Dependencies work seamlessly with all parser combinators (`object()`,
+    `subcommands()`, `or()`, `longestMatch()`, `multiple()`, etc.) and support
+    both sync and async parsers.
+
 
 Version 0.9.0
 -------------
