@@ -67,6 +67,14 @@
       "import": "./dist/constructs.js",
       "require": "./dist/constructs.cjs"
     },
+    "./dependency": {
+      "types": {
+        "import": "./dist/dependency.d.ts",
+        "require": "./dist/dependency.d.cts"
+      },
+      "import": "./dist/dependency.js",
+      "require": "./dist/dependency.cjs"
+    },
     "./doc": {
       "types": {
         "import": "./dist/doc.d.ts",

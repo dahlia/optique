@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./completion": "./src/completion.ts",
     "./constructs": "./src/constructs.ts",
+    "./dependency": "./src/dependency.ts",
     "./doc": "./src/doc.ts",
     "./facade": "./src/facade.ts",
     "./message": "./src/message.ts",
