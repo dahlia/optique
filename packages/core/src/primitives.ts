@@ -1,4 +1,52 @@
+import {
+  createDeferredParseState,
+  createDependencySourceState,
+  type DeferredParseState,
+  DependencyId,
+  type DependencySourceState,
+  type DerivedValueParser,
+  isDeferredParseState,
+  isDependencySource,
+  isDependencySourceState,
+  isDerivedValueParser,
+} from "./dependency.ts";
 import type { DocFragment } from "./doc.ts";
+
+/**
+ * State type for options that may use deferred parsing (DerivedValueParser).
+ * This extends the normal ValueParserResult to also support DeferredParseState.
+ * @internal
+ */
+export type OptionState<T> =
+  | ValueParserResult<T>
+  | DeferredParseState<T>
+  | undefined;
+
+/**
+ * Helper function to create the appropriate state for an option value.
+ * - If the value parser is a DerivedValueParser, wraps the result in a DeferredParseState
+ *   to allow later resolution with actual dependency values.
+ * - If the value parser is a DependencySource, wraps the result in a DependencySourceState
+ *   so that it can be matched with DeferredParseState during resolution.
+ * @internal
+ */
+function createOptionParseState<M extends Mode, T>(
+  rawInput: string,
+  valueParser: ValueParser<M, T>,
+  parseResult: ValueParserResult<T>,
+): ValueParserResult<T> | DeferredParseState<T> | DependencySourceState<T> {
+  if (isDerivedValueParser(valueParser)) {
+    return createDeferredParseState(
+      rawInput,
+      valueParser as DerivedValueParser<M, T, unknown>,
+      parseResult,
+    );
+  }
+  if (isDependencySource(valueParser)) {
+    return createDependencySourceState(parseResult, valueParser[DependencyId]);
+  }
+  return parseResult;
+}
 import {
   type Message,
   message,
@@ -532,14 +580,19 @@ export function option<M extends Mode, T>(
             } requires a value, but got no value.`,
           };
         }
-        const parseResultOrPromise = valueParser!.parse(context.buffer[1]);
+        const rawInput = context.buffer[1];
+        const parseResultOrPromise = valueParser!.parse(rawInput);
         if (isAsync) {
           return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
             (parseResult) => ({
               success: true as const,
               next: {
                 ...context,
-                state: parseResult,
+                state: createOptionParseState(
+                  rawInput,
+                  valueParser!,
+                  parseResult,
+                ),
                 buffer: context.buffer.slice(2),
               },
               consumed: context.buffer.slice(0, 2),
@@ -550,7 +603,11 @@ export function option<M extends Mode, T>(
           success: true,
           next: {
             ...context,
-            state: parseResultOrPromise as ValueParserResult<T>,
+            state: createOptionParseState(
+              rawInput,
+              valueParser!,
+              parseResultOrPromise as ValueParserResult<T>,
+            ),
             buffer: context.buffer.slice(2),
           },
           consumed: context.buffer.slice(0, 2),
@@ -578,28 +635,32 @@ export function option<M extends Mode, T>(
               : message`${eOptionName(prefix)} cannot be used multiple times.`,
           };
         }
-        const value = context.buffer[0].slice(prefix.length);
+        const rawInput = context.buffer[0].slice(prefix.length);
         if (valueParser == null) {
           return {
             success: false,
             consumed: 1,
             error: options.errors?.unexpectedValue
               ? (typeof options.errors.unexpectedValue === "function"
-                ? options.errors.unexpectedValue(value)
+                ? options.errors.unexpectedValue(rawInput)
                 : options.errors.unexpectedValue)
               : message`Option ${
                 eOptionName(prefix)
-              } is a Boolean flag, but got a value: ${value}.`,
+              } is a Boolean flag, but got a value: ${rawInput}.`,
           };
         }
-        const parseResultOrPromise = valueParser.parse(value);
+        const parseResultOrPromise = valueParser.parse(rawInput);
         if (isAsync) {
           return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
             (parseResult) => ({
               success: true as const,
               next: {
                 ...context,
-                state: parseResult,
+                state: createOptionParseState(
+                  rawInput,
+                  valueParser,
+                  parseResult,
+                ),
                 buffer: context.buffer.slice(1),
               },
               consumed: context.buffer.slice(0, 1),
@@ -610,7 +671,11 @@ export function option<M extends Mode, T>(
           success: true,
           next: {
             ...context,
-            state: parseResultOrPromise as ValueParserResult<T>,
+            state: createOptionParseState(
+              rawInput,
+              valueParser,
+              parseResultOrPromise as ValueParserResult<T>,
+            ),
             buffer: context.buffer.slice(1),
           },
           consumed: context.buffer.slice(0, 1),
@@ -697,7 +762,7 @@ export function option<M extends Mode, T>(
       };
     },
     complete(
-      state: ValueParserResult<T | boolean> | undefined,
+      state: ValueParserResult<T | boolean> | DeferredParseState<T> | undefined,
     ) {
       if (state == null) {
         return valueParser == null ? { success: true, value: false } : {
@@ -707,6 +772,33 @@ export function option<M extends Mode, T>(
               ? options.errors.missing(optionNames)
               : options.errors.missing)
             : message`Missing option ${eOptionNames(optionNames)}.`,
+        };
+      }
+      // Handle DeferredParseState: use preliminary result for now.
+      // Actual resolution with real dependency values happens at object() level.
+      if (isDeferredParseState<T>(state)) {
+        const preliminaryResult = state.preliminaryResult;
+        if (preliminaryResult.success) return preliminaryResult;
+        return {
+          success: false,
+          error: options.errors?.invalidValue
+            ? (typeof options.errors.invalidValue === "function"
+              ? options.errors.invalidValue(preliminaryResult.error)
+              : options.errors.invalidValue)
+            : message`${eOptionNames(optionNames)}: ${preliminaryResult.error}`,
+        };
+      }
+      // Handle DependencySourceState: extract the underlying result.
+      if (isDependencySourceState<T | boolean>(state)) {
+        const result = state.result;
+        if (result.success) return result;
+        return {
+          success: false,
+          error: options.errors?.invalidValue
+            ? (typeof options.errors.invalidValue === "function"
+              ? options.errors.invalidValue(result.error)
+              : options.errors.invalidValue)
+            : message`${eOptionNames(optionNames)}: ${result.error}`,
         };
       }
       if (state.success) return state;
@@ -1252,7 +1344,8 @@ export function argument<M extends Mode, T>(
         };
       }
 
-      const parseResultOrPromise = valueParser.parse(context.buffer[i]);
+      const rawInput = context.buffer[i];
+      const parseResultOrPromise = valueParser.parse(rawInput);
       if (isAsync) {
         return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
           (parseResult) => ({
@@ -1260,7 +1353,7 @@ export function argument<M extends Mode, T>(
             next: {
               ...context,
               buffer: context.buffer.slice(i + 1),
-              state: parseResult,
+              state: createOptionParseState(rawInput, valueParser, parseResult),
               optionsTerminated,
             },
             consumed: context.buffer.slice(0, i + 1),
@@ -1272,13 +1365,17 @@ export function argument<M extends Mode, T>(
         next: {
           ...context,
           buffer: context.buffer.slice(i + 1),
-          state: parseResultOrPromise as ValueParserResult<T>,
+          state: createOptionParseState(
+            rawInput,
+            valueParser,
+            parseResultOrPromise as ValueParserResult<T>,
+          ),
           optionsTerminated,
         },
         consumed: context.buffer.slice(0, i + 1),
       };
     },
-    complete(state: ValueParserResult<T> | undefined) {
+    complete(state: ValueParserResult<T> | DeferredParseState<T> | undefined) {
       if (state == null) {
         return {
           success: false,
@@ -1287,7 +1384,37 @@ export function argument<M extends Mode, T>(
               metavar(valueParser.metavar)
             }, but too few arguments.`,
         };
-      } else if (state.success) return state;
+      }
+      // Handle DeferredParseState: use preliminary result for now.
+      // Actual resolution with real dependency values happens at object() level.
+      if (isDeferredParseState<T>(state)) {
+        const preliminaryResult = state.preliminaryResult;
+        if (preliminaryResult.success) return preliminaryResult;
+        return {
+          success: false,
+          error: options.errors?.invalidValue
+            ? (typeof options.errors.invalidValue === "function"
+              ? options.errors.invalidValue(preliminaryResult.error)
+              : options.errors.invalidValue)
+            : message`${
+              metavar(valueParser.metavar)
+            }: ${preliminaryResult.error}`,
+        };
+      }
+      // Handle DependencySourceState: extract the underlying result.
+      if (isDependencySourceState<T>(state)) {
+        const result = state.result;
+        if (result.success) return result;
+        return {
+          success: false,
+          error: options.errors?.invalidValue
+            ? (typeof options.errors.invalidValue === "function"
+              ? options.errors.invalidValue(result.error)
+              : options.errors.invalidValue)
+            : message`${metavar(valueParser.metavar)}: ${result.error}`,
+        };
+      }
+      if (state.success) return state;
       return {
         success: false,
         error: options.errors?.invalidValue

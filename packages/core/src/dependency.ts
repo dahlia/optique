@@ -1,3 +1,4 @@
+import type { Message } from "./message.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import type { Mode, Suggestion } from "./parser.ts";
 import type { ValueParser, ValueParserResult } from "./valueparser.ts";
@@ -28,6 +29,14 @@ export const DerivedValueParserMarker: unique symbol = Symbol.for(
  */
 export const DependencyId: unique symbol = Symbol.for(
   "@optique/core/dependency/DependencyId",
+);
+
+/**
+ * A unique symbol used to access the parseWithDependency method on derived parsers.
+ * @since 0.10.0
+ */
+export const ParseWithDependency: unique symbol = Symbol.for(
+  "@optique/core/dependency/ParseWithDependency",
 );
 
 /**
@@ -227,6 +236,20 @@ export interface DerivedValueParser<
    * @internal
    */
   readonly [DependencyId]: symbol;
+
+  /**
+   * Parses the input using the actual dependency value instead of the default.
+   * This method is used during dependency resolution in `complete()`.
+   *
+   * @param input The raw input string to parse.
+   * @param dependencyValue The resolved dependency value.
+   * @returns The parse result.
+   * @internal
+   */
+  readonly [ParseWithDependency]: (
+    input: string,
+    dependencyValue: S,
+  ) => ValueParserResult<T> | Promise<ValueParserResult<T>>;
 }
 
 /**
@@ -385,6 +408,16 @@ function createSyncDerivedFromParser<
       return derivedParser.parse(input);
     },
 
+    [ParseWithDependency](
+      input: string,
+      dependencyValue: DependencyValues<Deps>,
+    ): ValueParserResult<T> {
+      const derivedParser = options.factory(
+        ...(dependencyValue as DependencyValues<Deps>),
+      );
+      return derivedParser.parse(input);
+    },
+
     format(value: T): string {
       const sourceValues = options.defaultValues();
       const derivedParser = options.factory(
@@ -422,6 +455,16 @@ function createAsyncDerivedFromParser<
       const sourceValues = options.defaultValues();
       const derivedParser = options.factory(
         ...(sourceValues as DependencyValues<Deps>),
+      );
+      return Promise.resolve(derivedParser.parse(input));
+    },
+
+    [ParseWithDependency](
+      input: string,
+      dependencyValue: DependencyValues<Deps>,
+    ): Promise<ValueParserResult<T>> {
+      const derivedParser = options.factory(
+        ...(dependencyValue as DependencyValues<Deps>),
       );
       return Promise.resolve(derivedParser.parse(input));
     },
@@ -482,6 +525,14 @@ function createSyncDerivedParser<S, T>(
       return derivedParser.parse(input);
     },
 
+    [ParseWithDependency](
+      input: string,
+      dependencyValue: S,
+    ): ValueParserResult<T> {
+      const derivedParser = options.factory(dependencyValue);
+      return derivedParser.parse(input);
+    },
+
     format(value: T): string {
       const sourceValue = options.defaultValue();
       const derivedParser = options.factory(sourceValue);
@@ -514,6 +565,14 @@ function createAsyncDerivedParser<S, T>(
       return Promise.resolve(derivedParser.parse(input));
     },
 
+    [ParseWithDependency](
+      input: string,
+      dependencyValue: S,
+    ): Promise<ValueParserResult<T>> {
+      const derivedParser = options.factory(dependencyValue);
+      return Promise.resolve(derivedParser.parse(input));
+    },
+
     format(value: T): string {
       const sourceValue = options.defaultValue();
       const derivedParser = options.factory(sourceValue);
@@ -528,4 +587,290 @@ function createAsyncDerivedParser<S, T>(
       }
     },
   };
+}
+
+// =============================================================================
+// Deferred Parsing Types and Functions
+// =============================================================================
+
+/**
+ * A unique symbol used to identify deferred parse states.
+ * @since 0.10.0
+ */
+export const DeferredParseMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/DeferredParseMarker",
+);
+
+/**
+ * Represents a deferred parse state for a DerivedValueParser.
+ *
+ * When a DerivedValueParser is used in an option or argument, the raw
+ * input string is stored along with the parser reference. The actual
+ * parsing is deferred until `complete()` time when all dependencies
+ * have been resolved.
+ *
+ * @template T The type of value this parser will produce after resolution.
+ * @since 0.10.0
+ */
+export interface DeferredParseState<T = unknown> {
+  /**
+   * Marker to identify this as a deferred parse state.
+   */
+  readonly [DeferredParseMarker]: true;
+
+  /**
+   * The raw input string to be parsed.
+   */
+  readonly rawInput: string;
+
+  /**
+   * The DerivedValueParser that will parse the input.
+   */
+  readonly parser: DerivedValueParser<Mode, T, unknown>;
+
+  /**
+   * The dependency ID that this parser depends on.
+   */
+  readonly dependencyId: symbol;
+
+  /**
+   * The preliminary parse result using the default dependency value.
+   * This is used as a fallback if dependency resolution is not needed
+   * or if the dependency was not provided.
+   */
+  readonly preliminaryResult: ValueParserResult<T>;
+}
+
+/**
+ * Checks if a value is a {@link DeferredParseState}.
+ *
+ * @param value The value to check.
+ * @returns `true` if the value is a deferred parse state, `false` otherwise.
+ * @since 0.10.0
+ */
+export function isDeferredParseState<T>(
+  value: unknown,
+): value is DeferredParseState<T> {
+  return typeof value === "object" &&
+    value !== null &&
+    DeferredParseMarker in value &&
+    (value as DeferredParseState)[DeferredParseMarker] === true;
+}
+
+/**
+ * Creates a deferred parse state for a DerivedValueParser.
+ *
+ * @template T The type of value the parser will produce.
+ * @template S The type of the source dependency value.
+ * @param rawInput The raw input string to be parsed.
+ * @param parser The DerivedValueParser that will parse the input.
+ * @param preliminaryResult The parse result using default dependency value.
+ * @returns A DeferredParseState object.
+ * @since 0.10.0
+ */
+export function createDeferredParseState<T, S>(
+  rawInput: string,
+  parser: DerivedValueParser<Mode, T, S>,
+  preliminaryResult: ValueParserResult<T>,
+): DeferredParseState<T> {
+  return {
+    [DeferredParseMarker]: true,
+    rawInput,
+    parser: parser as DerivedValueParser<Mode, T, unknown>,
+    dependencyId: parser[DependencyId],
+    preliminaryResult,
+  };
+}
+
+/**
+ * A unique symbol used to identify dependency source parse states.
+ * @since 0.10.0
+ */
+export const DependencySourceStateMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/DependencySourceStateMarker",
+);
+
+/**
+ * Represents a parse state from a DependencySource.
+ * This wraps the normal ValueParserResult with the dependency ID so that
+ * it can be matched with DeferredParseState during resolution.
+ *
+ * @template T The type of value this state contains.
+ * @since 0.10.0
+ */
+export interface DependencySourceState<T = unknown> {
+  /**
+   * Marker to identify this as a dependency source state.
+   */
+  readonly [DependencySourceStateMarker]: true;
+
+  /**
+   * The dependency ID of the source.
+   */
+  readonly [DependencyId]: symbol;
+
+  /**
+   * The underlying parse result.
+   */
+  readonly result: ValueParserResult<T>;
+}
+
+/**
+ * Checks if a value is a {@link DependencySourceState}.
+ *
+ * @param value The value to check.
+ * @returns `true` if the value is a dependency source state, `false` otherwise.
+ * @since 0.10.0
+ */
+export function isDependencySourceState<T>(
+  value: unknown,
+): value is DependencySourceState<T> {
+  return typeof value === "object" &&
+    value !== null &&
+    DependencySourceStateMarker in value &&
+    (value as DependencySourceState)[DependencySourceStateMarker] === true;
+}
+
+/**
+ * Creates a dependency source state from a parse result.
+ *
+ * @template T The type of value the state contains.
+ * @param result The parse result.
+ * @param dependencyId The dependency ID.
+ * @returns A DependencySourceState object.
+ * @since 0.10.0
+ */
+export function createDependencySourceState<T>(
+  result: ValueParserResult<T>,
+  dependencyId: symbol,
+): DependencySourceState<T> {
+  return {
+    [DependencySourceStateMarker]: true,
+    [DependencyId]: dependencyId,
+    result,
+  };
+}
+
+/**
+ * Represents a resolved dependency value stored during parsing.
+ * @since 0.10.0
+ */
+export interface ResolvedDependency<T = unknown> {
+  /**
+   * The dependency ID.
+   */
+  readonly id: symbol;
+
+  /**
+   * The resolved value.
+   */
+  readonly value: T;
+}
+
+/**
+ * A registry for storing resolved dependency values during parsing.
+ * This is used to pass dependency values from DependencySource options
+ * to DerivedValueParser options.
+ * @since 0.10.0
+ */
+export class DependencyRegistry {
+  private readonly values = new Map<symbol, unknown>();
+
+  /**
+   * Registers a resolved dependency value.
+   * @param id The dependency ID.
+   * @param value The resolved value.
+   */
+  set<T>(id: symbol, value: T): void {
+    this.values.set(id, value);
+  }
+
+  /**
+   * Gets a resolved dependency value.
+   * @param id The dependency ID.
+   * @returns The resolved value, or undefined if not found.
+   */
+  get<T>(id: symbol): T | undefined {
+    return this.values.get(id) as T | undefined;
+  }
+
+  /**
+   * Checks if a dependency has been resolved.
+   * @param id The dependency ID.
+   * @returns `true` if the dependency has been resolved.
+   */
+  has(id: symbol): boolean {
+    return this.values.has(id);
+  }
+
+  /**
+   * Creates a copy of the registry.
+   */
+  clone(): DependencyRegistry {
+    const copy = new DependencyRegistry();
+    for (const [id, value] of this.values) {
+      copy.values.set(id, value);
+    }
+    return copy;
+  }
+}
+
+/**
+ * Error types for dependency resolution failures.
+ * @since 0.10.0
+ */
+export type DependencyError =
+  | {
+    /**
+     * The dependency was used in multiple locations.
+     */
+    readonly kind: "duplicate";
+    readonly dependencyId: symbol;
+    readonly locations: readonly string[];
+  }
+  | {
+    /**
+     * A derived parser references a dependency that was not provided.
+     */
+    readonly kind: "unresolved";
+    readonly dependencyId: symbol;
+    readonly derivedParserMetavar: string;
+  }
+  | {
+    /**
+     * Circular dependency detected.
+     */
+    readonly kind: "circular";
+    readonly cycle: readonly symbol[];
+  };
+
+/**
+ * Formats a {@link DependencyError} into a human-readable {@link Message}.
+ *
+ * @param error The dependency error to format.
+ * @returns A Message describing the error.
+ * @since 0.10.0
+ */
+export function formatDependencyError(error: DependencyError): Message {
+  switch (error.kind) {
+    case "duplicate":
+      return [
+        {
+          type: "text" as const,
+          text: `Dependency used in multiple locations: ${
+            error.locations.join(", ")
+          }.`,
+        },
+      ];
+    case "unresolved":
+      return [
+        {
+          type: "text" as const,
+          text:
+            `Unresolved dependency for ${error.derivedParserMetavar}: the dependency was not provided.`,
+        },
+      ];
+    case "circular":
+      return [{ type: "text" as const, text: `Circular dependency detected.` }];
+  }
 }

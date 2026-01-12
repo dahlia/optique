@@ -1,3 +1,11 @@
+import {
+  type DeferredParseState,
+  DependencyId,
+  DependencyRegistry,
+  isDeferredParseState,
+  isDependencySourceState,
+  ParseWithDependency,
+} from "./dependency.ts";
 import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
 import {
   type Message,
@@ -2102,6 +2110,131 @@ async function* suggestObjectAsync<
 }
 
 /**
+ * Resolves deferred parse states in an object's field states.
+ * This function builds a dependency registry from DependencySourceState fields
+ * and re-parses DeferredParseState fields using the actual dependency values.
+ *
+ * @param fieldStates A record of field names to their state values
+ * @returns The field states with deferred states resolved to their actual values
+ * @internal
+ */
+function resolveDeferredParseStates(
+  fieldStates: Record<string | symbol, unknown>,
+): Record<string | symbol, unknown> {
+  // First pass: Build dependency registry from DependencySourceState fields
+  const registry = new DependencyRegistry();
+
+  for (const key of Reflect.ownKeys(fieldStates)) {
+    const fieldState = fieldStates[key];
+
+    // Check if this is a DependencySourceState
+    if (isDependencySourceState(fieldState)) {
+      const depId = fieldState[DependencyId];
+      const result = fieldState.result;
+      if (result.success) {
+        registry.set(depId, result.value);
+      }
+    }
+  }
+
+  // Second pass: Resolve DeferredParseState fields
+  const resolvedStates: Record<string | symbol, unknown> = { ...fieldStates };
+
+  for (const key of Reflect.ownKeys(fieldStates)) {
+    const fieldState = fieldStates[key];
+
+    if (isDeferredParseState(fieldState)) {
+      const deferredState = fieldState as DeferredParseState<unknown>;
+      const depId = deferredState.dependencyId;
+
+      // Check if dependency is available in registry
+      if (registry.has(depId)) {
+        const dependencyValue = registry.get(depId);
+
+        // Re-parse using ParseWithDependency
+        const parser = deferredState.parser;
+        const reParseResult = parser[ParseWithDependency](
+          deferredState.rawInput,
+          dependencyValue,
+        );
+
+        // Handle sync vs async result
+        // For now, assume sync since we're in sync complete()
+        // If reParseResult is a Promise, we'd need async handling
+        if (reParseResult instanceof Promise) {
+          // For async, we'd need to handle this differently
+          // For now, use preliminary result
+          resolvedStates[key] = deferredState.preliminaryResult;
+        } else {
+          resolvedStates[key] = reParseResult;
+        }
+      } else {
+        // Dependency not found, use preliminary result (default value)
+        resolvedStates[key] = deferredState.preliminaryResult;
+      }
+    }
+  }
+
+  return resolvedStates;
+}
+
+/**
+ * Async version of resolveDeferredParseStates for async parsers.
+ * @internal
+ */
+async function resolveDeferredParseStatesAsync(
+  fieldStates: Record<string | symbol, unknown>,
+): Promise<Record<string | symbol, unknown>> {
+  // First pass: Build dependency registry from DependencySourceState fields
+  const registry = new DependencyRegistry();
+
+  for (const key of Reflect.ownKeys(fieldStates)) {
+    const fieldState = fieldStates[key];
+
+    // Check if this is a DependencySourceState
+    if (isDependencySourceState(fieldState)) {
+      const depId = fieldState[DependencyId];
+      const result = fieldState.result;
+      if (result.success) {
+        registry.set(depId, result.value);
+      }
+    }
+  }
+
+  // Second pass: Resolve DeferredParseState fields
+  const resolvedStates: Record<string | symbol, unknown> = { ...fieldStates };
+
+  for (const key of Reflect.ownKeys(fieldStates)) {
+    const fieldState = fieldStates[key];
+
+    if (isDeferredParseState(fieldState)) {
+      const deferredState = fieldState as DeferredParseState<unknown>;
+      const depId = deferredState.dependencyId;
+
+      // Check if dependency is available in registry
+      if (registry.has(depId)) {
+        const dependencyValue = registry.get(depId);
+
+        // Re-parse using ParseWithDependency
+        const parser = deferredState.parser;
+        const reParseResult = parser[ParseWithDependency](
+          deferredState.rawInput,
+          dependencyValue,
+        );
+
+        // Handle both sync and async results
+        resolvedStates[key] = await Promise.resolve(reParseResult);
+      } else {
+        // Dependency not found, use preliminary result (default value)
+        resolvedStates[key] = deferredState.preliminaryResult;
+      }
+    }
+  }
+
+  return resolvedStates;
+}
+
+/**
  * Creates a parser that combines multiple parsers into a single object parser.
  * Each parser in the object is applied to parse different parts of the input,
  * and the results are combined into an object with the same structure.
@@ -2519,6 +2652,11 @@ export function object<
       return parseSync(context);
     },
     complete(state: { readonly [K in keyof T]: unknown }) {
+      // First, resolve any deferred parse states with actual dependency values
+      const resolvedState = isAsync
+        ? state // Async resolution happens below
+        : resolveDeferredParseStates(state as Record<string | symbol, unknown>);
+
       // For sync mode, complete synchronously
       if (!isAsync) {
         const result: { [K in keyof T]: T[K]["$valueType"][number] } =
@@ -2528,7 +2666,7 @@ export function object<
           const valueResult = (
             parsers[field] as Parser<"sync", unknown, unknown>
           ).complete(
-            (state as Record<string | symbol, unknown>)[
+            (resolvedState as Record<string | symbol, unknown>)[
               field as string | symbol
             ],
           );
@@ -2543,12 +2681,17 @@ export function object<
 
       // For async mode, complete asynchronously
       return (async () => {
+        // First, resolve any deferred parse states with actual dependency values
+        const resolvedState = await resolveDeferredParseStatesAsync(
+          state as Record<string | symbol, unknown>,
+        );
+
         const result: { [K in keyof T]: T[K]["$valueType"][number] } =
           // deno-lint-ignore no-explicit-any
           {} as any;
         for (const field of parserKeys) {
           const valueResult = await parsers[field].complete(
-            (state as Record<string | symbol, unknown>)[
+            (resolvedState as Record<string | symbol, unknown>)[
               field as string | symbol
             ],
           );
