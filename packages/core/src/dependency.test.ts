@@ -9,13 +9,120 @@ import {
   DependencySourceMarker,
   DerivedValueParserMarker,
   deriveFrom,
+  deriveFromAsync,
+  deriveFromSync,
   formatDependencyError,
   isDeferredParseState,
   isDependencySource,
   isDerivedValueParser,
   ParseWithDependency,
 } from "./dependency.ts";
-import { choice, string } from "./valueparser.ts";
+import { message } from "./message.ts";
+import type { NonEmptyString } from "./nonempty.ts";
+import { parseAsync, parseSync, type Suggestion } from "./parser.ts";
+import {
+  choice,
+  string,
+  type ValueParser,
+  type ValueParserResult,
+} from "./valueparser.ts";
+import { object } from "./constructs.ts";
+import { option } from "./primitives.ts";
+import { map, multiple, optional, withDefault } from "./modifiers.ts";
+
+// =============================================================================
+// Test Helpers: Async Value Parsers
+// =============================================================================
+
+/**
+ * Creates an async string parser that transforms input to uppercase.
+ * Optionally delays to simulate async operations.
+ */
+function _asyncString(delay = 0): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "ASYNC_STRING" as NonEmptyString,
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+      return { success: true, value: input.toUpperCase() };
+    },
+    format(value: string): string {
+      return value.toLowerCase();
+    },
+  };
+}
+
+/**
+ * Creates an async choice parser that validates against allowed values.
+ */
+function asyncChoice<T extends string>(
+  choices: readonly T[],
+  delay = 0,
+): ValueParser<"async", T> {
+  return {
+    $mode: "async",
+    metavar: "ASYNC_CHOICE" as NonEmptyString,
+    async parse(input: string): Promise<ValueParserResult<T>> {
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+      if (choices.includes(input as T)) {
+        return { success: true, value: input as T };
+      }
+      return {
+        success: false,
+        error: message`Must be one of: ${choices.join(", ")}`,
+      };
+    },
+    format(value: T): string {
+      return value;
+    },
+    async *suggest(prefix: string): AsyncIterable<Suggestion> {
+      for (const c of choices) {
+        if (c.startsWith(prefix)) {
+          yield { kind: "literal", text: c };
+        }
+      }
+    },
+  };
+}
+
+/**
+ * Creates an async parser that always fails.
+ */
+function asyncFailingParser(errorMsg: string): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "FAIL" as NonEmptyString,
+    parse(_input: string): Promise<ValueParserResult<string>> {
+      return Promise.resolve({
+        success: false,
+        error: message`${errorMsg}`,
+      });
+    },
+    format(value: string): string {
+      return value;
+    },
+  };
+}
+
+/**
+ * Creates an async parser that throws/rejects.
+ */
+function asyncThrowingParser(errorMsg: string): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "THROW" as NonEmptyString,
+    parse(_input: string): Promise<ValueParserResult<string>> {
+      return Promise.reject(new Error(errorMsg));
+    },
+    format(value: string): string {
+      return value;
+    },
+  };
+}
 
 describe("dependency()", () => {
   test("creates a DependencySource from a ValueParser", () => {
@@ -470,10 +577,6 @@ describe("formatDependencyError", () => {
   });
 });
 
-import { object } from "./constructs.ts";
-import { parseSync } from "./parser.ts";
-import { option } from "./primitives.ts";
-
 describe("Integration: End-to-end dependency resolution", () => {
   test("option with DerivedValueParser uses actual dependency value from DependencySource", () => {
     // Create a dependency source for mode selection
@@ -673,5 +776,1065 @@ describe("ParseWithDependency", () => {
     if ("value" in result3) {
       assert.equal(result3.value, "/custom/prod.yaml");
     }
+  });
+});
+
+// =============================================================================
+// Async Factory Tests
+// =============================================================================
+
+describe("derive() with async factory", () => {
+  test("sync source + async factory → async derived parser", () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // Derived parser should be async
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("async source + sync factory → async derived parser", () => {
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // Derived parser should be async (source is async)
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("async source + async factory → async derived parser", () => {
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("async factory parse returns Promise", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const result = derived.parse("debug");
+    // Result should be a Promise
+    assert.ok(result instanceof Promise);
+
+    const resolved = await result;
+    assert.ok(resolved.success);
+    if (resolved.success) {
+      assert.equal(resolved.value, "debug");
+    }
+  });
+
+  test("async factory rejects invalid input", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // "quiet" is not valid for default mode "dev"
+    const result = await derived.parse("quiet");
+    assert.ok(!result.success);
+  });
+});
+
+describe("deriveSync()", () => {
+  test("sync source + sync factory → sync derived parser", () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    assert.equal(derived.$mode, "sync");
+  });
+
+  test("async source + sync factory → async derived parser", () => {
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // Even with sync factory, async source makes it async
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("deriveSync parse works correctly", () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const result = derived.parse("debug");
+    // Sync result, not a Promise
+    assert.ok(!("then" in result));
+    assert.ok(result.success);
+  });
+});
+
+describe("deriveAsync()", () => {
+  test("sync source + async factory → async derived parser", () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.deriveAsync({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("async source + async factory → async derived parser", () => {
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = modeParser.deriveAsync({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("deriveAsync parse returns Promise and works correctly", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = modeParser.deriveAsync({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const result = await derived.parse("verbose");
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "verbose");
+    }
+  });
+});
+
+// =============================================================================
+// deriveFrom Async Factory Tests
+// =============================================================================
+
+describe("deriveFrom() with async factory", () => {
+  test("sync sources + async factory → async derived parser", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFrom({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev" ? ["debug", "verbose"] : ["quiet", "silent"],
+        ),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("mixed sync/async sources + sync factory → async derived parser", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = deriveFrom({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "dev" | "prod") =>
+        choice(mode === "dev" ? ["debug", "verbose"] : ["quiet", "silent"]),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    // Even with sync factory, async source makes it async
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("async factory parse returns Promise", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFrom({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev" ? ["debug", "verbose"] : ["quiet", "silent"],
+        ),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    const result = derived.parse("debug");
+    assert.ok(result instanceof Promise);
+
+    const resolved = await result;
+    assert.ok(resolved.success);
+  });
+});
+
+describe("deriveFromSync()", () => {
+  test("sync sources + sync factory → sync derived parser", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "dev" | "prod") =>
+        choice(mode === "dev" ? ["debug", "verbose"] : ["quiet", "silent"]),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    assert.equal(derived.$mode, "sync");
+  });
+
+  test("mixed sync/async sources + sync factory → async derived parser", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+
+    const derived = deriveFromSync({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "dev" | "prod") =>
+        choice(mode === "dev" ? ["debug", "verbose"] : ["quiet", "silent"]),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    // Async source makes it async even with sync factory
+    assert.equal(derived.$mode, "async");
+  });
+});
+
+describe("deriveFromAsync()", () => {
+  test("sync sources + async factory → async derived parser", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFromAsync({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev" ? ["debug", "verbose"] : ["quiet", "silent"],
+        ),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    assert.equal(derived.$mode, "async");
+  });
+
+  test("deriveFromAsync parse works correctly", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFromAsync({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev" ? ["debug", "verbose"] : ["quiet", "silent"],
+        ),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    const result = await derived.parse("verbose");
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "verbose");
+    }
+  });
+});
+
+// =============================================================================
+// Integration Tests: object() and parseAsync()
+// =============================================================================
+
+describe("Integration: Async derived parser with object() and parseAsync()", () => {
+  test("object with async derived parser becomes async", () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // The combined parser should be async
+    assert.equal(parser.$mode, "async");
+  });
+
+  test("parseAsync with async derived parser works correctly", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Test: prod mode with quiet log level
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--log-level",
+      "quiet",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "prod");
+      assert.equal(result1.value.logLevel, "quiet");
+    }
+
+    // Test: dev mode with debug log level
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--log-level",
+      "debug",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "dev");
+      assert.equal(result2.value.logLevel, "debug");
+    }
+  });
+
+  test("parseAsync with options in reverse order", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Log level before mode - dependency resolution should still work
+    const result = await parseAsync(parser, [
+      "--log-level",
+      "silent",
+      "--mode",
+      "prod",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "prod");
+      assert.equal(result.value.logLevel, "silent");
+    }
+  });
+
+  test("parseAsync rejects invalid dependency combination", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // prod mode with debug (invalid - debug is only for dev)
+    const result = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--log-level",
+      "debug",
+    ]);
+    assert.ok(!result.success);
+  });
+
+  test("async derived parser with async source dependency", async () => {
+    // Both source and factory are async
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    const result = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--log-level",
+      "quiet",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "prod");
+      assert.equal(result.value.logLevel, "quiet");
+    }
+  });
+});
+
+// =============================================================================
+// Complex Combination Tests
+// =============================================================================
+
+describe("Complex combinations with async derived parser", () => {
+  test("optional() with async derived parser", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: optional(option("--log-level", logLevelParser)),
+    });
+
+    // Without --log-level
+    const result1 = await parseAsync(parser, ["--mode", "prod"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "prod");
+      assert.equal(result1.value.logLevel, undefined);
+    }
+
+    // With --log-level
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--log-level",
+      "quiet",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "prod");
+      assert.equal(result2.value.logLevel, "quiet");
+    }
+  });
+
+  test("withDefault() with async derived parser", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: withDefault(option("--mode", modeParser), "dev" as const),
+      logLevel: withDefault(
+        option("--log-level", logLevelParser),
+        "debug" as "debug" | "verbose" | "quiet" | "silent",
+      ),
+    });
+
+    // Both default
+    const result1 = await parseAsync(parser, []);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "dev");
+      assert.equal(result1.value.logLevel, "debug");
+    }
+
+    // Only mode provided
+    const result2 = await parseAsync(parser, ["--mode", "prod"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "prod");
+      assert.equal(result2.value.logLevel, "debug");
+    }
+  });
+
+  test("multiple() with async derived parser", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevels: multiple(option("--log-level", logLevelParser)),
+    });
+
+    const result = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--log-level",
+      "debug",
+      "--log-level",
+      "verbose",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "dev");
+      assert.deepEqual(result.value.logLevels, ["debug", "verbose"]);
+    }
+  });
+
+  test("map() chain with async derived parser", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: map(
+        option("--log-level", logLevelParser),
+        (level) => level.toUpperCase(),
+      ),
+    });
+
+    const result = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--log-level",
+      "debug",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "dev");
+      assert.equal(result.value.logLevel, "DEBUG");
+    }
+  });
+
+  test("nested optional with async derived parser", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: optional(option("--mode", modeParser)),
+      logLevel: optional(option("--log-level", logLevelParser)),
+    });
+
+    // Both optional, neither provided
+    const result1 = await parseAsync(parser, []);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, undefined);
+      assert.equal(result1.value.logLevel, undefined);
+    }
+
+    // Only log-level provided (uses default dependency value "dev")
+    const result2 = await parseAsync(parser, ["--log-level", "debug"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, undefined);
+      assert.equal(result2.value.logLevel, "debug");
+    }
+  });
+});
+
+// =============================================================================
+// Concurrency Tests
+// =============================================================================
+
+describe("Concurrency: async derived parser", () => {
+  test("multiple concurrent parseAsync calls are independent", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+          5, // 5ms delay
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Run multiple parses concurrently
+    const results = await Promise.all([
+      parseAsync(parser, ["--mode", "dev", "--log-level", "debug"]),
+      parseAsync(parser, ["--mode", "prod", "--log-level", "quiet"]),
+      parseAsync(parser, ["--mode", "dev", "--log-level", "verbose"]),
+    ]);
+
+    // All should succeed with their respective values
+    assert.ok(results[0].success);
+    if (results[0].success) {
+      assert.equal(results[0].value.mode, "dev");
+      assert.equal(results[0].value.logLevel, "debug");
+    }
+
+    assert.ok(results[1].success);
+    if (results[1].success) {
+      assert.equal(results[1].value.mode, "prod");
+      assert.equal(results[1].value.logLevel, "quiet");
+    }
+
+    assert.ok(results[2].success);
+    if (results[2].success) {
+      assert.equal(results[2].value.mode, "dev");
+      assert.equal(results[2].value.logLevel, "verbose");
+    }
+  });
+
+  test("parser reuse produces consistent results", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Same parser, multiple uses
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--log-level",
+      "debug",
+    ]);
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--log-level",
+      "silent",
+    ]);
+    const result3 = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--log-level",
+      "verbose",
+    ]);
+
+    assert.ok(result1.success && result2.success && result3.success);
+  });
+});
+
+// =============================================================================
+// Error Handling Tests
+// =============================================================================
+
+describe("Error handling with async derived parser", () => {
+  test("async factory returning failing parser", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const errorParser = modeParser.derive({
+      metavar: "VALUE",
+      factory: (_mode: "dev" | "prod") => asyncFailingParser("Always fails"),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      value: option("--value", errorParser),
+    });
+
+    const result = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--value",
+      "anything",
+    ]);
+    assert.ok(!result.success);
+  });
+
+  test("async factory returning throwing parser propagates error", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const throwingParser = modeParser.derive({
+      metavar: "VALUE",
+      factory: (_mode: "dev" | "prod") =>
+        asyncThrowingParser("Async parser error"),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      value: option("--value", throwingParser),
+    });
+
+    await assert.rejects(
+      async () =>
+        await parseAsync(parser, ["--mode", "dev", "--value", "anything"]),
+      { message: "Async parser error" },
+    );
+  });
+
+  test("dependency not provided uses default value correctly", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const, // Default is "dev"
+    });
+
+    // Parser without mode option
+    const parser = object({
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Should use default "dev" and accept "debug"
+    const result = await parseAsync(parser, ["--log-level", "debug"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.logLevel, "debug");
+    }
+  });
+
+  test("invalid value for default dependency mode fails", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const, // Default is "dev"
+    });
+
+    // Parser without mode option
+    const parser = object({
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // "quiet" is only valid for prod, but default is dev
+    const result = await parseAsync(parser, ["--log-level", "quiet"]);
+    assert.ok(!result.success);
+  });
+});
+
+// =============================================================================
+// ParseWithDependency Async Tests
+// =============================================================================
+
+describe("ParseWithDependency with async derived parser", () => {
+  test("async derived parser ParseWithDependency returns Promise", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // ParseWithDependency should return a Promise for async derived parser
+    const result = derived[ParseWithDependency]("quiet", "prod");
+    assert.ok(result instanceof Promise);
+
+    const resolved = await result;
+    assert.ok(resolved.success);
+    if (resolved.success) {
+      assert.equal(resolved.value, "quiet");
+    }
+  });
+
+  test("ParseWithDependency with actual dependency value validates correctly", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // With "prod" dependency, "quiet" should be valid
+    const result1 = await derived[ParseWithDependency]("quiet", "prod");
+    assert.ok(result1.success);
+
+    // With "prod" dependency, "debug" should be invalid
+    const result2 = await derived[ParseWithDependency]("debug", "prod");
+    assert.ok(!result2.success);
+
+    // With "dev" dependency, "debug" should be valid
+    const result3 = await derived[ParseWithDependency]("debug", "dev");
+    assert.ok(result3.success);
+  });
+
+  test("deriveFrom async ParseWithDependency works correctly", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFrom({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (dir: string, mode: "dev" | "prod") =>
+        asyncChoice([`${dir}/${mode}.json`, `${dir}/${mode}.yaml`]),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    // With default values, "/config/dev.json" is valid
+    const result1 = await derived.parse("/config/dev.json");
+    assert.ok(result1.success);
+
+    // With custom dependency values via ParseWithDependency
+    const result2 = await derived[ParseWithDependency](
+      "/custom/prod.yaml",
+      ["/custom", "prod"] as const,
+    );
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value, "/custom/prod.yaml");
+    }
+  });
+});
+
+// =============================================================================
+// Suggest Tests with Async
+// =============================================================================
+
+describe("suggest() with async derived parser", () => {
+  test("async derived parser suggest returns AsyncIterable", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    // Should have suggest method
+    assert.ok(derived.suggest !== undefined);
+
+    // Collect suggestions
+    const suggestions: Suggestion[] = [];
+    for await (const suggestion of derived.suggest!("d")) {
+      suggestions.push(suggestion);
+    }
+
+    // With default "dev", should suggest "debug"
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "debug"),
+    );
+  });
+
+  test("async derived parser suggest uses default dependency value", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    // Default is "prod"
+    const derived = modeParser.derive({
+      metavar: "LOG_LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev"
+            ? ["debug", "verbose"] as const
+            : ["quiet", "silent"] as const,
+        ),
+      defaultValue: () => "prod" as const,
+    });
+
+    const suggestions: Suggestion[] = [];
+    for await (const suggestion of derived.suggest!("q")) {
+      suggestions.push(suggestion);
+    }
+
+    // With default "prod", should suggest "quiet"
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "quiet"),
+    );
+  });
+
+  test("deriveFromAsync suggest works correctly", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    const derived = deriveFromAsync({
+      metavar: "CONFIG",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "dev" | "prod") =>
+        asyncChoice(
+          mode === "dev" ? ["debug", "verbose"] : ["quiet", "silent"],
+        ),
+      defaultValues: () => ["/config", "dev"] as const,
+    });
+
+    const suggestions: Suggestion[] = [];
+    for await (const suggestion of derived.suggest!("v")) {
+      suggestions.push(suggestion);
+    }
+
+    // With default "dev", should suggest "verbose"
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "verbose"),
+    );
   });
 });

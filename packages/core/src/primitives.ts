@@ -544,10 +544,16 @@ export function option<M extends Mode, T>(
       // When the input is split by spaces, the first element is the option name
       // E.g., `--option value` or `/O value`
       if ((optionNames as string[]).includes(context.buffer[0])) {
-        if (
-          context.state?.success &&
-          (valueParser != null || context.state.value)
-        ) {
+        // Check for duplicate option - applies to ValueParserResult, DeferredParseState,
+        // and DependencySourceState. For options with value parsers, any non-null state
+        // means we already have a value. For boolean flags, we check state.success && state.value.
+        const hasValue = valueParser != null
+          ? (context.state?.success ||
+            isDeferredParseState(context.state) ||
+            isDependencySourceState(context.state))
+          : (context.state?.success &&
+            (context.state as { value?: boolean })?.value);
+        if (hasValue) {
           return {
             success: false,
             consumed: 1,

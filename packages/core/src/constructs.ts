@@ -2118,64 +2118,207 @@ async function* suggestObjectAsync<
  * @returns The field states with deferred states resolved to their actual values
  * @internal
  */
+/**
+ * Recursively collects dependency values from DependencySourceState objects
+ * found anywhere in the state tree.
+ */
+function collectDependencies(
+  state: unknown,
+  registry: DependencyRegistry,
+): void {
+  if (state === null || state === undefined) return;
+
+  // Check if this is a DependencySourceState
+  if (isDependencySourceState(state)) {
+    const depId = state[DependencyId];
+    const result = state.result;
+    if (result.success) {
+      registry.set(depId, result.value);
+    }
+    return;
+  }
+
+  // Recursively search in arrays
+  if (Array.isArray(state)) {
+    for (const item of state) {
+      collectDependencies(item, registry);
+    }
+    return;
+  }
+
+  // Recursively search in objects (but skip DeferredParseState internals)
+  if (typeof state === "object" && !isDeferredParseState(state)) {
+    for (const key of Reflect.ownKeys(state)) {
+      collectDependencies(
+        (state as Record<string | symbol, unknown>)[key],
+        registry,
+      );
+    }
+  }
+}
+
+/**
+ * Checks if a value is a plain object (created with `{}` or `Object.create(null)`).
+ * Class instances like `Temporal.PlainDate`, `URL`, `Date`, etc. return false.
+ * This is used to determine whether to recursively traverse an object when
+ * resolving deferred parse states - we only want to traverse plain objects
+ * that are part of the parser state structure, not user values.
+ */
+function isPlainObject(
+  value: unknown,
+): value is Record<string | symbol, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Recursively resolves DeferredParseState objects found anywhere in the state tree.
+ * Returns the resolved state (sync version).
+ *
+ * Only traverses:
+ * - DeferredParseState (to resolve it)
+ * - DependencySourceState (skipped, kept as-is)
+ * - Arrays (to find nested deferred states)
+ * - Plain objects (to find nested deferred states in parser state structures)
+ *
+ * Does NOT traverse class instances (e.g., Temporal.PlainDate, URL) since these
+ * are user values that should be preserved as-is.
+ */
+function resolveDeferred(
+  state: unknown,
+  registry: DependencyRegistry,
+): unknown {
+  if (state === null || state === undefined) return state;
+
+  // Check if this is a DeferredParseState - resolve it
+  if (isDeferredParseState(state)) {
+    const deferredState = state as DeferredParseState<unknown>;
+    const depId = deferredState.dependencyId;
+
+    if (registry.has(depId)) {
+      const dependencyValue = registry.get(depId);
+      const parser = deferredState.parser;
+      const reParseResult = parser[ParseWithDependency](
+        deferredState.rawInput,
+        dependencyValue,
+      );
+
+      // Handle sync vs async result
+      if (reParseResult instanceof Promise) {
+        // For async, use preliminary result (will be handled by async version)
+        return deferredState.preliminaryResult;
+      }
+      return reParseResult;
+    }
+    // Dependency not found, use preliminary result
+    return deferredState.preliminaryResult;
+  }
+
+  // Skip DependencySourceState - it's a marker, not something to resolve
+  if (isDependencySourceState(state)) {
+    return state;
+  }
+
+  // Recursively resolve in arrays
+  if (Array.isArray(state)) {
+    return state.map((item) => resolveDeferred(item, registry));
+  }
+
+  // Only traverse plain objects (parser state structures)
+  // Skip class instances (user values like Temporal.PlainDate, URL, etc.)
+  if (isPlainObject(state)) {
+    const resolved: Record<string | symbol, unknown> = {};
+    for (const key of Reflect.ownKeys(state)) {
+      resolved[key] = resolveDeferred(state[key], registry);
+    }
+    return resolved;
+  }
+
+  // Everything else (primitives, class instances) - return as-is
+  return state;
+}
+
 function resolveDeferredParseStates(
   fieldStates: Record<string | symbol, unknown>,
 ): Record<string | symbol, unknown> {
-  // First pass: Build dependency registry from DependencySourceState fields
+  // First pass: Build dependency registry from all DependencySourceState fields
+  // (recursively searching through nested structures)
   const registry = new DependencyRegistry();
+  collectDependencies(fieldStates, registry);
 
-  for (const key of Reflect.ownKeys(fieldStates)) {
-    const fieldState = fieldStates[key];
+  // Second pass: Resolve all DeferredParseState fields recursively
+  return resolveDeferred(fieldStates, registry) as Record<
+    string | symbol,
+    unknown
+  >;
+}
 
-    // Check if this is a DependencySourceState
-    if (isDependencySourceState(fieldState)) {
-      const depId = fieldState[DependencyId];
-      const result = fieldState.result;
-      if (result.success) {
-        registry.set(depId, result.value);
-      }
+/**
+ * Recursively resolves DeferredParseState objects found anywhere in the state tree.
+ * Returns the resolved state (async version).
+ *
+ * Only traverses:
+ * - DeferredParseState (to resolve it)
+ * - DependencySourceState (skipped, kept as-is)
+ * - Arrays (to find nested deferred states)
+ * - Plain objects (to find nested deferred states in parser state structures)
+ *
+ * Does NOT traverse class instances (e.g., Temporal.PlainDate, URL) since these
+ * are user values that should be preserved as-is.
+ */
+async function resolveDeferredAsync(
+  state: unknown,
+  registry: DependencyRegistry,
+): Promise<unknown> {
+  if (state === null || state === undefined) return state;
+
+  // Check if this is a DeferredParseState - resolve it
+  if (isDeferredParseState(state)) {
+    const deferredState = state as DeferredParseState<unknown>;
+    const depId = deferredState.dependencyId;
+
+    if (registry.has(depId)) {
+      const dependencyValue = registry.get(depId);
+      const parser = deferredState.parser;
+      const reParseResult = parser[ParseWithDependency](
+        deferredState.rawInput,
+        dependencyValue,
+      );
+
+      // Handle both sync and async results
+      return Promise.resolve(reParseResult);
     }
+    // Dependency not found, use preliminary result
+    return deferredState.preliminaryResult;
   }
 
-  // Second pass: Resolve DeferredParseState fields
-  const resolvedStates: Record<string | symbol, unknown> = { ...fieldStates };
-
-  for (const key of Reflect.ownKeys(fieldStates)) {
-    const fieldState = fieldStates[key];
-
-    if (isDeferredParseState(fieldState)) {
-      const deferredState = fieldState as DeferredParseState<unknown>;
-      const depId = deferredState.dependencyId;
-
-      // Check if dependency is available in registry
-      if (registry.has(depId)) {
-        const dependencyValue = registry.get(depId);
-
-        // Re-parse using ParseWithDependency
-        const parser = deferredState.parser;
-        const reParseResult = parser[ParseWithDependency](
-          deferredState.rawInput,
-          dependencyValue,
-        );
-
-        // Handle sync vs async result
-        // For now, assume sync since we're in sync complete()
-        // If reParseResult is a Promise, we'd need async handling
-        if (reParseResult instanceof Promise) {
-          // For async, we'd need to handle this differently
-          // For now, use preliminary result
-          resolvedStates[key] = deferredState.preliminaryResult;
-        } else {
-          resolvedStates[key] = reParseResult;
-        }
-      } else {
-        // Dependency not found, use preliminary result (default value)
-        resolvedStates[key] = deferredState.preliminaryResult;
-      }
-    }
+  // Skip DependencySourceState - it's a marker, not something to resolve
+  if (isDependencySourceState(state)) {
+    return state;
   }
 
-  return resolvedStates;
+  // Recursively resolve in arrays
+  if (Array.isArray(state)) {
+    return Promise.all(
+      state.map((item) => resolveDeferredAsync(item, registry)),
+    );
+  }
+
+  // Only traverse plain objects (parser state structures)
+  // Skip class instances (user values like Temporal.PlainDate, URL, etc.)
+  if (isPlainObject(state)) {
+    const resolved: Record<string | symbol, unknown> = {};
+    const keys = Reflect.ownKeys(state);
+    await Promise.all(
+      keys.map(async (key) => {
+        resolved[key] = await resolveDeferredAsync(state[key], registry);
+      }),
+    );
+    return resolved;
+  }
+
+  return state;
 }
 
 /**
@@ -2185,53 +2328,16 @@ function resolveDeferredParseStates(
 async function resolveDeferredParseStatesAsync(
   fieldStates: Record<string | symbol, unknown>,
 ): Promise<Record<string | symbol, unknown>> {
-  // First pass: Build dependency registry from DependencySourceState fields
+  // First pass: Build dependency registry from all DependencySourceState fields
+  // (recursively searching through nested structures)
   const registry = new DependencyRegistry();
+  collectDependencies(fieldStates, registry);
 
-  for (const key of Reflect.ownKeys(fieldStates)) {
-    const fieldState = fieldStates[key];
-
-    // Check if this is a DependencySourceState
-    if (isDependencySourceState(fieldState)) {
-      const depId = fieldState[DependencyId];
-      const result = fieldState.result;
-      if (result.success) {
-        registry.set(depId, result.value);
-      }
-    }
-  }
-
-  // Second pass: Resolve DeferredParseState fields
-  const resolvedStates: Record<string | symbol, unknown> = { ...fieldStates };
-
-  for (const key of Reflect.ownKeys(fieldStates)) {
-    const fieldState = fieldStates[key];
-
-    if (isDeferredParseState(fieldState)) {
-      const deferredState = fieldState as DeferredParseState<unknown>;
-      const depId = deferredState.dependencyId;
-
-      // Check if dependency is available in registry
-      if (registry.has(depId)) {
-        const dependencyValue = registry.get(depId);
-
-        // Re-parse using ParseWithDependency
-        const parser = deferredState.parser;
-        const reParseResult = parser[ParseWithDependency](
-          deferredState.rawInput,
-          dependencyValue,
-        );
-
-        // Handle both sync and async results
-        resolvedStates[key] = await Promise.resolve(reParseResult);
-      } else {
-        // Dependency not found, use preliminary result (default value)
-        resolvedStates[key] = deferredState.preliminaryResult;
-      }
-    }
-  }
-
-  return resolvedStates;
+  // Second pass: Resolve all DeferredParseState fields recursively
+  return await resolveDeferredAsync(fieldStates, registry) as Record<
+    string | symbol,
+    unknown
+  >;
 }
 
 /**
