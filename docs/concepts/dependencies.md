@@ -83,6 +83,63 @@ The `derive()` method takes an options object with three properties:
     dependency option is omitted.
 
 
+Async factory support
+---------------------
+
+The `factory` function can return either a sync or async value parser.
+When the factory returns an async parser, the resulting derived parser
+will also be async:
+
+~~~~ typescript twoslash
+import type { ValueParser } from "@optique/core/valueparser";
+declare function gitRemoteBranch(options: { remote: string }): ValueParser<"async", string>;
+// ---cut-before---
+import { dependency } from "@optique/core/dependency";
+import { string } from "@optique/core/valueparser";
+
+const remoteParser = dependency(string({ metavar: "REMOTE" }));
+
+// Factory returns an async parser - derived parser is also async
+const branchParser = remoteParser.derive({
+  metavar: "BRANCH",
+  factory: (remote) => gitRemoteBranch({ remote }),
+  defaultValue: () => "origin",
+});
+
+// branchParser.$mode is "async"
+~~~~
+
+For explicit control over the factory mode, use `deriveSync()` or
+`deriveAsync()` instead of `derive()`:
+
+~~~~ typescript twoslash
+import { dependency } from "@optique/core/dependency";
+import { choice, string } from "@optique/core/valueparser";
+
+const modeParser = dependency(choice(["dev", "prod"] as const));
+
+// Explicitly sync factory
+const logLevelParser = modeParser.deriveSync({
+  metavar: "LEVEL",
+  factory: (mode) =>
+    choice(mode === "dev"
+      ? ["debug", "info", "warn", "error"]
+      : ["warn", "error"]),
+  defaultValue: () => "dev" as const,
+});
+~~~~
+
+The mode of the resulting derived parser is determined by combining the
+source parser's mode and the factory's return mode:
+
+| Source mode | Factory returns | Result mode |
+| ----------- | --------------- | ----------- |
+| sync        | sync parser     | sync        |
+| sync        | async parser    | async       |
+| async       | sync parser     | async       |
+| async       | async parser    | async       |
+
+
 Using dependencies in parsers
 -----------------------------
 
@@ -242,6 +299,28 @@ const parser = object({
 });
 ~~~~
 
+Like `derive()`, `deriveFrom()` also supports async factories. Use
+`deriveFromSync()` or `deriveFromAsync()` for explicit mode control:
+
+~~~~ typescript twoslash
+import { dependency, deriveFromSync } from "@optique/core/dependency";
+import { choice } from "@optique/core/valueparser";
+
+const envParser = dependency(choice(["local", "staging", "production"] as const));
+const regionParser = dependency(choice(["us", "eu", "asia"] as const));
+
+// Explicitly sync factory
+const serverParser = deriveFromSync({
+  metavar: "SERVER",
+  dependencies: [envParser, regionParser] as const,
+  factory: (env, region) =>
+    choice(env === "local"
+      ? ["localhost"]
+      : [`${env}-${region}-1`, `${env}-${region}-2`]),
+  defaultValues: () => ["local", "us"] as const,
+});
+~~~~
+
 
 Shell completion support
 ------------------------
@@ -298,10 +377,6 @@ The current dependency implementation has some limitations to be aware of:
 
  -  *No nested dependencies*: A derived parser cannot itself be used as a
     dependency source. Dependencies form a single level of relationships.
-
- -  *Sync factory only*: The `factory` function must be synchronous.
-    Async operations (like fetching valid values from a server) should be
-    performed before parser construction.
 
  -  *Single object scope*: Dependencies are resolved within a single `object()`
     combinator. Cross-object dependencies are not supported.
