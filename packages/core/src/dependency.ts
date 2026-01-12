@@ -1,4 +1,4 @@
-import type { Message } from "./message.ts";
+import { type Message, message } from "./message.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import type { Mode, Suggestion } from "./parser.ts";
 import type { ValueParser, ValueParserResult } from "./valueparser.ts";
@@ -740,9 +740,15 @@ function createSyncDerivedFromParser<
       input: string,
       dependencyValue: DependencyValues<Deps>,
     ): ValueParserResult<T> {
-      const derivedParser = options.factory(
-        ...(dependencyValue as DependencyValues<Deps>),
-      );
+      let derivedParser;
+      try {
+        derivedParser = options.factory(
+          ...(dependencyValue as DependencyValues<Deps>),
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { success: false, error: message`Factory error: ${msg}` };
+      }
       return derivedParser.parse(input);
     },
 
@@ -799,9 +805,18 @@ function createAsyncDerivedFromParserFromAsyncFactory<
       input: string,
       dependencyValue: DependencyValues<Deps>,
     ): Promise<ValueParserResult<T>> {
-      const derivedParser = options.factory(
-        ...(dependencyValue as DependencyValues<Deps>),
-      );
+      let derivedParser;
+      try {
+        derivedParser = options.factory(
+          ...(dependencyValue as DependencyValues<Deps>),
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Promise.resolve({
+          success: false,
+          error: message`Factory error: ${msg}`,
+        });
+      }
       return derivedParser.parse(input);
     },
 
@@ -860,9 +875,18 @@ function createAsyncDerivedFromParserFromSyncFactory<
       input: string,
       dependencyValue: DependencyValues<Deps>,
     ): Promise<ValueParserResult<T>> {
-      const derivedParser = options.factory(
-        ...(dependencyValue as DependencyValues<Deps>),
-      );
+      let derivedParser;
+      try {
+        derivedParser = options.factory(
+          ...(dependencyValue as DependencyValues<Deps>),
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Promise.resolve({
+          success: false,
+          error: message`Factory error: ${msg}`,
+        });
+      }
       return Promise.resolve(derivedParser.parse(input));
     },
 
@@ -953,7 +977,13 @@ function createSyncDerivedParser<S, T>(
       input: string,
       dependencyValue: S,
     ): ValueParserResult<T> {
-      const derivedParser = options.factory(dependencyValue);
+      let derivedParser;
+      try {
+        derivedParser = options.factory(dependencyValue);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { success: false, error: message`Factory error: ${msg}` };
+      }
       return derivedParser.parse(input);
     },
 
@@ -997,7 +1027,16 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
       input: string,
       dependencyValue: S,
     ): Promise<ValueParserResult<T>> {
-      const derivedParser = options.factory(dependencyValue);
+      let derivedParser;
+      try {
+        derivedParser = options.factory(dependencyValue);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Promise.resolve({
+          success: false,
+          error: message`Factory error: ${msg}`,
+        });
+      }
       return derivedParser.parse(input);
     },
 
@@ -1043,7 +1082,16 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
       input: string,
       dependencyValue: S,
     ): Promise<ValueParserResult<T>> {
-      const derivedParser = options.factory(dependencyValue);
+      let derivedParser;
+      try {
+        derivedParser = options.factory(dependencyValue);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Promise.resolve({
+          success: false,
+          error: message`Factory error: ${msg}`,
+        });
+      }
       return Promise.resolve(derivedParser.parse(input));
     },
 
@@ -1310,6 +1358,39 @@ export function createPendingDependencySourceState(
 export const WrappedDependencySourceMarker: unique symbol = Symbol.for(
   "@optique/core/dependency/WrappedDependencySourceMarker",
 );
+
+/**
+ * A unique symbol used to indicate that a wrapper transforms the dependency
+ * source value. This is used by withDefault to determine whether its default
+ * value should be registered as the dependency value.
+ *
+ * When a wrapper has this marker set to `true`, it means the wrapper transforms
+ * the dependency source value (e.g., via map()), so the wrapper's output is NOT
+ * a valid dependency source value.
+ *
+ * @since 0.10.0
+ */
+export const TransformsDependencyValueMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/TransformsDependencyValueMarker",
+);
+
+/**
+ * Checks if a parser transforms the dependency value (has TransformsDependencyValueMarker).
+ *
+ * @param parser The parser to check.
+ * @returns `true` if the parser transforms the dependency value.
+ * @since 0.10.0
+ */
+export function transformsDependencyValue(
+  parser: unknown,
+): parser is { [TransformsDependencyValueMarker]: true } {
+  return typeof parser === "object" &&
+    parser !== null &&
+    TransformsDependencyValueMarker in parser &&
+    (parser as { [TransformsDependencyValueMarker]: boolean })[
+        TransformsDependencyValueMarker
+      ] === true;
+}
 
 /**
  * Checks if a parser wraps a dependency source (has WrappedDependencySourceMarker).

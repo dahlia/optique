@@ -2,8 +2,12 @@ import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   createDependencySourceState,
   DependencyId,
+  isDependencySourceState,
   isPendingDependencySourceState,
+  isWrappedDependencySource,
   type PendingDependencySourceState,
+  transformsDependencyValue,
+  TransformsDependencyValueMarker,
   WrappedDependencySourceMarker,
 } from "./dependency.ts";
 import type {
@@ -156,6 +160,35 @@ export function optional<M extends Mode, TValue, TState>(
     }
   }
 
+  // Track whether the inner parser is a wrapped dependency source (via withDefault)
+  // or a direct dependency source (option with dependency source as initialState).
+  // This affects the behavior when the option is not provided:
+  // - Direct dependency source: return undefined, don't register dependency
+  // - Wrapped dependency source: delegate to inner parser to provide default and register dependency
+  const innerHasWrappedDependency = isWrappedDependencySource(parser);
+  const innerHasDirectDependency = isPendingDependencySourceState(
+    syncParser.initialState,
+  );
+
+  // Propagate WrappedDependencySourceMarker so outer wrappers (like withDefault)
+  // can detect that we wrap a dependency source.
+  // For direct dependency sources, we set the marker from inner's initialState.
+  // For wrapped dependency sources, we propagate the inner's marker.
+  const wrappedDependencyMarker: {
+    [WrappedDependencySourceMarker]?: PendingDependencySourceState;
+  } = innerHasWrappedDependency
+    ? { [WrappedDependencySourceMarker]: parser[WrappedDependencySourceMarker] }
+    : innerHasDirectDependency
+    ? { [WrappedDependencySourceMarker]: syncParser.initialState }
+    : {};
+
+  // Check if this optional parser wraps any dependency source
+  const hasWrappedDependencySource = WrappedDependencySourceMarker in
+    wrappedDependencyMarker;
+  const wrappedPendingState = hasWrappedDependencySource
+    ? wrappedDependencyMarker[WrappedDependencySourceMarker]
+    : undefined;
+
   // Type cast needed due to TypeScript's conditional type limitations with generic M
   return {
     $mode: parser.$mode,
@@ -164,6 +197,7 @@ export function optional<M extends Mode, TValue, TState>(
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
+    ...wrappedDependencyMarker,
     parse(context: ParserContext<[TState] | undefined>) {
       if (isAsync) {
         return parseOptionalStyleAsync(context, parser);
@@ -171,7 +205,43 @@ export function optional<M extends Mode, TValue, TState>(
       return parseOptionalStyleSync(context, syncParser);
     },
     complete(state: [TState] | undefined) {
+      // If state is undefined and this optional wraps a dependency source:
       if (typeof state === "undefined") {
+        // Case 1: Inner parser has a wrapped dependency source (e.g., optional(withDefault(...)))
+        // Delegate to inner parser which will provide its default value and register dependency
+        if (innerHasWrappedDependency && wrappedPendingState) {
+          // Delegate to inner parser with the pending state wrapped in array
+          // (inner parser like withDefault expects [PendingDependencySourceState])
+          if (!isAsync) {
+            return syncParser.complete(
+              [wrappedPendingState] as unknown as TState,
+            );
+          }
+          return parser.complete([wrappedPendingState] as unknown as TState);
+        }
+        // Case 2: Inner parser is a direct dependency source (e.g., optional(option(..., dep)))
+        // Return undefined and DON'T register dependency - derived parsers use their defaultValue
+        return { success: true, value: undefined };
+      }
+      // If state contains a PendingDependencySourceState:
+      // This happens when object() calls complete with [pendingState] for wrapped dependency sources.
+      if (
+        Array.isArray(state) &&
+        state.length === 1 &&
+        isPendingDependencySourceState(state[0])
+      ) {
+        // Only pass through to inner parser if inner HAS its own wrapped dependency
+        // (e.g., optional(withDefault(...))). Otherwise, return undefined.
+        if (innerHasWrappedDependency) {
+          // Pass the state as-is to the inner parser (it's already in the
+          // right format [PendingDependencySourceState])
+          if (!isAsync) {
+            return syncParser.complete(state as unknown as TState);
+          }
+          return parser.complete(state as unknown as TState);
+        }
+        // Inner parser is a direct dependency source (e.g., optional(option(..., dep)))
+        // Return undefined - the dependency is not provided
         return { success: true, value: undefined };
       }
       if (!isAsync) {
@@ -360,7 +430,8 @@ export function withDefault<
     }
   }
 
-  // Check if inner parser's initialState is a PendingDependencySourceState.
+  // Check if inner parser's initialState is a PendingDependencySourceState,
+  // or if inner parser has a WrappedDependencySourceMarker.
   // If so, we need to mark this parser so that object() can find it during
   // dependency resolution (Phase 1).
   const innerInitialState = syncParser.initialState;
@@ -368,6 +439,8 @@ export function withDefault<
     [WrappedDependencySourceMarker]?: PendingDependencySourceState;
   } = isPendingDependencySourceState(innerInitialState)
     ? { [WrappedDependencySourceMarker]: innerInitialState }
+    : isWrappedDependencySource(parser)
+    ? { [WrappedDependencySourceMarker]: parser[WrappedDependencySourceMarker] }
     : {};
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
@@ -387,6 +460,91 @@ export function withDefault<
     },
     complete(state: [TState] | undefined) {
       if (typeof state === "undefined") {
+        // If inner parser transforms the dependency value (e.g., map()),
+        // we need to delegate to see if the chain actually wants to register.
+        // A transform means our default value is NOT a valid dependency source value.
+        if (transformsDependencyValue(parser)) {
+          // Call inner parser's complete(undefined) to see if it returns
+          // a DependencySourceState. If it does, we should also return one
+          // with our default value. If not (e.g., optional returned undefined),
+          // we should NOT register the dependency.
+          const innerResult = !isAsync
+            ? syncParser.complete(undefined as unknown as TState)
+            : parser.complete(undefined as unknown as TState);
+          const handleInnerResult = (
+            res: ValueParserResult<TValue>,
+          ): ValueParserResult<TValue | TDefault> => {
+            // If inner result is a DependencySourceState, we should also
+            // return one with our default value (though this shouldn't happen
+            // with transforms since they break the dependency chain)
+            if (isDependencySourceState(res)) {
+              try {
+                const value = typeof defaultValue === "function"
+                  ? (defaultValue as () => TDefault)()
+                  : defaultValue;
+                return createDependencySourceState(
+                  { success: true, value },
+                  res[DependencyId],
+                ) as unknown as ValueParserResult<TValue | TDefault>;
+              } catch (error) {
+                return {
+                  success: false,
+                  error: error instanceof WithDefaultError
+                    ? error.errorMessage
+                    : message`${text(String(error))}`,
+                };
+              }
+            }
+            // Inner parser didn't return a DependencySourceState (e.g., optional
+            // returned undefined). Return our default value WITHOUT registering
+            // the dependency.
+            try {
+              const value = typeof defaultValue === "function"
+                ? (defaultValue as () => TDefault)()
+                : defaultValue;
+              return { success: true, value };
+            } catch (error) {
+              return {
+                success: false,
+                error: error instanceof WithDefaultError
+                  ? error.errorMessage
+                  : message`${text(String(error))}`,
+              };
+            }
+          };
+          if (innerResult instanceof Promise) {
+            return innerResult.then(handleInnerResult) as ModeValue<
+              M,
+              ValueParserResult<TValue | TDefault>
+            >;
+          }
+          return handleInnerResult(innerResult) as ModeValue<
+            M,
+            ValueParserResult<TValue | TDefault>
+          >;
+        }
+        // Inner parser does NOT transform the dependency value. If there's a
+        // wrapped dependency source, we should register with the default value.
+        if (isWrappedDependencySource(parser)) {
+          try {
+            const value = typeof defaultValue === "function"
+              ? (defaultValue as () => TDefault)()
+              : defaultValue;
+            const pendingState = parser[WrappedDependencySourceMarker];
+            return createDependencySourceState(
+              { success: true, value },
+              pendingState[DependencyId],
+            ) as unknown as ValueParserResult<TValue | TDefault>;
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof WithDefaultError
+                ? error.errorMessage
+                : message`${text(String(error))}`,
+            };
+          }
+        }
+        // No wrapped dependency source - just return the default value.
         try {
           const value = typeof defaultValue === "function"
             ? (defaultValue as () => TDefault)()
@@ -403,9 +561,69 @@ export function withDefault<
       }
       // Check if the inner state is a PendingDependencySourceState.
       // This means the option uses a DependencySource but wasn't provided.
-      // We should use the default value and wrap it in a DependencySourceState
-      // so that derived parsers can find the dependency value.
+      // We need to check if the inner chain wants to register the dependency.
+      // For example, withDefault(map(optional(...))) should NOT register
+      // the dependency when the optional's inner parser wasn't matched.
       if (isPendingDependencySourceState(state[0])) {
+        // If inner parser transforms the dependency value (e.g., map()),
+        // we need to delegate to see if the chain actually wants to register.
+        // A transform means our default value is NOT a valid dependency source value.
+        if (transformsDependencyValue(parser)) {
+          const innerResult = !isAsync
+            ? syncParser.complete(state as unknown as TState)
+            : parser.complete(state as unknown as TState);
+          const handleInnerResult = (
+            res: ValueParserResult<TValue>,
+          ): ValueParserResult<TValue | TDefault> => {
+            // If inner result is a DependencySourceState, return one with our default
+            // (but this shouldn't normally happen since transforms break the chain)
+            if (isDependencySourceState(res)) {
+              try {
+                const value = typeof defaultValue === "function"
+                  ? (defaultValue as () => TDefault)()
+                  : defaultValue;
+                return createDependencySourceState(
+                  { success: true, value },
+                  res[DependencyId],
+                ) as unknown as ValueParserResult<TValue | TDefault>;
+              } catch (error) {
+                return {
+                  success: false,
+                  error: error instanceof WithDefaultError
+                    ? error.errorMessage
+                    : message`${text(String(error))}`,
+                };
+              }
+            }
+            // Inner parser didn't return a DependencySourceState. Return default
+            // value WITHOUT registering the dependency.
+            try {
+              const value = typeof defaultValue === "function"
+                ? (defaultValue as () => TDefault)()
+                : defaultValue;
+              return { success: true, value };
+            } catch (error) {
+              return {
+                success: false,
+                error: error instanceof WithDefaultError
+                  ? error.errorMessage
+                  : message`${text(String(error))}`,
+              };
+            }
+          };
+          if (innerResult instanceof Promise) {
+            return innerResult.then(handleInnerResult) as ModeValue<
+              M,
+              ValueParserResult<TValue | TDefault>
+            >;
+          }
+          return handleInnerResult(innerResult) as ModeValue<
+            M,
+            ValueParserResult<TValue | TDefault>
+          >;
+        }
+        // Inner parser does NOT transform the dependency value (e.g., optional()).
+        // Register the dependency with default value.
         try {
           const value = typeof defaultValue === "function"
             ? (defaultValue as () => TDefault)()
@@ -544,10 +762,25 @@ export function map<M extends Mode, T, U, TState>(
     return res as ModeValue<M, ValueParserResult<U>>;
   };
 
+  // Propagate WrappedDependencySourceMarker from inner parser, and mark
+  // this wrapper as transforming the dependency value. This allows outer
+  // wrappers like withDefault to know that the default value is NOT a valid
+  // dependency source value.
+  const dependencyMarkers: {
+    [WrappedDependencySourceMarker]?: PendingDependencySourceState;
+    [TransformsDependencyValueMarker]?: true;
+  } = isWrappedDependencySource(parser)
+    ? {
+      [WrappedDependencySourceMarker]: parser[WrappedDependencySourceMarker],
+      [TransformsDependencyValueMarker]: true,
+    }
+    : {};
+
   return {
     ...parser,
     $valueType: [] as readonly U[],
     complete,
+    ...dependencyMarkers,
     getDocFragments(state: DocState<TState>, _defaultValue?: U) {
       // Since we can't reverse the transformation, we delegate to the original
       // parser with undefined default value. This is acceptable since

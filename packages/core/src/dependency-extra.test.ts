@@ -19,6 +19,7 @@ import {
 } from "./valueparser.ts";
 import {
   concat,
+  conditional,
   group,
   longestMatch,
   merge,
@@ -715,10 +716,23 @@ describe("Error recovery scenarios with dependencies", () => {
     ]);
     assert.ok(result1.success);
 
-    // When factory throws
-    await assert.rejects(async () => {
-      await parseAsync(parser, ["--mode", "broken", "--value", "ok"]);
-    }, /Factory error for broken mode/);
+    // When factory throws, the exception is caught and returned as a parse failure
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "broken",
+      "--value",
+      "ok",
+    ]);
+    assert.ok(!result2.success);
+    if (!result2.success) {
+      const errorText = result2.error
+        .map((t) => ("text" in t ? t.text : ""))
+        .join("");
+      assert.ok(
+        errorText.includes("Factory error"),
+        `Expected error to contain "Factory error", got: ${errorText}`,
+      );
+    }
   });
 
   test("derived parser returns failing parser - error propagates", async () => {
@@ -805,9 +819,23 @@ describe("Error recovery scenarios with dependencies", () => {
       value: option("--value", derivedParser),
     });
 
-    await assert.rejects(async () => {
-      await parseAsync(parser, ["--mode", "fail", "--value", "success"]);
-    }, /Async factory rejection/);
+    // Factory exception is caught and returned as parse failure
+    const result = await parseAsync(parser, [
+      "--mode",
+      "fail",
+      "--value",
+      "success",
+    ]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const errorText = result.error
+        .map((t) => ("text" in t ? t.text : ""))
+        .join("");
+      assert.ok(
+        errorText.includes("Factory error"),
+        `Expected error to contain "Factory error", got: ${errorText}`,
+      );
+    }
   });
 });
 
@@ -1380,9 +1408,7 @@ describe("Edge case: dependency source appears after derived parser in args", ()
 // =============================================================================
 
 describe("optional() + withDefault() double wrapping with dependencies", () => {
-  // TODO: Dependency resolution does not traverse optional() wrapper properly.
-  // The dependency source default is used instead of the withDefault value.
-  test.skip("optional(withDefault(option(..., dependencySource), default))", async () => {
+  test("optional(withDefault(option(..., dependencySource), default))", async () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
@@ -1425,9 +1451,7 @@ describe("optional() + withDefault() double wrapping with dependencies", () => {
     }
   });
 
-  // TODO: Dependency resolution does not traverse optional() wrapper properly.
-  // The dependency source default is used instead of the withDefault value.
-  test.skip("withDefault(optional(option(..., dependencySource)), default)", async () => {
+  test("withDefault(optional(option(..., dependencySource)), default)", async () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
@@ -1682,7 +1706,7 @@ describe("Factory edge cases", () => {
   // TODO: When factory throws an exception, it propagates instead of being
   // caught and returned as a parse failure. This test expects graceful error
   // handling but the current implementation lets exceptions bubble up.
-  test.skip("factory exception recovery - parser reuse after error", async () => {
+  test("factory exception recovery - parser reuse after error", async () => {
     let callCount = 0;
     const modeParser = dependency(choice(["normal", "error"] as const));
     const derivedParser = modeParser.derive({
@@ -1702,7 +1726,7 @@ describe("Factory edge cases", () => {
       value: option("--value", derivedParser),
     });
 
-    // First call with error mode should fail
+    // First call with error mode should fail (factory throws during resolution)
     const result1 = await parseAsync(parser, [
       "--mode",
       "error",
@@ -1710,6 +1734,16 @@ describe("Factory edge cases", () => {
       "a",
     ]);
     assert.ok(!result1.success);
+    // Error message should indicate factory error
+    if (!result1.success) {
+      const errorText = result1.error
+        .map((t) => ("text" in t ? t.text : ""))
+        .join("");
+      assert.ok(
+        errorText.includes("Factory error"),
+        `Expected error to contain "Factory error", got: ${errorText}`,
+      );
+    }
 
     // Second call with normal mode should succeed (parser reuse)
     const result2 = await parseAsync(parser, [
@@ -1724,8 +1758,14 @@ describe("Factory edge cases", () => {
       assert.equal(result2.value.value, "b");
     }
 
-    // Factory should have been called twice
-    assert.equal(callCount, 2);
+    // Factory is called during both initial parse (with default) and resolution
+    // (with actual dependency value), so we expect at least 4 calls:
+    // Parse 1: default parse + error resolution = 2 calls
+    // Parse 2: default parse + normal resolution = 2 calls
+    assert.ok(
+      callCount >= 4,
+      `Expected at least 4 factory calls, got ${callCount}`,
+    );
   });
 });
 
@@ -2039,10 +2079,7 @@ describe("constant() parser with dependencies", () => {
 // =============================================================================
 
 describe("tuple() with dependencies in various positions", () => {
-  // TODO: tuple() does not have dependency resolution logic in its complete()
-  // method. Unlike object(), it doesn't call resolveDeferredParseStates().
-  // Dependencies within tuple() use default values instead of actual parsed values.
-  test.skip("tuple with derived parser before dependency source", async () => {
+  test("tuple with derived parser before dependency source", async () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const levelParser = modeParser.derive({
       metavar: "LEVEL",
@@ -2074,8 +2111,7 @@ describe("tuple() with dependencies in various positions", () => {
     }
   });
 
-  // TODO: tuple() does not have dependency resolution logic. See above.
-  test.skip("tuple with multiple dependencies interleaved", async () => {
+  test("tuple with multiple dependencies interleaved", async () => {
     const env = dependency(choice(["dev", "prod"] as const));
     const region = dependency(choice(["us", "eu"] as const));
 
@@ -2400,10 +2436,7 @@ describe("or() with dependencies - complex cases", () => {
     }
   });
 
-  // TODO: When both or() branches share the same dependency source, the second
-  // branch fails with "cannot be used together" error. The dependency source
-  // registration seems to conflict when duplicated across or() branches.
-  test.skip("or() with shared dependency source across branches", async () => {
+  test("or() with shared dependency source across branches", async () => {
     const sharedMode = dependency(choice(["shared1", "shared2"] as const));
 
     const derivedForA = sharedMode.derive({
@@ -2583,6 +2616,184 @@ describe("command() with dependencies - additional cases", () => {
     if (result2.success) {
       assert.equal(result2.value.mode, "safe");
       assert.equal(result2.value.level, "8");
+    }
+  });
+});
+
+// =============================================================================
+// conditional() with dependencies
+// =============================================================================
+
+describe("conditional() with dependencies", () => {
+  test("dependency source as discriminator with derived parser in branches", async () => {
+    const modeParser = dependency(choice(["json", "xml"] as const));
+    const formatParser = modeParser.derive({
+      metavar: "FORMAT",
+      factory: (mode: "json" | "xml") =>
+        choice(
+          mode === "json"
+            ? (["pretty", "compact"] as const)
+            : (["formatted", "minified"] as const),
+        ),
+      defaultValue: () => "json" as const,
+    });
+
+    const parser = conditional(
+      option("--mode", modeParser),
+      {
+        json: object({ format: option("--format", formatParser) }),
+        xml: object({ format: option("--format", formatParser) }),
+      },
+    );
+
+    // Test json mode with json-specific format
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "json",
+      "--format",
+      "pretty",
+    ]);
+    assert.ok(
+      result1.success,
+      `Expected success but got: ${JSON.stringify(result1)}`,
+    );
+    if (result1.success) {
+      assert.equal(result1.value[0], "json");
+      assert.equal(result1.value[1].format, "pretty");
+    }
+
+    // Test xml mode with xml-specific format
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "xml",
+      "--format",
+      "formatted",
+    ]);
+    assert.ok(
+      result2.success,
+      `Expected success but got: ${JSON.stringify(result2)}`,
+    );
+    if (result2.success) {
+      assert.equal(result2.value[0], "xml");
+      assert.equal(result2.value[1].format, "formatted");
+    }
+  });
+
+  test("conditional with independent dependency in each branch", async () => {
+    const jsonStyleParser = dependency(choice(["array", "object"] as const));
+    const jsonDetailParser = jsonStyleParser.derive({
+      metavar: "DETAIL",
+      factory: (style: "array" | "object") =>
+        choice(
+          style === "array"
+            ? (["flat", "nested"] as const)
+            : (["shallow", "deep"] as const),
+        ),
+      defaultValue: () => "array" as const,
+    });
+
+    const xmlStyleParser = dependency(
+      choice(["element", "attribute"] as const),
+    );
+    const xmlDetailParser = xmlStyleParser.derive({
+      metavar: "DETAIL",
+      factory: (style: "element" | "attribute") =>
+        choice(
+          style === "element"
+            ? (["verbose", "compact"] as const)
+            : (["full", "minimal"] as const),
+        ),
+      defaultValue: () => "element" as const,
+    });
+
+    const parser = conditional(
+      option("--mode", choice(["json", "xml"] as const)),
+      {
+        json: object({
+          style: option("--style", jsonStyleParser),
+          detail: option("--detail", jsonDetailParser),
+        }),
+        xml: object({
+          style: option("--style", xmlStyleParser),
+          detail: option("--detail", xmlDetailParser),
+        }),
+      },
+    );
+
+    // Test json branch
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "json",
+      "--style",
+      "object",
+      "--detail",
+      "deep",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value[0], "json");
+      assert.equal(result1.value[1].style, "object");
+      assert.equal(result1.value[1].detail, "deep");
+    }
+
+    // Test xml branch
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "xml",
+      "--style",
+      "attribute",
+      "--detail",
+      "minimal",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value[0], "xml");
+      assert.equal(result2.value[1].style, "attribute");
+      assert.equal(result2.value[1].detail, "minimal");
+    }
+  });
+
+  test("conditional with default branch and dependencies", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const portParser = envParser.derive({
+      metavar: "PORT",
+      factory: (env: "dev" | "prod") =>
+        choice(
+          env === "dev"
+            ? (["3000", "8080"] as const)
+            : (["80", "443"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = conditional(
+      option("--env", envParser),
+      {
+        dev: object({ port: option("--port", portParser) }),
+        prod: object({ port: option("--port", portParser) }),
+      },
+      object({ name: option("--name", string()) }), // default branch
+    );
+
+    // Test with env specified
+    const result1 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--port",
+      "443",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value[0], "prod");
+      assert.equal((result1.value[1] as { port: string }).port, "443");
+    }
+
+    // Test default branch (no --env)
+    const result2 = await parseAsync(parser, ["--name", "default-app"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value[0], undefined);
+      assert.equal((result2.value[1] as { name: string }).name, "default-app");
     }
   });
 });

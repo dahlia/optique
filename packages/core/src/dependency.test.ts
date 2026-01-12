@@ -2467,9 +2467,7 @@ describe("Edge cases: dependency source with modifiers", () => {
     }
   });
 
-  // TODO: multiple() with dependency source not yet supported
-  // This test documents desired behavior for a future enhancement.
-  test.skip("multiple() dependency source - uses first value", async () => {
+  test("multiple() dependency source - uses last value", async () => {
     const tagsParser = dependency(string({ metavar: "TAG" }));
     const prefixParser = tagsParser.derive({
       metavar: "PREFIX",
@@ -2483,20 +2481,21 @@ describe("Edge cases: dependency source with modifiers", () => {
       prefix: option("--prefix", prefixParser),
     });
 
-    // Multiple tags provided - dependency should use first value
+    // Multiple tags provided - dependency uses the last value (like typical
+    // CLI behavior where later options override earlier ones)
     const result = await parseAsync(parser, [
       "--tag",
       "v2",
       "--tag",
       "v3",
       "--prefix",
-      "v2-beta",
+      "v3-beta",
     ]);
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value.tags, ["v2", "v3"]);
-      // The derived parser should work with the first tag value
-      assert.equal(result.value.prefix, "v2-beta");
+      // The derived parser works with the last tag value
+      assert.equal(result.value.prefix, "v3-beta");
     }
   });
 

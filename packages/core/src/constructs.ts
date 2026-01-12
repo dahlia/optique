@@ -1281,12 +1281,51 @@ export function or(
       });
       if (result.success && result.consumed.length > 0) {
         if (context.state?.[0] !== i && context.state?.[1].success) {
+          // Different branch succeeded. Check if the new branch can also
+          // consume the previously consumed input (shared options case).
+          const previouslyConsumed = context.state[1].consumed;
+          const checkResult = parser.parse({
+            ...context,
+            buffer: previouslyConsumed,
+            state: parser.initialState,
+          });
+          // If the new branch can consume exactly the same input,
+          // this is a shared option - allow branch switch.
+          const canConsumeShared = checkResult.success &&
+            checkResult.consumed.length === previouslyConsumed.length &&
+            checkResult.consumed.every((c, idx) =>
+              c === previouslyConsumed[idx]
+            );
+          if (!canConsumeShared) {
+            return {
+              success: false,
+              consumed: context.buffer.length - result.next.buffer.length,
+              error: message`${values(context.state[1].consumed)} and ${
+                values(result.consumed)
+              } cannot be used together.`,
+            };
+          }
+          // Branch switch allowed - re-parse current input with state from
+          // shared options to ensure dependency values are available.
+          const replayedResult = parser.parse({
+            ...context,
+            state: checkResult.next.state,
+          });
+          if (!replayedResult.success) {
+            return replayedResult;
+          }
           return {
-            success: false,
-            consumed: context.buffer.length - result.next.buffer.length,
-            error: message`${values(context.state[1].consumed)} and ${
-              values(result.consumed)
-            } cannot be used together.`,
+            success: true,
+            next: {
+              ...context,
+              buffer: replayedResult.next.buffer,
+              optionsTerminated: replayedResult.next.optionsTerminated,
+              state: [i, {
+                ...replayedResult,
+                consumed: [...previouslyConsumed, ...replayedResult.consumed],
+              }],
+            },
+            consumed: replayedResult.consumed,
           };
         }
         return {
@@ -1328,12 +1367,53 @@ export function or(
       const result = await resultOrPromise;
       if (result.success && result.consumed.length > 0) {
         if (context.state?.[0] !== i && context.state?.[1].success) {
+          // Different branch succeeded. Check if the new branch can also
+          // consume the previously consumed input (shared options case).
+          const previouslyConsumed = context.state[1].consumed;
+          const checkResultOrPromise = parser.parse({
+            ...context,
+            buffer: previouslyConsumed,
+            state: parser.initialState,
+          });
+          const checkResult = await checkResultOrPromise;
+          // If the new branch can consume exactly the same input,
+          // this is a shared option - allow branch switch.
+          const canConsumeShared = checkResult.success &&
+            checkResult.consumed.length === previouslyConsumed.length &&
+            checkResult.consumed.every((c, idx) =>
+              c === previouslyConsumed[idx]
+            );
+          if (!canConsumeShared) {
+            return {
+              success: false,
+              consumed: context.buffer.length - result.next.buffer.length,
+              error: message`${values(context.state[1].consumed)} and ${
+                values(result.consumed)
+              } cannot be used together.`,
+            };
+          }
+          // Branch switch allowed - re-parse current input with state from
+          // shared options to ensure dependency values are available.
+          const replayedResultOrPromise = parser.parse({
+            ...context,
+            state: checkResult.next.state,
+          });
+          const replayedResult = await replayedResultOrPromise;
+          if (!replayedResult.success) {
+            return replayedResult;
+          }
           return {
-            success: false,
-            consumed: context.buffer.length - result.next.buffer.length,
-            error: message`${values(context.state[1].consumed)} and ${
-              values(result.consumed)
-            } cannot be used together.`,
+            success: true,
+            next: {
+              ...context,
+              buffer: replayedResult.next.buffer,
+              optionsTerminated: replayedResult.next.optionsTerminated,
+              state: [i, {
+                ...replayedResult,
+                consumed: [...previouslyConsumed, ...replayedResult.consumed],
+              }],
+            },
+            consumed: replayedResult.consumed,
           };
         }
         return {
@@ -2276,19 +2356,18 @@ function resolveDeferred(
   return state;
 }
 
-function resolveDeferredParseStates(
-  fieldStates: Record<string | symbol, unknown>,
-): Record<string | symbol, unknown> {
+function resolveDeferredParseStates<
+  T extends Record<string | symbol, unknown> | unknown[],
+>(
+  fieldStates: T,
+): T {
   // First pass: Build dependency registry from all DependencySourceState fields
   // (recursively searching through nested structures)
   const registry = new DependencyRegistry();
   collectDependencies(fieldStates, registry);
 
   // Second pass: Resolve all DeferredParseState fields recursively
-  return resolveDeferred(fieldStates, registry) as Record<
-    string | symbol,
-    unknown
-  >;
+  return resolveDeferred(fieldStates, registry) as T;
 }
 
 /**
@@ -2392,19 +2471,18 @@ async function resolveDeferredAsync(
  * Async version of resolveDeferredParseStates for async parsers.
  * @internal
  */
-async function resolveDeferredParseStatesAsync(
-  fieldStates: Record<string | symbol, unknown>,
-): Promise<Record<string | symbol, unknown>> {
+async function resolveDeferredParseStatesAsync<
+  T extends Record<string | symbol, unknown> | unknown[],
+>(
+  fieldStates: T,
+): Promise<T> {
   // First pass: Build dependency registry from all DependencySourceState fields
   // (recursively searching through nested structures)
   const registry = new DependencyRegistry();
   collectDependencies(fieldStates, registry);
 
   // Second pass: Resolve all DeferredParseState fields recursively
-  return await resolveDeferredAsync(fieldStates, registry) as Record<
-    string | symbol,
-    unknown
-  >;
+  return await resolveDeferredAsync(fieldStates, registry) as T;
 }
 
 /**
@@ -2865,6 +2943,7 @@ export function object<
           // This happens with withDefault(option(..., dependencySource), defaultValue) when
           // no input was parsed. The withDefault parser wraps the inner dependency source
           // and stores the PendingDependencySourceState in WrappedDependencySourceMarker.
+          // Also handles optional(withDefault(...)) and withDefault(optional(...), default).
           else if (
             fieldState === undefined &&
             isWrappedDependencySource(fieldParser)
@@ -2873,7 +2952,14 @@ export function object<
             // special handling that returns DependencySourceState with the default value
             const pendingState = fieldParser[WrappedDependencySourceMarker];
             const completed = fieldParser.complete([pendingState]);
-            preCompletedState[fieldKey] = completed;
+            // Only use the pre-completed result if it's a DependencySourceState.
+            // If the wrapper returns a regular result (e.g., optional returning undefined),
+            // keep the original state so Phase 3 handles it normally.
+            if (isDependencySourceState(completed)) {
+              preCompletedState[fieldKey] = completed;
+            } else {
+              preCompletedState[fieldKey] = fieldState;
+            }
           } else {
             preCompletedState[fieldKey] = fieldState;
           }
@@ -2975,6 +3061,7 @@ export function object<
           // This happens with withDefault(option(..., dependencySource), defaultValue) when
           // no input was parsed. The withDefault parser wraps the inner dependency source
           // and stores the PendingDependencySourceState in WrappedDependencySourceMarker.
+          // Also handles optional(withDefault(...)) and withDefault(optional(...), default).
           else if (
             fieldState === undefined &&
             isWrappedDependencySource(fieldParser)
@@ -2983,7 +3070,14 @@ export function object<
             // special handling that returns DependencySourceState with the default value
             const pendingState = fieldParser[WrappedDependencySourceMarker];
             const completed = await fieldParser.complete([pendingState]);
-            preCompletedState[fieldKey] = completed;
+            // Only use the pre-completed result if it's a DependencySourceState.
+            // If the wrapper returns a regular result (e.g., optional returning undefined),
+            // keep the original state so Phase 3 handles it normally.
+            if (isDependencySourceState(completed)) {
+              preCompletedState[fieldKey] = completed;
+            } else {
+              preCompletedState[fieldKey] = fieldState;
+            }
           } else {
             preCompletedState[fieldKey] = fieldState;
           }
@@ -3491,13 +3585,86 @@ export function tuple<
     complete(state: TupleState) {
       // For sync mode, complete synchronously
       if (!isAsync) {
+        const stateArray = state as unknown[];
+
+        // Phase 1: Pre-complete elements with PendingDependencySourceState
+        const preCompletedState: unknown[] = [];
+        for (let i = 0; i < syncParsers.length; i++) {
+          const elementState = stateArray[i];
+          const elementParser = syncParsers[i];
+
+          // Case 1: state is [PendingDependencySourceState] (option was not provided)
+          if (
+            Array.isArray(elementState) &&
+            elementState.length === 1 &&
+            isPendingDependencySourceState(elementState[0])
+          ) {
+            // Call complete to get DependencySourceState with default value
+            const completed = elementParser.complete(elementState);
+            preCompletedState[i] = completed;
+          } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
+          else if (
+            elementState === undefined &&
+            isPendingDependencySourceState(elementParser.initialState)
+          ) {
+            // Call complete with [initialState] to get DependencySourceState
+            const completed = elementParser.complete([
+              elementParser.initialState,
+            ]);
+            preCompletedState[i] = completed;
+          } // Case 3: state is undefined and parser has WrappedDependencySourceMarker
+          else if (
+            elementState === undefined &&
+            isWrappedDependencySource(elementParser)
+          ) {
+            const pendingState = elementParser[WrappedDependencySourceMarker];
+            const completed = elementParser.complete([pendingState]);
+            preCompletedState[i] = completed;
+          } else {
+            preCompletedState[i] = elementState;
+          }
+        }
+
+        // Phase 2: Resolve any deferred parse states with actual dependency values
+        const resolvedState = resolveDeferredParseStates(preCompletedState);
+        const resolvedArray = resolvedState as unknown[];
+
+        // Phase 3: Complete remaining elements
         const result: { [K in keyof T]: T[K]["$valueType"][number] } =
           // deno-lint-ignore no-explicit-any
           [] as any;
-        const stateArray = state as unknown[];
 
         for (let i = 0; i < syncParsers.length; i++) {
-          const valueResult = syncParsers[i].complete(stateArray[i]);
+          const elementResolvedState = resolvedArray[i];
+          const elementParser = syncParsers[i];
+          const originalElementState = stateArray[i];
+
+          // Check if this element was pre-completed
+          const wasPreCompletedCase1 = Array.isArray(originalElementState) &&
+            originalElementState.length === 1 &&
+            isPendingDependencySourceState(originalElementState[0]);
+          const wasPreCompletedCase2 = originalElementState === undefined &&
+            isPendingDependencySourceState(elementParser.initialState);
+          const wasPreCompletedCase3 = originalElementState === undefined &&
+            isWrappedDependencySource(elementParser);
+
+          if (
+            isDependencySourceState(elementResolvedState) &&
+            (wasPreCompletedCase1 || wasPreCompletedCase2 ||
+              wasPreCompletedCase3)
+          ) {
+            // This is a pre-completed withDefault element. Extract the value directly.
+            const depResult = elementResolvedState.result;
+            if (depResult.success) {
+              // deno-lint-ignore no-explicit-any
+              (result as any)[i] = depResult.value;
+            } else {
+              return { success: false, error: depResult.error };
+            }
+            continue;
+          }
+
+          const valueResult = elementParser.complete(elementResolvedState);
           if (valueResult.success) {
             // deno-lint-ignore no-explicit-any
             (result as any)[i] = valueResult.value;
@@ -3511,13 +3678,88 @@ export function tuple<
 
       // For async mode, complete asynchronously
       return (async () => {
+        const stateArray = state as unknown[];
+
+        // Phase 1: Pre-complete elements with PendingDependencySourceState
+        const preCompletedState: unknown[] = [];
+        for (let i = 0; i < parsers.length; i++) {
+          const elementState = stateArray[i];
+          const elementParser = parsers[i];
+
+          // Case 1: state is [PendingDependencySourceState] (option was not provided)
+          if (
+            Array.isArray(elementState) &&
+            elementState.length === 1 &&
+            isPendingDependencySourceState(elementState[0])
+          ) {
+            const completed = await elementParser.complete(elementState);
+            preCompletedState[i] = completed;
+          } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
+          else if (
+            elementState === undefined &&
+            isPendingDependencySourceState(elementParser.initialState)
+          ) {
+            const completed = await elementParser.complete([
+              elementParser.initialState,
+            ]);
+            preCompletedState[i] = completed;
+          } // Case 3: state is undefined and parser has WrappedDependencySourceMarker
+          else if (
+            elementState === undefined &&
+            isWrappedDependencySource(elementParser)
+          ) {
+            const pendingState = elementParser[WrappedDependencySourceMarker];
+            const completed = await elementParser.complete([pendingState]);
+            preCompletedState[i] = completed;
+          } else {
+            preCompletedState[i] = elementState;
+          }
+        }
+
+        // Phase 2: Resolve any deferred parse states with actual dependency values
+        const resolvedState = await resolveDeferredParseStatesAsync(
+          preCompletedState,
+        );
+        const resolvedArray = resolvedState as unknown[];
+
+        // Phase 3: Complete remaining elements
         const result: { [K in keyof T]: T[K]["$valueType"][number] } =
           // deno-lint-ignore no-explicit-any
           [] as any;
-        const stateArray = state as unknown[];
 
         for (let i = 0; i < parsers.length; i++) {
-          const valueResult = await parsers[i].complete(stateArray[i]);
+          const elementResolvedState = resolvedArray[i];
+          const elementParser = parsers[i];
+          const originalElementState = stateArray[i];
+
+          // Check if this element was pre-completed
+          const wasPreCompletedCase1 = Array.isArray(originalElementState) &&
+            originalElementState.length === 1 &&
+            isPendingDependencySourceState(originalElementState[0]);
+          const wasPreCompletedCase2 = originalElementState === undefined &&
+            isPendingDependencySourceState(elementParser.initialState);
+          const wasPreCompletedCase3 = originalElementState === undefined &&
+            isWrappedDependencySource(elementParser);
+
+          if (
+            isDependencySourceState(elementResolvedState) &&
+            (wasPreCompletedCase1 || wasPreCompletedCase2 ||
+              wasPreCompletedCase3)
+          ) {
+            // This is a pre-completed withDefault element. Extract the value directly.
+            const depResult = elementResolvedState.result;
+            if (depResult.success) {
+              // deno-lint-ignore no-explicit-any
+              (result as any)[i] = depResult.value;
+            } else {
+              return { success: false, error: depResult.error };
+            }
+            continue;
+          }
+
+          const valueResult = await elementParser.complete(
+            elementResolvedState,
+          );
           if (valueResult.success) {
             // deno-lint-ignore no-explicit-any
             (result as any)[i] = valueResult.value;
@@ -6381,6 +6623,7 @@ export function conditional(
 
   // Sync complete implementation
   const completeSync = (state: ConditionalState<string>): CompleteResult => {
+    const syncDiscriminator = discriminator as Parser<"sync", string, unknown>;
     const syncDefaultBranch = defaultBranch as
       | Parser<"sync", unknown, unknown>
       | undefined;
@@ -6416,7 +6659,23 @@ export function conditional(
       ? syncDefaultBranch!
       : syncBranches[state.selectedBranch.key];
 
-    const branchResult = branchParser.complete(state.branchState);
+    // First, complete the discriminator to get DependencySourceState if applicable
+    const discriminatorCompleteResult = syncDiscriminator.complete(
+      state.discriminatorState,
+    );
+    // discriminatorCompleteResult may be { success: true, value: ... } or DependencySourceState
+
+    // To propagate dependency from discriminator to branch:
+    // 1. Wrap discriminator state and branch state together
+    // 2. Resolve deferred parse states with dependency registry populated from discriminator
+    const combinedState = {
+      _discriminator: state.discriminatorState,
+      _branch: state.branchState,
+    };
+    const resolvedCombinedState = resolveDeferredParseStates(combinedState);
+    const resolvedBranchState = resolvedCombinedState._branch;
+
+    const branchResult = branchParser.complete(resolvedBranchState);
 
     if (!branchResult.success) {
       // Add context to error message
@@ -6435,9 +6694,19 @@ export function conditional(
       return branchResult;
     }
 
-    const discriminatorValue = state.selectedBranch.kind === "default"
-      ? undefined
-      : state.selectedBranch.key;
+    // Get the discriminator value: either from DependencySourceState or regular completion
+    let discriminatorValue: string | undefined;
+    if (state.selectedBranch.kind === "default") {
+      discriminatorValue = undefined;
+    } else if (isDependencySourceState(discriminatorCompleteResult)) {
+      discriminatorValue = discriminatorCompleteResult.result.success
+        ? discriminatorCompleteResult.result.value as string
+        : state.selectedBranch.key;
+    } else if (discriminatorCompleteResult.success) {
+      discriminatorValue = discriminatorCompleteResult.value;
+    } else {
+      discriminatorValue = state.selectedBranch.key;
+    }
 
     return {
       success: true,
@@ -6476,7 +6745,24 @@ export function conditional(
       ? defaultBranch!
       : branches[state.selectedBranch.key];
 
-    const branchResult = await branchParser.complete(state.branchState);
+    // First, complete the discriminator to get DependencySourceState if applicable
+    const discriminatorCompleteResult = await discriminator.complete(
+      state.discriminatorState,
+    );
+
+    // To propagate dependency from discriminator to branch:
+    // 1. Wrap discriminator state and branch state together
+    // 2. Resolve deferred parse states with dependency registry populated from discriminator
+    const combinedState = {
+      _discriminator: state.discriminatorState,
+      _branch: state.branchState,
+    };
+    const resolvedCombinedState = await resolveDeferredParseStatesAsync(
+      combinedState,
+    );
+    const resolvedBranchState = resolvedCombinedState._branch;
+
+    const branchResult = await branchParser.complete(resolvedBranchState);
 
     if (!branchResult.success) {
       // Add context to error message
@@ -6495,9 +6781,19 @@ export function conditional(
       return branchResult;
     }
 
-    const discriminatorValue = state.selectedBranch.kind === "default"
-      ? undefined
-      : state.selectedBranch.key;
+    // Get the discriminator value: either from DependencySourceState or regular completion
+    let discriminatorValue: string | undefined;
+    if (state.selectedBranch.kind === "default") {
+      discriminatorValue = undefined;
+    } else if (isDependencySourceState(discriminatorCompleteResult)) {
+      discriminatorValue = discriminatorCompleteResult.result.success
+        ? discriminatorCompleteResult.result.value as string
+        : state.selectedBranch.key;
+    } else if (discriminatorCompleteResult.success) {
+      discriminatorValue = discriminatorCompleteResult.value;
+    } else {
+      discriminatorValue = state.selectedBranch.key;
+    }
 
     return {
       success: true,
