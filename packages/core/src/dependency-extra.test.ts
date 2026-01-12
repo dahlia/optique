@@ -2553,6 +2553,290 @@ describe("longestMatch() with dependencies - additional cases", () => {
 });
 
 // =============================================================================
+// longestMatch() with conflicting dependency states
+// =============================================================================
+
+describe("longestMatch() with conflicting dependency states", () => {
+  test("branches with same dependency source but different derived validations", async () => {
+    // Scenario: Both branches use the same dependency source, but each branch's
+    // derived parser accepts different values. longestMatch should properly
+    // isolate dependency resolution per branch.
+    const mode = dependency(choice(["fast", "safe"] as const));
+
+    // Branch 1: fast mode accepts "1" or "2", safe mode accepts "3" or "4"
+    const levelForBranch1 = mode.derive({
+      metavar: "LEVEL1",
+      factory: (m) =>
+        choice(m === "fast" ? (["1", "2"] as const) : (["3", "4"] as const)),
+      defaultValue: () => "fast" as const,
+    });
+
+    // Branch 2: fast mode accepts "a" or "b", safe mode accepts "c" or "d"
+    // (completely different values than branch 1)
+    const levelForBranch2 = mode.derive({
+      metavar: "LEVEL2",
+      factory: (m) =>
+        choice(m === "fast" ? (["a", "b"] as const) : (["c", "d"] as const)),
+      defaultValue: () => "fast" as const,
+    });
+
+    const branch1 = object({
+      mode: option("--mode", mode),
+      level: option("--level1", levelForBranch1),
+    });
+    const branch2 = object({
+      mode: option("--mode", mode),
+      level: option("--level2", levelForBranch2),
+    });
+
+    const parser = longestMatch(branch1, branch2);
+
+    // Test branch 1 with fast mode
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "fast",
+      "--level1",
+      "2",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "fast");
+      assert.equal(result1.value.level, "2");
+    }
+
+    // Test branch 2 with fast mode (different derived values)
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "fast",
+      "--level2",
+      "b",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "fast");
+      assert.equal(result2.value.level, "b");
+    }
+
+    // Test branch 1 with safe mode
+    const result3 = await parseAsync(parser, [
+      "--mode",
+      "safe",
+      "--level1",
+      "4",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.mode, "safe");
+      assert.equal(result3.value.level, "4");
+    }
+
+    // Test branch 2 with safe mode
+    const result4 = await parseAsync(parser, [
+      "--mode",
+      "safe",
+      "--level2",
+      "d",
+    ]);
+    assert.ok(result4.success);
+    if (result4.success) {
+      assert.equal(result4.value.mode, "safe");
+      assert.equal(result4.value.level, "d");
+    }
+  });
+
+  test("longestMatch chooses branch based on token count even with shared dependency", async () => {
+    // When both branches share a dependency and both could parse successfully,
+    // longestMatch should choose the branch that consumes more tokens
+    const mode = dependency(choice(["x", "y"] as const));
+
+    const derived = mode.derive({
+      metavar: "D",
+      factory: (m) =>
+        choice(m === "x" ? (["x1", "x2"] as const) : (["y1", "y2"] as const)),
+      defaultValue: () => "x" as const,
+    });
+
+    // Branch 1: fewer options
+    const branch1 = object({
+      mode: option("--mode", mode),
+      derived: option("--derived", derived),
+    });
+
+    // Branch 2: more options (should be selected when --extra is present)
+    const branch2 = object({
+      mode: option("--mode", mode),
+      derived: option("--derived", derived),
+      extra: option("--extra", string()),
+    });
+
+    const parser = longestMatch(branch1, branch2);
+
+    // With --extra, branch2 should be selected (consumes more tokens)
+    const result = await parseAsync(parser, [
+      "--mode",
+      "y",
+      "--derived",
+      "y1",
+      "--extra",
+      "value",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "y");
+      assert.equal(result.value.derived, "y1");
+      assert.equal((result.value as { extra: string }).extra, "value");
+    }
+  });
+
+  test("conflicting branches where only one validates successfully", async () => {
+    // Scenario: Both branches try to parse, but the derived parser in one
+    // branch rejects the value (wrong mode/value combination)
+    const mode = dependency(choice(["alpha", "beta"] as const));
+
+    // Branch 1 only accepts values for alpha mode
+    const alphaValues = mode.derive({
+      metavar: "ALPHA_VAL",
+      factory: (m) =>
+        choice(m === "alpha" ? (["a1", "a2"] as const) : ([] as const)),
+      defaultValue: () => "alpha" as const,
+    });
+
+    // Branch 2 only accepts values for beta mode
+    const betaValues = mode.derive({
+      metavar: "BETA_VAL",
+      factory: (m) =>
+        choice(m === "beta" ? (["b1", "b2"] as const) : ([] as const)),
+      defaultValue: () => "beta" as const,
+    });
+
+    const branch1 = object({
+      mode: option("--mode", mode),
+      value: option("--alpha-val", alphaValues),
+    });
+    const branch2 = object({
+      mode: option("--mode", mode),
+      value: option("--beta-val", betaValues),
+    });
+
+    const parser = longestMatch(branch1, branch2);
+
+    // Test alpha mode - only branch1 should validate
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "alpha",
+      "--alpha-val",
+      "a1",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "alpha");
+      assert.equal(result1.value.value, "a1");
+    }
+
+    // Test beta mode - only branch2 should validate
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "beta",
+      "--beta-val",
+      "b2",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "beta");
+      assert.equal(result2.value.value, "b2");
+    }
+  });
+
+  test("three branches with same dependency source and overlapping options", async () => {
+    const env = dependency(choice(["dev", "staging", "prod"] as const));
+
+    // Each branch has a derived parser specific to certain environments
+    const devConfig = env.derive({
+      metavar: "DEV_CFG",
+      factory: (e) =>
+        choice(
+          e === "dev" ? (["local", "docker"] as const) : (["N/A"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const stagingConfig = env.derive({
+      metavar: "STAGING_CFG",
+      factory: (e) =>
+        choice(
+          e === "staging"
+            ? (["staging-us", "staging-eu"] as const)
+            : (["N/A"] as const),
+        ),
+      defaultValue: () => "staging" as const,
+    });
+    const prodConfig = env.derive({
+      metavar: "PROD_CFG",
+      factory: (e) =>
+        choice(
+          e === "prod"
+            ? (["prod-east", "prod-west"] as const)
+            : (["N/A"] as const),
+        ),
+      defaultValue: () => "prod" as const,
+    });
+
+    const devBranch = object({
+      env: option("--env", env),
+      config: option("--dev-config", devConfig),
+    });
+    const stagingBranch = object({
+      env: option("--env", env),
+      config: option("--staging-config", stagingConfig),
+    });
+    const prodBranch = object({
+      env: option("--env", env),
+      config: option("--prod-config", prodConfig),
+    });
+
+    const parser = longestMatch(devBranch, stagingBranch, prodBranch);
+
+    // Dev environment
+    const result1 = await parseAsync(parser, [
+      "--env",
+      "dev",
+      "--dev-config",
+      "docker",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.env, "dev");
+      assert.equal(result1.value.config, "docker");
+    }
+
+    // Staging environment
+    const result2 = await parseAsync(parser, [
+      "--env",
+      "staging",
+      "--staging-config",
+      "staging-eu",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.env, "staging");
+      assert.equal(result2.value.config, "staging-eu");
+    }
+
+    // Prod environment
+    const result3 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--prod-config",
+      "prod-west",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.env, "prod");
+      assert.equal(result3.value.config, "prod-west");
+    }
+  });
+});
+
+// =============================================================================
 // command() with dependencies - additional cases
 // =============================================================================
 
