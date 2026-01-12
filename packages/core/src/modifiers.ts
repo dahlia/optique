@@ -1,4 +1,11 @@
 import { formatMessage, type Message, message, text } from "./message.ts";
+import {
+  createDependencySourceState,
+  DependencyId,
+  isPendingDependencySourceState,
+  type PendingDependencySourceState,
+  WrappedDependencySourceMarker,
+} from "./dependency.ts";
 import type {
   DocState,
   Mode,
@@ -353,6 +360,16 @@ export function withDefault<
     }
   }
 
+  // Check if inner parser's initialState is a PendingDependencySourceState.
+  // If so, we need to mark this parser so that object() can find it during
+  // dependency resolution (Phase 1).
+  const innerInitialState = syncParser.initialState;
+  const wrappedDependencyMarker: {
+    [WrappedDependencySourceMarker]?: PendingDependencySourceState;
+  } = isPendingDependencySourceState(innerInitialState)
+    ? { [WrappedDependencySourceMarker]: innerInitialState }
+    : {};
+
   // Type cast needed due to TypeScript's conditional type limitations with generic M
   return {
     $mode: parser.$mode,
@@ -361,6 +378,7 @@ export function withDefault<
     priority: parser.priority,
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
+    ...wrappedDependencyMarker,
     parse(context: ParserContext<[TState] | undefined>) {
       if (isAsync) {
         return parseOptionalStyleAsync(context, parser);
@@ -374,6 +392,30 @@ export function withDefault<
             ? (defaultValue as () => TDefault)()
             : defaultValue;
           return { success: true, value };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof WithDefaultError
+              ? error.errorMessage
+              : message`${text(String(error))}`,
+          };
+        }
+      }
+      // Check if the inner state is a PendingDependencySourceState.
+      // This means the option uses a DependencySource but wasn't provided.
+      // We should use the default value and wrap it in a DependencySourceState
+      // so that derived parsers can find the dependency value.
+      if (isPendingDependencySourceState(state[0])) {
+        try {
+          const value = typeof defaultValue === "function"
+            ? (defaultValue as () => TDefault)()
+            : defaultValue;
+          // Return a DependencySourceState with the default value so that
+          // dependency resolution can find this value
+          return createDependencySourceState(
+            { success: true, value },
+            state[0][DependencyId],
+          ) as unknown as ValueParserResult<TValue | TDefault>;
         } catch (error) {
           return {
             success: false,

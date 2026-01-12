@@ -2456,14 +2456,14 @@ describe("Edge cases: dependency source with modifiers", () => {
       logLevel: option("--log-level", logLevelParser),
     });
 
-    // Mode NOT provided - withDefault gives "prod", but derived parser
-    // doesn't see this (uses its own defaultValue)
-    const result = await parseAsync(parser, ["--log-level", "debug"]);
+    // Mode NOT provided - withDefault gives "prod", derived parser now sees this
+    // and accepts prod-mode values (quiet, silent)
+    const result = await parseAsync(parser, ["--log-level", "quiet"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.mode, "prod");
-      // Note: derived parser uses its own defaultValue, not the withDefault value
-      assert.equal(result.value.logLevel, "debug");
+      // Now derived parser sees the withDefault value
+      assert.equal(result.value.logLevel, "quiet");
     }
   });
 

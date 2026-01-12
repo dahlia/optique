@@ -760,11 +760,7 @@ describe("Error recovery scenarios with dependencies", () => {
     assert.ok(result2.success);
   });
 
-  // TODO: This test documents a known limitation. When withDefault() is applied
-  // to a dependency source option, the derived parser doesn't see the withDefault
-  // value - it falls back to its own defaultValue instead. This would require
-  // changes to how deferred parsing handles withDefault wrappers.
-  test.skip("withDefault on dependency source - derived parser sees default", async () => {
+  test("withDefault on dependency source - derived parser sees default", async () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
@@ -949,11 +945,7 @@ describe("group() with dependencies", () => {
 // =============================================================================
 
 describe("concat() with dependencies", () => {
-  // TODO: This test documents a known limitation. concat() doesn't properly
-  // propagate dependency resolution across concatenated tuples. The dependency
-  // source value from the first tuple isn't available when resolving deferred
-  // parsers, so the derived parser falls back to its defaultValue.
-  test.skip("concat of tuples where one contains dependencies", async () => {
+  test("concat of tuples where one contains dependencies", async () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const levelParser = modeParser.derive({
       metavar: "LEVEL",

@@ -1,6 +1,7 @@
 import {
   createDeferredParseState,
   createDependencySourceState,
+  createPendingDependencySourceState,
   type DeferredParseState,
   DependencyId,
   type DependencySourceState,
@@ -9,17 +10,21 @@ import {
   isDependencySource,
   isDependencySourceState,
   isDerivedValueParser,
+  isPendingDependencySourceState,
+  type PendingDependencySourceState,
 } from "./dependency.ts";
 import type { DocFragment } from "./doc.ts";
 
 /**
  * State type for options that may use deferred parsing (DerivedValueParser).
- * This extends the normal ValueParserResult to also support DeferredParseState.
+ * This extends the normal ValueParserResult to also support DeferredParseState
+ * and PendingDependencySourceState.
  * @internal
  */
 export type OptionState<T> =
   | ValueParserResult<T>
   | DeferredParseState<T>
+  | PendingDependencySourceState
   | undefined;
 
 /**
@@ -497,14 +502,18 @@ export function option<M extends Mode, T>(
           ...(options.hidden && { hidden: true }),
         },
     ],
-    initialState: valueParser == null ? { success: true, value: false } : {
-      success: false,
-      error: options.errors?.missing
-        ? (typeof options.errors.missing === "function"
-          ? options.errors.missing(optionNames)
-          : options.errors.missing)
-        : message`Missing option ${eOptionNames(optionNames)}.`,
-    },
+    initialState: valueParser == null
+      ? { success: true, value: false }
+      : isDependencySource(valueParser)
+      ? createPendingDependencySourceState(valueParser[DependencyId])
+      : {
+        success: false,
+        error: options.errors?.missing
+          ? (typeof options.errors.missing === "function"
+            ? options.errors.missing(optionNames)
+            : options.errors.missing)
+          : message`Missing option ${eOptionNames(optionNames)}.`,
+      },
     parse(
       context: ParserContext<
         ValueParserResult<T | boolean> | undefined
@@ -768,10 +777,26 @@ export function option<M extends Mode, T>(
       };
     },
     complete(
-      state: ValueParserResult<T | boolean> | DeferredParseState<T> | undefined,
+      state:
+        | ValueParserResult<T | boolean>
+        | DeferredParseState<T>
+        | PendingDependencySourceState
+        | undefined,
     ) {
       if (state == null) {
         return valueParser == null ? { success: true, value: false } : {
+          success: false,
+          error: options.errors?.missing
+            ? (typeof options.errors.missing === "function"
+              ? options.errors.missing(optionNames)
+              : options.errors.missing)
+            : message`Missing option ${eOptionNames(optionNames)}.`,
+        };
+      }
+      // Handle PendingDependencySourceState: this means the option was not provided
+      // but it uses a DependencySource. Return a "missing" error.
+      if (isPendingDependencySourceState(state)) {
+        return {
           success: false,
           error: options.errors?.missing
             ? (typeof options.errors.missing === "function"

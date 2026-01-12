@@ -1240,6 +1240,93 @@ export function createDependencySourceState<T>(
 }
 
 /**
+ * A unique symbol used to identify pending dependency source states.
+ * @since 0.10.0
+ */
+export const PendingDependencySourceStateMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/PendingDependencySourceStateMarker",
+);
+
+/**
+ * Represents a pending dependency source state.
+ * This is used when a dependency source option was not provided, but its
+ * dependency ID still needs to be tracked for later resolution with a
+ * default value.
+ *
+ * @since 0.10.0
+ */
+export interface PendingDependencySourceState {
+  /**
+   * Marker to identify this as a pending dependency source state.
+   */
+  readonly [PendingDependencySourceStateMarker]: true;
+
+  /**
+   * The dependency ID of the source.
+   */
+  readonly [DependencyId]: symbol;
+}
+
+/**
+ * Checks if a value is a {@link PendingDependencySourceState}.
+ *
+ * @param value The value to check.
+ * @returns `true` if the value is a pending dependency source state.
+ * @since 0.10.0
+ */
+export function isPendingDependencySourceState(
+  value: unknown,
+): value is PendingDependencySourceState {
+  return typeof value === "object" &&
+    value !== null &&
+    PendingDependencySourceStateMarker in value &&
+    (value as PendingDependencySourceState)[
+        PendingDependencySourceStateMarker
+      ] === true;
+}
+
+/**
+ * Creates a pending dependency source state.
+ *
+ * @param dependencyId The dependency ID.
+ * @returns A PendingDependencySourceState object.
+ * @since 0.10.0
+ */
+export function createPendingDependencySourceState(
+  dependencyId: symbol,
+): PendingDependencySourceState {
+  return {
+    [PendingDependencySourceStateMarker]: true,
+    [DependencyId]: dependencyId,
+  };
+}
+
+/**
+ * A unique symbol used to identify parsers that wrap a dependency source.
+ * This is used by withDefault to indicate it contains an inner parser
+ * with a PendingDependencySourceState initialState.
+ * @since 0.10.0
+ */
+export const WrappedDependencySourceMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/WrappedDependencySourceMarker",
+);
+
+/**
+ * Checks if a parser wraps a dependency source (has WrappedDependencySourceMarker).
+ *
+ * @param parser The parser to check.
+ * @returns `true` if the parser wraps a dependency source.
+ * @since 0.10.0
+ */
+export function isWrappedDependencySource(
+  parser: unknown,
+): parser is { [WrappedDependencySourceMarker]: PendingDependencySourceState } {
+  return typeof parser === "object" &&
+    parser !== null &&
+    WrappedDependencySourceMarker in parser;
+}
+
+/**
  * Represents a resolved dependency value stored during parsing.
  * @since 0.10.0
  */
