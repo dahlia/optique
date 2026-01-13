@@ -3730,3 +3730,1738 @@ describe("suggestAsync() with derived parsers and provided dependencies", () => 
     );
   });
 });
+
+// =============================================================================
+// Internal type guards and factory functions
+// =============================================================================
+
+import {
+  createDependencySourceState,
+  createPendingDependencySourceState,
+  DependencyId,
+  DependencyRegistry,
+  DependencySourceStateMarker,
+  isDependencySource,
+  isDependencySourceState,
+  isDerivedValueParser,
+  isPendingDependencySourceState,
+  isWrappedDependencySource,
+  PendingDependencySourceStateMarker,
+  transformsDependencyValue,
+  TransformsDependencyValueMarker,
+  WrappedDependencySourceMarker,
+} from "./dependency.ts";
+
+describe("Internal type guards and factory functions", () => {
+  describe("isDependencySourceState()", () => {
+    test("returns true for valid dependency source state", () => {
+      const state = createDependencySourceState(
+        { success: true, value: "test" },
+        Symbol("test-dep"),
+      );
+      assert.ok(isDependencySourceState(state));
+    });
+
+    test("returns false for null", () => {
+      assert.ok(!isDependencySourceState(null));
+    });
+
+    test("returns false for undefined", () => {
+      assert.ok(!isDependencySourceState(undefined));
+    });
+
+    test("returns false for plain objects", () => {
+      assert.ok(!isDependencySourceState({ foo: "bar" }));
+    });
+
+    test("returns false for objects with wrong marker value", () => {
+      const fake = { [DependencySourceStateMarker]: false };
+      assert.ok(!isDependencySourceState(fake));
+    });
+  });
+
+  describe("createDependencySourceState()", () => {
+    test("creates valid state with success result", () => {
+      const depId = Symbol("test");
+      const state = createDependencySourceState(
+        { success: true, value: 42 },
+        depId,
+      );
+
+      assert.ok(isDependencySourceState(state));
+      assert.equal(state[DependencySourceStateMarker], true);
+      assert.equal(state[DependencyId], depId);
+      assert.ok(state.result.success);
+      if (state.result.success) {
+        assert.equal(state.result.value, 42);
+      }
+    });
+
+    test("creates valid state with failure result", () => {
+      const depId = Symbol("test");
+      const state = createDependencySourceState(
+        { success: false, error: message`error` },
+        depId,
+      );
+
+      assert.ok(isDependencySourceState(state));
+      assert.ok(!state.result.success);
+    });
+  });
+
+  describe("isPendingDependencySourceState()", () => {
+    test("returns true for valid pending state", () => {
+      const state = createPendingDependencySourceState(Symbol("test"));
+      assert.ok(isPendingDependencySourceState(state));
+    });
+
+    test("returns false for null", () => {
+      assert.ok(!isPendingDependencySourceState(null));
+    });
+
+    test("returns false for undefined", () => {
+      assert.ok(!isPendingDependencySourceState(undefined));
+    });
+
+    test("returns false for plain objects", () => {
+      assert.ok(!isPendingDependencySourceState({ foo: "bar" }));
+    });
+
+    test("returns false for objects with wrong marker value", () => {
+      const fake = { [PendingDependencySourceStateMarker]: false };
+      assert.ok(!isPendingDependencySourceState(fake));
+    });
+
+    test("returns false for dependency source state (different type)", () => {
+      const state = createDependencySourceState(
+        { success: true, value: "test" },
+        Symbol("test"),
+      );
+      assert.ok(!isPendingDependencySourceState(state));
+    });
+  });
+
+  describe("createPendingDependencySourceState()", () => {
+    test("creates valid pending state", () => {
+      const depId = Symbol("test");
+      const state = createPendingDependencySourceState(depId);
+
+      assert.ok(isPendingDependencySourceState(state));
+      assert.equal(state[PendingDependencySourceStateMarker], true);
+      assert.equal(state[DependencyId], depId);
+    });
+  });
+
+  describe("isWrappedDependencySource()", () => {
+    test("returns false for regular parsers", () => {
+      const parser = string({ metavar: "VALUE" });
+      assert.ok(!isWrappedDependencySource(parser));
+    });
+
+    test("returns false for dependency source itself", () => {
+      const depSource = dependency(string({ metavar: "VALUE" }));
+      assert.ok(!isWrappedDependencySource(depSource));
+    });
+
+    test("returns true for parser with WrappedDependencySourceMarker", () => {
+      const fake = {
+        [WrappedDependencySourceMarker]: createPendingDependencySourceState(
+          Symbol("test"),
+        ),
+      };
+      assert.ok(isWrappedDependencySource(fake));
+    });
+
+    test("returns false for null", () => {
+      assert.ok(!isWrappedDependencySource(null));
+    });
+  });
+
+  describe("transformsDependencyValue()", () => {
+    test("returns false for regular parsers", () => {
+      const parser = string({ metavar: "VALUE" });
+      assert.ok(!transformsDependencyValue(parser));
+    });
+
+    test("returns false for dependency source", () => {
+      const depSource = dependency(string({ metavar: "VALUE" }));
+      assert.ok(!transformsDependencyValue(depSource));
+    });
+
+    test("returns true for parser with TransformsDependencyValueMarker", () => {
+      const fake = { [TransformsDependencyValueMarker]: true };
+      assert.ok(transformsDependencyValue(fake));
+    });
+
+    test("returns false for marker set to false", () => {
+      const fake = { [TransformsDependencyValueMarker]: false };
+      assert.ok(!transformsDependencyValue(fake));
+    });
+
+    test("returns false for null", () => {
+      assert.ok(!transformsDependencyValue(null));
+    });
+  });
+
+  describe("isDependencySource()", () => {
+    test("returns true for dependency source", () => {
+      const depSource = dependency(string({ metavar: "VALUE" }));
+      assert.ok(isDependencySource(depSource));
+    });
+
+    test("returns false for regular value parser", () => {
+      const parser = string({ metavar: "VALUE" });
+      assert.ok(!isDependencySource(parser));
+    });
+
+    test("returns false for derived parser", () => {
+      const depSource = dependency(string({ metavar: "VALUE" }));
+      const derived = depSource.derive({
+        metavar: "DERIVED",
+        factory: () => string({ metavar: "INNER" }),
+        defaultValue: () => "",
+      });
+      assert.ok(!isDependencySource(derived));
+    });
+  });
+
+  describe("isDerivedValueParser()", () => {
+    test("returns true for derived parser", () => {
+      const depSource = dependency(string({ metavar: "VALUE" }));
+      const derived = depSource.derive({
+        metavar: "DERIVED",
+        factory: () => string({ metavar: "INNER" }),
+        defaultValue: () => "",
+      });
+      assert.ok(isDerivedValueParser(derived));
+    });
+
+    test("returns false for dependency source", () => {
+      const depSource = dependency(string({ metavar: "VALUE" }));
+      assert.ok(!isDerivedValueParser(depSource));
+    });
+
+    test("returns false for regular value parser", () => {
+      const parser = string({ metavar: "VALUE" });
+      assert.ok(!isDerivedValueParser(parser));
+    });
+  });
+
+  describe("DependencyRegistry", () => {
+    test("set and get values", () => {
+      const registry = new DependencyRegistry();
+      const id1 = Symbol("dep1");
+      const id2 = Symbol("dep2");
+
+      registry.set(id1, "value1");
+      registry.set(id2, 42);
+
+      assert.equal(registry.get(id1), "value1");
+      assert.equal(registry.get(id2), 42);
+    });
+
+    test("has() returns correct value", () => {
+      const registry = new DependencyRegistry();
+      const id1 = Symbol("dep1");
+      const id2 = Symbol("dep2");
+
+      registry.set(id1, "value");
+
+      assert.ok(registry.has(id1));
+      assert.ok(!registry.has(id2));
+    });
+
+    test("get() returns undefined for missing keys", () => {
+      const registry = new DependencyRegistry();
+      const id = Symbol("missing");
+
+      assert.equal(registry.get(id), undefined);
+    });
+
+    test("clone() creates independent copy", () => {
+      const registry = new DependencyRegistry();
+      const id1 = Symbol("dep1");
+      const id2 = Symbol("dep2");
+
+      registry.set(id1, "original");
+
+      const cloned = registry.clone();
+
+      // Verify cloned has same values
+      assert.equal(cloned.get(id1), "original");
+
+      // Modify original - should not affect clone
+      registry.set(id1, "modified");
+      registry.set(id2, "new");
+
+      assert.equal(cloned.get(id1), "original");
+      assert.ok(!cloned.has(id2));
+
+      // Modify clone - should not affect original
+      cloned.set(id1, "clone-modified");
+      assert.equal(registry.get(id1), "modified");
+    });
+  });
+});
+
+// =============================================================================
+// Error handling paths
+// =============================================================================
+
+describe("Error handling paths", () => {
+  describe("Factory throws non-Error value", () => {
+    test("derive() factory throws string", async () => {
+      const modeParser = dependency(choice(["a", "b"] as const));
+      const derivedParser = modeParser.derive({
+        metavar: "VALUE",
+        factory: (mode: "a" | "b") => {
+          if (mode === "b") {
+            throw "string error message"; // eslint-disable-line @typescript-eslint/only-throw-error
+          }
+          return string({ metavar: "VALUE" });
+        },
+        defaultValue: () => "a" as const,
+      });
+
+      const parser = object({
+        mode: option("--mode", modeParser),
+        value: option("--value", derivedParser),
+      });
+
+      const result = await parseAsync(parser, [
+        "--mode",
+        "b",
+        "--value",
+        "test",
+      ]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        // Should contain the string error message
+        // Note: message template puts interpolated values as { type: "value", value: ... }
+        const errorText = result.error
+          .map((s) => {
+            if (s.type === "text") return s.text;
+            if (s.type === "value") return s.value;
+            return "";
+          })
+          .join("");
+        assert.ok(
+          errorText.includes("string error message"),
+          `Error should contain thrown string, got: ${errorText}`,
+        );
+      }
+    });
+
+    test("derive() factory throws number", async () => {
+      const modeParser = dependency(choice(["a", "b"] as const));
+      const derivedParser = modeParser.derive({
+        metavar: "VALUE",
+        factory: (mode: "a" | "b") => {
+          if (mode === "b") {
+            throw 42; // eslint-disable-line @typescript-eslint/only-throw-error
+          }
+          return string({ metavar: "VALUE" });
+        },
+        defaultValue: () => "a" as const,
+      });
+
+      const parser = object({
+        mode: option("--mode", modeParser),
+        value: option("--value", derivedParser),
+      });
+
+      const result = await parseAsync(parser, [
+        "--mode",
+        "b",
+        "--value",
+        "test",
+      ]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorText = result.error
+          .map((s) => {
+            if (s.type === "text") return s.text;
+            if (s.type === "value") return s.value;
+            return "";
+          })
+          .join("");
+        assert.ok(
+          errorText.includes("42"),
+          `Error should contain stringified number, got: ${errorText}`,
+        );
+      }
+    });
+
+    test("deriveFrom() factory throws object", async () => {
+      const dep1 = dependency(choice(["x", "y"] as const));
+      const dep2 = dependency(choice(["1", "2"] as const));
+
+      const derived = deriveFrom({
+        metavar: "VALUE",
+        dependencies: [dep1, dep2] as const,
+        factory: (v1: "x" | "y", v2: "1" | "2") => {
+          if (v1 === "y" && v2 === "2") {
+            throw { custom: "error object" }; // eslint-disable-line @typescript-eslint/only-throw-error
+          }
+          return string({ metavar: "VALUE" });
+        },
+        defaultValues: () => ["x", "1"] as const,
+      });
+
+      const parser = object({
+        v1: option("--v1", dep1),
+        v2: option("--v2", dep2),
+        value: option("--value", derived),
+      });
+
+      const result = await parseAsync(parser, [
+        "--v1",
+        "y",
+        "--v2",
+        "2",
+        "--value",
+        "test",
+      ]);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("Suggestion fallback when factory throws", () => {
+    test("derive() suggestions fall back to default when factory throws", async () => {
+      const modeParser = dependency(choice(["safe", "dangerous"] as const));
+      const derivedParser = modeParser.derive({
+        metavar: "VALUE",
+        factory: (mode: "safe" | "dangerous") => {
+          if (mode === "dangerous") {
+            throw new Error("Cannot create parser for dangerous mode");
+          }
+          return choice(["option1", "option2"] as const);
+        },
+        defaultValue: () => "safe" as const,
+      });
+
+      const parser = object({
+        mode: option("--mode", modeParser),
+        value: option("--value", derivedParser),
+      });
+
+      // When mode is "dangerous", suggest should fall back to default ("safe")
+      const completions = await suggestAsync(parser, [
+        "--mode",
+        "dangerous",
+        "--value",
+        "",
+      ]);
+      const values = completions.map((c) => c.kind === "literal" ? c.text : "");
+
+      // Should get options from "safe" mode's parser
+      assert.ok(
+        values.includes("option1") || values.includes("option2"),
+        `Expected fallback suggestions, got: ${values.join(", ")}`,
+      );
+    });
+
+    test("deriveFrom() suggestions fall back to defaults when factory throws", async () => {
+      const dep1 = dependency(choice(["a", "b"] as const));
+      const dep2 = dependency(choice(["1", "2"] as const));
+
+      const derived = deriveFrom({
+        metavar: "VALUE",
+        dependencies: [dep1, dep2] as const,
+        factory: (v1: "a" | "b", v2: "1" | "2") => {
+          if (v1 === "b") {
+            throw new Error("Bad combination");
+          }
+          return choice([`${v1}-${v2}-x`, `${v1}-${v2}-y`] as const);
+        },
+        defaultValues: () => ["a", "1"] as const,
+      });
+
+      const parser = object({
+        v1: option("--v1", dep1),
+        v2: option("--v2", dep2),
+        value: option("--value", derived),
+      });
+
+      const completions = await suggestAsync(parser, [
+        "--v1",
+        "b",
+        "--v2",
+        "2",
+        "--value",
+        "",
+      ]);
+      const values = completions.map((c) => c.kind === "literal" ? c.text : "");
+
+      // Should fall back to default values ["a", "1"]
+      assert.ok(
+        values.includes("a-1-x") || values.includes("a-1-y"),
+        `Expected fallback suggestions from defaults, got: ${
+          values.join(", ")
+        }`,
+      );
+    });
+  });
+});
+
+// =============================================================================
+// Git-like CLI with subcommands and shared global dependency
+// =============================================================================
+
+describe("Git-like CLI with subcommands and shared global dependency", () => {
+  test("global -C option affects subcommand branch validation", async () => {
+    // Simulates: git -C <dir> branch --delete <branch>
+    const dirParser = dependency(string({ metavar: "DIR" }));
+
+    // Branch parser that depends on directory
+    const branchParser = dirParser.derive({
+      metavar: "BRANCH",
+      factory: (dir: string) => {
+        // In real code, this would validate against actual branches in dir
+        const branches = dir === "/repo1"
+          ? (["main", "feature-1"] as const)
+          : (["master", "develop"] as const);
+        return choice(branches);
+      },
+      defaultValue: () => ".",
+    });
+
+    // Build subcommands
+    const branchCmd = command(
+      "branch",
+      object({
+        delete: optional(option("-d", "--delete", branchParser)),
+        list: optional(option("-l", "--list", branchParser)),
+      }),
+    );
+
+    const checkoutCmd = command(
+      "checkout",
+      object({
+        branch: argument(branchParser),
+      }),
+    );
+
+    const parser = object({
+      dir: withDefault(option("-C", dirParser), "."),
+      cmd: or(branchCmd, checkoutCmd),
+    });
+
+    // Test with -C /repo1
+    const result1 = await parseAsync(parser, [
+      "-C",
+      "/repo1",
+      "branch",
+      "-d",
+      "feature-1",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.dir, "/repo1");
+      // Type narrowing for union type
+      if ("delete" in result1.value.cmd) {
+        assert.equal(result1.value.cmd.delete, "feature-1");
+      }
+    }
+
+    // Test with -C /repo2 - should have different valid branches
+    const result2 = await parseAsync(parser, [
+      "-C",
+      "/repo2",
+      "checkout",
+      "develop",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.dir, "/repo2");
+      // Type narrowing for union type
+      if ("branch" in result2.value.cmd) {
+        assert.equal(result2.value.cmd.branch, "develop");
+      }
+    }
+
+    // Invalid branch for the directory
+    const result3 = await parseAsync(parser, [
+      "-C",
+      "/repo1",
+      "checkout",
+      "develop", // Not valid in /repo1
+    ]);
+    assert.ok(!result3.success);
+  });
+
+  test("global option with multiple subcommands sharing derived parser", async () => {
+    const regionParser = dependency(choice(["us-east", "eu-west"] as const));
+
+    const resourceParser = regionParser.derive({
+      metavar: "RESOURCE",
+      factory: (region: "us-east" | "eu-west") => {
+        const resources = region === "us-east"
+          ? (["server-1", "server-2"] as const)
+          : (["instance-a", "instance-b"] as const);
+        return choice(resources);
+      },
+      defaultValue: () => "us-east" as const,
+    });
+
+    const listCmd = command(
+      "list",
+      object({
+        filter: optional(option("--filter", resourceParser)),
+      }),
+    );
+
+    const deleteCmd = command(
+      "delete",
+      object({
+        resource: argument(resourceParser),
+      }),
+    );
+
+    const describeCmd = command(
+      "describe",
+      object({
+        resource: argument(resourceParser),
+      }),
+    );
+
+    const parser = object({
+      region: option("--region", regionParser),
+      cmd: or(listCmd, or(deleteCmd, describeCmd)),
+    });
+
+    // Test list with filter
+    const r1 = await parseAsync(parser, [
+      "--region",
+      "eu-west",
+      "list",
+      "--filter",
+      "instance-a",
+    ]);
+    assert.ok(r1.success);
+
+    // Test delete
+    const r2 = await parseAsync(parser, [
+      "--region",
+      "us-east",
+      "delete",
+      "server-1",
+    ]);
+    assert.ok(r2.success);
+
+    // Test describe
+    const r3 = await parseAsync(parser, [
+      "--region",
+      "eu-west",
+      "describe",
+      "instance-b",
+    ]);
+    assert.ok(r3.success);
+
+    // Invalid: wrong resource for region
+    const r4 = await parseAsync(parser, [
+      "--region",
+      "us-east",
+      "delete",
+      "instance-a", // Not valid in us-east
+    ]);
+    assert.ok(!r4.success);
+  });
+
+  test("suggestions for subcommand argument based on global option", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+
+    const serviceParser = envParser.derive({
+      metavar: "SERVICE",
+      factory: (env: "dev" | "prod") => {
+        const services = env === "dev"
+          ? (["api-dev", "web-dev", "worker-dev"] as const)
+          : (["api-prod", "web-prod"] as const);
+        return choice(services);
+      },
+      defaultValue: () => "dev" as const,
+    });
+
+    const logsCmd = command(
+      "logs",
+      object({
+        service: argument(serviceParser),
+      }),
+    );
+
+    const parser = object({
+      env: option("--env", envParser),
+      cmd: logsCmd,
+    });
+
+    // Suggestions for prod environment
+    const completions = await suggestAsync(parser, [
+      "--env",
+      "prod",
+      "logs",
+      "",
+    ]);
+    const values = completions.map((c) => (c.kind === "literal" ? c.text : ""));
+
+    assert.ok(
+      values.includes("api-prod"),
+      `Expected 'api-prod', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      values.includes("web-prod"),
+      `Expected 'web-prod', got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      !values.includes("worker-dev"),
+      `Should not include 'worker-dev', got: ${values.join(", ")}`,
+    );
+  });
+});
+
+// =============================================================================
+// multiple() with derived parser
+// =============================================================================
+
+describe("multiple() with derived parser", () => {
+  test("multiple derived values with single dependency source", async () => {
+    const typeParser = dependency(choice(["number", "string"] as const));
+
+    const valueParser = typeParser.derive({
+      metavar: "VALUE",
+      factory: (type: "number" | "string") => {
+        if (type === "number") {
+          // Only accept numeric strings
+          return {
+            $mode: "sync" as const,
+            metavar: "NUMBER" as const,
+            parse: (input: string) => {
+              const num = Number(input);
+              if (Number.isNaN(num)) {
+                return { success: false, error: message`Not a number` };
+              }
+              return { success: true, value: input };
+            },
+            format: (v: string) => v,
+          };
+        } else {
+          return string({ metavar: "STRING" });
+        }
+      },
+      defaultValue: () => "string" as const,
+    });
+
+    const parser = object({
+      type: option("--type", typeParser),
+      values: multiple(option("--value", valueParser)),
+    });
+
+    // Multiple number values
+    const r1 = await parseAsync(parser, [
+      "--type",
+      "number",
+      "--value",
+      "1",
+      "--value",
+      "2",
+      "--value",
+      "3",
+    ]);
+    assert.ok(r1.success);
+    if (r1.success) {
+      assert.deepEqual(r1.value.values, ["1", "2", "3"]);
+    }
+
+    // Multiple string values
+    const r2 = await parseAsync(parser, [
+      "--type",
+      "string",
+      "--value",
+      "foo",
+      "--value",
+      "bar",
+    ]);
+    assert.ok(r2.success);
+    if (r2.success) {
+      assert.deepEqual(r2.value.values, ["foo", "bar"]);
+    }
+
+    // Invalid: non-number when type is number
+    const r3 = await parseAsync(parser, [
+      "--type",
+      "number",
+      "--value",
+      "123",
+      "--value",
+      "not-a-number",
+    ]);
+    assert.ok(!r3.success);
+  });
+
+  test("multiple with empty array", async () => {
+    const modeParser = dependency(choice(["a", "b"] as const));
+    const valueParser = modeParser.derive({
+      metavar: "VALUE",
+      factory: () => string({ metavar: "VALUE" }),
+      defaultValue: () => "a" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      values: multiple(option("--value", valueParser)),
+    });
+
+    const result = await parseAsync(parser, ["--mode", "a"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value.values, []);
+    }
+  });
+
+  test("multiple derived arguments", async () => {
+    const formatParser = dependency(choice(["json", "csv"] as const));
+
+    const fileParser = formatParser.derive({
+      metavar: "FILE",
+      factory: (format: "json" | "csv") => {
+        return {
+          $mode: "sync" as const,
+          metavar: "FILE" as const,
+          parse: (input: string) => {
+            const expectedExt = format === "json" ? ".json" : ".csv";
+            if (!input.endsWith(expectedExt)) {
+              return {
+                success: false,
+                error: message`File must end with ${expectedExt}`,
+              };
+            }
+            return { success: true, value: input };
+          },
+          format: (v: string) => v,
+        };
+      },
+      defaultValue: () => "json" as const,
+    });
+
+    const parser = object({
+      format: option("--format", formatParser),
+      files: multiple(argument(fileParser)),
+    });
+
+    // Valid JSON files
+    const r1 = await parseAsync(parser, [
+      "--format",
+      "json",
+      "a.json",
+      "b.json",
+      "c.json",
+    ]);
+    assert.ok(r1.success);
+    if (r1.success) {
+      assert.deepEqual(r1.value.files, ["a.json", "b.json", "c.json"]);
+    }
+
+    // Invalid: wrong extension
+    const r2 = await parseAsync(parser, [
+      "--format",
+      "json",
+      "a.json",
+      "b.csv",
+    ]);
+    assert.ok(!r2.success);
+  });
+});
+
+// =============================================================================
+// Multi-level dependencies using deriveFrom()
+// =============================================================================
+
+describe("Multi-level dependencies using deriveFrom()", () => {
+  test("deriveFrom with two independent dependency sources", async () => {
+    // Two independent dependency sources
+    const envParser = dependency(choice(["dev", "staging", "prod"] as const));
+    const regionParser = dependency(
+      choice(["local", "us-east", "us-west", "eu-west"] as const),
+    );
+
+    // Instance depends on both env and region
+    const instanceParser = deriveFrom({
+      metavar: "INSTANCE",
+      dependencies: [envParser, regionParser] as const,
+      factory: (
+        env: "dev" | "staging" | "prod",
+        region: "local" | "us-east" | "us-west" | "eu-west",
+      ) => {
+        // Valid combinations based on env
+        const validRegions: Record<string, readonly string[]> = {
+          dev: ["local"],
+          staging: ["us-east", "eu-west"],
+          prod: ["us-east", "us-west", "eu-west"],
+        };
+
+        // Check if region is valid for env
+        if (!validRegions[env].includes(region)) {
+          // Return a parser that will fail for any input
+          return {
+            $mode: "sync" as const,
+            metavar: "INSTANCE" as const,
+            parse: () => ({
+              success: false,
+              error:
+                message`Invalid region "${region}" for environment "${env}"`,
+            }),
+            format: (v: string) => v,
+          };
+        }
+
+        // Instance names depend on region
+        const instances: Record<string, readonly string[]> = {
+          local: ["localhost"],
+          "us-east": ["prod-us-1", "prod-us-2"],
+          "us-west": ["prod-usw-1"],
+          "eu-west": ["prod-eu-1", "prod-eu-2"],
+        };
+        return choice((instances[region] ?? ["unknown"]) as readonly string[]);
+      },
+      defaultValues: () => ["dev", "local"] as const,
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      region: option("--region", regionParser),
+      instance: option("--instance", instanceParser),
+    });
+
+    // Valid: dev + local + localhost
+    const r1 = await parseAsync(parser, [
+      "--env",
+      "dev",
+      "--region",
+      "local",
+      "--instance",
+      "localhost",
+    ]);
+    assert.ok(r1.success);
+
+    // Valid: prod + us-east + prod-us-2
+    const r2 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--region",
+      "us-east",
+      "--instance",
+      "prod-us-2",
+    ]);
+    assert.ok(r2.success);
+
+    // Invalid: dev + us-east (us-east not valid for dev)
+    const r3 = await parseAsync(parser, [
+      "--env",
+      "dev",
+      "--region",
+      "us-east",
+      "--instance",
+      "prod-us-1",
+    ]);
+    assert.ok(!r3.success);
+
+    // Invalid: prod + eu-west + prod-us-1 (wrong instance for region)
+    const r4 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--region",
+      "eu-west",
+      "--instance",
+      "prod-us-1",
+    ]);
+    assert.ok(!r4.success);
+  });
+
+  test("suggestions with deriveFrom use both dependency values", async () => {
+    const tierParser = dependency(choice(["free", "pro"] as const));
+    const categoryParser = dependency(
+      choice(["basic", "advanced"] as const),
+    );
+
+    // Features depend on both tier and category
+    const featureParser = deriveFrom({
+      metavar: "FEATURE",
+      dependencies: [tierParser, categoryParser] as const,
+      factory: (tier: "free" | "pro", category: "basic" | "advanced") => {
+        const features: Record<string, Record<string, readonly string[]>> = {
+          free: {
+            basic: ["f-basic-1", "f-basic-2"],
+            advanced: ["f-adv-1"], // Limited in free tier
+          },
+          pro: {
+            basic: ["p-basic-1", "p-basic-2", "p-basic-3"],
+            advanced: ["p-adv-1", "p-adv-2", "p-adv-3", "p-adv-4"],
+          },
+        };
+        return choice(
+          (features[tier]?.[category] ?? ["none"]) as readonly string[],
+        );
+      },
+      defaultValues: () => ["free", "basic"] as const,
+    });
+
+    const parser = object({
+      tier: option("--tier", tierParser),
+      category: option("--category", categoryParser),
+      feature: option("--feature", featureParser),
+    });
+
+    // Suggestions for pro + advanced
+    const completions = await suggestAsync(parser, [
+      "--tier",
+      "pro",
+      "--category",
+      "advanced",
+      "--feature",
+      "",
+    ]);
+    const values = completions.map((c) => (c.kind === "literal" ? c.text : ""));
+
+    assert.ok(
+      values.includes("p-adv-1"),
+      `Expected 'p-adv-1' for pro+advanced, got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      values.includes("p-adv-4"),
+      `Expected 'p-adv-4' for pro+advanced, got: ${values.join(", ")}`,
+    );
+    assert.ok(
+      !values.includes("f-basic-1"),
+      `Should not include free tier features, got: ${values.join(", ")}`,
+    );
+  });
+
+  test("three dependency sources with deriveFrom", async () => {
+    const cloud = dependency(choice(["aws", "gcp"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const tier = dependency(choice(["dev", "prod"] as const));
+
+    const resource = deriveFrom({
+      metavar: "RESOURCE",
+      dependencies: [cloud, region, tier] as const,
+      factory: (
+        c: "aws" | "gcp",
+        r: "us" | "eu",
+        t: "dev" | "prod",
+      ) => {
+        // Resource naming follows pattern: {cloud}-{region}-{tier}-{id}
+        const prefix = `${c}-${r}-${t}`;
+        return choice([`${prefix}-1`, `${prefix}-2`] as const);
+      },
+      defaultValues: () => ["aws", "us", "dev"] as const,
+    });
+
+    const parser = object({
+      cloud: option("--cloud", cloud),
+      region: option("--region", region),
+      tier: option("--tier", tier),
+      resource: option("--resource", resource),
+    });
+
+    // Valid combination
+    const r1 = await parseAsync(parser, [
+      "--cloud",
+      "gcp",
+      "--region",
+      "eu",
+      "--tier",
+      "prod",
+      "--resource",
+      "gcp-eu-prod-1",
+    ]);
+    assert.ok(r1.success);
+    if (r1.success) {
+      assert.equal(r1.value.resource, "gcp-eu-prod-1");
+    }
+
+    // Invalid: wrong resource name
+    const r2 = await parseAsync(parser, [
+      "--cloud",
+      "aws",
+      "--region",
+      "us",
+      "--tier",
+      "dev",
+      "--resource",
+      "gcp-eu-prod-1", // Wrong cloud/region/tier
+    ]);
+    assert.ok(!r2.success);
+  });
+});
+
+// =============================================================================
+// Edge case dependency values
+// =============================================================================
+
+describe("Edge case dependency values", () => {
+  test("empty string as dependency value", async () => {
+    const prefixParser = dependency(string({ metavar: "PREFIX" }));
+
+    const valueParser = prefixParser.derive({
+      metavar: "VALUE",
+      factory: (prefix: string) => {
+        return {
+          $mode: "sync" as const,
+          metavar: "VALUE" as const,
+          parse: (input: string) => {
+            if (prefix === "") {
+              // Empty prefix: accept anything
+              return { success: true, value: input };
+            }
+            if (!input.startsWith(prefix)) {
+              return {
+                success: false,
+                error: message`Value must start with "${prefix}"`,
+              };
+            }
+            return { success: true, value: input };
+          },
+          format: (v: string) => v,
+        };
+      },
+      defaultValue: () => "",
+    });
+
+    const parser = object({
+      prefix: option("--prefix", prefixParser),
+      value: option("--value", valueParser),
+    });
+
+    // Empty prefix - should accept anything
+    const r1 = await parseAsync(parser, [
+      "--prefix",
+      "",
+      "--value",
+      "anything",
+    ]);
+    assert.ok(r1.success);
+
+    // Non-empty prefix
+    const r2 = await parseAsync(parser, [
+      "--prefix",
+      "test-",
+      "--value",
+      "test-value",
+    ]);
+    assert.ok(r2.success);
+
+    // Invalid: doesn't match prefix
+    const r3 = await parseAsync(parser, [
+      "--prefix",
+      "test-",
+      "--value",
+      "other-value",
+    ]);
+    assert.ok(!r3.success);
+  });
+
+  test("whitespace-only dependency value", async () => {
+    const delimParser = dependency(string({ metavar: "DELIM" }));
+
+    const itemsParser = delimParser.derive({
+      metavar: "ITEMS",
+      factory: (delim: string) => {
+        return {
+          $mode: "sync" as const,
+          metavar: "ITEMS" as const,
+          parse: (input: string) => {
+            const items = input.split(delim);
+            return { success: true, value: items.join(",") };
+          },
+          format: (v: string) => v,
+        };
+      },
+      defaultValue: () => ",",
+    });
+
+    const parser = object({
+      delim: option("--delim", delimParser),
+      items: option("--items", itemsParser),
+    });
+
+    // Space as delimiter
+    const r1 = await parseAsync(parser, [
+      "--delim",
+      " ",
+      "--items",
+      "a b c",
+    ]);
+    assert.ok(r1.success);
+    if (r1.success) {
+      assert.equal(r1.value.items, "a,b,c");
+    }
+  });
+
+  test("special characters in dependency value", async () => {
+    const patternParser = dependency(string({ metavar: "PATTERN" }));
+
+    const matchParser = patternParser.derive({
+      metavar: "INPUT",
+      factory: (pattern: string) => {
+        return {
+          $mode: "sync" as const,
+          metavar: "INPUT" as const,
+          parse: (input: string) => {
+            try {
+              const regex = new RegExp(pattern);
+              if (!regex.test(input)) {
+                return {
+                  success: false,
+                  error: message`Input doesn't match pattern`,
+                };
+              }
+              return { success: true, value: input };
+            } catch {
+              return { success: false, error: message`Invalid regex pattern` };
+            }
+          },
+          format: (v: string) => v,
+        };
+      },
+      defaultValue: () => ".*",
+    });
+
+    const parser = object({
+      pattern: option("--pattern", patternParser),
+      input: option("--input", matchParser),
+    });
+
+    // Regex with special chars
+    const r1 = await parseAsync(parser, [
+      "--pattern",
+      "^[a-z]+$",
+      "--input",
+      "hello",
+    ]);
+    assert.ok(r1.success);
+
+    const r2 = await parseAsync(parser, [
+      "--pattern",
+      "^[a-z]+$",
+      "--input",
+      "Hello123",
+    ]);
+    assert.ok(!r2.success);
+  });
+
+  test("unicode characters in dependency value", async () => {
+    const langParser = dependency(choice(["en", "ko", "ja"] as const));
+
+    const greetingParser = langParser.derive({
+      metavar: "GREETING",
+      factory: (lang: "en" | "ko" | "ja") => {
+        const greetings = {
+          en: ["Hello", "Hi", "Hey"] as const,
+          ko: ["안녕하세요", "안녕", "반갑습니다"] as const,
+          ja: ["こんにちは", "おはよう", "こんばんは"] as const,
+        };
+        return choice(greetings[lang]);
+      },
+      defaultValue: () => "en" as const,
+    });
+
+    const parser = object({
+      lang: option("--lang", langParser),
+      greeting: option("--greeting", greetingParser),
+    });
+
+    // Korean
+    const r1 = await parseAsync(parser, [
+      "--lang",
+      "ko",
+      "--greeting",
+      "안녕하세요",
+    ]);
+    assert.ok(r1.success);
+    if (r1.success) {
+      assert.equal(r1.value.greeting, "안녕하세요");
+    }
+
+    // Japanese
+    const r2 = await parseAsync(parser, [
+      "--lang",
+      "ja",
+      "--greeting",
+      "こんにちは",
+    ]);
+    assert.ok(r2.success);
+  });
+
+  test("null-ish coerced dependency value", async () => {
+    // Test with value that becomes falsy when coerced
+    const countParser = dependency(choice(["0", "1", "2"] as const));
+
+    const itemsParser = countParser.derive({
+      metavar: "ITEMS",
+      factory: (count: "0" | "1" | "2") => {
+        const num = parseInt(count, 10);
+        const options = Array.from(
+          { length: num + 1 },
+          (_, i) => `item-${i}`,
+        ) as readonly string[];
+        return choice(options.length > 0 ? options : (["none"] as const));
+      },
+      defaultValue: () => "0" as const,
+    });
+
+    const parser = object({
+      count: option("--count", countParser),
+      item: option("--item", itemsParser),
+    });
+
+    // count = "0" (falsy when parsed as number)
+    const r1 = await parseAsync(parser, [
+      "--count",
+      "0",
+      "--item",
+      "item-0",
+    ]);
+    assert.ok(r1.success);
+  });
+});
+
+// =============================================================================
+// Real-world scenario: Database CLI
+// =============================================================================
+
+describe("Real-world scenario: Database CLI", () => {
+  // Test using deriveFrom with multiple dependencies for database-schema-table
+  // relationship. This pattern is supported: table depends on both db and schema.
+  test("database + schema → table using deriveFrom", async () => {
+    const dbParser = dependency(choice(["postgres", "mysql"] as const));
+
+    // Schema depends only on database
+    const schemaParser = dbParser.derive({
+      metavar: "SCHEMA",
+      factory: (db: "postgres" | "mysql") => {
+        if (db === "postgres") {
+          return choice(["public", "private", "audit"] as const);
+        }
+        return choice(["main", "archive"] as const);
+      },
+      defaultValue: () => "postgres" as const,
+    });
+
+    // Wrap schema as a dependency source for table to use
+    const schemaDep = dependency(
+      // Use a simple string parser since schema values are validated by schemaParser
+      {
+        $mode: "sync" as const,
+        metavar: "SCHEMA" as const,
+        parse: (s: string) => ({ success: true, value: s }),
+        format: (s: string) => s,
+      },
+    );
+
+    // Table depends on schema value (using deriveFrom for explicit dependency)
+    const tableParser = schemaDep.derive({
+      metavar: "TABLE",
+      factory: (schema: string) => {
+        const tables: Record<string, readonly string[]> = {
+          public: ["users", "posts", "comments"],
+          private: ["secrets", "tokens"],
+          audit: ["audit_log", "access_log"],
+          main: ["users", "products"],
+          archive: ["old_users", "old_products"],
+        };
+        return choice(
+          (tables[schema] ?? ["unknown_table"]) as readonly string[],
+        );
+      },
+      defaultValue: () => "public",
+    });
+
+    const queryCmd = command(
+      "query",
+      object({
+        table: option("--table", tableParser),
+        limit: withDefault(
+          option(
+            "--limit",
+            {
+              $mode: "sync" as const,
+              metavar: "N" as const,
+              parse: (s: string) => ({ success: true, value: parseInt(s, 10) }),
+              format: (n: number) => String(n),
+            },
+          ),
+          100,
+        ),
+      }),
+    );
+
+    const parser = object({
+      db: option("--db", dbParser),
+      schema: option("--schema", schemaDep), // Use simple dependency source
+      schemaValidated: option("--schema-check", schemaParser), // Validates schema against db
+      cmd: queryCmd,
+    });
+
+    // Valid: postgres → public → users (schema is valid string, validated separately)
+    const r1 = await parseAsync(parser, [
+      "--db",
+      "postgres",
+      "--schema",
+      "public",
+      "--schema-check",
+      "public",
+      "query",
+      "--table",
+      "users",
+    ]);
+    assert.ok(r1.success);
+
+    // Valid: mysql → archive → old_products
+    const r2 = await parseAsync(parser, [
+      "--db",
+      "mysql",
+      "--schema",
+      "archive",
+      "--schema-check",
+      "archive",
+      "query",
+      "--table",
+      "old_products",
+    ]);
+    assert.ok(r2.success);
+
+    // Invalid: wrong table for schema (table validation catches this)
+    const r3 = await parseAsync(parser, [
+      "--db",
+      "postgres",
+      "--schema",
+      "audit",
+      "--schema-check",
+      "audit",
+      "query",
+      "--table",
+      "users", // Not in audit schema
+    ]);
+    assert.ok(!r3.success);
+  });
+
+  // Alternative pattern: use deriveFrom to depend on both db and schema
+  test("table depends on db and schema using deriveFrom", async () => {
+    const dbParser = dependency(choice(["postgres", "mysql"] as const));
+    const schemaParser = dependency(
+      choice(["public", "private", "audit", "main", "archive"] as const),
+    );
+
+    // Table depends on both db and schema to validate the combination
+    const tableParser = deriveFrom({
+      dependencies: [dbParser, schemaParser] as const,
+      metavar: "TABLE",
+      factory: (db: "postgres" | "mysql", schema: string) => {
+        // Define valid schema-table combinations per database
+        const dbSchemas: Record<string, readonly string[]> = {
+          postgres: ["public", "private", "audit"],
+          mysql: ["main", "archive"],
+        };
+
+        const tables: Record<string, readonly string[]> = {
+          public: ["users", "posts", "comments"],
+          private: ["secrets", "tokens"],
+          audit: ["audit_log", "access_log"],
+          main: ["users", "products"],
+          archive: ["old_users", "old_products"],
+        };
+
+        // If schema is not valid for this db, return a parser that always fails
+        if (!dbSchemas[db]?.includes(schema)) {
+          return {
+            $mode: "sync" as const,
+            metavar: "TABLE" as const,
+            parse: () => ({
+              success: false,
+              error: message`Schema ${schema} is not valid for ${db} database.`,
+            }),
+            format: (s: string) => s,
+          };
+        }
+
+        return choice(
+          (tables[schema] ?? ["unknown_table"]) as readonly string[],
+        );
+      },
+      defaultValues: () => ["postgres", "public"] as const,
+    });
+
+    const parser = object({
+      db: option("--db", dbParser),
+      schema: option("--schema", schemaParser),
+      table: option("--table", tableParser),
+    });
+
+    // Valid: postgres → public → users
+    const r1 = await parseAsync(parser, [
+      "--db",
+      "postgres",
+      "--schema",
+      "public",
+      "--table",
+      "users",
+    ]);
+    assert.ok(r1.success);
+
+    // Valid: mysql → archive → old_products
+    const r2 = await parseAsync(parser, [
+      "--db",
+      "mysql",
+      "--schema",
+      "archive",
+      "--table",
+      "old_products",
+    ]);
+    assert.ok(r2.success);
+
+    // Invalid: postgres schema with mysql database
+    const r3 = await parseAsync(parser, [
+      "--db",
+      "mysql",
+      "--schema",
+      "public", // Not valid for mysql
+      "--table",
+      "users",
+    ]);
+    assert.ok(!r3.success);
+
+    // Invalid: wrong table for schema
+    const r4 = await parseAsync(parser, [
+      "--db",
+      "postgres",
+      "--schema",
+      "audit",
+      "--table",
+      "users", // Not in audit schema
+    ]);
+    assert.ok(!r4.success);
+  });
+});
+
+// =============================================================================
+// Performance and stress tests
+// =============================================================================
+
+describe("Performance and stress tests", () => {
+  test("many derived parsers from single source", async () => {
+    const baseParser = dependency(choice(["a", "b"] as const));
+
+    // Create derived parsers with explicit types
+    const derived0 = baseParser.derive({
+      metavar: "V0",
+      factory: (v: "a" | "b") => choice([`${v}-0-x`, `${v}-0-y`] as const),
+      defaultValue: () => "a" as const,
+    });
+    const derived1 = baseParser.derive({
+      metavar: "V1",
+      factory: (v: "a" | "b") => choice([`${v}-1-x`, `${v}-1-y`] as const),
+      defaultValue: () => "a" as const,
+    });
+    const derived2 = baseParser.derive({
+      metavar: "V2",
+      factory: (v: "a" | "b") => choice([`${v}-2-x`, `${v}-2-y`] as const),
+      defaultValue: () => "a" as const,
+    });
+    const derived3 = baseParser.derive({
+      metavar: "V3",
+      factory: (v: "a" | "b") => choice([`${v}-3-x`, `${v}-3-y`] as const),
+      defaultValue: () => "a" as const,
+    });
+    const derived4 = baseParser.derive({
+      metavar: "V4",
+      factory: (v: "a" | "b") => choice([`${v}-4-x`, `${v}-4-y`] as const),
+      defaultValue: () => "a" as const,
+    });
+
+    const parser = object({
+      base: option("--base", baseParser),
+      v0: optional(option("--v0", derived0)),
+      v1: optional(option("--v1", derived1)),
+      v2: optional(option("--v2", derived2)),
+      v3: optional(option("--v3", derived3)),
+      v4: optional(option("--v4", derived4)),
+    });
+
+    // Parse with base and some derived options
+    const result = await parseAsync(parser, [
+      "--base",
+      "b",
+      "--v0",
+      "b-0-x",
+      "--v2",
+      "b-2-y",
+      "--v4",
+      "b-4-x",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.base, "b");
+      assert.equal(result.value.v0, "b-0-x");
+      assert.equal(result.value.v2, "b-2-y");
+      assert.equal(result.value.v4, "b-4-x");
+      assert.equal(result.value.v1, undefined);
+      assert.equal(result.value.v3, undefined);
+    }
+  });
+
+  test("deeply nested merge with dependencies (5 levels)", async () => {
+    // Simpler version without recursive types
+    const level1Parser = dependency(choice(["L1"] as const));
+    const level2Parser = level1Parser.derive({
+      metavar: "L2",
+      factory: () => choice(["L1-L2"] as const),
+      defaultValue: () => "L1" as const,
+    });
+    const level2Dep = dependency(level2Parser);
+    const level3Parser = level2Dep.derive({
+      metavar: "L3",
+      factory: () => choice(["L1-L2-L3"] as const),
+      defaultValue: () => "L1-L2",
+    });
+    const level3Dep = dependency(level3Parser);
+    const level4Parser = level3Dep.derive({
+      metavar: "L4",
+      factory: () => choice(["L1-L2-L3-L4"] as const),
+      defaultValue: () => "L1-L2-L3",
+    });
+    const level4Dep = dependency(level4Parser);
+    const level5Parser = level4Dep.derive({
+      metavar: "L5",
+      factory: () => choice(["L1-L2-L3-L4-L5"] as const),
+      defaultValue: () => "L1-L2-L3-L4",
+    });
+
+    const parser = object({
+      l1: option("--l1", level1Parser),
+      l2: option("--l2", level2Dep),
+      l3: option("--l3", level3Dep),
+      l4: option("--l4", level4Dep),
+      l5: option("--l5", level5Parser),
+    });
+
+    const result = await parseAsync(parser, [
+      "--l1",
+      "L1",
+      "--l2",
+      "L1-L2",
+      "--l3",
+      "L1-L2-L3",
+      "--l4",
+      "L1-L2-L3-L4",
+      "--l5",
+      "L1-L2-L3-L4-L5",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.l5, "L1-L2-L3-L4-L5");
+    }
+  });
+
+  test("deriveFrom with 5 dependencies", async () => {
+    const d1 = dependency(choice(["a", "b"] as const));
+    const d2 = dependency(choice(["1", "2"] as const));
+    const d3 = dependency(choice(["x", "y"] as const));
+    const d4 = dependency(choice(["p", "q"] as const));
+    const d5 = dependency(choice(["m", "n"] as const));
+
+    const combined = deriveFrom({
+      metavar: "COMBINED",
+      dependencies: [d1, d2, d3, d4, d5] as const,
+      factory: (
+        v1: "a" | "b",
+        v2: "1" | "2",
+        v3: "x" | "y",
+        v4: "p" | "q",
+        v5: "m" | "n",
+      ) => {
+        return choice([`${v1}${v2}${v3}${v4}${v5}`] as const);
+      },
+      defaultValues: () => ["a", "1", "x", "p", "m"] as const,
+    });
+
+    const parser = object({
+      d1: option("--d1", d1),
+      d2: option("--d2", d2),
+      d3: option("--d3", d3),
+      d4: option("--d4", d4),
+      d5: option("--d5", d5),
+      combined: option("--combined", combined),
+    });
+
+    const result = await parseAsync(parser, [
+      "--d1",
+      "b",
+      "--d2",
+      "2",
+      "--d3",
+      "y",
+      "--d4",
+      "q",
+      "--d5",
+      "n",
+      "--combined",
+      "b2yqn",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.combined, "b2yqn");
+    }
+
+    // Invalid combination
+    const r2 = await parseAsync(parser, [
+      "--d1",
+      "a",
+      "--d2",
+      "1",
+      "--d3",
+      "x",
+      "--d4",
+      "p",
+      "--d5",
+      "m",
+      "--combined",
+      "wrong",
+    ]);
+    assert.ok(!r2.success);
+  });
+
+  test("rapid sequential parsing with dependencies", async () => {
+    const modeParser = dependency(choice(["fast", "slow"] as const));
+    const valueParser = modeParser.derive({
+      metavar: "VALUE",
+      factory: (mode: "fast" | "slow") =>
+        choice(
+          mode === "fast" ? (["f1", "f2"] as const) : (["s1", "s2"] as const),
+        ),
+      defaultValue: () => "fast" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      value: option("--value", valueParser),
+    });
+
+    // Run 100 parses in sequence
+    const results: boolean[] = [];
+    for (let i = 0; i < 100; i++) {
+      const mode = i % 2 === 0 ? "fast" : "slow";
+      const value = i % 2 === 0 ? "f1" : "s1";
+      const result = await parseAsync(parser, [
+        "--mode",
+        mode,
+        "--value",
+        value,
+      ]);
+      results.push(result.success);
+    }
+
+    assert.ok(
+      results.every((r) => r),
+      "All 100 parses should succeed",
+    );
+  });
+});

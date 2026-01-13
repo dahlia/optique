@@ -535,12 +535,17 @@ function* suggestArgumentSync<T>(
   valueParser: ValueParser<"sync", T>,
   hidden: boolean,
   prefix: string,
+  dependencyRegistry: unknown,
 ): Generator<Suggestion> {
   if (hidden) return;
 
   // Delegate to value parser if it has completion capabilities
   if (valueParser.suggest) {
-    yield* valueParser.suggest(prefix);
+    yield* getSuggestionsWithDependency(
+      valueParser,
+      prefix,
+      dependencyRegistry,
+    );
   }
 }
 
@@ -552,14 +557,17 @@ async function* suggestArgumentAsync<T>(
   valueParser: ValueParser<Mode, T>,
   hidden: boolean,
   prefix: string,
+  dependencyRegistry: unknown,
 ): AsyncGenerator<Suggestion> {
   if (hidden) return;
 
   // Delegate to value parser if it has completion capabilities
   if (valueParser.suggest) {
-    for await (const suggestion of valueParser.suggest(prefix)) {
-      yield suggestion;
-    }
+    yield* getSuggestionsWithDependencyAsync(
+      valueParser,
+      prefix,
+      dependencyRegistry,
+    );
   }
 }
 
@@ -1628,7 +1636,7 @@ export function argument<M extends Mode, T>(
       };
     },
     suggest(
-      _context: ParserContext<
+      context: ParserContext<
         ValueParserResult<T> | undefined
       >,
       prefix: string,
@@ -1639,12 +1647,14 @@ export function argument<M extends Mode, T>(
           valueParser,
           options.hidden ?? false,
           prefix,
+          context.dependencyRegistry,
         );
       }
       return suggestArgumentSync(
         valueParser as ValueParser<"sync", T>,
         options.hidden ?? false,
         prefix,
+        context.dependencyRegistry,
       );
     },
     getDocFragments(
