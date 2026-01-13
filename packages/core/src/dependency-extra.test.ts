@@ -5898,3 +5898,366 @@ describe("Negatable-style options with dependencies", () => {
     }
   });
 });
+
+// =============================================================================
+// Diamond dependency pattern
+// =============================================================================
+
+describe("Diamond dependency pattern", () => {
+  test("two derived parsers depending on same two sources", async () => {
+    // Diamond pattern:
+    //      sourceA    sourceB
+    //         \       /    \
+    //          \     /      \
+    //           v   v        v
+    //         derivedX    derivedY
+    //
+    // Both derivedX and derivedY depend on sourceA and sourceB
+
+    const envParser = dependency(choice(["dev", "staging", "prod"] as const));
+    const regionParser = dependency(choice(["us", "eu", "ap"] as const));
+
+    // derivedX: database connection depends on both env and region
+    const dbConnParser = deriveFrom({
+      dependencies: [envParser, regionParser] as const,
+      metavar: "DB_CONN",
+      defaultValues: () => ["dev", "us"] as const,
+      factory: (
+        env: "dev" | "staging" | "prod",
+        region: "us" | "eu" | "ap",
+      ) => {
+        const connections: Record<string, Record<string, readonly string[]>> = {
+          dev: {
+            us: ["localhost:5432", "dev-us.db:5432"],
+            eu: ["localhost:5432", "dev-eu.db:5432"],
+            ap: ["localhost:5432", "dev-ap.db:5432"],
+          },
+          staging: {
+            us: ["staging-us.db:5432"],
+            eu: ["staging-eu.db:5432"],
+            ap: ["staging-ap.db:5432"],
+          },
+          prod: {
+            us: ["prod-us-primary.db:5432", "prod-us-replica.db:5432"],
+            eu: ["prod-eu-primary.db:5432", "prod-eu-replica.db:5432"],
+            ap: ["prod-ap-primary.db:5432", "prod-ap-replica.db:5432"],
+          },
+        };
+        return choice(
+          connections[env][region] as readonly [string, ...string[]],
+        );
+      },
+    });
+
+    // derivedY: cache endpoint also depends on both env and region
+    const cacheParser = deriveFrom({
+      dependencies: [envParser, regionParser] as const,
+      metavar: "CACHE",
+      defaultValues: () => ["dev", "us"] as const,
+      factory: (
+        env: "dev" | "staging" | "prod",
+        region: "us" | "eu" | "ap",
+      ) => {
+        const caches: Record<string, Record<string, readonly string[]>> = {
+          dev: {
+            us: ["localhost:6379"],
+            eu: ["localhost:6379"],
+            ap: ["localhost:6379"],
+          },
+          staging: {
+            us: ["staging-us.cache:6379"],
+            eu: ["staging-eu.cache:6379"],
+            ap: ["staging-ap.cache:6379"],
+          },
+          prod: {
+            us: ["prod-us.cache:6379", "prod-us-backup.cache:6379"],
+            eu: ["prod-eu.cache:6379", "prod-eu-backup.cache:6379"],
+            ap: ["prod-ap.cache:6379", "prod-ap-backup.cache:6379"],
+          },
+        };
+        return choice(caches[env][region] as readonly [string, ...string[]]);
+      },
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      region: option("--region", regionParser),
+      db: option("--db", dbConnParser),
+      cache: option("--cache", cacheParser),
+    });
+
+    // Test prod + us
+    const result1 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--region",
+      "us",
+      "--db",
+      "prod-us-primary.db:5432",
+      "--cache",
+      "prod-us.cache:6379",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.env, "prod");
+      assert.equal(result1.value.region, "us");
+      assert.equal(result1.value.db, "prod-us-primary.db:5432");
+      assert.equal(result1.value.cache, "prod-us.cache:6379");
+    }
+
+    // Test dev + eu
+    const result2 = await parseAsync(parser, [
+      "--env",
+      "dev",
+      "--region",
+      "eu",
+      "--db",
+      "dev-eu.db:5432",
+      "--cache",
+      "localhost:6379",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.env, "dev");
+      assert.equal(result2.value.region, "eu");
+      assert.equal(result2.value.db, "dev-eu.db:5432");
+      assert.equal(result2.value.cache, "localhost:6379");
+    }
+
+    // Test invalid combination (prod + us with staging db)
+    const result3 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--region",
+      "us",
+      "--db",
+      "staging-us.db:5432",
+      "--cache",
+      "prod-us.cache:6379",
+    ]);
+    assert.ok(!result3.success);
+  });
+
+  test("diamond with async derived parsers", async () => {
+    const protocolParser = dependency(choice(["http", "https"] as const));
+    const portParser = dependency(choice(["80", "443", "8080"] as const));
+
+    // Both derived parsers depend on protocol + port
+    const urlParser = deriveFrom({
+      dependencies: [protocolParser, portParser] as const,
+      metavar: "URL",
+      defaultValues: () => ["http", "80"] as const,
+      factory: (protocol: "http" | "https", port: "80" | "443" | "8080") => {
+        if (protocol === "https") {
+          return choice(
+            [
+              `https://secure.example.com:${port}`,
+              `https://api.example.com:${port}`,
+            ] as const,
+          );
+        }
+        return choice(
+          [
+            `http://example.com:${port}`,
+            `http://test.example.com:${port}`,
+          ] as const,
+        );
+      },
+    });
+
+    const wsUrlParser = deriveFrom({
+      dependencies: [protocolParser, portParser] as const,
+      metavar: "WS_URL",
+      defaultValues: () => ["http", "80"] as const,
+      factory: (protocol: "http" | "https", port: "80" | "443" | "8080") => {
+        const wsProtocol = protocol === "https" ? "wss" : "ws";
+        return choice([`${wsProtocol}://ws.example.com:${port}`] as const);
+      },
+    });
+
+    const parser = object({
+      protocol: option("--protocol", protocolParser),
+      port: option("--port", portParser),
+      url: option("--url", urlParser),
+      wsUrl: option("--ws-url", wsUrlParser),
+    });
+
+    const result = await parseAsync(parser, [
+      "--protocol",
+      "https",
+      "--port",
+      "443",
+      "--url",
+      "https://secure.example.com:443",
+      "--ws-url",
+      "wss://ws.example.com:443",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.protocol, "https");
+      assert.equal(result.value.port, "443");
+      assert.equal(result.value.url, "https://secure.example.com:443");
+      assert.equal(result.value.wsUrl, "wss://ws.example.com:443");
+    }
+  });
+
+  test("diamond with three sources", async () => {
+    // Extended diamond with three sources
+    //   sourceA   sourceB   sourceC
+    //       \        |        /
+    //        \       |       /
+    //         v      v      v
+    //           derivedABC
+
+    const cloudParser = dependency(choice(["aws", "gcp", "azure"] as const));
+    const tierParser = dependency(
+      choice(["free", "pro", "enterprise"] as const),
+    );
+    const regionParser = dependency(choice(["us", "eu"] as const));
+
+    const instanceTypeParser = deriveFrom({
+      dependencies: [cloudParser, tierParser, regionParser] as const,
+      metavar: "INSTANCE",
+      defaultValues: () => ["aws", "free", "us"] as const,
+      factory: (
+        cloud: "aws" | "gcp" | "azure",
+        tier: "free" | "pro" | "enterprise",
+        region: "us" | "eu",
+      ) => {
+        const instances: Record<
+          string,
+          Record<string, Record<string, readonly string[]>>
+        > = {
+          aws: {
+            free: { us: ["t2.micro"], eu: ["t2.micro"] },
+            pro: { us: ["t3.medium", "t3.large"], eu: ["t3.medium"] },
+            enterprise: {
+              us: ["m5.xlarge", "m5.2xlarge"],
+              eu: ["m5.xlarge", "m5.2xlarge"],
+            },
+          },
+          gcp: {
+            free: { us: ["f1-micro"], eu: ["f1-micro"] },
+            pro: { us: ["n1-standard-1"], eu: ["n1-standard-1"] },
+            enterprise: { us: ["n1-standard-4"], eu: ["n1-standard-4"] },
+          },
+          azure: {
+            free: { us: ["B1s"], eu: ["B1s"] },
+            pro: { us: ["B2s", "B2ms"], eu: ["B2s"] },
+            enterprise: { us: ["D4s_v3"], eu: ["D4s_v3"] },
+          },
+        };
+        return choice(
+          instances[cloud][tier][region] as readonly [string, ...string[]],
+        );
+      },
+    });
+
+    const parser = object({
+      cloud: option("--cloud", cloudParser),
+      tier: option("--tier", tierParser),
+      region: option("--region", regionParser),
+      instance: option("--instance", instanceTypeParser),
+    });
+
+    // AWS enterprise us
+    const result1 = await parseAsync(parser, [
+      "--cloud",
+      "aws",
+      "--tier",
+      "enterprise",
+      "--region",
+      "us",
+      "--instance",
+      "m5.2xlarge",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.cloud, "aws");
+      assert.equal(result1.value.tier, "enterprise");
+      assert.equal(result1.value.region, "us");
+      assert.equal(result1.value.instance, "m5.2xlarge");
+    }
+
+    // GCP free eu
+    const result2 = await parseAsync(parser, [
+      "--cloud",
+      "gcp",
+      "--tier",
+      "free",
+      "--region",
+      "eu",
+      "--instance",
+      "f1-micro",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.cloud, "gcp");
+      assert.equal(result2.value.instance, "f1-micro");
+    }
+  });
+
+  test("diamond with defaults for sources", async () => {
+    const formatParser = dependency(choice(["json", "xml"] as const));
+    const compressionParser = dependency(choice(["gzip", "none"] as const));
+
+    const extensionParser = deriveFrom({
+      dependencies: [formatParser, compressionParser] as const,
+      metavar: "EXT",
+      defaultValues: () => ["json", "none"] as const,
+      factory: (format: "json" | "xml", compression: "gzip" | "none") => {
+        const ext = format === "json" ? ".json" : ".xml";
+        const suffix = compression === "gzip" ? ".gz" : "";
+        return choice([`${ext}${suffix}`] as const);
+      },
+    });
+
+    const parser = object({
+      format: withDefault(option("--format", formatParser), "json" as const),
+      compression: withDefault(
+        option("--compression", compressionParser),
+        "none" as const,
+      ),
+      extension: option("--extension", extensionParser),
+    });
+
+    // Use defaults for format and compression
+    const result1 = await parseAsync(parser, ["--extension", ".json"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.format, "json");
+      assert.equal(result1.value.compression, "none");
+      assert.equal(result1.value.extension, ".json");
+    }
+
+    // Override just compression
+    const result2 = await parseAsync(parser, [
+      "--compression",
+      "gzip",
+      "--extension",
+      ".json.gz",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.format, "json");
+      assert.equal(result2.value.compression, "gzip");
+      assert.equal(result2.value.extension, ".json.gz");
+    }
+
+    // Override both
+    const result3 = await parseAsync(parser, [
+      "--format",
+      "xml",
+      "--compression",
+      "gzip",
+      "--extension",
+      ".xml.gz",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.format, "xml");
+      assert.equal(result3.value.compression, "gzip");
+      assert.equal(result3.value.extension, ".xml.gz");
+    }
+  });
+});
