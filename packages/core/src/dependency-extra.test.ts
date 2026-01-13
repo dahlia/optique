@@ -5649,3 +5649,252 @@ describe("Short option clustering with dependencies", () => {
     }
   });
 });
+
+// =============================================================================
+// Negatable-style options with dependencies
+// =============================================================================
+
+describe("Negatable-style options with dependencies", () => {
+  // Helper: create a boolean value parser that accepts "true"/"false"
+  function booleanValueParser(): ValueParser<"sync", boolean> {
+    return {
+      $mode: "sync",
+      metavar: "BOOL" as NonEmptyString,
+      parse(input: string): ValueParserResult<boolean> {
+        const lower = input.toLowerCase();
+        if (lower === "true" || lower === "1" || lower === "yes") {
+          return { success: true, value: true };
+        }
+        if (lower === "false" || lower === "0" || lower === "no") {
+          return { success: true, value: false };
+        }
+        return {
+          success: false,
+          error: message`Expected boolean (true/false/yes/no/1/0)`,
+        };
+      },
+      format(value: boolean): string {
+        return value ? "true" : "false";
+      },
+      *suggest(_prefix: string): Iterable<Suggestion> {
+        yield { kind: "literal", text: "true" };
+        yield { kind: "literal", text: "false" };
+      },
+    };
+  }
+
+  test("boolean dependency with or() for negatable-like pattern", async () => {
+    // Simulate --verbose/--no-verbose using or() with boolean dependency
+    const verboseParser = dependency(booleanValueParser());
+    const outputParser = verboseParser.derive({
+      metavar: "OUTPUT",
+      defaultValue: () => false,
+      factory: (verbose: boolean) =>
+        choice(
+          verbose
+            ? (["detailed", "debug", "trace"] as const)
+            : (["summary", "brief"] as const),
+        ),
+    });
+
+    // Use or() to provide two ways to set verbose: --verbose=true or --quiet (sets to false)
+    const parser = object({
+      verbose: or(
+        option("--verbose", verboseParser),
+        map(option("--quiet"), () => false as boolean),
+      ),
+      output: option("--output", outputParser),
+    });
+
+    // --verbose=true allows detailed output
+    const result1 = await parseAsync(parser, [
+      "--verbose",
+      "true",
+      "--output",
+      "detailed",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.verbose, true);
+      assert.equal(result1.value.output, "detailed");
+    }
+
+    // --verbose=false allows summary output
+    const result2 = await parseAsync(parser, [
+      "--verbose",
+      "false",
+      "--output",
+      "brief",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.verbose, false);
+      assert.equal(result2.value.output, "brief");
+    }
+  });
+
+  test("boolean dependency with withDefault for optional verbose", async () => {
+    const verboseParser = dependency(booleanValueParser());
+    const formatParser = verboseParser.derive({
+      metavar: "FORMAT",
+      defaultValue: () => false,
+      factory: (verbose: boolean) =>
+        choice(verbose ? (["json", "yaml"] as const) : (["text"] as const)),
+    });
+
+    const parser = object({
+      verbose: withDefault(option("--verbose", verboseParser), false),
+      format: option("--format", formatParser),
+    });
+
+    // Without --verbose, defaults to false, so only "text" is valid
+    const result1 = await parseAsync(parser, ["--format", "text"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.verbose, false);
+      assert.equal(result1.value.format, "text");
+    }
+
+    // With --verbose=true, "json" and "yaml" are valid
+    const result2 = await parseAsync(parser, [
+      "--verbose",
+      "true",
+      "--format",
+      "json",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.verbose, true);
+      assert.equal(result2.value.format, "json");
+    }
+  });
+
+  test("boolean dependency affects multiple derived options", async () => {
+    const debugParser = dependency(booleanValueParser());
+
+    const logLevelParser = debugParser.derive({
+      metavar: "LEVEL",
+      defaultValue: () => false,
+      factory: (debug: boolean) =>
+        choice(
+          debug
+            ? (["trace", "debug", "info", "warn", "error"] as const)
+            : (["info", "warn", "error"] as const),
+        ),
+    });
+
+    const outputFormatParser = debugParser.derive({
+      metavar: "OUTPUT",
+      defaultValue: () => false,
+      factory: (debug: boolean) =>
+        choice(
+          debug
+            ? (["json", "pretty", "raw"] as const)
+            : (["json", "pretty"] as const),
+        ),
+    });
+
+    const parser = object({
+      debug: option("--debug", debugParser),
+      logLevel: option("--log-level", logLevelParser),
+      outputFormat: option("--output-format", outputFormatParser),
+    });
+
+    // debug=true unlocks more options for both derived parsers
+    const result1 = await parseAsync(parser, [
+      "--debug",
+      "true",
+      "--log-level",
+      "trace",
+      "--output-format",
+      "raw",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.debug, true);
+      assert.equal(result1.value.logLevel, "trace");
+      assert.equal(result1.value.outputFormat, "raw");
+    }
+
+    // debug=false restricts options
+    const result2 = await parseAsync(parser, [
+      "--debug",
+      "false",
+      "--log-level",
+      "info",
+      "--output-format",
+      "pretty",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.debug, false);
+      assert.equal(result2.value.logLevel, "info");
+      assert.equal(result2.value.outputFormat, "pretty");
+    }
+
+    // debug=false should reject "trace" as log level
+    const result3 = await parseAsync(parser, [
+      "--debug",
+      "false",
+      "--log-level",
+      "trace",
+      "--output-format",
+      "pretty",
+    ]);
+    assert.ok(!result3.success);
+  });
+
+  test("boolean dependency with yes/no input format", async () => {
+    const enabledParser = dependency(booleanValueParser());
+    const modeParser = enabledParser.derive({
+      metavar: "MODE",
+      defaultValue: () => false,
+      factory: (enabled: boolean) =>
+        choice(enabled ? (["full", "partial"] as const) : (["off"] as const)),
+    });
+
+    const parser = object({
+      enabled: option("--enabled", enabledParser),
+      mode: option("--mode", modeParser),
+    });
+
+    // Test with "yes"
+    const result1 = await parseAsync(parser, [
+      "--enabled",
+      "yes",
+      "--mode",
+      "full",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.enabled, true);
+      assert.equal(result1.value.mode, "full");
+    }
+
+    // Test with "no"
+    const result2 = await parseAsync(parser, [
+      "--enabled",
+      "no",
+      "--mode",
+      "off",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.enabled, false);
+      assert.equal(result2.value.mode, "off");
+    }
+
+    // Test with "1"
+    const result3 = await parseAsync(parser, [
+      "--enabled",
+      "1",
+      "--mode",
+      "partial",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.enabled, true);
+      assert.equal(result3.value.mode, "partial");
+    }
+  });
+});
