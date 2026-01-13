@@ -8191,3 +8191,142 @@ describe("Circular dependency prevention", () => {
     assert.ok(result3.success);
   });
 });
+
+describe("Complex modifier chains with dependencies", () => {
+  test("multiple(withDefault(optional(option(..., derived))))", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "local"] as const)
+            : (["release", "production"] as const),
+        ),
+    });
+
+    // Complex chain: multiple values, with defaults, optional inner option
+    const parser = object({
+      mode: option("--mode", modeParser),
+      configs: multiple(
+        withDefault(optional(option("--config", configParser)), "debug"),
+      ),
+    });
+
+    // Multiple config values
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--config",
+      "debug",
+      "--config",
+      "local",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "dev");
+      assert.deepEqual(result1.value.configs, ["debug", "local"]);
+    }
+
+    // No config specified - uses default
+    const result2 = await parseAsync(parser, ["--mode", "prod"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "prod");
+      // multiple with no values gives empty array, withDefault applies to each
+      assert.deepEqual(result2.value.configs, []);
+    }
+  });
+
+  test("optional(withDefault(option(..., derived), default))", async () => {
+    const envParser = dependency(choice(["test", "staging", "prod"] as const));
+    const endpointParser = envParser.derive({
+      metavar: "ENDPOINT",
+      defaultValue: () => "test" as const,
+      factory: (env: "test" | "staging" | "prod") =>
+        choice(
+          env === "test"
+            ? (["localhost:3000", "localhost:8080"] as const)
+            : env === "staging"
+            ? (["staging.api.com", "staging.cdn.com"] as const)
+            : (["api.example.com", "cdn.example.com"] as const),
+        ),
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      endpoint: optional(
+        withDefault(option("--endpoint", endpointParser), "localhost:3000"),
+      ),
+    });
+
+    // With endpoint specified
+    const result1 = await parseAsync(parser, [
+      "--env",
+      "test",
+      "--endpoint",
+      "localhost:8080",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.env, "test");
+      assert.equal(result1.value.endpoint, "localhost:8080");
+    }
+
+    // Without endpoint - uses undefined due to optional wrapping
+    const result2 = await parseAsync(parser, ["--env", "staging"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.env, "staging");
+      assert.equal(result2.value.endpoint, undefined);
+    }
+  });
+
+  test("withDefault(optional(multiple(option(..., derived))), [])", async () => {
+    const formatParser = dependency(choice(["json", "yaml", "xml"] as const));
+    const schemaParser = formatParser.derive({
+      metavar: "SCHEMA",
+      defaultValue: () => "json" as const,
+      factory: (format: "json" | "yaml" | "xml") =>
+        choice(
+          format === "json"
+            ? (["jsonschema", "openapi"] as const)
+            : format === "yaml"
+            ? (["kwalify", "strictyaml"] as const)
+            : (["xsd", "dtd"] as const),
+        ),
+    });
+
+    const parser = object({
+      format: option("--format", formatParser),
+      schemas: withDefault(
+        optional(multiple(option("--schema", schemaParser))),
+        [] as readonly string[],
+      ),
+    });
+
+    // Multiple schemas
+    const result1 = await parseAsync(parser, [
+      "--format",
+      "json",
+      "--schema",
+      "jsonschema",
+      "--schema",
+      "openapi",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.format, "json");
+      assert.deepEqual(result1.value.schemas, ["jsonschema", "openapi"]);
+    }
+
+    // No schemas - gets default empty array
+    const result2 = await parseAsync(parser, ["--format", "yaml"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.format, "yaml");
+      assert.deepEqual(result2.value.schemas, []);
+    }
+  });
+});
