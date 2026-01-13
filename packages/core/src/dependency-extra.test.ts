@@ -32,9 +32,11 @@ import {
   argument,
   command,
   constant,
+  flag,
   option,
   passThrough,
 } from "./primitives.ts";
+import { integer } from "./valueparser.ts";
 import { map, multiple, optional, withDefault } from "./modifiers.ts";
 import { formatUsage } from "./usage.ts";
 import { bash, fish, zsh } from "./completion.ts";
@@ -7909,5 +7911,151 @@ describe("argument() with derived parsers", () => {
       assert.equal(result.value[1], "eu");
       assert.equal(result.value[2], "https://prod.eu.example.com");
     }
+  });
+});
+
+describe("or() with derived parser fallback", () => {
+  test("or() falls back to next branch when derived parser fails validation", async () => {
+    // First branch: mode-dependent config
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug.json", "local.json"] as const)
+            : (["release.json", "prod.json"] as const),
+        ),
+    });
+
+    const branch1 = object({
+      mode: option("--mode", modeParser),
+      config: option("--config", configParser),
+    });
+
+    // Second branch: simple config without dependencies
+    const branch2 = object({
+      simple: option("--simple", choice(["a", "b", "c"] as const)),
+    });
+
+    const parser = or(branch1, branch2);
+
+    // First branch should succeed
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--config",
+      "debug.json",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      const value = result1.value as { mode: string; config: string };
+      assert.equal(value.mode, "dev");
+      assert.equal(value.config, "debug.json");
+    }
+
+    // Second branch should be used when first branch's options not present
+    const result2 = await parseAsync(parser, ["--simple", "b"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      const value = result2.value as { simple: string };
+      assert.equal(value.simple, "b");
+    }
+  });
+
+  test("or() with optional dependency source uses default for validation", async () => {
+    const envParser = dependency(choice(["test", "live"] as const));
+    const endpointParser = envParser.derive({
+      metavar: "ENDPOINT",
+      defaultValue: () => "test" as const,
+      factory: (env: "test" | "live") =>
+        choice(
+          env === "test"
+            ? (["localhost", "testserver"] as const)
+            : (["api.example.com", "cdn.example.com"] as const),
+        ),
+    });
+
+    // When env is optional with default, derived parser uses default for validation
+    const parser = object({
+      env: withDefault(option("--env", envParser), "test" as const),
+      endpoint: option("--endpoint", endpointParser),
+    });
+
+    // Valid: explicit env=test, endpoint valid for test
+    const result1 = await parseAsync(parser, [
+      "--env",
+      "test",
+      "--endpoint",
+      "localhost",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.env, "test");
+      assert.equal(result1.value.endpoint, "localhost");
+    }
+
+    // Valid: no env specified (uses default "test"), endpoint valid for test
+    const result2 = await parseAsync(parser, ["--endpoint", "testserver"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.env, "test");
+      assert.equal(result2.value.endpoint, "testserver");
+    }
+
+    // Invalid: endpoint not valid for test env (default)
+    const result3 = await parseAsync(parser, ["--endpoint", "api.example.com"]);
+    assert.ok(!result3.success);
+  });
+
+  test("or() with three branches and dependency in middle branch", async () => {
+    // Branch 1: requires --strict flag
+    const branch1 = object({
+      strict: flag("--strict"),
+      level: option("--level", integer()),
+    });
+
+    // Branch 2: dependency-based
+    const formatParser = dependency(choice(["json", "yaml"] as const));
+    const schemaParser = formatParser.derive({
+      metavar: "SCHEMA",
+      defaultValue: () => "json" as const,
+      factory: (format: "json" | "yaml") =>
+        choice(
+          format === "json"
+            ? (["jsonschema", "openapi"] as const)
+            : (["kwalify", "strictyaml"] as const),
+        ),
+    });
+
+    const branch2 = object({
+      format: option("--format", formatParser),
+      schema: option("--schema", schemaParser),
+    });
+
+    // Branch 3: simple fallback
+    const branch3 = object({
+      output: option("--output", string()),
+    });
+
+    const parser = or(branch1, branch2, branch3);
+
+    // Branch 1 succeeds
+    const result1 = await parseAsync(parser, ["--strict", "--level", "5"]);
+    assert.ok(result1.success);
+
+    // Branch 2 succeeds
+    const result2 = await parseAsync(parser, [
+      "--format",
+      "yaml",
+      "--schema",
+      "kwalify",
+    ]);
+    assert.ok(result2.success);
+
+    // Branch 3 succeeds (fallback)
+    const result3 = await parseAsync(parser, ["--output", "result.txt"]);
+    assert.ok(result3.success);
   });
 });
