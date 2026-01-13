@@ -145,6 +145,42 @@ const remoteBranchParser = option("--branch", gitRemoteBranch("origin"));
 // Usage: myapp pull --branch main
 ~~~~
 
+### Dynamic remote with dependencies
+
+Use the [dependency system](../concepts/dependencies.md) to validate branches
+against a user-specified remote. The `gitRemoteBranch()` parser works with
+async factory support in derived parsers:
+
+~~~~ typescript twoslash
+import { gitRemote, gitRemoteBranch } from "@optique/git";
+import { dependency } from "@optique/core/dependency";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+
+// Wrap gitRemote() as a dependency source
+const remoteParser = dependency(gitRemote());
+
+// Create a derived parser that validates branches against the selected remote
+const branchParser = remoteParser.derive({
+  metavar: "BRANCH",
+  factory: (remote) => gitRemoteBranch(remote),
+  defaultValue: () => "origin",
+});
+
+const pullCommand = object({
+  remote: option("--remote", remoteParser),
+  branch: option("--branch", branchParser),
+});
+
+// Now --branch validates against the remote specified by --remote:
+// myapp pull --remote upstream --branch feature/new
+// → validates that "feature/new" exists on "upstream"
+~~~~
+
+Since `gitRemoteBranch()` returns an async parser, the derived parser
+automatically becomes async. The dependency system handles the mode
+combination seamlessly.
+
 
 `gitCommit()`
 -------------

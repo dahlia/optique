@@ -1,3 +1,14 @@
+import {
+  type DeferredParseState,
+  dependencyId,
+  DependencyRegistry,
+  isDeferredParseState,
+  isDependencySourceState,
+  isPendingDependencySourceState,
+  isWrappedDependencySource,
+  parseWithDependency,
+  wrappedDependencySourceMarker,
+} from "./dependency.ts";
 import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
 import {
   type Message,
@@ -1270,12 +1281,51 @@ export function or(
       });
       if (result.success && result.consumed.length > 0) {
         if (context.state?.[0] !== i && context.state?.[1].success) {
+          // Different branch succeeded. Check if the new branch can also
+          // consume the previously consumed input (shared options case).
+          const previouslyConsumed = context.state[1].consumed;
+          const checkResult = parser.parse({
+            ...context,
+            buffer: previouslyConsumed,
+            state: parser.initialState,
+          });
+          // If the new branch can consume exactly the same input,
+          // this is a shared option - allow branch switch.
+          const canConsumeShared = checkResult.success &&
+            checkResult.consumed.length === previouslyConsumed.length &&
+            checkResult.consumed.every((c, idx) =>
+              c === previouslyConsumed[idx]
+            );
+          if (!canConsumeShared) {
+            return {
+              success: false,
+              consumed: context.buffer.length - result.next.buffer.length,
+              error: message`${values(context.state[1].consumed)} and ${
+                values(result.consumed)
+              } cannot be used together.`,
+            };
+          }
+          // Branch switch allowed - re-parse current input with state from
+          // shared options to ensure dependency values are available.
+          const replayedResult = parser.parse({
+            ...context,
+            state: checkResult.next.state,
+          });
+          if (!replayedResult.success) {
+            return replayedResult;
+          }
           return {
-            success: false,
-            consumed: context.buffer.length - result.next.buffer.length,
-            error: message`${values(context.state[1].consumed)} and ${
-              values(result.consumed)
-            } cannot be used together.`,
+            success: true,
+            next: {
+              ...context,
+              buffer: replayedResult.next.buffer,
+              optionsTerminated: replayedResult.next.optionsTerminated,
+              state: [i, {
+                ...replayedResult,
+                consumed: [...previouslyConsumed, ...replayedResult.consumed],
+              }],
+            },
+            consumed: replayedResult.consumed,
           };
         }
         return {
@@ -1317,12 +1367,53 @@ export function or(
       const result = await resultOrPromise;
       if (result.success && result.consumed.length > 0) {
         if (context.state?.[0] !== i && context.state?.[1].success) {
+          // Different branch succeeded. Check if the new branch can also
+          // consume the previously consumed input (shared options case).
+          const previouslyConsumed = context.state[1].consumed;
+          const checkResultOrPromise = parser.parse({
+            ...context,
+            buffer: previouslyConsumed,
+            state: parser.initialState,
+          });
+          const checkResult = await checkResultOrPromise;
+          // If the new branch can consume exactly the same input,
+          // this is a shared option - allow branch switch.
+          const canConsumeShared = checkResult.success &&
+            checkResult.consumed.length === previouslyConsumed.length &&
+            checkResult.consumed.every((c, idx) =>
+              c === previouslyConsumed[idx]
+            );
+          if (!canConsumeShared) {
+            return {
+              success: false,
+              consumed: context.buffer.length - result.next.buffer.length,
+              error: message`${values(context.state[1].consumed)} and ${
+                values(result.consumed)
+              } cannot be used together.`,
+            };
+          }
+          // Branch switch allowed - re-parse current input with state from
+          // shared options to ensure dependency values are available.
+          const replayedResultOrPromise = parser.parse({
+            ...context,
+            state: checkResult.next.state,
+          });
+          const replayedResult = await replayedResultOrPromise;
+          if (!replayedResult.success) {
+            return replayedResult;
+          }
           return {
-            success: false,
-            consumed: context.buffer.length - result.next.buffer.length,
-            error: message`${values(context.state[1].consumed)} and ${
-              values(result.consumed)
-            } cannot be used together.`,
+            success: true,
+            next: {
+              ...context,
+              buffer: replayedResult.next.buffer,
+              optionsTerminated: replayedResult.next.optionsTerminated,
+              state: [i, {
+                ...replayedResult,
+                consumed: [...previouslyConsumed, ...replayedResult.consumed],
+              }],
+            },
+            consumed: replayedResult.consumed,
           };
         }
         return {
@@ -2000,6 +2091,19 @@ function* suggestObjectSync<
   prefix: string,
   parserPairs: [string | symbol, Parser<"sync", unknown, unknown>][],
 ): Generator<Suggestion> {
+  // Build dependency registry from all parsed fields
+  const registry = context.dependencyRegistry instanceof DependencyRegistry
+    ? context.dependencyRegistry
+    : new DependencyRegistry();
+
+  // Collect dependency values from the current state
+  if (context.state && typeof context.state === "object") {
+    collectDependencies(context.state, registry);
+  }
+
+  // Create context with dependency registry for child parsers
+  const contextWithRegistry = { ...context, dependencyRegistry: registry };
+
   // Check if the last token in the buffer is an option that requires a value.
   // If so, only suggest values for that specific option parser, not all parsers.
   // This prevents positional argument suggestions from appearing when completing
@@ -2017,7 +2121,10 @@ function* suggestObjectSync<
             ? (context.state as Record<string | symbol, unknown>)[field]
             : parser.initialState;
 
-        yield* parser.suggest({ ...context, state: fieldState }, prefix);
+        yield* parser.suggest(
+          { ...contextWithRegistry, state: fieldState },
+          prefix,
+        );
         return;
       }
     }
@@ -2032,7 +2139,7 @@ function* suggestObjectSync<
       : parser.initialState;
 
     const fieldSuggestions = parser.suggest({
-      ...context,
+      ...contextWithRegistry,
       state: fieldState,
     }, prefix);
 
@@ -2053,6 +2160,19 @@ async function* suggestObjectAsync<
   prefix: string,
   parserPairs: readonly [string | symbol, Parser<Mode, unknown, unknown>][],
 ): AsyncGenerator<Suggestion> {
+  // Build dependency registry from all parsed fields
+  const registry = context.dependencyRegistry instanceof DependencyRegistry
+    ? context.dependencyRegistry
+    : new DependencyRegistry();
+
+  // Collect dependency values from the current state
+  if (context.state && typeof context.state === "object") {
+    collectDependencies(context.state, registry);
+  }
+
+  // Create context with dependency registry for child parsers
+  const contextWithRegistry = { ...context, dependencyRegistry: registry };
+
   // Check if the last token in the buffer is an option that requires a value.
   if (context.buffer.length > 0) {
     const lastToken = context.buffer[context.buffer.length - 1];
@@ -2068,7 +2188,7 @@ async function* suggestObjectAsync<
             : parser.initialState;
 
         const suggestions = parser.suggest(
-          { ...context, state: fieldState },
+          { ...contextWithRegistry, state: fieldState },
           prefix,
         ) as AsyncIterable<Suggestion>;
         for await (const s of suggestions) {
@@ -2088,7 +2208,7 @@ async function* suggestObjectAsync<
       : parser.initialState;
 
     const fieldSuggestions = parser.suggest(
-      { ...context, state: fieldState },
+      { ...contextWithRegistry, state: fieldState },
       prefix,
     );
 
@@ -2099,6 +2219,268 @@ async function* suggestObjectAsync<
   }
 
   yield* deduplicateSuggestions(suggestions);
+}
+
+/**
+ * Resolves deferred parse states in an object's field states.
+ * This function builds a dependency registry from DependencySourceState fields
+ * and re-parses DeferredParseState fields using the actual dependency values.
+ *
+ * @param fieldStates A record of field names to their state values
+ * @returns The field states with deferred states resolved to their actual values
+ * @internal
+ */
+/**
+ * Recursively collects dependency values from DependencySourceState objects
+ * found anywhere in the state tree.
+ */
+function collectDependencies(
+  state: unknown,
+  registry: DependencyRegistry,
+): void {
+  if (state === null || state === undefined) return;
+
+  // Check if this is a DependencySourceState
+  if (isDependencySourceState(state)) {
+    const depId = state[dependencyId];
+    const result = state.result;
+    if (result.success) {
+      registry.set(depId, result.value);
+    }
+    return;
+  }
+
+  // Recursively search in arrays
+  if (Array.isArray(state)) {
+    for (const item of state) {
+      collectDependencies(item, registry);
+    }
+    return;
+  }
+
+  // Recursively search in objects (but skip DeferredParseState internals)
+  if (typeof state === "object" && !isDeferredParseState(state)) {
+    for (const key of Reflect.ownKeys(state)) {
+      collectDependencies(
+        (state as Record<string | symbol, unknown>)[key],
+        registry,
+      );
+    }
+  }
+}
+
+/**
+ * Checks if a value is a plain object (created with `{}` or `Object.create(null)`).
+ * Class instances like `Temporal.PlainDate`, `URL`, `Date`, etc. return false.
+ * This is used to determine whether to recursively traverse an object when
+ * resolving deferred parse states - we only want to traverse plain objects
+ * that are part of the parser state structure, not user values.
+ */
+function isPlainObject(
+  value: unknown,
+): value is Record<string | symbol, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Collects dependency values for a DeferredParseState from the registry.
+ * Returns the collected values array, or null if any required dependency
+ * is missing (and no default is available).
+ */
+function collectDependencyValues(
+  deferredState: DeferredParseState<unknown>,
+  registry: DependencyRegistry,
+): unknown[] | unknown | null {
+  const depIds = deferredState.dependencyIds;
+
+  // Multi-dependency case (from deriveFrom)
+  if (depIds && depIds.length > 0) {
+    const defaults = deferredState.defaultValues;
+    const dependencyValues: unknown[] = [];
+
+    for (let i = 0; i < depIds.length; i++) {
+      const depId = depIds[i];
+      if (registry.has(depId)) {
+        dependencyValues.push(registry.get(depId));
+      } else if (defaults && i < defaults.length) {
+        dependencyValues.push(defaults[i]);
+      } else {
+        return null; // Missing dependency with no default
+      }
+    }
+    return dependencyValues;
+  }
+
+  // Single dependency case (from derive)
+  const depId = deferredState.dependencyId;
+  if (registry.has(depId)) {
+    return registry.get(depId);
+  }
+  return null; // Dependency not found
+}
+
+/**
+ * Recursively resolves DeferredParseState objects found anywhere in the state tree.
+ * Returns the resolved state (sync version).
+ *
+ * Only traverses:
+ * - DeferredParseState (to resolve it)
+ * - DependencySourceState (skipped, kept as-is)
+ * - Arrays (to find nested deferred states)
+ * - Plain objects (to find nested deferred states in parser state structures)
+ *
+ * Does NOT traverse class instances (e.g., Temporal.PlainDate, URL) since these
+ * are user values that should be preserved as-is.
+ */
+function resolveDeferred(
+  state: unknown,
+  registry: DependencyRegistry,
+): unknown {
+  if (state === null || state === undefined) return state;
+
+  // Check if this is a DeferredParseState - resolve it
+  if (isDeferredParseState(state)) {
+    const deferredState = state as DeferredParseState<unknown>;
+    const dependencyValue = collectDependencyValues(deferredState, registry);
+
+    if (dependencyValue === null) {
+      return deferredState.preliminaryResult;
+    }
+
+    const reParseResult = deferredState.parser[parseWithDependency](
+      deferredState.rawInput,
+      dependencyValue,
+    );
+
+    // Handle sync vs async result
+    if (reParseResult instanceof Promise) {
+      // For async, use preliminary result (will be handled by async version)
+      return deferredState.preliminaryResult;
+    }
+    return reParseResult;
+  }
+
+  // Skip DependencySourceState - it's a marker, not something to resolve
+  if (isDependencySourceState(state)) {
+    return state;
+  }
+
+  // Recursively resolve in arrays
+  if (Array.isArray(state)) {
+    return state.map((item) => resolveDeferred(item, registry));
+  }
+
+  // Only traverse plain objects (parser state structures)
+  // Skip class instances (user values like Temporal.PlainDate, URL, etc.)
+  if (isPlainObject(state)) {
+    const resolved: Record<string | symbol, unknown> = {};
+    for (const key of Reflect.ownKeys(state)) {
+      resolved[key] = resolveDeferred(state[key], registry);
+    }
+    return resolved;
+  }
+
+  // Everything else (primitives, class instances) - return as-is
+  return state;
+}
+
+function resolveDeferredParseStates<
+  T extends Record<string | symbol, unknown> | unknown[],
+>(
+  fieldStates: T,
+): T {
+  // First pass: Build dependency registry from all DependencySourceState fields
+  // (recursively searching through nested structures)
+  const registry = new DependencyRegistry();
+  collectDependencies(fieldStates, registry);
+
+  // Second pass: Resolve all DeferredParseState fields recursively
+  return resolveDeferred(fieldStates, registry) as T;
+}
+
+/**
+ * Recursively resolves DeferredParseState objects found anywhere in the state tree.
+ * Returns the resolved state (async version).
+ *
+ * Only traverses:
+ * - DeferredParseState (to resolve it)
+ * - DependencySourceState (skipped, kept as-is)
+ * - Arrays (to find nested deferred states)
+ * - Plain objects (to find nested deferred states in parser state structures)
+ *
+ * Does NOT traverse class instances (e.g., Temporal.PlainDate, URL) since these
+ * are user values that should be preserved as-is.
+ */
+async function resolveDeferredAsync(
+  state: unknown,
+  registry: DependencyRegistry,
+): Promise<unknown> {
+  if (state === null || state === undefined) return state;
+
+  // Check if this is a DeferredParseState - resolve it
+  if (isDeferredParseState(state)) {
+    const deferredState = state as DeferredParseState<unknown>;
+    const dependencyValue = collectDependencyValues(deferredState, registry);
+
+    if (dependencyValue === null) {
+      return deferredState.preliminaryResult;
+    }
+
+    const reParseResult = deferredState.parser[parseWithDependency](
+      deferredState.rawInput,
+      dependencyValue,
+    );
+
+    // Handle both sync and async results
+    return Promise.resolve(reParseResult);
+  }
+
+  // Skip DependencySourceState - it's a marker, not something to resolve
+  if (isDependencySourceState(state)) {
+    return state;
+  }
+
+  // Recursively resolve in arrays
+  if (Array.isArray(state)) {
+    return Promise.all(
+      state.map((item) => resolveDeferredAsync(item, registry)),
+    );
+  }
+
+  // Only traverse plain objects (parser state structures)
+  // Skip class instances (user values like Temporal.PlainDate, URL, etc.)
+  if (isPlainObject(state)) {
+    const resolved: Record<string | symbol, unknown> = {};
+    const keys = Reflect.ownKeys(state);
+    await Promise.all(
+      keys.map(async (key) => {
+        resolved[key] = await resolveDeferredAsync(state[key], registry);
+      }),
+    );
+    return resolved;
+  }
+
+  return state;
+}
+
+/**
+ * Async version of resolveDeferredParseStates for async parsers.
+ * @internal
+ */
+async function resolveDeferredParseStatesAsync<
+  T extends Record<string | symbol, unknown> | unknown[],
+>(
+  fieldStates: T,
+): Promise<T> {
+  // First pass: Build dependency registry from all DependencySourceState fields
+  // (recursively searching through nested structures)
+  const registry = new DependencyRegistry();
+  collectDependencies(fieldStates, registry);
+
+  // Second pass: Resolve all DeferredParseState fields recursively
+  return await resolveDeferredAsync(fieldStates, registry) as T;
 }
 
 /**
@@ -2521,21 +2903,109 @@ export function object<
     complete(state: { readonly [K in keyof T]: unknown }) {
       // For sync mode, complete synchronously
       if (!isAsync) {
+        // Phase 1: Pre-complete fields with PendingDependencySourceState to get
+        // DependencySourceState with default values. This is needed for
+        // withDefault(option(..., dependencySource), defaultValue) pattern.
+        const preCompletedState: Record<string | symbol, unknown> = {};
+        const preCompletedKeys = new Set<string | symbol>();
+        for (const field of parserKeys) {
+          const fieldKey = field as string | symbol;
+          const fieldState =
+            (state as Record<string | symbol, unknown>)[fieldKey];
+          const fieldParser = parsers[field] as Parser<
+            "sync",
+            unknown,
+            unknown
+          >;
+
+          // Check if this is a withDefault state containing PendingDependencySourceState
+          // Case 1: state is [PendingDependencySourceState] (option was not provided)
+          if (
+            Array.isArray(fieldState) &&
+            fieldState.length === 1 &&
+            isPendingDependencySourceState(fieldState[0])
+          ) {
+            // Call complete to get DependencySourceState with default value
+            const completed = fieldParser.complete(fieldState);
+            // The result might be a DependencySourceState (from withDefault)
+            preCompletedState[fieldKey] = completed;
+            preCompletedKeys.add(fieldKey);
+          } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
+          // This happens with withDefault(option(..., dependencySource), ...) when no input was parsed
+          else if (
+            fieldState === undefined &&
+            isPendingDependencySourceState(fieldParser.initialState)
+          ) {
+            // Call complete with [initialState] to get DependencySourceState
+            const completed = fieldParser.complete([fieldParser.initialState]);
+            preCompletedState[fieldKey] = completed;
+            preCompletedKeys.add(fieldKey);
+          } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
+          // This happens with withDefault(option(..., dependencySource), defaultValue) when
+          // no input was parsed. The withDefault parser wraps the inner dependency source
+          // and stores the PendingDependencySourceState in wrappedDependencySourceMarker.
+          // Also handles optional(withDefault(...)) and withDefault(optional(...), default).
+          else if (
+            fieldState === undefined &&
+            isWrappedDependencySource(fieldParser)
+          ) {
+            // Call complete with [PendingDependencySourceState] to trigger withDefault's
+            // special handling that returns DependencySourceState with the default value
+            const pendingState = fieldParser[wrappedDependencySourceMarker];
+            const completed = fieldParser.complete([pendingState]);
+            // Only use the pre-completed result if it's a DependencySourceState.
+            // If the wrapper returns a regular result (e.g., optional returning undefined),
+            // keep the original state so Phase 3 handles it normally.
+            if (isDependencySourceState(completed)) {
+              preCompletedState[fieldKey] = completed;
+              preCompletedKeys.add(fieldKey);
+            } else {
+              preCompletedState[fieldKey] = fieldState;
+            }
+          } else {
+            preCompletedState[fieldKey] = fieldState;
+          }
+        }
+
+        // Phase 2: Resolve any deferred parse states with actual dependency values
+        // (using pre-completed state which now contains DependencySourceState for
+        // withDefault'd dependency sources)
+        const resolvedState = resolveDeferredParseStates(preCompletedState);
+
+        // Phase 3: Complete remaining fields
         const result: { [K in keyof T]: T[K]["$valueType"][number] } =
           // deno-lint-ignore no-explicit-any
           {} as any;
         for (const field of parserKeys) {
-          const valueResult = (
-            parsers[field] as Parser<"sync", unknown, unknown>
-          ).complete(
-            (state as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ],
-          );
+          const fieldKey = field as string | symbol;
+          const fieldResolvedState =
+            (resolvedState as Record<string | symbol, unknown>)[fieldKey];
+          const fieldParser = parsers[field] as Parser<
+            "sync",
+            unknown,
+            unknown
+          >;
+
+          // If this field was pre-completed in Phase 1 and is a DependencySourceState,
+          // extract the value directly since complete() was already called.
+          if (
+            isDependencySourceState(fieldResolvedState) &&
+            preCompletedKeys.has(fieldKey)
+          ) {
+            const depResult = fieldResolvedState.result;
+            if (depResult.success) {
+              (result as Record<string | symbol, unknown>)[fieldKey] =
+                depResult.value;
+            } else {
+              return { success: false, error: depResult.error };
+            }
+            continue;
+          }
+
+          const valueResult = fieldParser.complete(fieldResolvedState);
           if (valueResult.success) {
-            (result as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ] = valueResult.value;
+            (result as Record<string | symbol, unknown>)[fieldKey] =
+              valueResult.value;
           } else return { success: false, error: valueResult.error };
         }
         return { success: true, value: result };
@@ -2543,19 +3013,101 @@ export function object<
 
       // For async mode, complete asynchronously
       return (async () => {
+        // Phase 1: Pre-complete fields with PendingDependencySourceState
+        const preCompletedState: Record<string | symbol, unknown> = {};
+        const preCompletedKeys = new Set<string | symbol>();
+        for (const field of parserKeys) {
+          const fieldKey = field as string | symbol;
+          const fieldState =
+            (state as Record<string | symbol, unknown>)[fieldKey];
+          const fieldParser = parsers[field];
+
+          // Check if this is a withDefault state containing PendingDependencySourceState
+          // Case 1: state is [PendingDependencySourceState] (option was not provided)
+          if (
+            Array.isArray(fieldState) &&
+            fieldState.length === 1 &&
+            isPendingDependencySourceState(fieldState[0])
+          ) {
+            // Call complete to get DependencySourceState with default value
+            const completed = await fieldParser.complete(fieldState);
+            // The result might be a DependencySourceState (from withDefault)
+            preCompletedState[fieldKey] = completed;
+            preCompletedKeys.add(fieldKey);
+          } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
+          // This happens with withDefault(option(..., dependencySource), ...) when no input was parsed
+          else if (
+            fieldState === undefined &&
+            isPendingDependencySourceState(fieldParser.initialState)
+          ) {
+            // Call complete with [initialState] to get DependencySourceState
+            const completed = await fieldParser.complete([
+              fieldParser.initialState,
+            ]);
+            preCompletedState[fieldKey] = completed;
+            preCompletedKeys.add(fieldKey);
+          } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
+          // This happens with withDefault(option(..., dependencySource), defaultValue) when
+          // no input was parsed. The withDefault parser wraps the inner dependency source
+          // and stores the PendingDependencySourceState in wrappedDependencySourceMarker.
+          // Also handles optional(withDefault(...)) and withDefault(optional(...), default).
+          else if (
+            fieldState === undefined &&
+            isWrappedDependencySource(fieldParser)
+          ) {
+            // Call complete with [PendingDependencySourceState] to trigger withDefault's
+            // special handling that returns DependencySourceState with the default value
+            const pendingState = fieldParser[wrappedDependencySourceMarker];
+            const completed = await fieldParser.complete([pendingState]);
+            // Only use the pre-completed result if it's a DependencySourceState.
+            // If the wrapper returns a regular result (e.g., optional returning undefined),
+            // keep the original state so Phase 3 handles it normally.
+            if (isDependencySourceState(completed)) {
+              preCompletedState[fieldKey] = completed;
+              preCompletedKeys.add(fieldKey);
+            } else {
+              preCompletedState[fieldKey] = fieldState;
+            }
+          } else {
+            preCompletedState[fieldKey] = fieldState;
+          }
+        }
+
+        // Phase 2: Resolve any deferred parse states with actual dependency values
+        const resolvedState = await resolveDeferredParseStatesAsync(
+          preCompletedState,
+        );
+
+        // Phase 3: Complete remaining fields
         const result: { [K in keyof T]: T[K]["$valueType"][number] } =
           // deno-lint-ignore no-explicit-any
           {} as any;
         for (const field of parserKeys) {
-          const valueResult = await parsers[field].complete(
-            (state as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ],
-          );
+          const fieldKey = field as string | symbol;
+          const fieldResolvedState =
+            (resolvedState as Record<string | symbol, unknown>)[fieldKey];
+          const fieldParser = parsers[field];
+
+          // If this field was pre-completed in Phase 1 and is a DependencySourceState,
+          // extract the value directly since complete() was already called.
+          if (
+            isDependencySourceState(fieldResolvedState) &&
+            preCompletedKeys.has(fieldKey)
+          ) {
+            const depResult = fieldResolvedState.result;
+            if (depResult.success) {
+              (result as Record<string | symbol, unknown>)[fieldKey] =
+                depResult.value;
+            } else {
+              return { success: false, error: depResult.error };
+            }
+            continue;
+          }
+
+          const valueResult = await fieldParser.complete(fieldResolvedState);
           if (valueResult.success) {
-            (result as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ] = valueResult.value;
+            (result as Record<string | symbol, unknown>)[fieldKey] =
+              valueResult.value;
           } else return { success: false, error: valueResult.error };
         }
         return { success: true, value: result };
@@ -3013,13 +3565,86 @@ export function tuple<
     complete(state: TupleState) {
       // For sync mode, complete synchronously
       if (!isAsync) {
+        const stateArray = state as unknown[];
+
+        // Phase 1: Pre-complete elements with PendingDependencySourceState
+        const preCompletedState: unknown[] = [];
+        for (let i = 0; i < syncParsers.length; i++) {
+          const elementState = stateArray[i];
+          const elementParser = syncParsers[i];
+
+          // Case 1: state is [PendingDependencySourceState] (option was not provided)
+          if (
+            Array.isArray(elementState) &&
+            elementState.length === 1 &&
+            isPendingDependencySourceState(elementState[0])
+          ) {
+            // Call complete to get DependencySourceState with default value
+            const completed = elementParser.complete(elementState);
+            preCompletedState[i] = completed;
+          } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
+          else if (
+            elementState === undefined &&
+            isPendingDependencySourceState(elementParser.initialState)
+          ) {
+            // Call complete with [initialState] to get DependencySourceState
+            const completed = elementParser.complete([
+              elementParser.initialState,
+            ]);
+            preCompletedState[i] = completed;
+          } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
+          else if (
+            elementState === undefined &&
+            isWrappedDependencySource(elementParser)
+          ) {
+            const pendingState = elementParser[wrappedDependencySourceMarker];
+            const completed = elementParser.complete([pendingState]);
+            preCompletedState[i] = completed;
+          } else {
+            preCompletedState[i] = elementState;
+          }
+        }
+
+        // Phase 2: Resolve any deferred parse states with actual dependency values
+        const resolvedState = resolveDeferredParseStates(preCompletedState);
+        const resolvedArray = resolvedState as unknown[];
+
+        // Phase 3: Complete remaining elements
         const result: { [K in keyof T]: T[K]["$valueType"][number] } =
           // deno-lint-ignore no-explicit-any
           [] as any;
-        const stateArray = state as unknown[];
 
         for (let i = 0; i < syncParsers.length; i++) {
-          const valueResult = syncParsers[i].complete(stateArray[i]);
+          const elementResolvedState = resolvedArray[i];
+          const elementParser = syncParsers[i];
+          const originalElementState = stateArray[i];
+
+          // Check if this element was pre-completed
+          const wasPreCompletedCase1 = Array.isArray(originalElementState) &&
+            originalElementState.length === 1 &&
+            isPendingDependencySourceState(originalElementState[0]);
+          const wasPreCompletedCase2 = originalElementState === undefined &&
+            isPendingDependencySourceState(elementParser.initialState);
+          const wasPreCompletedCase3 = originalElementState === undefined &&
+            isWrappedDependencySource(elementParser);
+
+          if (
+            isDependencySourceState(elementResolvedState) &&
+            (wasPreCompletedCase1 || wasPreCompletedCase2 ||
+              wasPreCompletedCase3)
+          ) {
+            // This is a pre-completed withDefault element. Extract the value directly.
+            const depResult = elementResolvedState.result;
+            if (depResult.success) {
+              // deno-lint-ignore no-explicit-any
+              (result as any)[i] = depResult.value;
+            } else {
+              return { success: false, error: depResult.error };
+            }
+            continue;
+          }
+
+          const valueResult = elementParser.complete(elementResolvedState);
           if (valueResult.success) {
             // deno-lint-ignore no-explicit-any
             (result as any)[i] = valueResult.value;
@@ -3033,13 +3658,88 @@ export function tuple<
 
       // For async mode, complete asynchronously
       return (async () => {
+        const stateArray = state as unknown[];
+
+        // Phase 1: Pre-complete elements with PendingDependencySourceState
+        const preCompletedState: unknown[] = [];
+        for (let i = 0; i < parsers.length; i++) {
+          const elementState = stateArray[i];
+          const elementParser = parsers[i];
+
+          // Case 1: state is [PendingDependencySourceState] (option was not provided)
+          if (
+            Array.isArray(elementState) &&
+            elementState.length === 1 &&
+            isPendingDependencySourceState(elementState[0])
+          ) {
+            const completed = await elementParser.complete(elementState);
+            preCompletedState[i] = completed;
+          } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
+          else if (
+            elementState === undefined &&
+            isPendingDependencySourceState(elementParser.initialState)
+          ) {
+            const completed = await elementParser.complete([
+              elementParser.initialState,
+            ]);
+            preCompletedState[i] = completed;
+          } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
+          else if (
+            elementState === undefined &&
+            isWrappedDependencySource(elementParser)
+          ) {
+            const pendingState = elementParser[wrappedDependencySourceMarker];
+            const completed = await elementParser.complete([pendingState]);
+            preCompletedState[i] = completed;
+          } else {
+            preCompletedState[i] = elementState;
+          }
+        }
+
+        // Phase 2: Resolve any deferred parse states with actual dependency values
+        const resolvedState = await resolveDeferredParseStatesAsync(
+          preCompletedState,
+        );
+        const resolvedArray = resolvedState as unknown[];
+
+        // Phase 3: Complete remaining elements
         const result: { [K in keyof T]: T[K]["$valueType"][number] } =
           // deno-lint-ignore no-explicit-any
           [] as any;
-        const stateArray = state as unknown[];
 
         for (let i = 0; i < parsers.length; i++) {
-          const valueResult = await parsers[i].complete(stateArray[i]);
+          const elementResolvedState = resolvedArray[i];
+          const elementParser = parsers[i];
+          const originalElementState = stateArray[i];
+
+          // Check if this element was pre-completed
+          const wasPreCompletedCase1 = Array.isArray(originalElementState) &&
+            originalElementState.length === 1 &&
+            isPendingDependencySourceState(originalElementState[0]);
+          const wasPreCompletedCase2 = originalElementState === undefined &&
+            isPendingDependencySourceState(elementParser.initialState);
+          const wasPreCompletedCase3 = originalElementState === undefined &&
+            isWrappedDependencySource(elementParser);
+
+          if (
+            isDependencySourceState(elementResolvedState) &&
+            (wasPreCompletedCase1 || wasPreCompletedCase2 ||
+              wasPreCompletedCase3)
+          ) {
+            // This is a pre-completed withDefault element. Extract the value directly.
+            const depResult = elementResolvedState.result;
+            if (depResult.success) {
+              // deno-lint-ignore no-explicit-any
+              (result as any)[i] = depResult.value;
+            } else {
+              return { success: false, error: depResult.error };
+            }
+            continue;
+          }
+
+          const valueResult = await elementParser.complete(
+            elementResolvedState,
+          );
           if (valueResult.success) {
             // deno-lint-ignore no-explicit-any
             (result as any)[i] = valueResult.value;
@@ -4476,22 +5176,26 @@ export function merge(
       // Helper function to extract parser state for completion
       const extractCompleteState = (
         parser: Parser<Mode, MergeState, MergeState>,
+        resolvedState: MergeState,
         index: number,
       ): unknown => {
         if (parser.initialState === undefined) {
           const key = `__parser_${index}`;
-          if (state && typeof state === "object" && key in state) {
-            return state[key];
+          if (
+            resolvedState && typeof resolvedState === "object" &&
+            key in resolvedState
+          ) {
+            return resolvedState[key];
           }
           return undefined;
         } else if (
           parser.initialState && typeof parser.initialState === "object"
         ) {
-          if (state && typeof state === "object") {
+          if (resolvedState && typeof resolvedState === "object") {
             const extractedState: MergeState = {};
             for (const field in parser.initialState) {
-              extractedState[field] = field in state
-                ? state[field]
+              extractedState[field] = field in resolvedState
+                ? resolvedState[field]
                 : parser.initialState[field];
             }
             return extractedState;
@@ -4503,10 +5207,15 @@ export function merge(
 
       // For sync mode, complete synchronously
       if (!isAsync) {
+        // Resolve deferred parse states across the entire merged state first.
+        // This ensures dependencies from one merged parser are available to
+        // derived parsers in other merged parsers.
+        const resolvedState = resolveDeferredParseStates(state);
+
         const object: MergeState = {};
         for (let i = 0; i < syncParsers.length; i++) {
           const parser = syncParsers[i];
-          const parserState = extractCompleteState(parser, i);
+          const parserState = extractCompleteState(parser, resolvedState, i);
           const result = parser.complete(
             parserState as Parameters<typeof parser.complete>[0],
           );
@@ -4518,10 +5227,15 @@ export function merge(
 
       // For async mode, complete asynchronously
       return (async () => {
+        // Resolve deferred parse states across the entire merged state first.
+        // This ensures dependencies from one merged parser are available to
+        // derived parsers in other merged parsers.
+        const resolvedState = await resolveDeferredParseStatesAsync(state);
+
         const object: MergeState = {};
         for (let i = 0; i < parsers.length; i++) {
           const parser = parsers[i];
-          const parserState = extractCompleteState(parser, i);
+          const parserState = extractCompleteState(parser, resolvedState, i);
           const result = await parser.complete(
             parserState as Parameters<typeof parser.complete>[0],
           );
@@ -5081,11 +5795,24 @@ export function concat(
 
   // Sync complete implementation
   const completeSync = (state: readonly unknown[]): CompleteResult => {
-    const results: unknown[] = [];
     const stateArray = state as unknown[];
+
+    // Phase 1: Build a combined state object for dependency resolution
+    // This allows DependencySourceState from one tuple to be used by
+    // DeferredParseState in another tuple.
+    const combinedState: Record<number, unknown> = {};
+    for (let i = 0; i < stateArray.length; i++) {
+      combinedState[i] = stateArray[i];
+    }
+
+    // Phase 2: Resolve deferred parse states across all tuples
+    const resolvedCombinedState = resolveDeferredParseStates(combinedState);
+
+    // Phase 3: Complete each parser with resolved state
+    const results: unknown[] = [];
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
-      const parserState = stateArray[i];
+      const parserState = resolvedCombinedState[i];
       const result = parser.complete(parserState);
       if (!result.success) return result;
 
@@ -5103,11 +5830,24 @@ export function concat(
   const completeAsync = async (
     state: readonly unknown[],
   ): Promise<CompleteResult> => {
-    const results: unknown[] = [];
     const stateArray = state as unknown[];
+
+    // Phase 1: Build a combined state object for dependency resolution
+    const combinedState: Record<number, unknown> = {};
+    for (let i = 0; i < stateArray.length; i++) {
+      combinedState[i] = stateArray[i];
+    }
+
+    // Phase 2: Resolve deferred parse states across all tuples
+    const resolvedCombinedState = await resolveDeferredParseStatesAsync(
+      combinedState,
+    );
+
+    // Phase 3: Complete each parser with resolved state
+    const results: unknown[] = [];
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
-      const parserState = stateArray[i];
+      const parserState = resolvedCombinedState[i];
       const result = await parser.complete(parserState);
       if (!result.success) return result;
 
@@ -5863,6 +6603,7 @@ export function conditional(
 
   // Sync complete implementation
   const completeSync = (state: ConditionalState<string>): CompleteResult => {
+    const syncDiscriminator = discriminator as Parser<"sync", string, unknown>;
     const syncDefaultBranch = defaultBranch as
       | Parser<"sync", unknown, unknown>
       | undefined;
@@ -5898,7 +6639,23 @@ export function conditional(
       ? syncDefaultBranch!
       : syncBranches[state.selectedBranch.key];
 
-    const branchResult = branchParser.complete(state.branchState);
+    // First, complete the discriminator to get DependencySourceState if applicable
+    const discriminatorCompleteResult = syncDiscriminator.complete(
+      state.discriminatorState,
+    );
+    // discriminatorCompleteResult may be { success: true, value: ... } or DependencySourceState
+
+    // To propagate dependency from discriminator to branch:
+    // 1. Wrap discriminator state and branch state together
+    // 2. Resolve deferred parse states with dependency registry populated from discriminator
+    const combinedState = {
+      _discriminator: state.discriminatorState,
+      _branch: state.branchState,
+    };
+    const resolvedCombinedState = resolveDeferredParseStates(combinedState);
+    const resolvedBranchState = resolvedCombinedState._branch;
+
+    const branchResult = branchParser.complete(resolvedBranchState);
 
     if (!branchResult.success) {
       // Add context to error message
@@ -5917,9 +6674,19 @@ export function conditional(
       return branchResult;
     }
 
-    const discriminatorValue = state.selectedBranch.kind === "default"
-      ? undefined
-      : state.selectedBranch.key;
+    // Get the discriminator value: either from DependencySourceState or regular completion
+    let discriminatorValue: string | undefined;
+    if (state.selectedBranch.kind === "default") {
+      discriminatorValue = undefined;
+    } else if (isDependencySourceState(discriminatorCompleteResult)) {
+      discriminatorValue = discriminatorCompleteResult.result.success
+        ? discriminatorCompleteResult.result.value as string
+        : state.selectedBranch.key;
+    } else if (discriminatorCompleteResult.success) {
+      discriminatorValue = discriminatorCompleteResult.value;
+    } else {
+      discriminatorValue = state.selectedBranch.key;
+    }
 
     return {
       success: true,
@@ -5958,7 +6725,24 @@ export function conditional(
       ? defaultBranch!
       : branches[state.selectedBranch.key];
 
-    const branchResult = await branchParser.complete(state.branchState);
+    // First, complete the discriminator to get DependencySourceState if applicable
+    const discriminatorCompleteResult = await discriminator.complete(
+      state.discriminatorState,
+    );
+
+    // To propagate dependency from discriminator to branch:
+    // 1. Wrap discriminator state and branch state together
+    // 2. Resolve deferred parse states with dependency registry populated from discriminator
+    const combinedState = {
+      _discriminator: state.discriminatorState,
+      _branch: state.branchState,
+    };
+    const resolvedCombinedState = await resolveDeferredParseStatesAsync(
+      combinedState,
+    );
+    const resolvedBranchState = resolvedCombinedState._branch;
+
+    const branchResult = await branchParser.complete(resolvedBranchState);
 
     if (!branchResult.success) {
       // Add context to error message
@@ -5977,9 +6761,19 @@ export function conditional(
       return branchResult;
     }
 
-    const discriminatorValue = state.selectedBranch.kind === "default"
-      ? undefined
-      : state.selectedBranch.key;
+    // Get the discriminator value: either from DependencySourceState or regular completion
+    let discriminatorValue: string | undefined;
+    if (state.selectedBranch.kind === "default") {
+      discriminatorValue = undefined;
+    } else if (isDependencySourceState(discriminatorCompleteResult)) {
+      discriminatorValue = discriminatorCompleteResult.result.success
+        ? discriminatorCompleteResult.result.value as string
+        : state.selectedBranch.key;
+    } else if (discriminatorCompleteResult.success) {
+      discriminatorValue = discriminatorCompleteResult.value;
+    } else {
+      discriminatorValue = state.selectedBranch.key;
+    }
 
     return {
       success: true,

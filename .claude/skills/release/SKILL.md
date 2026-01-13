@@ -154,7 +154,6 @@ branches and eventually to `main`.
          -  Issue/PR reference definitions (e.g., `[#123]: ...`) should not
             be duplicated if they already exist
 
-
         For example, if merging 1.2.3 into 1.3-maintenance where 1.3.2 is
         pending:
 

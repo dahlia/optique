@@ -8,6 +8,50 @@ Version 0.10.0
 
 To be released.
 
+### @optique/core
+
+ -  Added inter-option dependency support via `@optique/core/dependency` module.
+    This allows one option's valid values to depend on another option's parsed
+    value, enabling dynamic validation and context-aware shell completion.
+
+    New exports:
+
+     -  `dependency()`: Creates a dependency source from an existing value parser.
+     -  `deriveFrom()`: Creates a derived parser from multiple dependency sources.
+     -  `DependencySource<M, T>`: A value parser that can be referenced by other
+        parsers.
+     -  `DerivedValueParser<M, T>`: A value parser whose behavior depends on
+        other parsers' values.
+
+    The dependency system uses deferred parsing: dependent options store their
+    raw input during initial parsing, then re-validate using actual dependency
+    values after all options are collected.
+
+    ~~~~ typescript
+    import { dependency } from "@optique/core/dependency";
+    import { choice } from "@optique/core/valueparser";
+
+    // Create a dependency source
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+
+    // Create a derived parser that depends on the mode
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode) => {
+        if (mode === "dev") {
+          return choice(["debug", "info", "warn", "error"]);
+        } else {
+          return choice(["warn", "error"]);
+        }
+      },
+      defaultValue: () => "dev" as const,
+    });
+    ~~~~
+
+    Dependencies work seamlessly with all parser combinators (`object()`,
+    `subcommands()`, `or()`, `longestMatch()`, `multiple()`, etc.) and support
+    both sync and async parsers.
+
 
 Version 0.9.0
 -------------
@@ -30,7 +74,6 @@ Released on January 6, 2026.
         element is `"async"`, otherwise `"sync"`.
      -  `InferMode<P>`: Extracts the mode from a parser type.
 
-
     All parsers now include a `$mode` property indicating their execution mode.
     Combinators automatically propagate modes from their constituent parsers,
     resulting in `"async"` mode if any child parser is async.
@@ -45,7 +88,6 @@ Released on January 6, 2026.
      -  `getDocPageAsync()`: Gets documentation page from any parser as a Promise.
      -  `runParserSync()`: Runs a sync-only parser, returning the result directly.
      -  `runParserAsync()`: Runs any parser, returning a Promise of the result.
-
 
     This change is backward compatible.  Existing code continues to work
     unchanged as all parsers default to sync mode.
@@ -226,7 +268,6 @@ Released on January 6, 2026.
         directly.
      -  `runAsync()`: Runs with any parser, returning a `Promise` of the parsed
         value.
-
 
     The existing `run()` function continues to work unchanged for sync parsers.
     For async parsers, use `runAsync()` or `await run()`.
@@ -859,7 +900,6 @@ Released on November 25, 2025.
      -  Double or more consecutive newlines (`\n\n+`) are treated as hard
         breaks, creating actual paragraph separations in the output.
 
-
     This change improves the readability of multi-part error messages, such
     as those with “Did you mean?” suggestions, by ensuring proper spacing
     between the base error and suggestions:
@@ -1318,7 +1358,6 @@ Released on September 23, 2025.
         module. These combinator functions that compose and combine parsers are
         now organized in a separate module.
 
-
     For backward compatibility, all functions continue to be re-exported from
     `@optique/core/parser`, so existing code will work unchanged. However, the
     recommended approach going forward is to import directly from the
@@ -1742,7 +1781,6 @@ Released on September 6, 2025.
      -  Improved handling of multiple identical flags
         (e.g., `--version --version`)
 
-
     The public API remains unchanged - existing `run()` usage continues to work
     identically while benefiting from more robust edge case handling.  [[#13]]
 
@@ -2054,7 +2092,6 @@ Released on August 29, 2025.
      -  Added `PrintOptions` and `PrintErrorOptions` interfaces for type-safe
         configuration.
      -  Added `Printer` type for custom printer functions.
-
 
     All output functions automatically detect terminal capabilities (colors,
     width) and format structured messages consistently across different

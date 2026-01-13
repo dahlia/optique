@@ -208,6 +208,16 @@ export interface ParserContext<TState> {
    * @since 0.7.0
    */
   readonly usage: Usage;
+
+  /**
+   * A registry containing resolved dependency values from DependencySource parsers.
+   * This is used during shell completion to provide suggestions based on
+   * the actual dependency values that have been parsed, rather than defaults.
+   * The type is `unknown` to avoid circular dependency issues; the actual type
+   * is `DependencyRegistry` from `./dependency.ts`.
+   * @since 0.10.0
+   */
+  readonly dependencyRegistry?: unknown;
 }
 
 /**

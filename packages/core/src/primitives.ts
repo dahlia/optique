@@ -1,4 +1,60 @@
+import {
+  createDeferredParseState,
+  createDependencySourceState,
+  createPendingDependencySourceState,
+  defaultValues,
+  type DeferredParseState,
+  dependencyId,
+  dependencyIds,
+  type DependencySourceState,
+  type DerivedValueParser,
+  isDeferredParseState,
+  isDependencySource,
+  isDependencySourceState,
+  isDerivedValueParser,
+  isPendingDependencySourceState,
+  type PendingDependencySourceState,
+  suggestWithDependency,
+} from "./dependency.ts";
 import type { DocFragment } from "./doc.ts";
+
+/**
+ * State type for options that may use deferred parsing (DerivedValueParser).
+ * This extends the normal ValueParserResult to also support DeferredParseState
+ * and PendingDependencySourceState.
+ * @internal
+ */
+export type OptionState<T> =
+  | ValueParserResult<T>
+  | DeferredParseState<T>
+  | PendingDependencySourceState
+  | undefined;
+
+/**
+ * Helper function to create the appropriate state for an option value.
+ * - If the value parser is a DerivedValueParser, wraps the result in a DeferredParseState
+ *   to allow later resolution with actual dependency values.
+ * - If the value parser is a DependencySource, wraps the result in a DependencySourceState
+ *   so that it can be matched with DeferredParseState during resolution.
+ * @internal
+ */
+function createOptionParseState<M extends Mode, T>(
+  rawInput: string,
+  valueParser: ValueParser<M, T>,
+  parseResult: ValueParserResult<T>,
+): ValueParserResult<T> | DeferredParseState<T> | DependencySourceState<T> {
+  if (isDerivedValueParser(valueParser)) {
+    return createDeferredParseState(
+      rawInput,
+      valueParser as DerivedValueParser<M, T, unknown>,
+      parseResult,
+    );
+  }
+  if (isDependencySource(valueParser)) {
+    return createDependencySourceState(parseResult, valueParser[dependencyId]);
+  }
+  return parseResult;
+}
 import {
   type Message,
   message,
@@ -132,6 +188,76 @@ export interface OptionErrorOptions {
 }
 
 /**
+ * Internal helper to get suggestions from a value parser, using dependency values
+ * if the parser is a derived parser and dependency values are available.
+ * @internal
+ */
+function* getSuggestionsWithDependency<T>(
+  valueParser: ValueParser<"sync", T>,
+  prefix: string,
+  dependencyRegistry: unknown,
+): Generator<Suggestion> {
+  if (!valueParser.suggest) return;
+
+  // Check if this is a derived parser with suggestWithDependency
+  if (
+    isDerivedValueParser(valueParser) && suggestWithDependency in valueParser
+  ) {
+    const derived = valueParser as DerivedValueParser<"sync", T, unknown>;
+    const suggestWithDep = derived[suggestWithDependency];
+
+    if (suggestWithDep && dependencyRegistry) {
+      // Get dependency values from registry
+      const depIds = dependencyIds in derived
+        ? (derived as unknown as { [dependencyIds]: readonly symbol[] })[
+          dependencyIds
+        ]
+        : [derived[dependencyId]];
+
+      const defaults = defaultValues in derived
+        ? (derived as unknown as { [defaultValues]: () => readonly unknown[] })
+          [defaultValues]?.()
+        : undefined;
+
+      const registry = dependencyRegistry as {
+        has(id: symbol): boolean;
+        get<V>(id: symbol): V | undefined;
+      };
+
+      // Collect dependency values, using defaults for missing ones
+      const dependencyValues: unknown[] = [];
+      let hasAnyValue = false;
+
+      for (let i = 0; i < depIds.length; i++) {
+        const depId = depIds[i];
+        if (registry.has(depId)) {
+          dependencyValues.push(registry.get(depId));
+          hasAnyValue = true;
+        } else if (defaults && i < defaults.length) {
+          dependencyValues.push(defaults[i]);
+        } else {
+          // Can't resolve, fall back to default suggest
+          yield* valueParser.suggest(prefix);
+          return;
+        }
+      }
+
+      // If we have at least one actual value (not just defaults), use suggestWithDependency
+      if (hasAnyValue) {
+        const depValue = depIds.length === 1
+          ? dependencyValues[0]
+          : dependencyValues;
+        yield* suggestWithDep(prefix, depValue) as Iterable<Suggestion>;
+        return;
+      }
+    }
+  }
+
+  // Fall back to default suggest
+  yield* valueParser.suggest(prefix);
+}
+
+/**
  * Internal sync helper for option suggest functionality.
  * @internal
  */
@@ -156,7 +282,11 @@ function* suggestOptionSync<T>(
     // Check if this option matches any of our option names
     if ((optionNames as readonly string[]).includes(optionPart)) {
       if (valueParser && valueParser.suggest) {
-        const valueSuggestions = valueParser.suggest(valuePart);
+        const valueSuggestions = getSuggestionsWithDependency(
+          valueParser,
+          valuePart,
+          context.dependencyRegistry,
+        );
         // Prepend the option= part to each suggestion
         for (const suggestion of valueSuggestions) {
           if (suggestion.kind === "literal") {
@@ -210,9 +340,94 @@ function* suggestOptionSync<T>(
       }
 
       if (shouldSuggestValues) {
-        yield* valueParser.suggest(prefix);
+        yield* getSuggestionsWithDependency(
+          valueParser,
+          prefix,
+          context.dependencyRegistry,
+        );
       }
     }
+  }
+}
+
+/**
+ * Internal async helper to get suggestions from a value parser, using dependency values
+ * if the parser is a derived parser and dependency values are available.
+ * @internal
+ */
+async function* getSuggestionsWithDependencyAsync<T>(
+  valueParser: ValueParser<Mode, T>,
+  prefix: string,
+  dependencyRegistry: unknown,
+): AsyncGenerator<Suggestion> {
+  if (!valueParser.suggest) return;
+
+  // Check if this is a derived parser with suggestWithDependency
+  if (
+    isDerivedValueParser(valueParser) && suggestWithDependency in valueParser
+  ) {
+    const derived = valueParser as DerivedValueParser<Mode, T, unknown>;
+    const suggestWithDep = derived[suggestWithDependency];
+
+    if (suggestWithDep && dependencyRegistry) {
+      // Get dependency values from registry
+      const depIds = dependencyIds in derived
+        ? (derived as unknown as { [dependencyIds]: readonly symbol[] })[
+          dependencyIds
+        ]
+        : [derived[dependencyId]];
+
+      const defaults = defaultValues in derived
+        ? (derived as unknown as { [defaultValues]: () => readonly unknown[] })
+          [defaultValues]?.()
+        : undefined;
+
+      const registry = dependencyRegistry as {
+        has(id: symbol): boolean;
+        get<V>(id: symbol): V | undefined;
+      };
+
+      // Collect dependency values, using defaults for missing ones
+      const dependencyValues: unknown[] = [];
+      let hasAnyValue = false;
+
+      for (let i = 0; i < depIds.length; i++) {
+        const depId = depIds[i];
+        if (registry.has(depId)) {
+          dependencyValues.push(registry.get(depId));
+          hasAnyValue = true;
+        } else if (defaults && i < defaults.length) {
+          dependencyValues.push(defaults[i]);
+        } else {
+          // Can't resolve, fall back to default suggest
+          for await (const suggestion of valueParser.suggest(prefix)) {
+            yield suggestion;
+          }
+          return;
+        }
+      }
+
+      // If we have at least one actual value (not just defaults), use suggestWithDependency
+      if (hasAnyValue) {
+        const depValue = depIds.length === 1
+          ? dependencyValues[0]
+          : dependencyValues;
+        for await (
+          const suggestion of suggestWithDep(
+            prefix,
+            depValue,
+          ) as AsyncIterable<Suggestion>
+        ) {
+          yield suggestion;
+        }
+        return;
+      }
+    }
+  }
+
+  // Fall back to default suggest
+  for await (const suggestion of valueParser.suggest(prefix)) {
+    yield suggestion;
   }
 }
 
@@ -241,7 +456,11 @@ async function* suggestOptionAsync<T>(
     // Check if this option matches any of our option names
     if ((optionNames as readonly string[]).includes(optionPart)) {
       if (valueParser && valueParser.suggest) {
-        const valueSuggestions = valueParser.suggest(valuePart);
+        const valueSuggestions = getSuggestionsWithDependencyAsync(
+          valueParser,
+          valuePart,
+          context.dependencyRegistry,
+        );
         // Prepend the option= part to each suggestion - handle both sync and async
         for await (const suggestion of valueSuggestions) {
           if (suggestion.kind === "literal") {
@@ -294,7 +513,13 @@ async function* suggestOptionAsync<T>(
       }
 
       if (shouldSuggestValues) {
-        for await (const suggestion of valueParser.suggest(prefix)) {
+        for await (
+          const suggestion of getSuggestionsWithDependencyAsync(
+            valueParser,
+            prefix,
+            context.dependencyRegistry,
+          )
+        ) {
           yield suggestion;
         }
       }
@@ -310,12 +535,17 @@ function* suggestArgumentSync<T>(
   valueParser: ValueParser<"sync", T>,
   hidden: boolean,
   prefix: string,
+  dependencyRegistry: unknown,
 ): Generator<Suggestion> {
   if (hidden) return;
 
   // Delegate to value parser if it has completion capabilities
   if (valueParser.suggest) {
-    yield* valueParser.suggest(prefix);
+    yield* getSuggestionsWithDependency(
+      valueParser,
+      prefix,
+      dependencyRegistry,
+    );
   }
 }
 
@@ -327,14 +557,17 @@ async function* suggestArgumentAsync<T>(
   valueParser: ValueParser<Mode, T>,
   hidden: boolean,
   prefix: string,
+  dependencyRegistry: unknown,
 ): AsyncGenerator<Suggestion> {
   if (hidden) return;
 
   // Delegate to value parser if it has completion capabilities
   if (valueParser.suggest) {
-    for await (const suggestion of valueParser.suggest(prefix)) {
-      yield suggestion;
-    }
+    yield* getSuggestionsWithDependencyAsync(
+      valueParser,
+      prefix,
+      dependencyRegistry,
+    );
   }
 }
 
@@ -449,14 +682,18 @@ export function option<M extends Mode, T>(
           ...(options.hidden && { hidden: true }),
         },
     ],
-    initialState: valueParser == null ? { success: true, value: false } : {
-      success: false,
-      error: options.errors?.missing
-        ? (typeof options.errors.missing === "function"
-          ? options.errors.missing(optionNames)
-          : options.errors.missing)
-        : message`Missing option ${eOptionNames(optionNames)}.`,
-    },
+    initialState: valueParser == null
+      ? { success: true, value: false }
+      : isDependencySource(valueParser)
+      ? createPendingDependencySourceState(valueParser[dependencyId])
+      : {
+        success: false,
+        error: options.errors?.missing
+          ? (typeof options.errors.missing === "function"
+            ? options.errors.missing(optionNames)
+            : options.errors.missing)
+          : message`Missing option ${eOptionNames(optionNames)}.`,
+      },
     parse(
       context: ParserContext<
         ValueParserResult<T | boolean> | undefined
@@ -496,10 +733,16 @@ export function option<M extends Mode, T>(
       // When the input is split by spaces, the first element is the option name
       // E.g., `--option value` or `/O value`
       if ((optionNames as string[]).includes(context.buffer[0])) {
-        if (
-          context.state?.success &&
-          (valueParser != null || context.state.value)
-        ) {
+        // Check for duplicate option - applies to ValueParserResult, DeferredParseState,
+        // and DependencySourceState. For options with value parsers, any non-null state
+        // means we already have a value. For boolean flags, we check state.success && state.value.
+        const hasValue = valueParser != null
+          ? (context.state?.success ||
+            isDeferredParseState(context.state) ||
+            isDependencySourceState(context.state))
+          : (context.state?.success &&
+            (context.state as { value?: boolean })?.value);
+        if (hasValue) {
           return {
             success: false,
             consumed: 1,
@@ -532,14 +775,19 @@ export function option<M extends Mode, T>(
             } requires a value, but got no value.`,
           };
         }
-        const parseResultOrPromise = valueParser!.parse(context.buffer[1]);
+        const rawInput = context.buffer[1];
+        const parseResultOrPromise = valueParser!.parse(rawInput);
         if (isAsync) {
           return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
             (parseResult) => ({
               success: true as const,
               next: {
                 ...context,
-                state: parseResult,
+                state: createOptionParseState(
+                  rawInput,
+                  valueParser!,
+                  parseResult,
+                ),
                 buffer: context.buffer.slice(2),
               },
               consumed: context.buffer.slice(0, 2),
@@ -550,7 +798,11 @@ export function option<M extends Mode, T>(
           success: true,
           next: {
             ...context,
-            state: parseResultOrPromise as ValueParserResult<T>,
+            state: createOptionParseState(
+              rawInput,
+              valueParser!,
+              parseResultOrPromise as ValueParserResult<T>,
+            ),
             buffer: context.buffer.slice(2),
           },
           consumed: context.buffer.slice(0, 2),
@@ -578,28 +830,32 @@ export function option<M extends Mode, T>(
               : message`${eOptionName(prefix)} cannot be used multiple times.`,
           };
         }
-        const value = context.buffer[0].slice(prefix.length);
+        const rawInput = context.buffer[0].slice(prefix.length);
         if (valueParser == null) {
           return {
             success: false,
             consumed: 1,
             error: options.errors?.unexpectedValue
               ? (typeof options.errors.unexpectedValue === "function"
-                ? options.errors.unexpectedValue(value)
+                ? options.errors.unexpectedValue(rawInput)
                 : options.errors.unexpectedValue)
               : message`Option ${
                 eOptionName(prefix)
-              } is a Boolean flag, but got a value: ${value}.`,
+              } is a Boolean flag, but got a value: ${rawInput}.`,
           };
         }
-        const parseResultOrPromise = valueParser.parse(value);
+        const parseResultOrPromise = valueParser.parse(rawInput);
         if (isAsync) {
           return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
             (parseResult) => ({
               success: true as const,
               next: {
                 ...context,
-                state: parseResult,
+                state: createOptionParseState(
+                  rawInput,
+                  valueParser,
+                  parseResult,
+                ),
                 buffer: context.buffer.slice(1),
               },
               consumed: context.buffer.slice(0, 1),
@@ -610,7 +866,11 @@ export function option<M extends Mode, T>(
           success: true,
           next: {
             ...context,
-            state: parseResultOrPromise as ValueParserResult<T>,
+            state: createOptionParseState(
+              rawInput,
+              valueParser,
+              parseResultOrPromise as ValueParserResult<T>,
+            ),
             buffer: context.buffer.slice(1),
           },
           consumed: context.buffer.slice(0, 1),
@@ -697,7 +957,11 @@ export function option<M extends Mode, T>(
       };
     },
     complete(
-      state: ValueParserResult<T | boolean> | undefined,
+      state:
+        | ValueParserResult<T | boolean>
+        | DeferredParseState<T>
+        | PendingDependencySourceState
+        | undefined,
     ) {
       if (state == null) {
         return valueParser == null ? { success: true, value: false } : {
@@ -707,6 +971,45 @@ export function option<M extends Mode, T>(
               ? options.errors.missing(optionNames)
               : options.errors.missing)
             : message`Missing option ${eOptionNames(optionNames)}.`,
+        };
+      }
+      // Handle PendingDependencySourceState: this means the option was not provided
+      // but it uses a DependencySource. Return a "missing" error.
+      if (isPendingDependencySourceState(state)) {
+        return {
+          success: false,
+          error: options.errors?.missing
+            ? (typeof options.errors.missing === "function"
+              ? options.errors.missing(optionNames)
+              : options.errors.missing)
+            : message`Missing option ${eOptionNames(optionNames)}.`,
+        };
+      }
+      // Handle DeferredParseState: use preliminary result for now.
+      // Actual resolution with real dependency values happens at object() level.
+      if (isDeferredParseState<T>(state)) {
+        const preliminaryResult = state.preliminaryResult;
+        if (preliminaryResult.success) return preliminaryResult;
+        return {
+          success: false,
+          error: options.errors?.invalidValue
+            ? (typeof options.errors.invalidValue === "function"
+              ? options.errors.invalidValue(preliminaryResult.error)
+              : options.errors.invalidValue)
+            : message`${eOptionNames(optionNames)}: ${preliminaryResult.error}`,
+        };
+      }
+      // Handle DependencySourceState: extract the underlying result.
+      if (isDependencySourceState<T | boolean>(state)) {
+        const result = state.result;
+        if (result.success) return result;
+        return {
+          success: false,
+          error: options.errors?.invalidValue
+            ? (typeof options.errors.invalidValue === "function"
+              ? options.errors.invalidValue(result.error)
+              : options.errors.invalidValue)
+            : message`${eOptionNames(optionNames)}: ${result.error}`,
         };
       }
       if (state.success) return state;
@@ -1252,7 +1555,8 @@ export function argument<M extends Mode, T>(
         };
       }
 
-      const parseResultOrPromise = valueParser.parse(context.buffer[i]);
+      const rawInput = context.buffer[i];
+      const parseResultOrPromise = valueParser.parse(rawInput);
       if (isAsync) {
         return (parseResultOrPromise as Promise<ValueParserResult<T>>).then(
           (parseResult) => ({
@@ -1260,7 +1564,7 @@ export function argument<M extends Mode, T>(
             next: {
               ...context,
               buffer: context.buffer.slice(i + 1),
-              state: parseResult,
+              state: createOptionParseState(rawInput, valueParser, parseResult),
               optionsTerminated,
             },
             consumed: context.buffer.slice(0, i + 1),
@@ -1272,13 +1576,17 @@ export function argument<M extends Mode, T>(
         next: {
           ...context,
           buffer: context.buffer.slice(i + 1),
-          state: parseResultOrPromise as ValueParserResult<T>,
+          state: createOptionParseState(
+            rawInput,
+            valueParser,
+            parseResultOrPromise as ValueParserResult<T>,
+          ),
           optionsTerminated,
         },
         consumed: context.buffer.slice(0, i + 1),
       };
     },
-    complete(state: ValueParserResult<T> | undefined) {
+    complete(state: ValueParserResult<T> | DeferredParseState<T> | undefined) {
       if (state == null) {
         return {
           success: false,
@@ -1287,7 +1595,37 @@ export function argument<M extends Mode, T>(
               metavar(valueParser.metavar)
             }, but too few arguments.`,
         };
-      } else if (state.success) return state;
+      }
+      // Handle DeferredParseState: use preliminary result for now.
+      // Actual resolution with real dependency values happens at object() level.
+      if (isDeferredParseState<T>(state)) {
+        const preliminaryResult = state.preliminaryResult;
+        if (preliminaryResult.success) return preliminaryResult;
+        return {
+          success: false,
+          error: options.errors?.invalidValue
+            ? (typeof options.errors.invalidValue === "function"
+              ? options.errors.invalidValue(preliminaryResult.error)
+              : options.errors.invalidValue)
+            : message`${
+              metavar(valueParser.metavar)
+            }: ${preliminaryResult.error}`,
+        };
+      }
+      // Handle DependencySourceState: extract the underlying result.
+      if (isDependencySourceState<T>(state)) {
+        const result = state.result;
+        if (result.success) return result;
+        return {
+          success: false,
+          error: options.errors?.invalidValue
+            ? (typeof options.errors.invalidValue === "function"
+              ? options.errors.invalidValue(result.error)
+              : options.errors.invalidValue)
+            : message`${metavar(valueParser.metavar)}: ${result.error}`,
+        };
+      }
+      if (state.success) return state;
       return {
         success: false,
         error: options.errors?.invalidValue
@@ -1298,7 +1636,7 @@ export function argument<M extends Mode, T>(
       };
     },
     suggest(
-      _context: ParserContext<
+      context: ParserContext<
         ValueParserResult<T> | undefined
       >,
       prefix: string,
@@ -1309,12 +1647,14 @@ export function argument<M extends Mode, T>(
           valueParser,
           options.hidden ?? false,
           prefix,
+          context.dependencyRegistry,
         );
       }
       return suggestArgumentSync(
         valueParser as ValueParser<"sync", T>,
         options.hidden ?? false,
         prefix,
+        context.dependencyRegistry,
       );
     },
     getDocFragments(
