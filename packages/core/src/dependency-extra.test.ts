@@ -8330,3 +8330,120 @@ describe("Complex modifier chains with dependencies", () => {
     }
   });
 });
+
+describe("map() chain with multiple() and dependencies", () => {
+  test("multiple(map(option(..., derived), transform))", async () => {
+    const tierParser = dependency(
+      choice(["free", "pro", "enterprise"] as const),
+    );
+    const featureParser = tierParser.derive({
+      metavar: "FEATURE",
+      defaultValue: () => "free" as const,
+      factory: (tier: "free" | "pro" | "enterprise") =>
+        choice(
+          tier === "free"
+            ? (["basic", "limited"] as const)
+            : tier === "pro"
+            ? (["advanced", "priority"] as const)
+            : (["custom", "dedicated", "unlimited"] as const),
+        ),
+    });
+
+    const parser = object({
+      tier: option("--tier", tierParser),
+      features: multiple(
+        map(option("--feature", featureParser), (f) => f.toUpperCase()),
+      ),
+    });
+
+    const result = await parseAsync(parser, [
+      "--tier",
+      "pro",
+      "--feature",
+      "advanced",
+      "--feature",
+      "priority",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.tier, "pro");
+      assert.deepEqual(result.value.features, ["ADVANCED", "PRIORITY"]);
+    }
+  });
+
+  test("map(multiple(option(..., derived)), transform)", async () => {
+    const levelParser = dependency(choice(["low", "medium", "high"] as const));
+    const valueParser = levelParser.derive({
+      metavar: "VALUE",
+      defaultValue: () => "low" as const,
+      factory: (level: "low" | "medium" | "high") =>
+        choice(
+          level === "low"
+            ? (["1", "2", "3"] as const)
+            : level === "medium"
+            ? (["10", "20", "30"] as const)
+            : (["100", "200", "300"] as const),
+        ),
+    });
+
+    const parser = object({
+      level: option("--level", levelParser),
+      values: map(
+        multiple(option("--value", valueParser)),
+        (values) => values.map((v) => parseInt(v, 10)),
+      ),
+    });
+
+    const result = await parseAsync(parser, [
+      "--level",
+      "high",
+      "--value",
+      "100",
+      "--value",
+      "200",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.level, "high");
+      assert.deepEqual(result.value.values, [100, 200]);
+    }
+  });
+
+  test("map(map(option(..., derived), t1), t2) with multiple", async () => {
+    const scaleParser = dependency(choice(["small", "large"] as const));
+    const sizeParser = scaleParser.derive({
+      metavar: "SIZE",
+      defaultValue: () => "small" as const,
+      factory: (scale: "small" | "large") =>
+        choice(
+          scale === "small"
+            ? (["xs", "sm", "md"] as const)
+            : (["lg", "xl", "xxl"] as const),
+        ),
+    });
+
+    const parser = object({
+      scale: option("--scale", scaleParser),
+      sizes: multiple(
+        map(
+          map(option("--size", sizeParser), (s) => s.toUpperCase()),
+          (s) => `SIZE_${s}`,
+        ),
+      ),
+    });
+
+    const result = await parseAsync(parser, [
+      "--scale",
+      "large",
+      "--size",
+      "lg",
+      "--size",
+      "xl",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.scale, "large");
+      assert.deepEqual(result.value.sizes, ["SIZE_LG", "SIZE_XL"]);
+    }
+  });
+});
