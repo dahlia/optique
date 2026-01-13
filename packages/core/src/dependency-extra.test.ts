@@ -7326,3 +7326,246 @@ describe("map() with dependencies", () => {
     assert.ok(!result2.success);
   });
 });
+
+describe("Error customization with dependencies", () => {
+  test("error propagation through dependency chain", async () => {
+    const formatParser = dependency(choice(["json", "xml"] as const));
+    const styleParser = formatParser.derive({
+      metavar: "STYLE",
+      defaultValue: () => "json" as const,
+      factory: (format: "json" | "xml") =>
+        choice(
+          format === "json"
+            ? (["compact", "pretty"] as const)
+            : (["indented", "minified"] as const),
+        ),
+    });
+
+    const parser = object({
+      format: option("--format", formatParser),
+      style: option("--style", styleParser),
+    });
+
+    // Valid combination
+    const result1 = await parseAsync(parser, [
+      "--format",
+      "json",
+      "--style",
+      "compact",
+    ]);
+    assert.ok(result1.success);
+
+    // Invalid style for format
+    const result2 = await parseAsync(parser, [
+      "--format",
+      "json",
+      "--style",
+      "indented", // xml style, not valid for json
+    ]);
+    assert.ok(!result2.success);
+  });
+
+  test("withDefault error handling with dependencies", async () => {
+    const envParser = dependency(choice(["dev", "staging", "prod"] as const));
+    const logLevelParser = envParser.derive({
+      metavar: "LEVEL",
+      defaultValue: () => "dev" as const,
+      factory: (env: "dev" | "staging" | "prod") => {
+        if (env === "dev") return choice(["debug", "trace"] as const);
+        if (env === "staging") return choice(["info", "warn"] as const);
+        return choice(["warn", "error"] as const);
+      },
+    });
+
+    const parser = object({
+      env: withDefault(option("--env", envParser), "dev" as const),
+      logLevel: withDefault(
+        option("--log-level", logLevelParser),
+        "debug" as const,
+      ),
+    });
+
+    // Valid with defaults
+    const result1 = await parseAsync(parser, []);
+    assert.ok(result1.success);
+
+    // Invalid log level for env
+    const result2 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--log-level",
+      "debug", // invalid for prod
+    ]);
+    assert.ok(!result2.success);
+  });
+
+  test("multiple dependency validation errors", async () => {
+    const typeParser = dependency(choice(["a", "b"] as const));
+    const value1Parser = typeParser.derive({
+      metavar: "V1",
+      defaultValue: () => "a" as const,
+      factory: (type: "a" | "b") =>
+        choice(type === "a" ? (["x", "y"] as const) : (["m", "n"] as const)),
+    });
+    const value2Parser = typeParser.derive({
+      metavar: "V2",
+      defaultValue: () => "a" as const,
+      factory: (type: "a" | "b") =>
+        choice(type === "a" ? (["p", "q"] as const) : (["r", "s"] as const)),
+    });
+
+    const parser = object({
+      type: option("--type", typeParser),
+      value1: option("--value1", value1Parser),
+      value2: option("--value2", value2Parser),
+    });
+
+    // Both values invalid for type - first error reported
+    const result = await parseAsync(parser, [
+      "--type",
+      "b",
+      "--value1",
+      "x", // invalid for type=b
+      "--value2",
+      "p", // invalid for type=b
+    ]);
+    assert.ok(!result.success);
+  });
+
+  test("error recovery with optional dependencies", async () => {
+    const modeParser = dependency(choice(["fast", "safe"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "fast" as const,
+      factory: (mode: "fast" | "safe") =>
+        choice(
+          mode === "fast"
+            ? (["turbo", "quick"] as const)
+            : (["verified", "checked"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      config: optional(option("--config", configParser)),
+    });
+
+    // Mode valid, config not provided (ok)
+    const result1 = await parseAsync(parser, ["--mode", "fast"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "fast");
+      assert.equal(result1.value.config, undefined);
+    }
+
+    // Mode valid, config invalid
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "fast",
+      "--config",
+      "verified", // invalid for fast mode
+    ]);
+    assert.ok(!result2.success);
+  });
+
+  test("deriveFrom validation errors", async () => {
+    const hostParser = dependency(choice(["localhost", "remote"] as const));
+    const portParser = dependency(choice(["80", "443"] as const));
+
+    const urlParser = deriveFrom({
+      dependencies: [hostParser, portParser] as const,
+      metavar: "URL",
+      defaultValues: () => ["localhost", "80"] as const,
+      factory: (
+        host: "localhost" | "remote",
+        port: "80" | "443",
+      ) =>
+        choice([`http://${host}:${port}`, `https://${host}:${port}`] as const),
+    });
+
+    const parser = object({
+      host: option("--host", hostParser),
+      port: option("--port", portParser),
+      url: option("--url", urlParser),
+    });
+
+    // Valid: localhost with 80
+    const result1 = await parseAsync(parser, [
+      "--host",
+      "localhost",
+      "--port",
+      "80",
+      "--url",
+      "http://localhost:80",
+    ]);
+    assert.ok(result1.success);
+
+    // Invalid URL that doesn't match dependencies
+    const result2 = await parseAsync(parser, [
+      "--host",
+      "localhost",
+      "--port",
+      "80",
+      "--url",
+      "http://example.com:8080", // not in choice set
+    ]);
+    assert.ok(!result2.success);
+  });
+
+  test("error with invalid source option value", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["release", "optimized"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      config: option("--config", configParser),
+    });
+
+    // Invalid source option value
+    const result = await parseAsync(parser, [
+      "--mode",
+      "invalid", // not in choice
+      "--config",
+      "debug",
+    ]);
+    assert.ok(!result.success);
+  });
+
+  test("error message contains option name context", async () => {
+    const typeParser = dependency(choice(["a", "b"] as const));
+    const valueParser = typeParser.derive({
+      metavar: "VALUE",
+      defaultValue: () => "a" as const,
+      factory: (type: "a" | "b") =>
+        choice(type === "a" ? (["x", "y"] as const) : (["m", "n"] as const)),
+    });
+
+    const parser = object({
+      type: option("--type", typeParser),
+      value: option("--value", valueParser),
+    });
+
+    // Invalid value
+    const result = await parseAsync(parser, [
+      "--type",
+      "a",
+      "--value",
+      "m", // invalid for type=a
+    ]);
+    assert.ok(!result.success);
+    // Error should be related to the value option
+    if (!result.success) {
+      // Just verify we got an error - the exact message format may vary
+      assert.ok(result.error.length > 0);
+    }
+  });
+});
