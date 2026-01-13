@@ -8447,3 +8447,215 @@ describe("map() chain with multiple() and dependencies", () => {
     }
   });
 });
+
+describe("parseSync() with async derived parser", () => {
+  test("parseSync with sync dependency source and sync derived parser works", () => {
+    // Both sync - should work fine
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.deriveSync({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug.json", "local.json"] as const)
+            : (["prod.json", "release.json"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      config: option("--config", configParser),
+    });
+
+    const result = parseSync(parser, [
+      "--mode",
+      "dev",
+      "--config",
+      "debug.json",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "dev");
+      assert.equal(result.value.config, "debug.json");
+    }
+  });
+
+  test("async derived parser requires parseAsync", async () => {
+    // deriveAsync creates an async derived parser that must be used with parseAsync
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const asyncConfigParser = modeParser.deriveAsync({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        // Returns async value parser (validates asynchronously)
+        asyncChoice(
+          mode === "dev" ? (["debug.json"] as const) : (["prod.json"] as const),
+        ),
+    });
+
+    // Parser with async derived parser has mode "async"
+    const parser = object({
+      mode: option("--mode", modeParser),
+      config: option("--config", asyncConfigParser),
+    });
+
+    // parseAsync works correctly with async derived parsers
+    const result = await parseAsync(parser, [
+      "--mode",
+      "dev",
+      "--config",
+      "debug.json",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "dev");
+      assert.equal(result.value.config, "debug.json");
+    }
+
+    // TypeScript prevents using parseSync with async parser at compile time
+    // The parser type is Parser<"async", ...> which doesn't match parseSync's requirement
+    // @ts-expect-error - This demonstrates compile-time safety
+    const _typeError = () => parseSync(parser, ["--mode", "dev"]);
+  });
+
+  test("mixed sync source with async derived requires parseAsync", async () => {
+    // Sync dependency source
+    const envParser = dependency(choice(["test", "prod"] as const));
+
+    // Async derived parser
+    const urlParser = envParser.deriveAsync({
+      metavar: "URL",
+      defaultValue: () => "test" as const,
+      factory: (env: "test" | "prod") =>
+        asyncChoice(
+          env === "test"
+            ? (["http://localhost:3000", "http://localhost:8080"] as const)
+            : (["https://api.example.com", "https://cdn.example.com"] as const),
+        ),
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      url: option("--url", urlParser),
+    });
+
+    const result = await parseAsync(parser, [
+      "--env",
+      "test",
+      "--url",
+      "http://localhost:3000",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.env, "test");
+      assert.equal(result.value.url, "http://localhost:3000");
+    }
+  });
+});
+
+describe("Mixed mode deriveFrom() with sync/async sources", () => {
+  test("deriveFrom with all sync sources produces sync parser", () => {
+    const sourceA = dependency(choice(["a1", "a2"] as const));
+    const sourceB = dependency(choice(["b1", "b2"] as const));
+
+    const derived = deriveFrom({
+      dependencies: [sourceA, sourceB] as const,
+      metavar: "DERIVED",
+      defaultValues: () => ["a1", "b1"] as const,
+      factory: (a: "a1" | "a2", b: "b1" | "b2") =>
+        choice(
+          a === "a1" && b === "b1" ? (["x", "y"] as const) : (["z"] as const),
+        ),
+    });
+
+    const parser = object({
+      a: option("--a", sourceA),
+      b: option("--b", sourceB),
+      d: option("--d", derived),
+    });
+
+    // Sync parser works with parseSync
+    const result = parseSync(parser, ["--a", "a1", "--b", "b1", "--d", "x"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, "a1");
+      assert.equal(result.value.b, "b1");
+      assert.equal(result.value.d, "x");
+    }
+  });
+
+  test("deriveFrom with async factory produces async parser", async () => {
+    const sourceA = dependency(choice(["a1", "a2"] as const));
+    const sourceB = dependency(choice(["b1", "b2"] as const));
+
+    // Using async factory via generic derive with async value parser
+    const derived = deriveFrom({
+      dependencies: [sourceA, sourceB] as const,
+      metavar: "DERIVED",
+      defaultValues: () => ["a1", "b1"] as const,
+      factory: (a: "a1" | "a2", b: "b1" | "b2") =>
+        asyncChoice(
+          a === "a1" && b === "b1" ? (["x", "y"] as const) : (["z"] as const),
+        ),
+    });
+
+    const parser = object({
+      a: option("--a", sourceA),
+      b: option("--b", sourceB),
+      d: option("--d", derived),
+    });
+
+    // Async parser requires parseAsync
+    const result = await parseAsync(parser, [
+      "--a",
+      "a1",
+      "--b",
+      "b1",
+      "--d",
+      "x",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, "a1");
+      assert.equal(result.value.b, "b1");
+      assert.equal(result.value.d, "x");
+    }
+  });
+
+  test("async source with sync factory produces async parser", async () => {
+    // One source is async
+    const asyncSource = dependency(asyncChoice(["s1", "s2"] as const));
+    const syncSource = dependency(choice(["t1", "t2"] as const));
+
+    // Factory returns sync parser, but overall mode is async due to async source
+    const derived = deriveFrom({
+      dependencies: [asyncSource, syncSource] as const,
+      metavar: "DERIVED",
+      defaultValues: () => ["s1", "t1"] as const,
+      factory: (s: "s1" | "s2", _t: "t1" | "t2") =>
+        choice(s === "s1" ? (["v1", "v2"] as const) : (["v3", "v4"] as const)),
+    });
+
+    const parser = object({
+      s: option("--s", asyncSource),
+      t: option("--t", syncSource),
+      d: option("--d", derived),
+    });
+
+    const result = await parseAsync(parser, [
+      "--s",
+      "s1",
+      "--t",
+      "t1",
+      "--d",
+      "v1",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.s, "s1");
+      assert.equal(result.value.t, "t1");
+      assert.equal(result.value.d, "v1");
+    }
+  });
+});
