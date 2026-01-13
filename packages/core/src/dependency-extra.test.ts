@@ -6655,3 +6655,317 @@ describe("parseSync() comprehensive tests", () => {
     }
   });
 });
+
+describe("Nested withDefault with dependencies", () => {
+  test("withDefault on both source and derived parsers", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["release", "optimized"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: withDefault(option("--mode", modeParser), "dev" as const),
+      config: withDefault(option("--config", configParser), "debug" as const),
+    });
+
+    // Test all defaults
+    const result1 = await parseAsync(parser, []);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "dev");
+      assert.equal(result1.value.config, "debug");
+    }
+
+    // Test mode specified, config defaults
+    const result2 = await parseAsync(parser, ["--mode", "prod"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "prod");
+      assert.equal(result2.value.config, "debug");
+    }
+
+    // Test both specified
+    const result3 = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--config",
+      "release",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.mode, "prod");
+      assert.equal(result3.value.config, "release");
+    }
+  });
+
+  test("chained withDefault with multiple levels", async () => {
+    const envParser = dependency(choice(["dev", "staging", "prod"] as const));
+
+    const logLevelParser = envParser.derive({
+      metavar: "LOG_LEVEL",
+      defaultValue: () => "dev" as const,
+      factory: (env: "dev" | "staging" | "prod") => {
+        if (env === "dev") return choice(["debug", "trace"] as const);
+        if (env === "staging") return choice(["info", "warn"] as const);
+        return choice(["warn", "error"] as const);
+      },
+    });
+
+    const outputParser = dependency(choice(["json", "text"] as const));
+
+    const formatParser = outputParser.derive({
+      metavar: "FORMAT",
+      defaultValue: () => "json" as const,
+      factory: (output: "json" | "text") =>
+        choice(
+          output === "json"
+            ? (["compact", "pretty"] as const)
+            : (["simple", "detailed"] as const),
+        ),
+    });
+
+    const parser = object({
+      env: withDefault(option("--env", envParser), "dev" as const),
+      logLevel: withDefault(
+        option("--log-level", logLevelParser),
+        "debug" as const,
+      ),
+      output: withDefault(option("--output", outputParser), "json" as const),
+      format: withDefault(option("--format", formatParser), "compact" as const),
+    });
+
+    // Test all defaults
+    const result1 = await parseAsync(parser, []);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.env, "dev");
+      assert.equal(result1.value.logLevel, "debug");
+      assert.equal(result1.value.output, "json");
+      assert.equal(result1.value.format, "compact");
+    }
+
+    // Test partial: env and logLevel chain
+    const result2 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--log-level",
+      "error",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.env, "prod");
+      assert.equal(result2.value.logLevel, "error");
+      assert.equal(result2.value.output, "json");
+      assert.equal(result2.value.format, "compact");
+    }
+
+    // Test partial: output and format chain
+    const result3 = await parseAsync(parser, [
+      "--output",
+      "text",
+      "--format",
+      "detailed",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.env, "dev");
+      assert.equal(result3.value.logLevel, "debug");
+      assert.equal(result3.value.output, "text");
+      assert.equal(result3.value.format, "detailed");
+    }
+
+    // Test all specified
+    const result4 = await parseAsync(parser, [
+      "--env",
+      "staging",
+      "--log-level",
+      "info",
+      "--output",
+      "text",
+      "--format",
+      "simple",
+    ]);
+    assert.ok(result4.success);
+    if (result4.success) {
+      assert.equal(result4.value.env, "staging");
+      assert.equal(result4.value.logLevel, "info");
+      assert.equal(result4.value.output, "text");
+      assert.equal(result4.value.format, "simple");
+    }
+  });
+
+  test("withDefault with deriveFrom multiple dependencies", async () => {
+    const hostParser = dependency(
+      choice(["localhost", "example.com"] as const),
+    );
+    const portParser = dependency(choice(["80", "443", "8080"] as const));
+
+    const urlParser = deriveFrom({
+      dependencies: [hostParser, portParser] as const,
+      metavar: "URL",
+      defaultValues: () => ["localhost", "8080"] as const,
+      factory: (
+        host: "localhost" | "example.com",
+        port: "80" | "443" | "8080",
+      ) =>
+        choice([`http://${host}:${port}`, `https://${host}:${port}`] as const),
+    });
+
+    const parser = object({
+      host: withDefault(option("--host", hostParser), "localhost" as const),
+      port: withDefault(option("--port", portParser), "8080" as const),
+      url: withDefault(
+        option("--url", urlParser),
+        "http://localhost:8080" as const,
+      ),
+    });
+
+    // Test all defaults
+    const result1 = await parseAsync(parser, []);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.host, "localhost");
+      assert.equal(result1.value.port, "8080");
+      assert.equal(result1.value.url, "http://localhost:8080");
+    }
+
+    // Test with host and port, url defaults
+    const result2 = await parseAsync(parser, [
+      "--host",
+      "example.com",
+      "--port",
+      "443",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.host, "example.com");
+      assert.equal(result2.value.port, "443");
+      assert.equal(result2.value.url, "http://localhost:8080");
+    }
+
+    // Test with all options
+    const result3 = await parseAsync(parser, [
+      "--host",
+      "example.com",
+      "--port",
+      "443",
+      "--url",
+      "https://example.com:443",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.host, "example.com");
+      assert.equal(result3.value.port, "443");
+      assert.equal(result3.value.url, "https://example.com:443");
+    }
+  });
+
+  test("nested object with withDefault dependencies", async () => {
+    const dbTypeParser = dependency(choice(["postgres", "mysql"] as const));
+    const connParser = dbTypeParser.derive({
+      metavar: "CONN",
+      defaultValue: () => "postgres" as const,
+      factory: (dbType: "postgres" | "mysql") =>
+        choice(
+          dbType === "postgres"
+            ? (["pg://localhost", "pg://remote"] as const)
+            : (["mysql://localhost", "mysql://remote"] as const),
+        ),
+    });
+
+    const parser = object({
+      database: object({
+        type: withDefault(
+          option("--db-type", dbTypeParser),
+          "postgres" as const,
+        ),
+        connection: withDefault(
+          option("--db-conn", connParser),
+          "pg://localhost" as const,
+        ),
+      }),
+      appName: option("--app-name", string()),
+    });
+
+    // Test with only app-name
+    const result1 = await parseAsync(parser, ["--app-name", "myapp"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.database.type, "postgres");
+      assert.equal(result1.value.database.connection, "pg://localhost");
+      assert.equal(result1.value.appName, "myapp");
+    }
+
+    // Test with db options overridden
+    const result2 = await parseAsync(parser, [
+      "--app-name",
+      "myapp",
+      "--db-type",
+      "mysql",
+      "--db-conn",
+      "mysql://remote",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.database.type, "mysql");
+      assert.equal(result2.value.database.connection, "mysql://remote");
+      assert.equal(result2.value.appName, "myapp");
+    }
+  });
+
+  test("withDefault with optional and dependency", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["release", "optimized"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: withDefault(option("--mode", modeParser), "dev" as const),
+      // optional without default - may be undefined
+      config: optional(option("--config", configParser)),
+    });
+
+    // Test with no options
+    const result1 = await parseAsync(parser, []);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "dev");
+      assert.equal(result1.value.config, undefined);
+    }
+
+    // Test with mode only
+    const result2 = await parseAsync(parser, ["--mode", "prod"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "prod");
+      assert.equal(result2.value.config, undefined);
+    }
+
+    // Test with both
+    const result3 = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--config",
+      "optimized",
+    ]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.mode, "prod");
+      assert.equal(result3.value.config, "optimized");
+    }
+  });
+});
