@@ -8,6 +8,7 @@ import { dependency, deriveFrom } from "./dependency.ts";
 import {
   getDocPage,
   parseAsync,
+  parseSync,
   suggestAsync,
   type Suggestion,
 } from "./parser.ts";
@@ -6407,6 +6408,250 @@ describe("Hidden option with dependencies", () => {
       assert.equal(result2.value.secret, "a");
       assert.equal(result2.value.secretDerived, "x");
       assert.equal(result2.value.visible, "world");
+    }
+  });
+});
+
+describe("parseSync() comprehensive tests", () => {
+  test("basic sync parsing with dependencies", () => {
+    // Test that parseSync works with dependency chains
+    const formatParser = dependency(choice(["json", "xml", "csv"] as const));
+    const outputParser = formatParser.derive({
+      metavar: "FILE",
+      defaultValue: () => "json" as const,
+      factory: (format: "json" | "xml" | "csv") =>
+        // Derive output file extension from format
+        choice(
+          [
+            `output.${format}`,
+            `data.${format}`,
+            `result.${format}`,
+          ] as const,
+        ),
+    });
+
+    const parser = object({
+      format: option("--format", formatParser),
+      output: option("--output", outputParser),
+    });
+
+    // Test with format specified
+    const result1 = parseSync(parser, [
+      "--format",
+      "xml",
+      "--output",
+      "data.xml",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.format, "xml");
+      assert.equal(result1.value.output, "data.xml");
+    }
+
+    // Test with both options
+    const result2 = parseSync(parser, [
+      "--format",
+      "json",
+      "--output",
+      "output.json",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.format, "json");
+      assert.equal(result2.value.output, "output.json");
+    }
+  });
+
+  test("parseSync with withDefault on dependencies", () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug.json", "local.json"] as const)
+            : (["release.json", "production.json"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: withDefault(option("--mode", modeParser), "dev" as const),
+      config: withDefault(
+        option("--config", configParser),
+        "debug.json" as const,
+      ),
+    });
+
+    // Test with defaults
+    const result1 = parseSync(parser, []);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "dev");
+      assert.equal(result1.value.config, "debug.json");
+    }
+
+    // Test with mode specified
+    const result2 = parseSync(parser, [
+      "--mode",
+      "prod",
+      "--config",
+      "release.json",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "prod");
+      assert.equal(result2.value.config, "release.json");
+    }
+  });
+
+  test("parseSync with deriveFrom multiple dependencies", () => {
+    // Test deriveFrom with parseSync
+    const hostParser = dependency(
+      choice(["localhost", "example.com"] as const),
+    );
+    const portParser = dependency(choice(["80", "443", "8080"] as const));
+
+    const urlParser = deriveFrom({
+      dependencies: [hostParser, portParser] as const,
+      metavar: "URL",
+      defaultValues: () => ["localhost", "8080"] as const,
+      factory: (
+        host: "localhost" | "example.com",
+        port: "80" | "443" | "8080",
+      ) =>
+        choice(
+          [
+            `http://${host}:${port}`,
+            `https://${host}:${port}`,
+          ] as const,
+        ),
+    });
+
+    const parser = object({
+      host: option("--host", hostParser),
+      port: option("--port", portParser),
+      url: option("--url", urlParser),
+    });
+
+    // Test with all options specified
+    const result1 = parseSync(parser, [
+      "--host",
+      "example.com",
+      "--port",
+      "443",
+      "--url",
+      "https://example.com:443",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.host, "example.com");
+      assert.equal(result1.value.port, "443");
+      assert.equal(result1.value.url, "https://example.com:443");
+    }
+  });
+
+  test("parseSync error handling with dependencies", () => {
+    const typeParser = dependency(choice(["a", "b", "c"] as const));
+    const valueParser = typeParser.derive({
+      metavar: "VAL",
+      defaultValue: () => "a" as const,
+      factory: (type: "a" | "b" | "c") => {
+        if (type === "a") return choice(["x", "y"] as const);
+        if (type === "b") return choice(["m", "n"] as const);
+        return choice(["p", "q"] as const);
+      },
+    });
+
+    const parser = object({
+      type: option("--type", typeParser),
+      value: option("--value", valueParser),
+    });
+
+    // Valid combination
+    const result1 = parseSync(parser, ["--type", "b", "--value", "m"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.type, "b");
+      assert.equal(result1.value.value, "m");
+    }
+
+    // Invalid type value
+    const result2 = parseSync(parser, ["--type", "invalid", "--value", "x"]);
+    assert.ok(!result2.success);
+
+    // Invalid value for type (type=a only accepts x,y)
+    const result3 = parseSync(parser, ["--type", "a", "--value", "m"]);
+    assert.ok(!result3.success);
+  });
+
+  test("parseSync maintains order independence", () => {
+    // Options can be specified in any order
+    const modeParser = dependency(choice(["read", "write", "append"] as const));
+    const fileParser = modeParser.derive({
+      metavar: "PATH",
+      defaultValue: () => "read" as const,
+      factory: (mode: "read" | "write" | "append") =>
+        choice([`${mode}.txt`, `${mode}.log`, `${mode}.dat`] as const),
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      file: option("--file", fileParser),
+    });
+
+    // Test: dependency first, then derived
+    const result1 = parseSync(parser, [
+      "--mode",
+      "write",
+      "--file",
+      "write.log",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "write");
+      assert.equal(result1.value.file, "write.log");
+    }
+
+    // Test: derived first, then dependency (should still work)
+    const result2 = parseSync(parser, [
+      "--file",
+      "append.dat",
+      "--mode",
+      "append",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "append");
+      assert.equal(result2.value.file, "append.dat");
+    }
+  });
+
+  test("parseSync with nested objects and dependencies", () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = envParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (env: "dev" | "prod") =>
+        choice(
+          env === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["release", "optimized"] as const),
+        ),
+    });
+
+    const parser = object({
+      settings: object({
+        env: option("--env", envParser),
+        config: option("--config", configParser),
+      }),
+    });
+
+    const result = parseSync(parser, ["--env", "prod", "--config", "release"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.settings.env, "prod");
+      assert.equal(result.value.settings.config, "release");
     }
   });
 });
