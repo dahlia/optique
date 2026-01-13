@@ -8659,3 +8659,74 @@ describe("Mixed mode deriveFrom() with sync/async sources", () => {
     }
   });
 });
+
+describe("Help and usage with derived parser descriptions", () => {
+  test("getDocPage includes derived parser option with metavar", () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG_FILE",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["dev.json", "local.json"] as const)
+            : (["prod.json", "release.json"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser, {
+        description: message`Build mode`,
+      }),
+      config: option("--config", configParser, {
+        description: message`Configuration file`,
+      }),
+    });
+
+    const docPage = getDocPage(parser);
+    assert.ok(docPage);
+    assert.ok(docPage.sections.length > 0);
+
+    // Find entries for our options
+    const entries = docPage.sections.flatMap((s) => s.entries);
+    const modeEntry = entries.find(
+      (e) => e.term.type === "option" && e.term.names.includes("--mode"),
+    );
+    const configEntry = entries.find(
+      (e) => e.term.type === "option" && e.term.names.includes("--config"),
+    );
+
+    assert.ok(modeEntry, "Help should include --mode option");
+    assert.ok(configEntry, "Help should include --config option");
+
+    // Check metavar is present in config entry
+    assert.ok(configEntry.term.type === "option");
+    assert.equal(configEntry.term.metavar, "CONFIG_FILE");
+  });
+
+  test("formatUsage includes derived parser with correct metavar", () => {
+    const envParser = dependency(choice(["test", "prod"] as const));
+    const dbParser = envParser.derive({
+      metavar: "DB_URL",
+      defaultValue: () => "test" as const,
+      factory: (env: "test" | "prod") =>
+        choice(
+          env === "test"
+            ? (["sqlite://test.db", "postgres://localhost"] as const)
+            : (["postgres://prod-db"] as const),
+        ),
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      db: option("--db", dbParser),
+    });
+
+    const usage = formatUsage("app", parser.usage);
+
+    // Usage should contain both option metavars
+    assert.ok(usage.includes("--env"), "Usage should include --env");
+    assert.ok(usage.includes("--db"), "Usage should include --db");
+    assert.ok(usage.includes("DB_URL"), "Usage should include DB_URL metavar");
+  });
+});
