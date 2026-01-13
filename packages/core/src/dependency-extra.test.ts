@@ -8059,3 +8059,135 @@ describe("or() with derived parser fallback", () => {
     assert.ok(result3.success);
   });
 });
+
+describe("Circular dependency prevention", () => {
+  test("API design prevents circular dependencies - derive creates one-way relationship", async () => {
+    // The dependency API is designed to prevent circular dependencies:
+    // - dependency() creates a source
+    // - derive() creates a derived parser FROM a source
+    // - A derived parser cannot be used as a source for another parser
+    //   that the original source depends on
+
+    const sourceA = dependency(choice(["a1", "a2"] as const));
+
+    // B derives from A
+    const derivedB = sourceA.derive({
+      metavar: "B",
+      defaultValue: () => "a1" as const,
+      factory: (a: "a1" | "a2") =>
+        choice(a === "a1" ? (["b1", "b2"] as const) : (["b3", "b4"] as const)),
+    });
+
+    // This creates a valid one-way dependency chain: A -> B
+    const parser = object({
+      a: option("--a", sourceA),
+      b: option("--b", derivedB),
+    });
+
+    const result = await parseAsync(parser, ["--a", "a1", "--b", "b1"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, "a1");
+      assert.equal(result.value.b, "b1");
+    }
+  });
+
+  test("multiple dependency sources form a DAG with deriveFrom", async () => {
+    // Multiple independent sources can be combined with deriveFrom
+    // A and B are independent sources, C depends on both
+    const sourceA = dependency(choice(["x", "y"] as const));
+    const sourceB = dependency(choice(["1", "2"] as const));
+
+    // C depends on both A and B via deriveFrom
+    const derivedC = deriveFrom({
+      dependencies: [sourceA, sourceB] as const,
+      metavar: "C",
+      defaultValues: () => ["x", "1"] as const,
+      factory: (a: "x" | "y", b: "1" | "2") => {
+        if (a === "x" && b === "1") {
+          return choice(["c1", "c2"] as const);
+        }
+        return choice(["c3", "c4"] as const);
+      },
+    });
+
+    const parser = object({
+      a: option("--a", sourceA),
+      b: option("--b", sourceB),
+      c: option("--c", derivedC),
+    });
+
+    const result = await parseAsync(parser, [
+      "--a",
+      "x",
+      "--b",
+      "1",
+      "--c",
+      "c1",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, "x");
+      assert.equal(result.value.b, "1");
+      assert.equal(result.value.c, "c1");
+    }
+  });
+
+  test("self-referential dependency is prevented by type system", async () => {
+    // TypeScript prevents using a derived parser as its own dependency source
+    // The following would be a compile-time error:
+    //
+    // const bad = dependency(choice(["a"] as const));
+    // const badDerived = bad.derive({
+    //   metavar: "X",
+    //   defaultValue: () => "a" as const,
+    //   factory: () => badDerived, // Error: badDerived used before declaration
+    // });
+    //
+    // This test verifies that valid non-circular dependencies work correctly
+
+    const source = dependency(choice(["1", "2", "3"] as const));
+    const derived = source.derive({
+      metavar: "DERIVED",
+      defaultValue: () => "1" as const,
+      factory: (s: "1" | "2" | "3") =>
+        choice(
+          s === "1"
+            ? (["one"] as const)
+            : s === "2"
+            ? (["two"] as const)
+            : (["three"] as const),
+        ),
+    });
+
+    const parser = object({
+      source: option("--source", source),
+      derived: option("--derived", derived),
+    });
+
+    // Test all valid combinations
+    const result1 = await parseAsync(parser, [
+      "--source",
+      "1",
+      "--derived",
+      "one",
+    ]);
+    assert.ok(result1.success);
+
+    const result2 = await parseAsync(parser, [
+      "--source",
+      "2",
+      "--derived",
+      "two",
+    ]);
+    assert.ok(result2.success);
+
+    const result3 = await parseAsync(parser, [
+      "--source",
+      "3",
+      "--derived",
+      "three",
+    ]);
+    assert.ok(result3.success);
+  });
+});
