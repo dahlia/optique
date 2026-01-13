@@ -8872,3 +8872,371 @@ describe("Suggestions with --option=value form and dependencies", () => {
     );
   });
 });
+
+// =============================================================================
+// Real-world scenario: Environment-based configuration
+// =============================================================================
+
+describe("Real-world scenario: Environment-based configuration", () => {
+  test("multi-environment deployment CLI", async () => {
+    // Simulates a deployment CLI where:
+    // - Environment determines available regions
+    // - Environment determines available instance types (simplified from original)
+
+    const envParser = dependency(
+      choice(["development", "staging", "production"] as const),
+    );
+
+    const regionParser = envParser.derive({
+      metavar: "REGION",
+      defaultValue: () => "development" as const,
+      factory: (env: "development" | "staging" | "production") => {
+        switch (env) {
+          case "development":
+            return choice(["local", "dev-us-east"] as const);
+          case "staging":
+            return choice(["staging-us-east", "staging-eu-west"] as const);
+          case "production":
+            return choice(
+              [
+                "prod-us-east",
+                "prod-us-west",
+                "prod-eu-west",
+                "prod-ap-south",
+              ] as const,
+            );
+        }
+      },
+    });
+
+    // Instance types also depend on environment directly
+    const instanceParser = envParser.derive({
+      metavar: "INSTANCE",
+      defaultValue: () => "development" as const,
+      factory: (env: "development" | "staging" | "production") => {
+        switch (env) {
+          case "development":
+            return choice(["t2.micro", "t2.small"] as const);
+          case "staging":
+            return choice(["t3.medium", "t3.large"] as const);
+          case "production":
+            return choice(["c5.xlarge", "c5.2xlarge", "r5.xlarge"] as const);
+        }
+      },
+    });
+
+    const parser = object({
+      env: option("--env", "-e", envParser),
+      region: option("--region", "-r", regionParser),
+      instance: option("--instance", "-i", instanceParser),
+    });
+
+    // Test production deployment
+    const prodResult = await parseAsync(parser, [
+      "--env",
+      "production",
+      "--region",
+      "prod-us-east",
+      "--instance",
+      "c5.xlarge",
+    ]);
+    assert.ok(prodResult.success);
+    if (prodResult.success) {
+      assert.equal(prodResult.value.env, "production");
+      assert.equal(prodResult.value.region, "prod-us-east");
+      assert.equal(prodResult.value.instance, "c5.xlarge");
+    }
+
+    // Test staging deployment
+    const stagingResult = await parseAsync(parser, [
+      "--env",
+      "staging",
+      "--region",
+      "staging-eu-west",
+      "--instance",
+      "t3.large",
+    ]);
+    assert.ok(stagingResult.success);
+    if (stagingResult.success) {
+      assert.equal(stagingResult.value.env, "staging");
+      assert.equal(stagingResult.value.region, "staging-eu-west");
+      assert.equal(stagingResult.value.instance, "t3.large");
+    }
+
+    // Test that mismatched values fail
+    const invalidResult = await parseAsync(parser, [
+      "--env",
+      "development",
+      "--region",
+      "prod-us-east", // Invalid: prod region for dev env
+      "--instance",
+      "t2.micro",
+    ]);
+    assert.ok(!invalidResult.success);
+  });
+
+  test("database connection CLI with environment-specific defaults", async () => {
+    // Simulates a database CLI where environment determines:
+    // - Available database types
+    // - Connection string formats
+
+    const envParser = dependency(choice(["local", "cloud"] as const));
+
+    const dbTypeParser = envParser.derive({
+      metavar: "DB_TYPE",
+      defaultValue: () => "local" as const,
+      factory: (env: "local" | "cloud") =>
+        choice(
+          env === "local"
+            ? (["sqlite", "postgres-local"] as const)
+            : (["postgres-rds", "aurora", "dynamodb"] as const),
+        ),
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      dbType: option("--db-type", dbTypeParser),
+    });
+
+    // Local environment with sqlite
+    const localResult = await parseAsync(parser, [
+      "--env",
+      "local",
+      "--db-type",
+      "sqlite",
+    ]);
+    assert.ok(localResult.success);
+    if (localResult.success) {
+      assert.equal(localResult.value.env, "local");
+      assert.equal(localResult.value.dbType, "sqlite");
+    }
+
+    // Cloud environment with aurora
+    const cloudResult = await parseAsync(parser, [
+      "--env",
+      "cloud",
+      "--db-type",
+      "aurora",
+    ]);
+    assert.ok(cloudResult.success);
+    if (cloudResult.success) {
+      assert.equal(cloudResult.value.env, "cloud");
+      assert.equal(cloudResult.value.dbType, "aurora");
+    }
+
+    // Invalid: cloud database type in local environment
+    const invalidResult = await parseAsync(parser, [
+      "--env",
+      "local",
+      "--db-type",
+      "aurora",
+    ]);
+    assert.ok(!invalidResult.success);
+  });
+});
+
+// =============================================================================
+// Real-world scenario: Mutually dependent option groups
+// =============================================================================
+
+describe("Real-world scenario: Mutually dependent option groups", () => {
+  test("build system with target-specific options", async () => {
+    // Simulates a build system where:
+    // - Target platform determines available architectures
+    // - Architecture determines available optimization levels
+
+    const targetParser = dependency(
+      choice(["web", "mobile", "desktop"] as const),
+    );
+
+    const archParser = targetParser.derive({
+      metavar: "ARCH",
+      defaultValue: () => "web" as const,
+      factory: (target: "web" | "mobile" | "desktop") => {
+        switch (target) {
+          case "web":
+            return choice(["wasm32", "wasm64"] as const);
+          case "mobile":
+            return choice(["arm64", "armv7"] as const);
+          case "desktop":
+            return choice(["x86_64", "aarch64"] as const);
+        }
+      },
+    });
+
+    // Optimization also depends on target directly
+    const optimizationParser = targetParser.derive({
+      metavar: "OPT_LEVEL",
+      defaultValue: () => "web" as const,
+      factory: (target: "web" | "mobile" | "desktop") => {
+        switch (target) {
+          case "web":
+            return choice(["size", "speed"] as const);
+          case "mobile":
+            return choice(["battery", "performance"] as const);
+          case "desktop":
+            return choice(["debug", "release", "release-lto"] as const);
+        }
+      },
+    });
+
+    const parser = object({
+      target: option("--target", targetParser),
+      arch: option("--arch", archParser),
+      optimization: option("--opt", optimizationParser),
+    });
+
+    // Web build
+    const webResult = await parseAsync(parser, [
+      "--target",
+      "web",
+      "--arch",
+      "wasm64",
+      "--opt",
+      "size",
+    ]);
+    assert.ok(webResult.success);
+    if (webResult.success) {
+      assert.equal(webResult.value.target, "web");
+      assert.equal(webResult.value.arch, "wasm64");
+      assert.equal(webResult.value.optimization, "size");
+    }
+
+    // Mobile build
+    const mobileResult = await parseAsync(parser, [
+      "--target",
+      "mobile",
+      "--arch",
+      "arm64",
+      "--opt",
+      "battery",
+    ]);
+    assert.ok(mobileResult.success);
+    if (mobileResult.success) {
+      assert.equal(mobileResult.value.target, "mobile");
+      assert.equal(mobileResult.value.arch, "arm64");
+      assert.equal(mobileResult.value.optimization, "battery");
+    }
+
+    // Desktop build with LTO
+    const desktopResult = await parseAsync(parser, [
+      "--target",
+      "desktop",
+      "--arch",
+      "x86_64",
+      "--opt",
+      "release-lto",
+    ]);
+    assert.ok(desktopResult.success);
+    if (desktopResult.success) {
+      assert.equal(desktopResult.value.target, "desktop");
+      assert.equal(desktopResult.value.arch, "x86_64");
+      assert.equal(desktopResult.value.optimization, "release-lto");
+    }
+  });
+
+  test("API client with version-specific endpoints", async () => {
+    // Simulates an API client CLI where:
+    // - API version determines available endpoints
+    // - Endpoint determines available parameters
+
+    const versionParser = dependency(choice(["v1", "v2", "v3"] as const));
+
+    const endpointParser = versionParser.derive({
+      metavar: "ENDPOINT",
+      defaultValue: () => "v1" as const,
+      factory: (version: "v1" | "v2" | "v3") => {
+        switch (version) {
+          case "v1":
+            return choice(["/users", "/posts"] as const);
+          case "v2":
+            return choice(["/users", "/posts", "/comments"] as const);
+          case "v3":
+            return choice(
+              [
+                "/users",
+                "/posts",
+                "/comments",
+                "/reactions",
+              ] as const,
+            );
+        }
+      },
+    });
+
+    const formatParser = versionParser.derive({
+      metavar: "FORMAT",
+      defaultValue: () => "v1" as const,
+      factory: (version: "v1" | "v2" | "v3") => {
+        switch (version) {
+          case "v1":
+            return choice(["json"] as const);
+          case "v2":
+            return choice(["json", "xml"] as const);
+          case "v3":
+            return choice(["json", "xml", "protobuf"] as const);
+        }
+      },
+    });
+
+    const parser = object({
+      version: option("--api-version", versionParser),
+      endpoint: option("--endpoint", endpointParser),
+      format: option("--format", formatParser),
+    });
+
+    // v1 API call
+    const v1Result = await parseAsync(parser, [
+      "--api-version",
+      "v1",
+      "--endpoint",
+      "/users",
+      "--format",
+      "json",
+    ]);
+    assert.ok(v1Result.success);
+    if (v1Result.success) {
+      assert.equal(v1Result.value.version, "v1");
+      assert.equal(v1Result.value.endpoint, "/users");
+      assert.equal(v1Result.value.format, "json");
+    }
+
+    // v3 API call with new features
+    const v3Result = await parseAsync(parser, [
+      "--api-version",
+      "v3",
+      "--endpoint",
+      "/reactions",
+      "--format",
+      "protobuf",
+    ]);
+    assert.ok(v3Result.success);
+    if (v3Result.success) {
+      assert.equal(v3Result.value.version, "v3");
+      assert.equal(v3Result.value.endpoint, "/reactions");
+      assert.equal(v3Result.value.format, "protobuf");
+    }
+
+    // Invalid: v1 doesn't have /reactions endpoint
+    const invalidEndpoint = await parseAsync(parser, [
+      "--api-version",
+      "v1",
+      "--endpoint",
+      "/reactions",
+      "--format",
+      "json",
+    ]);
+    assert.ok(!invalidEndpoint.success);
+
+    // Invalid: v1 doesn't support protobuf
+    const invalidFormat = await parseAsync(parser, [
+      "--api-version",
+      "v1",
+      "--endpoint",
+      "/users",
+      "--format",
+      "protobuf",
+    ]);
+    assert.ok(!invalidFormat.success);
+  });
+});
