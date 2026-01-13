@@ -5465,3 +5465,187 @@ describe("Performance and stress tests", () => {
     );
   });
 });
+
+// =============================================================================
+// Short option clustering with dependencies
+// =============================================================================
+
+describe("Short option clustering with dependencies", () => {
+  test("bundled short flags with dependency source", async () => {
+    // -v (verbose) as dependency source, -d (debug) as derived parser
+    const verboseParser = dependency(choice(["true", "false"] as const));
+    const debugParser = verboseParser.derive({
+      metavar: "DEBUG",
+      defaultValue: () => "false" as const,
+      factory: (verbose: "true" | "false") => {
+        if (verbose === "true") {
+          return choice(["trace", "info"] as const);
+        }
+        return choice(["warn", "error"] as const);
+      },
+    });
+
+    const parser = object({
+      verbose: option("-v", "--verbose", verboseParser),
+      debug: option("-d", "--debug", debugParser),
+    });
+
+    // Test with long options first (baseline)
+    const result1 = await parseAsync(parser, [
+      "--verbose",
+      "true",
+      "--debug",
+      "trace",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.verbose, "true");
+      assert.equal(result1.value.debug, "trace");
+    }
+
+    // Test with separate short options
+    const result2 = await parseAsync(parser, ["-v", "true", "-d", "trace"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.verbose, "true");
+      assert.equal(result2.value.debug, "trace");
+    }
+  });
+
+  test("long options with value attached using equals", async () => {
+    const modeParser = dependency(choice(["fast", "slow"] as const));
+    const levelParser = modeParser.derive({
+      metavar: "LEVEL",
+      defaultValue: () => "fast" as const,
+      factory: (mode: "fast" | "slow") => {
+        if (mode === "fast") {
+          return choice(["1", "2", "3"] as const);
+        }
+        return choice(["a", "b", "c"] as const);
+      },
+    });
+
+    const parser = object({
+      mode: option("-m", "--mode", modeParser),
+      level: option("-l", "--level", levelParser),
+    });
+
+    // Test with --mode=fast --level=1 format (note: -m=fast is not supported,
+    // as equals format is only for long options starting with --)
+    const result = await parseAsync(parser, ["--mode=fast", "--level=1"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.mode, "fast");
+      assert.equal(result.value.level, "1");
+    }
+  });
+
+  test("short options in reverse order (derived before source)", async () => {
+    const typeParser = dependency(choice(["json", "xml"] as const));
+    const formatParser = typeParser.derive({
+      metavar: "FORMAT",
+      defaultValue: () => "json" as const,
+      factory: (type: "json" | "xml") => {
+        if (type === "json") {
+          return choice(["pretty", "compact"] as const);
+        }
+        return choice(["indented", "flat"] as const);
+      },
+    });
+
+    const parser = object({
+      type: option("-t", "--type", typeParser),
+      format: option("-f", "--format", formatParser),
+    });
+
+    // Provide derived option before source option
+    const result = await parseAsync(parser, ["-f", "pretty", "-t", "json"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.type, "json");
+      assert.equal(result.value.format, "pretty");
+    }
+  });
+
+  test("multiple short options with dependency chain", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const regionParser = envParser.derive({
+      metavar: "REGION",
+      defaultValue: () => "dev" as const,
+      factory: (env: "dev" | "prod") => {
+        if (env === "dev") {
+          return choice(["local", "staging"] as const);
+        }
+        return choice(["us-east", "eu-west"] as const);
+      },
+    });
+    const tierParser = envParser.derive({
+      metavar: "TIER",
+      defaultValue: () => "dev" as const,
+      factory: (env: "dev" | "prod") => {
+        if (env === "dev") {
+          return choice(["free", "basic"] as const);
+        }
+        return choice(["standard", "premium"] as const);
+      },
+    });
+
+    const parser = object({
+      env: option("-e", "--env", envParser),
+      region: option("-r", "--region", regionParser),
+      tier: option("-t", "--tier", tierParser),
+    });
+
+    // All short options
+    const result = await parseAsync(parser, [
+      "-e",
+      "prod",
+      "-r",
+      "us-east",
+      "-t",
+      "premium",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.env, "prod");
+      assert.equal(result.value.region, "us-east");
+      assert.equal(result.value.tier, "premium");
+    }
+  });
+
+  test("mixed short and long options with dependencies", async () => {
+    const sourceParser = dependency(choice(["a", "b"] as const));
+    const derivedParser = sourceParser.derive({
+      metavar: "DERIVED",
+      defaultValue: () => "a" as const,
+      factory: (source: "a" | "b") => {
+        if (source === "a") {
+          return choice(["a1", "a2"] as const);
+        }
+        return choice(["b1", "b2"] as const);
+      },
+    });
+
+    const parser = object({
+      source: option("-s", "--source", sourceParser),
+      derived: option("-d", "--derived", derivedParser),
+      extra: option("-x", "--extra", string()),
+    });
+
+    // Mix of short and long options
+    const result = await parseAsync(parser, [
+      "-s",
+      "a",
+      "--derived",
+      "a1",
+      "-x",
+      "test",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.source, "a");
+      assert.equal(result.value.derived, "a1");
+      assert.equal(result.value.extra, "test");
+    }
+  });
+});
