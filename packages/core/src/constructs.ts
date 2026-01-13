@@ -2285,6 +2285,43 @@ function isPlainObject(
 }
 
 /**
+ * Collects dependency values for a DeferredParseState from the registry.
+ * Returns the collected values array, or null if any required dependency
+ * is missing (and no default is available).
+ */
+function collectDependencyValues(
+  deferredState: DeferredParseState<unknown>,
+  registry: DependencyRegistry,
+): unknown[] | unknown | null {
+  const depIds = deferredState.dependencyIds;
+
+  // Multi-dependency case (from deriveFrom)
+  if (depIds && depIds.length > 0) {
+    const defaults = deferredState.defaultValues;
+    const dependencyValues: unknown[] = [];
+
+    for (let i = 0; i < depIds.length; i++) {
+      const depId = depIds[i];
+      if (registry.has(depId)) {
+        dependencyValues.push(registry.get(depId));
+      } else if (defaults && i < defaults.length) {
+        dependencyValues.push(defaults[i]);
+      } else {
+        return null; // Missing dependency with no default
+      }
+    }
+    return dependencyValues;
+  }
+
+  // Single dependency case (from derive)
+  const depId = deferredState.dependencyId;
+  if (registry.has(depId)) {
+    return registry.get(depId);
+  }
+  return null; // Dependency not found
+}
+
+/**
  * Recursively resolves DeferredParseState objects found anywhere in the state tree.
  * Returns the resolved state (sync version).
  *
@@ -2306,60 +2343,23 @@ function resolveDeferred(
   // Check if this is a DeferredParseState - resolve it
   if (isDeferredParseState(state)) {
     const deferredState = state as DeferredParseState<unknown>;
-    const parser = deferredState.parser;
+    const dependencyValue = collectDependencyValues(deferredState, registry);
 
-    // Check if this parser has multiple dependencies (from deriveFrom)
-    const depIds = deferredState.dependencyIds;
-    if (depIds && depIds.length > 0) {
-      // Multi-dependency case: collect all dependency values in order,
-      // using default values for missing dependencies
-      const defaults = deferredState.defaultValues;
-      const dependencyValues: unknown[] = [];
-
-      for (let i = 0; i < depIds.length; i++) {
-        const depId = depIds[i];
-        if (registry.has(depId)) {
-          dependencyValues.push(registry.get(depId));
-        } else if (defaults && i < defaults.length) {
-          // Use the default value for this missing dependency
-          dependencyValues.push(defaults[i]);
-        } else {
-          // No default available, fall back to preliminary result
-          return deferredState.preliminaryResult;
-        }
-      }
-
-      const reParseResult = parser[parseWithDependency](
-        deferredState.rawInput,
-        dependencyValues,
-      );
-
-      // Handle sync vs async result
-      if (reParseResult instanceof Promise) {
-        // For async, use preliminary result (will be handled by async version)
-        return deferredState.preliminaryResult;
-      }
-      return reParseResult;
+    if (dependencyValue === null) {
+      return deferredState.preliminaryResult;
     }
 
-    // Single dependency case (from derive)
-    const depId = deferredState.dependencyId;
-    if (registry.has(depId)) {
-      const dependencyValue = registry.get(depId);
-      const reParseResult = parser[parseWithDependency](
-        deferredState.rawInput,
-        dependencyValue,
-      );
+    const reParseResult = deferredState.parser[parseWithDependency](
+      deferredState.rawInput,
+      dependencyValue,
+    );
 
-      // Handle sync vs async result
-      if (reParseResult instanceof Promise) {
-        // For async, use preliminary result (will be handled by async version)
-        return deferredState.preliminaryResult;
-      }
-      return reParseResult;
+    // Handle sync vs async result
+    if (reParseResult instanceof Promise) {
+      // For async, use preliminary result (will be handled by async version)
+      return deferredState.preliminaryResult;
     }
-    // Dependency not found, use preliminary result
-    return deferredState.preliminaryResult;
+    return reParseResult;
   }
 
   // Skip DependencySourceState - it's a marker, not something to resolve
