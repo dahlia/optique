@@ -2940,6 +2940,7 @@ export function object<
         // DependencySourceState with default values. This is needed for
         // withDefault(option(..., dependencySource), defaultValue) pattern.
         const preCompletedState: Record<string | symbol, unknown> = {};
+        const preCompletedKeys = new Set<string | symbol>();
         for (const field of parserKeys) {
           const fieldKey = field as string | symbol;
           const fieldState =
@@ -2961,6 +2962,7 @@ export function object<
             const completed = fieldParser.complete(fieldState);
             // The result might be a DependencySourceState (from withDefault)
             preCompletedState[fieldKey] = completed;
+            preCompletedKeys.add(fieldKey);
           } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
           // This happens with withDefault(option(..., dependencySource), ...) when no input was parsed
           else if (
@@ -2970,6 +2972,7 @@ export function object<
             // Call complete with [initialState] to get DependencySourceState
             const completed = fieldParser.complete([fieldParser.initialState]);
             preCompletedState[fieldKey] = completed;
+            preCompletedKeys.add(fieldKey);
           } // Case 3: state is undefined and parser has WrappedDependencySourceMarker
           // This happens with withDefault(option(..., dependencySource), defaultValue) when
           // no input was parsed. The withDefault parser wraps the inner dependency source
@@ -2988,6 +2991,7 @@ export function object<
             // keep the original state so Phase 3 handles it normally.
             if (isDependencySourceState(completed)) {
               preCompletedState[fieldKey] = completed;
+              preCompletedKeys.add(fieldKey);
             } else {
               preCompletedState[fieldKey] = fieldState;
             }
@@ -3015,28 +3019,12 @@ export function object<
             unknown
           >;
 
-          // If this field was pre-completed from withDefault and is a DependencySourceState,
-          // we need to handle it specially: the state for the inner parser should be
-          // the DependencySourceState wrapped in an array (withDefault's state structure).
-          // However, if the original state already had this structure (i.e., field was
-          // parsed normally), we should use the resolved state as-is.
-          const originalFieldState =
-            (state as Record<string | symbol, unknown>)[fieldKey];
-          const wasPreCompletedCase1 = Array.isArray(originalFieldState) &&
-            originalFieldState.length === 1 &&
-            isPendingDependencySourceState(originalFieldState[0]);
-          const wasPreCompletedCase2 = originalFieldState === undefined &&
-            isPendingDependencySourceState(fieldParser.initialState);
-          const wasPreCompletedCase3 = originalFieldState === undefined &&
-            isWrappedDependencySource(fieldParser);
-
+          // If this field was pre-completed in Phase 1 and is a DependencySourceState,
+          // extract the value directly since complete() was already called.
           if (
             isDependencySourceState(fieldResolvedState) &&
-            (wasPreCompletedCase1 || wasPreCompletedCase2 ||
-              wasPreCompletedCase3)
+            preCompletedKeys.has(fieldKey)
           ) {
-            // This is a pre-completed withDefault field. Extract the value directly
-            // since complete() was already called and returned DependencySourceState.
             const depResult = fieldResolvedState.result;
             if (depResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
@@ -3060,6 +3048,7 @@ export function object<
       return (async () => {
         // Phase 1: Pre-complete fields with PendingDependencySourceState
         const preCompletedState: Record<string | symbol, unknown> = {};
+        const preCompletedKeys = new Set<string | symbol>();
         for (const field of parserKeys) {
           const fieldKey = field as string | symbol;
           const fieldState =
@@ -3077,6 +3066,7 @@ export function object<
             const completed = await fieldParser.complete(fieldState);
             // The result might be a DependencySourceState (from withDefault)
             preCompletedState[fieldKey] = completed;
+            preCompletedKeys.add(fieldKey);
           } // Case 2: state is undefined but parser's initialState is PendingDependencySourceState
           // This happens with withDefault(option(..., dependencySource), ...) when no input was parsed
           else if (
@@ -3088,6 +3078,7 @@ export function object<
               fieldParser.initialState,
             ]);
             preCompletedState[fieldKey] = completed;
+            preCompletedKeys.add(fieldKey);
           } // Case 3: state is undefined and parser has WrappedDependencySourceMarker
           // This happens with withDefault(option(..., dependencySource), defaultValue) when
           // no input was parsed. The withDefault parser wraps the inner dependency source
@@ -3106,6 +3097,7 @@ export function object<
             // keep the original state so Phase 3 handles it normally.
             if (isDependencySourceState(completed)) {
               preCompletedState[fieldKey] = completed;
+              preCompletedKeys.add(fieldKey);
             } else {
               preCompletedState[fieldKey] = fieldState;
             }
@@ -3129,21 +3121,11 @@ export function object<
             (resolvedState as Record<string | symbol, unknown>)[fieldKey];
           const fieldParser = parsers[field];
 
-          // Similar to sync version: handle pre-completed withDefault fields
-          const originalFieldState =
-            (state as Record<string | symbol, unknown>)[fieldKey];
-          const wasPreCompletedCase1 = Array.isArray(originalFieldState) &&
-            originalFieldState.length === 1 &&
-            isPendingDependencySourceState(originalFieldState[0]);
-          const wasPreCompletedCase2 = originalFieldState === undefined &&
-            isPendingDependencySourceState(fieldParser.initialState);
-          const wasPreCompletedCase3 = originalFieldState === undefined &&
-            isWrappedDependencySource(fieldParser);
-
+          // If this field was pre-completed in Phase 1 and is a DependencySourceState,
+          // extract the value directly since complete() was already called.
           if (
             isDependencySourceState(fieldResolvedState) &&
-            (wasPreCompletedCase1 || wasPreCompletedCase2 ||
-              wasPreCompletedCase3)
+            preCompletedKeys.has(fieldKey)
           ) {
             const depResult = fieldResolvedState.result;
             if (depResult.success) {
