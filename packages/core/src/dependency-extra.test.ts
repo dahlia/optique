@@ -6969,3 +6969,360 @@ describe("Nested withDefault with dependencies", () => {
     }
   });
 });
+
+describe("map() with dependencies", () => {
+  test("map() transforms dependency source value", async () => {
+    // map() on the source option doesn't break the dependency chain
+    // because the dependency is resolved at parse time from the raw value
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["release", "optimized"] as const),
+        ),
+    });
+
+    const parser = object({
+      // map() transforms the result after parsing
+      mode: map(option("--mode", modeParser), (m) => m.toUpperCase()),
+      config: option("--config", configParser),
+    });
+
+    const result = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--config",
+      "release",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      // mode is transformed by map
+      assert.equal(result.value.mode, "PROD");
+      // config was validated against the original "prod" value
+      assert.equal(result.value.config, "release");
+    }
+  });
+
+  test("map() on derived parser transforms derived value", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = envParser.derive({
+      metavar: "LOG_LEVEL",
+      defaultValue: () => "dev" as const,
+      factory: (env: "dev" | "prod") =>
+        choice(
+          env === "dev"
+            ? (["debug", "trace"] as const)
+            : (["warn", "error"] as const),
+        ),
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      // map() transforms the derived value
+      logLevel: map(option("--log-level", logLevelParser), (level) => ({
+        name: level,
+        priority: level === "debug"
+          ? 0
+          : level === "trace"
+          ? 1
+          : level === "warn"
+          ? 2
+          : 3,
+      })),
+    });
+
+    const result = await parseAsync(parser, [
+      "--env",
+      "dev",
+      "--log-level",
+      "trace",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.env, "dev");
+      assert.deepEqual(result.value.logLevel, { name: "trace", priority: 1 });
+    }
+  });
+
+  test("chained map() with dependencies", async () => {
+    const formatParser = dependency(choice(["json", "xml"] as const));
+    const outputParser = formatParser.derive({
+      metavar: "OUTPUT",
+      defaultValue: () => "json" as const,
+      factory: (format: "json" | "xml") =>
+        choice(
+          format === "json"
+            ? (["data.json", "output.json"] as const)
+            : (["data.xml", "output.xml"] as const),
+        ),
+    });
+
+    const parser = object({
+      format: map(
+        map(option("--format", formatParser), (f) => f.toUpperCase()),
+        (f) => `Format: ${f}`,
+      ),
+      output: map(
+        map(option("--output", outputParser), (o) => o.split(".")[0] ?? ""),
+        (name) => ({ filename: name }),
+      ),
+    });
+
+    const result = await parseAsync(parser, [
+      "--format",
+      "xml",
+      "--output",
+      "data.xml",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.format, "Format: XML");
+      assert.deepEqual(result.value.output, { filename: "data" });
+    }
+  });
+
+  test("map() with withDefault and dependencies - transforms parsed values", async () => {
+    // Note: map(withDefault(...)) transforms parsed values, but NOT default values
+    // when the option is not provided. This is because dependency sources need
+    // special handling for their raw values.
+    const modeParser = dependency(choice(["fast", "safe"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "fast" as const,
+      factory: (mode: "fast" | "safe") =>
+        choice(
+          mode === "fast"
+            ? (["turbo", "quick"] as const)
+            : (["verified", "checked"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: map(
+        withDefault(option("--mode", modeParser), "fast" as const),
+        (m) => ({ type: m, enabled: true }),
+      ),
+      config: map(
+        withDefault(option("--config", configParser), "turbo" as const),
+        (c) => `config-${c}`,
+      ),
+    });
+
+    // Test with specified values - map() transformation IS applied
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "safe",
+      "--config",
+      "verified",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.deepEqual(result1.value.mode, { type: "safe", enabled: true });
+      assert.equal(result1.value.config, "config-verified");
+    }
+
+    // Test with partial - mode specified, config defaults
+    const result2 = await parseAsync(parser, ["--mode", "fast"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      // mode was parsed, so map() is applied
+      assert.deepEqual(result2.value.mode, { type: "fast", enabled: true });
+      // config used default, map() still transforms
+      assert.equal(result2.value.config, "config-turbo");
+    }
+  });
+
+  test("alternative pattern: withDefault after map for guaranteed transform", async () => {
+    // If you need map() to always transform (including defaults), put withDefault outside
+    const modeParser = dependency(choice(["fast", "safe"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "fast" as const,
+      factory: (mode: "fast" | "safe") =>
+        choice(
+          mode === "fast"
+            ? (["turbo", "quick"] as const)
+            : (["verified", "checked"] as const),
+        ),
+    });
+
+    const parser = object({
+      // withDefault OUTSIDE map: default is already transformed type
+      mode: withDefault(
+        map(option("--mode", modeParser), (m) => ({ type: m, enabled: true })),
+        { type: "fast" as const, enabled: true },
+      ),
+      config: withDefault(
+        map(option("--config", configParser), (c) => `config-${c}`),
+        "config-turbo",
+      ),
+    });
+
+    // Test with defaults - transformation is "baked into" the default value
+    const result1 = await parseAsync(parser, []);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.deepEqual(result1.value.mode, { type: "fast", enabled: true });
+      assert.equal(result1.value.config, "config-turbo");
+    }
+
+    // Test with specified values
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "safe",
+      "--config",
+      "verified",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.deepEqual(result2.value.mode, { type: "safe", enabled: true });
+      assert.equal(result2.value.config, "config-verified");
+    }
+  });
+
+  test("map() with multiple() and dependencies", async () => {
+    const typeParser = dependency(choice(["a", "b"] as const));
+    const valueParser = typeParser.derive({
+      metavar: "VALUE",
+      defaultValue: () => "a" as const,
+      factory: (type: "a" | "b") =>
+        choice(type === "a" ? (["x", "y"] as const) : (["m", "n"] as const)),
+    });
+
+    const parser = object({
+      type: option("--type", typeParser),
+      // multiple values with map transformation
+      values: map(
+        multiple(option("--value", valueParser)),
+        (vals) => vals.map((v) => v.toUpperCase()),
+      ),
+    });
+
+    const result = await parseAsync(parser, [
+      "--type",
+      "a",
+      "--value",
+      "x",
+      "--value",
+      "y",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.type, "a");
+      assert.deepEqual(result.value.values, ["X", "Y"]);
+    }
+  });
+
+  test("map() with optional and dependencies", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = envParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (env: "dev" | "prod") =>
+        choice(
+          env === "dev"
+            ? (["local", "staging"] as const)
+            : (["production", "canary"] as const),
+        ),
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      config: map(
+        optional(option("--config", configParser)),
+        (c) => c ? { value: c, isSet: true } : { value: null, isSet: false },
+      ),
+    });
+
+    // Test without config
+    const result1 = await parseAsync(parser, ["--env", "dev"]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.env, "dev");
+      assert.deepEqual(result1.value.config, { value: null, isSet: false });
+    }
+
+    // Test with config
+    const result2 = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--config",
+      "production",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.env, "prod");
+      assert.deepEqual(result2.value.config, {
+        value: "production",
+        isSet: true,
+      });
+    }
+  });
+
+  test("map() doesn't affect dependency resolution order", async () => {
+    // Dependencies should still work correctly regardless of map() placement
+    // Use two separate dependency chains since derived parsers don't have derive()
+    const aParser = dependency(choice(["a1", "a2"] as const));
+    const bParser = aParser.derive({
+      metavar: "B",
+      defaultValue: () => "a1" as const,
+      factory: (a: "a1" | "a2") =>
+        choice(a === "a1" ? (["b1", "b2"] as const) : (["b3", "b4"] as const)),
+    });
+
+    // Separate dependency for second level
+    const bSource = dependency(choice(["b1", "b2", "b3", "b4"] as const));
+    const cParser = bSource.derive({
+      metavar: "C",
+      defaultValue: () => "b1" as const,
+      factory: (b: "b1" | "b2" | "b3" | "b4") =>
+        choice(
+          b === "b1" || b === "b2"
+            ? (["c1", "c2"] as const)
+            : (["c3", "c4"] as const),
+        ),
+    });
+
+    const parser = object({
+      a: map(option("--a", aParser), (v) => `mapped-${v}`),
+      b: map(option("--b", bParser), (v) => `mapped-${v}`),
+      // Note: bSource for c is independent but we test validation still works
+      bForC: option("--b-for-c", bSource),
+      c: map(option("--c", cParser), (v) => `mapped-${v}`),
+    });
+
+    const result = await parseAsync(parser, [
+      "--a",
+      "a2",
+      "--b",
+      "b3",
+      "--b-for-c",
+      "b3",
+      "--c",
+      "c3",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, "mapped-a2");
+      assert.equal(result.value.b, "mapped-b3");
+      assert.equal(result.value.c, "mapped-c3");
+    }
+
+    // Invalid: c1 requires b1 or b2 in bForC
+    const result2 = await parseAsync(parser, [
+      "--a",
+      "a2",
+      "--b",
+      "b3",
+      "--b-for-c",
+      "b3",
+      "--c",
+      "c1", // invalid: c1 requires b-for-c=b1 or b2
+    ]);
+    assert.ok(!result2.success);
+  });
+});
