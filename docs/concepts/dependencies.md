@@ -57,14 +57,12 @@ const modeParser = dependency(choice(["dev", "prod"] as const));
 // Create a derived parser that depends on the mode
 const logLevelParser = modeParser.derive({
   metavar: "LEVEL",
-  factory: (mode) => {
-    // Return different choices based on the mode value
-    if (mode === "dev") {
-      return choice(["debug", "info", "warn", "error"]);
-    } else {
-      return choice(["warn", "error"]);
-    }
-  },
+  factory: (mode) =>
+    choice(
+      mode === "dev"
+        ? ["debug", "info", "warn", "error"]
+        : ["warn", "error"]
+    ),
   defaultValue: () => "dev" as const,
 });
 ~~~~

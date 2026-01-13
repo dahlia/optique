@@ -29,14 +29,13 @@ const modeParser = dependency(choice(["dev", "prod"] as const));
 // Create a derived parser - log levels that are valid depend on the mode
 const logLevelParser = modeParser.derive({
   metavar: "LEVEL",
-  factory: (mode) => {
-    // In dev mode, allow verbose logging options
-    if (mode === "dev") {
-      return choice(["debug", "info", "warn", "error"] as const);
-    }
-    // In prod mode, only allow less verbose options
-    return choice(["warn", "error"] as const);
-  },
+  // In dev mode, allow verbose logging options; in prod, only less verbose
+  factory: (mode) =>
+    choice(
+      mode === "dev"
+        ? (["debug", "info", "warn", "error"] as const)
+        : (["warn", "error"] as const),
+    ),
   // Default value used when --mode is not provided
   defaultValue: () => "dev" as const,
 });
