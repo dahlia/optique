@@ -6261,3 +6261,152 @@ describe("Diamond dependency pattern", () => {
     }
   });
 });
+
+// =============================================================================
+// Hidden option with dependencies
+// =============================================================================
+
+describe("Hidden option with dependencies", () => {
+  test("hidden option as dependency source with withDefault", async () => {
+    const internalModeParser = dependency(
+      choice(["debug", "release"] as const),
+    );
+    const logLevelParser = internalModeParser.derive({
+      metavar: "LEVEL",
+      defaultValue: () => "release" as const,
+      factory: (mode: "debug" | "release") =>
+        choice(
+          mode === "debug"
+            ? (["trace", "debug", "info"] as const)
+            : (["warn", "error"] as const),
+        ),
+    });
+
+    const parser = object({
+      // Hidden internal option that affects derived parser, with default
+      internalMode: withDefault(
+        option("--internal-mode", internalModeParser, { hidden: true }),
+        "release" as const,
+      ),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Test with hidden option provided
+    const result1 = await parseAsync(parser, [
+      "--internal-mode",
+      "debug",
+      "--log-level",
+      "trace",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.internalMode, "debug");
+      assert.equal(result1.value.logLevel, "trace");
+    }
+
+    // Test with hidden option not provided - uses withDefault value
+    const result2 = await parseAsync(parser, ["--log-level", "warn"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.internalMode, "release");
+      assert.equal(result2.value.logLevel, "warn");
+    }
+
+    // Verify usage term has hidden: true
+    const hiddenTerm = parser.usage.find(
+      (t) =>
+        t.type === "optional" && t.terms.some(
+          (inner) =>
+            inner.type === "option" && inner.names.includes("--internal-mode"),
+        ),
+    );
+    assert.ok(hiddenTerm);
+  });
+
+  test("hidden derived option from visible source with withDefault", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const internalFlagParser = envParser.derive({
+      metavar: "FLAG",
+      defaultValue: () => "dev" as const,
+      factory: (env: "dev" | "prod") =>
+        choice(env === "dev" ? (["on", "off"] as const) : (["off"] as const)),
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      // Hidden derived option with default
+      internalFlag: withDefault(
+        option("--internal-flag", internalFlagParser, { hidden: true }),
+        "off" as const,
+      ),
+    });
+
+    // Both options provided
+    const result1 = await parseAsync(parser, [
+      "--env",
+      "dev",
+      "--internal-flag",
+      "on",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.env, "dev");
+      assert.equal(result1.value.internalFlag, "on");
+    }
+
+    // Only visible option provided - hidden uses default
+    const result2 = await parseAsync(parser, ["--env", "prod"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.env, "prod");
+      assert.equal(result2.value.internalFlag, "off");
+    }
+  });
+
+  test("both source and derived hidden with defaults", async () => {
+    const secretParser = dependency(choice(["a", "b"] as const));
+    const secretDerivedParser = secretParser.derive({
+      metavar: "DERIVED",
+      defaultValue: () => "a" as const,
+      factory: (secret: "a" | "b") =>
+        choice(secret === "a" ? (["x", "y"] as const) : (["z", "w"] as const)),
+    });
+
+    const parser = object({
+      secret: withDefault(
+        option("--secret", secretParser, { hidden: true }),
+        "a" as const,
+      ),
+      secretDerived: withDefault(
+        option("--secret-derived", secretDerivedParser, { hidden: true }),
+        "x" as const,
+      ),
+      visible: option("--visible", string()),
+    });
+
+    // All options provided
+    const result1 = await parseAsync(parser, [
+      "--secret",
+      "b",
+      "--secret-derived",
+      "z",
+      "--visible",
+      "hello",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.secret, "b");
+      assert.equal(result1.value.secretDerived, "z");
+      assert.equal(result1.value.visible, "hello");
+    }
+
+    // Only visible option provided - hidden options use defaults
+    const result2 = await parseAsync(parser, ["--visible", "world"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.secret, "a");
+      assert.equal(result2.value.secretDerived, "x");
+      assert.equal(result2.value.visible, "world");
+    }
+  });
+});
