@@ -2267,7 +2267,6 @@ describe("Complex dependency chains", () => {
     }
   });
 
-  // TODO: deriveFrom with multiple independent dependency sources not yet working correctly
   test("deriveFrom with multiple independent dependency sources", async () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const regionParser = dependency(choice(["us", "eu", "asia"] as const));
