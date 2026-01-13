@@ -8,6 +8,8 @@ description: >-
 Inter-option dependencies
 =========================
 
+*This API is available since Optique 0.10.0.*
+
 Sometimes the valid values for one command-line option depend on the value of
 another option. For example, a `--log-level` option might accept different
 values depending on whether `--mode` is set to `dev` or `prod`. Optique's
@@ -365,15 +367,44 @@ Shell completion support
 ------------------------
 
 The dependency system integrates with Optique's shell completion. When
-generating completions for a derived parser, the system uses the default
-dependency value to determine which completions to suggest. This provides
-useful suggestions even when the dependency hasn't been specified yet on
-the command line.
+generating completions for a derived parser, the system is context-aware:
 
-> [!NOTE]
-> Currently, shell completion for derived parsers uses the default dependency
-> value. Future versions may support context-aware completion that considers
-> already-typed dependency values on the command line.
+ -  If the dependency option has already been specified on the command line,
+    completions are generated based on that actual value.
+ -  If the dependency option hasn't been specified yet, the system uses the
+    `defaultValue` to generate reasonable suggestions.
+
+This means users get accurate completions that reflect the current state of
+their command line:
+
+~~~~ typescript twoslash
+import { dependency } from "@optique/core/dependency";
+import { object } from "@optique/core/constructs";
+import { suggestAsync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+
+const modeParser = dependency(choice(["dev", "prod"] as const));
+const portParser = modeParser.derive({
+  metavar: "PORT",
+  factory: (mode) =>
+    choice(mode === "dev" ? ["3000", "8080"] : ["80", "443"]),
+  defaultValue: () => "dev" as const,
+});
+
+const parser = object({
+  mode: option("--mode", modeParser),
+  port: option("--port", portParser),
+});
+// ---cut-before---
+// With --mode prod already specified, completions show prod ports
+const suggestions = await suggestAsync(parser, ["--mode", "prod", "--port", ""]);
+// suggestions include "80" and "443" (prod mode ports)
+
+// Without --mode, completions use defaultValue ("dev")
+const defaultSuggestions = await suggestAsync(parser, ["--port", ""]);
+// suggestions include "3000" and "8080" (dev mode ports)
+~~~~
 
 
 Practical example: Git-like CLI
@@ -416,3 +447,11 @@ The current dependency implementation has some limitations to be aware of:
 
  -  *No nested dependencies*: A derived parser cannot itself be used as a
     dependency source. Dependencies form a single level of relationships.
+    However, you can have multiple derived parsers that depend on the same
+    source, or use `deriveFrom()` to depend on multiple sources simultaneously.
+
+ -  *`deriveFrom()` requires dependency sources*: The `dependencies` array
+    in `deriveFrom()` must contain `DependencySource` objects created with
+    `dependency()`, not derived parsers. If you need a parser that depends
+    on both a source and a derived value, consider restructuring to have
+    multiple sources instead.

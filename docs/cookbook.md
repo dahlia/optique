@@ -387,6 +387,105 @@ The key insight is that dependent options are often about context: when certain
 features are enabled, additional configuration becomes relevant.
 
 
+Inter-option value dependencies
+-------------------------------
+
+*This API is available since Optique 0.10.0.*
+
+Sometimes one option's *valid values* depend on another option's value.
+For example, a `--log-level` option might accept `debug` and `trace` in
+development mode, but only `warn` and `error` in production. The
+[`dependency()`](./concepts/dependencies.md) system provides type-safe
+support for these relationships.
+
+~~~~ typescript twoslash
+import { dependency } from "@optique/core/dependency";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+// Create a dependency source from the mode option
+const modeParser = dependency(choice(["dev", "prod"] as const));
+
+// Create a derived parser whose valid values depend on mode
+const logLevelParser = modeParser.derive({
+  metavar: "LEVEL",
+  factory: (mode) =>
+    choice(mode === "dev"
+      ? ["debug", "info", "warn", "error"]
+      : ["warn", "error"]),
+  defaultValue: () => "dev" as const,
+});
+
+const parser = object({
+  mode: option("--mode", modeParser),
+  logLevel: option("--log-level", logLevelParser),
+});
+
+const config = run(parser);
+//    ^?
+
+
+
+
+// In dev mode: --log-level debug ✓
+// In prod mode: --log-level debug ✗ (invalid)
+~~~~
+
+This pattern differs from the [dependent options](#dependent-options) pattern
+above in an important way:
+
+ -  *Dependent options*: Controls whether options are *available* based on
+    a flag's presence
+ -  *Value dependencies*: Controls which *values are valid* based on another
+    option's value
+
+### Multiple dependencies
+
+When an option depends on multiple other options, use `deriveFrom()`:
+
+~~~~ typescript twoslash
+import { dependency, deriveFrom } from "@optique/core/dependency";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const envParser = dependency(choice(["local", "staging", "prod"] as const));
+const regionParser = dependency(choice(["us", "eu", "asia"] as const));
+
+// Server names depend on both environment and region
+const serverParser = deriveFrom({
+  metavar: "SERVER",
+  dependencies: [envParser, regionParser] as const,
+  factory: (env, region) =>
+    choice(env === "local"
+      ? ["localhost"]
+      : [`${env}-${region}-1`, `${env}-${region}-2`]),
+  defaultValues: () => ["local", "us"] as const,
+});
+
+const parser = object({
+  env: option("--env", envParser),
+  region: option("--region", regionParser),
+  server: option("--server", serverParser),
+});
+
+const config = run(parser);
+// --env prod --region eu --server prod-eu-1 ✓
+// --env local --server localhost ✓
+// --env local --server prod-us-1 ✗ (invalid for local)
+~~~~
+
+The dependency system also integrates with shell completion—when users request
+completions for `--server`, they see suggestions appropriate for the current
+`--env` and `--region` values.
+
+For more details, see the
+[*Inter-option dependencies*](./concepts/dependencies.md) concept guide.
+
+
 Conditional options based on discriminator
 ------------------------------------------
 
