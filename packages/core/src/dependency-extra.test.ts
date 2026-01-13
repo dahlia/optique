@@ -8730,3 +8730,145 @@ describe("Help and usage with derived parser descriptions", () => {
     assert.ok(usage.includes("DB_URL"), "Usage should include DB_URL metavar");
   });
 });
+
+// =============================================================================
+// Suggestions with --option=value form and dependencies
+// =============================================================================
+
+describe("Suggestions with --option=value form and dependencies", () => {
+  test("suggestAsync with --option= form for dependency source", async () => {
+    const modeParser = dependency(choice(["dev", "staging", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "staging" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "trace"] as const)
+            : (["info", "warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Suggest for --mode=
+    const suggestions = await suggestAsync(parser, ["--mode="]);
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    assert.ok(texts.includes("--mode=dev"), "Should suggest --mode=dev");
+    assert.ok(
+      texts.includes("--mode=staging"),
+      "Should suggest --mode=staging",
+    );
+    assert.ok(texts.includes("--mode=prod"), "Should suggest --mode=prod");
+  });
+
+  test("suggestAsync with --option= form for derived parser", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const logLevelParser = modeParser.derive({
+      metavar: "LEVEL",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "trace"] as const)
+            : (["info", "warn"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      logLevel: option("--log-level", logLevelParser),
+    });
+
+    // Suggest for --log-level= (should use default "dev")
+    const suggestions = await suggestAsync(parser, ["--log-level="]);
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    // Default is "dev", so should suggest debug/trace
+    assert.ok(
+      texts.includes("--log-level=debug") ||
+        texts.includes("--log-level=trace"),
+      `Expected dev-mode values, got: ${texts.join(", ")}`,
+    );
+  });
+
+  test("suggestAsync with --option=partial for derived parser", async () => {
+    const envParser = dependency(choice(["dev", "test", "prod"] as const));
+    const configParser = envParser.derive({
+      metavar: "CONFIG",
+      factory: (env: "dev" | "test" | "prod") =>
+        choice(
+          env === "dev"
+            ? (["dev.json", "dev.yaml"] as const)
+            : env === "test"
+            ? (["test.json", "test.yaml"] as const)
+            : (["prod.json", "prod.yaml"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      env: option("--env", envParser),
+      config: option("--config", configParser),
+    });
+
+    // Suggest for --config=dev (partial match)
+    const suggestions = await suggestAsync(parser, ["--config=dev"]);
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    // Default is "dev", so should suggest dev.json and dev.yaml
+    assert.ok(
+      texts.includes("--config=dev.json"),
+      `Should include --config=dev.json, got: ${texts.join(", ")}`,
+    );
+    assert.ok(
+      texts.includes("--config=dev.yaml"),
+      `Should include --config=dev.yaml, got: ${texts.join(", ")}`,
+    );
+  });
+
+  test("suggestAsync with --option= form respects provided source value", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const portParser = modeParser.derive({
+      metavar: "PORT",
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["3000", "8080"] as const)
+            : (["80", "443"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      port: option("--port", portParser),
+    });
+
+    // When mode is already set to "prod", suggest prod ports for --port=
+    const suggestions = await suggestAsync(parser, [
+      "--mode",
+      "prod",
+      "--port=",
+    ]);
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    // Mode is "prod", so should suggest 80 and 443
+    assert.ok(
+      texts.includes("--port=80") || texts.includes("--port=443"),
+      `Expected prod-mode ports, got: ${texts.join(", ")}`,
+    );
+  });
+});
