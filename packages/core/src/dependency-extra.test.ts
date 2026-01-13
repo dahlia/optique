@@ -7569,3 +7569,345 @@ describe("Error customization with dependencies", () => {
     }
   });
 });
+
+describe("conditional() with dependencies", () => {
+  test("conditional with dependency in discriminator", async () => {
+    const formatParser = dependency(choice(["json", "xml"] as const));
+    const jsonStyleParser = formatParser.derive({
+      metavar: "STYLE",
+      defaultValue: () => "json" as const,
+      factory: (format: "json" | "xml") =>
+        choice(
+          format === "json"
+            ? (["compact", "pretty"] as const)
+            : (["inline", "formatted"] as const),
+        ),
+    });
+
+    // Use conditional based on format
+    const parser = object({
+      format: option("--format", formatParser),
+      style: option("--style", jsonStyleParser),
+    });
+
+    const result1 = await parseAsync(parser, [
+      "--format",
+      "json",
+      "--style",
+      "compact",
+    ]);
+    assert.ok(result1.success);
+
+    const result2 = await parseAsync(parser, [
+      "--format",
+      "xml",
+      "--style",
+      "formatted",
+    ]);
+    assert.ok(result2.success);
+  });
+
+  test("conditional branch selection with dependencies", async () => {
+    const modeParser = dependency(choice(["simple", "advanced"] as const));
+
+    // Simple mode: just one option
+    const simpleValueParser = modeParser.derive({
+      metavar: "VALUE",
+      defaultValue: () => "simple" as const,
+      factory: () => choice(["a", "b"] as const),
+    });
+
+    // Advanced mode: multiple options
+    const advancedValueParser = modeParser.derive({
+      metavar: "ADV_VALUE",
+      defaultValue: () => "simple" as const,
+      factory: () => choice(["x", "y", "z"] as const),
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      simpleValue: optional(option("--simple-value", simpleValueParser)),
+      advancedValue: optional(option("--advanced-value", advancedValueParser)),
+    });
+
+    // Simple mode
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "simple",
+      "--simple-value",
+      "a",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value.mode, "simple");
+      assert.equal(result1.value.simpleValue, "a");
+    }
+
+    // Advanced mode
+    const result2 = await parseAsync(parser, [
+      "--mode",
+      "advanced",
+      "--advanced-value",
+      "z",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value.mode, "advanced");
+      assert.equal(result2.value.advancedValue, "z");
+    }
+  });
+});
+
+describe("Suggestions with dependencies", () => {
+  // Helper to extract text from suggestions
+  const getSuggestionTexts = (suggestions: readonly Suggestion[]) =>
+    suggestions
+      .filter((s): s is { kind: "literal"; text: string } =>
+        s.kind === "literal"
+      )
+      .map((s) => s.text);
+
+  test("suggestions from derived parser based on source value", async () => {
+    const formatParser = dependency(choice(["json", "xml"] as const));
+    const styleParser = formatParser.derive({
+      metavar: "STYLE",
+      defaultValue: () => "json" as const,
+      factory: (format: "json" | "xml") =>
+        choice(
+          format === "json"
+            ? (["compact", "pretty"] as const)
+            : (["indented", "minified"] as const),
+        ),
+    });
+
+    const parser = object({
+      format: option("--format", formatParser),
+      style: option("--style", styleParser),
+    });
+
+    // Suggestions for style when format=json
+    const suggestions1 = await suggestAsync(parser, [
+      "--format",
+      "json",
+      "--style",
+      "",
+    ]);
+    const styleValues1 = getSuggestionTexts(suggestions1).filter(
+      (v) => !v.startsWith("-"),
+    );
+    assert.ok(styleValues1.includes("compact"));
+    assert.ok(styleValues1.includes("pretty"));
+    // xml styles should not be suggested
+    assert.ok(!styleValues1.includes("indented"));
+    assert.ok(!styleValues1.includes("minified"));
+
+    // Suggestions for style when format=xml
+    const suggestions2 = await suggestAsync(parser, [
+      "--format",
+      "xml",
+      "--style",
+      "",
+    ]);
+    const styleValues2 = getSuggestionTexts(suggestions2).filter(
+      (v) => !v.startsWith("-"),
+    );
+    assert.ok(styleValues2.includes("indented"));
+    assert.ok(styleValues2.includes("minified"));
+    // json styles should not be suggested
+    assert.ok(!styleValues2.includes("compact"));
+    assert.ok(!styleValues2.includes("pretty"));
+  });
+
+  test("suggestions with partial prefix", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      defaultValue: () => "dev" as const,
+      factory: (mode: "dev" | "prod") =>
+        choice(
+          mode === "dev"
+            ? (["debug", "development", "dev-local"] as const)
+            : (["production", "prod-release"] as const),
+        ),
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      config: option("--config", configParser),
+    });
+
+    // Suggestions with prefix "de" for dev mode
+    const suggestions = await suggestAsync(parser, [
+      "--mode",
+      "dev",
+      "--config",
+      "de",
+    ]);
+    const configValues = getSuggestionTexts(suggestions).filter(
+      (v) => !v.startsWith("-"),
+    );
+    assert.ok(configValues.includes("debug"));
+    assert.ok(configValues.includes("development"));
+    assert.ok(configValues.includes("dev-local"));
+  });
+
+  test("suggestions for deriveFrom with multiple sources", async () => {
+    const hostParser = dependency(choice(["localhost", "remote"] as const));
+    const portParser = dependency(choice(["80", "443"] as const));
+
+    const urlParser = deriveFrom({
+      dependencies: [hostParser, portParser] as const,
+      metavar: "URL",
+      defaultValues: () => ["localhost", "80"] as const,
+      factory: (host: "localhost" | "remote", port: "80" | "443") =>
+        choice([`http://${host}:${port}`, `https://${host}:${port}`] as const),
+    });
+
+    const parser = object({
+      host: option("--host", hostParser),
+      port: option("--port", portParser),
+      url: option("--url", urlParser),
+    });
+
+    // Suggestions for URL when host=remote, port=443
+    const suggestions = await suggestAsync(parser, [
+      "--host",
+      "remote",
+      "--port",
+      "443",
+      "--url",
+      "",
+    ]);
+    const urlValues = getSuggestionTexts(suggestions).filter(
+      (v) => !v.startsWith("-"),
+    );
+    assert.ok(urlValues.includes("http://remote:443"));
+    assert.ok(urlValues.includes("https://remote:443"));
+  });
+});
+
+describe("argument() with derived parsers", () => {
+  test("positional argument with derived parser", async () => {
+    const typeParser = dependency(choice(["file", "url"] as const));
+    const pathParser = typeParser.derive({
+      metavar: "PATH",
+      defaultValue: () => "file" as const,
+      factory: (type: "file" | "url") =>
+        choice(
+          type === "file"
+            ? (["/path/to/file", "./relative/path"] as const)
+            : (["http://example.com", "https://example.com"] as const),
+        ),
+    });
+
+    const parser = tuple([
+      option("--type", typeParser),
+      argument(pathParser),
+    ]);
+
+    // File type
+    const result1 = await parseAsync(parser, [
+      "--type",
+      "file",
+      "/path/to/file",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.equal(result1.value[0], "file");
+      assert.equal(result1.value[1], "/path/to/file");
+    }
+
+    // URL type
+    const result2 = await parseAsync(parser, [
+      "--type",
+      "url",
+      "https://example.com",
+    ]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      assert.equal(result2.value[0], "url");
+      assert.equal(result2.value[1], "https://example.com");
+    }
+  });
+
+  test("multiple arguments with different derived parsers", async () => {
+    const formatParser = dependency(choice(["csv", "json"] as const));
+    const inputParser = formatParser.derive({
+      metavar: "INPUT",
+      defaultValue: () => "csv" as const,
+      factory: (format: "csv" | "json") =>
+        choice(
+          format === "csv"
+            ? (["input.csv", "data.csv"] as const)
+            : (["input.json", "data.json"] as const),
+        ),
+    });
+    const outputParser = formatParser.derive({
+      metavar: "OUTPUT",
+      defaultValue: () => "csv" as const,
+      factory: (format: "csv" | "json") =>
+        choice(
+          format === "csv"
+            ? (["output.csv", "result.csv"] as const)
+            : (["output.json", "result.json"] as const),
+        ),
+    });
+
+    const parser = tuple([
+      option("--format", formatParser),
+      argument(inputParser),
+      argument(outputParser),
+    ]);
+
+    const result = await parseAsync(parser, [
+      "--format",
+      "json",
+      "input.json",
+      "output.json",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "json");
+      assert.equal(result.value[1], "input.json");
+      assert.equal(result.value[2], "output.json");
+    }
+  });
+
+  test("argument with deriveFrom multiple sources", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const regionParser = dependency(choice(["us", "eu"] as const));
+
+    const endpointParser = deriveFrom({
+      dependencies: [envParser, regionParser] as const,
+      metavar: "ENDPOINT",
+      defaultValues: () => ["dev", "us"] as const,
+      factory: (env: "dev" | "prod", region: "us" | "eu") =>
+        choice(
+          [
+            `https://${env}.${region}.example.com`,
+            `https://api.${env}.${region}.example.com`,
+          ] as const,
+        ),
+    });
+
+    const parser = tuple([
+      option("--env", envParser),
+      option("--region", regionParser),
+      argument(endpointParser),
+    ]);
+
+    const result = await parseAsync(parser, [
+      "--env",
+      "prod",
+      "--region",
+      "eu",
+      "https://prod.eu.example.com",
+    ]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "prod");
+      assert.equal(result.value[1], "eu");
+      assert.equal(result.value[2], "https://prod.eu.example.com");
+    }
+  });
+});
