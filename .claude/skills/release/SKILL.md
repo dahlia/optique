@@ -54,7 +54,7 @@ They are created from `X.Y-maintenance` branches.
     ~~~~
 
 2.  Update *CHANGES.md*: Find the section for the version being released and
-    change "To be released." to "Released on {Month} {Day}, {Year}." using
+    change “To be released.” to “Released on {Month} {Day}, {Year}.” using
     the current date in English.  For example:
 
     ~~~~ markdown
@@ -257,7 +257,7 @@ changes.  They are always created from the `main` branch with patch version 0.
     ~~~~
 
 2.  Update *CHANGES.md*: Find the section for the version being released and
-    change "To be released." to "Released on {Month} {Day}, {Year}." using
+    change “To be released.” to “Released on {Month} {Day}, {Year}.” using
     the current date in English.  For example:
 
     ~~~~ markdown
@@ -428,7 +428,7 @@ Checklist summary
 
  -  [ ] Check out `X.Y-maintenance` branch
  -  [ ] Update *CHANGES.md* release date
- -  [ ] Commit with message "Release X.Y.Z"
+ -  [ ] Commit with message “Release X.Y.Z”
  -  [ ] Create tag `X.Y.Z` with `-m "Optique X.Y.Z"`
  -  [ ] Add next version section to *CHANGES.md*
  -  [ ] Bump version in *packages/core/deno.json*
@@ -446,7 +446,7 @@ Checklist summary
 
  -  [ ] Check out `main` branch
  -  [ ] Update *CHANGES.md* release date
- -  [ ] Commit with message "Release X.Y.0"
+ -  [ ] Commit with message “Release X.Y.0”
  -  [ ] Create tag `X.Y.0` with `-m "Optique X.Y.0"`
  -  [ ] Add next version section to *CHANGES.md*
  -  [ ] Bump version in *packages/core/deno.json*

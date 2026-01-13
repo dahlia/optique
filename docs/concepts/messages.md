@@ -949,7 +949,7 @@ of whether colors are enabled or disabled.
 
 *Available since Optique 0.7.0.*
 
-Optique's automatic "Did you mean?" suggestions can also be customized through
+Optique's automatic “Did you mean?” suggestions can also be customized through
 the `errors` option. This allows you to control how suggestion messages are
 formatted or disable them entirely for specific parsers.
 

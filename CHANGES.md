@@ -185,7 +185,7 @@ Released on January 6, 2026.
  -  Added `hidden` option to all primitive parsers (`option()`, `flag()`,
     `argument()`, `command()`, `passThrough()`).  When `hidden: true`, the
     parser is excluded from help text, shell completion suggestions, and
-    "Did you mean?" error suggestions, while remaining fully functional for
+    “Did you mean?” error suggestions, while remaining fully functional for
     parsing.  This is useful for deprecated options, internal debugging flags,
     and experimental features.  [[#62]]
 
@@ -928,7 +928,7 @@ Released on November 25, 2025.
  -  Improved error messages for `or()`, `longestMatch()`, and `object()`
     combinators to provide context-aware feedback based on expected input types.
     Error messages now accurately reflect what's missing (options, commands, or
-    arguments) instead of showing generic "No matching option or command found"
+    arguments) instead of showing generic “No matching option or command found”
     for all cases. [[#45]]
 
     ~~~~ typescript

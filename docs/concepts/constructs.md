@@ -474,8 +474,8 @@ The function form receives a `NoMatchContext` object with three boolean flags:
  -  `hasArguments`: Whether any parsers expect arguments
 
 This enables precise, context-aware error messages. For example, if all parsers
-expect only commands, you can show "No matching command found" instead of the
-generic "No matching option or command found."
+expect only commands, you can show “No matching command found” instead of the
+generic “No matching option or command found.”
 
 **Default behavior** (when no custom error is provided):
 
