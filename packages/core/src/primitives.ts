@@ -2,10 +2,10 @@ import {
   createDeferredParseState,
   createDependencySourceState,
   createPendingDependencySourceState,
-  DefaultValues,
+  defaultValues,
   type DeferredParseState,
-  DependencyId,
-  DependencyIds,
+  dependencyId,
+  dependencyIds,
   type DependencySourceState,
   type DerivedValueParser,
   isDeferredParseState,
@@ -14,7 +14,7 @@ import {
   isDerivedValueParser,
   isPendingDependencySourceState,
   type PendingDependencySourceState,
-  SuggestWithDependency,
+  suggestWithDependency,
 } from "./dependency.ts";
 import type { DocFragment } from "./doc.ts";
 
@@ -51,7 +51,7 @@ function createOptionParseState<M extends Mode, T>(
     );
   }
   if (isDependencySource(valueParser)) {
-    return createDependencySourceState(parseResult, valueParser[DependencyId]);
+    return createDependencySourceState(parseResult, valueParser[dependencyId]);
   }
   return parseResult;
 }
@@ -199,24 +199,24 @@ function* getSuggestionsWithDependency<T>(
 ): Generator<Suggestion> {
   if (!valueParser.suggest) return;
 
-  // Check if this is a derived parser with SuggestWithDependency
+  // Check if this is a derived parser with suggestWithDependency
   if (
-    isDerivedValueParser(valueParser) && SuggestWithDependency in valueParser
+    isDerivedValueParser(valueParser) && suggestWithDependency in valueParser
   ) {
     const derived = valueParser as DerivedValueParser<"sync", T, unknown>;
-    const suggestWithDep = derived[SuggestWithDependency];
+    const suggestWithDep = derived[suggestWithDependency];
 
     if (suggestWithDep && dependencyRegistry) {
       // Get dependency values from registry
-      const depIds = DependencyIds in derived
-        ? (derived as unknown as { [DependencyIds]: readonly symbol[] })[
-          DependencyIds
+      const depIds = dependencyIds in derived
+        ? (derived as unknown as { [dependencyIds]: readonly symbol[] })[
+          dependencyIds
         ]
-        : [derived[DependencyId]];
+        : [derived[dependencyId]];
 
-      const defaults = DefaultValues in derived
-        ? (derived as unknown as { [DefaultValues]: () => readonly unknown[] })
-          [DefaultValues]?.()
+      const defaults = defaultValues in derived
+        ? (derived as unknown as { [defaultValues]: () => readonly unknown[] })
+          [defaultValues]?.()
         : undefined;
 
       const registry = dependencyRegistry as {
@@ -242,7 +242,7 @@ function* getSuggestionsWithDependency<T>(
         }
       }
 
-      // If we have at least one actual value (not just defaults), use SuggestWithDependency
+      // If we have at least one actual value (not just defaults), use suggestWithDependency
       if (hasAnyValue) {
         const depValue = depIds.length === 1
           ? dependencyValues[0]
@@ -362,24 +362,24 @@ async function* getSuggestionsWithDependencyAsync<T>(
 ): AsyncGenerator<Suggestion> {
   if (!valueParser.suggest) return;
 
-  // Check if this is a derived parser with SuggestWithDependency
+  // Check if this is a derived parser with suggestWithDependency
   if (
-    isDerivedValueParser(valueParser) && SuggestWithDependency in valueParser
+    isDerivedValueParser(valueParser) && suggestWithDependency in valueParser
   ) {
     const derived = valueParser as DerivedValueParser<Mode, T, unknown>;
-    const suggestWithDep = derived[SuggestWithDependency];
+    const suggestWithDep = derived[suggestWithDependency];
 
     if (suggestWithDep && dependencyRegistry) {
       // Get dependency values from registry
-      const depIds = DependencyIds in derived
-        ? (derived as unknown as { [DependencyIds]: readonly symbol[] })[
-          DependencyIds
+      const depIds = dependencyIds in derived
+        ? (derived as unknown as { [dependencyIds]: readonly symbol[] })[
+          dependencyIds
         ]
-        : [derived[DependencyId]];
+        : [derived[dependencyId]];
 
-      const defaults = DefaultValues in derived
-        ? (derived as unknown as { [DefaultValues]: () => readonly unknown[] })
-          [DefaultValues]?.()
+      const defaults = defaultValues in derived
+        ? (derived as unknown as { [defaultValues]: () => readonly unknown[] })
+          [defaultValues]?.()
         : undefined;
 
       const registry = dependencyRegistry as {
@@ -407,7 +407,7 @@ async function* getSuggestionsWithDependencyAsync<T>(
         }
       }
 
-      // If we have at least one actual value (not just defaults), use SuggestWithDependency
+      // If we have at least one actual value (not just defaults), use suggestWithDependency
       if (hasAnyValue) {
         const depValue = depIds.length === 1
           ? dependencyValues[0]
@@ -685,7 +685,7 @@ export function option<M extends Mode, T>(
     initialState: valueParser == null
       ? { success: true, value: false }
       : isDependencySource(valueParser)
-      ? createPendingDependencySourceState(valueParser[DependencyId])
+      ? createPendingDependencySourceState(valueParser[dependencyId])
       : {
         success: false,
         error: options.errors?.missing

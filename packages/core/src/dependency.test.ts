@@ -2,12 +2,12 @@ import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
   createDeferredParseState,
-  DeferredParseMarker,
+  deferredParseMarker,
   dependency,
-  DependencyId,
+  dependencyId,
   DependencyRegistry,
-  DependencySourceMarker,
-  DerivedValueParserMarker,
+  dependencySourceMarker,
+  derivedValueParserMarker,
   deriveFrom,
   deriveFromAsync,
   deriveFromSync,
@@ -15,7 +15,7 @@ import {
   isDeferredParseState,
   isDependencySource,
   isDerivedValueParser,
-  ParseWithDependency,
+  parseWithDependency,
 } from "./dependency.ts";
 import { message } from "./message.ts";
 import type { NonEmptyString } from "./nonempty.ts";
@@ -167,8 +167,8 @@ describe("dependency()", () => {
     const source = dependency(parser);
 
     assert.ok(isDependencySource(source));
-    assert.equal(source[DependencySourceMarker], true);
-    assert.equal(typeof source[DependencyId], "symbol");
+    assert.equal(source[dependencySourceMarker], true);
+    assert.equal(typeof source[dependencyId], "symbol");
   });
 
   test("preserves the original parser's properties", () => {
@@ -200,7 +200,7 @@ describe("dependency()", () => {
     const source1 = dependency(parser);
     const source2 = dependency(parser);
 
-    assert.notEqual(source1[DependencyId], source2[DependencyId]);
+    assert.notEqual(source1[dependencyId], source2[dependencyId]);
   });
 });
 
@@ -226,7 +226,7 @@ describe("derive()", () => {
     });
 
     assert.ok(isDerivedValueParser(derived));
-    assert.equal(derived[DerivedValueParserMarker], true);
+    assert.equal(derived[derivedValueParserMarker], true);
   });
 
   test("derived parser has the specified metavar", () => {
@@ -281,7 +281,7 @@ describe("derive()", () => {
       defaultValue: () => "/default",
     });
 
-    assert.equal(derived[DependencyId], cwdParser[DependencyId]);
+    assert.equal(derived[dependencyId], cwdParser[dependencyId]);
   });
 
   test("derived parser has sync mode when source is sync", () => {
@@ -421,10 +421,10 @@ describe("DeferredParseState", () => {
     );
 
     assert.ok(isDeferredParseState(deferred));
-    assert.equal(deferred[DeferredParseMarker], true);
+    assert.equal(deferred[deferredParseMarker], true);
     assert.equal(deferred.rawInput, "test-input");
     assert.equal(deferred.parser, derived);
-    assert.equal(deferred.dependencyId, source[DependencyId]);
+    assert.equal(deferred.dependencyId, source[dependencyId]);
     assert.deepEqual(deferred.preliminaryResult, preliminaryResult);
   });
 
@@ -468,7 +468,7 @@ describe("DeferredParseState", () => {
       derived,
       preliminaryResult,
     );
-    assert.equal(deferred.dependencyId, source[DependencyId]);
+    assert.equal(deferred.dependencyId, source[dependencyId]);
   });
 
   test("deferred state stores preliminary result", () => {
@@ -746,7 +746,7 @@ describe("Integration: End-to-end dependency resolution", () => {
   });
 });
 
-describe("ParseWithDependency", () => {
+describe("parseWithDependency", () => {
   test("derived parser can parse with actual dependency value", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const derived = modeParser.derive<"debug" | "verbose" | "quiet" | "silent">(
@@ -770,16 +770,16 @@ describe("ParseWithDependency", () => {
     const result2 = derived.parse("quiet");
     assert.ok(!result2.success);
 
-    // With ParseWithDependency and "prod", now "quiet" is valid
-    const result3 = derived[ParseWithDependency]("quiet", "prod");
+    // With parseWithDependency and "prod", now "quiet" is valid
+    const result3 = derived[parseWithDependency]("quiet", "prod");
     // For sync parsers, result is not a Promise
     assert.ok("success" in result3 && result3.success);
     if ("value" in result3) {
       assert.equal(result3.value, "quiet");
     }
 
-    // With ParseWithDependency and "prod", "debug" is now invalid
-    const result4 = derived[ParseWithDependency]("debug", "prod");
+    // With parseWithDependency and "prod", "debug" is now invalid
+    const result4 = derived[parseWithDependency]("debug", "prod");
     assert.ok("success" in result4 && !result4.success);
   });
 
@@ -803,8 +803,8 @@ describe("ParseWithDependency", () => {
     const result2 = derived.parse("/custom/prod.yaml");
     assert.ok(!result2.success);
 
-    // With ParseWithDependency and actual values, "/custom/prod.yaml" is valid
-    const result3 = derived[ParseWithDependency](
+    // With parseWithDependency and actual values, "/custom/prod.yaml" is valid
+    const result3 = derived[parseWithDependency](
       "/custom/prod.yaml",
       ["/custom", "prod"] as const,
     );
@@ -1709,11 +1709,11 @@ describe("Error handling with async derived parser", () => {
 });
 
 // =============================================================================
-// ParseWithDependency Async Tests
+// parseWithDependency Async Tests
 // =============================================================================
 
-describe("ParseWithDependency with async derived parser", () => {
-  test("async derived parser ParseWithDependency returns Promise", async () => {
+describe("parseWithDependency with async derived parser", () => {
+  test("async derived parser parseWithDependency returns Promise", async () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const derived = modeParser.derive({
       metavar: "LOG_LEVEL",
@@ -1726,8 +1726,8 @@ describe("ParseWithDependency with async derived parser", () => {
       defaultValue: () => "dev" as const,
     });
 
-    // ParseWithDependency should return a Promise for async derived parser
-    const result = derived[ParseWithDependency]("quiet", "prod");
+    // parseWithDependency should return a Promise for async derived parser
+    const result = derived[parseWithDependency]("quiet", "prod");
     assert.ok(result instanceof Promise);
 
     const resolved = await result;
@@ -1737,7 +1737,7 @@ describe("ParseWithDependency with async derived parser", () => {
     }
   });
 
-  test("ParseWithDependency with actual dependency value validates correctly", async () => {
+  test("parseWithDependency with actual dependency value validates correctly", async () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const derived = modeParser.derive({
       metavar: "LOG_LEVEL",
@@ -1751,19 +1751,19 @@ describe("ParseWithDependency with async derived parser", () => {
     });
 
     // With "prod" dependency, "quiet" should be valid
-    const result1 = await derived[ParseWithDependency]("quiet", "prod");
+    const result1 = await derived[parseWithDependency]("quiet", "prod");
     assert.ok(result1.success);
 
     // With "prod" dependency, "debug" should be invalid
-    const result2 = await derived[ParseWithDependency]("debug", "prod");
+    const result2 = await derived[parseWithDependency]("debug", "prod");
     assert.ok(!result2.success);
 
     // With "dev" dependency, "debug" should be valid
-    const result3 = await derived[ParseWithDependency]("debug", "dev");
+    const result3 = await derived[parseWithDependency]("debug", "dev");
     assert.ok(result3.success);
   });
 
-  test("deriveFrom async ParseWithDependency works correctly", async () => {
+  test("deriveFrom async parseWithDependency works correctly", async () => {
     const dirParser = dependency(string({ metavar: "DIR" }));
     const modeParser = dependency(choice(["dev", "prod"] as const));
 
@@ -1779,8 +1779,8 @@ describe("ParseWithDependency with async derived parser", () => {
     const result1 = await derived.parse("/config/dev.json");
     assert.ok(result1.success);
 
-    // With custom dependency values via ParseWithDependency
-    const result2 = await derived[ParseWithDependency](
+    // With custom dependency values via parseWithDependency
+    const result2 = await derived[parseWithDependency](
       "/custom/prod.yaml",
       ["/custom", "prod"] as const,
     );

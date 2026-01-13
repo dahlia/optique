@@ -1,14 +1,14 @@
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   createDependencySourceState,
-  DependencyId,
+  dependencyId,
   isDependencySourceState,
   isPendingDependencySourceState,
   isWrappedDependencySource,
   type PendingDependencySourceState,
   transformsDependencyValue,
-  TransformsDependencyValueMarker,
-  WrappedDependencySourceMarker,
+  transformsDependencyValueMarker,
+  wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import type {
   DocState,
@@ -170,23 +170,23 @@ export function optional<M extends Mode, TValue, TState>(
     syncParser.initialState,
   );
 
-  // Propagate WrappedDependencySourceMarker so outer wrappers (like withDefault)
+  // Propagate wrappedDependencySourceMarker so outer wrappers (like withDefault)
   // can detect that we wrap a dependency source.
   // For direct dependency sources, we set the marker from inner's initialState.
   // For wrapped dependency sources, we propagate the inner's marker.
   const wrappedDependencyMarker: {
-    [WrappedDependencySourceMarker]?: PendingDependencySourceState;
+    [wrappedDependencySourceMarker]?: PendingDependencySourceState;
   } = innerHasWrappedDependency
-    ? { [WrappedDependencySourceMarker]: parser[WrappedDependencySourceMarker] }
+    ? { [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker] }
     : innerHasDirectDependency
-    ? { [WrappedDependencySourceMarker]: syncParser.initialState }
+    ? { [wrappedDependencySourceMarker]: syncParser.initialState }
     : {};
 
   // Check if this optional parser wraps any dependency source
-  const hasWrappedDependencySource = WrappedDependencySourceMarker in
+  const hasWrappedDependencySource = wrappedDependencySourceMarker in
     wrappedDependencyMarker;
   const wrappedPendingState = hasWrappedDependencySource
-    ? wrappedDependencyMarker[WrappedDependencySourceMarker]
+    ? wrappedDependencyMarker[wrappedDependencySourceMarker]
     : undefined;
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
@@ -431,16 +431,16 @@ export function withDefault<
   }
 
   // Check if inner parser's initialState is a PendingDependencySourceState,
-  // or if inner parser has a WrappedDependencySourceMarker.
+  // or if inner parser has a wrappedDependencySourceMarker.
   // If so, we need to mark this parser so that object() can find it during
   // dependency resolution (Phase 1).
   const innerInitialState = syncParser.initialState;
   const wrappedDependencyMarker: {
-    [WrappedDependencySourceMarker]?: PendingDependencySourceState;
+    [wrappedDependencySourceMarker]?: PendingDependencySourceState;
   } = isPendingDependencySourceState(innerInitialState)
-    ? { [WrappedDependencySourceMarker]: innerInitialState }
+    ? { [wrappedDependencySourceMarker]: innerInitialState }
     : isWrappedDependencySource(parser)
-    ? { [WrappedDependencySourceMarker]: parser[WrappedDependencySourceMarker] }
+    ? { [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker] }
     : {};
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
@@ -484,7 +484,7 @@ export function withDefault<
                   : defaultValue;
                 return createDependencySourceState(
                   { success: true, value },
-                  res[DependencyId],
+                  res[dependencyId],
                 ) as unknown as ValueParserResult<TValue | TDefault>;
               } catch (error) {
                 return {
@@ -530,10 +530,10 @@ export function withDefault<
             const value = typeof defaultValue === "function"
               ? (defaultValue as () => TDefault)()
               : defaultValue;
-            const pendingState = parser[WrappedDependencySourceMarker];
+            const pendingState = parser[wrappedDependencySourceMarker];
             return createDependencySourceState(
               { success: true, value },
-              pendingState[DependencyId],
+              pendingState[dependencyId],
             ) as unknown as ValueParserResult<TValue | TDefault>;
           } catch (error) {
             return {
@@ -584,7 +584,7 @@ export function withDefault<
                   : defaultValue;
                 return createDependencySourceState(
                   { success: true, value },
-                  res[DependencyId],
+                  res[dependencyId],
                 ) as unknown as ValueParserResult<TValue | TDefault>;
               } catch (error) {
                 return {
@@ -632,7 +632,7 @@ export function withDefault<
           // dependency resolution can find this value
           return createDependencySourceState(
             { success: true, value },
-            state[0][DependencyId],
+            state[0][dependencyId],
           ) as unknown as ValueParserResult<TValue | TDefault>;
         } catch (error) {
           return {
@@ -762,17 +762,17 @@ export function map<M extends Mode, T, U, TState>(
     return res as ModeValue<M, ValueParserResult<U>>;
   };
 
-  // Propagate WrappedDependencySourceMarker from inner parser, and mark
+  // Propagate wrappedDependencySourceMarker from inner parser, and mark
   // this wrapper as transforming the dependency value. This allows outer
   // wrappers like withDefault to know that the default value is NOT a valid
   // dependency source value.
   const dependencyMarkers: {
-    [WrappedDependencySourceMarker]?: PendingDependencySourceState;
-    [TransformsDependencyValueMarker]?: true;
+    [wrappedDependencySourceMarker]?: PendingDependencySourceState;
+    [transformsDependencyValueMarker]?: true;
   } = isWrappedDependencySource(parser)
     ? {
-      [WrappedDependencySourceMarker]: parser[WrappedDependencySourceMarker],
-      [TransformsDependencyValueMarker]: true,
+      [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker],
+      [transformsDependencyValueMarker]: true,
     }
     : {};
 

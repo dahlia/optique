@@ -9,8 +9,8 @@ import type { ValueParser, ValueParserResult } from "./valueparser.ts";
  * {@link ValueParser} instances.
  * @since 0.10.0
  */
-export const DependencySourceMarker: unique symbol = Symbol.for(
-  "@optique/core/dependency/DependencySourceMarker",
+export const dependencySourceMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/dependencySourceMarker",
 );
 
 /**
@@ -19,16 +19,16 @@ export const DependencySourceMarker: unique symbol = Symbol.for(
  * {@link ValueParser} instances.
  * @since 0.10.0
  */
-export const DerivedValueParserMarker: unique symbol = Symbol.for(
-  "@optique/core/dependency/DerivedValueParserMarker",
+export const derivedValueParserMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/derivedValueParserMarker",
 );
 
 /**
  * A unique symbol used to store the dependency ID on value parsers.
  * @since 0.10.0
  */
-export const DependencyId: unique symbol = Symbol.for(
-  "@optique/core/dependency/DependencyId",
+export const dependencyId: unique symbol = Symbol.for(
+  "@optique/core/dependency/dependencyId",
 );
 
 /**
@@ -36,8 +36,8 @@ export const DependencyId: unique symbol = Symbol.for(
  * that depend on multiple sources (created via {@link deriveFrom}).
  * @since 0.10.0
  */
-export const DependencyIds: unique symbol = Symbol.for(
-  "@optique/core/dependency/DependencyIds",
+export const dependencyIds: unique symbol = Symbol.for(
+  "@optique/core/dependency/dependencyIds",
 );
 
 /**
@@ -45,16 +45,16 @@ export const DependencyIds: unique symbol = Symbol.for(
  * This is used during partial dependency resolution to fill in missing values.
  * @since 0.10.0
  */
-export const DefaultValues: unique symbol = Symbol.for(
-  "@optique/core/dependency/DefaultValues",
+export const defaultValues: unique symbol = Symbol.for(
+  "@optique/core/dependency/defaultValues",
 );
 
 /**
  * A unique symbol used to access the parseWithDependency method on derived parsers.
  * @since 0.10.0
  */
-export const ParseWithDependency: unique symbol = Symbol.for(
-  "@optique/core/dependency/ParseWithDependency",
+export const parseWithDependency: unique symbol = Symbol.for(
+  "@optique/core/dependency/parseWithDependency",
 );
 
 /**
@@ -62,8 +62,8 @@ export const ParseWithDependency: unique symbol = Symbol.for(
  * This method generates suggestions using the provided dependency values instead of defaults.
  * @since 0.10.0
  */
-export const SuggestWithDependency: unique symbol = Symbol.for(
-  "@optique/core/dependency/SuggestWithDependency",
+export const suggestWithDependency: unique symbol = Symbol.for(
+  "@optique/core/dependency/suggestWithDependency",
 );
 
 /**
@@ -178,13 +178,13 @@ export interface DependencySource<M extends Mode = "sync", T = unknown>
    * Marker to identify this as a dependency source.
    * @internal
    */
-  readonly [DependencySourceMarker]: true;
+  readonly [dependencySourceMarker]: true;
 
   /**
    * Unique identifier for this dependency source.
    * @internal
    */
-  readonly [DependencyId]: symbol;
+  readonly [dependencyId]: symbol;
 
   /**
    * Creates a derived value parser whose behavior depends on this
@@ -421,7 +421,7 @@ export interface DerivedValueParser<
    * Marker to identify this as a derived value parser.
    * @internal
    */
-  readonly [DerivedValueParserMarker]: true;
+  readonly [derivedValueParserMarker]: true;
 
   /**
    * The unique identifier of the dependency source this parser depends on.
@@ -429,23 +429,23 @@ export interface DerivedValueParser<
    * this is set to the first dependency's ID for backwards compatibility.
    * @internal
    */
-  readonly [DependencyId]: symbol;
+  readonly [dependencyId]: symbol;
 
   /**
    * The unique identifiers of all dependency sources this parser depends on.
    * Present only for parsers created with {@link deriveFrom} that have multiple
-   * dependencies. If present, this takes precedence over {@link DependencyId}
+   * dependencies. If present, this takes precedence over {@link dependencyId}
    * during dependency resolution.
    * @internal
    */
-  readonly [DependencyIds]?: readonly symbol[];
+  readonly [dependencyIds]?: readonly symbol[];
 
   /**
    * The default values function for this parser's dependencies.
    * Used during partial dependency resolution to fill in missing values.
    * @internal
    */
-  readonly [DefaultValues]?: () => readonly unknown[];
+  readonly [defaultValues]?: () => readonly unknown[];
 
   /**
    * Parses the input using the actual dependency value instead of the default.
@@ -456,7 +456,7 @@ export interface DerivedValueParser<
    * @returns The parse result.
    * @internal
    */
-  readonly [ParseWithDependency]: (
+  readonly [parseWithDependency]: (
     input: string,
     dependencyValue: S,
   ) => ValueParserResult<T> | Promise<ValueParserResult<T>>;
@@ -470,7 +470,7 @@ export interface DerivedValueParser<
    * @returns An iterable of suggestions.
    * @internal
    */
-  readonly [SuggestWithDependency]?: (
+  readonly [suggestWithDependency]?: (
     prefix: string,
     dependencyValue: S,
   ) => Iterable<Suggestion> | AsyncIterable<Suggestion>;
@@ -512,8 +512,8 @@ export function dependency<M extends Mode, T>(
   // deno-lint-ignore no-explicit-any
   const result: any = {
     ...parser,
-    [DependencySourceMarker]: true,
-    [DependencyId]: id,
+    [dependencySourceMarker]: true,
+    [dependencyId]: id,
     derive<U, FM extends Mode = "sync">(
       options: DeriveOptions<T, U, FM>,
     ): DerivedValueParser<CombineMode<M, FM>, U, T> {
@@ -553,8 +553,8 @@ export function dependency<M extends Mode, T>(
 export function isDependencySource<M extends Mode, T>(
   parser: ValueParser<M, T>,
 ): parser is DependencySource<M, T> {
-  return DependencySourceMarker in parser &&
-    parser[DependencySourceMarker] === true;
+  return dependencySourceMarker in parser &&
+    parser[dependencySourceMarker] === true;
 }
 
 /**
@@ -567,8 +567,8 @@ export function isDependencySource<M extends Mode, T>(
 export function isDerivedValueParser<M extends Mode, T>(
   parser: ValueParser<M, T>,
 ): parser is DerivedValueParser<M, T, unknown> {
-  return DerivedValueParserMarker in parser &&
-    parser[DerivedValueParserMarker] === true;
+  return derivedValueParserMarker in parser &&
+    parser[derivedValueParserMarker] === true;
 }
 
 /**
@@ -622,7 +622,7 @@ export function deriveFrom<
   // Create a combined dependency ID (using the first dependency's ID for now)
   // In a full implementation, we might want to track all dependency IDs
   const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][DependencyId]
+    ? options.dependencies[0][dependencyId]
     : Symbol();
 
   const isAsync = depsAsync || factoryReturnsAsync;
@@ -682,7 +682,7 @@ export function deriveFromSync<
   const depsAsync = options.dependencies.some((dep) => dep.$mode === "async");
 
   const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][DependencyId]
+    ? options.dependencies[0][dependencyId]
     : Symbol();
 
   if (depsAsync) {
@@ -727,7 +727,7 @@ export function deriveFromAsync<
   options: DeriveFromAsyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
   const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][DependencyId]
+    ? options.dependencies[0][dependencyId]
     : Symbol();
 
   return createAsyncDerivedFromParserFromAsyncFactory(sourceId, options);
@@ -758,15 +758,15 @@ function createSyncDerivedFromParser<
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<"sync", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const allDependencyIds = options.dependencies.map((dep) => dep[DependencyId]);
+  const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
 
   return {
     $mode: "sync",
     metavar: options.metavar,
-    [DerivedValueParserMarker]: true,
-    [DependencyId]: sourceId,
-    [DependencyIds]: allDependencyIds,
-    [DefaultValues]: options.defaultValues,
+    [derivedValueParserMarker]: true,
+    [dependencyId]: sourceId,
+    [dependencyIds]: alldependencyIds,
+    [defaultValues]: options.defaultValues,
 
     parse(input: string): ValueParserResult<T> {
       const sourceValues = options.defaultValues();
@@ -776,7 +776,7 @@ function createSyncDerivedFromParser<
       return derivedParser.parse(input);
     },
 
-    [ParseWithDependency](
+    [parseWithDependency](
       input: string,
       dependencyValue: DependencyValues<Deps>,
     ): ValueParserResult<T> {
@@ -810,7 +810,7 @@ function createSyncDerivedFromParser<
       }
     },
 
-    *[SuggestWithDependency](
+    *[suggestWithDependency](
       prefix: string,
       dependencyValue: DependencyValues<Deps>,
     ): Iterable<Suggestion> {
@@ -845,15 +845,15 @@ function createAsyncDerivedFromParserFromAsyncFactory<
   options: DeriveFromAsyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const allDependencyIds = options.dependencies.map((dep) => dep[DependencyId]);
+  const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
 
   return {
     $mode: "async",
     metavar: options.metavar,
-    [DerivedValueParserMarker]: true,
-    [DependencyId]: sourceId,
-    [DependencyIds]: allDependencyIds,
-    [DefaultValues]: options.defaultValues,
+    [derivedValueParserMarker]: true,
+    [dependencyId]: sourceId,
+    [dependencyIds]: alldependencyIds,
+    [defaultValues]: options.defaultValues,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       const sourceValues = options.defaultValues();
@@ -863,7 +863,7 @@ function createAsyncDerivedFromParserFromAsyncFactory<
       return derivedParser.parse(input);
     },
 
-    [ParseWithDependency](
+    [parseWithDependency](
       input: string,
       dependencyValue: DependencyValues<Deps>,
     ): Promise<ValueParserResult<T>> {
@@ -902,7 +902,7 @@ function createAsyncDerivedFromParserFromAsyncFactory<
       }
     },
 
-    async *[SuggestWithDependency](
+    async *[suggestWithDependency](
       prefix: string,
       dependencyValue: DependencyValues<Deps>,
     ): AsyncIterable<Suggestion> {
@@ -939,15 +939,15 @@ function createAsyncDerivedFromParserFromSyncFactory<
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const allDependencyIds = options.dependencies.map((dep) => dep[DependencyId]);
+  const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
 
   return {
     $mode: "async",
     metavar: options.metavar,
-    [DerivedValueParserMarker]: true,
-    [DependencyId]: sourceId,
-    [DependencyIds]: allDependencyIds,
-    [DefaultValues]: options.defaultValues,
+    [derivedValueParserMarker]: true,
+    [dependencyId]: sourceId,
+    [dependencyIds]: alldependencyIds,
+    [defaultValues]: options.defaultValues,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       const sourceValues = options.defaultValues();
@@ -957,7 +957,7 @@ function createAsyncDerivedFromParserFromSyncFactory<
       return Promise.resolve(derivedParser.parse(input));
     },
 
-    [ParseWithDependency](
+    [parseWithDependency](
       input: string,
       dependencyValue: DependencyValues<Deps>,
     ): Promise<ValueParserResult<T>> {
@@ -994,7 +994,7 @@ function createAsyncDerivedFromParserFromSyncFactory<
       }
     },
 
-    *[SuggestWithDependency](
+    *[suggestWithDependency](
       prefix: string,
       dependencyValue: DependencyValues<Deps>,
     ): Iterable<Suggestion> {
@@ -1071,8 +1071,8 @@ function createSyncDerivedParser<S, T>(
   return {
     $mode: "sync",
     metavar: options.metavar,
-    [DerivedValueParserMarker]: true,
-    [DependencyId]: sourceId,
+    [derivedValueParserMarker]: true,
+    [dependencyId]: sourceId,
 
     parse(input: string): ValueParserResult<T> {
       const sourceValue = options.defaultValue();
@@ -1080,7 +1080,7 @@ function createSyncDerivedParser<S, T>(
       return derivedParser.parse(input);
     },
 
-    [ParseWithDependency](
+    [parseWithDependency](
       input: string,
       dependencyValue: S,
     ): ValueParserResult<T> {
@@ -1108,7 +1108,7 @@ function createSyncDerivedParser<S, T>(
       }
     },
 
-    *[SuggestWithDependency](
+    *[suggestWithDependency](
       prefix: string,
       dependencyValue: S,
     ): Iterable<Suggestion> {
@@ -1137,8 +1137,8 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
   return {
     $mode: "async",
     metavar: options.metavar,
-    [DerivedValueParserMarker]: true,
-    [DependencyId]: sourceId,
+    [derivedValueParserMarker]: true,
+    [dependencyId]: sourceId,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       const sourceValue = options.defaultValue();
@@ -1146,7 +1146,7 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
       return derivedParser.parse(input);
     },
 
-    [ParseWithDependency](
+    [parseWithDependency](
       input: string,
       dependencyValue: S,
     ): Promise<ValueParserResult<T>> {
@@ -1179,7 +1179,7 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
       }
     },
 
-    async *[SuggestWithDependency](
+    async *[suggestWithDependency](
       prefix: string,
       dependencyValue: S,
     ): AsyncIterable<Suggestion> {
@@ -1210,8 +1210,8 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
   return {
     $mode: "async",
     metavar: options.metavar,
-    [DerivedValueParserMarker]: true,
-    [DependencyId]: sourceId,
+    [derivedValueParserMarker]: true,
+    [dependencyId]: sourceId,
 
     parse(input: string): Promise<ValueParserResult<T>> {
       const sourceValue = options.defaultValue();
@@ -1219,7 +1219,7 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
       return Promise.resolve(derivedParser.parse(input));
     },
 
-    [ParseWithDependency](
+    [parseWithDependency](
       input: string,
       dependencyValue: S,
     ): Promise<ValueParserResult<T>> {
@@ -1250,7 +1250,7 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
       }
     },
 
-    *[SuggestWithDependency](
+    *[suggestWithDependency](
       prefix: string,
       dependencyValue: S,
     ): Iterable<Suggestion> {
@@ -1276,8 +1276,8 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
  * A unique symbol used to identify deferred parse states.
  * @since 0.10.0
  */
-export const DeferredParseMarker: unique symbol = Symbol.for(
-  "@optique/core/dependency/DeferredParseMarker",
+export const deferredParseMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/deferredParseMarker",
 );
 
 /**
@@ -1295,7 +1295,7 @@ export interface DeferredParseState<T = unknown> {
   /**
    * Marker to identify this as a deferred parse state.
    */
-  readonly [DeferredParseMarker]: true;
+  readonly [deferredParseMarker]: true;
 
   /**
    * The raw input string to be parsed.
@@ -1345,8 +1345,8 @@ export function isDeferredParseState<T>(
 ): value is DeferredParseState<T> {
   return typeof value === "object" &&
     value !== null &&
-    DeferredParseMarker in value &&
-    (value as DeferredParseState)[DeferredParseMarker] === true;
+    deferredParseMarker in value &&
+    (value as DeferredParseState)[deferredParseMarker] === true;
 }
 
 /**
@@ -1366,26 +1366,26 @@ export function createDeferredParseState<T, S>(
   preliminaryResult: ValueParserResult<T>,
 ): DeferredParseState<T> {
   // Check if parser has multiple dependency IDs (from deriveFrom)
-  const multipleIds = DependencyIds in parser
-    ? (parser as unknown as { [DependencyIds]: readonly symbol[] })[
-      DependencyIds
+  const multipleIds = dependencyIds in parser
+    ? (parser as unknown as { [dependencyIds]: readonly symbol[] })[
+      dependencyIds
     ]
     : undefined;
 
   // Get the default values if available
-  const defaultValuesFn = DefaultValues in parser
-    ? (parser as unknown as { [DefaultValues]: () => readonly unknown[] })[
-      DefaultValues
+  const defaultValuesFn = defaultValues in parser
+    ? (parser as unknown as { [defaultValues]: () => readonly unknown[] })[
+      defaultValues
     ]
     : undefined;
 
   const defaultVals = defaultValuesFn ? defaultValuesFn() : undefined;
 
   return {
-    [DeferredParseMarker]: true,
+    [deferredParseMarker]: true,
     rawInput,
     parser: parser as DerivedValueParser<Mode, T, unknown>,
-    dependencyId: parser[DependencyId],
+    dependencyId: parser[dependencyId],
     dependencyIds: multipleIds,
     defaultValues: defaultVals,
     preliminaryResult,
@@ -1396,8 +1396,8 @@ export function createDeferredParseState<T, S>(
  * A unique symbol used to identify dependency source parse states.
  * @since 0.10.0
  */
-export const DependencySourceStateMarker: unique symbol = Symbol.for(
-  "@optique/core/dependency/DependencySourceStateMarker",
+export const dependencySourceStateMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/dependencySourceStateMarker",
 );
 
 /**
@@ -1412,12 +1412,12 @@ export interface DependencySourceState<T = unknown> {
   /**
    * Marker to identify this as a dependency source state.
    */
-  readonly [DependencySourceStateMarker]: true;
+  readonly [dependencySourceStateMarker]: true;
 
   /**
    * The dependency ID of the source.
    */
-  readonly [DependencyId]: symbol;
+  readonly [dependencyId]: symbol;
 
   /**
    * The underlying parse result.
@@ -1437,8 +1437,8 @@ export function isDependencySourceState<T>(
 ): value is DependencySourceState<T> {
   return typeof value === "object" &&
     value !== null &&
-    DependencySourceStateMarker in value &&
-    (value as DependencySourceState)[DependencySourceStateMarker] === true;
+    dependencySourceStateMarker in value &&
+    (value as DependencySourceState)[dependencySourceStateMarker] === true;
 }
 
 /**
@@ -1446,17 +1446,17 @@ export function isDependencySourceState<T>(
  *
  * @template T The type of value the state contains.
  * @param result The parse result.
- * @param dependencyId The dependency ID.
+ * @param depId The dependency ID.
  * @returns A DependencySourceState object.
  * @since 0.10.0
  */
 export function createDependencySourceState<T>(
   result: ValueParserResult<T>,
-  dependencyId: symbol,
+  depId: symbol,
 ): DependencySourceState<T> {
   return {
-    [DependencySourceStateMarker]: true,
-    [DependencyId]: dependencyId,
+    [dependencySourceStateMarker]: true,
+    [dependencyId]: depId,
     result,
   };
 }
@@ -1465,8 +1465,8 @@ export function createDependencySourceState<T>(
  * A unique symbol used to identify pending dependency source states.
  * @since 0.10.0
  */
-export const PendingDependencySourceStateMarker: unique symbol = Symbol.for(
-  "@optique/core/dependency/PendingDependencySourceStateMarker",
+export const pendingDependencySourceStateMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/pendingDependencySourceStateMarker",
 );
 
 /**
@@ -1481,12 +1481,12 @@ export interface PendingDependencySourceState {
   /**
    * Marker to identify this as a pending dependency source state.
    */
-  readonly [PendingDependencySourceStateMarker]: true;
+  readonly [pendingDependencySourceStateMarker]: true;
 
   /**
    * The dependency ID of the source.
    */
-  readonly [DependencyId]: symbol;
+  readonly [dependencyId]: symbol;
 }
 
 /**
@@ -1501,25 +1501,25 @@ export function isPendingDependencySourceState(
 ): value is PendingDependencySourceState {
   return typeof value === "object" &&
     value !== null &&
-    PendingDependencySourceStateMarker in value &&
+    pendingDependencySourceStateMarker in value &&
     (value as PendingDependencySourceState)[
-        PendingDependencySourceStateMarker
+        pendingDependencySourceStateMarker
       ] === true;
 }
 
 /**
  * Creates a pending dependency source state.
  *
- * @param dependencyId The dependency ID.
+ * @param depId The dependency ID.
  * @returns A PendingDependencySourceState object.
  * @since 0.10.0
  */
 export function createPendingDependencySourceState(
-  dependencyId: symbol,
+  depId: symbol,
 ): PendingDependencySourceState {
   return {
-    [PendingDependencySourceStateMarker]: true,
-    [DependencyId]: dependencyId,
+    [pendingDependencySourceStateMarker]: true,
+    [dependencyId]: depId,
   };
 }
 
@@ -1529,8 +1529,8 @@ export function createPendingDependencySourceState(
  * with a PendingDependencySourceState initialState.
  * @since 0.10.0
  */
-export const WrappedDependencySourceMarker: unique symbol = Symbol.for(
-  "@optique/core/dependency/WrappedDependencySourceMarker",
+export const wrappedDependencySourceMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/wrappedDependencySourceMarker",
 );
 
 /**
@@ -1544,12 +1544,12 @@ export const WrappedDependencySourceMarker: unique symbol = Symbol.for(
  *
  * @since 0.10.0
  */
-export const TransformsDependencyValueMarker: unique symbol = Symbol.for(
-  "@optique/core/dependency/TransformsDependencyValueMarker",
+export const transformsDependencyValueMarker: unique symbol = Symbol.for(
+  "@optique/core/dependency/transformsDependencyValueMarker",
 );
 
 /**
- * Checks if a parser transforms the dependency value (has TransformsDependencyValueMarker).
+ * Checks if a parser transforms the dependency value (has transformsDependencyValueMarker).
  *
  * @param parser The parser to check.
  * @returns `true` if the parser transforms the dependency value.
@@ -1557,17 +1557,17 @@ export const TransformsDependencyValueMarker: unique symbol = Symbol.for(
  */
 export function transformsDependencyValue(
   parser: unknown,
-): parser is { [TransformsDependencyValueMarker]: true } {
+): parser is { [transformsDependencyValueMarker]: true } {
   return typeof parser === "object" &&
     parser !== null &&
-    TransformsDependencyValueMarker in parser &&
-    (parser as { [TransformsDependencyValueMarker]: boolean })[
-        TransformsDependencyValueMarker
+    transformsDependencyValueMarker in parser &&
+    (parser as { [transformsDependencyValueMarker]: boolean })[
+        transformsDependencyValueMarker
       ] === true;
 }
 
 /**
- * Checks if a parser wraps a dependency source (has WrappedDependencySourceMarker).
+ * Checks if a parser wraps a dependency source (has wrappedDependencySourceMarker).
  *
  * @param parser The parser to check.
  * @returns `true` if the parser wraps a dependency source.
@@ -1575,10 +1575,10 @@ export function transformsDependencyValue(
  */
 export function isWrappedDependencySource(
   parser: unknown,
-): parser is { [WrappedDependencySourceMarker]: PendingDependencySourceState } {
+): parser is { [wrappedDependencySourceMarker]: PendingDependencySourceState } {
   return typeof parser === "object" &&
     parser !== null &&
-    WrappedDependencySourceMarker in parser;
+    wrappedDependencySourceMarker in parser;
 }
 
 /**

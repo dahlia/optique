@@ -1,13 +1,13 @@
 import {
   type DeferredParseState,
-  DependencyId,
+  dependencyId,
   DependencyRegistry,
   isDeferredParseState,
   isDependencySourceState,
   isPendingDependencySourceState,
   isWrappedDependencySource,
-  ParseWithDependency,
-  WrappedDependencySourceMarker,
+  parseWithDependency,
+  wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
 import {
@@ -2242,7 +2242,7 @@ function collectDependencies(
 
   // Check if this is a DependencySourceState
   if (isDependencySourceState(state)) {
-    const depId = state[DependencyId];
+    const depId = state[dependencyId];
     const result = state.result;
     if (result.success) {
       registry.set(depId, result.value);
@@ -2329,7 +2329,7 @@ function resolveDeferred(
         }
       }
 
-      const reParseResult = parser[ParseWithDependency](
+      const reParseResult = parser[parseWithDependency](
         deferredState.rawInput,
         dependencyValues,
       );
@@ -2346,7 +2346,7 @@ function resolveDeferred(
     const depId = deferredState.dependencyId;
     if (registry.has(depId)) {
       const dependencyValue = registry.get(depId);
-      const reParseResult = parser[ParseWithDependency](
+      const reParseResult = parser[parseWithDependency](
         deferredState.rawInput,
         dependencyValue,
       );
@@ -2445,7 +2445,7 @@ async function resolveDeferredAsync(
         }
       }
 
-      const reParseResult = parser[ParseWithDependency](
+      const reParseResult = parser[parseWithDependency](
         deferredState.rawInput,
         dependencyValues,
       );
@@ -2458,7 +2458,7 @@ async function resolveDeferredAsync(
     const depId = deferredState.dependencyId;
     if (registry.has(depId)) {
       const dependencyValue = registry.get(depId);
-      const reParseResult = parser[ParseWithDependency](
+      const reParseResult = parser[parseWithDependency](
         deferredState.rawInput,
         dependencyValue,
       );
@@ -2973,10 +2973,10 @@ export function object<
             const completed = fieldParser.complete([fieldParser.initialState]);
             preCompletedState[fieldKey] = completed;
             preCompletedKeys.add(fieldKey);
-          } // Case 3: state is undefined and parser has WrappedDependencySourceMarker
+          } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
           // This happens with withDefault(option(..., dependencySource), defaultValue) when
           // no input was parsed. The withDefault parser wraps the inner dependency source
-          // and stores the PendingDependencySourceState in WrappedDependencySourceMarker.
+          // and stores the PendingDependencySourceState in wrappedDependencySourceMarker.
           // Also handles optional(withDefault(...)) and withDefault(optional(...), default).
           else if (
             fieldState === undefined &&
@@ -2984,7 +2984,7 @@ export function object<
           ) {
             // Call complete with [PendingDependencySourceState] to trigger withDefault's
             // special handling that returns DependencySourceState with the default value
-            const pendingState = fieldParser[WrappedDependencySourceMarker];
+            const pendingState = fieldParser[wrappedDependencySourceMarker];
             const completed = fieldParser.complete([pendingState]);
             // Only use the pre-completed result if it's a DependencySourceState.
             // If the wrapper returns a regular result (e.g., optional returning undefined),
@@ -3079,10 +3079,10 @@ export function object<
             ]);
             preCompletedState[fieldKey] = completed;
             preCompletedKeys.add(fieldKey);
-          } // Case 3: state is undefined and parser has WrappedDependencySourceMarker
+          } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
           // This happens with withDefault(option(..., dependencySource), defaultValue) when
           // no input was parsed. The withDefault parser wraps the inner dependency source
-          // and stores the PendingDependencySourceState in WrappedDependencySourceMarker.
+          // and stores the PendingDependencySourceState in wrappedDependencySourceMarker.
           // Also handles optional(withDefault(...)) and withDefault(optional(...), default).
           else if (
             fieldState === undefined &&
@@ -3090,7 +3090,7 @@ export function object<
           ) {
             // Call complete with [PendingDependencySourceState] to trigger withDefault's
             // special handling that returns DependencySourceState with the default value
-            const pendingState = fieldParser[WrappedDependencySourceMarker];
+            const pendingState = fieldParser[wrappedDependencySourceMarker];
             const completed = await fieldParser.complete([pendingState]);
             // Only use the pre-completed result if it's a DependencySourceState.
             // If the wrapper returns a regular result (e.g., optional returning undefined),
@@ -3625,12 +3625,12 @@ export function tuple<
               elementParser.initialState,
             ]);
             preCompletedState[i] = completed;
-          } // Case 3: state is undefined and parser has WrappedDependencySourceMarker
+          } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
           else if (
             elementState === undefined &&
             isWrappedDependencySource(elementParser)
           ) {
-            const pendingState = elementParser[WrappedDependencySourceMarker];
+            const pendingState = elementParser[wrappedDependencySourceMarker];
             const completed = elementParser.complete([pendingState]);
             preCompletedState[i] = completed;
           } else {
@@ -3716,12 +3716,12 @@ export function tuple<
               elementParser.initialState,
             ]);
             preCompletedState[i] = completed;
-          } // Case 3: state is undefined and parser has WrappedDependencySourceMarker
+          } // Case 3: state is undefined and parser has wrappedDependencySourceMarker
           else if (
             elementState === undefined &&
             isWrappedDependencySource(elementParser)
           ) {
-            const pendingState = elementParser[WrappedDependencySourceMarker];
+            const pendingState = elementParser[wrappedDependencySourceMarker];
             const completed = await elementParser.complete([pendingState]);
             preCompletedState[i] = completed;
           } else {

@@ -3741,18 +3741,18 @@ describe("suggestAsync() with derived parsers and provided dependencies", () => 
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
-  DependencyId,
+  dependencyId,
   DependencyRegistry,
-  DependencySourceStateMarker,
+  dependencySourceStateMarker,
   isDependencySource,
   isDependencySourceState,
   isDerivedValueParser,
   isPendingDependencySourceState,
   isWrappedDependencySource,
-  PendingDependencySourceStateMarker,
+  pendingDependencySourceStateMarker,
   transformsDependencyValue,
-  TransformsDependencyValueMarker,
-  WrappedDependencySourceMarker,
+  transformsDependencyValueMarker,
+  wrappedDependencySourceMarker,
 } from "./dependency.ts";
 
 describe("Internal type guards and factory functions", () => {
@@ -3778,7 +3778,7 @@ describe("Internal type guards and factory functions", () => {
     });
 
     test("returns false for objects with wrong marker value", () => {
-      const fake = { [DependencySourceStateMarker]: false };
+      const fake = { [dependencySourceStateMarker]: false };
       assert.ok(!isDependencySourceState(fake));
     });
   });
@@ -3792,8 +3792,8 @@ describe("Internal type guards and factory functions", () => {
       );
 
       assert.ok(isDependencySourceState(state));
-      assert.equal(state[DependencySourceStateMarker], true);
-      assert.equal(state[DependencyId], depId);
+      assert.equal(state[dependencySourceStateMarker], true);
+      assert.equal(state[dependencyId], depId);
       assert.ok(state.result.success);
       if (state.result.success) {
         assert.equal(state.result.value, 42);
@@ -3831,7 +3831,7 @@ describe("Internal type guards and factory functions", () => {
     });
 
     test("returns false for objects with wrong marker value", () => {
-      const fake = { [PendingDependencySourceStateMarker]: false };
+      const fake = { [pendingDependencySourceStateMarker]: false };
       assert.ok(!isPendingDependencySourceState(fake));
     });
 
@@ -3850,8 +3850,8 @@ describe("Internal type guards and factory functions", () => {
       const state = createPendingDependencySourceState(depId);
 
       assert.ok(isPendingDependencySourceState(state));
-      assert.equal(state[PendingDependencySourceStateMarker], true);
-      assert.equal(state[DependencyId], depId);
+      assert.equal(state[pendingDependencySourceStateMarker], true);
+      assert.equal(state[dependencyId], depId);
     });
   });
 
@@ -3866,9 +3866,9 @@ describe("Internal type guards and factory functions", () => {
       assert.ok(!isWrappedDependencySource(depSource));
     });
 
-    test("returns true for parser with WrappedDependencySourceMarker", () => {
+    test("returns true for parser with wrappedDependencySourceMarker", () => {
       const fake = {
-        [WrappedDependencySourceMarker]: createPendingDependencySourceState(
+        [wrappedDependencySourceMarker]: createPendingDependencySourceState(
           Symbol("test"),
         ),
       };
@@ -3891,13 +3891,13 @@ describe("Internal type guards and factory functions", () => {
       assert.ok(!transformsDependencyValue(depSource));
     });
 
-    test("returns true for parser with TransformsDependencyValueMarker", () => {
-      const fake = { [TransformsDependencyValueMarker]: true };
+    test("returns true for parser with transformsDependencyValueMarker", () => {
+      const fake = { [transformsDependencyValueMarker]: true };
       assert.ok(transformsDependencyValue(fake));
     });
 
     test("returns false for marker set to false", () => {
-      const fake = { [TransformsDependencyValueMarker]: false };
+      const fake = { [transformsDependencyValueMarker]: false };
       assert.ok(!transformsDependencyValue(fake));
     });
 
