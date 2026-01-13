@@ -807,7 +807,7 @@ export interface RunOptions<THelp, TError> {
    *
    * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
    * on Deno to this option.
-   * @default Throws a {@link RunError}.
+   * @default Throws a {@link RunParserError}.
    */
   readonly onError?: (() => TError) | ((exitCode: number) => TError);
 
@@ -1518,14 +1518,6 @@ export function runParserAsync<
 }
 
 /**
- * @deprecated Use `runParser()` instead. This export will be removed in
- *             a future major version. The name `run` conflicts with
- *             `@optique/run`'s `run()` function, causing IDE autocomplete
- *             confusion.
- */
-export const run = runParser;
-
-/**
  * An error class used to indicate that the command line arguments
  * could not be parsed successfully.
  */
@@ -1535,12 +1527,6 @@ export class RunParserError extends Error {
     this.name = "RunParserError";
   }
 }
-
-/**
- * @deprecated Use `RunParserError` instead. This export will be removed in
- *             a future major version.
- */
-export const RunError = RunParserError;
 
 function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));

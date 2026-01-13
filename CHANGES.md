@@ -13,6 +13,7 @@ To be released.
  -  Added inter-option dependency support via `@optique/core/dependency` module.
     This allows one option's valid values to depend on another option's parsed
     value, enabling dynamic validation and context-aware shell completion.
+    [[#74], [#76]]
 
     New exports:
 
@@ -51,6 +52,18 @@ To be released.
     Dependencies work seamlessly with all parser combinators (`object()`,
     `subcommands()`, `or()`, `longestMatch()`, `multiple()`, etc.) and support
     both sync and async parsers.
+
+ -  Removed deprecated `run` export. Use `runParser()` instead. The old name
+    was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
+    `run()` function. [[#65]]
+
+ -  Removed deprecated `RunError` export. Use `RunParserError` instead.
+    This was renamed in v0.9.0 for consistency with the `runParser()` rename.
+    [[#65]]
+
+[#65]: https://github.com/dahlia/optique/issues/65
+[#74]: https://github.com/dahlia/optique/issues/74
+[#76]: https://github.com/dahlia/optique/pull/76
 
 
 Version 0.9.0
