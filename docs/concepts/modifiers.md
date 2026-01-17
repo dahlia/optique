@@ -743,8 +743,8 @@ import { argument, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 // ---cut-before---
 const configParser = nonEmpty(object({
-  // Required when any option is provided
-  files: multiple(argument(string({ metavar: "FILE" })), { min: 1 }),
+  // Accepts zero or more files, but nonEmpty ensures at least one token overall
+  files: multiple(argument(string({ metavar: "FILE" }))),
   // Optional with default
   timeout: withDefault(option("--timeout", integer()), 30),
   // Pure optional

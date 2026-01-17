@@ -2762,16 +2762,25 @@ describe("nonEmpty", () => {
   });
 
   it("should work with multiple modifier", () => {
-    const parser = nonEmpty(multiple(argument(string()), { min: 1 }));
+    // When wrapped in object(), multiple() without { min: 1 } succeeds
+    // with empty array when no args are provided (zero tokens consumed).
+    // nonEmpty() turns that into a failure.
+    const parser = nonEmpty(object({
+      files: multiple(argument(string())),
+    }));
 
     const result = parse(parser, ["file1.txt", "file2.txt"]);
     assert.ok(result.success);
     if (result.success) {
-      assert.deepEqual(result.value, ["file1.txt", "file2.txt"]);
+      assert.deepEqual(result.value.files, ["file1.txt", "file2.txt"]);
     }
 
-    // No arguments - fails because nonEmpty requires consumption
+    // No arguments - object({ files: multiple(...) }) succeeds with { files: [] }
+    // but consumes zero tokens, so nonEmpty() fails
     const emptyResult = parse(parser, []);
     assert.ok(!emptyResult.success);
+    if (!emptyResult.success) {
+      assertErrorIncludes(emptyResult.error, "at least one token");
+    }
   });
 });
