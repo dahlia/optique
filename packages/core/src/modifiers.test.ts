@@ -2676,14 +2676,8 @@ describe("nonEmpty", () => {
     assert.ok(activeResult.success);
     if (activeResult.success) {
       assert.equal(activeResult.value.mode, "active");
-      assert.equal(
-        (activeResult.value as { cwd: string }).cwd,
-        "./default",
-      );
-      assert.equal(
-        (activeResult.value as { key: string | undefined }).key,
-        "mykey",
-      );
+      assert.equal(activeResult.value.cwd, "./default");
+      assert.equal(activeResult.value.key, "mykey");
     }
 
     // With --cwd option - activeParser wins
@@ -2691,7 +2685,7 @@ describe("nonEmpty", () => {
     assert.ok(cwdResult.success);
     if (cwdResult.success) {
       assert.equal(cwdResult.value.mode, "active");
-      assert.equal((cwdResult.value as { cwd: string }).cwd, "./custom");
+      assert.equal(cwdResult.value.cwd, "./custom");
     }
   });
 
