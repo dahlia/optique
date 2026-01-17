@@ -1118,11 +1118,10 @@ export function nonEmpty<M extends Mode, T, TState>(
   const syncParser = parser as Parser<"sync", T, TState>;
   const isAsync = parser.$mode === "async";
 
-  // Sync parse implementation
-  const parseSync = (
-    context: ParserContext<TState>,
+  // Helper to process the result of the inner parser
+  const processNonEmptyResult = (
+    result: ParserResult<TState>,
   ): ParserResult<TState> => {
-    const result = syncParser.parse(context);
     if (!result.success) {
       return result;
     }
@@ -1137,23 +1136,20 @@ export function nonEmpty<M extends Mode, T, TState>(
     return result;
   };
 
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<TState>,
+  ): ParserResult<TState> => {
+    const result = syncParser.parse(context);
+    return processNonEmptyResult(result);
+  };
+
   // Async parse implementation
   const parseAsync = async (
     context: ParserContext<TState>,
   ): Promise<ParserResult<TState>> => {
     const result = await parser.parse(context);
-    if (!result.success) {
-      return result;
-    }
-    // Check if inner parser consumed at least one token
-    if (result.consumed.length === 0) {
-      return {
-        success: false,
-        consumed: 0,
-        error: message`Parser must consume at least one token.`,
-      };
-    }
-    return result;
+    return processNonEmptyResult(result);
   };
 
   return {
