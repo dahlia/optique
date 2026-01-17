@@ -967,6 +967,104 @@ need fine-grained control over default behaviors, following the Unix tradition
 of sensible defaults with explicit override capabilities.
 
 
+Conditional defaults based on input consumption
+-----------------------------------------------
+
+*This API is available since Optique 0.10.0.*
+
+Sometimes you need different behavior based on whether the user provided any
+options at all. For example, a CLI tool might show help when invoked with no
+arguments, but apply default values when at least one option is provided.
+
+The [`nonEmpty()`](./concepts/modifiers.md#nonempty-parser) modifier combined
+with [`longestMatch()`](./concepts/constructs.md#longestmatch-parser) enables
+this pattern:
+
+~~~~ typescript twoslash
+import { longestMatch, object } from "@optique/core/constructs";
+import { nonEmpty, optional, withDefault } from "@optique/core/modifiers";
+import { constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+// Active mode: requires at least one option to be provided
+const activeParser = nonEmpty(object({
+  mode: constant("active" as const),
+  cwd: withDefault(option("--cwd", string()), "./"),
+  key: optional(option("--key", string())),
+}));
+
+// Help mode: fallback when no options are given
+const helpParser = object({
+  mode: constant("help" as const),
+});
+
+const parser = longestMatch(activeParser, helpParser);
+
+const result = run(parser);
+//    ^?
+
+
+
+
+
+
+
+
+if (result.mode === "help") {
+  console.log("No options provided. Showing help.");
+} else {
+  console.log(`Running with cwd=${result.cwd}, key=${result.key ?? "none"}`);
+}
+~~~~
+
+### How it works
+
+Without `nonEmpty()`, the `activeParser` would always succeed even with no
+input, because all its options have defaults or are optional. This means it
+would consume 0 tokens and still produce a valid result, preventing the
+`helpParser` from ever being selected.
+
+The `nonEmpty()` modifier changes this behavior:
+
+1.  When no options are provided, `activeParser` succeeds but consumes 0 tokens
+2.  `nonEmpty()` detects this and converts the success into a failure
+3.  `longestMatch()` then falls back to `helpParser`, which also consumes
+    0 tokens but succeeds
+4.  The result is the help mode
+
+When at least one option is provided:
+
+1.  `activeParser` succeeds and consumes at least one token
+2.  `nonEmpty()` allows this success to pass through
+3.  `longestMatch()` selects `activeParser` because it consumed more tokens
+4.  Default values are applied to unprovided options
+
+### Usage examples
+
+~~~~ bash
+# No options: help mode
+myapp dev
+# → "No options provided. Showing help."
+
+# With --key: active mode with defaults
+myapp dev --key mykey
+# → "Running with cwd=./, key=mykey"
+
+# With --cwd: active mode
+myapp dev --cwd /tmp
+# → "Running with cwd=/tmp, key=none"
+
+# With both options: active mode
+myapp dev --cwd /tmp --key mykey
+# → "Running with cwd=/tmp, key=mykey"
+~~~~
+
+This pattern is ideal for development tools, build systems, or any CLI where
+you want to guide users to provide at least some configuration while still
+supporting sensible defaults once they start configuring.
+
+
 Design principles
 -----------------
 

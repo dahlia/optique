@@ -53,6 +53,28 @@ To be released.
     `subcommands()`, `or()`, `longestMatch()`, `multiple()`, etc.) and support
     both sync and async parsers.
 
+ -  Added `nonEmpty()` modifier that requires the wrapped parser to consume at
+    least one input token to succeed.  This enables conditional default values
+    and help display logic when using `longestMatch()`.  [[#79], [#80]]
+
+    ~~~~ typescript
+    import { longestMatch, object } from "@optique/core/constructs";
+    import { nonEmpty, optional, withDefault } from "@optique/core/modifiers";
+    import { constant, option } from "@optique/core/primitives";
+    import { string } from "@optique/core/valueparser";
+
+    // Without nonEmpty(): activeParser always wins (consumes 0 tokens)
+    // With nonEmpty(): helpParser wins when no options are provided
+    const activeParser = nonEmpty(object({
+      mode: constant("active" as const),
+      cwd: withDefault(option("--cwd", string()), "./default"),
+      key: optional(option("--key", string())),
+    }));
+
+    const helpParser = object({ mode: constant("help" as const) });
+    const parser = longestMatch(activeParser, helpParser);
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]
@@ -64,6 +86,8 @@ To be released.
 [#65]: https://github.com/dahlia/optique/issues/65
 [#74]: https://github.com/dahlia/optique/issues/74
 [#76]: https://github.com/dahlia/optique/pull/76
+[#79]: https://github.com/dahlia/optique/issues/79
+[#80]: https://github.com/dahlia/optique/pull/80
 
 
 Version 0.9.0
