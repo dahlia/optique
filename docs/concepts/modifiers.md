@@ -625,3 +625,137 @@ if (config.success) {
   console.log(`Found ${config.value.excludes.length} exclusions.`);
 }
 ~~~~
+
+
+`nonEmpty()` parser
+-------------------
+
+*This API is available since Optique 0.10.0.*
+
+The `nonEmpty()` modifier requires the wrapped parser to consume at least one
+input token to succeed. If the wrapped parser succeeds without consuming any
+tokens, `nonEmpty()` fails with an error. This is particularly useful with
+[`longestMatch()`](./constructs.md#longestmatch-parser) for implementing
+conditional default values.
+
+~~~~ typescript twoslash
+import { longestMatch, object } from "@optique/core/constructs";
+import { nonEmpty, optional, withDefault } from "@optique/core/modifiers";
+import { constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+// Without nonEmpty(): activeParser always wins (consumes 0 tokens)
+// With nonEmpty(): helpParser wins when no options are provided
+const activeParser = nonEmpty(object({
+  mode: constant("active" as const),
+  cwd: withDefault(option("--cwd", string()), "./default"),
+  key: optional(option("--key", string())),
+}));
+
+const helpParser = object({
+  mode: constant("help" as const),
+});
+
+const parser = longestMatch(activeParser, helpParser);
+// cli           → helpParser matches (activeParser fails with nonEmpty)
+// cli --key foo → activeParser matches (consumes tokens)
+~~~~
+
+### Type transformation
+
+The `nonEmpty()` modifier does not change the result type. It simply adds
+a constraint that prevents parsers with only default values from matching
+when no input is provided:
+
+~~~~ typescript twoslash
+import { nonEmpty } from "@optique/core/modifiers";
+import type { InferValue } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+
+const baseParser = option("-v", "--verbose");
+const nonEmptyParser = nonEmpty(baseParser);
+
+type BaseResult = InferValue<typeof baseParser>;
+//   ^?
+
+
+
+type NonEmptyResult = InferValue<typeof nonEmptyParser>;
+//   ^?
+
+
+
+// Both types are `boolean` - nonEmpty() does not change the type
+~~~~
+
+### Usage patterns
+
+The `nonEmpty()` modifier is ideal when:
+
+ -  You want to distinguish between “no input” and “input with defaults”
+ -  You're using `longestMatch()` to provide different behaviors based on
+    whether options were explicitly provided
+ -  You need a fallback branch (like help or default mode) when no options
+    are given
+
+~~~~ typescript twoslash
+import { longestMatch, object } from "@optique/core/constructs";
+import { nonEmpty, optional, withDefault } from "@optique/core/modifiers";
+import { parse } from "@optique/core/parser";
+import { constant, option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+// ---cut-before---
+const serverConfig = nonEmpty(object({
+  mode: constant("server" as const),
+  host: withDefault(option("--host", string()), "localhost"),
+  port: withDefault(option("--port", integer()), 3000),
+}));
+
+const helpConfig = object({
+  mode: constant("help" as const),
+});
+
+const parser = longestMatch(serverConfig, helpConfig);
+
+// No options: help mode
+const helpResult = parse(parser, []);
+if (helpResult.success && helpResult.value.mode === "help") {
+  console.log("No options provided. Showing help.");
+}
+
+// With options: server mode with defaults applied
+const serverResult = parse(parser, ["--port", "8080"]);
+if (serverResult.success && serverResult.value.mode === "server") {
+  console.log(`Starting server on ${serverResult.value.host}:${serverResult.value.port}.`);
+}
+~~~~
+
+### Combining with other modifiers
+
+The `nonEmpty()` modifier works well with other modifiers. You can wrap
+complex parsers built with `object()`, `withDefault()`, and `optional()`:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { multiple, nonEmpty, optional, withDefault } from "@optique/core/modifiers";
+import { parse } from "@optique/core/parser";
+import { argument, option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+// ---cut-before---
+const configParser = nonEmpty(object({
+  // Required when any option is provided
+  files: multiple(argument(string({ metavar: "FILE" })), { min: 1 }),
+  // Optional with default
+  timeout: withDefault(option("--timeout", integer()), 30),
+  // Pure optional
+  verbose: optional(option("-v", "--verbose")),
+}));
+
+// Fails: nonEmpty requires at least one consumed token
+const emptyResult = parse(configParser, []);
+console.log(emptyResult.success); // false
+
+// Succeeds: file argument is provided
+const validResult = parse(configParser, ["input.txt"]);
+console.log(validResult.success); // true
+~~~~
