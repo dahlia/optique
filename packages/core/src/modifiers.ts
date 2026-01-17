@@ -940,9 +940,7 @@ export function multiple<M extends Mode, TValue, TState>(
     initialState: [] as readonly TState[],
     parse(context: ParserContext<MultipleState>) {
       if (isAsync) {
-        // Cast needed: isAsync means parseAsync() returns Promise, but
-        // TypeScript sees the declared return type as ParseResult
-        return parseAsync(context) as unknown as ParseResult;
+        return parseAsync(context) as ModeValue<M, ParseResult>;
       }
       return parseSync(context);
     },
@@ -1167,7 +1165,7 @@ export function nonEmpty<M extends Mode, T, TState>(
     initialState: parser.initialState,
     parse(context: ParserContext<TState>) {
       if (isAsync) {
-        return parseAsync(context) as unknown as ParserResult<TState>;
+        return parseAsync(context) as ModeValue<M, ParserResult<TState>>;
       }
       return parseSync(context);
     },
