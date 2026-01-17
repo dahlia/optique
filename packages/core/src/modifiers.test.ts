@@ -1,4 +1,4 @@
-import { object } from "@optique/core/constructs";
+import { longestMatch, object } from "@optique/core/constructs";
 import {
   envVar,
   formatMessage,
@@ -9,6 +9,7 @@ import {
 import {
   map,
   multiple,
+  nonEmpty,
   optional,
   withDefault,
   WithDefaultError,
@@ -2545,5 +2546,232 @@ describe("state management edge cases", () => {
         assert.equal(result.value, false);
       }
     });
+  });
+});
+
+describe("nonEmpty", () => {
+  it("should create a parser with same priority as wrapped parser", () => {
+    const baseParser = option("-v", "--verbose");
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    assert.equal(nonEmptyParser.priority, baseParser.priority);
+    assert.deepEqual(nonEmptyParser.initialState, baseParser.initialState);
+  });
+
+  it("should preserve wrapped parser mode", () => {
+    const baseParser = option("-v", "--verbose");
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    assert.equal(nonEmptyParser.$mode, baseParser.$mode);
+  });
+
+  it("should succeed when inner parser succeeds and consumes input", () => {
+    const baseParser = option("-v", "--verbose");
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    const context = {
+      buffer: ["-v"] as readonly string[],
+      state: nonEmptyParser.initialState,
+      optionsTerminated: false,
+      usage: nonEmptyParser.usage,
+    };
+
+    const parseResult = nonEmptyParser.parse(context);
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      assert.deepEqual(parseResult.consumed, ["-v"]);
+      assert.deepEqual(parseResult.next.buffer, []);
+
+      const completeResult = nonEmptyParser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.equal(completeResult.value, true);
+      }
+    }
+  });
+
+  it("should fail when inner parser succeeds but consumes zero tokens", () => {
+    const baseParser = constant("hello");
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    const context = {
+      buffer: [] as readonly string[],
+      state: nonEmptyParser.initialState,
+      optionsTerminated: false,
+      usage: nonEmptyParser.usage,
+    };
+
+    const parseResult = nonEmptyParser.parse(context);
+    assert.ok(!parseResult.success);
+    if (!parseResult.success) {
+      assertErrorIncludes(parseResult.error, "at least one token");
+    }
+  });
+
+  it("should propagate inner parser failure", () => {
+    const baseParser = option("-v", "--verbose");
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    const context = {
+      buffer: ["--other"] as readonly string[],
+      state: nonEmptyParser.initialState,
+      optionsTerminated: false,
+      usage: nonEmptyParser.usage,
+    };
+
+    const parseResult = nonEmptyParser.parse(context);
+    assert.ok(!parseResult.success);
+  });
+
+  it("should work with object parser that consumes input", () => {
+    const parser = nonEmpty(object({
+      verbose: option("-v", "--verbose"),
+      debug: option("-d", "--debug"),
+    }));
+
+    const result = parse(parser, ["-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.debug, false);
+    }
+  });
+
+  it("should fail with object parser that consumes no input", () => {
+    const parser = nonEmpty(object({
+      verbose: option("-v", "--verbose"),
+      debug: option("-d", "--debug"),
+    }));
+
+    const result = parse(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "at least one token");
+    }
+  });
+
+  it("should work with longestMatch() for conditional defaults", () => {
+    // This is the main use case from issue #79
+    const activeParser = nonEmpty(object({
+      mode: constant("active" as const),
+      cwd: withDefault(option("--cwd", string()), "./default"),
+      key: optional(option("--key", string())),
+    }));
+
+    const helpParser = object({
+      mode: constant("help" as const),
+    });
+
+    const parser = longestMatch(activeParser, helpParser);
+
+    // No options provided - helpParser wins because activeParser fails (zero consumption)
+    const helpResult = parse(parser, []);
+    assert.ok(helpResult.success);
+    if (helpResult.success) {
+      assert.equal(helpResult.value.mode, "help");
+    }
+
+    // With --key option - activeParser wins and applies defaults
+    const activeResult = parse(parser, ["--key", "mykey"]);
+    assert.ok(activeResult.success);
+    if (activeResult.success) {
+      assert.equal(activeResult.value.mode, "active");
+      assert.equal(
+        (activeResult.value as { cwd: string }).cwd,
+        "./default",
+      );
+      assert.equal(
+        (activeResult.value as { key: string | undefined }).key,
+        "mykey",
+      );
+    }
+
+    // With --cwd option - activeParser wins
+    const cwdResult = parse(parser, ["--cwd", "./custom"]);
+    assert.ok(cwdResult.success);
+    if (cwdResult.success) {
+      assert.equal(cwdResult.value.mode, "active");
+      assert.equal((cwdResult.value as { cwd: string }).cwd, "./custom");
+    }
+  });
+
+  it("should delegate complete() to inner parser", () => {
+    const baseParser = option("-n", "--name", string());
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    const state = { success: true as const, value: "Alice" };
+    const result = nonEmptyParser.complete(state);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "Alice");
+    }
+  });
+
+  it("should delegate suggest() to inner parser", () => {
+    const baseParser = option("-f", "--format", choice(["json", "yaml"]));
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    const context = {
+      buffer: ["--format"] as readonly string[],
+      state: nonEmptyParser.initialState,
+      optionsTerminated: false,
+      usage: nonEmptyParser.usage,
+    };
+
+    const suggestions = [...nonEmptyParser.suggest(context, "")];
+    assert.ok(suggestions.length > 0);
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "json"),
+    );
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "yaml"),
+    );
+  });
+
+  it("should delegate getDocFragments() to inner parser", () => {
+    const description = message`Enable verbose output`;
+    const baseParser = option("-v", "--verbose", { description });
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    const fragments = nonEmptyParser.getDocFragments({ kind: "unavailable" });
+    const baseFragments = baseParser.getDocFragments({ kind: "unavailable" });
+
+    assert.deepEqual(fragments, baseFragments);
+  });
+
+  it("should preserve usage from inner parser", () => {
+    const baseParser = option("-v", "--verbose");
+    const nonEmptyParser = nonEmpty(baseParser);
+
+    assert.deepEqual(nonEmptyParser.usage, baseParser.usage);
+  });
+
+  it("should work with withDefault wrapper", () => {
+    const parser = nonEmpty(object({
+      verbose: option("-v", "--verbose"),
+      port: withDefault(option("-p", "--port", integer()), 8080),
+    }));
+
+    // Providing at least one option makes it succeed
+    const result = parse(parser, ["-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.verbose, true);
+      assert.equal(result.value.port, 8080);
+    }
+  });
+
+  it("should work with multiple modifier", () => {
+    const parser = nonEmpty(multiple(argument(string()), { min: 1 }));
+
+    const result = parse(parser, ["file1.txt", "file2.txt"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["file1.txt", "file2.txt"]);
+    }
+
+    // No arguments - fails because nonEmpty requires consumption
+    const emptyResult = parse(parser, []);
+    assert.ok(!emptyResult.success);
   });
 });

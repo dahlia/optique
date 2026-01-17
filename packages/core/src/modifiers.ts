@@ -1076,3 +1076,109 @@ export function multiple<M extends Mode, TValue, TState>(
 
   return resultParser;
 }
+
+/**
+ * Creates a parser that requires the wrapped parser to consume at least one
+ * input token to succeed. If the wrapped parser succeeds without consuming
+ * any tokens, this parser fails with an error.
+ *
+ * This modifier is useful with `longestMatch()` for implementing conditional
+ * default values. When used together, `nonEmpty()` prevents a parser with
+ * only default values from matching when no input is provided, allowing
+ * another branch (like a help command) to match instead.
+ *
+ * @template M The execution mode of the parser.
+ * @template T The type of value produced by the wrapped parser.
+ * @template TState The type of state used by the wrapped parser.
+ * @param parser The {@link Parser} that must consume input to succeed.
+ * @returns A {@link Parser} that fails if the wrapped parser consumes no input.
+ *
+ * @example
+ * ```typescript
+ * // Without nonEmpty(): activeParser always wins (consumes 0 tokens)
+ * // With nonEmpty(): helpParser wins when no options are provided
+ * const activeParser = nonEmpty(object({
+ *   cwd: withDefault(option("--cwd", string()), "./default"),
+ *   key: optional(option("--key", string())),
+ * }));
+ *
+ * const helpParser = object({
+ *   mode: constant("help"),
+ * });
+ *
+ * const parser = longestMatch(activeParser, helpParser);
+ *
+ * // cli           → helpParser matches (activeParser fails with nonEmpty)
+ * // cli --key foo → activeParser matches (consumes tokens)
+ * ```
+ *
+ * @since 0.10.0
+ */
+export function nonEmpty<M extends Mode, T, TState>(
+  parser: Parser<M, T, TState>,
+): Parser<M, T, TState> {
+  const syncParser = parser as Parser<"sync", T, TState>;
+  const isAsync = parser.$mode === "async";
+
+  // Sync parse implementation
+  const parseSync = (
+    context: ParserContext<TState>,
+  ): ParserResult<TState> => {
+    const result = syncParser.parse(context);
+    if (!result.success) {
+      return result;
+    }
+    // Check if inner parser consumed at least one token
+    if (result.consumed.length === 0) {
+      return {
+        success: false,
+        consumed: 0,
+        error: message`Parser must consume at least one token.`,
+      };
+    }
+    return result;
+  };
+
+  // Async parse implementation
+  const parseAsync = async (
+    context: ParserContext<TState>,
+  ): Promise<ParserResult<TState>> => {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      return result;
+    }
+    // Check if inner parser consumed at least one token
+    if (result.consumed.length === 0) {
+      return {
+        success: false,
+        consumed: 0,
+        error: message`Parser must consume at least one token.`,
+      };
+    }
+    return result;
+  };
+
+  return {
+    $mode: parser.$mode,
+    $valueType: parser.$valueType,
+    $stateType: parser.$stateType,
+    priority: parser.priority,
+    usage: parser.usage,
+    initialState: parser.initialState,
+    parse(context: ParserContext<TState>) {
+      if (isAsync) {
+        return parseAsync(context) as unknown as ParserResult<TState>;
+      }
+      return parseSync(context);
+    },
+    complete(state: TState) {
+      return parser.complete(state);
+    },
+    suggest(context: ParserContext<TState>, prefix: string) {
+      return parser.suggest(context, prefix);
+    },
+    getDocFragments(state: DocState<TState>, defaultValue?: T) {
+      return syncParser.getDocFragments(state, defaultValue);
+    },
+  } as Parser<M, T, TState>;
+}
