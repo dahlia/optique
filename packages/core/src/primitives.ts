@@ -1661,7 +1661,30 @@ export function command<M extends Mode, T, TState>(
             message`Command ${eOptionName(name)} was not matched.`,
         };
       } else if (state[0] === "matched") {
-        // Command matched but inner parser never started, try to complete with initial state
+        // Command matched but inner parser never started.
+        // First give the inner parser a chance to run with empty buffer,
+        // then complete with the resulting state.
+        const parseResultOrPromise = parser.parse({
+          buffer: [],
+          optionsTerminated: false,
+          usage: [],
+          state: parser.initialState,
+        });
+        if (isAsync) {
+          return (
+            parseResultOrPromise as Promise<ParserResult<TState>>
+          ).then((parseResult) => {
+            if (parseResult.success) {
+              return parser.complete(parseResult.next.state);
+            }
+            return parser.complete(parser.initialState);
+          });
+        }
+        const parseResult = parseResultOrPromise as ParserResult<TState>;
+        if (parseResult.success) {
+          return parser.complete(parseResult.next.state);
+        }
+        // If parse fails, fallback to completing with initial state
         return parser.complete(parser.initialState);
       } else if (state[0] === "parsing") {
         // Delegate to inner parser
