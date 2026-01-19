@@ -90,6 +90,24 @@ To be released.
 [#80]: https://github.com/dahlia/optique/pull/80
 
 
+Version 0.9.1
+-------------
+
+Released on January 19, 2026.
+
+### @optique/core
+
+ -  Fixed `command()` failing to parse inner parser when buffer is empty after
+    command match.  Previously, when using `command()` with an inner parser
+    that can succeed with zero tokens (like `longestMatch()` or `object()` with
+    all optional fields), parsing `["dev"]` would fail with “No matching option,
+    command, or argument found” even though the inner parser should succeed.
+    Now, the `complete()` method first gives the inner parser a chance to run
+    with an empty buffer before completing.  [[#81]]
+
+[#81]: https://github.com/dahlia/optique/issues/81
+
+
 Version 0.9.0
 -------------
 
@@ -400,6 +418,22 @@ remotes) using [isomorphic-git].  [[#71], [#72]]
 [isomorphic-git]: https://github.com/isomorphic-git/isomorphic-git
 [#71]: https://github.com/dahlia/optique/issues/71
 [#72]: https://github.com/dahlia/optique/pull/72
+
+
+Version 0.8.8
+-------------
+
+Released on January 19, 2026.
+
+### @optique/core
+
+ -  Fixed `command()` failing to parse inner parser when buffer is empty after
+    command match.  Previously, when using `command()` with an inner parser
+    that can succeed with zero tokens (like `longestMatch()` or `object()` with
+    all optional fields), parsing `["dev"]` would fail with “No matching option,
+    command, or argument found” even though the inner parser should succeed.
+    Now, the `complete()` method first gives the inner parser a chance to run
+    with an empty buffer before completing.  [[#81]]
 
 
 Version 0.8.7
