@@ -215,6 +215,40 @@ Code style
     infer complex union types and optional fields based on the combinator
     composition.
 
+### Internal mode dispatch patterns
+
+Optique supports both synchronous and asynchronous parsing through a generic
+`Mode` type parameter (`"sync" | "async"`).  TypeScript has a fundamental
+limitation: it cannot narrow conditional types like `ModeValue<M, T>` based
+on runtime checks of the mode value.
+
+~~~~ typescript
+// This doesn't work - TypeScript can't narrow ModeValue<M, T>
+if (mode === "async") {
+  return asyncResult;  // Type error: ModeValue<M, T> expected
+}
+~~~~
+
+To handle this limitation while maintaining type safety at API boundaries:
+
+ -  All mode-based type assertions are isolated in *mode-dispatch.ts*.
+ -  Use `dispatchByMode()` for value returns and `dispatchIterableByMode()`
+    for iterables instead of manual `if (mode === "async")` checks.
+ -  These helpers encapsulate the necessary `as ModeValue<M, T>` assertions.
+
+~~~~ typescript
+// Correct pattern:
+return dispatchByMode(
+  parser.$mode,
+  () => parseSync(context),
+  () => parseAsync(context),
+);
+~~~~
+
+When refactoring mode-related code, always use these dispatch helpers rather
+than adding new type assertions elsewhere.  This keeps unsafe casts contained
+in a single, well-documented location.
+
 ### API documentation
 
  -  All exported APIs must have JSDoc comments describing their purpose,

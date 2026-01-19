@@ -1,5 +1,6 @@
 import type { DocEntry, DocFragments, DocPage, DocSection } from "./doc.ts";
 import { type Message, message } from "./message.ts";
+import type { DependencyRegistryLike } from "./registry-types.ts";
 import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 
@@ -213,11 +214,9 @@ export interface ParserContext<TState> {
    * A registry containing resolved dependency values from DependencySource parsers.
    * This is used during shell completion to provide suggestions based on
    * the actual dependency values that have been parsed, rather than defaults.
-   * The type is `unknown` to avoid circular dependency issues; the actual type
-   * is `DependencyRegistry` from `./dependency.ts`.
    * @since 0.10.0
    */
-  readonly dependencyRegistry?: unknown;
+  readonly dependencyRegistry?: DependencyRegistryLike;
 }
 
 /**

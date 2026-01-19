@@ -2,12 +2,12 @@ import {
   createDeferredParseState,
   createDependencySourceState,
   createPendingDependencySourceState,
-  defaultValues,
   type DeferredParseState,
   dependencyId,
-  dependencyIds,
   type DependencySourceState,
   type DerivedValueParser,
+  getDefaultValuesFunction,
+  getDependencyIds,
   isDeferredParseState,
   isDependencySource,
   isDependencySourceState,
@@ -17,6 +17,7 @@ import {
   suggestWithDependency,
 } from "./dependency.ts";
 import type { DocFragment } from "./doc.ts";
+import type { DependencyRegistryLike } from "./registry-types.ts";
 
 /**
  * State type for options that may use deferred parsing (DerivedValueParser).
@@ -195,7 +196,7 @@ export interface OptionErrorOptions {
 function* getSuggestionsWithDependency<T>(
   valueParser: ValueParser<"sync", T>,
   prefix: string,
-  dependencyRegistry: unknown,
+  dependencyRegistry: DependencyRegistryLike | undefined,
 ): Generator<Suggestion> {
   if (!valueParser.suggest) return;
 
@@ -208,21 +209,9 @@ function* getSuggestionsWithDependency<T>(
 
     if (suggestWithDep && dependencyRegistry) {
       // Get dependency values from registry
-      const depIds = dependencyIds in derived
-        ? (derived as unknown as { [dependencyIds]: readonly symbol[] })[
-          dependencyIds
-        ]
-        : [derived[dependencyId]];
-
-      const defaults = defaultValues in derived
-        ? (derived as unknown as { [defaultValues]: () => readonly unknown[] })
-          [defaultValues]?.()
-        : undefined;
-
-      const registry = dependencyRegistry as {
-        has(id: symbol): boolean;
-        get<V>(id: symbol): V | undefined;
-      };
+      const depIds = getDependencyIds(derived);
+      const defaultsFn = getDefaultValuesFunction(derived);
+      const defaults = defaultsFn?.();
 
       // Collect dependency values, using defaults for missing ones
       const dependencyValues: unknown[] = [];
@@ -230,8 +219,8 @@ function* getSuggestionsWithDependency<T>(
 
       for (let i = 0; i < depIds.length; i++) {
         const depId = depIds[i];
-        if (registry.has(depId)) {
-          dependencyValues.push(registry.get(depId));
+        if (dependencyRegistry.has(depId)) {
+          dependencyValues.push(dependencyRegistry.get(depId));
           hasAnyValue = true;
         } else if (defaults && i < defaults.length) {
           dependencyValues.push(defaults[i]);
@@ -358,7 +347,7 @@ function* suggestOptionSync<T>(
 async function* getSuggestionsWithDependencyAsync<T>(
   valueParser: ValueParser<Mode, T>,
   prefix: string,
-  dependencyRegistry: unknown,
+  dependencyRegistry: DependencyRegistryLike | undefined,
 ): AsyncGenerator<Suggestion> {
   if (!valueParser.suggest) return;
 
@@ -371,21 +360,9 @@ async function* getSuggestionsWithDependencyAsync<T>(
 
     if (suggestWithDep && dependencyRegistry) {
       // Get dependency values from registry
-      const depIds = dependencyIds in derived
-        ? (derived as unknown as { [dependencyIds]: readonly symbol[] })[
-          dependencyIds
-        ]
-        : [derived[dependencyId]];
-
-      const defaults = defaultValues in derived
-        ? (derived as unknown as { [defaultValues]: () => readonly unknown[] })
-          [defaultValues]?.()
-        : undefined;
-
-      const registry = dependencyRegistry as {
-        has(id: symbol): boolean;
-        get<V>(id: symbol): V | undefined;
-      };
+      const depIds = getDependencyIds(derived);
+      const defaultsFn = getDefaultValuesFunction(derived);
+      const defaults = defaultsFn?.();
 
       // Collect dependency values, using defaults for missing ones
       const dependencyValues: unknown[] = [];
@@ -393,8 +370,8 @@ async function* getSuggestionsWithDependencyAsync<T>(
 
       for (let i = 0; i < depIds.length; i++) {
         const depId = depIds[i];
-        if (registry.has(depId)) {
-          dependencyValues.push(registry.get(depId));
+        if (dependencyRegistry.has(depId)) {
+          dependencyValues.push(dependencyRegistry.get(depId));
           hasAnyValue = true;
         } else if (defaults && i < defaults.length) {
           dependencyValues.push(defaults[i]);
@@ -535,7 +512,7 @@ function* suggestArgumentSync<T>(
   valueParser: ValueParser<"sync", T>,
   hidden: boolean,
   prefix: string,
-  dependencyRegistry: unknown,
+  dependencyRegistry: DependencyRegistryLike | undefined,
 ): Generator<Suggestion> {
   if (hidden) return;
 
@@ -557,7 +534,7 @@ async function* suggestArgumentAsync<T>(
   valueParser: ValueParser<Mode, T>,
   hidden: boolean,
   prefix: string,
-  dependencyRegistry: unknown,
+  dependencyRegistry: DependencyRegistryLike | undefined,
 ): AsyncGenerator<Suggestion> {
   if (hidden) return;
 

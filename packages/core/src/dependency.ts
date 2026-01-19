@@ -1,6 +1,7 @@
 import { type Message, message } from "./message.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import type { Mode, Suggestion } from "./parser.ts";
+import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParser, ValueParserResult } from "./valueparser.ts";
 
 /**
@@ -1350,6 +1351,45 @@ export function isDeferredParseState<T>(
 }
 
 /**
+ * Gets all dependency IDs from a derived parser.
+ * If the parser was created with `deriveFrom` (multiple dependencies),
+ * returns the array of dependency IDs. Otherwise, returns an array
+ * containing the single dependency ID.
+ *
+ * @param parser The derived value parser to get dependency IDs from.
+ * @returns An array of dependency ID symbols.
+ * @internal
+ * @since 0.10.0
+ */
+export function getDependencyIds<M extends Mode, T, S>(
+  parser: DerivedValueParser<M, T, S>,
+): readonly symbol[] {
+  if (dependencyIds in parser) {
+    return parser[dependencyIds]!;
+  }
+  return [parser[dependencyId]];
+}
+
+/**
+ * Gets the default values function from a derived parser, if present.
+ * This function is available on parsers created with `deriveFrom` that
+ * specify default values for their dependencies.
+ *
+ * @param parser The derived value parser to get the default values function from.
+ * @returns The default values function, or undefined if not available.
+ * @internal
+ * @since 0.10.0
+ */
+export function getDefaultValuesFunction<M extends Mode, T, S>(
+  parser: DerivedValueParser<M, T, S>,
+): (() => readonly unknown[]) | undefined {
+  if (defaultValues in parser) {
+    return parser[defaultValues];
+  }
+  return undefined;
+}
+
+/**
  * Creates a deferred parse state for a DerivedValueParser.
  *
  * @template T The type of value the parser will produce.
@@ -1603,7 +1643,7 @@ export interface ResolvedDependency<T = unknown> {
  * to DerivedValueParser options.
  * @since 0.10.0
  */
-export class DependencyRegistry {
+export class DependencyRegistry implements DependencyRegistryLike {
   private readonly values = new Map<symbol, unknown>();
 
   /**
