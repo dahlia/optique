@@ -2046,6 +2046,43 @@ describe("command", () => {
       }
     });
   });
+
+  // Regression test for issue #81:
+  // https://github.com/dahlia/optique/issues/81
+  it("should parse inner parser that succeeds with zero tokens", () => {
+    // This tests the case where the command is matched but the buffer is empty,
+    // and the inner parser (like longestMatch or object with all optional fields)
+    // can succeed without consuming any tokens.
+    const activeParser = object({
+      mode: constant("active" as const),
+      cwd: withDefault(option("--cwd", string()), "./"),
+      key: optional(option("--key", string())),
+    });
+
+    const helpParser = object({
+      mode: constant("help" as const),
+    });
+
+    const parser = command("dev", longestMatch(activeParser, helpParser));
+
+    // This should succeed - the inner parser can complete with zero tokens
+    const result = parse(parser, ["dev"]);
+    assert.strictEqual(result.success, true);
+    if (result.success) {
+      assert.strictEqual(result.value.mode, "active");
+      assert.strictEqual(result.value.cwd, "./");
+      assert.strictEqual(result.value.key, undefined);
+    }
+
+    // With additional options should also work
+    const resultWithOptions = parse(parser, ["dev", "--key", "foo"]);
+    assert.strictEqual(resultWithOptions.success, true);
+    if (resultWithOptions.success) {
+      assert.strictEqual(resultWithOptions.value.mode, "active");
+      assert.strictEqual(resultWithOptions.value.cwd, "./");
+      assert.strictEqual(resultWithOptions.value.key, "foo");
+    }
+  });
 });
 
 describe("command() error customization", () => {

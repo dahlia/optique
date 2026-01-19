@@ -6,6 +6,18 @@ Version 0.8.8
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `command()` failing to parse inner parser when buffer is empty after
+    command match.  Previously, when using `command()` with an inner parser
+    that can succeed with zero tokens (like `longestMatch()` or `object()` with
+    all optional fields), parsing `["dev"]` would fail with “No matching option,
+    command, or argument found” even though the inner parser should succeed.
+    Now, the `complete()` method first gives the inner parser a chance to run
+    with an empty buffer before completing.  [[#81]]
+
+[#81]: https://github.com/dahlia/optique/issues/81
+
 
 Version 0.8.7
 -------------
