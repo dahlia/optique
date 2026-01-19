@@ -1,6 +1,6 @@
 {
   "name": "@optique/temporal",
-  "version": "0.7.10",
+  "version": "0.7.11",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts"
