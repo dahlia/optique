@@ -1266,7 +1266,19 @@ export function command<T, TState>(
             message`Command ${eOptionName(name)} was not matched.`,
         };
       } else if (state[0] === "matched") {
-        // Command matched but inner parser never started, try to complete with initial state
+        // Command matched but inner parser never started.
+        // First give the inner parser a chance to run with empty buffer,
+        // then complete with the resulting state.
+        const parseResult = parser.parse({
+          buffer: [],
+          optionsTerminated: false,
+          usage: [],
+          state: parser.initialState,
+        });
+        if (parseResult.success) {
+          return parser.complete(parseResult.next.state);
+        }
+        // If parse fails, fallback to completing with initial state
         return parser.complete(parser.initialState);
       } else if (state[0] === "parsing") {
         // Delegate to inner parser
