@@ -149,6 +149,7 @@ The following is a list of the available packages:
 | [@optique/run](/packages/run/)           | [JSR][jsr:@optique/run]      | [npm][npm:@optique/run]      | Runner for Node.js/Deno/Bun                 |
 | [@optique/git](/packages/git/)           | [JSR][jsr:@optique/git]      | [npm][npm:@optique/git]      | Git reference parsers (branches, tags, etc) |
 | [@optique/logtape](/packages/logtape/)   | [JSR][jsr:@optique/logtape]  | [npm][npm:@optique/logtape]  | [LogTape] logging integration               |
+| [@optique/man](/packages/man/)           | [JSR][jsr:@optique/man]      | [npm][npm:@optique/man]      | Man page generation from parsers            |
 | [@optique/temporal](/packages/temporal/) | [JSR][jsr:@optique/temporal] | [npm][npm:@optique/temporal] | [Temporal] value parsers (date and time)    |
 | [@optique/valibot](/packages/valibot/)   | [JSR][jsr:@optique/valibot]  | [npm][npm:@optique/valibot]  | [Valibot] schema integration for validation |
 | [@optique/zod](/packages/zod/)           | [JSR][jsr:@optique/zod]      | [npm][npm:@optique/zod]      | [Zod] schema integration for validation     |
@@ -162,6 +163,8 @@ The following is a list of the available packages:
 [jsr:@optique/logtape]: https://jsr.io/@optique/logtape
 [npm:@optique/logtape]: https://www.npmjs.com/package/@optique/logtape
 [LogTape]: https://logtape.org/
+[jsr:@optique/man]: https://jsr.io/@optique/man
+[npm:@optique/man]: https://www.npmjs.com/package/@optique/man
 [jsr:@optique/temporal]: https://jsr.io/@optique/temporal
 [npm:@optique/temporal]: https://www.npmjs.com/package/@optique/temporal
 [Temporal]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal

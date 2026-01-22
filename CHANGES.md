@@ -167,6 +167,30 @@ To be released.
     });
     ~~~~
 
+### @optique/man
+
+The *@optique/man* package was introduced in this release, providing
+man page generation from parser metadata.  This allows CLI applications
+to generate Unix man pages that stay synchronized with parser definitions.
+[[#77]]
+
+ -  Added `generateManPage()` function for generating man pages from sync
+    parsers.
+ -  Added `generateManPageSync()` function for explicit sync-only man page
+    generation.
+ -  Added `generateManPageAsync()` function for generating man pages from
+    async parsers.
+ -  Added `ManPageOptions` interface for configuring man page output (name,
+    section, description, date, source, manual, authors, seeAlso, bugs).
+ -  Added `formatDocPageAsMan()` function for converting `DocPage` objects
+    to man page format.
+ -  Added `formatMessageAsRoff()` function for converting Optique `Message`
+    objects to roff markup.
+ -  Added `escapeRoff()` function for escaping special roff characters.
+ -  Added `escapeHyphens()` function for escaping hyphens in option names.
+
+[#77]: https://github.com/dahlia/optique/issues/77
+
 
 Version 0.9.1
 -------------
