@@ -3,6 +3,7 @@ import {
   type DocPageFormatOptions,
   formatDocPage,
 } from "@optique/core/doc";
+import { message } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -244,9 +245,15 @@ describe("formatDocPage", () => {
 
     const options: DocPageFormatOptions = { colors: true };
     const result = formatDocPage("myapp", page, options);
+
+    // Verify exact format: bold+dim label, space, bold program name, space, bold command
     const expected =
-      "Usage: \u001b[1mmyapp\u001b[0m \u001b[1mcommand\u001b[0m\n";
-    assert.equal(result, expected);
+      "\u001b[1;2mUsage:\u001b[0m \u001b[1mmyapp\u001b[0m \u001b[1mcommand\u001b[0m\n";
+    assert.equal(
+      result,
+      expected,
+      "Output should match expected format exactly",
+    );
   });
 
   it("should sort sections with untitled sections first", () => {
@@ -482,5 +489,200 @@ describe("formatDocPage", () => {
 
     // Output should only have the usage line
     assert.equal(output.trim(), "Usage: test");
+  });
+
+  it("should format examples, author, and bugs sections", () => {
+    const page: DocPage = {
+      usage: [],
+      sections: [],
+      examples: message`myapp --help\nmyapp --version`,
+      author: message`Jane Doe <jane@example.com>`,
+      bugs: message`Report bugs at https://github.com/example/myapp/issues`,
+    };
+
+    const result = formatDocPage("myapp", page);
+
+    assert.ok(result.includes("Examples:\n"));
+    // formatMessage converts \n to space, so check for indented content
+    assert.ok(result.includes("  myapp --help myapp --version"));
+
+    assert.ok(result.includes("Author:\n"));
+    assert.ok(result.includes("  Jane Doe <jane@example.com>"));
+
+    assert.ok(result.includes("Bugs:\n"));
+    assert.ok(
+      result.includes(
+        "  Report bugs at https://github.com/example/myapp/issues",
+      ),
+    );
+  });
+
+  it("should format examples, author, and bugs with bold+dim labels when colors enabled", () => {
+    const page: DocPage = {
+      usage: [],
+      sections: [],
+      examples: message`Example usage`,
+      author: message`John Doe`,
+      bugs: message`Bug tracker`,
+    };
+
+    const result = formatDocPage("myapp", page, { colors: true });
+
+    // Even with empty usage array, formatUsage still outputs the program name
+    const expected = [
+      "\x1b[1;2mUsage:\x1b[0m \x1b[1mmyapp\x1b[0m ",
+      "",
+      "\x1b[1;2mExamples:\x1b[0m",
+      "  Example usage",
+      "",
+      "\x1b[1;2mAuthor:\x1b[0m",
+      "  John Doe",
+      "",
+      "\x1b[1;2mBugs:\x1b[0m",
+      "  Bug tracker",
+      "",
+    ].join("\n");
+
+    assert.equal(result, expected);
+  });
+
+  it("should render examples, author, and bugs in correct order before footer", () => {
+    const page: DocPage = {
+      usage: [],
+      sections: [],
+      examples: message`Example usage`,
+      author: message`John Doe`,
+      bugs: message`Bug tracker`,
+      footer: message`Footer text`,
+    };
+
+    const result = formatDocPage("test", page);
+
+    const examplesIndex = result.indexOf("Examples:");
+    const authorIndex = result.indexOf("Author:");
+    const bugsIndex = result.indexOf("Bugs:");
+    const footerIndex = result.indexOf("Footer text");
+
+    // Check that all sections are present
+    assert.ok(examplesIndex !== -1, "Examples section should be present");
+    assert.ok(authorIndex !== -1, "Author section should be present");
+    assert.ok(bugsIndex !== -1, "Bugs section should be present");
+    assert.ok(footerIndex !== -1, "Footer should be present");
+
+    // Check order: Examples → Author → Bugs → Footer
+    assert.ok(
+      examplesIndex < authorIndex,
+      "Examples should come before Author",
+    );
+    assert.ok(authorIndex < bugsIndex, "Author should come before Bugs");
+    assert.ok(bugsIndex < footerIndex, "Bugs should come before Footer");
+  });
+
+  it("should not include examples, author, or bugs sections when not provided", () => {
+    const page: DocPage = {
+      usage: [],
+      sections: [],
+      footer: message`Footer only`,
+    };
+
+    const result = formatDocPage("test", page);
+
+    assert.ok(!result.includes("Examples:"));
+    assert.ok(!result.includes("Author:"));
+    assert.ok(!result.includes("Bugs:"));
+    assert.ok(result.includes("Footer only"));
+  });
+
+  it("should format all labels with bold+dim when colors enabled", () => {
+    const page: DocPage = {
+      usage: [{ type: "command", name: "myapp" }],
+      sections: [
+        {
+          title: "Options",
+          entries: [{
+            term: { type: "option", names: ["--help"] },
+            description: message`Show help`,
+          }],
+        },
+        {
+          title: "Commands",
+          entries: [{
+            term: { type: "command", name: "test" },
+            description: message`Run tests`,
+          }],
+        },
+      ],
+      examples: message`myapp --help`,
+      author: message`Jane Doe`,
+      bugs: message`GitHub Issues`,
+    };
+
+    const result = formatDocPage("myapp", page, { colors: true });
+
+    const expected = [
+      // Usage includes both program name and command name
+      "\x1b[1;2mUsage:\x1b[0m \x1b[1mmyapp\x1b[0m \x1b[1mmyapp\x1b[0m",
+      "",
+      "\x1b[1;2mOptions:\x1b[0m",
+      // Options are rendered with italic (code 3) by default
+      "  \x1b[3m--help\x1b[0m                      Show help",
+      "",
+      "\x1b[1;2mCommands:\x1b[0m",
+      // Commands are rendered with bold (code 1)
+      "  \x1b[1mtest\x1b[0m                        Run tests",
+      "",
+      "\x1b[1;2mExamples:\x1b[0m",
+      "  myapp --help",
+      "",
+      "\x1b[1;2mAuthor:\x1b[0m",
+      "  Jane Doe",
+      "",
+      "\x1b[1;2mBugs:\x1b[0m",
+      "  GitHub Issues",
+      "",
+    ].join("\n");
+
+    assert.equal(result, expected);
+  });
+
+  it("should format all labels as plain text when colors disabled", () => {
+    const page: DocPage = {
+      usage: [{ type: "command", name: "myapp" }],
+      sections: [
+        {
+          title: "Options",
+          entries: [{
+            term: { type: "option", names: ["--help"] },
+            description: message`Show help`,
+          }],
+        },
+      ],
+      examples: message`myapp --help`,
+      author: message`Jane Doe`,
+      bugs: message`GitHub Issues`,
+    };
+
+    const result = formatDocPage("myapp", page, { colors: false });
+
+    const expected = [
+      // Usage includes both program name and command name
+      "Usage: myapp myapp",
+      "",
+      "Options:",
+      // Default termWidth is 26, spacing adjusted accordingly
+      "  --help                      Show help",
+      "",
+      "Examples:",
+      "  myapp --help",
+      "",
+      "Author:",
+      "  Jane Doe",
+      "",
+      "Bugs:",
+      "  GitHub Issues",
+      "",
+    ].join("\n");
+
+    assert.equal(result, expected);
   });
 });

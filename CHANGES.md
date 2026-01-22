@@ -24,6 +24,12 @@ To be released.
         creating `Program` objects. This eliminates the need to manually specify
         `Program<"sync", InferValue<typeof parser>>` type annotations.
 
+ -  Added support for displaying `author`, `bugs`, and `examples` metadata
+    fields in help text. When these fields are provided in `ProgramMetadata`
+    or `RunOptions`, they are now displayed in the help output in the following
+    order: Examples → Author → Bugs (before the footer). Each section has
+    a bold label (when colors are enabled) and indented content for clear
+    visual separation.
 
     ~~~~ typescript
     import { defineProgram } from "@optique/core/program";

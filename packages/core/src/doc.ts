@@ -50,6 +50,21 @@ export interface DocPage {
   readonly usage?: Usage;
   readonly description?: Message;
   readonly sections: readonly DocSection[];
+  /**
+   * Usage examples for the program.
+   * @since 0.10.0
+   */
+  readonly examples?: Message;
+  /**
+   * Author information.
+   * @since 0.10.0
+   */
+  readonly author?: Message;
+  /**
+   * Information about where to report bugs.
+   * @since 0.10.0
+   */
+  readonly bugs?: Message;
   readonly footer?: Message;
 }
 
@@ -206,7 +221,8 @@ export function formatDocPage(
     output += "\n";
   }
   if (page.usage != null) {
-    output += "Usage: ";
+    const usageLabel = options.colors ? "\x1b[1;2mUsage:\x1b[0m " : "Usage: ";
+    output += usageLabel;
     output += indentLines(
       formatUsage(programName, page.usage, {
         colors: options.colors,
@@ -234,7 +250,10 @@ export function formatDocPage(
     if (section.entries.length < 1) continue;
     output += "\n";
     if (section.title != null) {
-      output += `${section.title}:\n`;
+      const sectionLabel = options.colors
+        ? `\x1b[1;2m${section.title}:\x1b[0m\n`
+        : `${section.title}:\n`;
+      output += sectionLabel;
     }
     for (const entry of section.entries) {
       const term = formatUsageTerm(entry.term, {
@@ -284,6 +303,46 @@ export function formatDocPage(
         )
       }\n`;
     }
+  }
+  if (page.examples != null) {
+    output += "\n";
+    const examplesLabel = options.colors
+      ? "\x1b[1;2mExamples:\x1b[0m\n"
+      : "Examples:\n";
+    output += examplesLabel;
+    const examplesContent = formatMessage(page.examples, {
+      colors: options.colors,
+      maxWidth: options.maxWidth == null ? undefined : options.maxWidth - 2,
+      quotes: !options.colors,
+    });
+    output += "  " + indentLines(examplesContent, 2);
+    output += "\n";
+  }
+  if (page.author != null) {
+    output += "\n";
+    const authorLabel = options.colors
+      ? "\x1b[1;2mAuthor:\x1b[0m\n"
+      : "Author:\n";
+    output += authorLabel;
+    const authorContent = formatMessage(page.author, {
+      colors: options.colors,
+      maxWidth: options.maxWidth == null ? undefined : options.maxWidth - 2,
+      quotes: !options.colors,
+    });
+    output += "  " + indentLines(authorContent, 2);
+    output += "\n";
+  }
+  if (page.bugs != null) {
+    output += "\n";
+    const bugsLabel = options.colors ? "\x1b[1;2mBugs:\x1b[0m\n" : "Bugs:\n";
+    output += bugsLabel;
+    const bugsContent = formatMessage(page.bugs, {
+      colors: options.colors,
+      maxWidth: options.maxWidth == null ? undefined : options.maxWidth - 2,
+      quotes: !options.colors,
+    });
+    output += "  " + indentLines(bugsContent, 2);
+    output += "\n";
   }
   if (page.footer != null) {
     output += "\n";

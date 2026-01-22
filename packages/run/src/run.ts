@@ -138,6 +138,27 @@ export interface RunOptions {
   readonly description?: Message;
 
   /**
+   * Usage examples for the program.
+   *
+   * @since 0.10.0
+   */
+  readonly examples?: Message;
+
+  /**
+   * Author information.
+   *
+   * @since 0.10.0
+   */
+  readonly author?: Message;
+
+  /**
+   * Information about where to report bugs.
+   *
+   * @since 0.10.0
+   */
+  readonly bugs?: Message;
+
+  /**
    * Footer text shown at the bottom of help text.
    *
    * @since 0.4.0
@@ -337,6 +358,9 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
   let programMetadata: {
     brief?: Message;
     description?: Message;
+    examples?: Message;
+    author?: Message;
+    bugs?: Message;
     footer?: Message;
   } | undefined;
 
@@ -347,6 +371,9 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     programMetadata = {
       brief: program.metadata.brief,
       description: program.metadata.description,
+      examples: program.metadata.examples,
+      author: program.metadata.author,
+      bugs: program.metadata.bugs,
       footer: program.metadata.footer,
     };
   } else {
@@ -367,6 +394,9 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     errorExitCode = 1,
     brief = programMetadata?.brief,
     description = programMetadata?.description,
+    examples = programMetadata?.examples,
+    author = programMetadata?.author,
+    bugs = programMetadata?.bugs,
     footer = programMetadata?.footer,
   } = options;
 
@@ -419,6 +449,9 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     aboveError,
     brief,
     description,
+    examples,
+    author,
+    bugs,
     footer,
     onError() {
       return process.exit(errorExitCode) as never;

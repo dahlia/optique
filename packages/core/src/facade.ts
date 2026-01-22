@@ -843,6 +843,27 @@ export interface RunOptions<THelp, TError> {
   readonly description?: Message;
 
   /**
+   * Usage examples for the program.
+   *
+   * @since 0.10.0
+   */
+  readonly examples?: Message;
+
+  /**
+   * Author information.
+   *
+   * @since 0.10.0
+   */
+  readonly author?: Message;
+
+  /**
+   * Information about where to report bugs.
+   *
+   * @since 0.10.0
+   */
+  readonly bugs?: Message;
+
+  /**
    * Footer text shown at the bottom of help text.
    *
    * @since 0.4.0
@@ -1083,6 +1104,9 @@ export function runParser<
       ...options,
       brief: options.brief ?? program.metadata.brief,
       description: options.description ?? program.metadata.description,
+      examples: options.examples ?? program.metadata.examples,
+      author: options.author ?? program.metadata.author,
+      bugs: options.bugs ?? program.metadata.bugs,
       footer: options.footer ?? program.metadata.footer,
     };
   } else {
@@ -1106,6 +1130,9 @@ export function runParser<
     stdout = console.log,
     brief,
     description,
+    examples,
+    author,
+    bugs,
     footer,
   } = options;
 
@@ -1392,6 +1419,11 @@ export function runParser<
               description: !isMetaCommandHelp
                 ? (description ?? doc.description)
                 : doc.description,
+              examples: !isMetaCommandHelp
+                ? (examples ?? doc.examples)
+                : doc.examples,
+              author: !isMetaCommandHelp ? (author ?? doc.author) : doc.author,
+              bugs: !isMetaCommandHelp ? (bugs ?? doc.bugs) : doc.bugs,
               footer: !isMetaCommandHelp ? (footer ?? doc.footer) : doc.footer,
             };
             stdout(formatDocPage(programName, augmentedDoc, {
@@ -1433,6 +1465,9 @@ export function runParser<
                 ...doc,
                 brief: brief ?? doc.brief,
                 description: description ?? doc.description,
+                examples: examples ?? doc.examples,
+                author: author ?? doc.author,
+                bugs: bugs ?? doc.bugs,
                 footer: footer ?? doc.footer,
               };
               stderr(formatDocPage(programName, augmentedDoc, {
