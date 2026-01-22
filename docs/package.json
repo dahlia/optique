@@ -4,6 +4,7 @@
     "@optique/core": "workspace:",
     "@optique/git": "workspace:",
     "@optique/logtape": "workspace:",
+    "@optique/man": "workspace:",
     "@optique/run": "workspace:",
     "@optique/temporal": "workspace:",
     "@optique/valibot": "workspace:",

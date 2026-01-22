@@ -1,0 +1,41 @@
+{
+  "name": "@optique/man",
+  "version": "0.10.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./roff": "./src/roff.ts",
+    "./man": "./src/man.ts",
+    "./cli": "./src/cli.ts"
+  },
+  "imports": {
+    "tsx/esm/api": "npm:tsx@^4.21.0/esm/api"
+  },
+  "exclude": [
+    "dist/",
+    "tsdown.config.ts"
+  ],
+  "tasks": {
+    "build": "pnpm build",
+    "test": "deno test",
+    "test:node": {
+      "dependencies": [
+        "build"
+      ],
+      "command": "node --experimental-transform-types --test"
+    },
+    "test:bun": {
+      "dependencies": [
+        "build"
+      ],
+      "command": "bun test"
+    },
+    "test-all": {
+      "dependencies": [
+        "test",
+        "test:node",
+        "test:bun"
+      ]
+    }
+  }
+}

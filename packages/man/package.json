@@ -1,0 +1,105 @@
+{
+  "name": "@optique/man",
+  "version": "0.10.0",
+  "description": "Man page generator for Optique CLI parsers",
+  "keywords": [
+    "CLI",
+    "command-line",
+    "commandline",
+    "parser",
+    "man",
+    "manpage",
+    "documentation",
+    "roff",
+    "groff"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Hong Minhee",
+    "email": "hong@minhee.org",
+    "url": "https://hongminhee.org/"
+  },
+  "homepage": "https://optique.dev/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dahlia/optique.git",
+    "directory": "packages/man/"
+  },
+  "bugs": {
+    "url": "https://github.com/dahlia/optique/issues"
+  },
+  "funding": [
+    "https://github.com/sponsors/dahlia"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.2.0",
+    "deno": ">=2.3.0"
+  },
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md"
+  ],
+  "type": "module",
+  "module": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./roff": {
+      "types": {
+        "import": "./dist/roff.d.ts",
+        "require": "./dist/roff.d.cts"
+      },
+      "import": "./dist/roff.js",
+      "require": "./dist/roff.cjs"
+    },
+    "./man": {
+      "types": {
+        "import": "./dist/man.d.ts",
+        "require": "./dist/man.d.cts"
+      },
+      "import": "./dist/man.js",
+      "require": "./dist/man.cjs"
+    },
+    "./cli": {
+      "types": {
+        "import": "./dist/cli.d.ts",
+        "require": "./dist/cli.d.cts"
+      },
+      "import": "./dist/cli.js",
+      "require": "./dist/cli.cjs"
+    }
+  },
+  "sideEffects": false,
+  "bin": {
+    "optique-man": "./dist/cli.js"
+  },
+  "dependencies": {
+    "@optique/core": "workspace:",
+    "@optique/run": "workspace:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown",
+    "prepublish": "tsdown",
+    "test": "tsdown && node --experimental-transform-types --test 'src/**/*.test.ts'",
+    "test:bun": "tsdown && bun test src/",
+    "test:deno": "deno test",
+    "test-all": "tsdown && node --experimental-transform-types --test 'src/**/*.test.ts' && bun test src/ && deno test"
+  }
+}

@@ -167,6 +167,84 @@ To be released.
     });
     ~~~~
 
+### @optique/man
+
+The *@optique/man* package was introduced in this release, providing
+man page generation from parser metadata.  This allows CLI applications
+to generate Unix man pages that stay synchronized with parser definitions.
+[[#77]]
+
+ -  Added `generateManPage()` function for generating man pages from sync
+    parsers.
+
+ -  Added `generateManPageSync()` function for explicit sync-only man page
+    generation.
+
+ -  Added `generateManPageAsync()` function for generating man pages from
+    async parsers.
+
+ -  Added `ManPageOptions` interface for configuring man page output (name,
+    section, description, date, source, manual, authors, seeAlso, bugs).
+
+ -  Added `formatDocPageAsMan()` function for converting `DocPage` objects
+    to man page format.
+
+ -  Added `formatMessageAsRoff()` function for converting Optique `Message`
+    objects to roff markup.
+
+ -  Added `escapeRoff()` function for escaping special roff characters.
+
+ -  Added `escapeHyphens()` function for escaping hyphens in option names.
+
+ -  Updated `generateManPage()`, `generateManPageSync()`, and
+    `generateManPageAsync()` to accept `Program` objects directly.
+    The metadata (`name`, `version`, `author`, `bugs`, `examples`) is
+    automatically extracted from the program, eliminating duplication.
+    [[#82]]
+
+    ~~~~ typescript
+    import { defineProgram } from "@optique/core/program";
+    import { generateManPage } from "@optique/man";
+
+    const prog = defineProgram({
+      parser: myParser,
+      metadata: {
+        name: "myapp",
+        version: "1.0.0",
+        author: message`Hong Minhee`,
+      },
+    });
+
+    // Metadata is automatically extracted
+    const manPage = generateManPage(prog, { section: 1 });
+    ~~~~
+
+ -  Added `optique-man` CLI tool for generating man pages from TypeScript/JavaScript
+    files that export a `Program` or `Parser`.  This enables automated man page
+    generation as part of build processes.  [[#77]]
+
+    ~~~~ bash
+    # Generate man page from a Program export
+    optique-man ./src/cli.ts -s 1
+
+    # Use a named export instead of default
+    optique-man ./src/cli.ts -s 1 -e myProgram
+
+    # Write output to a file
+    optique-man ./src/cli.ts -s 1 -o myapp.1
+    ~~~~
+
+    The CLI supports:
+
+     -  Loading TypeScript files directly (Deno, Bun, Node.js 25.2.0+ native,
+        or Node.js with `tsx` installed).
+     -  Extracting metadata from `Program` objects or using command-line options
+        for `Parser` objects.
+     -  Overriding metadata via `--name`, `--date`, `--version-string`, and
+        `--manual` options.
+
+[#77]: https://github.com/dahlia/optique/issues/77
+
 
 Version 0.9.1
 -------------
