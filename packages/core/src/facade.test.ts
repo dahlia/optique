@@ -3,6 +3,7 @@ import { runParser, RunParserError } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { argument, command, flag, option } from "@optique/core/primitives";
+import type { Program } from "@optique/core/program";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -2802,6 +2803,72 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         !completionOutput.includes("'completions'"),
         "Should not include 'completions' (plural) command in generated script when name is 'singular'",
       );
+    });
+  });
+
+  describe("Program support", () => {
+    it("should accept Program object instead of separate parser and options", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      const prog: Program<"sync", { name: string }> = {
+        parser,
+        metadata: {
+          name: "greet",
+          version: "1.0.0",
+          brief: message`A greeting CLI tool`,
+        },
+      };
+
+      const result = runParser(prog, ["Alice"]);
+      assert.deepEqual(result, { name: "Alice" });
+    });
+
+    it("should use metadata from Program for help output", () => {
+      const parser = option("--verbose");
+      const prog: Program<"sync", boolean> = {
+        parser,
+        metadata: {
+          name: "myapp",
+          version: "2.0.0",
+          brief: message`A test application`,
+          description: message`This is a test application description.`,
+        },
+      };
+
+      let helpOutput = "";
+      runParser(prog, ["--help"], {
+        help: { mode: "option" },
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      // Should not throw, help should be displayed
+      assert.ok(helpOutput.includes("myapp"));
+      assert.ok(helpOutput.includes("A test application"));
+    });
+
+    it("should merge additional options with Program metadata", () => {
+      const parser = option("--verbose");
+      const prog: Program<"sync", boolean> = {
+        parser,
+        metadata: {
+          name: "myapp",
+          version: "1.0.0",
+        },
+      };
+
+      let versionOutput = "";
+      runParser(prog, ["--version"], {
+        version: { mode: "option", value: prog.metadata.version! },
+        stdout: (text) => {
+          versionOutput += text;
+        },
+      });
+
+      assert.equal(versionOutput, "1.0.0");
     });
   });
 });

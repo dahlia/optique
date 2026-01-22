@@ -131,6 +131,14 @@
       "import": "./dist/primitives.js",
       "require": "./dist/primitives.cjs"
     },
+    "./program": {
+      "types": {
+        "import": "./dist/program.d.ts",
+        "require": "./dist/program.d.cts"
+      },
+      "import": "./dist/program.js",
+      "require": "./dist/program.cjs"
+    },
     "./usage": {
       "types": {
         "import": "./dist/usage.d.ts",

@@ -19,6 +19,7 @@ import {
   value,
 } from "./message.ts";
 import { multiple, optional, withDefault } from "./modifiers.ts";
+import type { Program } from "@optique/core/program";
 import {
   getDocPage,
   type InferMode,
@@ -998,7 +999,22 @@ function handleCompletion<M extends Mode, THelp, TError>(
  *          callbacks.
  * @throws {RunParserError} When parsing fails and no `onError` callback is
  *          provided.
+ * @since 0.11.0 Added support for {@link Program} objects.
  */
+// Overload: Program with sync parser
+export function runParser<T, THelp = void, TError = never>(
+  program: Program<"sync", T>,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): T;
+
+// Overload: Program with async parser
+export function runParser<T, THelp = void, TError = never>(
+  program: Program<"async", T>,
+  args: readonly string[],
+  options?: RunOptions<THelp, TError>,
+): Promise<T>;
+
 // Overload: sync parser returns sync result
 export function runParser<
   TParser extends Parser<"sync", unknown, unknown>,
@@ -1041,11 +1057,42 @@ export function runParser<
   THelp = void,
   TError = never,
 >(
-  parser: TParser,
-  programName: string,
-  args: readonly string[],
-  options: RunOptions<THelp, TError> = {},
+  parserOrProgram: TParser | Program<Mode, unknown>,
+  programNameOrArgs: string | readonly string[],
+  argsOrOptions?: readonly string[] | RunOptions<THelp, TError>,
+  optionsParam?: RunOptions<THelp, TError>,
 ): ModeValue<InferMode<TParser>, InferValue<TParser>> {
+  // Determine if we're using the new Program API or the old API
+  const isProgram = typeof programNameOrArgs !== "string";
+
+  let parser: TParser;
+  let programName: string;
+  let args: readonly string[];
+  let options: RunOptions<THelp, TError>;
+
+  if (isProgram) {
+    // New API: runParser(program, args, options?)
+    const program = parserOrProgram as Program<Mode, unknown>;
+    parser = program.parser as TParser;
+    programName = program.metadata.name;
+    args = programNameOrArgs as readonly string[];
+    options = (argsOrOptions as RunOptions<THelp, TError> | undefined) ?? {};
+
+    // Merge program metadata into options
+    options = {
+      ...options,
+      brief: options.brief ?? program.metadata.brief,
+      description: options.description ?? program.metadata.description,
+      footer: options.footer ?? program.metadata.footer,
+    };
+  } else {
+    // Old API: runParser(parser, programName, args, options?)
+    parser = parserOrProgram as TParser;
+    programName = programNameOrArgs as string;
+    args = argsOrOptions as readonly string[];
+    options = optionsParam ?? {};
+  }
+
   // Extract all options first
   const {
     colors,

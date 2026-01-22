@@ -11,12 +11,81 @@ Runners and execution
 Once you've built a parser using combinators, you need to execute it against
 command-line arguments. Optique provides three different approaches with
 varying levels of automation and control: the low-level `parse()` function,
-the mid-level `run()` function from `@optique/core/facade`, and the high-level
-`run()` function from *@optique/run* with full process integration.
+the mid-level `runParser()` function from `@optique/core/facade`, and the
+high-level `run()` function from *@optique/run* with full process integration.
 
 Each approach serves different use cases, from fine-grained control over
 parsing results to completely automated CLI applications that handle everything
 from argument extraction to process exit codes.
+
+
+Bundling parsers with metadata
+------------------------------
+
+Optique supports two approaches for providing program metadata (name, version,
+description, etc.):
+
+1.  *Bundled with `Program`*: Create a single object containing both parser
+    and metadata
+2.  *Passed as options*: Provide metadata directly to `runParser()` or `run()`
+
+### Using the `Program` interface
+
+The `Program` interface from `@optique/core/program` bundles your parser with
+metadata:
+
+~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+const parser = object({
+  name: option("-n", "--name", string()),
+  port: option("-p", "--port", integer({ min: 1000 })),
+});
+
+const prog = defineProgram({
+  parser,
+  metadata: {
+    name: "myserver",
+    version: "1.0.0",
+    brief: message`A powerful server application`,
+    description: message`This server processes requests efficiently.`,
+    author: message`Jane Doe <jane@example.com>`,
+    bugs: message`Report bugs at https://github.com/user/repo/issues`,
+    examples: message`
+      ${message`myserver --name server1 --port 8080`}
+      ${message`myserver --help`}
+    `,
+    footer: message`Visit https://example.com for more info.`,
+  },
+});
+~~~~
+
+*Benefits of using `Program`:*
+
+ -  Metadata is defined once and reused everywhere
+ -  `runParser()` and `run()` automatically extract metadata
+ -  Future features like man page generation (see [#77]) will use the same metadata
+ -  Cleaner API with fewer parameters to pass
+
+*When to use `Program`:*
+
+ -  Production CLI applications with version numbers and help text
+ -  Projects where metadata needs to be shared across multiple entry points
+ -  When building reusable CLI components
+
+*When to pass metadata as options:*
+
+ -  Simple scripts or prototypes without versioning
+ -  One-off tools where metadata isn't reused
+ -  When metadata needs to be computed dynamically at runtime
+
+Both approaches are fully supported and you can choose based on your needs.
+
+[#77]: https://github.com/dahlia/optique/issues/77
 
 
 Low-level parsing with `parse()`
@@ -89,32 +158,43 @@ Mid-level execution with `@optique/core/facade`
 
 The `runParser()` function from `@optique/core/facade` adds automatic help
 generation and formatted error messages while still giving you control over
-program behavior through callbacks.
+program behavior through callbacks. It accepts either a `Program` object or
+a parser with metadata passed via options.
 
 ~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
 import { object } from "@optique/core/constructs";
 import { runParser } from "@optique/core/facade";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 const parser = object({
   name: option("-n", "--name", string()),
   port: option("-p", "--port", integer({ min: 1000 })),
 });
 
-// Manual process integration (Node.js example)
-const config = runParser(
+const prog = defineProgram({
   parser,
-  "myserver",                     // program name
+  metadata: {
+    name: "myserver",
+    version: "1.0.0",
+    brief: message`A powerful server application`,
+  },
+});
+
+// Program metadata is automatically used for help and error messages
+const config = runParser(
+  prog,
   process.argv.slice(2),          // arguments
   {
-    help: {                       // New grouped API
+    help: {                       // Enable help functionality
       mode: "both",               // Enable --help and help command
       onShow: process.exit,       // Exit after showing help
     },
-    version: {                    // Version functionality
+    version: {                    // Enable version functionality
       mode: "option",             // Enable --version flag
-      value: "1.0.0",             // Version string to display
+      value: prog.metadata.version!, // Use version from metadata
       onShow: process.exit,       // Exit after showing version
     },
     colors: process.stdout.isTTY, // Auto-detect color support
@@ -133,7 +213,44 @@ config // Its result type is:
 console.log(`Starting ${config.name} on port ${config.port}.`);
 ~~~~
 
-This approach automatically handles:
+Alternatively, you can pass metadata directly without using `Program`:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { runParser } from "@optique/core/facade";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+
+const parser = object({
+  name: option("-n", "--name", string()),
+  port: option("-p", "--port", integer({ min: 1000 })),
+});
+
+const config = runParser(
+  parser,
+  "myserver",                     // program name
+  process.argv.slice(2),          // arguments
+  {
+    brief: message`A powerful server application`,
+    help: {
+      mode: "both",
+      onShow: process.exit,
+    },
+    version: {
+      mode: "option",
+      value: "1.0.0",
+      onShow: process.exit,
+    },
+    colors: process.stdout.isTTY,
+    onError: process.exit,
+  }
+);
+
+console.log(`Starting ${config.name} on port ${config.port}.`);
+~~~~
+
+Both approaches automatically handle:
 
  -  *Help generation*: Creates formatted help text from parser structure
  -  *Version display*: Shows version information via `--version` or `version`
@@ -146,6 +263,7 @@ This approach automatically handles:
 The `RunOptions` interface provides extensive customization:
 
 ~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
 import { object } from "@optique/core/constructs";
 import { runParser } from "@optique/core/facade";
 import { option } from "@optique/core/primitives";
@@ -154,19 +272,27 @@ import { message } from "@optique/core/message";
 
 const parser = object({ name: option("-n", "--name", string()) });
 
-const result = runParser(parser, "myapp", ["--name", "test"], {
+const prog = defineProgram({
+  parser,
+  metadata: {
+    name: "myapp",
+    version: "2.1.0",
+    brief: message`A powerful CLI tool`,
+    description: message`This tool processes data efficiently.`,
+    footer: message`Visit https://example.com for more info`,
+  },
+});
+
+const result = runParser(prog, ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
   showDefault: true,     // Show default values in help text
-  brief: message`A powerful CLI tool`,                    // Brief description at top
-  description: message`This tool processes data efficiently.`, // Detailed description
-  footer: message`Visit https://example.com for more info`,   // Footer at bottom
-  help: {                // New grouped API
+  help: {                // Grouped help API
     mode: "option",      // Only --help option, no help command
   },
   version: {             // Version functionality
     mode: "both",        // Both --version option and version command
-    value: "2.1.0",      // Version string to display
+    value: prog.metadata.version!, // Use version from metadata
   },
   completion: {          // Shell completion functionality
     mode: "both",        // "command" | "option" | "both"
@@ -249,6 +375,7 @@ with zero configuration required. It automatically handles argument extraction,
 terminal detection, and process exit.
 
 ~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
@@ -260,10 +387,25 @@ const parser = object({
   port: option("-p", "--port", integer({ min: 1000 })),
 });
 
-// Completely automated - just run the parser
-const config = run(parser);
-//    ^?
+const prog = defineProgram({
+  parser,
+  metadata: {
+    name: "myserver",
+    version: "1.0.0",
+    brief: message`A powerful server application`,
+    description: message`This server processes requests efficiently.`,
+    footer: message`Visit https://example.com for more info.`,
+  },
+});
 
+// Completely automated - just run the program
+const config = run(prog, {
+  help: "both",               // Enable both --help and help command
+  version: prog.metadata.version, // Use version from metadata
+});
+
+config // Its result type is:
+// ^?
 
 
 
@@ -277,38 +419,12 @@ print(message`Starting ${config.name} on port ${config.port.toString()}.`);
 The function automatically:
 
  -  *Extracts arguments* from `process.argv.slice(2)`
- -  *Detects program name* from `process.argv[1]`
+ -  *Uses program name* from `Program` metadata
  -  *Auto-detects colors* from `process.stdout.isTTY`
  -  *Auto-detects width* from `process.stdout.columns`
  -  *Exits on help* with code 0
  -  *Exits on version* with code 0
  -  *Exits on error* with code 1
-
-You can still customize behavior when needed:
-
-~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
-import { option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
-import { run } from "@optique/run";
-
-const parser = object({ name: option("-n", "--name", string()) });
-
-const config = run(parser, {
-  programName: "custom-name",  // Override detected program name
-  brief: message`Custom CLI Tool`,                       // Brief description
-  description: message`A tool for processing files.`,   // Detailed description
-  footer: message`Report bugs at github.com/user/repo`, // Footer information
-  help: "both",               // Enable both --help and help command
-  version: "1.2.0",           // Simple version string (uses default "option" mode)
-  colors: true,               // Force colors even for non-TTY
-  errorExitCode: 2,           // Exit with code 2 on errors
-});
-~~~~
-
-Use this approach for standalone CLI applications where you want maximum
-convenience and standard CLI behavior.
 
 ### Configuration options
 
@@ -316,6 +432,7 @@ convenience and standard CLI behavior.
 for fine-tuning behavior:
 
 ~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
@@ -327,18 +444,25 @@ const parser = object({
   debug: option("--debug")
 });
 
-const config = run(parser, {
-  programName: "my-tool",     // Override detected program name
+const prog = defineProgram({
+  parser,
+  metadata: {
+    name: "my-tool",
+    version: "2.0.0",
+    brief: message`My CLI Tool`,
+    description: message`Processes files efficiently`,
+    footer: message`Visit example.com for help`,
+  },
+});
+
+const config = run(prog, {
   args: ["custom", "args"],   // Override process.argv
   colors: true,               // Force colored output
   maxWidth: 100,              // Set output width
   showDefault: true,          // Show default values in help text
-  brief: message`My CLI Tool`,                    // Brief description
-  description: message`Processes files efficiently`, // Detailed description
-  footer: message`Visit example.com for help`,    // Footer information
   help: "both",               // Enable both --help and help command
   version: {                  // Advanced version configuration
-    value: "2.0.0",           // Version string
+    value: prog.metadata.version!, // Version from metadata
     mode: "command"           // Only version command, no --version option
   },
   aboveError: "usage",        // Show usage on errors
@@ -351,28 +475,33 @@ const config = run(parser, {
 Enable built-in help functionality with different modes:
 
 ~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { run } from "@optique/run";
 
 const parser = object({ name: option("-n", "--name", string()) });
+const prog = defineProgram({
+  parser,
+  metadata: { name: "mytool" },
+});
 
 // Simple string-based API
-const result1 = run(parser, {
+const result1 = run(prog, {
   help: "option",  // Adds --help option only
 });
 
-const result2 = run(parser, {
+const result2 = run(prog, {
   help: "command", // Adds help subcommand only
 });
 
-const result3 = run(parser, {
+const result3 = run(prog, {
   help: "both",    // Adds both --help and help command
 });
 
 // No help (default) - simply omit the help option
-const result4 = run(parser, {});
+const result4 = run(prog, {});
 ~~~~
 
 ### Version system options
@@ -380,42 +509,47 @@ const result4 = run(parser, {});
 Enable built-in version functionality with flexible configuration:
 
 ~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { run } from "@optique/run";
 
 const parser = object({ name: option("-n", "--name", string()) });
+const prog = defineProgram({
+  parser,
+  metadata: { name: "mytool", version: "1.0.0" },
+});
 
 // Simple string-based API (uses default "option" mode)
-const result1 = run(parser, {
-  version: "1.0.0",  // Adds --version option only
+const result1 = run(prog, {
+  version: prog.metadata.version,  // Adds --version option only
 });
 
 // Advanced object-based API with mode selection
-const result2 = run(parser, {
+const result2 = run(prog, {
   version: {
-    value: "1.0.0",
+    value: prog.metadata.version!,
     mode: "option",   // Adds --version option only
   }
 });
 
-const result3 = run(parser, {
+const result3 = run(prog, {
   version: {
-    value: "1.0.0",
+    value: prog.metadata.version!,
     mode: "command",  // Adds version subcommand only
   }
 });
 
-const result4 = run(parser, {
+const result4 = run(prog, {
   version: {
-    value: "1.0.0",
+    value: prog.metadata.version!,
     mode: "both",     // Adds both --version and version command
   }
 });
 
 // No version (default) - simply omit the version option
-const result5 = run(parser, {});
+const result5 = run(prog, {});
 ~~~~
 
 ### Shell completion
@@ -558,11 +692,12 @@ visually distinct from the main help text.
 
 *This API is available since Optique 0.4.0.*
 
-Both runner functions support adding rich documentation to help text through
-the `brief`, `description`, and `footer` options. These fields allow you to
-provide comprehensive documentation without modifying parser definitions:
+Both runner functions support adding rich documentation to help text.
+The recommended approach is to bundle metadata with your parser using the
+`Program` interface:
 
 ~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
@@ -574,19 +709,27 @@ const parser = object("Options", {
   output: option("-o", "--output", string()),
 });
 
-const config = run(parser, {
-  brief: message`A powerful file processing tool`,
-  description: message`This utility processes files with various transformations.
+const prog = defineProgram({
+  parser,
+  metadata: {
+    name: "myapp",
+    version: "1.0.0",
+    brief: message`A powerful file processing tool`,
+    description: message`This utility processes files with various transformations.
 
 Supports multiple input formats including JSON, YAML, and plain text. Output can be customized with different formatting options.`,
-  footer: message`Examples:
+    footer: message`Examples:
   myapp -i data.json -o result.txt
   myapp --input config.yaml --output processed.json
 
 For more information, visit: https://example.com/docs
 Report bugs at: https://github.com/user/myapp/issues`,
+  },
+});
+
+const config = run(prog, {
   help: "option",
-  version: "1.0.0",
+  version: prog.metadata.version,
 });
 ~~~~
 
@@ -864,15 +1007,6 @@ const parser = or(
 type Config = InferValue<typeof parser>;
 //   ^?
 
-
-
-
-
-
-
-
-
-
 function handleConfig(config: Config) {
   if (config.type === "start") {
     // TypeScript knows this is the start command
@@ -894,7 +1028,10 @@ function handleConfig(config: Config) {
 When to use each approach
 -------------------------
 
-Choose your execution strategy based on your application's needs:
+Choose your execution strategy based on your application's needs.
+
+For guidance on whether to use `Program` objects or pass metadata directly,
+see [*Bundling parsers with metadata*](#bundling-parsers-with-metadata).
 
 ### Use *@optique/run* when:
 
@@ -917,7 +1054,7 @@ Choose your execution strategy based on your application's needs:
  -  *Custom error handling*: You need application-specific error recovery
  -  *Multiple attempts*: You want to try different parsers or arguments
 
-### Use `run()` from `@optique/core/facade` when:
+### Use `runParser()` from `@optique/core/facade` when:
 
  -  *Framework integration*: Working with web frameworks or custom runtimes
  -  *Library development*: Building CLI libraries for other applications

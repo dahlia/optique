@@ -14,6 +14,7 @@
     "./nonempty": "./src/nonempty.ts",
     "./parser": "./src/parser.ts",
     "./primitives": "./src/primitives.ts",
+    "./program": "./src/program.ts",
     "./usage": "./src/usage.ts",
     "./valueparser": "./src/valueparser.ts"
   },

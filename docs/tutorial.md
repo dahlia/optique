@@ -291,343 +291,37 @@ rules. Let's explore the most commonly used ones, with special attention to
 the versatile `path()` parser:
 
 ~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
 import { object } from "@optique/core/constructs";
-import { option } from "@optique/core/primitives";
-import { integer, url, locale } from "@optique/core/valueparser";
-import { run } from "@optique/run";
-import { path } from "@optique/run/valueparser"
+import { option, argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+import { run, print } from "@optique/run";
+import { optional, withDefault, map } from "@optique/core/modifiers";
 
 const parser = object({
-  // Path validation - checks if file exists and is readable
-  inputFile: option("--input", path({
-// ^?
-
-
-    mustExist: true,   // File must exist
-  })),
-
-  // Path for output - ensures parent directory is writable
-  outputDir: option("--output", path({
-    mustExist: false,  // Path must not exist (for new files)
-    allowCreate: true, // Can create the file if it doesn't exist
-  })),
-
-  // Integer with bounds checking
-  port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
-// ^?
-
-
-  // URL with protocol restrictions
-  endpoint: option("--api", url({ allowedProtocols: ["https:"] })),
-// ^?
-
-
-  // Locale validation
-  language: option("-l", "--locale", locale())
-// ^?
-
-
-});
-
-// Example usage that would validate at runtime:
-// myapp --input ./data.txt --output ./results/ --port 8080 --api https://api.example.com --locale en-US
-~~~~
-
-The `path()` value parser is particularly powerful for file system operations.
-Unlike generic string parsers, it can validate file system constraints at
-parse time, preventing your application from receiving invalid paths:
-
-~~~~ typescript twoslash
-import { path } from "@optique/run/valueparser";
-
-// Different path validation modes
-const existingFile = path({ mustExist: true });
-const newFile = path({ allowCreate: true });
-const directory = path({ mustExist: true, type: "directory" });
-
-// All return string paths, but validation happens at parse time
-~~~~
-
-*Why path validation matters*: Consider a file conversion tool. Instead of
-discovering that the input file doesn't exist or the output directory isn't
-writable deep inside your conversion logic, the `path()` parser catches these
-issues immediately and provides clear error messages to the user.
-
-The validation options work together naturally:
-
- -  `mustExist: true` ensures the path points to something that exists
- -  `allowCreate: true` allows creating the file if it doesn't exist
- -  `type: "directory"` ensures the path points to a directory, not a file
-
-### Constraining choices
-
-Many CLI options should only accept specific values. Log levels, output formats,
-and operation modes are common examples.
-The [`choice()`](./concepts/valueparsers.md#choice-parser) parser creates
-type-safe enumerations that catch invalid values at parse time and provide
-excellent autocomplete support in TypeScript.
-
-The `choice()` parser is particularly powerful because it creates exact string
-literal types rather than generic `string` types. This means TypeScript can
-help you handle all possible cases and catch typos at compile time:
-
-~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
-import { message } from "@optique/core/message";
-import { option } from "@optique/core/primitives";
-import { print, run } from "@optique/run";
-import { choice, integer } from "@optique/core/valueparser";
-
-const parser = object({
-  logLevel: option("--log-level", choice(["debug", "info", "warn", "error"])),
-// ^?
-
-
-
-  format: option("-f", "--format", choice(["json", "yaml", "toml"])),
-// ^?
-
-
-
-  workers: option("-w", "--workers", integer({ min: 1, max: 16 }))
-// ^?
-
-
-});
-
-const config = run(parser, {
-  args: ["--log-level", "info", "--format", "json", "--workers", "4"]
-});
-
-// TypeScript knows the exact string literal types!
-if (config.logLevel === "debug") {
-//         ^?
-
-
-  print(message`Debug logging enabled.`);
-}
-
-switch (config.format) {
-//             ^?
-
-
-  case "json":
-    // ...
-    break;
-  case "yaml":
-  case "toml":
-    // ...
-    break;
-}
-~~~~
-
-*The power of literal types*: Notice how `logLevel` has the type
-`"debug" | "info" | "warn" | "error"` instead of just `string`. This is
-incredibly powerful:
-
- -  TypeScript will autocomplete the available options as you type
- -  The compiler will catch typos in your code (e.g., `"warning"` instead
-    of `"warn"`)
- -  You can use exhaustive checking with `switch` statements
- -  The choices are documented in the type system itself
-
-When users provide invalid choices, they get clear error messages listing all
-valid options. This eliminates the guesswork and reduces support burden.
-
-
-Advanced combinators
---------------------
-
-As your CLI applications grow more sophisticated, you'll encounter patterns
-that require more than simple options and arguments. You might need mutually
-exclusive modes, optional parameters with defaults, or commands that can be
-repeated multiple times. This is where Optique's advanced combinators shine.
-
-The combinators in this section represent some of the most powerful features
-of functional parsing. They allow you to express complex CLI patterns
-declaratively while maintaining complete type safety. More importantly, they
-compose naturally—you can combine any of these patterns with each other to
-create exactly the CLI interface your application needs.
-
-### Mutually exclusive options with `or()`
-
-Many CLI tools have mutually exclusive modes of operation. Think of `curl`
-with its different protocols, or `git` with its various commands. These tools
-need to parse completely different sets of options depending on which mode
-the user selects.
-
-The [`or()`](./concepts/constructs.md#or-parser) combinator models this pattern
-perfectly. It tries alternatives in order, and the first one that successfully
-parses determines both the result value and its type. This creates what
-TypeScript calls a “discriminated union”—a type where each alternative can
-be distinguished from the others:
-
-~~~~ typescript twoslash
-import { object, or } from "@optique/core/constructs";
-import { message } from "@optique/core/message";
-import type { InferValue } from "@optique/core/parser";
-import { constant, option } from "@optique/core/primitives";
-import { print, run } from "@optique/run";
-import { integer, string, url } from "@optique/core/valueparser";
-
-const parser = or(
-  object({
-    port: option("-p", "--port", integer({ min: 1, max: 0xffff })),
-    host: option("-h", "--host", string())
-  }),
-  object({
-    url: option("-u", "--url", url()),
-    timeout: option("-t", "--timeout", integer({ min: 0 }))
-  })
-);
-
-// TypeScript creates a discriminated union automatically
-type Config = InferValue<typeof parser>;
-//   ^?
-
-
-
-
-
-
-
-
-
-const config: Config = run(parser, {
-  args: ["-p", "8080", "-h", "localhost"]
-});
-
-// TypeScript can't narrow the type yet - we need the discriminator
-print(message`Running in ${"port" in config ? 'server' : 'client'} mode.`);
-~~~~
-
-> [!TIP]
-> The `or()` parser requires *at least one alternative to match*. If you want
-> to allow none of the alternatives (e.g., optional verbosity flags), wrap
-> the `or()` with `optional()` or `withDefault()`. See the
-> [optional mutually exclusive flags](./cookbook.md#optional-mutually-exclusive-flags)
-> pattern in the cookbook for details.
-
-### Discriminated unions with `constant()`
-
-The previous example creates a union type, but TypeScript can't yet distinguish
-between the alternatives. This is where
-the [`constant()`](./concepts/primitives.md#constant-parser) parser becomes
-essential. It adds a literal value to the parse result without consuming any
-input, creating what's called a “discriminator” or “tag” field.
-
-Discriminated unions are one of TypeScript's most powerful features for
-modeling data that can be one of several alternatives. The `constant()` parser
-makes it trivial to create these unions from CLI input, enabling type-safe
-pattern matching and exhaustive case analysis:
-
-~~~~ typescript twoslash
-// @errors: 2339
-import { object, or } from "@optique/core/constructs";
-import { message } from "@optique/core/message";
-import { constant, option } from "@optique/core/primitives";
-import { print, run } from "@optique/run";
-import { integer, string, url } from "@optique/core/valueparser";
-
-const parser = or(
-  object({
-    mode: constant("server"),  // [!code highlight]
-    port: option("-p", "--port", integer()),
-    host: option("-h", "--host", string())
-  }),
-  object({
-    mode: constant("client"),  // [!code highlight]
-    url: option("-u", "--url", url()),
-    timeout: option("-t", "--timeout", integer())
-  })
-);
-
-const config = run(parser, {
-  programName: "app",
-  args: ["-p", "8080", "-h", "localhost"]
-});
-
-// Now TypeScript can narrow the type based on the discriminator!
-if (config.mode === "server") {
-  print(message`Server running on ${config.host}:${config.port.toString()}.`);
-  // TypeScript error if we try to access client-only properties
-  print(message`${config.url.toString()}`);
-} else {
-  print(message`Connecting to ${config.url.toString()}.`);
-  print(message`Timeout: ${config.timeout.toString()}ms.`);
-}
-~~~~
-
-*The magic of type narrowing*: Notice how TypeScript automatically narrows
-the union type in each branch of the `if` statement. Once you check
-`config.mode === "server"`, the compiler knows that `config` must be the
-server configuration object, so properties like `port` and `host` become
-available. Try to access `config.url` in the server branch and TypeScript
-will give you a compile-time error.
-
-This pattern is incredibly powerful for building type-safe CLI applications.
-Your code is guaranteed to only access properties that are valid for the
-current mode, and the compiler will catch mistakes before they reach production.
-
-### Optional values and defaults
-
-Real-world CLI applications need flexibility. Some options should be optional,
-some should have sensible defaults, and some should be transformable based on
-other values. Optique provides several combinators to handle these patterns
-elegantly.
-
-The distinction between [`optional()`](./concepts/modifiers.md#optional-parser)
-and [`withDefault()`](./concepts/modifiers.md#withdefault-parser) is important:
-`optional()` creates nullable types that you must handle explicitly, while
-`withDefault()` always provides a value, eliminating null checks. Choose
-`optional()` when the absence of a value is meaningful, and `withDefault()`
-when you want to simplify your application logic:
-
-~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
-import { message } from "@optique/core/message";
-import { map, optional, withDefault } from "@optique/core/modifiers";
-import { option } from "@optique/core/primitives";
-import { path, print, run } from "@optique/run";
-import { integer, string } from "@optique/core/valueparser";
-
-const parser = object({
-  // Optional returns T | undefined
-  config: optional(option("-c", "--config", path())),
-// ^?
-
-
-
-  // withDefault always returns T (never undefined)
-  port: withDefault(option("-p", "--port", integer()), 8080),
-// ^?
-
-
-
+  name: option("-n", "--name", string()),
+  config: optional(option("-c", "--config", string())),
+  debug: option("--debug"),
+  upperName: map(
+    argument(string({ metavar: "NAME" })),
+    (s) => s.toUpperCase(),
+  ),
   host: withDefault(option("-h", "--host", string()), "localhost"),
-// ^?
-
-
-
-  // map() transforms the parsed value
-  upperName: map(option("-n", "--name", string()), s => s.toUpperCase()),
-// ^?
-
-
-  // Another transformation example
+  port: withDefault(option("-p", "--port", string()), "8080"),
   portDescription: map(
-// ^?
-
-
-
-    withDefault(option("--port", integer()), 3000),
-    port => `Server will run on port ${port}`
-  )
+    withDefault(option("-p", "--port", string()), "8080"),
+    (port) => `Server will run on port ${port}`,
+  ),
 });
 
-const config = run(parser, {
-  programName: "server",
-  args: ["--name", "my-app"]
+const prog = defineProgram({
+  parser,
+  metadata: { name: "server" },
+});
+
+const config = run(prog, {
+  args: ["my-app", "--name", "test"]
 });
 
 // Optional properties need checking
@@ -709,6 +403,14 @@ print(message`Processing ${config.files.length.toString()} files:`);
 //                               ^?
 
 
+
+
+
+
+
+
+
+
 config.files.forEach((file, index) => {
 //     ^?
 
@@ -727,7 +429,7 @@ if (config.headers.length > 0) {
 }
 
 print(message`Tags: ${values(config.tags)}.`);
-//                          ^?
+//                                  ^?
 
 ~~~~
 
@@ -1228,6 +930,8 @@ Use *@optique/core* when:
 Here's how the same parser would work with *@optique/core*:
 
 ~~~~ typescript twoslash
+import type { Program } from "@optique/core/program";
+import type { InferValue } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
 import { runParser } from "@optique/core/facade";
 import { optional } from "@optique/core/modifiers";
@@ -1242,8 +946,13 @@ const parser = object({
   verbose: option("-v", "--verbose")
 });
 
+const prog: Program<"sync", InferValue<typeof parser>> = {
+  parser,
+  metadata: { name: "myapp" },
+};
+
 // @optique/core requires explicit argument handling
-const config = runParser(parser, "myapp", process.argv.slice(2), {
+const config = runParser(prog, process.argv.slice(2), {
 //    ^?
 
 
@@ -1308,18 +1017,35 @@ automatically.
 *@optique/run* provides several configuration options for fine-tuning behavior:
 
 ~~~~ typescript twoslash
+import type { Program } from "@optique/core/program";
+import type { InferValue } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
+import { map, optional, withDefault } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
-import { run } from "@optique/run";
+import { path, print, run } from "@optique/run";
+import { integer, string } from "@optique/core/valueparser";
 
 const parser = object({
   name: option("-n", "--name", string()),
-  debug: option("--debug")
+  config: optional(option("-c", "--config", path())),
+  port: withDefault(option("-p", "--port", integer()), 3000),
+  portDescription: map(
+// ^?
+
+
+
+
+    withDefault(option("--port", integer()), 3000),
+    port => `Server will run on port ${port}`
+  )
 });
 
-const config = run(parser, {
-  programName: "my-tool", // Override detected program name (default: process.argv[1])
+const prog: Program<"sync", InferValue<typeof parser>> = {
+  parser,
+  metadata: { name: "my-tool" },
+};
+
+const config = run(prog, {
   help: "both",           // Enable --help option AND help subcommand
  // ^?
 
@@ -1366,8 +1092,10 @@ learned:
 import { merge, object, or } from "@optique/core/constructs";
 import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
+import type { Program } from "@optique/core/program";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 import { path, run } from "@optique/run";
 
 // Reusable option groups
@@ -1450,11 +1178,19 @@ type Config = InferValue<typeof cli>;
 
 
 
+const prog: Program<"sync", Config> = {
+  parser: cli,
+  metadata: {
+    name: "build-tool",
+    version: "1.0.0",
+    brief: message`A modern build tool for JavaScript projects`,
+  },
+};
 
 // Run with comprehensive configuration
-const config: Config = run(cli, {
-  programName: "build-tool",
+const config: Config = run(prog, {
   help: "both",                    // Both --help and help command
+  version: prog.metadata.version,  // Enable version display
   aboveError: "usage",             // Show usage on errors
   colors: true,                    // Colored output
 });

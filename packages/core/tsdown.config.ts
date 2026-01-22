@@ -13,6 +13,7 @@ export default defineConfig({
     "src/nonempty.ts",
     "src/parser.ts",
     "src/primitives.ts",
+    "src/program.ts",
     "src/usage.ts",
     "src/valueparser.ts",
   ],

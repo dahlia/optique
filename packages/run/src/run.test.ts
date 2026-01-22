@@ -2,11 +2,13 @@ import { longestMatch, object, or } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { argument, command, option } from "@optique/core/primitives";
+import type { Program } from "@optique/core/program";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import { run, runAsync, runSync } from "@optique/run/run";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import process from "node:process";
 
 describe("run", () => {
   describe("basic parsing", () => {
@@ -788,6 +790,68 @@ describe("runSync", () => {
     assert.ok(!(result instanceof Promise));
     assert.deepEqual(result, { names: ["alice", "bob"] });
   });
+
+  describe("Program support", () => {
+    it("should accept Program object instead of parser", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      const prog: Program<"sync", { name: string }> = {
+        parser,
+        metadata: {
+          name: "greet",
+          version: "1.0.0",
+          brief: message`A greeting CLI tool`,
+        },
+      };
+
+      const result = runSync(prog, {
+        args: ["Alice"],
+      });
+
+      assert.ok(!(result instanceof Promise));
+      assert.deepEqual(result, { name: "Alice" });
+    });
+
+    it("should use program name from metadata", () => {
+      const parser = option("--verbose");
+      const prog: Program<"sync", boolean> = {
+        parser,
+        metadata: {
+          name: "myapp-sync",
+          version: "2.0.0",
+        },
+      };
+
+      let helpOutput = "";
+      const originalExit = process.exit;
+      process.exit = ((code?: number) => {
+        void code;
+        throw new Error("exit");
+      }) as typeof process.exit;
+
+      const originalWrite = process.stdout.write;
+      process.stdout.write = ((chunk: unknown) => {
+        helpOutput += chunk;
+        return true;
+      }) as typeof process.stdout.write;
+
+      try {
+        runSync(prog, {
+          args: ["--help"],
+          help: "option",
+        });
+      } catch {
+        // Expected exit
+      } finally {
+        process.exit = originalExit;
+        process.stdout.write = originalWrite;
+      }
+
+      assert.ok(helpOutput.includes("myapp-sync"));
+    });
+  });
 });
 
 describe("runAsync", () => {
@@ -929,5 +993,107 @@ describe("runAsync", () => {
 
     assert.ok(result instanceof Promise);
     assert.deepEqual(await result, { name: "ITEM" });
+  });
+
+  describe("Program support", () => {
+    it("should accept Program object instead of parser", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      const prog: Program<"sync", { name: string }> = {
+        parser,
+        metadata: {
+          name: "greet",
+          version: "1.0.0",
+          brief: message`A greeting CLI tool`,
+        },
+      };
+
+      const result = run(prog, {
+        args: ["Alice"],
+      });
+
+      assert.deepEqual(result, { name: "Alice" });
+    });
+
+    it("should use program name from metadata", () => {
+      const parser = option("--verbose");
+      const prog: Program<"sync", boolean> = {
+        parser,
+        metadata: {
+          name: "myapp",
+          version: "2.0.0",
+        },
+      };
+
+      let helpOutput = "";
+      let exitCode = 0;
+      const originalExit = process.exit;
+      process.exit = ((code?: number) => {
+        exitCode = code ?? 0;
+        throw new Error("EXIT");
+      }) as typeof process.exit;
+
+      const originalWrite = process.stdout.write;
+      process.stdout.write = ((chunk: unknown) => {
+        helpOutput += String(chunk);
+        return true;
+      }) as typeof process.stdout.write;
+
+      try {
+        run(prog, {
+          args: ["--help"],
+          help: "option",
+        });
+      } catch (err) {
+        if ((err as Error).message !== "EXIT") throw err;
+      } finally {
+        process.exit = originalExit;
+        process.stdout.write = originalWrite;
+      }
+
+      assert.ok(helpOutput.includes("myapp"));
+      assert.equal(exitCode, 0);
+    });
+
+    it("should merge program metadata with options", () => {
+      const parser = option("--verbose");
+      const prog: Program<"sync", boolean> = {
+        parser,
+        metadata: {
+          name: "myapp",
+          brief: message`A test app`,
+          description: message`This is a test application.`,
+        },
+      };
+
+      let helpOutput = "";
+      const originalExit = process.exit;
+      process.exit = (() => {
+        throw new Error("EXIT");
+      }) as typeof process.exit;
+
+      const originalWrite = process.stdout.write;
+      process.stdout.write = ((chunk: unknown) => {
+        helpOutput += String(chunk);
+        return true;
+      }) as typeof process.stdout.write;
+
+      try {
+        run(prog, {
+          args: ["--help"],
+          help: "option",
+        });
+      } catch (err) {
+        if ((err as Error).message !== "EXIT") throw err;
+      } finally {
+        process.exit = originalExit;
+        process.stdout.write = originalWrite;
+      }
+
+      assert.ok(helpOutput.includes("myapp"));
+      assert.ok(helpOutput.includes("A test app"));
+    });
   });
 });

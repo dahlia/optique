@@ -10,6 +10,57 @@ To be released.
 
 ### @optique/core
 
+ -  Added `@optique/core/program` module with `Program` and `ProgramMetadata`
+    interfaces. These provide a structured way to bundle a parser with its
+    metadata (name, version, description, etc.), creating a single source of
+    truth for CLI application information. [[#82]]
+
+    New exports:
+
+     -  `Program<M, T>`: Interface bundling a parser with metadata.
+     -  `ProgramMetadata`: Interface for program metadata including name,
+        version, brief, description, author, bugs, examples, and footer.
+     -  `defineProgram()`: Helper function for automatic type inference when
+        creating `Program` objects. This eliminates the need to manually specify
+        `Program<"sync", InferValue<typeof parser>>` type annotations.
+
+
+    ~~~~ typescript
+    import { defineProgram } from "@optique/core/program";
+    import { option } from "@optique/core/primitives";
+    import { string } from "@optique/core/valueparser";
+    import { message } from "@optique/core/message";
+
+    const prog = defineProgram({
+      parser: option("--name", string()),
+      metadata: {
+        name: "myapp",
+        version: "1.0.0",
+        brief: message`A sample CLI application`,
+        description: message`This tool processes data efficiently.`,
+        author: message`Jane Doe <jane@example.com>`,
+      },
+    });
+    ~~~~
+
+ -  Updated `runParser()` to accept `Program` objects directly. The new API
+    automatically extracts program name and metadata from the `Program` object,
+    eliminating the need to pass these separately. Both the new `Program`-based
+    API and the original `parser`-based API are supported. [[#82]]
+
+    ~~~~ typescript
+    import { runParser } from "@optique/core/facade";
+
+    // Program-based API (recommended for applications with metadata)
+    const result = runParser(prog, ["--name", "Alice"]);
+
+    // Parser-based API (useful for simple scripts)
+    const result = runParser(parser, "myapp", ["--name", "Alice"], {
+      brief: message`A sample CLI application`,
+      // ...
+    });
+    ~~~~
+
  -  Added inter-option dependency support via `@optique/core/dependency` module.
     This allows one option's valid values to depend on another option's parsed
     value, enabling dynamic validation and context-aware shell completion.
@@ -88,6 +139,33 @@ To be released.
 [#76]: https://github.com/dahlia/optique/pull/76
 [#79]: https://github.com/dahlia/optique/issues/79
 [#80]: https://github.com/dahlia/optique/pull/80
+[#82]: https://github.com/dahlia/optique/issues/82
+
+### @optique/run
+
+ -  Updated `run()`, `runSync()`, and `runAsync()` to accept `Program` objects
+    directly. The new API automatically extracts program name and metadata from
+    the `Program` object. Both the new `Program`-based API and the original
+    `parser`-based API are supported. [[#82]]
+
+    ~~~~ typescript
+    import { run } from "@optique/run";
+
+    // Program-based API (recommended for applications with metadata)
+    const result = run(prog, {
+      help: "both",
+      colors: true,
+    });
+
+    // Parser-based API (useful for simple scripts)
+    const result = run(parser, {
+      programName: "myapp",
+      help: "both",
+      colors: true,
+      brief: message`A sample CLI application`,
+      // ...
+    });
+    ~~~~
 
 
 Version 0.9.1
