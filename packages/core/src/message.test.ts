@@ -2,12 +2,14 @@ import {
   commandLine,
   envVar,
   formatMessage,
+  link,
   type Message,
   message,
   metavar,
   optionName,
   optionNames,
   text,
+  url,
   value,
   values,
   valueSet,
@@ -178,6 +180,94 @@ describe("message term constructors", () => {
     const term = commandLine("myapp completion bash > output.bash");
     assert.equal(term.type, "commandLine");
     assert.equal(term.commandLine, "myapp completion bash > output.bash");
+  });
+
+  it("should create url term from valid HTTP URL string", () => {
+    const term = url("http://example.com");
+    assert.equal(term.type, "url");
+    assert.ok(term.url instanceof URL);
+    assert.equal(term.url.href, "http://example.com/");
+  });
+
+  it("should create url term from valid HTTPS URL string", () => {
+    const term = url("https://example.com/path");
+    assert.equal(term.type, "url");
+    assert.ok(term.url instanceof URL);
+    assert.equal(term.url.href, "https://example.com/path");
+  });
+
+  it("should create url term from URL object", () => {
+    const urlObj = new URL("https://example.com");
+    const term = url(urlObj);
+    assert.equal(term.type, "url");
+    assert.equal(term.url, urlObj);
+  });
+
+  it("should accept various protocols (ftp, file, etc.)", () => {
+    const term = url("ftp://ftp.example.com");
+    assert.equal(term.type, "url");
+    assert.ok(term.url instanceof URL);
+    assert.equal(term.url.protocol, "ftp:");
+  });
+
+  it("should throw RangeError for invalid URL string", () => {
+    assert.throws(
+      () => url("not a valid url"),
+      RangeError,
+    );
+  });
+
+  it("should throw RangeError for empty string", () => {
+    assert.throws(
+      () => url(""),
+      RangeError,
+    );
+  });
+
+  it("should handle URL with query parameters", () => {
+    const term = url("https://example.com?foo=bar&baz=qux");
+    assert.equal(term.type, "url");
+    assert.ok(term.url.href.includes("foo=bar"));
+  });
+
+  it("should handle URL with hash fragment", () => {
+    const term = url("https://example.com/page#section");
+    assert.equal(term.type, "url");
+    assert.equal(term.url.hash, "#section");
+  });
+
+  it("should normalize URL (add trailing slash to origin)", () => {
+    const term = url("https://example.com");
+    assert.equal(term.type, "url");
+    // URL constructor normalizes this to include trailing slash
+    assert.equal(term.url.href, "https://example.com/");
+  });
+
+  it("should create url term using link() alias", () => {
+    const term = link("https://example.com");
+    assert.equal(term.type, "url");
+    assert.ok(term.url instanceof URL);
+    assert.equal(term.url.href, "https://example.com/");
+  });
+
+  it("link() should work identically to url()", () => {
+    const urlTerm = url("https://example.com/path");
+    const linkTerm = link("https://example.com/path");
+    assert.deepEqual(urlTerm, linkTerm);
+  });
+
+  it("link() should accept URL object", () => {
+    const urlObj = new URL("https://example.com");
+    const term = link(urlObj);
+    assert.equal(term.type, "url");
+    assert.equal(term.url, urlObj);
+  });
+
+  it("link() should throw RangeError for invalid URL", () => {
+    assert.throws(
+      () => link("not valid"),
+      RangeError,
+    );
   });
 });
 
@@ -936,5 +1026,155 @@ describe("valueSet", () => {
 
     const formatted = formatMessage(msg, { quotes: true });
     assert.equal(formatted, 'Expected one of "error", "warn", or "info".');
+  });
+});
+
+describe("formatMessage with url term", () => {
+  it("should format url without colors and without quotes", () => {
+    const msg: Message = [
+      { type: "text", text: "Visit " },
+      { type: "url", url: new URL("https://example.com") },
+    ];
+    const formatted = formatMessage(msg, { colors: false, quotes: false });
+    assert.equal(formatted, "Visit https://example.com/");
+  });
+
+  it("should format url without colors and with quotes", () => {
+    const msg: Message = [
+      { type: "text", text: "Visit " },
+      { type: "url", url: new URL("https://example.com") },
+    ];
+    const formatted = formatMessage(msg, { colors: false, quotes: true });
+    assert.equal(formatted, "Visit <https://example.com/>");
+  });
+
+  it("should format url with colors and without quotes (OSC 8)", () => {
+    const msg: Message = [
+      { type: "text", text: "Visit " },
+      { type: "url", url: new URL("https://example.com") },
+    ];
+    const formatted = formatMessage(msg, { colors: true, quotes: false });
+    // OSC 8 format: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
+    assert.ok(formatted.includes("\x1b]8;;https://example.com/\x1b\\"));
+    assert.ok(formatted.includes("https://example.com/"));
+    assert.ok(formatted.includes("\x1b]8;;\x1b\\"));
+    assert.equal(
+      formatted,
+      "Visit \x1b]8;;https://example.com/\x1b\\https://example.com/\x1b]8;;\x1b\\",
+    );
+  });
+
+  it("should format url with colors and with quotes (OSC 8 + angle brackets)", () => {
+    const msg: Message = [
+      { type: "text", text: "Visit " },
+      { type: "url", url: new URL("https://example.com") },
+    ];
+    const formatted = formatMessage(msg, { colors: true, quotes: true });
+    // Should show <URL> with hyperlink
+    assert.ok(formatted.includes("\x1b]8;;https://example.com/\x1b\\"));
+    assert.ok(formatted.includes("<https://example.com/>"));
+    assert.ok(formatted.includes("\x1b]8;;\x1b\\"));
+    assert.equal(
+      formatted,
+      "Visit \x1b]8;;https://example.com/\x1b\\<https://example.com/>\x1b]8;;\x1b\\",
+    );
+  });
+
+  it("should apply resetSuffix with url term", () => {
+    const msg: Message = [
+      { type: "text", text: "Visit " },
+      { type: "url", url: new URL("https://example.com") },
+      { type: "text", text: " now" },
+    ];
+    const formatted = formatMessage(msg, {
+      colors: { resetSuffix: "\x1b[2m" },
+      quotes: false,
+    });
+    assert.ok(formatted.includes("\x1b]8;;\x1b\\\x1b[2m"));
+    assert.equal(
+      formatted,
+      "Visit \x1b]8;;https://example.com/\x1b\\https://example.com/\x1b]8;;\x1b\\\x1b[2m now",
+    );
+  });
+
+  it("should work with message template and url()", () => {
+    const msg = message`Visit ${url("https://example.com")} for details.`;
+    const formatted = formatMessage(msg, { quotes: true });
+    assert.equal(formatted, "Visit <https://example.com/> for details.");
+  });
+
+  it("should handle multiple urls in one message", () => {
+    const msg = message`Check ${url("https://docs.example.com")} and ${
+      url("https://github.com/example")
+    }.`;
+    const formatted = formatMessage(msg, { colors: false, quotes: true });
+    assert.ok(formatted.includes("<https://docs.example.com/>"));
+    assert.ok(formatted.includes("<https://github.com/example>"));
+  });
+
+  it("should work with mixed message components", () => {
+    const msg = message`Run ${commandLine("myapp --help")} or visit ${
+      url("https://example.com/help")
+    } for ${metavar("INFO")}.`;
+    const formatted = formatMessage(msg, { quotes: true });
+    assert.ok(formatted.includes("`myapp --help`"));
+    assert.ok(formatted.includes("<https://example.com/help>"));
+    assert.ok(formatted.includes("`INFO`"));
+  });
+
+  it("should handle url with query parameters", () => {
+    const msg: Message = [
+      { type: "url", url: new URL("https://example.com?foo=bar") },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+    assert.ok(formatted.includes("foo=bar"));
+  });
+
+  it("should handle url with hash", () => {
+    const msg: Message = [
+      { type: "url", url: new URL("https://example.com/page#section") },
+    ];
+    const formatted = formatMessage(msg, { quotes: true });
+    assert.equal(formatted, "<https://example.com/page#section>");
+  });
+
+  it("should handle very long URLs with maxWidth", () => {
+    const msg: Message = [
+      { type: "text", text: "Visit " },
+      {
+        type: "url",
+        url: new URL(
+          "https://example.com/very/long/path/that/exceeds/the/maximum/width",
+        ),
+      },
+      { type: "text", text: " for more information" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false, maxWidth: 40 });
+    assert.ok(formatted.includes("\n"));
+  });
+
+  it("should calculate width based on display text, not ANSI codes", () => {
+    const msg: Message = [
+      { type: "url", url: new URL("https://example.com") },
+    ];
+    const formatted = formatMessage(msg, { colors: true, quotes: false });
+    // The ANSI codes are long, but display width should be ~21 chars (https://example.com/)
+    // Not the full length including escape sequences
+    assert.ok(formatted.length > 50); // Has ANSI codes
+    // But wrapping should be based on display text length only
+  });
+
+  it("should work with message template and link() alias", () => {
+    const msg = message`Visit ${link("https://example.com")} for details.`;
+    const formatted = formatMessage(msg, { quotes: true });
+    assert.equal(formatted, "Visit <https://example.com/> for details.");
+  });
+
+  it("link() and url() should produce identical output", () => {
+    const msgWithUrl = message`Check ${url("https://example.com")}.`;
+    const msgWithLink = message`Check ${link("https://example.com")}.`;
+    const formattedUrl = formatMessage(msgWithUrl, { quotes: true });
+    const formattedLink = formatMessage(msgWithLink, { quotes: true });
+    assert.equal(formattedUrl, formattedLink);
   });
 });

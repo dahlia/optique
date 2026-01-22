@@ -114,6 +114,10 @@ function formatTermAsRoff(term: MessageTerm): string {
       // Bold with escaped hyphens for command lines
       return `\\fB${escapeHyphens(escapeBackslashes(term.commandLine))}\\fR`;
 
+    case "url":
+      // URLs in man pages - underline with escaped hyphens
+      return `\\fI${escapeHyphens(escapeBackslashes(term.url.href))}\\fR`;
+
     default: {
       // TypeScript exhaustiveness check
       const _exhaustive: never = term;

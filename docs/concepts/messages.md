@@ -212,6 +212,66 @@ const examples = message`Examples:
   ${commandLine("myapp --config app.json --verbose")}`;
 ~~~~
 
+### URLs
+
+*Available since Optique 0.10.0.*
+
+URLs that should be displayed as clickable hyperlinks in terminals that support
+[OSC 8 hyperlink sequences].
+The URL can be provided as a string or a `URL` object:
+
+~~~~ typescript twoslash
+import { message, url } from "@optique/core/message";
+// ---cut-before---
+const helpMsg = message`Visit ${url("https://example.com/docs")} for more information.`;
+~~~~
+
+With colors (no quotes), the URL becomes a clickable hyperlink in terminals that
+support OSC 8 (such as iTerm2, GNOME Terminal 3.26+, Windows Terminal, etc.):
+
+~~~~ ansi
+Visit https://example.com/docs for more information.
+~~~~
+
+In the actual terminal, `https://example.com/docs` appears as an underlined,
+clickable link (the OSC 8 escape sequences are invisible).
+
+Without colors (with quotes):
+
+~~~~ ansi
+Visit <https://example.com/docs> for more information.
+~~~~
+
+The URL is validated when created. If an invalid URL string is provided,
+a `RangeError` is thrown:
+
+~~~~ typescript twoslash
+import { url } from "@optique/core/message";
+// ---cut-before---
+// Valid URLs
+url("https://example.com");
+url("http://localhost:8080");
+url(new URL("https://example.com"));
+
+// @errors: 2345
+// Invalid URL - throws RangeError
+url("not a valid url");
+~~~~
+
+> [!NOTE]
+> The `link()` function is provided as an alias for `url()`. This can be useful
+> to avoid naming conflicts when importing both the message function and the
+> `url()` value parser from `@optique/core/valueparser`:
+>
+> ~~~~ typescript twoslash
+> import { message, link } from "@optique/core/message";
+> import { url } from "@optique/core/valueparser";
+> // ---cut-before---
+> const helpMsg = message`Visit ${link("https://example.com")} for help.`;
+> ~~~~
+
+[OSC 8 hyperlink sequences]: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
+
 ### Consecutive values
 
 Consecutive values that were provided together, such as multiple arguments or
@@ -327,6 +387,7 @@ import {
   metavar,
   optionName,
   optionNames,
+  url,
   values,
 } from "@optique/core/message";
 
@@ -348,6 +409,9 @@ const examples = {
 
   // Command-line example
   cmdExample: message`Run ${commandLine("myapp --config app.json")} to start.`,
+
+  // URL reference
+  helpUrl: message`For help, visit ${url("https://example.com/help")}.`,
 
   // Consecutive values
   invalidFiles: message`Cannot process files ${values(["missing.txt", "readonly.txt"])}.`,

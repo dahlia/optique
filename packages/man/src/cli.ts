@@ -11,6 +11,7 @@ import {
   message,
   metavar,
   optionName,
+  url,
 } from "@optique/core/message";
 import type { Message } from "@optique/core/message";
 import { defineProgram } from "@optique/core/program";
@@ -127,7 +128,9 @@ Write output to a file:
 Override the program name:
 
   ${commandLine("optique-man ./src/cli.ts -s 1 --name myapp")}`,
-    bugs: message`Report bugs to: <https://github.com/dahlia/optique/issues>.`,
+    bugs: message`Report bugs to: ${
+      url("https://github.com/dahlia/optique/issues")
+    }.`,
   },
 });
 

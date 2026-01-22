@@ -127,6 +127,20 @@ export type MessageTerm =
      * For example, `"myapp completion bash > myapp-completion.bash"`.
      */
     readonly commandLine: string;
+  }
+  /**
+   * A URL term in the message, which represents a clickable hyperlink.
+   * @since 0.10.0
+   */
+  | {
+    /**
+     * The type of the term, which is `"url"` for a URL.
+     */
+    readonly type: "url";
+    /**
+     * The URL object representing the hyperlink.
+     */
+    readonly url: URL;
   };
 
 /**
@@ -264,6 +278,46 @@ export function envVar(envVar: string): MessageTerm {
  */
 export function commandLine(commandLine: string): MessageTerm {
   return { type: "commandLine", commandLine };
+}
+
+/**
+ * Creates a {@link MessageTerm} for a URL.
+ * @param url The URL, which can be a URL object or a string that can be parsed
+ *            as a URL. For example, `"https://example.com"` or
+ *            `new URL("https://example.com")`.
+ * @returns A {@link MessageTerm} representing the URL.
+ * @throws {RangeError} If the URL string cannot be parsed.
+ * @since 0.10.0
+ */
+export function url(url: string | URL): MessageTerm {
+  let urlObj: URL;
+  if (typeof url === "string") {
+    if (!URL.canParse(url)) {
+      throw new RangeError(`Invalid URL: ${url}.`);
+    }
+    urlObj = new URL(url);
+  } else {
+    urlObj = url;
+  }
+  return { type: "url", url: urlObj };
+}
+
+/**
+ * Creates a {@link MessageTerm} for a URL (alias for {@link url}).
+ *
+ * This is an alias for the {@link url} function, provided for convenience
+ * when you want to avoid potential naming conflicts with the `url()` value
+ * parser from `@optique/core/valueparser`.
+ *
+ * @param href The URL, which can be a URL object or a string that can be parsed
+ *             as a URL. For example, `"https://example.com"` or
+ *             `new URL("https://example.com")`.
+ * @returns A {@link MessageTerm} representing the URL.
+ * @throws {RangeError} If the URL string cannot be parsed.
+ * @since 0.10.0
+ */
+export function link(href: string | URL): MessageTerm {
+  return url(href);
 }
 
 /**
@@ -547,6 +601,24 @@ export function formatMessage(
             : cmd,
           width: cmd.length,
         };
+      } else if (term.type === "url") {
+        const urlString = term.url.href;
+        const displayText = useQuotes ? `<${urlString}>` : urlString;
+
+        if (useColors) {
+          // OSC 8 hyperlink: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
+          const hyperlink =
+            `\x1b]8;;${urlString}\x1b\\${displayText}\x1b]8;;\x1b\\${resetSuffix}`;
+          yield {
+            text: hyperlink,
+            width: displayText.length,
+          };
+        } else {
+          yield {
+            text: displayText,
+            width: displayText.length,
+          };
+        }
       } else {
         throw new TypeError(
           `Invalid MessageTerm type: ${term["type"]}.`,

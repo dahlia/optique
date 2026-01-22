@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { or } from "@optique/core/constructs";
 import { printError, run } from "@optique/run";
-import { message } from "@optique/core/message";
+import { message, url } from "@optique/core/message";
 import { addCommand, executeAdd } from "./commands/add.ts";
 import { commitCommand, executeCommit } from "./commands/commit.ts";
 import { diffCommand, executeDiff } from "./commands/diff.ts";
@@ -48,9 +48,10 @@ async function main() {
       aboveError: "usage", // Show usage information above error messages
       colors: true, // Force colored output for better UX
       showDefault: true, // Display default values in help text
-      brief: message`A Git-like CLI built with Optique`,
-      footer:
-        message`For more information, visit https://github.com/dahlia/optique`,
+      brief: message`A Git-like CLI built with Optique.`,
+      footer: message`For more information, visit ${
+        url("https://github.com/dahlia/optique")
+      }.`,
     });
 
     // Execute the appropriate command based on the discriminated union tag

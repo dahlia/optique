@@ -10,6 +10,25 @@ To be released.
 
 ### @optique/core
 
+ -  Added `url()` message component for displaying URLs with clickable
+    hyperlinks in terminals that support OSC 8 escape sequences. URLs are
+    validated using `URL.canParse()` and stored as `URL` objects internally.
+    When colors are enabled, URLs are rendered with OSC 8 hyperlink sequences
+    making them clickable in compatible terminals. When quotes are enabled,
+    URLs are wrapped in angle brackets (`<>`).
+
+    ~~~~ typescript
+    import { message, url } from "@optique/core/message";
+
+    const helpMsg = message`Visit ${url("https://example.com")} for details.`;
+    ~~~~
+
+    New exports:
+
+     -  `url()`: Creates a URL message term from a string or URL object.
+     -  `link()`: Alias for `url()`, useful for avoiding naming conflicts with
+        the `url()` value parser from `@optique/core/valueparser`.
+
  -  Added `@optique/core/program` module with `Program` and `ProgramMetadata`
     interfaces. These provide a structured way to bundle a parser with its
     metadata (name, version, description, etc.), creating a single source of
