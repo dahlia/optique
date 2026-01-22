@@ -12,29 +12,13 @@ behavior.
 Installation
 ------------
 
-::: code-group
-
-~~~~ bash [Deno]
+~~~~ bash
 deno add jsr:@optique/man
+npm  add     @optique/man
+pnpm add     @optique/man
+yarn add     @optique/man
+bun  add     @optique/man
 ~~~~
-
-~~~~ bash [npm]
-npm add @optique/man
-~~~~
-
-~~~~ bash [pnpm]
-pnpm add @optique/man
-~~~~
-
-~~~~ bash [Yarn]
-yarn add @optique/man
-~~~~
-
-~~~~ bash [Bun]
-bun add @optique/man
-~~~~
-
-:::
 
 
 Quick start
