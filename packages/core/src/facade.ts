@@ -999,7 +999,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
  *          callbacks.
  * @throws {RunParserError} When parsing fails and no `onError` callback is
  *          provided.
- * @since 0.11.0 Added support for {@link Program} objects.
+ * @since 0.10.0 Added support for {@link Program} objects.
  */
 // Overload: Program with sync parser
 export function runParser<T, THelp = void, TError = never>(

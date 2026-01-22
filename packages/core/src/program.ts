@@ -7,7 +7,7 @@
  * functionalities like running, help generation, and man page generation.
  *
  * @module
- * @since 0.11.0
+ * @since 0.10.0
  */
 
 import type { Message } from "./message.ts";
@@ -16,7 +16,7 @@ import type { Mode, Parser } from "./parser.ts";
 /**
  * Metadata for a CLI program.
  *
- * @since 0.11.0
+ * @since 0.10.0
  */
 export interface ProgramMetadata {
   /**

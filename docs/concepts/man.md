@@ -87,7 +87,7 @@ and OPTIONS sections.
 Using with Program
 ------------------
 
-*This feature is available since Optique 0.11.0.*
+*This feature is available since Optique 0.10.0.*
 
 If you're using the [`Program`](./runners.md#program-interface) interface,
 `generateManPage()` can extract metadata directly from your program:

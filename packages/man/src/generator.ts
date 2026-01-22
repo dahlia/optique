@@ -23,7 +23,7 @@ export interface GenerateManPageOptions extends ManPageOptions {}
  * metadata. You can still override them by providing values in this options
  * object.
  *
- * @since 0.11.0
+ * @since 0.10.0
  */
 export interface GenerateManPageProgramOptions
   extends
@@ -104,7 +104,6 @@ function extractParserAndOptions<M extends Mode>(
  * @param options The man page generation options.
  * @returns The complete man page in roff format.
  * @since 0.10.0
- * @since 0.11.0 Added support for {@link Program} objects.
  */
 export function generateManPageSync<T>(
   program: Program<"sync", T>,
@@ -153,7 +152,6 @@ export function generateManPageSync(
  * @param options The man page generation options.
  * @returns A promise that resolves to the complete man page in roff format.
  * @since 0.10.0
- * @since 0.11.0 Added support for {@link Program} objects.
  */
 export async function generateManPageAsync<M extends Mode, T>(
   program: Program<M, T>,
@@ -239,7 +237,6 @@ export async function generateManPageAsync<M extends Mode>(
  * @param options The man page generation options.
  * @returns The complete man page in roff format, or a Promise for async parsers.
  * @since 0.10.0
- * @since 0.11.0 Added support for {@link Program} objects.
  */
 // Overload: Program with sync parser
 export function generateManPage<T>(
