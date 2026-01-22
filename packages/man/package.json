@@ -69,24 +69,37 @@
       },
       "import": "./dist/man.js",
       "require": "./dist/man.cjs"
+    },
+    "./cli": {
+      "types": {
+        "import": "./dist/cli.d.ts",
+        "require": "./dist/cli.d.cts"
+      },
+      "import": "./dist/cli.js",
+      "require": "./dist/cli.cjs"
     }
   },
   "sideEffects": false,
+  "bin": {
+    "optique-man": "./dist/cli.js"
+  },
   "dependencies": {
-    "@optique/core": "workspace:"
+    "@optique/core": "workspace:",
+    "@optique/run": "workspace:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsdown": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:"
   },
   "scripts": {
     "build": "tsdown",
     "prepack": "tsdown",
     "prepublish": "tsdown",
-    "test": "tsdown && node --experimental-transform-types --test",
-    "test:bun": "tsdown && bun test",
+    "test": "tsdown && node --experimental-transform-types --test 'src/**/*.test.ts'",
+    "test:bun": "tsdown && bun test src/",
     "test:deno": "deno test",
-    "test-all": "tsdown && node --experimental-transform-types --test && bun test && deno test"
+    "test-all": "tsdown && node --experimental-transform-types --test 'src/**/*.test.ts' && bun test src/ && deno test"
   }
 }

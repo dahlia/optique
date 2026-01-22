@@ -4,6 +4,12 @@ import type { Usage, UsageTerm } from "@optique/core/usage";
 import { escapeHyphens, formatMessageAsRoff } from "./roff.ts";
 
 /**
+ * Valid man page section numbers.
+ * @since 0.10.0
+ */
+export type ManPageSection = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+/**
  * Options for generating a man page.
  * @since 0.10.0
  */
@@ -24,7 +30,7 @@ export interface ManPageOptions {
    * - 7: Miscellaneous
    * - 8: System administration
    */
-  readonly section: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  readonly section: ManPageSection;
 
   /**
    * The date to display in the man page footer.

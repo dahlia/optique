@@ -484,4 +484,103 @@ man ./myapp.1
 groff -man -Tutf8 myapp.1
 ~~~~
 
+
+CLI tool
+--------
+
+*This feature is available since Optique 0.10.0.*
+
+The *@optique/man* package includes a CLI tool called `optique-man` for
+generating man pages from TypeScript or JavaScript files that export a
+`Program` or `Parser`.
+
+### Installation
+
+::: code-group
+
+~~~~ bash [npm]
+npm install -g @optique/man
+~~~~
+
+~~~~ bash [Deno]
+deno install -gAn optique-man jsr:@optique/man/cli
+~~~~
+
+:::
+
+After installation, you can use `optique-man` directly from the command line.
+
+### Basic usage
+
+~~~~ bash
+# Generate man page from a file with a default export
+optique-man ./src/cli.ts -s 1
+
+# Use a named export instead of default
+optique-man ./src/cli.ts -s 1 -e myProgram
+
+# Write output to a file
+optique-man ./src/cli.ts -s 1 -o myapp.1
+~~~~
+
+### Options
+
+`FILE` (required)
+:   Path to a TypeScript or JavaScript file that exports a `Program` or
+    `Parser`.
+
+`-s`, `--section` (required)
+:   Man page section number (1–8). Section 1 is for user commands.
+
+`-e`, `--export`
+:   Name of the export to use. Defaults to the default export.
+
+`-o`, `--output`
+:   Output file path. If not specified, output goes to stdout.
+
+`--name`
+:   Override the program name in the man page header.
+
+`--date`
+:   Override the date in the man page footer.
+
+`--version-string`
+:   Override the version string in the footer.
+
+`--manual`
+:   Override the manual title in the header.
+
+### TypeScript support
+
+The CLI tool can load TypeScript files directly:
+
+ -  *Deno*: Native TypeScript support.
+ -  *Bun*: Native TypeScript support.
+ -  *Node.js 25.2.0+*: Native type stripping enabled by default.
+ -  *Node.js < 25.2.0*: Requires `tsx` to be installed (`npm install -D tsx`).
+
+### Build integration
+
+You can integrate `optique-man` into your build process:
+
+::: code-group
+
+~~~~ json [npm]
+{
+  "scripts": {
+    "build:man": "optique-man ./src/cli.ts -s 1 -o dist/myapp.1"
+  }
+}
+~~~~
+
+~~~~ json [Deno]
+{
+  "tasks": {
+    "build:man": "deno run --allow-read --allow-write jsr:@optique/man/cli ./src/cli.ts -s 1 -o dist/myapp.1"
+  }
+}
+~~~~
+
+:::
+
 <!-- cSpell: ignore myapp mandoc Tutf -->
