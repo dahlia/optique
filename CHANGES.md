@@ -176,18 +176,48 @@ to generate Unix man pages that stay synchronized with parser definitions.
 
  -  Added `generateManPage()` function for generating man pages from sync
     parsers.
+
  -  Added `generateManPageSync()` function for explicit sync-only man page
     generation.
+
  -  Added `generateManPageAsync()` function for generating man pages from
     async parsers.
+
  -  Added `ManPageOptions` interface for configuring man page output (name,
     section, description, date, source, manual, authors, seeAlso, bugs).
+
  -  Added `formatDocPageAsMan()` function for converting `DocPage` objects
     to man page format.
+
  -  Added `formatMessageAsRoff()` function for converting Optique `Message`
     objects to roff markup.
+
  -  Added `escapeRoff()` function for escaping special roff characters.
+
  -  Added `escapeHyphens()` function for escaping hyphens in option names.
+
+ -  Updated `generateManPage()`, `generateManPageSync()`, and
+    `generateManPageAsync()` to accept `Program` objects directly.
+    The metadata (`name`, `version`, `author`, `bugs`, `examples`) is
+    automatically extracted from the program, eliminating duplication.
+    [[#82]]
+
+    ~~~~ typescript
+    import { defineProgram } from "@optique/core/program";
+    import { generateManPage } from "@optique/man";
+
+    const prog = defineProgram({
+      parser: myParser,
+      metadata: {
+        name: "myapp",
+        version: "1.0.0",
+        author: message`Hong Minhee`,
+      },
+    });
+
+    // Metadata is automatically extracted
+    const manPage = generateManPage(prog, { section: 1 });
+    ~~~~
 
 [#77]: https://github.com/dahlia/optique/issues/77
 

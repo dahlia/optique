@@ -84,6 +84,73 @@ This generates a complete man page with NAME, SYNOPSIS, DESCRIPTION,
 and OPTIONS sections.
 
 
+Using with Program
+------------------
+
+*This feature is available since Optique 0.11.0.*
+
+If you're using the [`Program`](./runners.md#program-interface) interface,
+`generateManPage()` can extract metadata directly from your program:
+
+~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { generateManPage } from "@optique/man";
+
+const prog = defineProgram({
+  parser: object({
+    config: option("-c", "--config", string(), {
+      description: message`Path to configuration file.`,
+    }),
+  }),
+  metadata: {
+    name: "myapp",
+    version: "1.0.0",
+    author: message`Hong Minhee <hong@minhee.org>`,
+    bugs: message`https://github.com/dahlia/optique/issues`,
+  },
+});
+
+// Metadata is automatically extracted from the program
+const manPage = generateManPage(prog, { section: 1 });
+~~~~
+
+The following metadata fields are shared between `Program` and man pages:
+
+ -  `name`: Program name
+ -  `version`: Version string
+ -  `author`: Author information
+ -  `bugs`: Bug reporting URL
+ -  `examples`: Usage examples
+
+You can still override any of these by passing them in the options:
+
+~~~~ typescript twoslash
+import { defineProgram } from "@optique/core/program";
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { generateManPage } from "@optique/man";
+
+const prog = defineProgram({
+  parser: object({}),
+  metadata: {
+    name: "myapp",
+    version: "1.0.0",
+  },
+});
+// ---cut-before---
+const manPage = generateManPage(prog, {
+  section: 1,
+  version: "2.0.0",  // Overrides the version from metadata
+  date: new Date(),
+  manual: "User Commands",
+});
+~~~~
+
+
 Man page options
 ----------------
 

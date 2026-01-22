@@ -9,6 +9,7 @@ import { object } from "@optique/core/constructs";
 import { argument, command, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
+import { defineProgram } from "@optique/core/program";
 
 describe("generateManPage()", () => {
   it("generates man page from simple option parser", () => {
@@ -250,5 +251,128 @@ describe("generateManPageAsync()", () => {
 
     assert.ok(typeof result === "string");
     assert.ok(result.includes(".TH MYAPP 1"));
+  });
+});
+
+describe("Program-based API", () => {
+  it("extracts metadata from Program", () => {
+    const prog = defineProgram({
+      parser: object({
+        verbose: flag("-v", "--verbose", {
+          description: message`Enable verbose output.`,
+        }),
+      }),
+      metadata: {
+        name: "myapp",
+        version: "1.0.0",
+        author: message`Hong Minhee`,
+        bugs: message`https://github.com/dahlia/optique/issues`,
+      },
+    });
+
+    const result = generateManPage(prog, { section: 1 });
+
+    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('"myapp 1.0.0"'));
+    assert.ok(result.includes(".SH AUTHOR"));
+    assert.ok(result.includes("Hong Minhee"));
+    assert.ok(result.includes(".SH BUGS"));
+    assert.ok(result.includes("https://github.com/dahlia/optique/issues"));
+  });
+
+  it("allows overriding metadata via options", () => {
+    const prog = defineProgram({
+      parser: object({}),
+      metadata: {
+        name: "original",
+        version: "1.0.0",
+        author: message`Original Author`,
+      },
+    });
+
+    const result = generateManPage(prog, {
+      section: 1,
+      name: "overridden",
+      version: "2.0.0",
+      author: message`Override Author`,
+    });
+
+    assert.ok(result.includes(".TH OVERRIDDEN 1"));
+    assert.ok(result.includes('"overridden 2.0.0"'));
+    assert.ok(result.includes("Override Author"));
+    assert.ok(!result.includes("Original Author"));
+  });
+
+  it("merges man page specific options with metadata", () => {
+    const prog = defineProgram({
+      parser: object({}),
+      metadata: {
+        name: "myapp",
+        version: "1.0.0",
+      },
+    });
+
+    const result = generateManPage(prog, {
+      section: 1,
+      date: "January 2026",
+      manual: "User Commands",
+      seeAlso: [{ name: "git", section: 1 }],
+    });
+
+    assert.ok(result.includes('"January 2026"'));
+    assert.ok(result.includes('"User Commands"'));
+    assert.ok(result.includes(".SH SEE ALSO"));
+    assert.ok(result.includes(".BR git (1)"));
+  });
+
+  it("works with generateManPageSync()", () => {
+    const prog = defineProgram({
+      parser: object({
+        config: option("-c", "--config", string()),
+      }),
+      metadata: {
+        name: "myapp",
+        version: "1.0.0",
+      },
+    });
+
+    const result = generateManPageSync(prog, { section: 1 });
+
+    assert.ok(typeof result === "string");
+    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('"myapp 1.0.0"'));
+  });
+
+  it("works with generateManPageAsync()", async () => {
+    const prog = defineProgram({
+      parser: object({
+        config: option("-c", "--config", string()),
+      }),
+      metadata: {
+        name: "myapp",
+        version: "1.0.0",
+      },
+    });
+
+    const result = await generateManPageAsync(prog, { section: 1 });
+
+    assert.ok(typeof result === "string");
+    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('"myapp 1.0.0"'));
+  });
+
+  it("includes examples from metadata", () => {
+    const prog = defineProgram({
+      parser: object({}),
+      metadata: {
+        name: "myapp",
+        examples: message`Basic usage:\n\n  myapp --help`,
+      },
+    });
+
+    const result = generateManPage(prog, { section: 1 });
+
+    assert.ok(result.includes(".SH EXAMPLES"));
+    assert.ok(result.includes("Basic usage:"));
   });
 });

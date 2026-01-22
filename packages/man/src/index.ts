@@ -51,5 +51,6 @@ export {
   generateManPage,
   generateManPageAsync,
   type GenerateManPageOptions,
+  type GenerateManPageProgramOptions,
   generateManPageSync,
 } from "./generator.ts";
