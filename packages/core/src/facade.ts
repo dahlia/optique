@@ -19,7 +19,7 @@ import {
   value,
 } from "./message.ts";
 import { multiple, optional, withDefault } from "./modifiers.ts";
-import type { Program } from "@optique/core/program";
+import type { Program } from "./program.ts";
 import {
   getDocPage,
   type InferMode,
