@@ -45,7 +45,7 @@ const program = defineProgram({
     brief: message`A Git-like CLI built with Optique.`,
     description:
       message`A realistic Git CLI implementation showcasing Optique's type-safe combinatorial parsing and es-git's modern Git operations.`,
-    author: message`Hong Minhee <${url("https://hongminhee.org/")}>`,
+    author: message`Hong Minhee ${url("https://hongminhee.org/")}`,
     examples: message`Common commands:
 
   ${commandLine("gitique add .")}                     Stage all changes
