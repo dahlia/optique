@@ -1413,17 +1413,26 @@ export function runParser<
                 : false) ||
               requestedCommand === "help" ||
               requestedCommand === "version";
+
+            // Check if this is top-level help (empty commands array means top-level)
+            const isTopLevel = classified.commands.length === 0;
+
             const augmentedDoc = {
               ...doc,
               brief: !isMetaCommandHelp ? (brief ?? doc.brief) : doc.brief,
               description: !isMetaCommandHelp
                 ? (description ?? doc.description)
                 : doc.description,
-              examples: !isMetaCommandHelp
+              // Only show examples, author, and bugs for top-level help
+              examples: isTopLevel && !isMetaCommandHelp
                 ? (examples ?? doc.examples)
-                : doc.examples,
-              author: !isMetaCommandHelp ? (author ?? doc.author) : doc.author,
-              bugs: !isMetaCommandHelp ? (bugs ?? doc.bugs) : doc.bugs,
+                : undefined,
+              author: isTopLevel && !isMetaCommandHelp
+                ? (author ?? doc.author)
+                : undefined,
+              bugs: isTopLevel && !isMetaCommandHelp
+                ? (bugs ?? doc.bugs)
+                : undefined,
               footer: !isMetaCommandHelp ? (footer ?? doc.footer) : doc.footer,
             };
             stdout(formatDocPage(programName, augmentedDoc, {

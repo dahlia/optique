@@ -134,6 +134,115 @@ describe("runParser", () => {
       assert.equal(result, "help-shown");
       assert.ok(helpShown);
     });
+
+    it("should show examples, author, and bugs for top-level help", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let helpOutput = "";
+
+      runParser(parser, "test", ["--help"], {
+        help: {
+          mode: "option",
+          onShow: () => "help-shown",
+        },
+        examples: message`test Alice\ntest Bob`,
+        author: message`Jane Doe <jane@example.com>`,
+        bugs: message`Report bugs at https://github.com/example/test/issues`,
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      assert.ok(helpOutput.includes("Examples:"));
+      assert.ok(helpOutput.includes("test Alice"));
+      assert.ok(helpOutput.includes("Author:"));
+      assert.ok(helpOutput.includes("Jane Doe"));
+      assert.ok(helpOutput.includes("Bugs:"));
+      assert.ok(helpOutput.includes("Report bugs at"));
+    });
+
+    it("should hide examples, author, and bugs for subcommand help", () => {
+      const serveCmd = command(
+        "serve",
+        object({
+          port: argument(integer()),
+        }),
+        {
+          description: message`Start the server`,
+        },
+      );
+
+      const buildCmd = command(
+        "build",
+        object({
+          output: argument(string()),
+        }),
+        {
+          description: message`Build the project`,
+        },
+      );
+
+      const parser = or(serveCmd, buildCmd);
+
+      let helpOutput = "";
+
+      runParser(parser, "test", ["help", "serve"], {
+        help: {
+          mode: "both",
+          onShow: () => "help-shown",
+        },
+        examples: message`test serve 3000\ntest build dist`,
+        author: message`Jane Doe <jane@example.com>`,
+        bugs: message`Report bugs at https://github.com/example/test/issues`,
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      // Subcommand help should NOT include examples, author, bugs
+      assert.ok(!helpOutput.includes("Examples:"));
+      assert.ok(!helpOutput.includes("Author:"));
+      assert.ok(!helpOutput.includes("Bugs:"));
+
+      // But should still show the command-specific description
+      assert.ok(helpOutput.includes("Start the server"));
+    });
+
+    it("should hide examples, author, and bugs when using --help on subcommand", () => {
+      const serveCmd = command(
+        "serve",
+        object({
+          port: argument(integer()),
+        }),
+        {
+          description: message`Start the server`,
+        },
+      );
+
+      const parser = serveCmd;
+
+      let helpOutput = "";
+
+      runParser(parser, "test", ["serve", "--help"], {
+        help: {
+          mode: "option",
+          onShow: () => "help-shown",
+        },
+        examples: message`test serve 3000`,
+        author: message`Jane Doe <jane@example.com>`,
+        bugs: message`Report bugs at https://github.com/example/test/issues`,
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      // Subcommand help should NOT include examples, author, bugs
+      assert.ok(!helpOutput.includes("Examples:"));
+      assert.ok(!helpOutput.includes("Author:"));
+      assert.ok(!helpOutput.includes("Bugs:"));
+    });
   });
 
   describe("version functionality", () => {
