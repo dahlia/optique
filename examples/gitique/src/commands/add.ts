@@ -2,7 +2,7 @@ import { group, merge, object } from "@optique/core/constructs";
 import { multiple } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
-import { message } from "@optique/core/message";
+import { commandLine, message } from "@optique/core/message";
 import { path, printError } from "@optique/run";
 import { addAllFiles, addFile, getRepository } from "../utils/git.ts";
 import {
@@ -67,10 +67,14 @@ export const addCommand = command("add", addOptionsParser, {
   brief: message`Add file contents to the index`,
   description: message`Add file contents to the index for the next commit`,
   footer: message`Examples:
-  gitique add .              Add all files in current directory
-  gitique add -A             Add all files (including deletions)
-  gitique add file1.ts       Add a specific file
-  gitique add -v *.ts        Add files with verbose output`,
+  ${
+    commandLine("gitique add .")
+  }              Add all files in current directory
+  ${
+    commandLine("gitique add -A")
+  }             Add all files (including deletions)
+  ${commandLine("gitique add file1.ts")}       Add a specific file
+  ${commandLine("gitique add -v *.ts")}        Add files with verbose output`,
 });
 
 /**

@@ -3,7 +3,7 @@ import { map, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
+import { commandLine, message, optionName } from "@optique/core/message";
 import { printError } from "@optique/run";
 import { getCommitHistory, getRepository } from "../utils/git.ts";
 import {
@@ -33,7 +33,7 @@ const displayOptions = group(
       "medium" as const,
     ),
     oneline: option("--oneline", {
-      description: message`Shorthand for --format=oneline`,
+      description: message`Shorthand for ${optionName("--format")}=oneline`,
     }),
     maxCount: withDefault(
       option("-n", "--max-count", integer({ metavar: "NUMBER", min: 1 }), {
@@ -102,13 +102,20 @@ const logOptionsParser = map(
  */
 export const logCommand = command("log", logOptionsParser, {
   brief: message`Show commit history`,
-  description: message`Show commit history in reverse chronological order`,
+  description:
+    message`Show commit history in reverse chronological order. Use ${
+      optionName("--oneline")
+    } for compact output or ${
+      optionName("--format")
+    } to customize the display.`,
   footer: message`Examples:
-  gitique log                     Show recent commits
-  gitique log --oneline -n 5      Show 5 commits in one-line format
-  gitique log --format=full       Show full commit details
-  gitique log --author=john       Filter by author
-  gitique log --since="2024-01-01"  Show commits since date`,
+  ${commandLine("gitique log")}                     Show recent commits
+  ${
+    commandLine("gitique log --oneline -n 5")
+  }      Show 5 commits in one-line format
+  ${commandLine("gitique log --format=full")}       Show full commit details
+  ${commandLine("gitique log --author=john")}       Filter by author
+  ${commandLine('gitique log --since="2024-01-01"')}  Show commits since date`,
 });
 
 /**

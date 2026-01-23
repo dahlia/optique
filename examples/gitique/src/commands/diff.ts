@@ -3,7 +3,12 @@ import { map, multiple, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
+import {
+  commandLine,
+  message,
+  metavar,
+  optionName,
+} from "@optique/core/message";
 import { path, printError } from "@optique/run";
 import process from "node:process";
 import { getDiff, getRepository } from "../utils/git.ts";
@@ -52,13 +57,16 @@ const contextOptions = group(
   object({
     unified: withDefault(
       option("-U", "--unified", integer({ metavar: "LINES", min: 0 }), {
-        description: message`Generate diffs with <n> lines of context`,
+        description: message`Generate diffs with ${
+          metavar("LINES")
+        } lines of context`,
       }),
       3,
     ),
     algorithm: withDefault(
       option("--diff-algorithm", choice(algorithms, { metavar: "ALGORITHM" }), {
-        description: message`Choose a diff algorithm`,
+        description:
+          message`Choose a diff algorithm (default, minimal, patience, histogram)`,
       }),
       "default" as const,
     ),
@@ -75,7 +83,7 @@ const filterOptions = group(
       description: message`View staged changes`,
     }),
     staged: option("--staged", {
-      description: message`Synonym for --cached`,
+      description: message`Synonym for ${optionName("--cached")}`,
     }),
   }),
 );
@@ -123,13 +131,17 @@ const diffOptionsParser = map(
 export const diffCommand = command("diff", diffOptionsParser, {
   brief: message`Show changes between commits`,
   description:
-    message`Show changes between commits, commit and working tree, etc.`,
+    message`Show changes between commits, commit and working tree, etc. Use ${
+      optionName("--cached")
+    } to view staged changes.`,
   footer: message`Examples:
-  gitique diff                    Show unstaged changes
-  gitique diff --cached           Show staged changes
-  gitique diff HEAD~1             Compare with previous commit
-  gitique diff --stat             Show change statistics
-  gitique diff --name-only        Show only changed file names`,
+  ${commandLine("gitique diff")}                    Show unstaged changes
+  ${commandLine("gitique diff --cached")}           Show staged changes
+  ${commandLine("gitique diff HEAD~1")}             Compare with previous commit
+  ${commandLine("gitique diff --stat")}             Show change statistics
+  ${
+    commandLine("gitique diff --name-only")
+  }        Show only changed file names`,
 });
 
 /**

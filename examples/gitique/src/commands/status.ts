@@ -3,7 +3,7 @@ import { map, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { choice } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
+import { commandLine, message, optionName } from "@optique/core/message";
 import { printError } from "@optique/run";
 import { getRepository, getStatus } from "../utils/git.ts";
 import {
@@ -35,10 +35,12 @@ const displayOptions = group(
       "long" as const,
     ),
     short: option("-s", "--short", {
-      description: message`Shorthand for --format=short`,
+      description: message`Shorthand for ${optionName("--format")}=short`,
     }),
     porcelain: option("--porcelain", {
-      description: message`Shorthand for --format=porcelain (machine-readable)`,
+      description: message`Shorthand for ${
+        optionName("--format")
+      }=porcelain (machine-readable)`,
     }),
     branch: option("-b", "--branch", {
       description: message`Show branch information`,
@@ -77,12 +79,16 @@ const statusOptionsParser = map(
 export const statusCommand = command("status", statusOptionsParser, {
   brief: message`Show working tree status`,
   description:
-    message`Display the state of the working directory and staging area`,
+    message`Display the state of the working directory and staging area. Use ${
+      optionName("-s")
+    } for compact output or ${
+      optionName("--porcelain")
+    } for machine-readable format.`,
   footer: message`Examples:
-  gitique status              Show full status
-  gitique status -s           Show short format
-  gitique status --porcelain  Machine-readable format
-  gitique status -b           Show branch information`,
+  ${commandLine("gitique status")}              Show full status
+  ${commandLine("gitique status -s")}           Show short format
+  ${commandLine("gitique status --porcelain")}  Machine-readable format
+  ${commandLine("gitique status -b")}           Show branch information`,
 });
 
 /**

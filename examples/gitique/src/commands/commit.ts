@@ -3,7 +3,7 @@ import { optional } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { command, constant, option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
+import { commandLine, message, optionName } from "@optique/core/message";
 import { printError } from "@optique/run";
 import {
   addAllFiles,
@@ -72,12 +72,18 @@ const commitOptionsParser = merge(
  */
 export const commitCommand = command("commit", commitOptionsParser, {
   brief: message`Record changes to the repository`,
-  description: message`Record changes to the repository with a commit`,
+  description: message`Record changes to the repository with a commit. Use ${
+    optionName("-m")
+  } to provide a commit message.`,
   footer: message`Examples:
-  gitique commit -m "Initial commit"
-  gitique commit -a -m "Fix bug"
-  gitique commit --author "John <john@example.com>" -m "Co-authored"
-  gitique commit --allow-empty -m "Empty commit"`,
+  ${commandLine('gitique commit -m "Initial commit"')}
+  ${commandLine('gitique commit -a -m "Fix bug"')}
+  ${
+    commandLine(
+      'gitique commit --author "John <john@example.com>" -m "Co-authored"',
+    )
+  }
+  ${commandLine('gitique commit --allow-empty -m "Empty commit"')}`,
 });
 
 /**

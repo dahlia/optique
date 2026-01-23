@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { or } from "@optique/core/constructs";
+import { defineProgram } from "@optique/core/program";
+import { commandLine, message, url } from "@optique/core/message";
 import { printError, run } from "@optique/run";
-import { message, url } from "@optique/core/message";
 import { addCommand, executeAdd } from "./commands/add.ts";
 import { commitCommand, executeCommit } from "./commands/commit.ts";
 import { diffCommand, executeDiff } from "./commands/diff.ts";
 import { executeLog, logCommand } from "./commands/log.ts";
 import { executeReset, resetCommand } from "./commands/reset.ts";
 import { executeStatus, statusCommand } from "./commands/status.ts";
+import pkgJson from "../package.json" with { type: "json" };
 
 /**
  * Main CLI parser that combines all git commands using Optique's or() combinator.
@@ -31,6 +33,43 @@ const parser = or(
 );
 
 /**
+ * The gitique CLI program with bundled metadata.
+ * Demonstrates Optique's Program interface for defining a CLI application
+ * with all its metadata in one place.
+ */
+const program = defineProgram({
+  parser,
+  metadata: {
+    name: "gitique",
+    version: pkgJson.version,
+    brief: message`A Git-like CLI built with Optique.`,
+    description:
+      message`A realistic Git CLI implementation showcasing Optique's type-safe combinatorial parsing and es-git's modern Git operations.`,
+    author: message`Hong Minhee <${url("https://hongminhee.org/")}>`,
+    examples: message`Common commands:
+
+  ${commandLine("gitique add .")}                     Stage all changes
+
+  ${commandLine('gitique commit -m "message"')}       Create a commit
+
+  ${commandLine("gitique status")}                    Show working tree status
+
+  ${commandLine("gitique log --oneline")}             View commit history
+
+  ${commandLine("gitique diff --cached")}             Show staged changes
+
+Shell completion:
+
+  ${commandLine("gitique completion bash > ~/.bashrc.d/gitique.bash")}
+
+  ${commandLine("gitique completion zsh > ~/.zsh/completions/_gitique")}`,
+    footer: message`For more information, visit ${
+      url("https://github.com/dahlia/optique")
+    }.`,
+  },
+});
+
+/**
  * Execute the gitique CLI with comprehensive error handling and help support.
  * Uses @optique/run for automatic process integration including:
  * - Argument parsing from process.argv
@@ -41,17 +80,12 @@ const parser = or(
  */
 async function main() {
   try {
-    const result = run(parser, {
-      programName: "gitique",
+    const result = run(program, {
       help: "both", // Enable both --help option and help command
       completion: "both", // Enable both completion command and --completion option
       aboveError: "usage", // Show usage information above error messages
       colors: true, // Force colored output for better UX
       showDefault: true, // Display default values in help text
-      brief: message`A Git-like CLI built with Optique.`,
-      footer: message`For more information, visit ${
-        url("https://github.com/dahlia/optique")
-      }.`,
     });
 
     // Execute the appropriate command based on the discriminated union tag

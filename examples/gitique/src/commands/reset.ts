@@ -3,7 +3,7 @@ import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, string } from "@optique/core/valueparser";
-import { message } from "@optique/core/message";
+import { commandLine, message, optionName } from "@optique/core/message";
 import { printError } from "@optique/run";
 import { getRepository, resetIndex } from "../utils/git.ts";
 import type { Repository } from "es-git";
@@ -34,10 +34,12 @@ const modeOptions = group(
       "mixed" as const,
     ),
     soft: option("--soft", {
-      description: message`Shorthand for --mode=soft`,
+      description: message`Shorthand for ${optionName("--mode")}=soft`,
     }),
     hard: option("--hard", {
-      description: message`Shorthand for --mode=hard (DANGEROUS)`,
+      description: message`Shorthand for ${
+        optionName("--mode")
+      }=hard (DANGEROUS: discards all changes)`,
     }),
   }),
 );
@@ -98,12 +100,20 @@ const resetOptionsParser = map(
  */
 export const resetCommand = command("reset", resetOptionsParser, {
   brief: message`Reset current HEAD`,
-  description: message`Reset current HEAD to the specified state`,
+  description: message`Reset current HEAD to the specified state. Use ${
+    optionName("--soft")
+  } to keep changes staged, ${optionName("--mixed")} to unstage, or ${
+    optionName("--hard")
+  } to discard all changes (dangerous).`,
   footer: message`Examples:
-  gitique reset                    Mixed reset to HEAD
-  gitique reset --soft HEAD~1      Soft reset, keep changes staged
-  gitique reset --hard             Hard reset (DANGER: loses changes)
-  gitique reset -- file.ts         Unstage specific file`,
+  ${commandLine("gitique reset")}                    Mixed reset to HEAD
+  ${
+    commandLine("gitique reset --soft HEAD~1")
+  }      Soft reset, keep changes staged
+  ${
+    commandLine("gitique reset --hard")
+  }             Hard reset (DANGER: loses changes)
+  ${commandLine("gitique reset -- file.ts")}         Unstage specific file`,
 });
 
 /**
