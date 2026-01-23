@@ -10,9 +10,6 @@ Optique: Type-safe combinatorial CLI parser for TypeScript
 [![Bundlephobia][Bundlephobia badge]][Bundlephobia]
 [![GitHub Actions][GitHub Actions badge]][GitHub Actions]
 
-> [!WARNING]
-> The API is stabilizing, but may change before the 1.0 release.
-
 Type-safe combinatorial CLI parser for TypeScript inspired by Haskell's
 [optparse-applicative] and TypeScript's [Zod]. Build composable parsers for
 command-line interfaces with full type safety, automatic type inference, and
