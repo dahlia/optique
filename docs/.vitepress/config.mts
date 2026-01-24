@@ -60,6 +60,7 @@ const CONCEPTS = {
     { text: "Man pages", link: "/concepts/man" },
     { text: "Messages", link: "/concepts/messages" },
     { text: "Runners and execution", link: "/concepts/runners" },
+    { text: "Runtime context extension", link: "/concepts/extend" },
   ],
 };
 

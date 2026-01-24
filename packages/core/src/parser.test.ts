@@ -1718,3 +1718,175 @@ describe("Error message customization", () => {
     }
   });
 });
+
+describe("Annotations system", () => {
+  it("should pass annotations to parser via ParseOptions", async () => {
+    const testKey = Symbol.for("@test/data");
+    const testData = { value: 42 };
+    const { getAnnotations } = await import("./annotations.ts");
+    let capturedState: unknown;
+
+    // Use constant parser and wrap complete() to capture state
+    const baseParser = constant("test-value");
+    const wrappedParser = {
+      ...baseParser,
+      complete: (state: unknown) => {
+        capturedState = state;
+        return baseParser.complete(state as "test-value");
+      },
+    };
+
+    const result = parse(wrappedParser, [], {
+      annotations: { [testKey]: testData },
+    });
+
+    assert.ok(result.success);
+    assert.ok(capturedState !== undefined);
+
+    const annotations = getAnnotations(capturedState);
+    assert.ok(annotations !== undefined);
+    assert.deepEqual(annotations[testKey], testData);
+  });
+
+  it("should extract annotations using getAnnotations()", async () => {
+    const { getAnnotations, annotationKey } = await import("./annotations.ts");
+    const testKey = Symbol.for("@test/key");
+    const testData = { foo: "bar" };
+
+    // Test with valid state containing annotations
+    const stateWithAnnotations = {
+      [annotationKey]: { [testKey]: testData },
+    };
+    const annotations1 = getAnnotations(stateWithAnnotations);
+    assert.ok(annotations1 !== undefined);
+    assert.deepEqual(annotations1[testKey], testData);
+
+    // Test with state without annotations (returns undefined)
+    const stateWithoutAnnotations = { someField: "value" };
+    const annotations2 = getAnnotations(stateWithoutAnnotations);
+    assert.equal(annotations2, undefined);
+
+    // Test with non-object state (returns undefined)
+    const annotations3 = getAnnotations(null);
+    assert.equal(annotations3, undefined);
+
+    const annotations4 = getAnnotations(undefined);
+    assert.equal(annotations4, undefined);
+
+    const annotations5 = getAnnotations(42);
+    assert.equal(annotations5, undefined);
+
+    const annotations6 = getAnnotations("string");
+    assert.equal(annotations6, undefined);
+  });
+
+  it("should work with annotations in parse()", () => {
+    const configKey = Symbol.for("@test/config");
+    const configData = { apiUrl: "https://api.test" };
+
+    // Simply verify that annotations are passed without error
+    const parser = option("-v");
+    const result = parse(parser, ["-v"], {
+      annotations: { [configKey]: configData },
+    });
+
+    assert.ok(result.success);
+  });
+
+  it("should work without annotations (backward compatibility)", () => {
+    const parser = option("-v");
+    const result = parse(parser, ["-v"]); // No ParseOptions
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, true);
+    }
+  });
+
+  it("should support multiple annotation keys", async () => {
+    const key1 = Symbol.for("@package1/data");
+    const key2 = Symbol.for("@package2/data");
+    const key3 = Symbol.for("@package3/data");
+    const data1 = { pkg1: "value1" };
+    const data2 = { pkg2: "value2" };
+    const data3 = { pkg3: "value3" };
+
+    const { getAnnotations } = await import("./annotations.ts");
+    let capturedState: unknown;
+
+    const baseParser = constant("test");
+    const wrappedParser = {
+      ...baseParser,
+      complete: (state: unknown) => {
+        capturedState = state;
+        return baseParser.complete(state as "test");
+      },
+    };
+
+    const result = parse(wrappedParser, [], {
+      annotations: {
+        [key1]: data1,
+        [key2]: data2,
+        [key3]: data3,
+      },
+    });
+
+    assert.ok(result.success);
+    const annotations = getAnnotations(capturedState);
+    assert.ok(annotations !== undefined);
+    assert.deepEqual(annotations[key1], data1);
+    assert.deepEqual(annotations[key2], data2);
+    assert.deepEqual(annotations[key3], data3);
+  });
+
+  it("should support annotations in parseSync()", async () => {
+    const testKey = Symbol.for("@test/sync");
+    const testData = "sync-data";
+    const { getAnnotations } = await import("./annotations.ts");
+    const { parseSync } = await import("./parser.ts");
+    let capturedState: unknown;
+
+    const baseParser = constant("ok");
+    const wrappedParser = {
+      ...baseParser,
+      complete: (state: unknown) => {
+        capturedState = state;
+        return baseParser.complete(state as "ok");
+      },
+    };
+
+    const result = parseSync(wrappedParser, [], {
+      annotations: { [testKey]: testData },
+    });
+
+    assert.ok(result.success);
+    const annotations = getAnnotations(capturedState);
+    assert.ok(annotations !== undefined);
+    assert.equal(annotations[testKey], testData);
+  });
+
+  it("should support annotations in parseAsync()", async () => {
+    const testKey = Symbol.for("@test/async-func");
+    const testData = "async-data";
+    const { getAnnotations } = await import("./annotations.ts");
+    const { parseAsync } = await import("./parser.ts");
+    let capturedState: unknown;
+
+    const baseParser = constant("ok");
+    const wrappedParser = {
+      ...baseParser,
+      complete: (state: unknown) => {
+        capturedState = state;
+        return baseParser.complete(state as "ok");
+      },
+    };
+
+    const result = await parseAsync(wrappedParser, [], {
+      annotations: { [testKey]: testData },
+    });
+
+    assert.ok(result.success);
+    const annotations = getAnnotations(capturedState);
+    assert.ok(annotations !== undefined);
+    assert.equal(annotations[testKey], testData);
+  });
+});

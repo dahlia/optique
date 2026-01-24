@@ -1,3 +1,9 @@
+export {
+  annotationKey,
+  type Annotations,
+  getAnnotations,
+  type ParseOptions,
+} from "./annotations.ts";
 export * from "./completion.ts";
 export * from "./dependency.ts";
 export * from "./doc.ts";

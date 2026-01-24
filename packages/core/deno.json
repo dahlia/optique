@@ -4,6 +4,7 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
+    "./annotations": "./src/annotations.ts",
     "./completion": "./src/completion.ts",
     "./constructs": "./src/constructs.ts",
     "./dependency": "./src/dependency.ts",

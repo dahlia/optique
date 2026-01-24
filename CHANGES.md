@@ -10,6 +10,67 @@ To be released.
 
 ### @optique/core
 
+ -  Added annotations system for passing runtime context to parsers. This allows
+    parsers to access external runtime data during both `parse()` and
+    `complete()` phases, enabling use cases like config file fallbacks,
+    environment-based validation, and shared context. [[#83]]
+
+    The annotations system uses symbol-keyed records to avoid naming conflicts
+    between packages. Annotations are passed via the new `ParseOptions`
+    parameter and can be accessed using the `getAnnotations()` helper function.
+
+    New exports from `@optique/core/annotations`:
+
+     -  `annotationKey`: Symbol for storing annotations in parser state.
+     -  `Annotations`: Type for annotation records (symbol-keyed objects).
+     -  `ParseOptions`: Options interface for parse functions.
+     -  `getAnnotations()`: Helper function to extract annotations from state.
+
+    Updated function signatures (all now accept optional `ParseOptions`):
+
+     -  `parse()`, `parseSync()`, `parseAsync()`
+     -  `suggest()`, `suggestSync()`, `suggestAsync()`
+     -  `getDocPage()`, `getDocPageSync()`, `getDocPageAsync()`
+
+
+    ~~~~ typescript
+    import { parse, getAnnotations } from "@optique/core/parser";
+    import { option } from "@optique/core/primitives";
+    import { string } from "@optique/core/valueparser";
+
+    // Define annotation key for your package
+    const configDataKey = Symbol.for("@myapp/config");
+
+    // Two-pass parsing with config file
+    const firstPass = parse(parser, args);
+    const configData = await loadConfig(firstPass.value.configPath);
+
+    const finalResult = parse(parser, args, {
+      annotations: {
+        [configDataKey]: configData,
+      },
+    });
+
+    // Access annotations in custom parser
+    function myCustomParser() {
+      return {
+        // ... parser implementation
+        complete: (state) => {
+          const annotations = getAnnotations(state);
+          const config = annotations?.[configDataKey];
+          // Use config data for fallback values
+        },
+      };
+    }
+    ~~~~
+
+    This is a backward-compatible change. Existing code continues to work
+    unchanged as the `options` parameter is optional and annotations are only
+    used when explicitly provided.
+
+    See the [runtime context extension guide] for detailed documentation and
+    usage patterns.
+
  -  Added `url()` message component for displaying URLs with clickable
     hyperlinks in terminals that support OSC 8 escape sequences. URLs are
     validated using `URL.canParse()` and stored as `URL` objects internally.
@@ -159,12 +220,14 @@ To be released.
     This was renamed in v0.9.0 for consistency with the `runParser()` rename.
     [[#65]]
 
+[runtime context extension guide]: https://optique.dev/concepts/extend
 [#65]: https://github.com/dahlia/optique/issues/65
 [#74]: https://github.com/dahlia/optique/issues/74
 [#76]: https://github.com/dahlia/optique/pull/76
 [#79]: https://github.com/dahlia/optique/issues/79
 [#80]: https://github.com/dahlia/optique/pull/80
 [#82]: https://github.com/dahlia/optique/issues/82
+[#83]: https://github.com/dahlia/optique/issues/83
 
 ### @optique/run
 

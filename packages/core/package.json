@@ -51,6 +51,14 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./annotations": {
+      "types": {
+        "import": "./dist/annotations.d.ts",
+        "require": "./dist/annotations.d.cts"
+      },
+      "import": "./dist/annotations.js",
+      "require": "./dist/annotations.cjs"
+    },
     "./completion": {
       "types": {
         "import": "./dist/completion.d.ts",

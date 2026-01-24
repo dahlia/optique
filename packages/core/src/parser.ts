@@ -3,6 +3,9 @@ import { type Message, message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
+import { annotationKey, type ParseOptions } from "./annotations.ts";
+
+export type { ParseOptions };
 
 /**
  * Represents the execution mode for parsers.
@@ -364,21 +367,36 @@ export type Result<T> =
  *               arguments.  Must be a synchronous parser.
  * @param args The array of command-line arguments to parse.  Usually this is
  *             `process.argv.slice(2)` in Node.js or `Deno.args` in Deno.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns A {@link Result} object indicating whether the parsing was
  *          successful or not.  If successful, it contains the parsed value of
  *          type `T`.  If not, it contains an error message describing the
  *          failure.
  * @since 0.9.0 Renamed from the original `parse` function which now delegates
  *              to this for sync parsers.
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export function parseSync<T>(
   parser: Parser<"sync", T, unknown>,
   args: readonly string[],
+  options?: ParseOptions,
 ): Result<T> {
+  let initialState = parser.initialState;
+
+  // Inject annotations into state if provided
+  if (options?.annotations) {
+    initialState = {
+      ...(typeof initialState === "object" && initialState !== null
+        ? initialState
+        : {}),
+      [annotationKey]: options.annotations,
+    } as unknown;
+  }
+
   let context: ParserContext<unknown> = {
     buffer: args,
     optionsTerminated: false,
-    state: parser.initialState,
+    state: initialState,
     usage: parser.usage,
   };
   do {
@@ -421,18 +439,33 @@ export function parseSync<T>(
  *               arguments.
  * @param args The array of command-line arguments to parse.  Usually this is
  *             `process.argv.slice(2)` in Node.js or `Deno.args` in Deno.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns A Promise that resolves to a {@link Result} object indicating
  *          whether the parsing was successful or not.
  * @since 0.9.0
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export async function parseAsync<T>(
   parser: Parser<Mode, T, unknown>,
   args: readonly string[],
+  options?: ParseOptions,
 ): Promise<Result<T>> {
+  let initialState = parser.initialState;
+
+  // Inject annotations into state if provided
+  if (options?.annotations) {
+    initialState = {
+      ...(typeof initialState === "object" && initialState !== null
+        ? initialState
+        : {}),
+      [annotationKey]: options.annotations,
+    } as unknown;
+  }
+
   let context: ParserContext<unknown> = {
     buffer: args,
     optionsTerminated: false,
-    state: parser.initialState,
+    state: initialState,
     usage: parser.usage,
   };
   do {
@@ -479,19 +512,23 @@ export async function parseAsync<T>(
  *               arguments.
  * @param args The array of command-line arguments to parse.  Usually this is
  *             `process.argv.slice(2)` in Node.js or `Deno.args` in Deno.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns A {@link Result} object (for sync) or Promise thereof (for async)
  *          indicating whether the parsing was successful or not.
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export function parse<M extends Mode, T>(
   parser: Parser<M, T, unknown>,
   args: readonly string[],
+  options?: ParseOptions,
 ): ModeValue<M, Result<T>> {
   if (parser.$mode === "async") {
-    return parseAsync(parser, args) as ModeValue<M, Result<T>>;
+    return parseAsync(parser, args, options) as ModeValue<M, Result<T>>;
   }
   return parseSync(
     parser as Parser<"sync", T, unknown>,
     args,
+    options,
   ) as ModeValue<M, Result<T>>;
 }
 
@@ -509,6 +546,7 @@ export function parse<M extends Mode, T>(
  * @param args The array of command-line arguments including the partial
  *             argument to complete.  The last element is treated as
  *             the prefix for suggestions.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns An array of {@link Suggestion} objects containing completion
  *          candidates.
  * @example
@@ -528,18 +566,32 @@ export function parse<M extends Mode, T>(
  * ```
  * @since 0.6.0
  * @since 0.9.0 Renamed from the original `suggest` function.
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export function suggestSync<T>(
   parser: Parser<"sync", T, unknown>,
   args: readonly [string, ...readonly string[]],
+  options?: ParseOptions,
 ): readonly Suggestion[] {
   const allButLast = args.slice(0, -1);
   const prefix = args[args.length - 1];
 
+  let initialState = parser.initialState;
+
+  // Inject annotations into state if provided
+  if (options?.annotations) {
+    initialState = {
+      ...(typeof initialState === "object" && initialState !== null
+        ? initialState
+        : {}),
+      [annotationKey]: options.annotations,
+    } as unknown;
+  }
+
   let context: ParserContext<unknown> = {
     buffer: allButLast,
     optionsTerminated: false,
-    state: parser.initialState,
+    state: initialState,
     usage: parser.usage,
   };
 
@@ -582,21 +634,36 @@ export function suggestSync<T>(
  * @param args The array of command-line arguments including the partial
  *             argument to complete.  The last element is treated as
  *             the prefix for suggestions.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns A Promise that resolves to an array of {@link Suggestion} objects
  *          containing completion candidates.
  * @since 0.9.0
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export async function suggestAsync<T>(
   parser: Parser<Mode, T, unknown>,
   args: readonly [string, ...readonly string[]],
+  options?: ParseOptions,
 ): Promise<readonly Suggestion[]> {
   const allButLast = args.slice(0, -1);
   const prefix = args[args.length - 1];
 
+  let initialState = parser.initialState;
+
+  // Inject annotations into state if provided
+  if (options?.annotations) {
+    initialState = {
+      ...(typeof initialState === "object" && initialState !== null
+        ? initialState
+        : {}),
+      [annotationKey]: options.annotations,
+    } as unknown;
+  }
+
   let context: ParserContext<unknown> = {
     buffer: allButLast,
     optionsTerminated: false,
-    state: parser.initialState,
+    state: initialState,
     usage: parser.usage,
   };
 
@@ -650,20 +717,27 @@ export async function suggestAsync<T>(
  * @param args The array of command-line arguments including the partial
  *             argument to complete.  The last element is treated as
  *             the prefix for suggestions.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns An array of {@link Suggestion} objects (for sync) or Promise thereof
  *          (for async) containing completion candidates.
  * @since 0.6.0
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export function suggest<M extends Mode, T>(
   parser: Parser<M, T, unknown>,
   args: readonly [string, ...readonly string[]],
+  options?: ParseOptions,
 ): ModeValue<M, readonly Suggestion[]> {
   if (parser.$mode === "async") {
-    return suggestAsync(parser, args) as ModeValue<M, readonly Suggestion[]>;
+    return suggestAsync(parser, args, options) as ModeValue<
+      M,
+      readonly Suggestion[]
+    >;
   }
   return suggestSync(
     parser as Parser<"sync", T, unknown>,
     args,
+    options,
   ) as ModeValue<M, readonly Suggestion[]>;
 }
 
@@ -712,14 +786,17 @@ function findCommandInExclusive(
  *
  * @param parser The sync parser to generate documentation for.
  * @param args Optional array of command-line arguments for context.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns A {@link DocPage} or `undefined`.
  * @since 0.9.0
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export function getDocPageSync(
   parser: Parser<"sync", unknown, unknown>,
   args: readonly string[] = [],
+  options?: ParseOptions,
 ): DocPage | undefined {
-  return getDocPageSyncImpl(parser, args);
+  return getDocPageSyncImpl(parser, args, options);
 }
 
 /**
@@ -731,19 +808,26 @@ export function getDocPageSync(
  *
  * @param parser The parser to generate documentation for.
  * @param args Optional array of command-line arguments for context.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns A Promise of {@link DocPage} or `undefined`.
  * @since 0.9.0
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 export function getDocPageAsync(
   parser: Parser<Mode, unknown, unknown>,
   args: readonly string[] = [],
+  options?: ParseOptions,
 ): Promise<DocPage | undefined> {
   if (parser.$mode === "sync") {
     return Promise.resolve(
-      getDocPageSyncImpl(parser as Parser<"sync", unknown, unknown>, args),
+      getDocPageSyncImpl(
+        parser as Parser<"sync", unknown, unknown>,
+        args,
+        options,
+      ),
     );
   }
-  return getDocPageAsyncImpl(parser, args);
+  return getDocPageAsyncImpl(parser, args, options);
 }
 
 /**
@@ -764,6 +848,7 @@ export function getDocPageAsync(
  * @param args Optional array of command-line arguments that have been parsed
  *             so far. Defaults to an empty array. This is used to determine
  *             the current parsing context and generate contextual documentation.
+ * @param options Optional {@link ParseOptions} for customizing parsing behavior.
  * @returns For sync parsers, returns a {@link DocPage} directly.
  *          For async parsers, returns a Promise of {@link DocPage}.
  *          Returns `undefined` if no documentation can be generated.
@@ -782,34 +867,43 @@ export function getDocPageAsync(
  * const asyncDoc = await getDocPage(asyncParser);
  * ```
  * @since 0.9.0 Updated to support async parsers.
+ * @since 0.10.0 Added optional `options` parameter for annotations support.
  */
 // Overload: sync parser returns sync result
 export function getDocPage(
   parser: Parser<"sync", unknown, unknown>,
   args?: readonly string[],
+  options?: ParseOptions,
 ): DocPage | undefined;
 
 // Overload: async parser returns Promise
 export function getDocPage(
   parser: Parser<"async", unknown, unknown>,
   args?: readonly string[],
+  options?: ParseOptions,
 ): Promise<DocPage | undefined>;
 
 // Overload: generic mode parser returns ModeValue
 export function getDocPage<M extends Mode>(
   parser: Parser<M, unknown, unknown>,
   args?: readonly string[],
+  options?: ParseOptions,
 ): ModeValue<M, DocPage | undefined>;
 
 // Implementation
 export function getDocPage(
   parser: Parser<Mode, unknown, unknown>,
   args: readonly string[] = [],
+  options?: ParseOptions,
 ): DocPage | undefined | Promise<DocPage | undefined> {
   if (parser.$mode === "sync") {
-    return getDocPageSyncImpl(parser as Parser<"sync", unknown, unknown>, args);
+    return getDocPageSyncImpl(
+      parser as Parser<"sync", unknown, unknown>,
+      args,
+      options,
+    );
   }
-  return getDocPageAsyncImpl(parser, args);
+  return getDocPageAsyncImpl(parser, args, options);
 }
 
 /**
@@ -818,11 +912,24 @@ export function getDocPage(
 function getDocPageSyncImpl(
   parser: Parser<"sync", unknown, unknown>,
   args: readonly string[],
+  options?: ParseOptions,
 ): DocPage | undefined {
+  let initialState = parser.initialState;
+
+  // Inject annotations into state if provided
+  if (options?.annotations) {
+    initialState = {
+      ...(typeof initialState === "object" && initialState !== null
+        ? initialState
+        : {}),
+      [annotationKey]: options.annotations,
+    } as unknown;
+  }
+
   let context: ParserContext<unknown> = {
     buffer: args,
     optionsTerminated: false,
-    state: parser.initialState,
+    state: initialState,
     usage: parser.usage,
   };
   do {
@@ -839,11 +946,24 @@ function getDocPageSyncImpl(
 async function getDocPageAsyncImpl(
   parser: Parser<Mode, unknown, unknown>,
   args: readonly string[],
+  options?: ParseOptions,
 ): Promise<DocPage | undefined> {
+  let initialState = parser.initialState;
+
+  // Inject annotations into state if provided
+  if (options?.annotations) {
+    initialState = {
+      ...(typeof initialState === "object" && initialState !== null
+        ? initialState
+        : {}),
+      [annotationKey]: options.annotations,
+    } as unknown;
+  }
+
   let context: ParserContext<unknown> = {
     buffer: args,
     optionsTerminated: false,
-    state: parser.initialState,
+    state: initialState,
     usage: parser.usage,
   };
   do {
