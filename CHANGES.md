@@ -71,6 +71,62 @@ To be released.
     See the [runtime context extension guide] for detailed documentation and
     usage patterns.
 
+ -  Added `SourceContext` system and `runWith()` functions for composing
+    multiple data sources with automatic priority handling. This builds on the
+    annotations system to provide a higher-level abstraction for common
+    use cases like environment variable fallbacks and config file loading.
+    [[#85]]
+
+    The source context system enables packages to provide data sources in a
+    standard way with clear priority ordering. Earlier contexts in the array
+    override later ones, making it natural to implement fallback chains like
+    CLI > environment variables > configuration file > default values.
+
+    New exports from `@optique/core/context`:
+
+     -  `SourceContext`: Interface for data sources that provide annotations.
+     -  `Annotations`: Re-exported from `@optique/core/annotations`.
+     -  `isStaticContext()`: Helper to check if a context is static.
+
+    New exports from `@optique/core/facade`:
+
+     -  `runWith()`: Run parser with multiple source contexts (async).
+     -  `runWithSync()`: Sync-only variant of `runWith()`.
+     -  `runWithAsync()`: Explicit async variant of `runWith()`.
+
+    The `runWith()` function uses a smart two-phase approach:
+
+    1)  Collect annotations from all contexts (static return immediately,
+        dynamic may return empty)
+    2)  First parse with Phase 1 annotations
+    3)  Call `getAnnotations(parsed)` on all contexts with parsed result
+    4)  Second parse with merged annotations from both phases
+
+    If all contexts are static, the second parse is skipped for optimization.
+
+    ~~~~ typescript
+    import { runWith } from "@optique/core/facade";
+    import type { SourceContext } from "@optique/core/context";
+
+    const envContext: SourceContext = {
+      id: Symbol.for("@myapp/env"),
+      getAnnotations() {
+        return {
+          [Symbol.for("@myapp/env")]: {
+            HOST: process.env.MYAPP_HOST,
+          }
+        };
+      }
+    };
+
+    const result = await runWith(
+      parser,
+      "myapp",
+      [envContext],
+      { args: process.argv.slice(2) }
+    );
+    ~~~~
+
  -  Added `url()` message component for displaying URLs with clickable
     hyperlinks in terminals that support OSC 8 escape sequences. URLs are
     validated using `URL.canParse()` and stored as `URL` objects internally.
@@ -228,6 +284,7 @@ To be released.
 [#80]: https://github.com/dahlia/optique/pull/80
 [#82]: https://github.com/dahlia/optique/issues/82
 [#83]: https://github.com/dahlia/optique/issues/83
+[#85]: https://github.com/dahlia/optique/issues/85
 
 ### @optique/run
 

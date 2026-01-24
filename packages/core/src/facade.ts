@@ -43,6 +43,10 @@ import {
 } from "./primitives.ts";
 import { formatUsage, type OptionName } from "./usage.ts";
 import { string, type ValueParser } from "./valueparser.ts";
+import { annotationKey, type Annotations } from "./annotations.ts";
+import type { SourceContext } from "./context.ts";
+
+export type { SourceContext };
 
 /**
  * Helper types for parser generation
@@ -1621,4 +1625,457 @@ export class RunParserError extends Error {
 
 function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));
+}
+
+/**
+ * Merges multiple annotation objects, with earlier contexts having priority.
+ *
+ * When the same symbol key exists in multiple annotations, the value from
+ * the earlier context (lower index in the array) takes precedence.
+ *
+ * @param annotationsList Array of annotations to merge.
+ * @returns Merged annotations object.
+ */
+function mergeAnnotations(
+  annotationsList: readonly Annotations[],
+): Annotations {
+  const result: Record<symbol, unknown> = {};
+  // Process in reverse order so earlier contexts override later ones
+  for (let i = annotationsList.length - 1; i >= 0; i--) {
+    const annotations = annotationsList[i];
+    for (const key of Object.getOwnPropertySymbols(annotations)) {
+      result[key] = annotations[key];
+    }
+  }
+  return result;
+}
+
+/**
+ * Collects annotations from all contexts.
+ *
+ * @param contexts Source contexts to collect annotations from.
+ * @param parsed Optional parsed result from a previous parse pass.
+ * @returns Promise that resolves to merged annotations.
+ */
+async function collectAnnotations(
+  contexts: readonly SourceContext[],
+  parsed?: unknown,
+): Promise<Annotations> {
+  const annotationsList: Annotations[] = [];
+
+  for (const context of contexts) {
+    const result = context.getAnnotations(parsed);
+    if (result instanceof Promise) {
+      annotationsList.push(await result);
+    } else {
+      annotationsList.push(result);
+    }
+  }
+
+  return mergeAnnotations(annotationsList);
+}
+
+/**
+ * Collects annotations from all contexts synchronously.
+ *
+ * @param contexts Source contexts to collect annotations from.
+ * @param parsed Optional parsed result from a previous parse pass.
+ * @returns Merged annotations.
+ * @throws Error if any context returns a Promise.
+ */
+function collectAnnotationsSync(
+  contexts: readonly SourceContext[],
+  parsed?: unknown,
+): Annotations {
+  const annotationsList: Annotations[] = [];
+
+  for (const context of contexts) {
+    const result = context.getAnnotations(parsed);
+    if (result instanceof Promise) {
+      throw new Error(
+        `Context ${String(context.id)} returned a Promise in sync mode. ` +
+          "Use runWith() or runWithAsync() for async contexts.",
+      );
+    }
+    annotationsList.push(result);
+  }
+
+  return mergeAnnotations(annotationsList);
+}
+
+/**
+ * Checks if any context has dynamic behavior (returns different annotations
+ * when called with parsed results).
+ *
+ * A context is considered dynamic if:
+ * - It returns a Promise
+ * - It returns empty annotations without parsed results but may return
+ *   non-empty annotations with parsed results
+ *
+ * @param contexts Source contexts to check.
+ * @returns `true` if any context appears to be dynamic.
+ */
+function hasDynamicContexts(contexts: readonly SourceContext[]): boolean {
+  for (const context of contexts) {
+    const result = context.getAnnotations();
+    if (result instanceof Promise) {
+      return true;
+    }
+    // If a context returns empty annotations, it might be dynamic
+    if (Object.getOwnPropertySymbols(result).length === 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Options for runWith functions.
+ * Extends RunOptions with additional context-related settings.
+ *
+ * @template THelp The return type when help is shown.
+ * @template TError The return type when an error occurs.
+ * @since 0.10.0
+ */
+export interface RunWithOptions<THelp, TError>
+  extends RunOptions<THelp, TError> {
+  /**
+   * Command-line arguments to parse. If not provided, defaults to
+   * `process.argv.slice(2)` on Node.js/Bun or `Deno.args` on Deno.
+   */
+  readonly args?: readonly string[];
+}
+
+/**
+ * Runs a parser with multiple source contexts.
+ *
+ * This function automatically handles static and dynamic contexts with proper
+ * priority. Earlier contexts in the array override later ones.
+ *
+ * The function uses a smart two-phase approach:
+ *
+ * 1. *Phase 1*: Collect annotations from all contexts (static contexts return
+ *    their data, dynamic contexts may return empty).
+ * 2. *First parse*: Parse with Phase 1 annotations.
+ * 3. *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the first
+ *    parse result.
+ * 4. *Second parse*: Parse again with merged annotations from both phases.
+ *
+ * If all contexts are static (no dynamic contexts), the second parse is skipped
+ * for optimization.
+ *
+ * @template TParser The parser type.
+ * @template THelp Return type when help is shown.
+ * @template TError Return type when an error occurs.
+ * @param parser The parser to execute.
+ * @param programName Name of the program for help/error output.
+ * @param contexts Source contexts to use (priority: earlier overrides later).
+ * @param options Run options including args, help, version, etc.
+ * @returns Promise that resolves to the parsed result.
+ * @since 0.10.0
+ *
+ * @example
+ * ```typescript
+ * import { runWith } from "@optique/core/facade";
+ * import type { SourceContext } from "@optique/core/context";
+ *
+ * const envContext: SourceContext = {
+ *   id: Symbol.for("@myapp/env"),
+ *   getAnnotations() {
+ *     return { [Symbol.for("@myapp/env")]: process.env };
+ *   }
+ * };
+ *
+ * const result = await runWith(
+ *   parser,
+ *   "myapp",
+ *   [envContext],
+ *   { args: process.argv.slice(2) }
+ * );
+ * ```
+ */
+export async function runWith<
+  TParser extends Parser<Mode, unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  contexts: readonly SourceContext[],
+  options?: RunWithOptions<THelp, TError>,
+): Promise<InferValue<TParser>> {
+  const args = options?.args ?? [];
+
+  // If no contexts, just run the parser directly
+  if (contexts.length === 0) {
+    if (parser.$mode === "async") {
+      return runParser(parser, programName, args, options) as Promise<
+        InferValue<TParser>
+      >;
+    }
+    return Promise.resolve(
+      runParser(parser, programName, args, options) as InferValue<TParser>,
+    );
+  }
+
+  // Phase 1: Collect initial annotations
+  const phase1Annotations = await collectAnnotations(contexts);
+
+  // Check if we need two-phase parsing
+  const needsTwoPhase = hasDynamicContexts(contexts);
+
+  if (!needsTwoPhase) {
+    // All static contexts - single pass is sufficient
+    // Inject annotations into the parser's initial state
+    const augmentedParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
+    );
+
+    if (parser.$mode === "async") {
+      return runParser(
+        augmentedParser,
+        programName,
+        args,
+        options,
+      ) as Promise<InferValue<TParser>>;
+    }
+    return Promise.resolve(
+      runParser(augmentedParser, programName, args, options) as InferValue<
+        TParser
+      >,
+    );
+  }
+
+  // Two-phase parsing for dynamic contexts
+  // First pass: parse with Phase 1 annotations to get initial result
+  const augmentedParser1 = injectAnnotationsIntoParser(
+    parser,
+    phase1Annotations,
+  );
+
+  let firstPassResult: unknown;
+  try {
+    if (parser.$mode === "async") {
+      firstPassResult = await parseAsync(augmentedParser1, args);
+    } else {
+      firstPassResult = parseSync(
+        augmentedParser1 as Parser<"sync", unknown, unknown>,
+        args,
+      );
+    }
+
+    // Extract value from result
+    if (
+      typeof firstPassResult === "object" && firstPassResult !== null &&
+      "success" in firstPassResult
+    ) {
+      const result = firstPassResult as Result<unknown>;
+      if (result.success) {
+        firstPassResult = result.value;
+      } else {
+        // First pass failed - run through runParser for proper error handling
+        const augmentedParser = injectAnnotationsIntoParser(
+          parser,
+          phase1Annotations,
+        );
+        if (parser.$mode === "async") {
+          return runParser(
+            augmentedParser,
+            programName,
+            args,
+            options,
+          ) as Promise<InferValue<TParser>>;
+        }
+        return Promise.resolve(
+          runParser(augmentedParser, programName, args, options) as InferValue<
+            TParser
+          >,
+        );
+      }
+    }
+  } catch {
+    // First pass threw an error - run through runParser for proper error handling
+    const augmentedParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
+    );
+    if (parser.$mode === "async") {
+      return runParser(augmentedParser, programName, args, options) as Promise<
+        InferValue<TParser>
+      >;
+    }
+    return Promise.resolve(
+      runParser(augmentedParser, programName, args, options) as InferValue<
+        TParser
+      >,
+    );
+  }
+
+  // Phase 2: Collect annotations with parsed result
+  const phase2Annotations = await collectAnnotations(contexts, firstPassResult);
+
+  // Final parse with merged annotations
+  const finalAnnotations = mergeAnnotations([
+    phase1Annotations,
+    phase2Annotations,
+  ]);
+  const augmentedParser2 = injectAnnotationsIntoParser(
+    parser,
+    finalAnnotations,
+  );
+
+  if (parser.$mode === "async") {
+    return runParser(augmentedParser2, programName, args, options) as Promise<
+      InferValue<TParser>
+    >;
+  }
+  return Promise.resolve(
+    runParser(augmentedParser2, programName, args, options) as InferValue<
+      TParser
+    >,
+  );
+}
+
+/**
+ * Runs a synchronous parser with multiple source contexts.
+ *
+ * This is the sync-only variant of {@link runWith}. All contexts must return
+ * annotations synchronously (not Promises).
+ *
+ * @template TParser The sync parser type.
+ * @template THelp Return type when help is shown.
+ * @template TError Return type when an error occurs.
+ * @param parser The synchronous parser to execute.
+ * @param programName Name of the program for help/error output.
+ * @param contexts Source contexts to use (priority: earlier overrides later).
+ * @param options Run options including args, help, version, etc.
+ * @returns The parsed result.
+ * @throws Error if any context returns a Promise.
+ * @since 0.10.0
+ */
+export function runWithSync<
+  TParser extends Parser<"sync", unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  contexts: readonly SourceContext[],
+  options?: RunWithOptions<THelp, TError>,
+): InferValue<TParser> {
+  const args = options?.args ?? [];
+
+  // If no contexts, just run the parser directly
+  if (contexts.length === 0) {
+    return runParser(parser, programName, args, options);
+  }
+
+  // Phase 1: Collect initial annotations
+  const phase1Annotations = collectAnnotationsSync(contexts);
+
+  // Check if we need two-phase parsing
+  const needsTwoPhase = hasDynamicContexts(contexts);
+
+  if (!needsTwoPhase) {
+    // All static contexts - single pass is sufficient
+    const augmentedParser = injectAnnotationsIntoParser(
+      parser,
+      phase1Annotations,
+    );
+    return runParser(augmentedParser, programName, args, options);
+  }
+
+  // Two-phase parsing for dynamic contexts
+  // First pass: parse with Phase 1 annotations
+  const augmentedParser1 = injectAnnotationsIntoParser(
+    parser,
+    phase1Annotations,
+  );
+
+  let firstPassResult: unknown;
+  try {
+    const result = parseSync(augmentedParser1, args);
+    if (result.success) {
+      firstPassResult = result.value;
+    } else {
+      // First pass failed - run through runParser for proper error handling
+      return runParser(augmentedParser1, programName, args, options);
+    }
+  } catch {
+    // First pass threw - run through runParser for proper error handling
+    return runParser(augmentedParser1, programName, args, options);
+  }
+
+  // Phase 2: Collect annotations with parsed result
+  const phase2Annotations = collectAnnotationsSync(contexts, firstPassResult);
+
+  // Final parse with merged annotations
+  const finalAnnotations = mergeAnnotations([
+    phase1Annotations,
+    phase2Annotations,
+  ]);
+  const augmentedParser2 = injectAnnotationsIntoParser(
+    parser,
+    finalAnnotations,
+  );
+
+  return runParser(augmentedParser2, programName, args, options);
+}
+
+/**
+ * Runs any parser asynchronously with multiple source contexts.
+ *
+ * This function accepts parsers of any mode (sync or async) and always
+ * returns a Promise. Use this when working with async contexts or parsers.
+ *
+ * @template TParser The parser type.
+ * @template THelp Return type when help is shown.
+ * @template TError Return type when an error occurs.
+ * @param parser The parser to execute.
+ * @param programName Name of the program for help/error output.
+ * @param contexts Source contexts to use (priority: earlier overrides later).
+ * @param options Run options including args, help, version, etc.
+ * @returns Promise that resolves to the parsed result.
+ * @since 0.10.0
+ */
+export function runWithAsync<
+  TParser extends Parser<Mode, unknown, unknown>,
+  THelp = void,
+  TError = never,
+>(
+  parser: TParser,
+  programName: string,
+  contexts: readonly SourceContext[],
+  options?: RunWithOptions<THelp, TError>,
+): Promise<InferValue<TParser>> {
+  return runWith(parser, programName, contexts, options);
+}
+
+/**
+ * Creates a new parser with annotations injected into its initial state.
+ *
+ * @param parser The original parser.
+ * @param annotations Annotations to inject.
+ * @returns A new parser with annotations in its initial state.
+ */
+function injectAnnotationsIntoParser<
+  M extends Mode,
+  TValue,
+  TState,
+>(
+  parser: Parser<M, TValue, TState>,
+  annotations: Annotations,
+): Parser<M, TValue, TState> {
+  // Create a new initial state with annotations
+  const newInitialState = {
+    ...parser.initialState,
+    [annotationKey]: annotations,
+  } as TState;
+
+  // Return a parser with the new initial state
+  return {
+    ...parser,
+    initialState: newInitialState,
+  };
 }

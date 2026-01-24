@@ -1,9 +1,15 @@
 Extending Optique with runtime context
 ======================================
 
-This guide explains how to extend Optique parsers with runtime context using
-the annotations system. This enables advanced use cases like config file
-fallbacks, environment-based validation, and shared context across parsers.
+This guide explains how to extend Optique parsers with runtime context.
+Optique provides two complementary systems for this purpose:
+
+ -  *Annotations*: A low-level primitive for passing runtime data to parsers
+ -  *Source context*: A high-level system for composing multiple data sources
+    with automatic priority handling
+
+Together, these systems enable advanced use cases like config file fallbacks,
+environment variable integration, and shared context across parsers.
 
 
 Introduction
@@ -15,14 +21,21 @@ runtime data that is not part of the command-line arguments:
 
  -  *Configuration files*: A parser might fall back to values from a config
     file whose path is determined by another option
- -  *Environment-based validation*: Value parsers might validate against
-    external resources like databases, APIs, or filesystems
+ -  *Environment variables*: Options might have defaults from environment
+    variables (e.g., `MYAPP_HOST` for `--host`)
  -  *Shared context*: Multiple parsers might need access to common runtime
     data such as user preferences or locale settings
 
 The challenge is that this external data often becomes available only during
 parsing (for example, the config file path is only known after parsing
 `--config`), but parsers need access to it during their execution.
+
+Optique solves this with two systems:
+
+ -  Use *annotations* when you need direct, low-level control over how runtime
+    data flows through parsers
+ -  Use *source context* and `runWith()` when you need to compose multiple data
+    sources with clear priority ordering
 
 
 The annotations system
@@ -62,7 +75,10 @@ const configDataKey = Symbol.for("@myapp/config");
 
 ### Passing annotations
 
-Annotations are passed to parsing functions via the `ParseOptions` parameter:
+Annotations are passed to parsing functions via the `ParseOptions` parameter.
+The third argument to `parse()` accepts an `annotations` object where each key
+is a symbol and each value is the data you want to make available during
+parsing:
 
 ~~~~ typescript twoslash
 import { parse } from "@optique/core/parser";
@@ -80,10 +96,15 @@ const result = parse(parser, ["--name", "Bob"], {
 });
 ~~~~
 
+In this example, we attach a `configData` object containing default values.
+Custom parsers can later retrieve this data and use it as a fallback when
+command-line arguments are not provided.
+
 ### Accessing annotations
 
-Use the `getAnnotations()` helper function to extract annotations from parser
-state:
+Inside a parser, you can retrieve annotations using the `getAnnotations()`
+helper function. This function extracts the annotations object from the parser
+state, which is passed to the parser's `parse()` and `complete()` methods:
 
 ~~~~ typescript twoslash
 import { getAnnotations } from "@optique/core/annotations";
@@ -102,12 +123,23 @@ function myCustomComplete(state: unknown) {
 }
 ~~~~
 
+The function returns `undefined` if no annotations were provided, so always
+use optional chaining (`?.`) when accessing annotation data. Since annotations
+are typed as `unknown`, you need to cast them to your expected type.
+
 
 Creating custom parsers with annotations
 ----------------------------------------
 
 Custom parsers can access annotations during both `parse()` and `complete()`
-phases. Here's an example of a parser that falls back to config file values:
+phases. The `complete()` phase is particularly useful for annotations because
+it runs after all command-line arguments have been processed, allowing you to
+provide fallback values for missing options.
+
+The following example creates a `configOption()` function that returns a parser
+looking up values from a configuration object passed via annotations. If the
+user doesn't provide the option on the command line, the parser falls back to
+the config file value:
 
 ~~~~ typescript twoslash
 import type { Parser } from "@optique/core/parser";
@@ -160,14 +192,22 @@ function configOption(
 }
 ~~~~
 
+The key insight here is that `complete()` receives the accumulated parser state,
+which includes any annotations passed to `parse()`. By calling
+`getAnnotations(state)`, the parser can access the configuration data and use
+it as a fallback. The `required` parameter controls whether a missing value
+(both from CLI and config) should be treated as an error.
+
 
 Use cases
 ---------
 
 ### Config file fallback pattern
 
-A common pattern is to perform two-pass parsing: first to extract the config
-file path, then again with the loaded config data as annotations:
+A common pattern is *two-pass parsing*: first parse to extract the config file
+path, then parse again with the loaded config data as annotations. This is
+necessary because the config file path itself comes from command-line arguments,
+creating a chicken-and-egg problem that two-pass parsing solves.
 
 ~~~~ typescript twoslash
 import { parse } from "@optique/core/parser";
@@ -212,9 +252,17 @@ const finalResult = parse(finalParser, process.argv.slice(2), {
 });
 ~~~~
 
+The first pass extracts just the `--config` option to determine which file to
+load. After loading the config file, the second pass runs with the full parser,
+now with config data available via annotations. Custom parsers for `--name` and
+`--port` can then fall back to config values when the user doesn't provide them
+on the command line.
+
 ### Environment-based validation
 
-Annotations can provide runtime context for validation:
+Annotations can provide runtime context that affects validation behavior. For
+example, you might want stricter validation in production but more permissive
+rules during development:
 
 ~~~~ typescript twoslash
 import { getAnnotations } from "@optique/core/annotations";
@@ -243,9 +291,15 @@ function createEnvironmentValidator() {
 }
 ~~~~
 
+The caller passes environment information via annotations, and the validator
+adapts its behavior accordingly. This keeps the validation logic decoupled from
+how the environment is determined.
+
 ### Shared context across parsers
 
-Multiple parsers can share common runtime data through annotations:
+When building complex CLI applications with multiple subcommands or composed
+parsers, you often need to share common data across all of them. Annotations
+provide a clean way to inject this shared context once at the top level:
 
 ~~~~ typescript twoslash
 import { parse } from "@optique/core/parser";
@@ -272,11 +326,17 @@ const result = parse(parser, process.argv.slice(2), {
 });
 ~~~~
 
+Any parser in the tree can access this shared context without explicit parameter
+passing. This is particularly useful for feature flags, user session data, or
+API configuration that many parts of your CLI might need.
+
 
 Type safety
 -----------
 
-TypeScript provides full type safety when working with annotations:
+Since annotations are stored as `Record<symbol, unknown>`, you need to cast
+them to your expected types when accessing. Define interfaces for your
+annotation data and use type assertions:
 
 ~~~~ typescript twoslash
 import { getAnnotations } from "@optique/core/annotations";
@@ -306,7 +366,12 @@ function parseWithConfig(state: unknown) {
 }
 ~~~~
 
-For better type safety, you can create a typed helper function:
+The `as ConfigData | undefined` cast tells TypeScript what shape to expect.
+Always include `undefined` in the union since the annotation might not be
+present.
+
+For better type safety and to avoid repeating the cast, create a typed helper
+function:
 
 ~~~~ typescript twoslash
 import { getAnnotations, type Annotations } from "@optique/core/annotations";
@@ -489,7 +554,10 @@ console.log(`Connecting to ${finalResult.value.host}:${finalResult.value.port}`)
 
 ### Conditional validation based on runtime state
 
-Annotations enable validators that adapt to runtime conditions:
+Annotations enable validators that adapt to runtime conditions. This example
+shows a port validator that enforces different rules based on the deployment
+environment. In production, only specific whitelisted ports are allowed, while
+development mode is more permissive:
 
 ~~~~ typescript twoslash
 import type { ValueParser } from "@optique/core/valueparser";
@@ -542,6 +610,11 @@ function portValidator(): ValueParser<"sync", number> {
 }
 ~~~~
 
+The validator first checks for basic validity (is it a number?), then applies
+environment-specific rules if available. When no environment data is provided,
+it falls back to accepting any valid port number. This graceful degradation
+ensures the validator works both with and without annotations.
+
 ### Multiple annotation sources
 
 Different packages can use different annotation keys simultaneously:
@@ -572,7 +645,7 @@ interfering with others.
 API reference
 -------------
 
-### Types and symbols
+### Types and symbols from `@optique/core/annotations`
 
 `annotationKey`
 :   Unique symbol for storing annotations in parser state. Use this symbol to
@@ -586,7 +659,16 @@ API reference
 :   Interface containing options for parse functions. Currently has one field:
     `annotations?: Annotations`.
 
-### Functions
+### Types from `@optique/core/context`
+
+`SourceContext`
+:   Interface for data sources that provide annotations. Has two members:
+
+     -  `id: symbol` - Unique identifier for the context
+     -  `getAnnotations(parsed?: unknown): Promise<Annotations> | Annotations` -
+        Returns annotations to inject into parsing
+
+### Functions from `@optique/core/annotations`
 
 `getAnnotations(state: unknown): Annotations | undefined`
 :   Extracts annotations from parser state. Returns `undefined` if the state
@@ -602,21 +684,312 @@ API reference
     const myData = annotations?.[myKey];
     ~~~~
 
-### Updated function signatures
+`isStaticContext(context: SourceContext): boolean`
+:   Checks whether a context is static (returns non-empty annotations without
+    needing parsed results).
 
-The following functions now accept an optional `ParseOptions` parameter:
+### Functions from `@optique/core/facade`
 
- -  `parse(parser, args, options?)`
- -  `parseSync(parser, args, options?)`
- -  `parseAsync(parser, args, options?)`
- -  `suggest(parser, args, options?)`
- -  `suggestSync(parser, args, options?)`
- -  `suggestAsync(parser, args, options?)`
- -  `getDocPage(parser, args?, options?)`
- -  `getDocPageSync(parser, args?, options?)`
- -  `getDocPageAsync(parser, args?, options?)`
+`runWith(parser, programName, contexts, options?): Promise<T>`
+:   Runs a parser with multiple source contexts. Automatically handles
+    static and dynamic contexts with two-phase parsing when needed.
 
-All existing code continues to work as the `options` parameter is optional.
+`runWithSync(parser, programName, contexts, options?): T`
+:   Synchronous variant of `runWith()`. All contexts must return annotations
+    synchronously (not Promises).
+
+`runWithAsync(parser, programName, contexts, options?): Promise<T>`
+:   Explicit async variant of `runWith()`. Equivalent to `runWith()`.
+
+
+The source context system
+-------------------------
+
+While annotations provide low-level control, the *source context* system offers
+a higher-level abstraction for composing multiple data sources. This is
+particularly useful when you need to implement priority-based fallback chains
+like CLI > environment variables > configuration file > default values.
+
+### What is a source context?
+
+A `SourceContext` is an interface that represents a data source capable of
+providing annotations to parsers. Each context has:
+
+ -  A unique `id` symbol for identification
+ -  A `getAnnotations()` method that returns annotations
+
+Here's a simple context that provides environment variables to parsers:
+
+~~~~ typescript
+import type { SourceContext } from "@optique/core/context";
+
+const envContext: SourceContext = {
+  id: Symbol.for("@myapp/env"),
+  getAnnotations() {
+    return {
+      [Symbol.for("@myapp/env")]: {
+        HOST: process.env.MYAPP_HOST,
+        PORT: process.env.MYAPP_PORT,
+      }
+    };
+  }
+};
+~~~~
+
+The `id` symbol identifies this context for debugging and priority resolution.
+The `getAnnotations()` method returns an object mapping annotation keys to
+their values. Parsers can then access these values using `getAnnotations()`.
+
+### Static vs dynamic contexts
+
+Contexts can be either *static* or *dynamic*:
+
+ -  *Static contexts* return data immediately (e.g., environment variables)
+ -  *Dynamic contexts* need parsing results first (e.g., config files whose
+    path is determined by a CLI option)
+
+The difference lies in whether `getAnnotations()` needs the parsed result to
+do its work:
+
+~~~~ typescript
+import type { SourceContext } from "@optique/core/context";
+
+// Static context: data is always available
+const envContext: SourceContext = {
+  id: Symbol.for("@myapp/env"),
+  getAnnotations() {
+    // Returns immediately - no need for parsing results
+    return {
+      [Symbol.for("@myapp/env")]: process.env
+    };
+  }
+};
+
+// Dynamic context: needs parsed result to load config
+const configContext: SourceContext = {
+  id: Symbol.for("@myapp/config"),
+  async getAnnotations(parsed?: unknown) {
+    if (!parsed) return {}; // Return empty on first pass
+    
+    const result = parsed as { config?: string };
+    if (!result.config) return {};
+    
+    // Load config file asynchronously
+    const data = await loadConfigFile(result.config);
+    return {
+      [Symbol.for("@myapp/config")]: data
+    };
+  }
+};
+~~~~
+
+The static `envContext` reads environment variables directly and doesn't need
+any parsed values. The dynamic `configContext`, however, needs to know the
+config file path from the parsed `--config` option before it can load the file.
+When `parsed` is `undefined` (first pass), it returns an empty object.
+
+
+Using `runWith()`
+-----------------
+
+The `runWith()` function orchestrates multiple source contexts with automatic
+priority handling and smart two-phase parsing.
+
+### Basic usage
+
+The `runWith()` function takes a parser, program name, array of contexts, and
+options. It automatically collects annotations from all contexts, merges them
+with proper priority handling, and runs the parser:
+
+~~~~ typescript
+import { runWith } from "@optique/core/facade";
+import { object } from "@optique/core/constructs";
+import { option, argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { withDefault } from "@optique/core/modifiers";
+import type { SourceContext } from "@optique/core/context";
+
+const envContext: SourceContext = {
+  id: Symbol.for("@myapp/env"),
+  getAnnotations() {
+    return {
+      [Symbol.for("@myapp/env")]: {
+        HOST: process.env.MYAPP_HOST ?? "localhost",
+      }
+    };
+  }
+};
+
+const parser = object({
+  host: withDefault(option("--host", string()), "localhost"),
+  name: argument(string()),
+});
+
+const result = await runWith(parser, "myapp", [envContext], {
+  args: process.argv.slice(2),
+  help: { mode: "option" },
+  version: { mode: "option", value: "1.0.0" },
+});
+~~~~
+
+The function handles all the complexity of collecting annotations from multiple
+sources and injecting them into the parsing process. It also supports the same
+help and version options as `runParser()`.
+
+### Priority handling
+
+When using multiple contexts, *earlier contexts have priority over later ones*.
+This allows you to implement fallback chains naturally:
+
+~~~~ typescript
+// Priority: envContext > configContext
+// Environment variables override config file values
+const result = await runWith(
+  parser,
+  "myapp",
+  [envContext, configContext],  // env has higher priority
+  { args: process.argv.slice(2) }
+);
+~~~~
+
+### Two-phase parsing
+
+When dynamic contexts are present, `runWith()` automatically performs two-phase
+parsing:
+
+1.  *Phase 1*: Parse with static context data to get initial result
+2.  *Phase 2*: Call `getAnnotations(parsed)` on all contexts with the parsed
+    result, then parse again with merged annotations
+
+This ensures that:
+
+ -  Static contexts (like environment variables) are available immediately
+ -  Dynamic contexts (like config files) can extract information from the
+    first parse pass
+
+### Sync and async variants
+
+Three function variants are available:
+
+`runWith()`
+:   Always returns a Promise. Handles both sync and async contexts.
+
+`runWithSync()`
+:   Returns the result directly. All contexts must be synchronous.
+
+`runWithAsync()`
+:   Same as `runWith()`. Explicit async variant for clarity.
+
+~~~~ typescript
+import { runWith, runWithSync, runWithAsync } from "@optique/core/facade";
+
+// Async (recommended for most cases)
+const result1 = await runWith(parser, "myapp", contexts, options);
+
+// Sync (only for sync contexts and parsers)
+const result2 = runWithSync(parser, "myapp", syncContexts, options);
+
+// Explicit async
+const result3 = await runWithAsync(parser, "myapp", contexts, options);
+~~~~
+
+
+Building custom source contexts
+-------------------------------
+
+### Creating a simple environment context
+
+A reusable environment context can be created with a factory function that
+accepts a prefix. This pattern allows different applications to use their own
+environment variable naming conventions:
+
+~~~~ typescript
+import type { SourceContext, Annotations } from "@optique/core/context";
+
+const envKey = Symbol.for("@myapp/env");
+
+interface EnvData {
+  readonly HOST?: string;
+  readonly PORT?: string;
+  readonly DEBUG?: string;
+}
+
+export function createEnvContext(prefix: string = ""): SourceContext {
+  return {
+    id: envKey,
+    getAnnotations(): Annotations {
+      const data: EnvData = {
+        HOST: process.env[`${prefix}HOST`],
+        PORT: process.env[`${prefix}PORT`],
+        DEBUG: process.env[`${prefix}DEBUG`],
+      };
+      return { [envKey]: data };
+    }
+  };
+}
+
+// Usage
+const envContext = createEnvContext("MYAPP_");
+~~~~
+
+When called with `"MYAPP_"`, the context reads `MYAPP_HOST`, `MYAPP_PORT`, and
+`MYAPP_DEBUG` from the environment. This is a static context since it doesn't
+need any parsed values.
+
+### Creating a config file context
+
+A config file context is dynamic because it needs to know the file path from
+parsed arguments. The `getAnnotations()` method receives the parsed result and
+uses it to load the configuration:
+
+~~~~ typescript
+import type { SourceContext, Annotations } from "@optique/core/context";
+
+const configKey = Symbol.for("@myapp/config");
+
+interface ConfigData {
+  readonly host?: string;
+  readonly port?: number;
+  readonly debug?: boolean;
+}
+
+export function createConfigContext(): SourceContext {
+  return {
+    id: configKey,
+    async getAnnotations(parsed?: unknown): Promise<Annotations> {
+      if (!parsed) return {}; // First pass - no config yet
+      
+      const result = parsed as { config?: string };
+      if (!result.config) return {}; // No config file specified
+      
+      try {
+        const content = await Deno.readTextFile(result.config);
+        const data: ConfigData = JSON.parse(content);
+        return { [configKey]: data };
+      } catch {
+        return {}; // Config file not found or invalid
+      }
+    }
+  };
+}
+
+// Usage
+const configContext = createConfigContext();
+~~~~
+
+Note the defensive checks: when `parsed` is `undefined` (first pass), return
+empty. When the user didn't specify `--config`, return empty. When the file
+can't be read or parsed, return empty. This ensures the context never throws
+and gracefully degrades when config isn't available.
+
+### Best practices for custom contexts
+
+ -  *Use unique symbols*: Always use `Symbol.for()` with a namespaced string
+    matching your package name
+ -  *Handle missing data gracefully*: Return empty objects instead of throwing
+    errors
+ -  *Keep contexts focused*: Each context should handle one data source
+ -  *Document the annotation key*: Make it clear what data your context provides
 
 
 Limitations and considerations
@@ -627,11 +1000,12 @@ Limitations and considerations
 Annotations are only available in low-level parsing functions:
 
  -  ✅ Available: `parse()`, `parseSync()`, `parseAsync()`
- -  ❌ Not available: `runParser()`, `run()` from *@optique/run*
+ -  ✅ Available via contexts: `runWith()`, `runWithSync()`, `runWithAsync()`
+ -  ❌ Not directly available: `runParser()`, `run()` from *@optique/run*
 
 This is intentional. Annotations are a low-level primitive for building
-advanced parsers. High-level APIs remain simple and focused on common use
-cases.
+advanced parsers. For high-level usage, use the SourceContext system with
+`runWith()`.
 
 ### State immutability
 
@@ -656,5 +1030,11 @@ Annotation injection creates a shallow copy of the initial state. This has
 minimal performance impact, but be aware that it happens on every call to
 `parse()`, `suggest()`, or `getDocPage()` when annotations are provided.
 
-For performance-critical applications, consider caching parsed results rather
-than re-parsing with annotations multiple times.
+For `runWith()` with dynamic contexts, two parse passes are performed. This
+is necessary for the two-phase approach but doubles the parsing overhead.
+For performance-critical applications:
+
+ -  Use only static contexts when possible (single pass)
+ -  Cache parsed results rather than re-parsing multiple times
+ -  Consider using `runWithSync()` for sync-only contexts to avoid Promise
+    overhead

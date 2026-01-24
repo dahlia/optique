@@ -5,6 +5,7 @@ export default defineConfig({
     "src/index.ts",
     "src/annotations.ts",
     "src/completion.ts",
+    "src/context.ts",
     "src/constructs.ts",
     "src/dependency.ts",
     "src/doc.ts",

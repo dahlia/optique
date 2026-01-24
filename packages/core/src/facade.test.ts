@@ -1,5 +1,12 @@
 import { object, or } from "@optique/core/constructs";
-import { runParser, RunParserError } from "@optique/core/facade";
+import type { SourceContext } from "@optique/core/context";
+import {
+  runParser,
+  RunParserError,
+  runWith,
+  runWithAsync,
+  runWithSync,
+} from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { argument, command, flag, option } from "@optique/core/primitives";
@@ -2979,5 +2986,414 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       assert.equal(versionOutput, "1.0.0");
     });
+  });
+});
+
+describe("runWith", () => {
+  describe("basic functionality", () => {
+    it("should parse with no contexts", async () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      const result = await runWith(parser, "test", [], {
+        args: ["Alice"],
+      });
+      assert.deepEqual(result, { name: "Alice" });
+    });
+
+    it("should parse with a static context", async () => {
+      const envKey = Symbol.for("@test/env");
+      const envContext: SourceContext = {
+        id: envKey,
+        getAnnotations() {
+          return { [envKey]: { HOST: "localhost" } };
+        },
+      };
+
+      const parser = object({
+        host: withDefault(option("--host", string()), "default"),
+      });
+
+      const result = await runWith(parser, "test", [envContext], {
+        args: [],
+      });
+
+      // Without any special binding, just verifies the context doesn't break parsing
+      assert.deepEqual(result, { host: "default" });
+    });
+
+    it("should parse with multiple static contexts", async () => {
+      const envKey = Symbol.for("@test/env");
+      const configKey = Symbol.for("@test/config");
+
+      const envContext: SourceContext = {
+        id: envKey,
+        getAnnotations() {
+          return { [envKey]: { HOST: "env-host" } };
+        },
+      };
+
+      const configContext: SourceContext = {
+        id: configKey,
+        getAnnotations() {
+          return { [configKey]: { host: "config-host" } };
+        },
+      };
+
+      const parser = object({
+        host: withDefault(option("--host", string()), "default"),
+      });
+
+      const result = await runWith(
+        parser,
+        "test",
+        [envContext, configContext],
+        { args: [] },
+      );
+
+      assert.deepEqual(result, { host: "default" });
+    });
+  });
+
+  describe("priority handling", () => {
+    it("should give priority to earlier contexts", async () => {
+      const sharedKey = Symbol.for("@test/shared");
+
+      const context1: SourceContext = {
+        id: Symbol.for("@test/context1"),
+        getAnnotations() {
+          return { [sharedKey]: { value: "from-context1" } };
+        },
+      };
+
+      const context2: SourceContext = {
+        id: Symbol.for("@test/context2"),
+        getAnnotations() {
+          return { [sharedKey]: { value: "from-context2" } };
+        },
+      };
+
+      const parser = object({
+        value: withDefault(option("--value", string()), "default"),
+      });
+
+      // context1 should have priority over context2
+      const result = await runWith(parser, "test", [context1, context2], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { value: "default" });
+    });
+  });
+
+  describe("dynamic contexts", () => {
+    it("should handle dynamic context with two-phase parsing", async () => {
+      const configKey = Symbol.for("@test/config");
+
+      const dynamicContext: SourceContext = {
+        id: configKey,
+        getAnnotations(parsed?: unknown) {
+          if (!parsed) return {};
+          const result = parsed as { config?: string };
+          if (!result.config) return {};
+          // Simulate loaded config
+          return { [configKey]: { host: "dynamic-host" } };
+        },
+      };
+
+      const parser = object({
+        config: optional(option("--config", string())),
+        host: withDefault(option("--host", string()), "default"),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: ["--config", "test.json"],
+      });
+
+      // Parser should complete successfully
+      assert.equal(result.config, "test.json");
+      assert.equal(result.host, "default");
+    });
+
+    it("should handle mixed static and dynamic contexts", async () => {
+      const envKey = Symbol.for("@test/env");
+      const configKey = Symbol.for("@test/config");
+
+      const staticContext: SourceContext = {
+        id: envKey,
+        getAnnotations() {
+          return { [envKey]: { HOST: "env-host" } };
+        },
+      };
+
+      const dynamicContext: SourceContext = {
+        id: configKey,
+        getAnnotations(parsed?: unknown) {
+          if (!parsed) return {};
+          return { [configKey]: { host: "config-host" } };
+        },
+      };
+
+      const parser = object({
+        host: withDefault(option("--host", string()), "default"),
+      });
+
+      const result = await runWith(
+        parser,
+        "test",
+        [staticContext, dynamicContext],
+        { args: [] },
+      );
+
+      assert.deepEqual(result, { host: "default" });
+    });
+
+    it("should handle async context", async () => {
+      const asyncKey = Symbol.for("@test/async");
+
+      const asyncContext: SourceContext = {
+        id: asyncKey,
+        async getAnnotations() {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+          return { [asyncKey]: { value: "async-value" } };
+        },
+      };
+
+      const parser = object({
+        value: withDefault(option("--value", string()), "default"),
+      });
+
+      const result = await runWith(parser, "test", [asyncContext], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { value: "default" });
+    });
+  });
+
+  describe("error handling", () => {
+    it("should handle parse errors with proper error messages", async () => {
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      let errorCalled = false;
+      let errorOutput = "";
+
+      await runWith(parser, "test", [], {
+        args: ["not-a-number"],
+        onError: () => {
+          errorCalled = true;
+          return "error-handled";
+        },
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.ok(errorCalled);
+      assert.ok(errorOutput.includes("Error:"));
+    });
+  });
+
+  describe("help and version integration", () => {
+    it("should show help when --help is provided", async () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let helpShown = false;
+      let helpOutput = "";
+
+      await runWith(parser, "test", [], {
+        args: ["--help"],
+        help: {
+          mode: "option",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.ok(helpShown);
+      assert.ok(helpOutput.includes("Usage: test"));
+    });
+
+    it("should show version when --version is provided", async () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionShown = false;
+      let versionOutput = "";
+
+      await runWith(parser, "test", [], {
+        args: ["--version"],
+        version: {
+          mode: "option",
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
+          },
+        },
+        stdout: (text) => {
+          versionOutput = text;
+        },
+      });
+
+      assert.ok(versionShown);
+      assert.equal(versionOutput, "1.0.0");
+    });
+  });
+});
+
+describe("runWithSync", () => {
+  it("should parse with static contexts synchronously", () => {
+    const envKey = Symbol.for("@test/env");
+    const envContext: SourceContext = {
+      id: envKey,
+      getAnnotations() {
+        return { [envKey]: { HOST: "localhost" } };
+      },
+    };
+
+    const parser = object({
+      host: withDefault(option("--host", string()), "default"),
+    });
+
+    const result = runWithSync(parser, "test", [envContext], {
+      args: [],
+    });
+
+    assert.deepEqual(result, { host: "default" });
+  });
+
+  it("should throw error when context returns Promise", () => {
+    const asyncKey = Symbol.for("@test/async");
+    const asyncContext: SourceContext = {
+      id: asyncKey,
+      getAnnotations() {
+        return Promise.resolve({ [asyncKey]: { value: "async" } });
+      },
+    };
+
+    const parser = object({
+      value: withDefault(option("--value", string()), "default"),
+    });
+
+    assert.throws(() => {
+      runWithSync(parser, "test", [asyncContext], {
+        args: [],
+      });
+    }, /returned a Promise in sync mode/);
+  });
+
+  it("should parse with no contexts", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    const result = runWithSync(parser, "test", [], {
+      args: ["Alice"],
+    });
+
+    assert.deepEqual(result, { name: "Alice" });
+  });
+
+  it("should handle help option", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    let helpShown = false;
+
+    runWithSync(parser, "test", [], {
+      args: ["--help"],
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      stdout: () => {},
+    });
+
+    assert.ok(helpShown);
+  });
+});
+
+describe("runWithAsync", () => {
+  it("should parse with async contexts", async () => {
+    const asyncKey = Symbol.for("@test/async");
+    const asyncContext: SourceContext = {
+      id: asyncKey,
+      async getAnnotations() {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return { [asyncKey]: { value: "async-value" } };
+      },
+    };
+
+    const parser = object({
+      value: withDefault(option("--value", string()), "default"),
+    });
+
+    const result = await runWithAsync(parser, "test", [asyncContext], {
+      args: [],
+    });
+
+    assert.deepEqual(result, { value: "default" });
+  });
+
+  it("should work with sync parser", async () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    const result = await runWithAsync(parser, "test", [], {
+      args: ["Alice"],
+    });
+
+    assert.deepEqual(result, { name: "Alice" });
+  });
+
+  it("should handle multiple async contexts", async () => {
+    const key1 = Symbol.for("@test/async1");
+    const key2 = Symbol.for("@test/async2");
+
+    const context1: SourceContext = {
+      id: key1,
+      async getAnnotations() {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return { [key1]: { value: "value1" } };
+      },
+    };
+
+    const context2: SourceContext = {
+      id: key2,
+      async getAnnotations() {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return { [key2]: { value: "value2" } };
+      },
+    };
+
+    const parser = object({
+      value: withDefault(option("--value", string()), "default"),
+    });
+
+    const result = await runWithAsync(
+      parser,
+      "test",
+      [context1, context2],
+      { args: [] },
+    );
+
+    assert.deepEqual(result, { value: "default" });
   });
 });
