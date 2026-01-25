@@ -661,12 +661,36 @@ API reference
 
 ### Types from `@optique/core/context`
 
-`SourceContext`
-:   Interface for data sources that provide annotations. Has two members:
+`SourceContext<TRequiredOptions = void>`
+:   Interface for data sources that provide annotations. The `TRequiredOptions`
+    type parameter specifies additional options that `runWith()` must provide
+    when this context is used.
+
+    Members:
 
      -  `id: symbol` - Unique identifier for the context
      -  `getAnnotations(parsed?: unknown): Promise<Annotations> | Annotations` -
         Returns annotations to inject into parsing
+
+    Use `ParserValuePlaceholder` in `TRequiredOptions` when the options depend
+    on the parser's result type.
+
+`ParserValuePlaceholder`
+:   A placeholder type representing the parser's result value type. Use this
+    in `SourceContext<TRequiredOptions>` when the required options depend on
+    the parser's result type. The `runWith()` function substitutes this
+    placeholder with the actual parser type at the call site.
+
+    ~~~~ typescript
+    import type { SourceContext, ParserValuePlaceholder } from "@optique/core/context";
+
+    // Context that requires getConfigPath with typed parser result
+    interface MyContext extends SourceContext<{
+      getConfigPath: (parsed: ParserValuePlaceholder) => string | undefined;
+    }> {
+      // ...
+    }
+    ~~~~
 
 ### Functions from `@optique/core/annotations`
 
@@ -690,16 +714,39 @@ API reference
 
 ### Functions from `@optique/core/facade`
 
-`runWith(parser, programName, contexts, options?): Promise<T>`
+`runWith(parser, programName, contexts, options): Promise<T>`
 :   Runs a parser with multiple source contexts. Automatically handles
     static and dynamic contexts with two-phase parsing when needed.
 
-`runWithSync(parser, programName, contexts, options?): T`
+    The `options` parameter must include any options required by the contexts.
+    For example, if a context specifies `TRequiredOptions` with
+    `ParserValuePlaceholder`, you must provide that option with the correct
+    parser result type:
+
+    ~~~~ typescript
+    // If configContext requires getConfigPath
+    const result = await runWith(parser, "myapp", [configContext], {
+      args: process.argv.slice(2),
+      getConfigPath: (parsed) => parsed.config,  // typed from parser!
+    });
+    ~~~~
+
+`runWithSync(parser, programName, contexts, options): T`
 :   Synchronous variant of `runWith()`. All contexts must return annotations
     synchronously (not Promises).
 
-`runWithAsync(parser, programName, contexts, options?): Promise<T>`
+`runWithAsync(parser, programName, contexts, options): Promise<T>`
 :   Explicit async variant of `runWith()`. Equivalent to `runWith()`.
+
+`SubstituteParserValue<T, TValue>`
+:   Type utility that substitutes `ParserValuePlaceholder` with the actual
+    parser value type. Used internally by `runWith()` to compute the required
+    options type.
+
+`ExtractRequiredOptions<TContexts, TValue>`
+:   Type utility that extracts and merges required options from an array of
+    source contexts. Returns the intersection of all contexts' required options
+    with `ParserValuePlaceholder` substituted by `TValue`.
 
 
 The source context system
@@ -981,6 +1028,95 @@ Note the defensive checks: when `parsed` is `undefined` (first pass), return
 empty. When the user didn't specify `--config`, return empty. When the file
 can't be read or parsed, return empty. This ensures the context never throws
 and gracefully degrades when config isn't available.
+
+### Creating a type-safe config context
+
+The example above hardcodes how to extract the config path from parsed results
+(`result.config`). This couples the context to a specific parser structure.
+For a more reusable approach, use `ParserValuePlaceholder` to declare that
+the caller must provide a `getConfigPath` function:
+
+~~~~ typescript
+import type {
+  SourceContext,
+  Annotations,
+  ParserValuePlaceholder,
+} from "@optique/core/context";
+
+const configKey = Symbol.for("@myapp/config");
+
+interface ConfigData {
+  readonly host?: string;
+  readonly port?: number;
+  readonly debug?: boolean;
+}
+
+// Declare required options using ParserValuePlaceholder
+interface ConfigContextOptions {
+  getConfigPath: (parsed: ParserValuePlaceholder) => string | undefined;
+}
+
+// The context type includes required options
+interface ConfigContext extends SourceContext<ConfigContextOptions> {
+  getConfigPath?: (parsed: unknown) => string | undefined;
+}
+
+export function createConfigContext(): ConfigContext {
+  const context: ConfigContext = {
+    id: configKey,
+    async getAnnotations(parsed?: unknown): Promise<Annotations> {
+      if (!parsed) return {};
+      
+      // Use the injected getConfigPath function
+      const configPath = context.getConfigPath?.(parsed);
+      if (!configPath) return {};
+      
+      try {
+        const content = await Deno.readTextFile(configPath);
+        const data: ConfigData = JSON.parse(content);
+        return { [configKey]: data };
+      } catch {
+        return {};
+      }
+    }
+  };
+  return context;
+}
+~~~~
+
+Now when using `runWith()`, TypeScript *requires* the `getConfigPath` option
+and infers the correct type for the `parsed` parameter:
+
+~~~~ typescript
+import { runWith } from "@optique/core/facade";
+import { object } from "@optique/core/constructs";
+import { option, argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { optional } from "@optique/core/modifiers";
+
+const parser = object({
+  config: optional(option("--config", string())),
+  host: option("--host", string()),
+  input: argument(string()),
+});
+
+const configContext = createConfigContext();
+
+// TypeScript requires getConfigPath and types `parsed` from the parser
+const result = await runWith(parser, "myapp", [configContext], {
+  args: process.argv.slice(2),
+  getConfigPath: (parsed) => parsed.config,  // parsed is typed!
+});
+~~~~
+
+If you omit `getConfigPath`, TypeScript reports an error. The `parsed`
+parameter is automatically typed as
+`{ config?: string; host: string; input: string }`, providing full type safety
+and autocompletion.
+
+This pattern is used by *@optique/config* to provide type-safe config file
+integration. See the [config file integration](../integrations/config.md)
+guide for a complete implementation.
 
 ### Best practices for custom contexts
 

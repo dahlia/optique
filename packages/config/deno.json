@@ -1,0 +1,37 @@
+{
+  "name": "@optique/config",
+  "version": "0.10.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./run": "./src/run.ts"
+  },
+  "exclude": [
+    "dist/",
+    "node_modules",
+    "tsdown.config.ts"
+  ],
+  "tasks": {
+    "build": "pnpm build",
+    "test": "deno test",
+    "test:node": {
+      "dependencies": [
+        "build"
+      ],
+      "command": "node --experimental-transform-types --test"
+    },
+    "test:bun": {
+      "dependencies": [
+        "build"
+      ],
+      "command": "bun test"
+    },
+    "test-all": {
+      "dependencies": [
+        "test",
+        "test:node",
+        "test:bun"
+      ]
+    }
+  }
+}

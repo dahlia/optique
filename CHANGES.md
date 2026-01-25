@@ -286,6 +286,82 @@ To be released.
 [#83]: https://github.com/dahlia/optique/issues/83
 [#85]: https://github.com/dahlia/optique/issues/85
 
+### @optique/config
+
+The *@optique/config* package was introduced in this release, providing
+configuration file support with type-safe validation using [Standard Schema].
+This package enables CLI applications to load default values from configuration
+files with proper priority handling: CLI arguments > config file values >
+defaults. [[#84]]
+
+ -  Added `createConfigContext()` function for creating configuration contexts
+    with Standard Schema validation.
+
+ -  Added `bindConfig()` function to bind parsers to configuration values with
+    automatic fallback handling.
+
+ -  Added `runWithConfig()` function for running parsers with two-pass parsing
+    to load and validate configuration files.
+
+ -  Added `ConfigContext` interface implementing `SourceContext` for composable
+    data source integration.
+
+ -  Added `configKey` symbol for storing config data in annotations.
+
+The package uses a two-phase parsing approach:
+
+1.  First pass: Parse arguments to extract the config file path
+2.  Load and validate: Read the config file and validate using Standard Schema
+3.  Second pass: Parse arguments again with config data as annotations
+
+This ensures the correct priority: CLI > config file > default values.
+
+~~~~ typescript
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { withDefault } from "@optique/core/modifiers";
+
+const configSchema = z.object({
+  host: z.string(),
+  port: z.number(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+});
+
+const result = await runWithConfig(parser, configContext, {
+  getConfigPath: (parsed) => parsed.config,
+  args: process.argv.slice(2),
+});
+
+// Config file: { "host": "api.example.com", "port": 8080 }
+// CLI: myapp --host localhost
+// Result: { host: "localhost", port: 8080 }
+~~~~
+
+The package supports any Standard Schema-compatible validation library (Zod,
+Valibot, ArkType, etc.) and allows custom file format parsers.
+
+[Standard Schema]: https://standardschema.dev/
+[#84]: https://github.com/dahlia/optique/issues/84
+
 ### @optique/run
 
  -  Updated `run()`, `runSync()`, and `runAsync()` to accept `Program` objects

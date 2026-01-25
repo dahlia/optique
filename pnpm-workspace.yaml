@@ -6,12 +6,13 @@ packages:
 catalog:
   "@logtape/file": ^1.2.2
   "@logtape/logtape": ^1.2.2
+  "@standard-schema/spec": ^1.1.0
   "@types/node": ^20.19.9
   isomorphic-git: ^1.36.1
   tsdown: ^0.13.0
   tsx: ^4.21.0
   typescript: ^5.8.3
-  valibot: ^0.42.0
+  valibot: ^1.2.0
   zod: "^3.25.0 || ^4.0.0"
 
 engineStrict: true

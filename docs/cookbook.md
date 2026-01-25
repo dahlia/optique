@@ -1065,6 +1065,212 @@ you want to guide users to provide at least some configuration while still
 supporting sensible defaults once they start configuring.
 
 
+Config file integration
+-----------------------
+
+*This API is available since Optique 0.10.0.*
+
+Many CLI tools support configuration files that provide default values for
+options. The *@optique/config* package provides type-safe config file
+integration with automatic fallback handling.
+
+### Basic setup with schema validation
+
+Use a Standard Schema-compatible library (Zod, Valibot, ArkType, etc.) to
+define your config structure:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+
+// Define the config schema
+const configSchema = z.object({
+  host: z.string().optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  debug: z.boolean().optional(),
+});
+
+// Create a config context
+const configContext = createConfigContext({ schema: configSchema });
+
+// Build the parser with config bindings
+const parser = object({
+  config: optional(option("-c", "--config", string())),
+  host: bindConfig(option("-h", "--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("-p", "--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+  debug: bindConfig(option("-d", "--debug"), {
+    context: configContext,
+    key: "debug",
+    default: false,
+  }),
+});
+
+// Run with config file support
+const result = await runWithConfig(parser, configContext, {
+  args: process.argv.slice(2),
+  getConfigPath: (parsed) => parsed.config,
+});
+
+// result.host: CLI > config.json > "localhost"
+// result.port: CLI > config.json > 3000
+~~~~
+
+The `bindConfig()` function wraps a parser to provide fallback behavior:
+
+1.  *CLI argument* (highest priority): User-provided command-line value
+2.  *Config file value*: Loaded from config file if path was specified
+3.  *Default value*: Specified in `bindConfig()` options
+4.  *Error*: If none of the above and no default
+
+### Type-safe config path extraction
+
+The `getConfigPath` option is type-checked against your parser's result type.
+TypeScript ensures you're accessing a field that actually exists:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { createConfigContext } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const configSchema = z.object({ host: z.string().optional() });
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  configFile: optional(option("--config-file", string())),
+  host: option("--host", string()),
+});
+
+const result = await runWithConfig(parser, configContext, {
+  args: process.argv.slice(2),
+  // `parsed` is typed as { configFile?: string; host: string }
+  getConfigPath: (parsed) => parsed.configFile,
+});
+~~~~
+
+### Nested config values
+
+For nested config structures, use a function instead of a key:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+
+const configSchema = z.object({
+  server: z.object({
+    host: z.string(),
+    port: z.number(),
+  }).optional(),
+  database: z.object({
+    connectionString: z.string(),
+  }).optional(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+// Access nested values with a function
+const hostParser = bindConfig(option("--host", string()), {
+  context: configContext,
+  key: (config) => config.server?.host,
+  default: "localhost",
+});
+
+const dbParser = bindConfig(option("--db", string()), {
+  context: configContext,
+  key: (config) => config.database?.connectionString,
+});
+~~~~
+
+### Custom config file formats
+
+By default, config files are parsed as JSON. For YAML, TOML, or other formats,
+provide a custom parser:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { createConfigContext } from "@optique/config";
+import { parse as parseYaml } from "yaml";
+
+const configSchema = z.object({
+  host: z.string(),
+  port: z.number(),
+});
+
+const configContext = createConfigContext({
+  schema: configSchema,
+  // Custom parser for YAML files
+  parser: (contents) => parseYaml(new TextDecoder().decode(contents)),
+});
+~~~~
+
+### Combining with environment variables
+
+A common pattern is to allow environment variables to override config file
+values. Use `bindConfig()` with environment variable fallbacks:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+
+const configSchema = z.object({
+  host: z.string().optional(),
+  port: z.number().optional(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  config: optional(option("-c", "--config", string())),
+  // Priority: CLI > env var > config file > default
+  host: bindConfig(option("-h", "--host", string()), {
+    context: configContext,
+    key: "host",
+    default: process.env.MYAPP_HOST ?? "localhost",
+  }),
+  port: bindConfig(option("-p", "--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: parseInt(process.env.MYAPP_PORT ?? "3000", 10),
+  }),
+});
+
+const result = await runWithConfig(parser, configContext, {
+  args: process.argv.slice(2),
+  getConfigPath: (parsed) => parsed.config,
+});
+~~~~
+
+This pattern achieves the priority order: CLI > environment variables >
+config file > hardcoded defaults, by using environment variables as the
+default value in `bindConfig()`.
+
+For more details on config file integration, see the
+[config file integration guide](./integrations/config.md).
+
+
 Design principles
 -----------------
 

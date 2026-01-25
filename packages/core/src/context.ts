@@ -15,6 +15,42 @@ import type { Annotations } from "./annotations.ts";
 export type { Annotations } from "./annotations.ts";
 
 /**
+ * Brand symbol for ParserValuePlaceholder type.
+ * @internal
+ */
+declare const parserValuePlaceholderBrand: unique symbol;
+
+/**
+ * A placeholder type that represents the parser's result value type.
+ *
+ * Use this type in `SourceContext<TRequiredOptions>` when the required options
+ * depend on the parser's result type. The `runWith()` function will substitute
+ * this placeholder with the actual parser value type at call site.
+ *
+ * @example
+ * ```typescript
+ * import type { SourceContext, ParserValuePlaceholder } from "@optique/core/context";
+ *
+ * // Define a context that requires options depending on parser result
+ * interface MyContext extends SourceContext<{
+ *   extractPath: (parsed: ParserValuePlaceholder) => string | undefined;
+ * }> {
+ *   // ...
+ * }
+ *
+ * // When used with runWith(), the placeholder becomes the actual parser type:
+ * // runWith(parser, "app", [myContext], {
+ * //   extractPath: (parsed) => parsed.configPath  // 'parsed' is typed!
+ * // });
+ * ```
+ *
+ * @since 0.10.0
+ */
+export type ParserValuePlaceholder = {
+  readonly [parserValuePlaceholderBrand]: "ParserValuePlaceholder";
+};
+
+/**
  * A source context that can provide data to parsers via annotations.
  *
  * Source contexts are used to inject external data (like environment variables
@@ -24,9 +60,14 @@ export type { Annotations } from "./annotations.ts";
  * - *Dynamic*: Data depends on parsing results (e.g., config files whose path
  *   is determined by a CLI option)
  *
+ * @template TRequiredOptions Additional options that `runWith()` must provide
+ *   when this context is used. Use `void` (the default) for contexts that
+ *   don't require extra options. Use {@link ParserValuePlaceholder} in option
+ *   types that depend on the parser's result type.
+ *
  * @example
  * ```typescript
- * // Static context example (environment variables)
+ * // Static context example (environment variables) - no extra options needed
  * const envContext: SourceContext = {
  *   id: Symbol.for("@myapp/env"),
  *   getAnnotations() {
@@ -39,24 +80,17 @@ export type { Annotations } from "./annotations.ts";
  *   }
  * };
  *
- * // Dynamic context example (config file)
- * const configContext: SourceContext = {
- *   id: Symbol.for("@myapp/config"),
- *   async getAnnotations(parsed?: unknown) {
- *     if (!parsed) return {}; // Return empty on first pass
- *     const result = parsed as { config?: string };
- *     if (!result.config) return {};
- *     const data = await loadConfigFile(result.config);
- *     return {
- *       [Symbol.for("@myapp/config")]: data
- *     };
- *   }
- * };
+ * // Dynamic context that requires options from runWith()
+ * interface ConfigContext extends SourceContext<{
+ *   getConfigPath: (parsed: ParserValuePlaceholder) => string | undefined;
+ * }> {
+ *   // ...
+ * }
  * ```
  *
  * @since 0.10.0
  */
-export interface SourceContext {
+export interface SourceContext<TRequiredOptions = void> {
   /**
    * Unique identifier for this context.
    *
@@ -64,6 +98,12 @@ export interface SourceContext {
    * that consume this context's data.
    */
   readonly id: symbol;
+
+  /**
+   * Type-level marker for the required options. Not used at runtime.
+   * @internal
+   */
+  readonly _requiredOptions?: TRequiredOptions;
 
   /**
    * Get annotations to inject into parsing.
@@ -96,7 +136,7 @@ export interface SourceContext {
  * @returns `true` if the context is static, `false` otherwise.
  * @since 0.10.0
  */
-export function isStaticContext(context: SourceContext): boolean {
+export function isStaticContext(context: SourceContext<unknown>): boolean {
   const result = context.getAnnotations();
   if (result instanceof Promise) {
     return false;

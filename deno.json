@@ -5,6 +5,7 @@
   ],
   "imports": {
     "@logtape/logtape": "jsr:@logtape/logtape@^1.2.2",
+    "@standard-schema/spec": "npm:@standard-schema/spec@^1.1.0",
     "@std/fs": "jsr:@std/fs@^1.0.19",
     "@std/path": "jsr:@std/path@^1.1.1",
     "@types/node": "npm:@types/node@^20.19.9",
@@ -12,7 +13,7 @@
     "markdownlint-cli2": "npm:markdownlint-cli2@^0.20.0",
     "tsdown": "npm:tsdown@^0.13.0",
     "typescript": "npm:typescript@^5.8.3",
-    "valibot": "jsr:@valibot/valibot@^1.1.0",
+    "valibot": "jsr:@valibot/valibot@^1.2.0",
     "zod": "npm:zod@^4.0.0"
   },
   "unstable": [

@@ -44,9 +44,9 @@ import {
 import { formatUsage, type OptionName } from "./usage.ts";
 import { string, type ValueParser } from "./valueparser.ts";
 import { annotationKey, type Annotations } from "./annotations.ts";
-import type { SourceContext } from "./context.ts";
+import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
-export type { SourceContext };
+export type { ParserValuePlaceholder, SourceContext };
 
 /**
  * Helper types for parser generation
@@ -1658,7 +1658,7 @@ function mergeAnnotations(
  * @returns Promise that resolves to merged annotations.
  */
 async function collectAnnotations(
-  contexts: readonly SourceContext[],
+  contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
 ): Promise<Annotations> {
   const annotationsList: Annotations[] = [];
@@ -1684,7 +1684,7 @@ async function collectAnnotations(
  * @throws Error if any context returns a Promise.
  */
 function collectAnnotationsSync(
-  contexts: readonly SourceContext[],
+  contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
 ): Annotations {
   const annotationsList: Annotations[] = [];
@@ -1715,7 +1715,9 @@ function collectAnnotationsSync(
  * @param contexts Source contexts to check.
  * @returns `true` if any context appears to be dynamic.
  */
-function hasDynamicContexts(contexts: readonly SourceContext[]): boolean {
+function hasDynamicContexts(
+  contexts: readonly SourceContext<unknown>[],
+): boolean {
   for (const context of contexts) {
     const result = context.getAnnotations();
     if (result instanceof Promise) {
@@ -1728,6 +1730,54 @@ function hasDynamicContexts(contexts: readonly SourceContext[]): boolean {
   }
   return false;
 }
+
+/**
+ * Substitutes {@link ParserValuePlaceholder} with the actual parser value type.
+ *
+ * This type recursively traverses `T` and replaces any occurrence of
+ * `ParserValuePlaceholder` with `TValue`. Used by `runWith()` to compute
+ * the required options type based on the parser's result type.
+ *
+ * @template T The type to transform.
+ * @template TValue The parser value type to substitute.
+ * @since 0.10.0
+ */
+export type SubstituteParserValue<T, TValue> = T extends ParserValuePlaceholder
+  ? TValue
+  : T extends (...args: infer A) => infer R ? (
+      ...args: { [K in keyof A]: SubstituteParserValue<A[K], TValue> }
+    ) => SubstituteParserValue<R, TValue>
+  : T extends object ? { [K in keyof T]: SubstituteParserValue<T[K], TValue> }
+  : T;
+
+/**
+ * Converts a union type to an intersection type.
+ * @internal
+ */
+type UnionToIntersection<U> = (
+  U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void ? I
+  : never;
+
+/**
+ * Extracts and merges required options from an array of source contexts.
+ *
+ * For each context in the array, extracts its `TRequiredOptions` type parameter,
+ * substitutes any `ParserValuePlaceholder` with `TValue`, and intersects all
+ * the resulting option types.
+ *
+ * @template TContexts The tuple/array type of source contexts.
+ * @template TValue The parser value type for placeholder substitution.
+ * @since 0.10.0
+ */
+export type ExtractRequiredOptions<
+  TContexts extends readonly SourceContext<unknown>[],
+  TValue,
+> = UnionToIntersection<
+  TContexts[number] extends SourceContext<infer O> ? O extends void ? unknown
+    : SubstituteParserValue<O, TValue>
+    : unknown
+>;
 
 /**
  * Options for runWith functions.
@@ -1796,13 +1846,16 @@ export interface RunWithOptions<THelp, TError>
  */
 export async function runWith<
   TParser extends Parser<Mode, unknown, unknown>,
+  TContexts extends readonly SourceContext<unknown>[],
   THelp = void,
   TError = never,
 >(
   parser: TParser,
   programName: string,
-  contexts: readonly SourceContext[],
-  options?: RunWithOptions<THelp, TError>,
+  contexts: TContexts,
+  options:
+    & RunWithOptions<THelp, TError>
+    & ExtractRequiredOptions<TContexts, InferValue<TParser>>,
 ): Promise<InferValue<TParser>> {
   const args = options?.args ?? [];
 
@@ -1956,13 +2009,16 @@ export async function runWith<
  */
 export function runWithSync<
   TParser extends Parser<"sync", unknown, unknown>,
+  TContexts extends readonly SourceContext<unknown>[],
   THelp = void,
   TError = never,
 >(
   parser: TParser,
   programName: string,
-  contexts: readonly SourceContext[],
-  options?: RunWithOptions<THelp, TError>,
+  contexts: TContexts,
+  options:
+    & RunWithOptions<THelp, TError>
+    & ExtractRequiredOptions<TContexts, InferValue<TParser>>,
 ): InferValue<TParser> {
   const args = options?.args ?? [];
 
@@ -2041,13 +2097,16 @@ export function runWithSync<
  */
 export function runWithAsync<
   TParser extends Parser<Mode, unknown, unknown>,
+  TContexts extends readonly SourceContext<unknown>[],
   THelp = void,
   TError = never,
 >(
   parser: TParser,
   programName: string,
-  contexts: readonly SourceContext[],
-  options?: RunWithOptions<THelp, TError>,
+  contexts: TContexts,
+  options:
+    & RunWithOptions<THelp, TError>
+    & ExtractRequiredOptions<TContexts, InferValue<TParser>>,
 ): Promise<InferValue<TParser>> {
   return runWith(parser, programName, contexts, options);
 }

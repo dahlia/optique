@@ -67,6 +67,7 @@ const CONCEPTS = {
 const INTEGRATIONS = {
   text: "Integrations",
   items: [
+    { text: "Config files", link: "/integrations/config" },
     { text: "Git", link: "/integrations/git" },
     { text: "LogTape", link: "/integrations/logtape" },
     { text: "Temporal", link: "/integrations/temporal" },
@@ -78,6 +79,7 @@ const INTEGRATIONS = {
 const REFERENCES = {
   text: "References",
   items: [
+    { text: "@optique/config", link: "https://jsr.io/@optique/config/doc" },
     { text: "@optique/core", link: "https://jsr.io/@optique/core/doc" },
     { text: "@optique/git", link: "https://jsr.io/@optique/git/doc" },
     { text: "@optique/logtape", link: "https://jsr.io/@optique/logtape/doc" },

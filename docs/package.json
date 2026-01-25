@@ -1,6 +1,7 @@
 {
   "devDependencies": {
     "@logtape/logtape": "catalog:",
+    "@optique/config": "workspace:",
     "@optique/core": "workspace:",
     "@optique/git": "workspace:",
     "@optique/logtape": "workspace:",
@@ -11,6 +12,7 @@
     "@optique/zod": "workspace:",
     "@shikijs/vitepress-twoslash": "^3.20.0",
     "@types/node": "catalog:",
+    "arktype": "^2.1.29",
     "markdown-it-deflist": "^3.0.0",
     "typescript": "catalog:",
     "valibot": "catalog:",
@@ -23,5 +25,8 @@
     "dev": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && vitepress dev",
     "build": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && NODE_OPTIONS=--max-old-space-size=8192 vitepress build",
     "preview": "vitepress preview"
+  },
+  "dependencies": {
+    "yaml": "^2.8.2"
   }
 }
