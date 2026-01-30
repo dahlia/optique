@@ -1451,6 +1451,273 @@ const bind = socketAddress({
 The parser uses `"HOST:PORT"` as its default metavar.
 
 
+`portRange()` parser
+--------------------
+
+The `portRange()` parser validates port ranges in the format `start-end`
+(e.g., `8000-8080`). It supports both number and bigint types, custom
+separators, and comprehensive validation options including min/max constraints
+and well-known port filtering.
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+// Basic port range (number type)
+const range = portRange();
+
+// Custom separator
+const colonRange = portRange({ separator: ":" });
+
+// Allow single ports (returns {start: 8080, end: 8080})
+const flexibleRange = portRange({ allowSingle: true });
+
+// Restrict to non-privileged ports
+const unprivilegedRange = portRange({ min: 1024 });
+
+// BigInt type for consistency with other APIs
+const bigintRange = portRange({ type: "bigint" });
+~~~~
+
+### Port range format
+
+The parser accepts port ranges in `start-end` format where both start and end
+must be valid port numbers (1-65535):
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+const parser = portRange();
+// ---cut-before---
+parser.parse("8000-8080");  // { start: 8000, end: 8080 }
+parser.parse("80-443");     // { start: 80, end: 443 }
+parser.parse("1-65535");    // { start: 1, end: 65535 }
+~~~~
+
+The start port must be less than or equal to the end port:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+const parser = portRange();
+// ---cut-before---
+parser.parse("8080-8000");  // Error: start port must not be greater than end port
+~~~~
+
+### Single port mode
+
+When `allowSingle` is enabled, the parser accepts single port numbers and
+returns a range where start equals end:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+const parser = portRange({ allowSingle: true });
+parser.parse("8080");       // { start: 8080, end: 8080 }
+parser.parse("80-443");     // { start: 80, end: 443 }
+~~~~
+
+Without `allowSingle`, single ports are rejected:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+const parser = portRange();
+parser.parse("8080");       // Error: must be in the format PORT-PORT
+~~~~
+
+### Custom separator
+
+The default separator is `"-"`, but you can specify any string:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+// Colon separator
+const colonRange = portRange({ separator: ":" });
+colonRange.parse("8000:8080");  // { start: 8000, end: 8080 }
+
+// Multi-character separator
+const toRange = portRange({ separator: " to " });
+toRange.parse("8000 to 8080");  // { start: 8000, end: 8080 }
+~~~~
+
+The separator is also used in the metavar and error messages:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+portRange({ separator: ":" }).metavar;     // "PORT:PORT"
+portRange({ separator: " to " }).metavar;  // "PORT to PORT"
+~~~~
+
+### Min/max constraints
+
+Restrict the allowed port range using `min` and `max` options. These
+constraints apply to both the start and end ports:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+// Only non-privileged ports
+const unprivileged = portRange({ min: 1024 });
+unprivileged.parse("1024-8080");  // { start: 1024, end: 8080 }
+unprivileged.parse("80-443");     // Error: must be at least 1024
+
+// Limit to ephemeral port range
+const ephemeral = portRange({ min: 49152, max: 65535 });
+ephemeral.parse("50000-51000");  // { start: 50000, end: 51000 }
+ephemeral.parse("8000-8080");    // Error: must be at least 49152
+~~~~
+
+### Well-known port filtering
+
+The `disallowWellKnown` option rejects well-known ports (1-1023) in both the
+start and end positions:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+const parser = portRange({ disallowWellKnown: true });
+parser.parse("1024-8080");  // { start: 1024, end: 8080 }
+parser.parse("80-443");     // Error: must not be a well-known port (1-1023)
+parser.parse("1024-1023");  // Error: must not be a well-known port (1-1023)
+~~~~
+
+### Number vs bigint types
+
+The parser supports both `number` (default) and `bigint` types:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+// Number type (default)
+const numRange = portRange();
+numRange.parse("8000-8080");  // { start: 8000, end: 8080 }
+
+// BigInt type
+const bigintRange = portRange({ type: "bigint" });
+bigintRange.parse("8000-8080");  // { start: 8000n, end: 8080n }
+~~~~
+
+The bigint type is useful for consistency when working with APIs that use
+bigint for port numbers.
+
+### Return value
+
+The parser returns a `PortRangeValue` object with `start` and `end` properties:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+interface PortRangeValueNumber {
+  readonly start: number;
+  readonly end: number;
+}
+
+interface PortRangeValueBigInt {
+  readonly start: bigint;
+  readonly end: bigint;
+}
+~~~~
+
+The type is inferred based on the `type` option:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+
+const numRange = portRange();
+const result1 = numRange.parse("8000-8080");
+if (result1.success) {
+  result1.value.start;  // type: number
+}
+
+const bigintRange = portRange({ type: "bigint" });
+const result2 = bigintRange.parse("8000-8080");
+if (result2.success) {
+  result2.value.start;  // type: bigint
+}
+~~~~
+
+### Custom error messages
+
+All error messages can be customized via the `errors` option:
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+import { message, text } from "@optique/core/message";
+import { option } from "@optique/core";
+// ---cut-before---
+const portOpt = option("--ports", portRange({
+  errors: {
+    invalidFormat: message`Port range must be START-END`,
+    invalidRange: message`START must be ≤ END`,
+    invalidPort: message`Ports must be 1-65535`,
+    belowMinimum: (port, min) => 
+      message`Port ${text(port.toString())} is below minimum ${text(min.toString())}`,
+    aboveMaximum: (port, max) =>
+      message`Port ${text(port.toString())} is above maximum ${text(max.toString())}`,
+    wellKnownNotAllowed: message`System ports (1-1023) are not allowed`,
+  },
+}));
+~~~~
+
+The `invalidFormat` and `invalidRange` errors are specific to port ranges,
+while other errors (`invalidPort`, `belowMinimum`, `aboveMaximum`,
+`wellKnownNotAllowed`) are inherited from the underlying `port()` parser.
+
+### Common use cases
+
+**Dynamic server port pools:**
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept ranges or single ports for service binding
+const ports = portRange({
+  allowSingle: true,
+  min: 1024,
+  metavar: "PORTS",
+});
+~~~~
+
+**Load balancer configuration:**
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+// ---cut-before---
+// Backend server port range
+const backendPorts = portRange({
+  min: 8000,
+  max: 9000,
+});
+~~~~
+
+**Firewall rules:**
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+// ---cut-before---
+// Allow specifying port ranges for firewall configuration
+const allowedPorts = portRange({
+  allowSingle: true,
+  disallowWellKnown: true,
+});
+~~~~
+
+**Container port mapping:**
+
+~~~~ typescript twoslash
+import { portRange } from "@optique/core/valueparser";
+// ---cut-before---
+// Map container port ranges (colon separator for Docker-style syntax)
+const portMapping = portRange({
+  separator: ":",
+  min: 1024,
+});
+~~~~
+
+The parser uses `"PORT-PORT"` as its default metavar (or `"PORT{separator}PORT"`
+when a custom separator is specified).
+
+
 `path()` parser
 ---------------
 
