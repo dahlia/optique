@@ -6,6 +6,7 @@ import {
   hostname,
   integer,
   ipv4,
+  ipv6,
   isValueParser,
   locale,
   macAddress,
@@ -7217,6 +7218,373 @@ describe("domain()", () => {
       const result = parser.parse("API.Example.COM");
       assert.ok(result.success);
       assert.strictEqual(result.value, "api.example.com");
+    });
+  });
+});
+
+describe("ipv6()", () => {
+  describe("basic validation", () => {
+    it("should accept full IPv6 address", () => {
+      const parser = ipv6();
+      const result = parser.parse("2001:0db8:85a3:0000:0000:8a2e:0370:7334");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8:85a3::8a2e:370:7334");
+    });
+
+    it("should accept compressed IPv6 address", () => {
+      const parser = ipv6();
+      const result = parser.parse("2001:db8::8a2e:370:7334");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8::8a2e:370:7334");
+    });
+
+    it("should accept loopback address", () => {
+      const parser = ipv6();
+      const result = parser.parse("::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::1");
+    });
+
+    it("should accept zero address", () => {
+      const parser = ipv6();
+      const result = parser.parse("::");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::");
+    });
+
+    it("should normalize to lowercase", () => {
+      const parser = ipv6();
+      const result = parser.parse("2001:DB8:85A3::8A2E:370:7334");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8:85a3::8a2e:370:7334");
+    });
+
+    it("should accept link-local address", () => {
+      const parser = ipv6();
+      const result = parser.parse("fe80::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "fe80::1");
+    });
+
+    it("should accept unique local address", () => {
+      const parser = ipv6();
+      const result = parser.parse("fc00::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "fc00::1");
+    });
+
+    it("should accept multicast address", () => {
+      const parser = ipv6();
+      const result = parser.parse("ff02::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "ff02::1");
+    });
+
+    it("should accept IPv4-mapped IPv6 address", () => {
+      const parser = ipv6();
+      const result = parser.parse("::ffff:192.0.2.1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::ffff:c000:201");
+    });
+  });
+
+  describe("allowLoopback option", () => {
+    it("should reject loopback when allowLoopback is false", () => {
+      const parser = ipv6({ allowLoopback: false });
+      const result = parser.parse("::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::1" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should accept loopback when allowLoopback is true", () => {
+      const parser = ipv6({ allowLoopback: true });
+      const result = parser.parse("::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::1");
+    });
+  });
+
+  describe("allowLinkLocal option", () => {
+    it("should reject link-local when allowLinkLocal is false", () => {
+      const parser = ipv6({ allowLinkLocal: false });
+      const result = parser.parse("fe80::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "fe80::1" },
+        { type: "text", text: " is a link-local address." },
+      ]);
+    });
+
+    it("should accept link-local when allowLinkLocal is true", () => {
+      const parser = ipv6({ allowLinkLocal: true });
+      const result = parser.parse("fe80::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "fe80::1");
+    });
+  });
+
+  describe("allowUniqueLocal option", () => {
+    it("should reject unique local when allowUniqueLocal is false", () => {
+      const parser = ipv6({ allowUniqueLocal: false });
+      const result = parser.parse("fc00::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "fc00::1" },
+        { type: "text", text: " is a unique local address." },
+      ]);
+    });
+
+    it("should accept unique local when allowUniqueLocal is true", () => {
+      const parser = ipv6({ allowUniqueLocal: true });
+      const result = parser.parse("fc00::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "fc00::1");
+    });
+  });
+
+  describe("allowMulticast option", () => {
+    it("should reject multicast when allowMulticast is false", () => {
+      const parser = ipv6({ allowMulticast: false });
+      const result = parser.parse("ff02::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "ff02::1" },
+        { type: "text", text: " is a multicast address." },
+      ]);
+    });
+
+    it("should accept multicast when allowMulticast is true", () => {
+      const parser = ipv6({ allowMulticast: true });
+      const result = parser.parse("ff02::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "ff02::1");
+    });
+  });
+
+  describe("allowZero option", () => {
+    it("should reject zero address when allowZero is false", () => {
+      const parser = ipv6({ allowZero: false });
+      const result = parser.parse("::");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::" },
+        { type: "text", text: " is the zero address." },
+      ]);
+    });
+
+    it("should accept zero address when allowZero is true", () => {
+      const parser = ipv6({ allowZero: true });
+      const result = parser.parse("::");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::");
+    });
+  });
+
+  describe("invalid formats", () => {
+    it("should reject empty string", () => {
+      const parser = ipv6();
+      const result = parser.parse("");
+      assert.ok(!result.success);
+    });
+
+    it("should reject IPv4 address", () => {
+      const parser = ipv6();
+      const result = parser.parse("192.0.2.1");
+      assert.ok(!result.success);
+    });
+
+    it("should reject invalid characters", () => {
+      const parser = ipv6();
+      const result = parser.parse("2001:db8::g123");
+      assert.ok(!result.success);
+    });
+
+    it("should reject too many groups", () => {
+      const parser = ipv6();
+      const result = parser.parse(
+        "2001:db8:85a3:0:0:8a2e:370:7334:extra",
+      );
+      assert.ok(!result.success);
+    });
+
+    it("should reject multiple :: compressions", () => {
+      const parser = ipv6();
+      const result = parser.parse("2001::db8::1");
+      assert.ok(!result.success);
+    });
+
+    it("should reject groups with more than 4 hex digits", () => {
+      const parser = ipv6();
+      const result = parser.parse("2001:0db85:85a3::8a2e:370:7334");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom invalidIpv6 message", () => {
+      const parser = ipv6({
+        errors: {
+          invalidIpv6: [
+            { type: "text", text: "Not a valid IPv6!" },
+          ],
+        },
+      });
+      const result = parser.parse("invalid");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Not a valid IPv6!" },
+      ]);
+    });
+
+    it("should use custom invalidIpv6 function", () => {
+      const parser = ipv6({
+        errors: {
+          invalidIpv6: (input) => [
+            { type: "text", text: "Bad IP: " },
+            { type: "value", value: input },
+          ],
+        },
+      });
+      const result = parser.parse("bad");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Bad IP: " },
+        { type: "value", value: "bad" },
+      ]);
+    });
+
+    it("should use custom loopbackNotAllowed message", () => {
+      const parser = ipv6({
+        allowLoopback: false,
+        errors: {
+          loopbackNotAllowed: [
+            { type: "text", text: "No loopback!" },
+          ],
+        },
+      });
+      const result = parser.parse("::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "No loopback!" },
+      ]);
+    });
+
+    it("should use custom linkLocalNotAllowed message", () => {
+      const parser = ipv6({
+        allowLinkLocal: false,
+        errors: {
+          linkLocalNotAllowed: [
+            { type: "text", text: "No link-local!" },
+          ],
+        },
+      });
+      const result = parser.parse("fe80::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "No link-local!" },
+      ]);
+    });
+
+    it("should use custom uniqueLocalNotAllowed message", () => {
+      const parser = ipv6({
+        allowUniqueLocal: false,
+        errors: {
+          uniqueLocalNotAllowed: [
+            { type: "text", text: "No unique local!" },
+          ],
+        },
+      });
+      const result = parser.parse("fc00::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "No unique local!" },
+      ]);
+    });
+
+    it("should use custom multicastNotAllowed message", () => {
+      const parser = ipv6({
+        allowMulticast: false,
+        errors: {
+          multicastNotAllowed: [
+            { type: "text", text: "No multicast!" },
+          ],
+        },
+      });
+      const result = parser.parse("ff02::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "No multicast!" },
+      ]);
+    });
+
+    it("should use custom zeroNotAllowed message", () => {
+      const parser = ipv6({
+        allowZero: false,
+        errors: {
+          zeroNotAllowed: [
+            { type: "text", text: "No zero address!" },
+          ],
+        },
+      });
+      const result = parser.parse("::");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "No zero address!" },
+      ]);
+    });
+  });
+
+  describe("metavar", () => {
+    it("should return default metavar", () => {
+      const parser = ipv6();
+      assert.strictEqual(parser.metavar, "IPV6");
+    });
+
+    it("should return custom metavar", () => {
+      const parser = ipv6({ metavar: "IPv6_ADDR" });
+      assert.strictEqual(parser.metavar, "IPv6_ADDR");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should compress leading zeros", () => {
+      const parser = ipv6();
+      const result = parser.parse(
+        "2001:0db8:0000:0000:0000:0000:0000:0001",
+      );
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8::1");
+    });
+
+    it("should handle maximum compression", () => {
+      const parser = ipv6();
+      const result = parser.parse("0000:0000:0000:0000:0000:0000:0000:0001");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::1");
+    });
+
+    it("should handle compression at start", () => {
+      const parser = ipv6();
+      const result = parser.parse("::8a2e:370:7334");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::8a2e:370:7334");
+    });
+
+    it("should handle compression at end", () => {
+      const parser = ipv6();
+      const result = parser.parse("2001:db8::");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8::");
+    });
+
+    it("should handle compression in middle", () => {
+      const parser = ipv6();
+      const result = parser.parse("2001:db8::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8::1");
     });
   });
 });
