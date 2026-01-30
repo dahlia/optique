@@ -1916,6 +1916,236 @@ const monitorMac = macAddress();
 The parser uses `"MAC"` as its default metavar.
 
 
+`domain()` parser
+-----------------
+
+The `domain()` parser validates domain names according to RFC 1035 with
+configurable options for subdomain filtering, TLD restrictions, minimum label
+requirements, and case normalization.
+
+### Basic validation
+
+The parser validates domain names with the following rules:
+
+ -  Each label (part separated by dots) must be 1-63 characters
+ -  Labels can contain alphanumeric characters and hyphens
+ -  Labels cannot start or end with a hyphen
+ -  By default, requires at least 2 labels (e.g., `example.com`)
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+
+const parser = domain();
+const result1 = parser.parse("example.com");
+if (result1.success) {
+  result1.value;  // "example.com"
+}
+
+const result2 = parser.parse("www.example.com");
+if (result2.success) {
+  result2.value;  // "www.example.com"
+}
+
+const result3 = parser.parse("api.staging.example.com");
+if (result3.success) {
+  result3.value;  // "api.staging.example.com"
+}
+~~~~
+
+### Subdomain filtering
+
+Use the `allowSubdomains` option to restrict to root domains only:
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept only root domains (2 labels)
+const rootOnly = domain({ allowSubdomains: false });
+
+const result1 = rootOnly.parse("example.com");
+if (result1.success) {
+  result1.value;  // "example.com"
+}
+
+// Rejects subdomains
+const result2 = rootOnly.parse("www.example.com");
+if (!result2.success) {
+  result2.error;  // "Subdomains are not allowed, but got www.example.com."
+}
+~~~~
+
+### TLD restrictions
+
+Use the `allowedTLDs` option to restrict accepted top-level domains:
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept only specific TLDs
+const restrictedTLD = domain({ allowedTLDs: ["com", "org", "net"] });
+
+const result1 = restrictedTLD.parse("example.com");
+if (result1.success) {
+  result1.value;  // "example.com"
+}
+
+// Case-insensitive TLD matching
+const result2 = restrictedTLD.parse("example.COM");
+if (result2.success) {
+  result2.value;  // "example.COM"
+}
+
+// Rejects disallowed TLDs
+const result3 = restrictedTLD.parse("example.io");
+if (!result3.success) {
+  result3.error;  // "Top-level domain io is not allowed. Allowed TLDs: com, org, net."
+}
+~~~~
+
+### Minimum labels
+
+Use the `minLabels` option to require a specific number of labels:
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+// Require at least 3 labels
+const threeLabels = domain({ minLabels: 3 });
+
+const result1 = threeLabels.parse("www.example.com");
+if (result1.success) {
+  result1.value;  // "www.example.com"
+}
+
+const result2 = threeLabels.parse("example.com");
+if (!result2.success) {
+  result2.error;  // "Domain example.com must have at least 3 labels."
+}
+
+// Allow single-label domains (e.g., "localhost")
+const singleLabel = domain({ minLabels: 1 });
+const result3 = singleLabel.parse("localhost");
+if (result3.success) {
+  result3.value;  // "localhost"
+}
+~~~~
+
+### Case normalization
+
+Use the `lowercase` option to normalize domain names to lowercase:
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+// Preserve original case (default)
+const preserveCase = domain();
+const result1 = preserveCase.parse("Example.COM");
+if (result1.success) {
+  result1.value;  // "Example.COM"
+}
+
+// Convert to lowercase
+const lowerCase = domain({ lowercase: true });
+const result2 = lowerCase.parse("Example.COM");
+if (result2.success) {
+  result2.value;  // "example.com"
+}
+~~~~
+
+### Return value
+
+The parser returns a string representing the domain name, optionally
+normalized to lowercase:
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = domain({ lowercase: true });
+const result = parser.parse("WWW.Example.COM");
+if (result.success) {
+  const domainName: string = result.value;  // "www.example.com"
+}
+~~~~
+
+### Custom error messages
+
+You can customize error messages using the `errors` option:
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+import { message, text } from "@optique/core/message";
+// ---cut-before---
+const parser = domain({
+  allowSubdomains: false,
+  allowedTLDs: ["com", "org"],
+  errors: {
+    invalidDomain: (input) =>
+      message`Invalid domain: ${text(input)}`,
+    subdomainsNotAllowed: (domain) =>
+      message`Only root domains allowed, got: ${text(domain)}`,
+    tldNotAllowed: (tld, allowed) =>
+      message`TLD ${text(tld)} not in: ${text(allowed.join(", "))}`,
+    tooFewLabels: (domain, min) =>
+      message`${text(domain)} needs ${text(min.toString())} labels`,
+  },
+});
+
+const result = parser.parse("example..com");
+if (!result.success) {
+  result.error;  // Custom error message
+}
+~~~~
+
+### Common use cases
+
+**Website configuration:**
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept any valid domain, normalize to lowercase
+const websiteDomain = domain({ lowercase: true });
+~~~~
+
+**Email domain validation:**
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+// Restrict to specific TLDs for corporate email
+const emailDomain = domain({
+  allowedTLDs: ["com", "org", "edu"],
+  lowercase: true,
+});
+~~~~
+
+**DNS configuration:**
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+// Root domains only for DNS zone setup
+const zoneDomain = domain({
+  allowSubdomains: false,
+  lowercase: true,
+});
+~~~~
+
+**API endpoint configuration:**
+
+~~~~ typescript twoslash
+import { domain } from "@optique/core/valueparser";
+// ---cut-before---
+// Any valid domain with minimum 2 labels
+const apiDomain = domain({
+  minLabels: 2,
+  lowercase: true,
+});
+~~~~
+
+The parser uses `"DOMAIN"` as its default metavar.
+
+
 `path()` parser
 ---------------
 
