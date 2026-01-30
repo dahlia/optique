@@ -446,6 +446,28 @@ To be released.
     }))
     ~~~~
 
+ -  Added `domain()` value parser for domain name validation. The parser
+    validates domain names according to RFC 1035 with configurable options for
+    subdomain filtering, TLD restrictions, minimum label requirements, and case
+    normalization. Returns a formatted string. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { domain } from "@optique/core/valueparser";
+
+    // Accept any valid domain
+    option("--domain", domain())
+
+    // Root domains only (no subdomains)
+    option("--root", domain({ allowSubdomains: false }))
+
+    // Restrict to specific TLDs
+    option("--domain", domain({ allowedTLDs: ["com", "org", "net"] }))
+
+    // Normalize to lowercase
+    option("--domain", domain({ lowercase: true }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]
