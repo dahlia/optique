@@ -1458,3 +1458,351 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
     },
   };
 }
+
+/**
+ * Options for creating a port parser that returns a JavaScript `number`.
+ */
+export interface PortOptionsNumber {
+  /**
+   * The type of value to return.
+   * @default `"number"`
+   */
+  readonly type?: "number";
+
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `PORT`.
+   * @default `"PORT"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Minimum allowed port number (inclusive).
+   * @default `1`
+   */
+  readonly min?: number;
+
+  /**
+   * Maximum allowed port number (inclusive).
+   * @default `65535`
+   */
+  readonly max?: number;
+
+  /**
+   * If `true`, disallows well-known ports (1-1023).
+   * These ports typically require root/administrator privileges on most systems.
+   * @default `false`
+   */
+  readonly disallowWellKnown?: boolean;
+
+  /**
+   * Custom error messages for port parsing failures.
+   * @since 0.10.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid port number.
+     * Can be a static message or a function that receives the input.
+     * @since 0.10.0
+     */
+    invalidPort?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when port is below minimum value.
+     * Can be a static message or a function that receives the port and minimum.
+     * @since 0.10.0
+     */
+    belowMinimum?: Message | ((port: number, min: number) => Message);
+
+    /**
+     * Custom error message when port is above maximum value.
+     * Can be a static message or a function that receives the port and maximum.
+     * @since 0.10.0
+     */
+    aboveMaximum?: Message | ((port: number, max: number) => Message);
+
+    /**
+     * Custom error message when well-known port is used but disallowed.
+     * Can be a static message or a function that receives the port.
+     * @since 0.10.0
+     */
+    wellKnownNotAllowed?: Message | ((port: number) => Message);
+  };
+}
+
+/**
+ * Options for creating a port parser that returns a `bigint`.
+ */
+export interface PortOptionsBigInt {
+  /**
+   * Must be set to `"bigint"` to create a `bigint` parser.
+   */
+  readonly type: "bigint";
+
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `PORT`.
+   * @default `"PORT"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Minimum allowed port number (inclusive).
+   * @default `1n`
+   */
+  readonly min?: bigint;
+
+  /**
+   * Maximum allowed port number (inclusive).
+   * @default `65535n`
+   */
+  readonly max?: bigint;
+
+  /**
+   * If `true`, disallows well-known ports (1-1023).
+   * These ports typically require root/administrator privileges on most systems.
+   * @default `false`
+   */
+  readonly disallowWellKnown?: boolean;
+
+  /**
+   * Custom error messages for port parsing failures.
+   * @since 0.10.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid port number.
+     * Can be a static message or a function that receives the input.
+     * @since 0.10.0
+     */
+    invalidPort?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when port is below minimum value.
+     * Can be a static message or a function that receives the port and minimum.
+     * @since 0.10.0
+     */
+    belowMinimum?: Message | ((port: bigint, min: bigint) => Message);
+
+    /**
+     * Custom error message when port is above maximum value.
+     * Can be a static message or a function that receives the port and maximum.
+     * @since 0.10.0
+     */
+    aboveMaximum?: Message | ((port: bigint, max: bigint) => Message);
+
+    /**
+     * Custom error message when well-known port is used but disallowed.
+     * Can be a static message or a function that receives the port.
+     * @since 0.10.0
+     */
+    wellKnownNotAllowed?: Message | ((port: bigint) => Message);
+  };
+}
+
+/**
+ * Creates a ValueParser for TCP/UDP port numbers that returns JavaScript numbers.
+ *
+ * @param options Configuration options for the port parser.
+ * @returns A {@link ValueParser} that parses strings into port numbers.
+ * @since 0.10.0
+ */
+export function port(
+  options?: PortOptionsNumber,
+): ValueParser<"sync", number>;
+
+/**
+ * Creates a ValueParser for TCP/UDP port numbers that returns `bigint` values.
+ *
+ * @param options Configuration options for the `bigint` port parser.
+ * @returns A {@link ValueParser} that parses strings into `bigint` port values.
+ * @since 0.10.0
+ */
+export function port(
+  options: PortOptionsBigInt,
+): ValueParser<"sync", bigint>;
+
+/**
+ * Creates a ValueParser for TCP/UDP port numbers.
+ *
+ * This parser validates that the input is a valid port number (1-65535 by default)
+ * and optionally enforces range constraints and well-known port restrictions.
+ *
+ * Port numbers are validated according to the following rules:
+ * - Must be a valid integer (no decimals, no scientific notation)
+ * - Must be within the range `[min, max]` (default `[1, 65535]`)
+ * - If `disallowWellKnown` is `true`, ports 1-1023 are rejected
+ *
+ * The parser provides two modes of operation:
+ * - Regular mode: Returns JavaScript numbers (safe for all port values)
+ * - `bigint` mode: Returns `bigint` values for consistency with other numeric types
+ *
+ * @example
+ * ```typescript
+ * // Basic port parser (1-65535)
+ * option("--port", port())
+ *
+ * // Custom range (non-privileged ports only)
+ * option("--port", port({ min: 1024, max: 65535 }))
+ *
+ * // Disallow well-known ports (reject 1-1023)
+ * option("--port", port({ disallowWellKnown: true }))
+ *
+ * // Development ports only
+ * option("--dev-port", port({ min: 3000, max: 9000 }))
+ *
+ * // Using bigint type
+ * option("--port", port({ type: "bigint" }))
+ * ```
+ *
+ * @param options Configuration options specifying the type and constraints.
+ * @returns A {@link ValueParser} that converts string input to port numbers.
+ * @since 0.10.0
+ */
+export function port(
+  options?: PortOptionsNumber | PortOptionsBigInt,
+): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
+  if (options?.type === "bigint") {
+    const metavar = options.metavar ?? "PORT";
+    ensureNonEmptyString(metavar);
+    const min = options.min ?? 1n;
+    const max = options.max ?? 65535n;
+
+    return {
+      $mode: "sync",
+      metavar,
+      parse(input: string): ValueParserResult<bigint> {
+        let value: bigint;
+        try {
+          value = BigInt(input);
+        } catch (e) {
+          if (e instanceof SyntaxError) {
+            return {
+              success: false,
+              error: options.errors?.invalidPort
+                ? (typeof options.errors.invalidPort === "function"
+                  ? options.errors.invalidPort(input)
+                  : options.errors.invalidPort)
+                : message`Expected a valid port number, but got ${input}.`,
+            };
+          }
+          throw e;
+        }
+
+        if (value < min) {
+          return {
+            success: false,
+            error: options.errors?.belowMinimum
+              ? (typeof options.errors.belowMinimum === "function"
+                ? options.errors.belowMinimum(value, min)
+                : options.errors.belowMinimum)
+              : message`Expected a port number greater than or equal to ${
+                text(min.toLocaleString("en"))
+              }, but got ${input}.`,
+          };
+        }
+
+        if (value > max) {
+          return {
+            success: false,
+            error: options.errors?.aboveMaximum
+              ? (typeof options.errors.aboveMaximum === "function"
+                ? options.errors.aboveMaximum(value, max)
+                : options.errors.aboveMaximum)
+              : message`Expected a port number less than or equal to ${
+                text(max.toLocaleString("en"))
+              }, but got ${input}.`,
+          };
+        }
+
+        if (options.disallowWellKnown && value >= 1n && value <= 1023n) {
+          return {
+            success: false,
+            error: options.errors?.wellKnownNotAllowed
+              ? (typeof options.errors.wellKnownNotAllowed === "function"
+                ? options.errors.wellKnownNotAllowed(value)
+                : options.errors.wellKnownNotAllowed)
+              : message`Port ${
+                value.toLocaleString("en")
+              } is a well-known port (1-1023) and may require elevated privileges.`,
+          };
+        }
+
+        return { success: true, value };
+      },
+      format(value: bigint): string {
+        return value.toString();
+      },
+    };
+  }
+
+  const metavar = options?.metavar ?? "PORT";
+  ensureNonEmptyString(metavar);
+  const min = options?.min ?? 1;
+  const max = options?.max ?? 65535;
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<number> {
+      if (!input.match(/^-?\d+$/)) {
+        return {
+          success: false,
+          error: options?.errors?.invalidPort
+            ? (typeof options.errors.invalidPort === "function"
+              ? options.errors.invalidPort(input)
+              : options.errors.invalidPort)
+            : message`Expected a valid port number, but got ${input}.`,
+        };
+      }
+
+      const value = Number.parseInt(input);
+
+      if (value < min) {
+        return {
+          success: false,
+          error: options?.errors?.belowMinimum
+            ? (typeof options.errors.belowMinimum === "function"
+              ? options.errors.belowMinimum(value, min)
+              : options.errors.belowMinimum)
+            : message`Expected a port number greater than or equal to ${
+              text(min.toLocaleString("en"))
+            }, but got ${input}.`,
+        };
+      }
+
+      if (value > max) {
+        return {
+          success: false,
+          error: options?.errors?.aboveMaximum
+            ? (typeof options.errors.aboveMaximum === "function"
+              ? options.errors.aboveMaximum(value, max)
+              : options.errors.aboveMaximum)
+            : message`Expected a port number less than or equal to ${
+              text(max.toLocaleString("en"))
+            }, but got ${input}.`,
+        };
+      }
+
+      if (options?.disallowWellKnown && value >= 1 && value <= 1023) {
+        return {
+          success: false,
+          error: options.errors?.wellKnownNotAllowed
+            ? (typeof options.errors.wellKnownNotAllowed === "function"
+              ? options.errors.wellKnownNotAllowed(value)
+              : options.errors.wellKnownNotAllowed)
+            : message`Port ${
+              value.toLocaleString("en")
+            } is a well-known port (1-1023) and may require elevated privileges.`,
+        };
+      }
+
+      return { success: true, value };
+    },
+    format(value: number): string {
+      return value.toString();
+    },
+  };
+}

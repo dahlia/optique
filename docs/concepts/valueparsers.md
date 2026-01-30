@@ -543,6 +543,108 @@ The parser uses `"UUID"` as its default metavar and provides specific error
 messages for format violations and version mismatches.
 
 
+`port()` parser
+---------------
+
+The `port()` parser validates TCP/UDP port numbers with support for both
+`number` and `bigint` types, range validation, and well-known port restrictions.
+Port numbers are commonly used in network applications for server addresses,
+database connections, and service configurations.
+
+~~~~ typescript twoslash
+import { port } from "@optique/core/valueparser";
+
+// Basic port parser (1-65535)
+const serverPort = port();
+
+// Non-privileged ports only (1024-65535)
+const userPort = port({ min: 1024, max: 65535 });
+
+// Development ports
+const devPort = port({ min: 3000, max: 9000 });
+
+// Disallow well-known ports (1-1023)
+const appPort = port({ disallowWellKnown: true });
+~~~~
+
+### Port number validation
+
+By default, the `port()` parser validates that the input is a valid port number
+between 1 and 65535 (the full range of valid TCP/UDP ports). You can customize
+this range using the `min` and `max` options:
+
+~~~~ typescript twoslash
+import { port } from "@optique/core/valueparser";
+// ---cut-before---
+// Web server ports (typically 80 or 443)
+const webPort = port({ min: 1, max: 65535 });
+
+// Custom application ports
+const customPort = port({ min: 8000, max: 8999 });
+~~~~
+
+### Well-known port restrictions
+
+The `disallowWellKnown` option rejects ports 1–1023, which typically require
+elevated privileges (root/administrator) to bind on most systems. This is useful
+for applications that should run without special permissions:
+
+~~~~ typescript twoslash
+import { port } from "@optique/core/valueparser";
+// ---cut-before---
+const unprivilegedPort = port({
+  disallowWellKnown: true,
+  metavar: "PORT"
+});
+~~~~
+
+When a well-known port is rejected, the error message explains why:
+
+~~~~ bash
+$ myapp --port 80
+Error: Port 80 is a well-known port (1-1023) and may require elevated privileges.
+~~~~
+
+### Number and bigint modes
+
+Like the `integer()` parser, `port()` supports both `number` (default) and
+`bigint` types. While all valid port numbers fit safely in JavaScript's `number`
+type, the `bigint` option is provided for consistency with other numeric
+parsers:
+
+~~~~ typescript twoslash
+import { port } from "@optique/core/valueparser";
+// ---cut-before---
+// Default: returns number
+const numPort = port();
+
+// Bigint mode: returns bigint
+const bigintPort = port({ type: "bigint" });
+~~~~
+
+### Common use cases
+
+The `port()` parser is commonly used in network applications:
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { port } from "@optique/core/valueparser";
+// ---cut-before---
+// HTTP server
+const httpPort = option("--port", port({ min: 1024 }));
+
+// Database connection
+const dbPort = option("--db-port", port());
+
+// Redis connection (default port 6379)
+const redisPort = option("--redis-port", port());
+~~~~
+
+The parser uses `"PORT"` as its default metavar and provides specific error
+messages for invalid port numbers, range violations, and well-known port
+restrictions.
+
+
 `path()` parser
 ---------------
 

@@ -268,6 +268,29 @@ To be released.
     const parser = longestMatch(activeParser, helpParser);
     ~~~~
 
+ -  Added `port()` value parser for TCP/UDP port numbers with support for both
+    `number` and `bigint` types, range validation, and well-known port
+    restrictions. The parser validates port numbers (1–65535 by default) and
+    optionally enforces custom ranges or disallows well-known ports (1–1023).
+    [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { port } from "@optique/core/valueparser";
+
+    // Basic port parser (1-65535)
+    option("--port", port())
+
+    // Non-privileged ports only
+    option("--port", port({ min: 1024, max: 65535 }))
+
+    // Disallow well-known ports
+    option("--port", port({ disallowWellKnown: true }))
+
+    // Using bigint type
+    option("--port", port({ type: "bigint" }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]
@@ -285,6 +308,7 @@ To be released.
 [#82]: https://github.com/dahlia/optique/issues/82
 [#83]: https://github.com/dahlia/optique/issues/83
 [#85]: https://github.com/dahlia/optique/issues/85
+[#89]: https://github.com/dahlia/optique/issues/89
 
 ### @optique/config
 

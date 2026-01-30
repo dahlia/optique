@@ -5,6 +5,7 @@ import {
   isValueParser,
   locale,
   type NonEmptyString,
+  port,
   string,
   url,
   uuid,
@@ -3854,6 +3855,576 @@ describe("ensureNonEmptyString", () => {
   it("should accept non-empty metavar", () => {
     const parser = string({ metavar: "FILE" });
     assert.equal(parser.metavar, "FILE");
+  });
+});
+
+describe("port", () => {
+  describe("number parser", () => {
+    it("should parse valid port numbers", () => {
+      const parser = port({});
+
+      const result1 = parser.parse("8080");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 8080);
+        assert.equal(typeof result1.value, "number");
+      }
+
+      const result2 = parser.parse("1");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 1);
+      }
+
+      const result3 = parser.parse("65535");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, 65535);
+      }
+
+      const result4 = parser.parse("3000");
+      assert.ok(result4.success);
+      if (result4.success) {
+        assert.equal(result4.value, 3000);
+      }
+    });
+
+    it("should reject invalid port numbers", () => {
+      const parser = port({});
+
+      const result1 = parser.parse("abc");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("8080.5");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("1e4");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("");
+      assert.ok(!result4.success);
+
+      const result5 = parser.parse("  8080  ");
+      assert.ok(!result5.success);
+
+      const result6 = parser.parse("-8080");
+      assert.ok(!result6.success);
+    });
+
+    it("should enforce default minimum constraint (1)", () => {
+      const parser = port({});
+
+      const result1 = parser.parse("1");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("0");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("-1");
+      assert.ok(!result3.success);
+    });
+
+    it("should enforce default maximum constraint (65535)", () => {
+      const parser = port({});
+
+      const result1 = parser.parse("65535");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("65536");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("100000");
+      assert.ok(!result3.success);
+    });
+
+    it("should enforce custom minimum constraint", () => {
+      const parser = port({ min: 1024 });
+
+      const result1 = parser.parse("1024");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 1024);
+      }
+
+      const result2 = parser.parse("8080");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("1023");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("80");
+      assert.ok(!result4.success);
+    });
+
+    it("should enforce custom maximum constraint", () => {
+      const parser = port({ max: 9000 });
+
+      const result1 = parser.parse("9000");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 9000);
+      }
+
+      const result2 = parser.parse("8080");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("9001");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("65535");
+      assert.ok(!result4.success);
+    });
+
+    it("should enforce both min and max constraints", () => {
+      const parser = port({ min: 3000, max: 9000 });
+
+      const result1 = parser.parse("3000");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("8080");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("9000");
+      assert.ok(result3.success);
+
+      const result4 = parser.parse("2999");
+      assert.ok(!result4.success);
+
+      const result5 = parser.parse("9001");
+      assert.ok(!result5.success);
+    });
+
+    it("should disallow well-known ports when requested", () => {
+      const parser = port({ disallowWellKnown: true });
+
+      const result1 = parser.parse("1024");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("8080");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("1023");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("80");
+      assert.ok(!result4.success);
+
+      const result5 = parser.parse("443");
+      assert.ok(!result5.success);
+
+      const result6 = parser.parse("22");
+      assert.ok(!result6.success);
+
+      const result7 = parser.parse("1");
+      assert.ok(!result7.success);
+    });
+
+    it("should allow well-known ports by default", () => {
+      const parser = port({});
+
+      const result1 = parser.parse("80");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("443");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("22");
+      assert.ok(result3.success);
+
+      const result4 = parser.parse("1023");
+      assert.ok(result4.success);
+    });
+
+    it("should work with custom min and disallowWellKnown together", () => {
+      const parser = port({ min: 100, disallowWellKnown: true });
+
+      const result1 = parser.parse("1024");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("500");
+      assert.ok(!result2.success); // below 1024 (well-known)
+
+      const result3 = parser.parse("99");
+      assert.ok(!result3.success); // below min and well-known
+    });
+  });
+
+  describe("bigint parser", () => {
+    it("should parse valid port numbers as bigint", () => {
+      const parser = port({ type: "bigint" });
+
+      const result1 = parser.parse("8080");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 8080n);
+        assert.equal(typeof result1.value, "bigint");
+      }
+
+      const result2 = parser.parse("1");
+      assert.ok(result2.success);
+      if (result2.success) {
+        assert.equal(result2.value, 1n);
+      }
+
+      const result3 = parser.parse("65535");
+      assert.ok(result3.success);
+      if (result3.success) {
+        assert.equal(result3.value, 65535n);
+      }
+    });
+
+    it("should reject invalid port numbers", () => {
+      const parser = port({ type: "bigint" });
+
+      const result1 = parser.parse("abc");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("8080.5");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("1e4");
+      assert.ok(!result3.success);
+    });
+
+    it("should enforce bigint minimum constraint", () => {
+      const parser = port({ type: "bigint", min: 1024n });
+
+      const result1 = parser.parse("1024");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 1024n);
+      }
+
+      const result2 = parser.parse("8080");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("1023");
+      assert.ok(!result3.success);
+    });
+
+    it("should enforce bigint maximum constraint", () => {
+      const parser = port({ type: "bigint", max: 9000n });
+
+      const result1 = parser.parse("9000");
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, 9000n);
+      }
+
+      const result2 = parser.parse("8080");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("9001");
+      assert.ok(!result3.success);
+    });
+
+    it("should enforce default constraints with bigint", () => {
+      const parser = port({ type: "bigint" });
+
+      const result1 = parser.parse("1");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("0");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("65535");
+      assert.ok(result3.success);
+
+      const result4 = parser.parse("65536");
+      assert.ok(!result4.success);
+    });
+
+    it("should disallow well-known ports with bigint", () => {
+      const parser = port({ type: "bigint", disallowWellKnown: true });
+
+      const result1 = parser.parse("1024");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("80");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("443");
+      assert.ok(!result3.success);
+    });
+  });
+
+  describe("format() method", () => {
+    it("should format number port correctly", () => {
+      const parser = port({});
+
+      assert.equal(parser.format(8080), "8080");
+      assert.equal(parser.format(80), "80");
+      assert.equal(parser.format(65535), "65535");
+      assert.equal(parser.format(1), "1");
+    });
+
+    it("should format bigint port correctly", () => {
+      const parser = port({ type: "bigint" });
+
+      assert.equal(parser.format(8080n), "8080");
+      assert.equal(parser.format(80n), "80");
+      assert.equal(parser.format(65535n), "65535");
+      assert.equal(parser.format(1n), "1");
+    });
+  });
+
+  describe("error messages", () => {
+    it("should provide structured error messages for invalid port", () => {
+      const parser = port({});
+
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected a valid port number, but got " },
+            { type: "value", value: "abc" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should provide structured error messages for below minimum", () => {
+      const parser = port({ min: 1024 });
+
+      const result = parser.parse("80");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            {
+              type: "text",
+              text: "Expected a port number greater than or equal to ",
+            },
+            { type: "text", text: "1,024" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "80" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should provide structured error messages for above maximum", () => {
+      const parser = port({ max: 9000 });
+
+      const result = parser.parse("10000");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            {
+              type: "text",
+              text: "Expected a port number less than or equal to ",
+            },
+            { type: "text", text: "9,000" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "10000" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should provide structured error messages for well-known ports", () => {
+      const parser = port({ disallowWellKnown: true });
+
+      const result = parser.parse("80");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Port " },
+            { type: "value", value: "80" },
+            {
+              type: "text",
+              text:
+                " is a well-known port (1-1023) and may require elevated privileges.",
+            },
+          ] as const,
+        );
+      }
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom invalidPort error message", () => {
+      const parser = port({
+        errors: {
+          invalidPort: message`Must be a valid port number.`,
+        },
+      });
+
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Must be a valid port number." },
+        ]);
+      }
+    });
+
+    it("should use function-based invalidPort error message", () => {
+      const parser = port({
+        errors: {
+          invalidPort: (input) => message`${input} is not a valid port.`,
+        },
+      });
+
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "value", value: "abc" },
+          { type: "text", text: " is not a valid port." },
+        ]);
+      }
+    });
+
+    it("should use custom belowMinimum error message", () => {
+      const parser = port({
+        min: 1024,
+        errors: {
+          belowMinimum: (port, min) =>
+            message`Port ${text(port.toString())} is below minimum ${
+              text(min.toString())
+            }.`,
+        },
+      });
+
+      const result = parser.parse("80");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Port " },
+          { type: "text", text: "80" },
+          { type: "text", text: " is below minimum " },
+          { type: "text", text: "1024" },
+          { type: "text", text: "." },
+        ]);
+      }
+    });
+
+    it("should use custom aboveMaximum error message", () => {
+      const parser = port({
+        max: 9000,
+        errors: {
+          aboveMaximum: (port, max) =>
+            message`Port ${text(port.toString())} exceeds maximum ${
+              text(max.toString())
+            }.`,
+        },
+      });
+
+      const result = parser.parse("10000");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Port " },
+          { type: "text", text: "10000" },
+          { type: "text", text: " exceeds maximum " },
+          { type: "text", text: "9000" },
+          { type: "text", text: "." },
+        ]);
+      }
+    });
+
+    it("should use custom wellKnownNotAllowed error message", () => {
+      const parser = port({
+        disallowWellKnown: true,
+        errors: {
+          wellKnownNotAllowed: (port) =>
+            message`Cannot use privileged port ${text(port.toString())}.`,
+        },
+      });
+
+      const result = parser.parse("80");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Cannot use privileged port " },
+          { type: "text", text: "80" },
+          { type: "text", text: "." },
+        ]);
+      }
+    });
+  });
+
+  describe("custom metavar", () => {
+    it("should use custom metavar when provided", () => {
+      const parser = port({ metavar: "SERVER_PORT" });
+      assert.equal(parser.metavar, "SERVER_PORT");
+    });
+
+    it("should use default metavar when not provided", () => {
+      const parser = port({});
+      assert.equal(parser.metavar, "PORT");
+    });
+
+    it("should use custom metavar with bigint type", () => {
+      const parser = port({ type: "bigint", metavar: "LISTEN_PORT" });
+      assert.equal(parser.metavar, "LISTEN_PORT");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle common web server ports", () => {
+      const parser = port({});
+
+      const commonPorts = [
+        "80", // HTTP
+        "443", // HTTPS
+        "8080", // HTTP alternate
+        "8443", // HTTPS alternate
+        "3000", // Node.js dev
+        "5000", // Flask dev
+        "8000", // Django dev
+      ];
+
+      for (const portStr of commonPorts) {
+        const result = parser.parse(portStr);
+        assert.ok(result.success, `Should accept common port ${portStr}`);
+      }
+    });
+
+    it("should handle database ports", () => {
+      const parser = port({});
+
+      const dbPorts = [
+        "3306", // MySQL
+        "5432", // PostgreSQL
+        "27017", // MongoDB
+        "6379", // Redis
+        "9042", // Cassandra
+      ];
+
+      for (const portStr of dbPorts) {
+        const result = parser.parse(portStr);
+        assert.ok(result.success, `Should accept database port ${portStr}`);
+      }
+    });
+
+    it("should reject port 0", () => {
+      const parser = port({});
+
+      const result = parser.parse("0");
+      assert.ok(!result.success);
+    });
+
+    it("should accept minimum port with custom min", () => {
+      const parser = port({ min: 0 });
+
+      const result = parser.parse("0");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, 0);
+      }
+    });
   });
 });
 
