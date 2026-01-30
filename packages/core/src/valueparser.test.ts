@@ -5,6 +5,7 @@ import {
   float,
   hostname,
   integer,
+  ip,
   ipv4,
   ipv6,
   isValueParser,
@@ -7601,6 +7602,203 @@ describe("ipv6()", () => {
     it("should handle compression in middle", () => {
       const parser = ipv6();
       const result = parser.parse("2001:db8::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8::1");
+    });
+  });
+});
+
+describe("ip()", () => {
+  describe("basic validation (both versions)", () => {
+    it("should accept IPv4 address", () => {
+      const parser = ip();
+      const result = parser.parse("192.0.2.1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "192.0.2.1");
+    });
+
+    it("should accept IPv6 address", () => {
+      const parser = ip();
+      const result = parser.parse("2001:db8::1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "2001:db8::1");
+    });
+
+    it("should reject invalid input", () => {
+      const parser = ip();
+      const result = parser.parse("not-an-ip");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("version option", () => {
+    it("should accept only IPv4 when version is 4", () => {
+      const parser = ip({ version: 4 });
+      const result4 = parser.parse("192.0.2.1");
+      assert.ok(result4.success);
+      assert.strictEqual(result4.value, "192.0.2.1");
+
+      const result6 = parser.parse("2001:db8::1");
+      assert.ok(!result6.success);
+    });
+
+    it("should accept only IPv6 when version is 6", () => {
+      const parser = ip({ version: 6 });
+      const result6 = parser.parse("2001:db8::1");
+      assert.ok(result6.success);
+      assert.strictEqual(result6.value, "2001:db8::1");
+
+      const result4 = parser.parse("192.0.2.1");
+      assert.ok(!result4.success);
+    });
+
+    it("should accept both when version is 'both'", () => {
+      const parser = ip({ version: "both" });
+      const result4 = parser.parse("192.0.2.1");
+      assert.ok(result4.success);
+      assert.strictEqual(result4.value, "192.0.2.1");
+
+      const result6 = parser.parse("2001:db8::1");
+      assert.ok(result6.success);
+      assert.strictEqual(result6.value, "2001:db8::1");
+    });
+  });
+
+  describe("ipv4 options passthrough", () => {
+    it("should pass through allowPrivate option", () => {
+      const parser = ip({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("192.168.1.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.1.1" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should pass through allowLoopback option", () => {
+      const parser = ip({ ipv4: { allowLoopback: false } });
+      const result = parser.parse("127.0.0.1");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("ipv6 options passthrough", () => {
+    it("should pass through allowLoopback option", () => {
+      const parser = ip({ ipv6: { allowLoopback: false } });
+      const result = parser.parse("::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::1" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should pass through allowLinkLocal option", () => {
+      const parser = ip({ ipv6: { allowLinkLocal: false } });
+      const result = parser.parse("fe80::1");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("shared error options", () => {
+    it("should use shared loopbackNotAllowed for IPv4", () => {
+      const parser = ip({
+        errors: {
+          loopbackNotAllowed: [
+            { type: "text", text: "No loopback allowed!" },
+          ],
+        },
+        ipv4: { allowLoopback: false },
+      });
+      const result = parser.parse("127.0.0.1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "No loopback allowed!" },
+      ]);
+    });
+
+    it("should use shared loopbackNotAllowed for IPv6", () => {
+      const parser = ip({
+        errors: {
+          loopbackNotAllowed: [
+            { type: "text", text: "No loopback allowed!" },
+          ],
+        },
+        ipv6: { allowLoopback: false },
+      });
+      const result = parser.parse("::1");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "No loopback allowed!" },
+      ]);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom invalidIP message", () => {
+      const parser = ip({
+        errors: {
+          invalidIP: [
+            { type: "text", text: "Not a valid IP!" },
+          ],
+        },
+      });
+      const result = parser.parse("invalid");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Not a valid IP!" },
+      ]);
+    });
+
+    it("should use custom invalidIP function", () => {
+      const parser = ip({
+        errors: {
+          invalidIP: (input) => [
+            { type: "text", text: "Bad: " },
+            { type: "value", value: input },
+          ],
+        },
+      });
+      const result = parser.parse("bad");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Bad: " },
+        { type: "value", value: "bad" },
+      ]);
+    });
+  });
+
+  describe("metavar", () => {
+    it("should return default metavar", () => {
+      const parser = ip();
+      assert.strictEqual(parser.metavar, "IP");
+    });
+
+    it("should return custom metavar", () => {
+      const parser = ip({ metavar: "IP_ADDR" });
+      assert.strictEqual(parser.metavar, "IP_ADDR");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should try IPv4 first when both versions allowed", () => {
+      const parser = ip();
+      // IPv4-mapped IPv6 should be parsed as IPv6
+      const result = parser.parse("::ffff:192.0.2.1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "::ffff:c000:201");
+    });
+
+    it("should normalize IPv4 addresses", () => {
+      const parser = ip();
+      const result = parser.parse("192.0.2.1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "192.0.2.1");
+    });
+
+    it("should normalize IPv6 addresses", () => {
+      const parser = ip();
+      const result = parser.parse("2001:0db8:0000:0000:0000:0000:0000:0001");
       assert.ok(result.success);
       assert.strictEqual(result.value, "2001:db8::1");
     });

@@ -4153,3 +4153,227 @@ function compressIpv6(groups: string[]): string {
     return before.join(":") + "::" + after.join(":");
   }
 }
+
+/**
+ * Options for configuring the universal IP address value parser.
+ *
+ * @since 0.10.0
+ */
+export interface IpOptions {
+  /**
+   * The metavariable name for this parser.
+   *
+   * @default `"IP"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * IP version to accept.
+   * - `4`: IPv4 only
+   * - `6`: IPv6 only
+   * - `"both"`: Accept both IPv4 and IPv6
+   *
+   * @default `"both"`
+   */
+  readonly version?: 4 | 6 | "both";
+
+  /**
+   * Options for IPv4 validation (when version is 4 or "both").
+   */
+  readonly ipv4?: Omit<Ipv4Options, "metavar" | "errors">;
+
+  /**
+   * Options for IPv6 validation (when version is 6 or "both").
+   */
+  readonly ipv6?: Omit<Ipv6Options, "metavar" | "errors">;
+
+  /**
+   * Custom error messages for IP parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid IP address.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidIP?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when private IP is used but disallowed (IPv4).
+     * Can be a static message or a function that receives the IP.
+     */
+    privateNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when loopback IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    loopbackNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when link-local IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    linkLocalNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when multicast IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    multicastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when broadcast IP is used but disallowed (IPv4).
+     * Can be a static message or a function that receives the IP.
+     */
+    broadcastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when zero IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    zeroNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when unique local IP is used but disallowed (IPv6).
+     * Can be a static message or a function that receives the IP.
+     */
+    uniqueLocalNotAllowed?: Message | ((ip: string) => Message);
+  };
+}
+
+/**
+ * Creates a value parser that accepts both IPv4 and IPv6 addresses.
+ *
+ * By default, accepts both IPv4 and IPv6 addresses. Use the `version` option
+ * to restrict to a specific IP version.
+ *
+ * @param options Configuration options for IP validation.
+ * @returns A value parser that validates IP addresses.
+ *
+ * @example
+ * ```typescript
+ * // Accept both IPv4 and IPv6
+ * option("--ip", ip())
+ *
+ * // IPv4 only
+ * option("--ipv4", ip({ version: 4 }))
+ *
+ * // Public IPs only (both versions)
+ * option("--public-ip", ip({
+ *   ipv4: { allowPrivate: false, allowLoopback: false },
+ *   ipv6: { allowLinkLocal: false, allowUniqueLocal: false }
+ * }))
+ * ```
+ *
+ * @since 0.10.0
+ */
+export function ip(
+  options?: IpOptions,
+): ValueParser<"sync", string> {
+  const version = options?.version ?? "both";
+  const metavar = options?.metavar ?? "IP";
+  const errors = options?.errors;
+
+  // Create IPv4 parser if needed
+  const ipv4Parser = (version === 4 || version === "both")
+    ? ipv4({
+      ...options?.ipv4,
+      errors: {
+        invalidIpv4: errors?.invalidIP,
+        privateNotAllowed: errors?.privateNotAllowed,
+        loopbackNotAllowed: errors?.loopbackNotAllowed,
+        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+        multicastNotAllowed: errors?.multicastNotAllowed,
+        broadcastNotAllowed: errors?.broadcastNotAllowed,
+        zeroNotAllowed: errors?.zeroNotAllowed,
+      },
+    })
+    : null;
+
+  // Create IPv6 parser if needed
+  const ipv6Parser = (version === 6 || version === "both")
+    ? ipv6({
+      ...options?.ipv6,
+      errors: {
+        invalidIpv6: errors?.invalidIP,
+        loopbackNotAllowed: errors?.loopbackNotAllowed,
+        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+        uniqueLocalNotAllowed: errors?.uniqueLocalNotAllowed,
+        multicastNotAllowed: errors?.multicastNotAllowed,
+        zeroNotAllowed: errors?.zeroNotAllowed,
+      },
+    })
+    : null;
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<string> {
+      let ipv4Error: ValueParserResult<string> | null = null;
+      let ipv6Error: ValueParserResult<string> | null = null;
+
+      // Try IPv4 first if allowed
+      if (ipv4Parser !== null) {
+        const result = ipv4Parser.parse(input);
+        if (result.success) {
+          return result;
+        }
+        ipv4Error = result;
+        // If only IPv4 is allowed, return the error
+        if (version === 4) {
+          return result;
+        }
+      }
+
+      // Try IPv6 if allowed
+      if (ipv6Parser !== null) {
+        const result = ipv6Parser.parse(input);
+        if (result.success) {
+          return result;
+        }
+        ipv6Error = result;
+        // If only IPv6 is allowed, return the error
+        if (version === 6) {
+          return result;
+        }
+      }
+
+      // Both failed - return the first non-generic error
+      // Prefer errors from parsers that actually tried to parse
+      // (e.g., "private not allowed" over "invalid IPv4")
+      if (ipv4Error !== null && !ipv4Error.success) {
+        // Check if it's a generic "invalid" error by looking for "Expected" text
+        const isGeneric = ipv4Error.error.some((term) =>
+          term.type === "text" && term.text.includes("Expected")
+        );
+        if (!isGeneric) {
+          return ipv4Error;
+        }
+      }
+
+      if (ipv6Error !== null && !ipv6Error.success) {
+        const isGeneric = ipv6Error.error.some((term) =>
+          term.type === "text" && term.text.includes("Expected")
+        );
+        if (!isGeneric) {
+          return ipv6Error;
+        }
+      }
+
+      // Return generic error if both returned generic errors or custom error is set
+      const errorMsg = errors?.invalidIP;
+      if (typeof errorMsg === "function") {
+        return { success: false, error: errorMsg(input) };
+      }
+      const msg = errorMsg ?? [
+        { type: "text", text: "Expected a valid IP address, but got " },
+        { type: "value", value: input },
+        { type: "text", text: "." },
+      ] as Message;
+      return { success: false, error: msg };
+    },
+    format(): string {
+      return metavar;
+    },
+  };
+}
