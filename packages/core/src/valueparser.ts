@@ -4377,3 +4377,309 @@ export function ip(
     },
   };
 }
+
+/**
+ * Value representing a CIDR notation (IP address with prefix length).
+ *
+ * @since 0.10.0
+ */
+export interface CidrValue {
+  /**
+   * The IP address portion (normalized).
+   */
+  readonly address: string;
+
+  /**
+   * The prefix length (0-32 for IPv4, 0-128 for IPv6).
+   */
+  readonly prefix: number;
+
+  /**
+   * IP version (4 or 6).
+   */
+  readonly version: 4 | 6;
+}
+
+/**
+ * Options for configuring the CIDR notation value parser.
+ *
+ * @since 0.10.0
+ */
+export interface CidrOptions {
+  /**
+   * The metavariable name for this parser.
+   *
+   * @default `"CIDR"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * IP version to accept.
+   * - `4`: IPv4 CIDR only
+   * - `6`: IPv6 CIDR only
+   * - `"both"`: Accept both IPv4 and IPv6 CIDR
+   *
+   * @default `"both"`
+   */
+  readonly version?: 4 | 6 | "both";
+
+  /**
+   * Minimum allowed prefix length.
+   * For IPv4: 0-32, for IPv6: 0-128.
+   */
+  readonly minPrefix?: number;
+
+  /**
+   * Maximum allowed prefix length.
+   * For IPv4: 0-32, for IPv6: 0-128.
+   */
+  readonly maxPrefix?: number;
+
+  /**
+   * Options for IPv4 validation (when version is 4 or "both").
+   */
+  readonly ipv4?: Omit<Ipv4Options, "metavar" | "errors">;
+
+  /**
+   * Options for IPv6 validation (when version is 6 or "both").
+   */
+  readonly ipv6?: Omit<Ipv6Options, "metavar" | "errors">;
+
+  /**
+   * Custom error messages for CIDR parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid CIDR notation.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidCidr?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when prefix length is invalid.
+     * Can be a static message or a function that receives the prefix and version.
+     */
+    invalidPrefix?: Message | ((prefix: number, version: 4 | 6) => Message);
+
+    /**
+     * Custom error message when prefix is below minimum.
+     * Can be a static message or a function that receives the prefix and minimum.
+     */
+    prefixBelowMinimum?: Message | ((prefix: number, min: number) => Message);
+
+    /**
+     * Custom error message when prefix is above maximum.
+     * Can be a static message or a function that receives the prefix and maximum.
+     */
+    prefixAboveMaximum?: Message | ((prefix: number, max: number) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for CIDR notation (IP address with prefix length).
+ *
+ * Parses and validates CIDR notation like `192.168.0.0/24` or `2001:db8::/32`.
+ * Returns a structured object with the normalized IP address, prefix length,
+ * and IP version.
+ *
+ * @param options Configuration options for CIDR validation.
+ * @returns A value parser that validates CIDR notation.
+ *
+ * @example
+ * ```typescript
+ * // Accept both IPv4 and IPv6 CIDR
+ * option("--network", cidr())
+ *
+ * // IPv4 CIDR only with prefix constraints
+ * option("--subnet", cidr({
+ *   version: 4,
+ *   minPrefix: 16,
+ *   maxPrefix: 24
+ * }))
+ * ```
+ *
+ * @since 0.10.0
+ */
+export function cidr(
+  options?: CidrOptions,
+): ValueParser<"sync", CidrValue> {
+  const version = options?.version ?? "both";
+  const minPrefix = options?.minPrefix;
+  const maxPrefix = options?.maxPrefix;
+  const errors = options?.errors;
+  const metavar = options?.metavar ?? "CIDR";
+
+  // Create IP parsers for address validation
+  const ipv4Parser = (version === 4 || version === "both")
+    ? ipv4(options?.ipv4)
+    : null;
+
+  const ipv6Parser = (version === 6 || version === "both")
+    ? ipv6(options?.ipv6)
+    : null;
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<CidrValue> {
+      // Parse CIDR format: <ip>/<prefix>
+      const slashIndex = input.lastIndexOf("/");
+      if (slashIndex === -1) {
+        const errorMsg = errors?.invalidCidr;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid CIDR notation, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      const ipPart = input.slice(0, slashIndex);
+      const prefixPart = input.slice(slashIndex + 1);
+
+      // Parse prefix length
+      const prefix = parseInt(prefixPart, 10);
+      if (
+        !Number.isInteger(prefix) || prefixPart !== prefix.toString() ||
+        prefix < 0
+      ) {
+        const errorMsg = errors?.invalidCidr;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid CIDR notation, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Try to parse as IPv4 first
+      let ipVersion: 4 | 6 | null = null;
+      let normalizedIp: string | null = null;
+
+      if (ipv4Parser !== null) {
+        const result = ipv4Parser.parse(ipPart);
+        if (result.success) {
+          ipVersion = 4;
+          normalizedIp = result.value;
+
+          // Validate IPv4 prefix range
+          if (prefix > 32) {
+            const errorMsg = errors?.invalidPrefix;
+            if (typeof errorMsg === "function") {
+              return { success: false, error: errorMsg(prefix, 4) };
+            }
+            const msg = errorMsg ?? [
+              {
+                type: "text",
+                text: "Expected a prefix length between 0 and ",
+              },
+              { type: "text", text: "32" },
+              { type: "text", text: " for IPv4, but got " },
+              { type: "text", text: prefix.toString() },
+              { type: "text", text: "." },
+            ] as Message;
+            return { success: false, error: msg };
+          }
+        }
+      }
+
+      // Try IPv6 if IPv4 failed
+      if (ipVersion === null && ipv6Parser !== null) {
+        const result = ipv6Parser.parse(ipPart);
+        if (result.success) {
+          ipVersion = 6;
+          normalizedIp = result.value;
+
+          // Validate IPv6 prefix range
+          if (prefix > 128) {
+            const errorMsg = errors?.invalidPrefix;
+            if (typeof errorMsg === "function") {
+              return { success: false, error: errorMsg(prefix, 6) };
+            }
+            const msg = errorMsg ?? [
+              {
+                type: "text",
+                text: "Expected a prefix length between 0 and ",
+              },
+              { type: "text", text: "128" },
+              { type: "text", text: " for IPv6, but got " },
+              { type: "text", text: prefix.toString() },
+              { type: "text", text: "." },
+            ] as Message;
+            return { success: false, error: msg };
+          }
+        }
+      }
+
+      // Neither IPv4 nor IPv6 worked
+      if (ipVersion === null || normalizedIp === null) {
+        const errorMsg = errors?.invalidCidr;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid CIDR notation, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check minPrefix constraint
+      if (minPrefix !== undefined && prefix < minPrefix) {
+        const errorMsg = errors?.prefixBelowMinimum;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(prefix, minPrefix) };
+        }
+        const msg = errorMsg ?? [
+          {
+            type: "text",
+            text: "Expected a prefix length greater than or equal to ",
+          },
+          { type: "text", text: minPrefix.toString() },
+          { type: "text", text: ", but got " },
+          { type: "text", text: prefix.toString() },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check maxPrefix constraint
+      if (maxPrefix !== undefined && prefix > maxPrefix) {
+        const errorMsg = errors?.prefixAboveMaximum;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(prefix, maxPrefix) };
+        }
+        const msg = errorMsg ?? [
+          {
+            type: "text",
+            text: "Expected a prefix length less than or equal to ",
+          },
+          { type: "text", text: maxPrefix.toString() },
+          { type: "text", text: ", but got " },
+          { type: "text", text: prefix.toString() },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      return {
+        success: true,
+        value: {
+          address: normalizedIp,
+          prefix,
+          version: ipVersion,
+        },
+      };
+    },
+    format(): string {
+      return metavar;
+    },
+  };
+}
