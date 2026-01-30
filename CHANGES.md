@@ -420,6 +420,32 @@ To be released.
     option("--ports", portRange({ type: "bigint" }))
     ~~~~
 
+ -  Added `macAddress()` value parser for MAC (Media Access Control)
+    addresses. The parser validates MAC-48 addresses in multiple formats
+    (colon-separated, hyphen-separated, Cisco dot notation, or no separator)
+    with support for case conversion and output normalization. Returns a
+    formatted string. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { macAddress } from "@optique/core/valueparser";
+
+    // Accept any format
+    option("--mac", macAddress())
+
+    // Normalize to uppercase colon-separated
+    option("--mac", macAddress({ 
+      outputSeparator: ":",
+      case: "upper"
+    }))
+
+    // Cisco format only
+    option("--mac", macAddress({ 
+      separator: ".",
+      case: "lower"
+    }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]

@@ -1718,6 +1718,204 @@ The parser uses `"PORT-PORT"` as its default metavar (or `"PORT{separator}PORT"`
 when a custom separator is specified).
 
 
+`macAddress()` parser
+---------------------
+
+The `macAddress()` parser validates MAC (Media Access Control) addresses,
+commonly used to identify network interface hardware. It accepts MAC-48
+addresses (6 octets, 12 hexadecimal digits) in multiple common formats with
+support for case conversion and output normalization.
+
+### Supported formats
+
+The parser accepts MAC addresses in four standard formats:
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+
+const parser = macAddress();
+const result1 = parser.parse("00:1A:2B:3C:4D:5E");  // Colon-separated
+const result2 = parser.parse("00-1A-2B-3C-4D-5E");  // Hyphen-separated
+const result3 = parser.parse("001A.2B3C.4D5E");     // Cisco format (dot-separated)
+const result4 = parser.parse("001A2B3C4D5E");       // No separator
+~~~~
+
+By default, the parser accepts any of these formats. You can restrict it to
+a specific format using the `separator` option:
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept only colon-separated format
+const colonOnly = macAddress({ separator: ":" });
+
+const result = colonOnly.parse("00:1A:2B:3C:4D:5E");
+if (result.success) {
+  result.value;  // "00:1A:2B:3C:4D:5E"
+}
+
+// Rejects other formats
+const invalid = colonOnly.parse("00-1A-2B-3C-4D-5E");
+if (!invalid.success) {
+  invalid.error;  // "Invalid MAC address."
+}
+~~~~
+
+The `separator` option accepts:
+
+ -  `":"` - Colon-separated format (e.g., `00:1A:2B:3C:4D:5E`)
+ -  `"-"` - Hyphen-separated format (e.g., `00-1A-2B-3C-4D-5E`)
+ -  `"."` - Cisco dot notation (e.g., `001A.2B3C.4D5E`)
+ -  `"none"` - No separator (e.g., `001A2B3C4D5E`)
+ -  `"any"` - Accept any format (default)
+
+### Case conversion
+
+The parser provides case conversion options for hexadecimal digits:
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Preserve original case (default)
+const preserveCase = macAddress({ case: "preserve" });
+const result1 = preserveCase.parse("00:1a:2B:3c:4D:5e");
+if (result1.success) {
+  result1.value;  // "00:1a:2B:3c:4D:5e"
+}
+
+// Convert to uppercase
+const upperCase = macAddress({ case: "upper" });
+const result2 = upperCase.parse("00:1a:2b:3c:4d:5e");
+if (result2.success) {
+  result2.value;  // "00:1A:2B:3C:4D:5E"
+}
+
+// Convert to lowercase
+const lowerCase = macAddress({ case: "lower" });
+const result3 = lowerCase.parse("00:1A:2B:3C:4D:5E");
+if (result3.success) {
+  result3.value;  // "00:1a:2b:3c:4d:5e"
+}
+~~~~
+
+### Output normalization
+
+The `outputSeparator` option normalizes the output format regardless of the
+input format:
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Normalize all inputs to colon-separated
+const normalize = macAddress({
+  outputSeparator: ":",
+  case: "upper",
+});
+
+const result1 = normalize.parse("00-1a-2b-3c-4d-5e");
+if (result1.success) {
+  result1.value;  // "00:1A:2B:3C:4D:5E"
+}
+
+const result2 = normalize.parse("001a.2b3c.4d5e");
+if (result2.success) {
+  result2.value;  // "00:1A:2B:3C:4D:5E"
+}
+~~~~
+
+The `outputSeparator` option accepts the same values as `separator` except
+`"any"`. When not specified, the output preserves the input format.
+
+### Return value
+
+The parser returns a formatted string according to the `case` and
+`outputSeparator` options:
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = macAddress({
+  outputSeparator: ":",
+  case: "upper",
+});
+
+const result = parser.parse("00-1a-2b-3c-4d-5e");
+if (result.success) {
+  const mac: string = result.value;  // "00:1A:2B:3C:4D:5E"
+}
+~~~~
+
+### Custom error messages
+
+You can customize error messages using the `errors` option:
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+import { message, text } from "@optique/core/message";
+// ---cut-before---
+const parser = macAddress({
+  errors: {
+    invalidMacAddress: (input) =>
+      message`Invalid MAC address: ${text(input)}. Expected format: XX:XX:XX:XX:XX:XX`,
+  },
+});
+
+const result = parser.parse("not-a-mac");
+if (!result.success) {
+  result.error;  // "Invalid MAC address: not-a-mac. Expected format: XX:XX:XX:XX:XX:XX"
+}
+~~~~
+
+### Common use cases
+
+**Network device configuration:**
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Standardize MAC addresses to uppercase colon format
+const deviceMac = macAddress({
+  outputSeparator: ":",
+  case: "upper",
+});
+~~~~
+
+**Cisco router configuration:**
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept only Cisco dot notation format
+const ciscoMac = macAddress({
+  separator: ".",
+  case: "lower",
+});
+~~~~
+
+**Access control lists:**
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept any format but normalize for storage
+const aclMac = macAddress({
+  outputSeparator: "none",
+  case: "upper",
+});
+~~~~
+
+**Network monitoring tools:**
+
+~~~~ typescript twoslash
+import { macAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept any format for user convenience
+const monitorMac = macAddress();
+~~~~
+
+The parser uses `"MAC"` as its default metavar.
+
+
 `path()` parser
 ---------------
 

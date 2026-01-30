@@ -3325,3 +3325,209 @@ export function portRange(
     },
   };
 }
+
+/**
+ * Options for the {@link macAddress} parser.
+ *
+ * @since 0.10.0
+ */
+export interface MacAddressOptions {
+  /**
+   * The metavariable name for this parser.
+   * @default "MAC"
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Separator format to accept.
+   * - `":"`: Colon-separated (e.g., `00:1A:2B:3C:4D:5E`)
+   * - `"-"`: Hyphen-separated (e.g., `00-1A-2B-3C-4D-5E`)
+   * - `"."`: Dot-separated (e.g., `001A.2B3C.4D5E` - Cisco format)
+   * - `"none"`: No separator (e.g., `001A2B3C4D5E`)
+   * - `"any"`: Accept any of the above formats
+   * @default "any"
+   */
+  readonly separator?: ":" | "-" | "." | "none" | "any";
+
+  /**
+   * Case for the output.
+   * - `"preserve"`: Keep input case
+   * - `"upper"`: Convert to uppercase
+   * - `"lower"`: Convert to lowercase
+   * @default "preserve"
+   */
+  readonly case?: "preserve" | "upper" | "lower";
+
+  /**
+   * Output separator format.
+   * If not specified, uses the input separator (or ":" for "any").
+   * @default undefined (uses input format)
+   */
+  readonly outputSeparator?: ":" | "-" | "." | "none";
+
+  /**
+   * Custom error messages for MAC address parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid MAC address.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidMacAddress?: Message | ((input: string) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for MAC (Media Access Control) addresses.
+ *
+ * Validates MAC-48 addresses (6 octets, 12 hex digits) in various formats:
+ * - Colon-separated: `00:1A:2B:3C:4D:5E`
+ * - Hyphen-separated: `00-1A-2B-3C-4D-5E`
+ * - Dot-separated (Cisco): `001A.2B3C.4D5E`
+ * - No separator: `001A2B3C4D5E`
+ *
+ * Returns the MAC address as a formatted string according to `case` and
+ * `outputSeparator` options.
+ *
+ * @param options Configuration options for the MAC address parser.
+ * @returns A parser that validates MAC addresses and returns formatted strings.
+ * @since 0.10.0
+ *
+ * @example
+ * ```typescript
+ * import { macAddress } from "@optique/core/valueparser";
+ *
+ * // Accept any format
+ * const mac = macAddress();
+ *
+ * // Normalize to uppercase colon-separated
+ * const normalizedMac = macAddress({
+ *   outputSeparator: ":",
+ *   case: "upper"
+ * });
+ * ```
+ */
+export function macAddress(
+  options?: MacAddressOptions,
+): ValueParser<"sync", string> {
+  const separator = options?.separator ?? "any";
+  const caseOption = options?.case ?? "preserve";
+  const outputSeparator = options?.outputSeparator;
+  const metavar = options?.metavar ?? "MAC";
+
+  // Regular expressions for different formats
+  const colonRegex =
+    /^([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2})$/;
+  const hyphenRegex =
+    /^([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})$/;
+  const dotRegex = /^([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})$/;
+  const noneRegex = /^([0-9a-fA-F]{12})$/;
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<string> {
+      let octets: string[] = [];
+      let inputSeparator: ":" | "-" | "." | "none" | undefined;
+
+      // Try to match based on separator option
+      if (separator === ":" || separator === "any") {
+        const match = colonRegex.exec(input);
+        if (match) {
+          octets = match.slice(1, 7);
+          inputSeparator = ":";
+        }
+      }
+
+      if (
+        octets.length === 0 &&
+        (separator === "-" || separator === "any")
+      ) {
+        const match = hyphenRegex.exec(input);
+        if (match) {
+          octets = match.slice(1, 7);
+          inputSeparator = "-";
+        }
+      }
+
+      if (
+        octets.length === 0 &&
+        (separator === "." || separator === "any")
+      ) {
+        const match = dotRegex.exec(input);
+        if (match) {
+          // Cisco format: split 3 groups of 4 hex digits into 6 octets
+          const groups = match.slice(1, 4);
+          octets = groups.flatMap((group) => [
+            group.slice(0, 2),
+            group.slice(2, 4),
+          ]);
+          inputSeparator = ".";
+        }
+      }
+
+      if (
+        octets.length === 0 &&
+        (separator === "none" || separator === "any")
+      ) {
+        const match = noneRegex.exec(input);
+        if (match) {
+          // Split 12 hex digits into 6 octets
+          const hex = match[1];
+          octets = [];
+          for (let i = 0; i < 12; i += 2) {
+            octets.push(hex.slice(i, i + 2));
+          }
+          inputSeparator = "none";
+        }
+      }
+
+      // If no match found, return error
+      if (octets.length === 0) {
+        const errorMsg = options?.errors?.invalidMacAddress;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid MAC address, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Apply case conversion
+      let formattedOctets = octets;
+      if (caseOption === "upper") {
+        formattedOctets = octets.map((octet) => octet.toUpperCase());
+      } else if (caseOption === "lower") {
+        formattedOctets = octets.map((octet) => octet.toLowerCase());
+      }
+
+      // Format output based on outputSeparator (or input separator if not specified)
+      const finalSeparator = outputSeparator ?? inputSeparator ?? ":";
+
+      let result: string;
+      if (finalSeparator === ":") {
+        result = formattedOctets.join(":");
+      } else if (finalSeparator === "-") {
+        result = formattedOctets.join("-");
+      } else if (finalSeparator === ".") {
+        // Cisco format: 3 groups of 4 hex digits
+        result = [
+          formattedOctets[0] + formattedOctets[1],
+          formattedOctets[2] + formattedOctets[3],
+          formattedOctets[4] + formattedOctets[5],
+        ].join(".");
+      } else {
+        // "none"
+        result = formattedOctets.join("");
+      }
+
+      return { success: true, value: result };
+    },
+    format(): string {
+      return metavar;
+    },
+  };
+}
