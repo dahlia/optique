@@ -1,5 +1,6 @@
 import {
   choice,
+  domain,
   email,
   float,
   hostname,
@@ -6813,6 +6814,409 @@ describe("macAddress()", () => {
       const result = parser.parse("aA:bB:cC:dD:eE:fF");
       assert.ok(result.success);
       assert.strictEqual(result.value, "AA:BB:CC:DD:EE:FF");
+    });
+  });
+});
+
+describe("domain()", () => {
+  describe("basic validation", () => {
+    it("should accept valid root domain", () => {
+      const parser = domain();
+      const result = parser.parse("example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.com");
+    });
+
+    it("should accept subdomain by default", () => {
+      const parser = domain();
+      const result = parser.parse("www.example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "www.example.com");
+    });
+
+    it("should accept multi-level subdomain", () => {
+      const parser = domain();
+      const result = parser.parse("api.staging.example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "api.staging.example.com");
+    });
+
+    it("should accept domain with numbers", () => {
+      const parser = domain();
+      const result = parser.parse("test123.example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "test123.example.com");
+    });
+
+    it("should accept domain with hyphens", () => {
+      const parser = domain();
+      const result = parser.parse("my-domain.example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "my-domain.example.com");
+    });
+  });
+
+  describe("allowSubdomains option", () => {
+    it("should accept root domain when allowSubdomains is false", () => {
+      const parser = domain({ allowSubdomains: false });
+      const result = parser.parse("example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.com");
+    });
+
+    it("should reject subdomain when allowSubdomains is false", () => {
+      const parser = domain({ allowSubdomains: false });
+      const result = parser.parse("www.example.com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Subdomains are not allowed, but got www.example.com.",
+      );
+    });
+
+    it("should reject multi-level subdomain when allowSubdomains is false", () => {
+      const parser = domain({ allowSubdomains: false });
+      const result = parser.parse("api.staging.example.com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Subdomains are not allowed, but got api.staging.example.com.",
+      );
+    });
+  });
+
+  describe("allowedTLDs option", () => {
+    it("should accept domain with allowed TLD", () => {
+      const parser = domain({ allowedTLDs: ["com", "org", "net"] });
+      const result = parser.parse("example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.com");
+    });
+
+    it("should accept domain with allowed TLD (case-insensitive)", () => {
+      const parser = domain({ allowedTLDs: ["com", "org", "net"] });
+      const result = parser.parse("example.COM");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.COM");
+    });
+
+    it("should reject domain with disallowed TLD", () => {
+      const parser = domain({ allowedTLDs: ["com", "org", "net"] });
+      const result = parser.parse("example.io");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Top-level domain io is not allowed. Allowed TLDs: com, org, net.",
+      );
+    });
+
+    it("should accept subdomain with allowed TLD", () => {
+      const parser = domain({ allowedTLDs: ["com", "org"] });
+      const result = parser.parse("www.example.org");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "www.example.org");
+    });
+  });
+
+  describe("minLabels option", () => {
+    it("should accept domain with exact minLabels", () => {
+      const parser = domain({ minLabels: 2 });
+      const result = parser.parse("example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.com");
+    });
+
+    it("should accept domain with more than minLabels", () => {
+      const parser = domain({ minLabels: 2 });
+      const result = parser.parse("www.example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "www.example.com");
+    });
+
+    it("should reject domain with fewer than minLabels", () => {
+      const parser = domain({ minLabels: 3 });
+      const result = parser.parse("example.com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Domain example.com must have at least 3 labels.",
+      );
+    });
+
+    it("should accept single label domain with minLabels: 1", () => {
+      const parser = domain({ minLabels: 1 });
+      const result = parser.parse("localhost");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "localhost");
+    });
+
+    it("should reject single label domain by default (minLabels: 2)", () => {
+      const parser = domain();
+      const result = parser.parse("localhost");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Domain localhost must have at least 2 labels.",
+      );
+    });
+  });
+
+  describe("lowercase option", () => {
+    it("should preserve case by default", () => {
+      const parser = domain();
+      const result = parser.parse("Example.COM");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "Example.COM");
+    });
+
+    it("should convert to lowercase when lowercase is true", () => {
+      const parser = domain({ lowercase: true });
+      const result = parser.parse("Example.COM");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.com");
+    });
+
+    it("should convert subdomain to lowercase", () => {
+      const parser = domain({ lowercase: true });
+      const result = parser.parse("WWW.Example.COM");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "www.example.com");
+    });
+  });
+
+  describe("invalid domains", () => {
+    it("should reject empty string", () => {
+      const parser = domain();
+      const result = parser.parse("");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Expected a valid domain name, but got .",
+      );
+    });
+
+    it("should reject domain starting with dot", () => {
+      const parser = domain();
+      const result = parser.parse(".example.com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Expected a valid domain name, but got .example.com.",
+      );
+    });
+
+    it("should reject domain ending with dot", () => {
+      const parser = domain();
+      const result = parser.parse("example.com.");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Expected a valid domain name, but got example.com..",
+      );
+    });
+
+    it("should reject label starting with hyphen", () => {
+      const parser = domain();
+      const result = parser.parse("-example.com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Expected a valid domain name, but got -example.com.",
+      );
+    });
+
+    it("should reject label ending with hyphen", () => {
+      const parser = domain();
+      const result = parser.parse("example-.com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Expected a valid domain name, but got example-.com.",
+      );
+    });
+
+    it("should reject label with special characters", () => {
+      const parser = domain();
+      const result = parser.parse("exam_ple.com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Expected a valid domain name, but got exam_ple.com.",
+      );
+    });
+
+    it("should reject label longer than 63 characters", () => {
+      const parser = domain();
+      const longLabel = "a".repeat(64);
+      const result = parser.parse(`${longLabel}.com`);
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        `Expected a valid domain name, but got ${longLabel}.com.`,
+      );
+    });
+
+    it("should reject consecutive dots", () => {
+      const parser = domain();
+      const result = parser.parse("example..com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Expected a valid domain name, but got example..com.",
+      );
+    });
+
+    it("should reject domain with spaces", () => {
+      const parser = domain();
+      const result = parser.parse("example .com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Expected a valid domain name, but got example .com.",
+      );
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom invalidDomain message", () => {
+      const parser = domain({
+        errors: {
+          invalidDomain: (input) => message`Domain ${text(input)} is not valid`,
+        },
+      });
+
+      const result = parser.parse("invalid..domain");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Domain " },
+        { type: "text", text: "invalid..domain" },
+        { type: "text", text: " is not valid" },
+      ]);
+    });
+
+    it("should use custom subdomainsNotAllowed message", () => {
+      const parser = domain({
+        allowSubdomains: false,
+        errors: {
+          subdomainsNotAllowed: (domain) =>
+            message`Root domains only. Got: ${text(domain)}`,
+        },
+      });
+
+      const result = parser.parse("www.example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Root domains only. Got: " },
+        { type: "text", text: "www.example.com" },
+      ]);
+    });
+
+    it("should use custom tldNotAllowed message", () => {
+      const parser = domain({
+        allowedTLDs: ["com", "org"],
+        errors: {
+          tldNotAllowed: (tld, allowed) =>
+            message`${text(tld)} not in ${text(allowed.join(", "))}`,
+        },
+      });
+
+      const result = parser.parse("example.io");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "io" },
+        { type: "text", text: " not in " },
+        { type: "text", text: "com, org" },
+      ]);
+    });
+
+    it("should use custom tooFewLabels message", () => {
+      const parser = domain({
+        minLabels: 3,
+        errors: {
+          tooFewLabels: (domain, min) =>
+            message`${text(domain)} needs ${text(min.toString())} labels`,
+        },
+      });
+
+      const result = parser.parse("example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "example.com" },
+        { type: "text", text: " needs " },
+        { type: "text", text: "3" },
+        { type: "text", text: " labels" },
+      ]);
+    });
+  });
+
+  describe("metavar", () => {
+    it("should return default metavar", () => {
+      const parser = domain();
+      assert.strictEqual(parser.metavar, "DOMAIN");
+    });
+
+    it("should return custom metavar", () => {
+      const parser = domain({ metavar: "DOMAIN_NAME" });
+      assert.strictEqual(parser.metavar, "DOMAIN_NAME");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should accept maximum label length (63 characters)", () => {
+      const parser = domain();
+      const maxLabel = "a".repeat(63);
+      const result = parser.parse(`${maxLabel}.com`);
+      assert.ok(result.success);
+      assert.strictEqual(result.value, `${maxLabel}.com`);
+    });
+
+    it("should accept numeric-only labels except TLD", () => {
+      const parser = domain();
+      const result = parser.parse("123.456.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "123.456.com");
+    });
+
+    it("should accept all-numeric TLD", () => {
+      const parser = domain({ minLabels: 1 });
+      const result = parser.parse("example.123");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.123");
+    });
+
+    it("should work with allowSubdomains and allowedTLDs together", () => {
+      const parser = domain({
+        allowSubdomains: false,
+        allowedTLDs: ["com", "org"],
+      });
+      const result = parser.parse("example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.com");
+    });
+
+    it("should reject subdomain with restricted TLDs", () => {
+      const parser = domain({
+        allowSubdomains: false,
+        allowedTLDs: ["com", "org"],
+      });
+      const result = parser.parse("www.example.com");
+      assert.ok(!result.success);
+      assert.strictEqual(
+        result.error,
+        "Subdomains are not allowed, but got www.example.com.",
+      );
+    });
+
+    it("should work with all options combined", () => {
+      const parser = domain({
+        allowSubdomains: true,
+        allowedTLDs: ["com", "org", "net"],
+        minLabels: 2,
+        lowercase: true,
+      });
+      const result = parser.parse("API.Example.COM");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "api.example.com");
     });
   });
 });

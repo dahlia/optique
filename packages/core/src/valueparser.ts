@@ -3531,3 +3531,238 @@ export function macAddress(
     },
   };
 }
+
+/**
+ * Options for {@link domain} parser.
+ *
+ * @since 0.10.0
+ */
+export interface DomainOptions {
+  /**
+   * The metavariable name for this parser.
+   *
+   * @default "DOMAIN"
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * If `true`, allows subdomains (e.g., "www.example.com").
+   * If `false`, only accepts root domains (e.g., "example.com").
+   *
+   * @default true
+   */
+  readonly allowSubdomains?: boolean;
+
+  /**
+   * List of allowed top-level domains (e.g., ["com", "org", "net"]).
+   * If specified, only domains with these TLDs are accepted.
+   */
+  readonly allowedTLDs?: readonly string[];
+
+  /**
+   * Minimum number of domain labels (parts separated by dots).
+   *
+   * @default 2
+   */
+  readonly minLabels?: number;
+
+  /**
+   * If `true`, converts domain to lowercase.
+   *
+   * @default false
+   */
+  readonly lowercase?: boolean;
+
+  /**
+   * Custom error messages for domain parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid domain.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidDomain?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when subdomains are not allowed.
+     * Can be a static message or a function that receives the domain.
+     */
+    subdomainsNotAllowed?: Message | ((domain: string) => Message);
+
+    /**
+     * Custom error message when TLD is not allowed.
+     * Can be a static message or a function that receives the TLD
+     * and allowed TLDs.
+     */
+    tldNotAllowed?:
+      | Message
+      | ((tld: string, allowedTLDs: readonly string[]) => Message);
+
+    /**
+     * Custom error message when domain has too few labels.
+     * Can be a static message or a function that receives the domain
+     * and minimum labels.
+     */
+    tooFewLabels?: Message | ((domain: string, minLabels: number) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for domain names.
+ *
+ * Validates domain names according to RFC 1035 with configurable options for
+ * subdomain filtering, TLD restrictions, minimum label requirements, and case
+ * normalization.
+ *
+ * @param options Parser options for domain validation.
+ * @returns A parser that accepts valid domain names as strings.
+ *
+ * @example
+ * ``` typescript
+ * import { option } from "@optique/core/primitives";
+ * import { domain } from "@optique/core/valueparser";
+ *
+ * // Accept any valid domain
+ * option("--domain", domain())
+ *
+ * // Root domains only (no subdomains)
+ * option("--root", domain({ allowSubdomains: false }))
+ *
+ * // Restrict to specific TLDs
+ * option("--domain", domain({ allowedTLDs: ["com", "org", "net"] }))
+ *
+ * // Normalize to lowercase
+ * option("--domain", domain({ lowercase: true }))
+ * ```
+ *
+ * @since 0.10.0
+ */
+export function domain(
+  options?: DomainOptions & { readonly metavar?: NonEmptyString },
+): ValueParser<"sync", string> {
+  const metavar = options?.metavar ?? "DOMAIN";
+  const allowSubdomains = options?.allowSubdomains ?? true;
+  const allowedTLDs = options?.allowedTLDs;
+  const minLabels = options?.minLabels ?? 2;
+  const lowercase = options?.lowercase ?? false;
+  const errors = options?.errors;
+
+  // Domain label regex: 1-63 alphanumeric characters and hyphens,
+  // cannot start or end with hyphen
+  const labelRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<string> {
+      // Basic validation
+      if (input.length === 0 || input.startsWith(".") || input.endsWith(".")) {
+        const errorMsg = errors?.invalidDomain;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid domain name, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check for consecutive dots
+      if (input.includes("..")) {
+        const errorMsg = errors?.invalidDomain;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid domain name, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Split into labels
+      const labels = input.split(".");
+
+      // Validate each label
+      for (const label of labels) {
+        if (!labelRegex.test(label)) {
+          const errorMsg = errors?.invalidDomain;
+          if (typeof errorMsg === "function") {
+            return { success: false, error: errorMsg(input) };
+          }
+          const msg = errorMsg ?? [
+            { type: "text", text: "Expected a valid domain name, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message;
+          return { success: false, error: msg };
+        }
+      }
+
+      // Check minimum labels
+      if (labels.length < minLabels) {
+        const errorMsg = errors?.tooFewLabels;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input, minLabels) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Domain " },
+          { type: "value", value: input },
+          {
+            type: "text",
+            text: ` must have at least ${minLabels} labels.`,
+          },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check subdomain restriction
+      if (!allowSubdomains && labels.length > 2) {
+        const errorMsg = errors?.subdomainsNotAllowed;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Subdomains are not allowed, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check TLD restriction
+      if (allowedTLDs !== undefined) {
+        const tld = labels[labels.length - 1];
+        const tldLower = tld.toLowerCase();
+        const allowedTLDsLower = allowedTLDs.map((t) => t.toLowerCase());
+
+        if (!allowedTLDsLower.includes(tldLower)) {
+          const errorMsg = errors?.tldNotAllowed;
+          if (typeof errorMsg === "function") {
+            return { success: false, error: errorMsg(tld, allowedTLDs) };
+          }
+          const msg = errorMsg ?? [
+            { type: "text", text: "Top-level domain " },
+            { type: "value", value: tld },
+            {
+              type: "text",
+              text: ` is not allowed. Allowed TLDs: ${allowedTLDs.join(", ")}.`,
+            },
+          ] as Message;
+          return { success: false, error: msg };
+        }
+      }
+
+      // Apply case conversion if needed
+      const result = lowercase ? input.toLowerCase() : input;
+
+      return { success: true, value: result };
+    },
+    format(): string {
+      return metavar;
+    },
+  };
+}
