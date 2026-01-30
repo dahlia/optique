@@ -2146,6 +2146,415 @@ const apiDomain = domain({
 The parser uses `"DOMAIN"` as its default metavar.
 
 
+`ipv6()` parser
+---------------
+
+The `ipv6()` parser validates and normalizes IPv6 addresses to canonical form
+(lowercase, compressed using `::` notation where appropriate). It supports full
+addresses, compressed notation, and IPv4-mapped IPv6 addresses, with
+configurable address type restrictions.
+
+### Basic validation
+
+The parser validates IPv6 addresses in various formats:
+
+~~~~ typescript twoslash
+import { ipv6 } from "@optique/core/valueparser";
+
+const parser = ipv6();
+
+// Full format
+const result1 = parser.parse("2001:0db8:85a3:0000:0000:8a2e:0370:7334");
+if (result1.success) {
+  result1.value;  // "2001:db8:85a3::8a2e:370:7334" (compressed)
+}
+
+// Compressed format
+const result2 = parser.parse("2001:db8::1");
+if (result2.success) {
+  result2.value;  // "2001:db8::1"
+}
+
+// IPv4-mapped IPv6
+const result3 = parser.parse("::ffff:192.0.2.1");
+if (result3.success) {
+  result3.value;  // "::ffff:c000:201"
+}
+
+// Loopback
+const result4 = parser.parse("::1");
+if (result4.success) {
+  result4.value;  // "::1"
+}
+~~~~
+
+### Address type filtering
+
+The parser provides options to restrict specific address types:
+
+~~~~ typescript twoslash
+import { ipv6 } from "@optique/core/valueparser";
+// ---cut-before---
+// No loopback addresses
+const noLoopback = ipv6({ allowLoopback: false });
+const result1 = noLoopback.parse("::1");
+if (!result1.success) {
+  result1.error;  // "::1 is a loopback address."
+}
+
+// Global unicast only (no link-local, no unique local)
+const publicOnly = ipv6({
+  allowLinkLocal: false,
+  allowUniqueLocal: false,
+});
+
+const result2 = publicOnly.parse("fe80::1");
+if (!result2.success) {
+  result2.error;  // "fe80::1 is a link-local address."
+}
+
+const result3 = publicOnly.parse("fc00::1");
+if (!result3.success) {
+  result3.error;  // "fc00::1 is a unique local address."
+}
+~~~~
+
+### Address type categories
+
+The parser recognizes these IPv6 address types:
+
+ -  **Loopback** (`::1`): Local loopback address
+ -  **Link-local** (`fe80::/10`): Addresses for single network segment
+ -  **Unique local** (`fc00::/7`): Private addresses for local communication
+ -  **Multicast** (`ff00::/8`): Addresses for multicast groups
+ -  **Zero** (`::`): All-zeros address
+
+### Normalization
+
+The parser automatically normalizes IPv6 addresses to canonical form:
+
+ -  Converts to lowercase
+ -  Removes leading zeros from each group
+ -  Compresses the longest sequence of consecutive zero groups with `::`
+
+~~~~ typescript twoslash
+import { ipv6 } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = ipv6();
+
+// Uppercase converted to lowercase
+const result1 = parser.parse("2001:DB8:85A3::8A2E:370:7334");
+if (result1.success) {
+  result1.value;  // "2001:db8:85a3::8a2e:370:7334"
+}
+
+// Leading zeros removed and compressed
+const result2 = parser.parse("2001:0db8:0000:0000:0000:0000:0000:0001");
+if (result2.success) {
+  result2.value;  // "2001:db8::1"
+}
+~~~~
+
+### Return value
+
+The parser returns a string representing the normalized IPv6 address in
+canonical form (lowercase, compressed).
+
+The parser uses `"IPV6"` as its default metavar.
+
+
+`ip()` parser
+-------------
+
+The `ip()` parser accepts both IPv4 and IPv6 addresses, delegating to the
+`ipv4()` and `ipv6()` parsers based on the detected format. It can be
+configured to accept only IPv4, only IPv6, or both (default).
+
+### Basic validation
+
+By default, the parser accepts both IP versions:
+
+~~~~ typescript twoslash
+import { ip } from "@optique/core/valueparser";
+
+const parser = ip();
+
+// IPv4 address
+const result1 = parser.parse("192.0.2.1");
+if (result1.success) {
+  result1.value;  // "192.0.2.1"
+}
+
+// IPv6 address
+const result2 = parser.parse("2001:db8::1");
+if (result2.success) {
+  result2.value;  // "2001:db8::1"
+}
+~~~~
+
+### Version filtering
+
+Use the `version` option to restrict to a specific IP version:
+
+~~~~ typescript twoslash
+import { ip } from "@optique/core/valueparser";
+// ---cut-before---
+// IPv4 only
+const ipv4Only = ip({ version: 4 });
+const result1 = ipv4Only.parse("192.0.2.1");
+if (result1.success) {
+  result1.value;  // "192.0.2.1"
+}
+
+const result2 = ipv4Only.parse("2001:db8::1");
+if (!result2.success) {
+  result2.error;  // "Expected a valid IP address, but got 2001:db8::1."
+}
+
+// IPv6 only
+const ipv6Only = ip({ version: 6 });
+const result3 = ipv6Only.parse("2001:db8::1");
+if (result3.success) {
+  result3.value;  // "2001:db8::1"
+}
+~~~~
+
+### Passing options to IPv4/IPv6 parsers
+
+The parser accepts separate options for IPv4 and IPv6 validation:
+
+~~~~ typescript twoslash
+import { ip } from "@optique/core/valueparser";
+// ---cut-before---
+// Public IPs only (both versions)
+const publicOnly = ip({
+  ipv4: { allowPrivate: false, allowLoopback: false },
+  ipv6: { allowLinkLocal: false, allowUniqueLocal: false },
+});
+
+const result1 = publicOnly.parse("192.168.1.1");
+if (!result1.success) {
+  result1.error;  // "192.168.1.1 is a private IP address."
+}
+
+const result2 = publicOnly.parse("fe80::1");
+if (!result2.success) {
+  result2.error;  // "fe80::1 is a link-local address."
+}
+~~~~
+
+### Shared error messages
+
+The parser supports shared error messages that apply to both IP versions:
+
+~~~~ typescript twoslash
+import { ip } from "@optique/core/valueparser";
+import type { Message } from "@optique/core/message";
+// ---cut-before---
+const parser = ip({
+  errors: {
+    loopbackNotAllowed: [
+      { type: "text", text: "Loopback addresses are not allowed" },
+    ] satisfies Message,
+  },
+  ipv4: { allowLoopback: false },
+  ipv6: { allowLoopback: false },
+});
+
+const result1 = parser.parse("127.0.0.1");
+if (!result1.success) {
+  result1.error;  // "Loopback addresses are not allowed"
+}
+
+const result2 = parser.parse("::1");
+if (!result2.success) {
+  result2.error;  // "Loopback addresses are not allowed"
+}
+~~~~
+
+### Return value
+
+The parser returns a normalized IP address string. IPv4 addresses are returned
+as-is, while IPv6 addresses are normalized to canonical form (lowercase,
+compressed).
+
+When `version` is `"both"`, the parser tries IPv4 first, then IPv6 if IPv4
+fails. This means IPv4-mapped IPv6 addresses like `::ffff:192.0.2.1` are
+parsed as IPv6.
+
+The parser uses `"IP"` as its default metavar.
+
+
+`cidr()` parser
+---------------
+
+The `cidr()` parser validates CIDR notation (IP address with prefix length)
+and returns a structured object containing the normalized IP address, prefix
+length, and IP version.
+
+### Basic validation
+
+The parser validates CIDR notation for both IPv4 and IPv6:
+
+~~~~ typescript twoslash
+import { cidr } from "@optique/core/valueparser";
+
+const parser = cidr();
+
+// IPv4 CIDR
+const result1 = parser.parse("192.0.2.0/24");
+if (result1.success) {
+  result1.value.address;  // "192.0.2.0"
+  result1.value.prefix;   // 24
+  result1.value.version;  // 4
+}
+
+// IPv6 CIDR
+const result2 = parser.parse("2001:db8::/32");
+if (result2.success) {
+  result2.value.address;  // "2001:db8::"
+  result2.value.prefix;   // 32
+  result2.value.version;  // 6
+}
+~~~~
+
+### Prefix validation
+
+The parser validates prefix lengths based on IP version:
+
+ -  IPv4: 0-32
+ -  IPv6: 0-128
+
+~~~~ typescript twoslash
+import { cidr } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = cidr();
+
+// Valid IPv4 prefix
+const result1 = parser.parse("192.0.2.0/32");
+if (result1.success) {
+  result1.value.prefix;  // 32
+}
+
+// Invalid IPv4 prefix (>32)
+const result2 = parser.parse("192.0.2.0/33");
+if (!result2.success) {
+  result2.error;  // "Expected a prefix length between 0 and 32 for IPv4, but got 33."
+}
+
+// Valid IPv6 prefix
+const result3 = parser.parse("2001:db8::/128");
+if (result3.success) {
+  result3.value.prefix;  // 128
+}
+~~~~
+
+### Prefix constraints
+
+Use `minPrefix` and `maxPrefix` options to constrain the prefix length:
+
+~~~~ typescript twoslash
+import { cidr } from "@optique/core/valueparser";
+// ---cut-before---
+// Subnet sizes between /16 and /24
+const subnet = cidr({
+  version: 4,
+  minPrefix: 16,
+  maxPrefix: 24,
+});
+
+const result1 = subnet.parse("192.0.2.0/20");
+if (result1.success) {
+  result1.value.prefix;  // 20
+}
+
+const result2 = subnet.parse("192.0.2.0/8");
+if (!result2.success) {
+  result2.error;  // "Expected a prefix length greater than or equal to 16, but got 8."
+}
+
+const result3 = subnet.parse("192.0.2.0/28");
+if (!result3.success) {
+  result3.error;  // "Expected a prefix length less than or equal to 24, but got 28."
+}
+~~~~
+
+### Version filtering
+
+Use the `version` option to restrict to IPv4 or IPv6 CIDR:
+
+~~~~ typescript twoslash
+import { cidr } from "@optique/core/valueparser";
+// ---cut-before---
+// IPv4 CIDR only
+const ipv4Cidr = cidr({ version: 4 });
+const result1 = ipv4Cidr.parse("192.0.2.0/24");
+if (result1.success) {
+  result1.value.version;  // 4
+}
+
+const result2 = ipv4Cidr.parse("2001:db8::/32");
+if (!result2.success) {
+  result2.error;  // "Expected a valid CIDR notation, but got 2001:db8::/32."
+}
+~~~~
+
+### IP address validation
+
+The parser delegates IP address validation to `ipv4()` and `ipv6()` parsers,
+so you can pass IPv4 and IPv6 options:
+
+~~~~ typescript twoslash
+import { cidr } from "@optique/core/valueparser";
+// ---cut-before---
+// Public IP ranges only
+const publicCidr = cidr({
+  ipv4: { allowPrivate: false },
+  ipv6: { allowLinkLocal: false, allowUniqueLocal: false },
+});
+
+const result1 = publicCidr.parse("192.168.0.0/24");
+if (!result1.success) {
+  result1.error;  // "192.168.0.0 is a private IP address."
+}
+~~~~
+
+### Return value
+
+The parser returns a `CidrValue` object with three fields:
+
+ -  `address`: The normalized IP address (string)
+ -  `prefix`: The prefix length (number)
+ -  `version`: The IP version (4 or 6)
+
+~~~~ typescript twoslash
+import { cidr } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = cidr();
+const result = parser.parse("192.0.2.0/24");
+if (result.success) {
+  const { address, prefix, version } = result.value;
+  console.log(`${address}/${prefix} (IPv${version})`);
+  // "192.0.2.0/24 (IPv4)"
+}
+~~~~
+
+IPv6 addresses are normalized to canonical form (lowercase, compressed):
+
+~~~~ typescript twoslash
+import { cidr } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = cidr();
+const result = parser.parse("2001:0DB8:0000:0000:0000:0000:0000:0000/32");
+if (result.success) {
+  result.value.address;  // "2001:db8::"
+  result.value.prefix;   // 32
+}
+~~~~
+
+The parser uses `"CIDR"` as its default metavar.
+
+
 `path()` parser
 ---------------
 
