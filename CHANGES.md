@@ -394,6 +394,32 @@ To be released.
     }))
     ~~~~
 
+ -  Added `portRange()` value parser for port ranges (e.g., “8000-8080”). The
+    parser validates port ranges with support for both `number` and `bigint`
+    types, custom separators, single port mode, and min/max constraints.
+    Returns a `PortRangeValue` object containing `start` and `end` ports.
+    [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { portRange } from "@optique/core/valueparser";
+
+    // Basic port range
+    option("--ports", portRange())
+
+    // Allow single port (returns range with start === end)
+    option("--ports", portRange({ allowSingle: true }))
+
+    // Custom separator
+    option("--ports", portRange({ separator: ":" }))
+
+    // Non-privileged ports only
+    option("--ports", portRange({ min: 1024 }))
+
+    // Using bigint type
+    option("--ports", portRange({ type: "bigint" }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]

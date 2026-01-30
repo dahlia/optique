@@ -2935,3 +2935,393 @@ export function socketAddress(
     },
   };
 }
+
+/**
+ * Port range value with number type.
+ *
+ * @since 0.10.0
+ */
+export interface PortRangeValueNumber {
+  /**
+   * Starting port number (inclusive).
+   */
+  readonly start: number;
+
+  /**
+   * Ending port number (inclusive).
+   */
+  readonly end: number;
+}
+
+/**
+ * Port range value with bigint type.
+ *
+ * @since 0.10.0
+ */
+export interface PortRangeValueBigInt {
+  /**
+   * Starting port number (inclusive).
+   */
+  readonly start: bigint;
+
+  /**
+   * Ending port number (inclusive).
+   */
+  readonly end: bigint;
+}
+
+/**
+ * Options for the {@link portRange} parser that returns number values.
+ *
+ * @since 0.10.0
+ */
+export interface PortRangeOptionsNumber {
+  /**
+   * The type of values to return.
+   * @default "number"
+   */
+  readonly type?: "number";
+
+  /**
+   * The metavariable name for this parser.
+   * @default "PORT-PORT"
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Separator character(s) between start and end ports.
+   * @default "-"
+   */
+  readonly separator?: string;
+
+  /**
+   * Minimum allowed port number (inclusive).
+   * Applied to both start and end ports.
+   * @default 1
+   */
+  readonly min?: number;
+
+  /**
+   * Maximum allowed port number (inclusive).
+   * Applied to both start and end ports.
+   * @default 65535
+   */
+  readonly max?: number;
+
+  /**
+   * If `true`, disallows well-known ports (1-1023).
+   * Applied to both start and end ports.
+   * @default false
+   */
+  readonly disallowWellKnown?: boolean;
+
+  /**
+   * If `true`, allows single port without range (e.g., "8080").
+   * The result will have `start === end`.
+   * @default false
+   */
+  readonly allowSingle?: boolean;
+
+  /**
+   * Custom error messages for port range parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input format is invalid.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when start port is greater than end port.
+     * Can be a static message or a function that receives start and end.
+     */
+    invalidRange?: Message | ((start: number, end: number) => Message);
+
+    /**
+     * Custom error message when port is invalid.
+     * Inherited from PortOptions.
+     */
+    invalidPort?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when port is below minimum.
+     * Inherited from PortOptions.
+     */
+    belowMinimum?: Message | ((port: number, min: number) => Message);
+
+    /**
+     * Custom error message when port is above maximum.
+     * Inherited from PortOptions.
+     */
+    aboveMaximum?: Message | ((port: number, max: number) => Message);
+
+    /**
+     * Custom error message when well-known port is not allowed.
+     * Inherited from PortOptions.
+     */
+    wellKnownNotAllowed?: Message | ((port: number) => Message);
+  };
+}
+
+/**
+ * Options for the {@link portRange} parser that returns bigint values.
+ *
+ * @since 0.10.0
+ */
+export interface PortRangeOptionsBigInt {
+  /**
+   * Must be set to "bigint" to create a bigint parser.
+   */
+  readonly type: "bigint";
+
+  /**
+   * The metavariable name for this parser.
+   * @default "PORT-PORT"
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Separator character(s) between start and end ports.
+   * @default "-"
+   */
+  readonly separator?: string;
+
+  /**
+   * Minimum allowed port number (inclusive).
+   * Applied to both start and end ports.
+   * @default 1n
+   */
+  readonly min?: bigint;
+
+  /**
+   * Maximum allowed port number (inclusive).
+   * Applied to both start and end ports.
+   * @default 65535n
+   */
+  readonly max?: bigint;
+
+  /**
+   * If `true`, disallows well-known ports (1-1023).
+   * Applied to both start and end ports.
+   * @default false
+   */
+  readonly disallowWellKnown?: boolean;
+
+  /**
+   * If `true`, allows single port without range (e.g., "8080").
+   * The result will have `start === end`.
+   * @default false
+   */
+  readonly allowSingle?: boolean;
+
+  /**
+   * Custom error messages for port range parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input format is invalid.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when start port is greater than end port.
+     * Can be a static message or a function that receives start and end.
+     */
+    invalidRange?: Message | ((start: bigint, end: bigint) => Message);
+
+    /**
+     * Custom error message when port is invalid.
+     * Inherited from PortOptions.
+     */
+    invalidPort?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when port is below minimum.
+     * Inherited from PortOptions.
+     */
+    belowMinimum?: Message | ((port: bigint, min: bigint) => Message);
+
+    /**
+     * Custom error message when port is above maximum.
+     * Inherited from PortOptions.
+     */
+    aboveMaximum?: Message | ((port: bigint, max: bigint) => Message);
+
+    /**
+     * Custom error message when well-known port is not allowed.
+     * Inherited from PortOptions.
+     */
+    wellKnownNotAllowed?: Message | ((port: bigint) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for port ranges (e.g., "8000-8080").
+ *
+ * Validates port ranges with support for:
+ * - Custom separator between start and end ports
+ * - Single port mode (when `allowSingle` is enabled)
+ * - Port number or bigint types
+ * - Min/max constraints
+ * - Well-known port restrictions
+ *
+ * @param options - Options for port range validation.
+ * @returns A value parser for port ranges.
+ * @since 0.10.0
+ *
+ * @example
+ * ```typescript
+ * import { portRange } from "@optique/core/valueparser";
+ *
+ * // Basic port range parser
+ * const range = portRange();
+ *
+ * // Allow single port
+ * const flexible = portRange({ allowSingle: true });
+ *
+ * // Non-privileged ports only
+ * const safe = portRange({ min: 1024 });
+ *
+ * // Using bigint type
+ * const bigRange = portRange({ type: "bigint" });
+ * ```
+ */
+export function portRange(
+  options: PortRangeOptionsBigInt,
+): ValueParser<"sync", PortRangeValueBigInt>;
+export function portRange(
+  options?: PortRangeOptionsNumber,
+): ValueParser<"sync", PortRangeValueNumber>;
+export function portRange(
+  options?: PortRangeOptionsNumber | PortRangeOptionsBigInt,
+): ValueParser<"sync", PortRangeValueNumber | PortRangeValueBigInt> {
+  const metavar: NonEmptyString = options?.metavar ?? "PORT-PORT";
+  ensureNonEmptyString(metavar);
+
+  const separator = options?.separator ?? "-";
+  const allowSingle = options?.allowSingle ?? false;
+  const isBigInt = options?.type === "bigint";
+
+  // Create port parser for validation
+  const portParser = isBigInt
+    ? port({
+      type: "bigint",
+      min: (options as PortRangeOptionsBigInt).min,
+      max: (options as PortRangeOptionsBigInt).max,
+      disallowWellKnown: options.disallowWellKnown,
+      errors: options.errors,
+    })
+    : port({
+      type: "number",
+      min: (options as PortRangeOptionsNumber | undefined)?.min,
+      max: (options as PortRangeOptionsNumber | undefined)?.max,
+      disallowWellKnown: options?.disallowWellKnown,
+      errors: options?.errors,
+    });
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<
+      PortRangeValueNumber | PortRangeValueBigInt
+    > {
+      const trimmed = input.trim();
+
+      // Find separator
+      const separatorIndex = trimmed.indexOf(separator);
+
+      if (separatorIndex === -1) {
+        // No separator - check if single port is allowed
+        if (!allowSingle) {
+          const errorMsg = options?.errors?.invalidFormat;
+          if (typeof errorMsg === "function") {
+            return { success: false, error: errorMsg(input) };
+          }
+          const msg = errorMsg ?? [
+            {
+              type: "text",
+              text:
+                `Expected a port range in format start${separator}end, but got `,
+            },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message;
+          return { success: false, error: msg };
+        }
+
+        // Parse as single port
+        const portResult = portParser.parse(trimmed);
+        if (!portResult.success) {
+          return portResult;
+        }
+
+        const portValue = portResult.value;
+        return {
+          success: true,
+          value: isBigInt
+            ? { start: portValue as bigint, end: portValue as bigint }
+            : { start: portValue as number, end: portValue as number },
+        };
+      }
+
+      // Parse range
+      const startPart = trimmed.substring(0, separatorIndex);
+      const endPart = trimmed.substring(separatorIndex + separator.length);
+
+      // Validate start port
+      const startResult = portParser.parse(startPart);
+      if (!startResult.success) {
+        return startResult;
+      }
+
+      // Validate end port
+      const endResult = portParser.parse(endPart);
+      if (!endResult.success) {
+        return endResult;
+      }
+
+      const startValue = startResult.value;
+      const endValue = endResult.value;
+
+      // Check that start <= end
+      if (isBigInt) {
+        const start = startValue as bigint;
+        const end = endValue as bigint;
+        if (start > end) {
+          const errorMsg = (options as PortRangeOptionsBigInt).errors
+            ?.invalidRange;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(start, end)
+            : errorMsg ??
+              message`Start port ${startPart} must be less than or equal to end port ${endPart}.`;
+          return { success: false, error: msg };
+        }
+        return {
+          success: true,
+          value: { start, end },
+        };
+      } else {
+        const start = startValue as number;
+        const end = endValue as number;
+        if (start > end) {
+          const errorMsg = (options as PortRangeOptionsNumber | undefined)
+            ?.errors?.invalidRange;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(start, end)
+            : errorMsg ??
+              message`Start port ${startPart} must be less than or equal to end port ${endPart}.`;
+          return { success: false, error: msg };
+        }
+        return {
+          success: true,
+          value: { start, end },
+        };
+      }
+    },
+    format(value: PortRangeValueNumber | PortRangeValueBigInt): string {
+      return `${value.start}${separator}${value.end}`;
+    },
+  };
+}
