@@ -468,6 +468,74 @@ To be released.
     option("--domain", domain({ lowercase: true }))
     ~~~~
 
+ -  Added `ipv6()` value parser for IPv6 address validation. The parser
+    validates and normalizes IPv6 addresses to canonical form (lowercase,
+    compressed using `::` notation) with support for full addresses, compressed
+    notation, and IPv4-mapped IPv6 addresses. Configurable address type
+    restrictions for loopback, link-local, unique local, multicast, and zero
+    addresses. Returns a normalized string. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { ipv6 } from "@optique/core/valueparser";
+
+    // Accept any IPv6 address
+    option("--ipv6", ipv6())
+
+    // Global unicast only (no link-local, no unique local)
+    option("--public-ipv6", ipv6({
+      allowLinkLocal: false,
+      allowUniqueLocal: false
+    }))
+
+    // No loopback addresses
+    option("--ipv6", ipv6({ allowLoopback: false }))
+    ~~~~
+
+ -  Added `ip()` value parser that accepts both IPv4 and IPv6 addresses. The
+    parser can be configured to accept only IPv4, only IPv6, or both (default).
+    Delegates to `ipv4()` and `ipv6()` parsers based on version setting, with
+    intelligent error handling that preserves specific validation errors.
+    Returns a normalized IP address string. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { ip } from "@optique/core/valueparser";
+
+    // Accept both IPv4 and IPv6
+    option("--ip", ip())
+
+    // IPv4 only
+    option("--ipv4", ip({ version: 4 }))
+
+    // Public IPs only (both versions)
+    option("--public-ip", ip({
+      ipv4: { allowPrivate: false, allowLoopback: false },
+      ipv6: { allowLinkLocal: false, allowUniqueLocal: false }
+    }))
+    ~~~~
+
+ -  Added `cidr()` value parser for CIDR notation validation. The parser
+    validates CIDR notation like `192.168.0.0/24` or `2001:db8::/32` and
+    returns a structured object with the normalized IP address, prefix length,
+    and IP version. Supports prefix length constraints and delegates IP
+    validation to `ipv4()` and `ipv6()` parsers. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { cidr } from "@optique/core/valueparser";
+
+    // Accept both IPv4 and IPv6 CIDR
+    option("--network", cidr())
+
+    // IPv4 CIDR only with prefix constraints
+    option("--subnet", cidr({
+      version: 4,
+      minPrefix: 16,
+      maxPrefix: 24
+    }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]
