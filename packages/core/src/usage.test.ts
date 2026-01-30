@@ -939,6 +939,33 @@ describe("expandCommands option", () => {
       "\x1b[1mtest\x1b[0m \x1b[1mtool\x1b[0m \x1b[1mstop\x1b[0m",
     );
   });
+
+  it("should exclude hidden commands from expanded usage lines", () => {
+    // Regression test for hidden commands appearing in usage lines
+    // When a command has hidden: true, it should not appear in the
+    // expanded usage output, even though it's still parsed normally
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "some-command" }, {
+            type: "argument",
+            metavar: "ARG",
+          }],
+          [{ type: "command", name: "s", hidden: true }, {
+            type: "argument",
+            metavar: "ARG",
+          }],
+        ],
+      },
+    ];
+    const result = formatUsage("cli", usage, { expandCommands: true });
+    const lines = result.split("\n");
+
+    // Should only show the non-hidden command
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0], "cli some-command ARG");
+  });
 });
 
 describe("formatUsageTerm", () => {

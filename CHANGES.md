@@ -467,6 +467,33 @@ to generate Unix man pages that stay synchronized with parser definitions.
 [#77]: https://github.com/dahlia/optique/issues/77
 
 
+Version 0.9.2
+-------------
+
+Released on January 30, 2026.
+
+### @optique/core
+
+ -  Fixed `command()` with `hidden: true` incorrectly hiding inner
+    argument/option descriptions when the hidden command is matched and
+    executed.  Previously, when a hidden command was invoked with `--help`,
+    the help text would not show descriptions for the command's arguments
+    and options, even when those arguments and options were not hidden.
+    Now, the `hidden` option only applies when the command is shown in a
+    command list (when the command is not matched), and inner parser
+    documentation is displayed normally when the hidden command is actually
+    executed.  [[#88]]
+
+ -  Fixed `formatUsage()` incorrectly showing hidden commands in expanded
+    usage lines.  Previously, when using `expandCommands: true` option,
+    hidden commands would appear in the usage output even though they were
+    correctly excluded from the command list.  Now, hidden commands are
+    filtered out from expanded usage lines while remaining fully functional
+    for parsing.
+
+[#88]: https://github.com/dahlia/optique/issues/88
+
+
 Version 0.9.1
 -------------
 

@@ -2036,10 +2036,11 @@ export function command<M extends Mode, T, TState>(
       );
     },
     getDocFragments(state: DocState<CommandState<TState>>, defaultValue?: T) {
-      if (options.hidden) {
-        return { fragments: [], description: options.description };
-      }
       if (state.kind === "unavailable" || typeof state.state === "undefined") {
+        // When the command is not matched (showing in a list), apply hidden option
+        if (options.hidden) {
+          return { fragments: [], description: options.description };
+        }
         // When showing command in a list, use brief if available,
         // otherwise fall back to description
         return {
@@ -2053,6 +2054,8 @@ export function command<M extends Mode, T, TState>(
           ],
         };
       }
+      // When the command is matched and executing, show inner parser documentation
+      // regardless of hidden status
       const innerState: DocState<TState> = state.state[0] === "parsing"
         ? { kind: "available", state: state.state[1] }
         : { kind: "available", state: parser.initialState };

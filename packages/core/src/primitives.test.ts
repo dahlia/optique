@@ -3702,6 +3702,54 @@ describe("hidden option", () => {
       ));
       assert.deepEqual(suggestions, []);
     });
+
+    it("should show inner argument/option descriptions when hidden command is matched", () => {
+      // Regression test for https://github.com/dahlia/optique/issues/88
+      // When a hidden command is matched and executed, its inner arguments
+      // and options should still be documented in help text.
+      const innerParser = object({
+        someArg: argument(string({ metavar: "ARG" }), {
+          description: message`the argument to the command`,
+        }),
+        someOption: option("--some-option", "-s", {
+          description: message`an option for the command`,
+        }),
+      });
+      const parser = command("s", innerParser, {
+        brief: message`run some-command`,
+        hidden: true,
+      });
+
+      // When the command is matched (e.g., user runs "cli s --help"),
+      // the state is ["matched", "s"]
+      const fragments = parser.getDocFragments(
+        { kind: "available", state: ["matched", "s"] },
+        undefined,
+      );
+
+      // The fragments should include the inner argument and option documentation
+      assert.ok(fragments.fragments.length > 0);
+
+      // object() returns DocSection with entries
+      const entries = fragments.fragments
+        .filter((f) => f.type === "section")
+        .flatMap((f) => f.entries);
+
+      const fragmentDescriptions = entries.map((entry) =>
+        entry.description ? formatMessage(entry.description) : ""
+      );
+
+      assert.ok(
+        fragmentDescriptions.some((d) =>
+          d.includes("the argument to the command")
+        ),
+      );
+      assert.ok(
+        fragmentDescriptions.some((d) =>
+          d.includes("an option for the command")
+        ),
+      );
+    });
   });
 
   describe("passThrough()", () => {
