@@ -1155,6 +1155,302 @@ const corporateEmail = email({
 The parser uses `"EMAIL"` as its default metavar.
 
 
+`socketAddress()` parser
+------------------------
+
+The `socketAddress()` parser validates socket addresses in “host:port” format.
+It supports both hostnames and IPv4 addresses, configurable separators, default
+ports, and comprehensive host/port validation options. The parser returns a
+`SocketAddressValue` object containing both the host and port components.
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+
+// Basic socket address (requires port)
+const endpoint = socketAddress({ requirePort: true });
+
+// With default port
+const server = socketAddress({ defaultPort: 80 });
+
+// IP addresses only
+const bind = socketAddress({
+  defaultPort: 8080,
+  host: { type: "ip" },
+});
+
+// Non-privileged ports only
+const listen = socketAddress({
+  defaultPort: 8080,
+  port: { min: 1024 },
+});
+~~~~
+
+### Socket address format
+
+The parser accepts addresses in the following format:
+
+ -  With port: `host:port` (e.g., `"localhost:3000"`, `"192.168.1.1:80"`)
+ -  Without port: `host` (only when `defaultPort` is set, e.g., `"example.com"`)
+
+The separator between host and port can be customized using the `separator`
+option.
+
+### Port requirements
+
+By default, the port is optional if `defaultPort` is specified. Control this
+behavior with the `requirePort` option:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Port always required
+const endpoint = option(
+  "--endpoint",
+  socketAddress({ requirePort: true })
+);
+~~~~
+
+~~~~ bash
+$ example --endpoint "localhost:3000"  # Valid
+$ example --endpoint "localhost"       # Error: port required
+~~~~
+
+When `requirePort` is `false` (default) and `defaultPort` is set, the port may
+be omitted:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Port optional, defaults to 80
+const server = option(
+  "--server",
+  socketAddress({ defaultPort: 80 })
+);
+~~~~
+
+~~~~ bash
+$ example --server "example.com:443"  # Uses port 443
+$ example --server "example.com"      # Uses default port 80
+~~~~
+
+### Host type filtering
+
+The `host.type` option controls what types of hosts are accepted:
+
+ -  `"hostname"`: Accept only valid hostnames
+ -  `"ip"`: Accept only IP addresses (currently IPv4 only)
+ -  `"both"`: Accept both hostnames and IP addresses (default)
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Only accept IP addresses for binding
+const bind = option(
+  "--bind",
+  socketAddress({
+    defaultPort: 8080,
+    host: { type: "ip" },
+  })
+);
+~~~~
+
+~~~~ bash
+$ example --bind "0.0.0.0:8080"     # Valid
+$ example --bind "localhost:8080"   # Error: hostname not allowed
+~~~~
+
+### Host validation options
+
+Pass options to the underlying hostname or IP parser using `host.hostname` or
+`host.ip`:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Remote hosts only (no localhost)
+const remote = option(
+  "--remote",
+  socketAddress({
+    defaultPort: 80,
+    host: {
+      type: "hostname",
+      hostname: { allowLocalhost: false },
+    },
+  })
+);
+~~~~
+
+~~~~ bash
+$ example --remote "localhost:80"     # Error: localhost not allowed
+$ example --remote "example.com:80"   # Valid
+~~~~
+
+For IP addresses, use `host.ip` to pass options like `allowPrivate`:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Public IPs only
+const publicServer = option(
+  "--server",
+  socketAddress({
+    defaultPort: 443,
+    host: {
+      type: "ip",
+      ip: { allowPrivate: false },
+    },
+  })
+);
+~~~~
+
+### Port validation options
+
+Pass port validation options using the `port` field:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Non-privileged ports only
+const listen = option(
+  "--listen",
+  socketAddress({
+    defaultPort: 8080,
+    port: { min: 1024, max: 65535 },
+  })
+);
+~~~~
+
+~~~~ bash
+$ example --listen "localhost:80"    # Error: port too low
+$ example --listen "localhost:8080"  # Valid
+~~~~
+
+Disallow well-known ports (1-1023):
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+const server = option(
+  "--server",
+  socketAddress({
+    defaultPort: 8080,
+    port: { disallowWellKnown: true },
+  })
+);
+~~~~
+
+### Custom separator
+
+Change the separator between host and port:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Use space as separator
+const proxy = option(
+  "--proxy",
+  socketAddress({ separator: " ", defaultPort: 8080 })
+);
+~~~~
+
+~~~~ bash
+$ example --proxy "localhost 3000"  # Valid
+$ example --proxy "localhost:3000"  # Invalid: wrong separator
+~~~~
+
+### Return value
+
+The parser returns a `SocketAddressValue` object:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = socketAddress({ defaultPort: 80 });
+const result = parser.parse("example.com:443");
+
+if (result.success) {
+  console.log(result.value.host);  // "example.com"
+  console.log(result.value.port);  // 443
+}
+~~~~
+
+### Custom error messages
+
+Customize error messages for validation failures:
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+import { option } from "@optique/core";
+// ---cut-before---
+const endpoint = option(
+  "--endpoint",
+  socketAddress({
+    requirePort: true,
+    errors: {
+      invalidFormat: (input) => message`Invalid endpoint: ${input}`,
+      missingPort: message`You must specify a port number`,
+    },
+  })
+);
+~~~~
+
+### Common use cases
+
+**Web server configuration:**
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Allow any host, default to port 8080
+const listen = socketAddress({ defaultPort: 8080 });
+~~~~
+
+**Database connections:**
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Require explicit host and port
+const dbServer = socketAddress({ requirePort: true });
+~~~~
+
+**Proxy configuration:**
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept hostnames and IPs, default port 3128
+const proxy = socketAddress({
+  defaultPort: 3128,
+  host: { type: "both" },
+});
+~~~~
+
+**Service binding (IP addresses only):**
+
+~~~~ typescript twoslash
+import { socketAddress } from "@optique/core/valueparser";
+// ---cut-before---
+// Bind to IP addresses only, non-privileged ports
+const bind = socketAddress({
+  defaultPort: 8080,
+  host: { type: "ip" },
+  port: { min: 1024 },
+});
+~~~~
+
+The parser uses `"HOST:PORT"` as its default metavar.
+
+
 `path()` parser
 ---------------
 

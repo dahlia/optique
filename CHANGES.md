@@ -365,6 +365,35 @@ To be released.
     option("--email", email({ lowercase: true }))
     ~~~~
 
+ -  Added `socketAddress()` value parser for socket addresses in “host:port”
+    format. The parser validates both hostname and IPv4 addresses combined with
+    port numbers, with support for default ports, custom separators, and host
+    type filtering. Returns a `SocketAddressValue` object containing both host
+    and port. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { socketAddress } from "@optique/core/valueparser";
+
+    // Basic socket address (requires port)
+    option("--endpoint", socketAddress({ requirePort: true }))
+
+    // With default port
+    option("--server", socketAddress({ defaultPort: 80 }))
+
+    // IP addresses only
+    option("--bind", socketAddress({
+      defaultPort: 8080,
+      host: { type: "ip" }
+    }))
+
+    // Non-privileged ports only
+    option("--listen", socketAddress({
+      defaultPort: 8080,
+      port: { min: 1024 }
+    }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]
