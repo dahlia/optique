@@ -9,6 +9,7 @@ import {
   locale,
   type NonEmptyString,
   port,
+  portRange,
   socketAddress,
   string,
   url,
@@ -5667,6 +5668,413 @@ describe("email()", () => {
         "user1@example.com",
         "user2@example.com",
       ]);
+    });
+  });
+});
+
+describe("portRange()", () => {
+  describe("basic validation (number type)", () => {
+    it("should accept valid port ranges", () => {
+      const parser = portRange();
+
+      // Simple range
+      const result1 = parser.parse("8000-8080");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.start, 8000);
+      assert.strictEqual(result1.value.end, 8080);
+
+      // Same start and end
+      const result2 = parser.parse("8080-8080");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.start, 8080);
+      assert.strictEqual(result2.value.end, 8080);
+
+      // Full range
+      const result3 = parser.parse("1-65535");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value.start, 1);
+      assert.strictEqual(result3.value.end, 65535);
+
+      // Well-known range
+      const result4 = parser.parse("80-443");
+      assert.ok(result4.success);
+      assert.strictEqual(result4.value.start, 80);
+      assert.strictEqual(result4.value.end, 443);
+    });
+
+    it("should reject invalid port ranges", () => {
+      const parser = portRange();
+
+      // No separator
+      const result1 = parser.parse("8000");
+      assert.ok(!result1.success);
+      assert.deepStrictEqual(result1.error, [
+        {
+          type: "text",
+          text: "Expected a port range in format start-end, but got ",
+        },
+        { type: "value", value: "8000" },
+        { type: "text", text: "." },
+      ]);
+
+      // Start > end
+      const result2 = parser.parse("8080-8000");
+      assert.ok(!result2.success);
+      assert.deepStrictEqual(result2.error, [
+        { type: "text", text: "Start port " },
+        { type: "value", value: "8080" },
+        { type: "text", text: " must be less than or equal to end port " },
+        { type: "value", value: "8000" },
+        { type: "text", text: "." },
+      ]);
+
+      // Invalid port number
+      const result3 = parser.parse("abc-8080");
+      assert.ok(!result3.success);
+
+      // Port out of range
+      const result4 = parser.parse("0-8080");
+      assert.ok(!result4.success);
+
+      // Port too high
+      const result5 = parser.parse("8000-70000");
+      assert.ok(!result5.success);
+
+      // Empty string
+      const result6 = parser.parse("");
+      assert.ok(!result6.success);
+
+      // Multiple separators
+      const result7 = parser.parse("8000-8080-9000");
+      assert.ok(!result7.success);
+    });
+  });
+
+  describe("basic validation (bigint type)", () => {
+    it("should accept valid port ranges with bigint", () => {
+      const parser = portRange({ type: "bigint" });
+
+      const result = parser.parse("8000-8080");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.start, 8000n);
+      assert.strictEqual(result.value.end, 8080n);
+    });
+
+    it("should reject invalid ranges with bigint", () => {
+      const parser = portRange({ type: "bigint" });
+
+      // Start > end
+      const result = parser.parse("8080-8000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Start port " },
+        { type: "value", value: "8080" },
+        { type: "text", text: " must be less than or equal to end port " },
+        { type: "value", value: "8000" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
+
+  describe("allowSingle option", () => {
+    it("should accept single port when allowSingle is true", () => {
+      const parser = portRange({ allowSingle: true });
+
+      const result = parser.parse("8080");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.start, 8080);
+      assert.strictEqual(result.value.end, 8080);
+    });
+
+    it("should reject single port when allowSingle is false", () => {
+      const parser = portRange({ allowSingle: false });
+
+      const result = parser.parse("8080");
+      assert.ok(!result.success);
+    });
+
+    it("should work with bigint type", () => {
+      const parser = portRange({ type: "bigint", allowSingle: true });
+
+      const result = parser.parse("8080");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.start, 8080n);
+      assert.strictEqual(result.value.end, 8080n);
+    });
+  });
+
+  describe("separator option", () => {
+    it("should use custom separator", () => {
+      const parser = portRange({ separator: ":" });
+
+      const result = parser.parse("8000:8080");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.start, 8000);
+      assert.strictEqual(result.value.end, 8080);
+    });
+
+    it("should reject input with wrong separator", () => {
+      const parser = portRange({ separator: ":" });
+
+      const result = parser.parse("8000-8080");
+      assert.ok(!result.success);
+    });
+
+    it("should work with multi-character separator", () => {
+      const parser = portRange({ separator: " to " });
+
+      const result = parser.parse("8000 to 8080");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.start, 8000);
+      assert.strictEqual(result.value.end, 8080);
+    });
+  });
+
+  describe("min and max options", () => {
+    it("should enforce minimum port", () => {
+      const parser = portRange({ min: 1024 });
+
+      // Below minimum
+      const result1 = parser.parse("80-8080");
+      assert.ok(!result1.success);
+
+      // At minimum
+      const result2 = parser.parse("1024-8080");
+      assert.ok(result2.success);
+    });
+
+    it("should enforce maximum port", () => {
+      const parser = portRange({ max: 9000 });
+
+      // Above maximum
+      const result1 = parser.parse("8000-10000");
+      assert.ok(!result1.success);
+
+      // At maximum
+      const result2 = parser.parse("8000-9000");
+      assert.ok(result2.success);
+    });
+
+    it("should apply to both start and end ports", () => {
+      const parser = portRange({ min: 1024, max: 9000 });
+
+      // Start below minimum
+      const result1 = parser.parse("80-8080");
+      assert.ok(!result1.success);
+
+      // End above maximum
+      const result2 = parser.parse("8000-10000");
+      assert.ok(!result2.success);
+
+      // Both in range
+      const result3 = parser.parse("1024-9000");
+      assert.ok(result3.success);
+    });
+
+    it("should work with bigint type", () => {
+      const parser = portRange({ type: "bigint", min: 1024n, max: 9000n });
+
+      const result1 = parser.parse("80-8080");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("1024-9000");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.start, 1024n);
+      assert.strictEqual(result2.value.end, 9000n);
+    });
+  });
+
+  describe("disallowWellKnown option", () => {
+    it("should reject well-known ports when disallowWellKnown is true", () => {
+      const parser = portRange({ disallowWellKnown: true });
+
+      // Both well-known
+      const result1 = parser.parse("80-443");
+      assert.ok(!result1.success);
+
+      // Start well-known
+      const result2 = parser.parse("80-8080");
+      assert.ok(!result2.success);
+
+      // End well-known
+      const result3 = parser.parse("8000-443");
+      assert.ok(!result3.success);
+
+      // Both non-well-known
+      const result4 = parser.parse("1024-8080");
+      assert.ok(result4.success);
+    });
+
+    it("should work with bigint type", () => {
+      const parser = portRange({ type: "bigint", disallowWellKnown: true });
+
+      const result1 = parser.parse("80-443");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("1024-8080");
+      assert.ok(result2.success);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom static error message for invalidFormat", () => {
+      const parser = portRange({
+        errors: {
+          invalidFormat: message`Bad port range format`,
+        },
+      });
+
+      // Single port without allowSingle triggers invalidFormat
+      const result = parser.parse("8080");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Bad port range format" },
+      ]);
+    });
+
+    it("should use custom error function for invalidFormat", () => {
+      const parser = portRange({
+        errors: {
+          invalidFormat: (input) => message`Cannot parse: ${input}`,
+        },
+      });
+
+      const result = parser.parse("abc");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Cannot parse: " },
+        { type: "value", value: "abc" },
+      ]);
+    });
+
+    it("should use custom error message for invalidRange", () => {
+      const parser = portRange({
+        errors: {
+          invalidRange: (start, end) =>
+            message`Range error: ${start.toString()} > ${end.toString()}`,
+        },
+      });
+
+      const result = parser.parse("8080-8000");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Range error: " },
+        { type: "value", value: "8080" },
+        { type: "text", text: " > " },
+        { type: "value", value: "8000" },
+      ]);
+    });
+
+    it("should use custom error for port validation", () => {
+      const parser = portRange({
+        min: 1024,
+        errors: {
+          belowMinimum: (port, min) =>
+            message`Port ${port.toString()} is too low (min: ${min.toString()})`,
+        },
+      });
+
+      const result = parser.parse("80-8080");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Port " },
+        { type: "value", value: "80" },
+        { type: "text", text: " is too low (min: " },
+        { type: "value", value: "1024" },
+        { type: "text", text: ")" },
+      ]);
+    });
+  });
+
+  describe("format()", () => {
+    it("should return port range in start-end format", () => {
+      const parser = portRange();
+
+      const formatted = parser.format({ start: 8000, end: 8080 });
+      assert.strictEqual(formatted, "8000-8080");
+    });
+
+    it("should use custom separator in format", () => {
+      const parser = portRange({ separator: ":" });
+
+      const formatted = parser.format({ start: 8000, end: 8080 });
+      assert.strictEqual(formatted, "8000:8080");
+    });
+
+    it("should work with bigint values", () => {
+      const parser = portRange({ type: "bigint" });
+
+      const formatted = parser.format({ start: 8000n, end: 8080n });
+      assert.strictEqual(formatted, "8000-8080");
+    });
+
+    it("should handle single port (same start and end)", () => {
+      const parser = portRange({ allowSingle: true });
+
+      const formatted = parser.format({ start: 8080, end: 8080 });
+      assert.strictEqual(formatted, "8080-8080");
+    });
+  });
+
+  describe("metavar", () => {
+    it("should use default metavar PORT-PORT", () => {
+      const parser = portRange();
+      assert.strictEqual(parser.metavar, "PORT-PORT");
+    });
+
+    it("should use custom metavar", () => {
+      const parser = portRange({ metavar: "RANGE" });
+      assert.strictEqual(parser.metavar, "RANGE");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle minimum port range (1-1)", () => {
+      const parser = portRange({ allowSingle: true });
+
+      const result = parser.parse("1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.start, 1);
+      assert.strictEqual(result.value.end, 1);
+    });
+
+    it("should handle maximum port range (65535-65535)", () => {
+      const parser = portRange({ allowSingle: true });
+
+      const result = parser.parse("65535");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.start, 65535);
+      assert.strictEqual(result.value.end, 65535);
+    });
+
+    it("should handle wide range (1-65535)", () => {
+      const parser = portRange();
+
+      const result = parser.parse("1-65535");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.start, 1);
+      assert.strictEqual(result.value.end, 65535);
+    });
+
+    it("should work with mixed options", () => {
+      const parser = portRange({
+        allowSingle: true,
+        min: 1024,
+        max: 65535,
+        disallowWellKnown: true,
+      });
+
+      // Single port in range
+      const result1 = parser.parse("8080");
+      assert.ok(result1.success);
+
+      // Range in bounds
+      const result2 = parser.parse("1024-9000");
+      assert.ok(result2.success);
+
+      // Well-known port rejected
+      const result3 = parser.parse("80-443");
+      assert.ok(!result3.success);
     });
   });
 });
