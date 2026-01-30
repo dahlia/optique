@@ -3766,3 +3766,390 @@ export function domain(
     },
   };
 }
+/**
+ * Options for configuring the IPv6 address value parser.
+ *
+ * @since 0.10.0
+ */
+export interface Ipv6Options {
+  /**
+   * The metavariable name for this parser.
+   *
+   * @default `"IPV6"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * If `true`, allows loopback address (::1).
+   *
+   * @default `true`
+   */
+  readonly allowLoopback?: boolean;
+
+  /**
+   * If `true`, allows link-local addresses (fe80::/10).
+   *
+   * @default `true`
+   */
+  readonly allowLinkLocal?: boolean;
+
+  /**
+   * If `true`, allows unique local addresses (fc00::/7).
+   *
+   * @default `true`
+   */
+  readonly allowUniqueLocal?: boolean;
+
+  /**
+   * If `true`, allows multicast addresses (ff00::/8).
+   *
+   * @default `true`
+   */
+  readonly allowMulticast?: boolean;
+
+  /**
+   * If `true`, allows the zero address (::).
+   *
+   * @default `true`
+   */
+  readonly allowZero?: boolean;
+
+  /**
+   * Custom error messages for IPv6 parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid IPv6 address.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidIpv6?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when loopback IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    loopbackNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when link-local IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    linkLocalNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when unique local IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    uniqueLocalNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when multicast IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    multicastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when zero IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    zeroNotAllowed?: Message | ((ip: string) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for IPv6 addresses.
+ *
+ * Validates and normalizes IPv6 addresses to canonical form (lowercase,
+ * compressed using `::` notation where appropriate).
+ *
+ * @param options Configuration options for IPv6 validation.
+ * @returns A value parser that validates IPv6 addresses.
+ *
+ * @example
+ * ```typescript
+ * // Basic IPv6 parser
+ * option("--ipv6", ipv6())
+ *
+ * // Global unicast only (no link-local, no unique local)
+ * option("--public-ipv6", ipv6({
+ *   allowLinkLocal: false,
+ *   allowUniqueLocal: false
+ * }))
+ * ```
+ *
+ * @since 0.10.0
+ */
+export function ipv6(
+  options?: Ipv6Options,
+): ValueParser<"sync", string> {
+  const allowLoopback = options?.allowLoopback ?? true;
+  const allowLinkLocal = options?.allowLinkLocal ?? true;
+  const allowUniqueLocal = options?.allowUniqueLocal ?? true;
+  const allowMulticast = options?.allowMulticast ?? true;
+  const allowZero = options?.allowZero ?? true;
+  const errors = options?.errors;
+  const metavar = options?.metavar ?? "IPV6";
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<string> {
+      // Parse and normalize IPv6 address
+      const normalized = parseAndNormalizeIpv6(input);
+      if (normalized === null) {
+        const errorMsg = errors?.invalidIpv6;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid IPv6 address, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check if it's the zero address
+      if (!allowZero && normalized === "::") {
+        const errorMsg = errors?.zeroNotAllowed;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(normalized) };
+        }
+        const msg = errorMsg ?? [
+          { type: "value", value: normalized },
+          { type: "text", text: " is the zero address." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check if it's loopback (::1)
+      if (!allowLoopback && normalized === "::1") {
+        const errorMsg = errors?.loopbackNotAllowed;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(normalized) };
+        }
+        const msg = errorMsg ?? [
+          { type: "value", value: normalized },
+          { type: "text", text: " is a loopback address." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Get the raw groups for type checking
+      const groups = expandIpv6(normalized);
+      if (groups === null) {
+        const errorMsg = errors?.invalidIpv6;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid IPv6 address, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      const firstGroup = parseInt(groups[0], 16);
+
+      // Check link-local (fe80::/10)
+      if (!allowLinkLocal && (firstGroup & 0xffc0) === 0xfe80) {
+        const errorMsg = errors?.linkLocalNotAllowed;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(normalized) };
+        }
+        const msg = errorMsg ?? [
+          { type: "value", value: normalized },
+          { type: "text", text: " is a link-local address." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check unique local (fc00::/7)
+      if (!allowUniqueLocal && (firstGroup & 0xfe00) === 0xfc00) {
+        const errorMsg = errors?.uniqueLocalNotAllowed;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(normalized) };
+        }
+        const msg = errorMsg ?? [
+          { type: "value", value: normalized },
+          { type: "text", text: " is a unique local address." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      // Check multicast (ff00::/8)
+      if (!allowMulticast && (firstGroup & 0xff00) === 0xff00) {
+        const errorMsg = errors?.multicastNotAllowed;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(normalized) };
+        }
+        const msg = errorMsg ?? [
+          { type: "value", value: normalized },
+          { type: "text", text: " is a multicast address." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
+      return { success: true, value: normalized };
+    },
+    format(): string {
+      return metavar;
+    },
+  };
+}
+
+/**
+ * Parses and normalizes an IPv6 address to canonical form.
+ * Returns null if the input is not a valid IPv6 address.
+ */
+function parseAndNormalizeIpv6(input: string): string | null {
+  if (input.length === 0) return null;
+
+  // Handle IPv4-mapped IPv6 addresses (::ffff:192.0.2.1)
+  const ipv4MappedMatch = input.match(/^(.+):(\d+\.\d+\.\d+\.\d+)$/);
+  if (ipv4MappedMatch) {
+    const ipv6Part = ipv4MappedMatch[1];
+    const ipv4Part = ipv4MappedMatch[2];
+
+    // Parse the IPv4 part
+    const ipv4Octets = ipv4Part.split(".");
+    if (ipv4Octets.length !== 4) return null;
+    const octets = ipv4Octets.map((o) => parseInt(o, 10));
+    if (octets.some((o) => isNaN(o) || o < 0 || o > 255)) return null;
+
+    // Convert IPv4 to two IPv6 groups
+    const group1 = (octets[0] << 8) | octets[1];
+    const group2 = (octets[2] << 8) | octets[3];
+
+    // Reconstruct as full IPv6
+    const fullAddress = `${ipv6Part}:${group1.toString(16)}:${
+      group2.toString(16)
+    }`;
+    return parseAndNormalizeIpv6(fullAddress);
+  }
+
+  // Count :: occurrences (should be at most 1)
+  const compressionCount = (input.match(/::/g) || []).length;
+  if (compressionCount > 1) return null;
+
+  let groups: string[];
+
+  if (input.includes("::")) {
+    // Handle compression
+    const parts = input.split("::");
+    if (parts.length > 2) return null;
+
+    const leftGroups = parts[0] ? parts[0].split(":") : [];
+    const rightGroups = parts[1] ? parts[1].split(":") : [];
+
+    // Calculate how many zero groups are compressed
+    const totalGroups = leftGroups.length + rightGroups.length;
+    if (totalGroups > 8) return null;
+
+    const zeroCount = 8 - totalGroups;
+    const zeros = Array(zeroCount).fill("0");
+
+    groups = [...leftGroups, ...zeros, ...rightGroups];
+  } else {
+    // No compression
+    groups = input.split(":");
+    if (groups.length !== 8) return null;
+  }
+
+  // Validate and normalize each group
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i];
+    if (group.length === 0 || group.length > 4) return null;
+    if (!/^[0-9a-fA-F]+$/.test(group)) return null;
+
+    // Normalize to remove leading zeros
+    groups[i] = parseInt(group, 16).toString(16);
+  }
+
+  // Convert back to compressed form
+  return compressIpv6(groups);
+}
+
+/**
+ * Expands a compressed IPv6 address to 8 groups of 4 hex digits.
+ * Returns null if the input is invalid.
+ */
+function expandIpv6(input: string): string[] | null {
+  if (input.includes("::")) {
+    const parts = input.split("::");
+    if (parts.length > 2) return null;
+
+    const leftGroups = parts[0] ? parts[0].split(":").filter((g) => g) : [];
+    const rightGroups = parts[1] ? parts[1].split(":").filter((g) => g) : [];
+
+    const totalGroups = leftGroups.length + rightGroups.length;
+    if (totalGroups > 8) return null;
+
+    const zeroCount = 8 - totalGroups;
+    const zeros = Array(zeroCount).fill("0");
+
+    const groups = [...leftGroups, ...zeros, ...rightGroups];
+
+    // Pad each group to 4 digits
+    return groups.map((g) => g.padStart(4, "0"));
+  } else {
+    const groups = input.split(":");
+    if (groups.length !== 8) return null;
+    return groups.map((g) => g.padStart(4, "0"));
+  }
+}
+
+/**
+ * Compresses an IPv6 address by replacing the longest sequence of zeros with ::.
+ */
+function compressIpv6(groups: string[]): string {
+  // Find the longest sequence of zeros
+  let longestStart = -1;
+  let longestLength = 0;
+  let currentStart = -1;
+  let currentLength = 0;
+
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i] === "0") {
+      if (currentStart === -1) {
+        currentStart = i;
+        currentLength = 1;
+      } else {
+        currentLength++;
+      }
+    } else {
+      if (currentLength > longestLength) {
+        longestStart = currentStart;
+        longestLength = currentLength;
+      }
+      currentStart = -1;
+      currentLength = 0;
+    }
+  }
+
+  // Check the last sequence
+  if (currentLength > longestLength) {
+    longestStart = currentStart;
+    longestLength = currentLength;
+  }
+
+  // Don't compress if sequence is less than 2
+  if (longestLength < 2) {
+    return groups.join(":");
+  }
+
+  // Build compressed form
+  const before = groups.slice(0, longestStart);
+  const after = groups.slice(longestStart + longestLength);
+
+  if (before.length === 0 && after.length === 0) {
+    return "::";
+  } else if (before.length === 0) {
+    return "::" + after.join(":");
+  } else if (after.length === 0) {
+    return before.join(":") + "::";
+  } else {
+    return before.join(":") + "::" + after.join(":");
+  }
+}
