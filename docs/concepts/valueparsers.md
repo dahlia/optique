@@ -645,6 +645,166 @@ messages for invalid port numbers, range violations, and well-known port
 restrictions.
 
 
+`ipv4()` parser
+---------------
+
+The `ipv4()` parser validates IPv4 addresses in dotted-decimal notation with
+comprehensive filtering options for different IP address types. It's commonly
+used for network configuration, server addresses, and IP allowlists/blocklists.
+
+~~~~ typescript twoslash
+import { ipv4 } from "@optique/core/valueparser";
+
+// Basic IPv4 parser (allows all types)
+const address = ipv4();
+
+// Public IPs only (no private/loopback)
+const publicIp = ipv4({
+  allowPrivate: false,
+  allowLoopback: false
+});
+
+// Server binding (allow 0.0.0.0 and private IPs)
+const bindAddress = ipv4({
+  allowZero: true,
+  allowPrivate: true
+});
+~~~~
+
+### IPv4 format validation
+
+The `ipv4()` parser validates that input matches the standard IPv4 format: four
+decimal octets (0-255) separated by dots (e.g., “192.168.1.1”). Each octet must
+be in the valid range, and the parser strictly rejects:
+
+ -  *Leading zeros*: “192.168.001.1” is invalid (except single “0”)
+ -  *Whitespace*: Leading, trailing, or embedded spaces are rejected
+ -  *Empty octets*: “192.168..1” is invalid
+ -  *Out-of-range values*: Octets must be 0-255
+
+~~~~ typescript twoslash
+import { ipv4 } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = ipv4();
+
+// Valid IPv4 addresses
+parser.parse("192.168.1.1");   // ✓
+parser.parse("10.0.0.1");      // ✓
+parser.parse("255.255.255.255"); // ✓
+parser.parse("0.0.0.0");       // ✓
+
+// Invalid formats
+parser.parse("192.168.001.1"); // ✗ Leading zero
+parser.parse("256.1.1.1");     // ✗ Octet > 255
+parser.parse("192.168.1");     // ✗ Only 3 octets
+parser.parse("192.168..1");    // ✗ Empty octet
+~~~~
+
+### IP address filtering
+
+The parser provides fine-grained control over which IP address types are
+accepted through boolean filter options. All filters default to `true`
+(permissive), allowing you to selectively restrict specific address types:
+
+`allowPrivate`
+:   Controls private IP ranges (RFC 1918): 10.0.0.0/8, 172.16.0.0/12,
+    192.168.0.0/16. Set to `false` to reject these addresses.
+
+`allowLoopback`
+:   Controls loopback addresses (127.0.0.0/8). Set to `false` to reject
+    addresses like 127.0.0.1.
+
+`allowLinkLocal`
+:   Controls link-local addresses (169.254.0.0/16). Set to `false` to reject
+    APIPA/link-local addresses.
+
+`allowMulticast`
+:   Controls multicast addresses (224.0.0.0/4). Set to `false` to reject
+    addresses in the 224-239 range.
+
+`allowBroadcast`
+:   Controls the broadcast address (255.255.255.255). Set to `false` to reject
+    the all-hosts broadcast address.
+
+`allowZero`
+:   Controls the zero address (0.0.0.0). Set to `false` to reject the “any”
+    or “unspecified” address.
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { ipv4 } from "@optique/core/valueparser";
+// ---cut-before---
+// Public-facing API endpoint (no private/loopback IPs)
+const publicEndpoint = option("--api-endpoint", ipv4({
+  allowPrivate: false,
+  allowLoopback: false,
+  allowLinkLocal: false
+}));
+
+// Server binding address (allow 0.0.0.0 and private IPs)
+const bindAddr = option("--bind", ipv4({
+  allowZero: true,
+  allowPrivate: true
+}));
+
+// Client IP address (no special addresses)
+const clientIp = option("--client-ip", ipv4({
+  allowZero: false,
+  allowBroadcast: false,
+  allowMulticast: false
+}));
+~~~~
+
+### Error messages
+
+The parser provides specific error messages for different validation failures:
+
+~~~~ bash
+$ myapp --ip "192.168.001.1"
+Error: Expected a valid IPv4 address, but got 192.168.001.1.
+
+$ myapp --public-ip "192.168.1.1"  # when private IPs are disallowed
+Error: 192.168.1.1 is a private IP address.
+
+$ myapp --endpoint "127.0.0.1"  # when loopback is disallowed
+Error: 127.0.0.1 is a loopback address.
+
+$ myapp --bind "255.255.255.255"  # when broadcast is disallowed
+Error: 255.255.255.255 is the broadcast address.
+~~~~
+
+### Common use cases
+
+The `ipv4()` parser is commonly used in network applications:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { ipv4, port } from "@optique/core/valueparser";
+// ---cut-before---
+// HTTP server configuration
+const serverConfig = object({
+  bind: option("--bind", ipv4({ allowPrivate: true })),
+  port: option("--port", port({ min: 1024 }))
+});
+
+// Firewall rule configuration
+const firewallRule = object({
+  source: option("--source", ipv4()),
+  dest: option("--dest", ipv4())
+});
+
+// DNS server configuration
+const dnsConfig = option("--nameserver", ipv4({
+  allowLoopback: false,  // Loopback doesn't make sense for DNS
+  allowZero: false       // 0.0.0.0 not valid for nameserver
+}));
+~~~~
+
+The parser uses `"IPV4"` as its default metavar and returns the normalized
+IPv4 address as a string (e.g., “192.168.1.1”).
+
+
 `path()` parser
 ---------------
 

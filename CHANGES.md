@@ -291,6 +291,32 @@ To be released.
     option("--port", port({ type: "bigint" }))
     ~~~~
 
+ -  Added `ipv4()` value parser for IPv4 address validation with filtering
+    options for private, loopback, link-local, multicast, broadcast, and zero
+    addresses. The parser validates IPv4 addresses in dotted-decimal notation
+    (e.g., “192.168.1.1”) and provides fine-grained control over which address
+    types are accepted. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { ipv4 } from "@optique/core/valueparser";
+
+    // Basic IPv4 parser (allows all types)
+    option("--ip", ipv4())
+
+    // Public IPs only (no private/loopback)
+    option("--public-ip", ipv4({
+      allowPrivate: false,
+      allowLoopback: false
+    }))
+
+    // Server binding address
+    option("--bind", ipv4({
+      allowZero: true,
+      allowPrivate: true
+    }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]

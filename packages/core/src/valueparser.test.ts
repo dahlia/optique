@@ -2,6 +2,7 @@ import {
   choice,
   float,
   integer,
+  ipv4,
   isValueParser,
   locale,
   type NonEmptyString,
@@ -4424,6 +4425,435 @@ describe("port", () => {
       if (result.success) {
         assert.equal(result.value, 0);
       }
+    });
+  });
+
+  describe("ipv4()", () => {
+    describe("basic validation", () => {
+      it("should accept valid IPv4 addresses", () => {
+        const parser = ipv4();
+
+        const validAddresses = [
+          "192.168.1.1",
+          "10.0.0.1",
+          "172.16.0.1",
+          "8.8.8.8",
+          "1.1.1.1",
+          "255.255.255.255",
+          "0.0.0.0",
+          "127.0.0.1",
+        ];
+
+        for (const addr of validAddresses) {
+          const result = parser.parse(addr);
+          assert.ok(
+            result.success,
+            `Should accept valid IPv4 address ${addr}`,
+          );
+          if (result.success) {
+            assert.equal(result.value, addr);
+          }
+        }
+      });
+
+      it("should reject invalid IPv4 addresses", () => {
+        const parser = ipv4();
+
+        const invalidAddresses = [
+          "256.1.1.1", // Octet > 255
+          "1.256.1.1",
+          "1.1.256.1",
+          "1.1.1.256",
+          "192.168.1", // Only 3 octets
+          "192.168.1.1.1", // 5 octets
+          "192.168.1.a", // Non-numeric
+          "192.168.1.-1", // Negative
+          "192.168.1.1.1.1", // Too many octets
+          "", // Empty
+          "192.168..1", // Empty octet
+          "....", // All dots
+          "not-an-ip",
+        ];
+
+        for (const addr of invalidAddresses) {
+          const result = parser.parse(addr);
+          assert.ok(
+            !result.success,
+            `Should reject invalid IPv4 address ${addr}`,
+          );
+        }
+      });
+
+      it("should reject leading zeros", () => {
+        const parser = ipv4();
+
+        const withLeadingZeros = [
+          "192.168.001.1",
+          "010.0.0.1",
+          "192.168.1.01",
+          "01.01.01.01",
+        ];
+
+        for (const addr of withLeadingZeros) {
+          const result = parser.parse(addr);
+          assert.ok(
+            !result.success,
+            `Should reject IPv4 with leading zeros: ${addr}`,
+          );
+        }
+      });
+
+      it("should accept single zero octet", () => {
+        const parser = ipv4();
+
+        const result = parser.parse("192.168.0.1");
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.value, "192.168.0.1");
+        }
+      });
+    });
+
+    describe("private IP filtering", () => {
+      it("should allow private IPs by default", () => {
+        const parser = ipv4();
+
+        const privateIps = [
+          "10.0.0.1",
+          "10.255.255.255",
+          "172.16.0.1",
+          "172.31.255.255",
+          "192.168.0.1",
+          "192.168.255.255",
+        ];
+
+        for (const ip of privateIps) {
+          const result = parser.parse(ip);
+          assert.ok(result.success, `Should accept private IP ${ip}`);
+        }
+      });
+
+      it("should reject private IPs when disallowed", () => {
+        const parser = ipv4({ allowPrivate: false });
+
+        const privateIps = [
+          "10.0.0.1", // 10.0.0.0/8
+          "10.255.255.255",
+          "172.16.0.1", // 172.16.0.0/12
+          "172.31.255.255",
+          "192.168.0.1", // 192.168.0.0/16
+          "192.168.255.255",
+        ];
+
+        for (const ip of privateIps) {
+          const result = parser.parse(ip);
+          assert.ok(!result.success, `Should reject private IP ${ip}`);
+        }
+      });
+
+      it("should accept public IPs when private is disallowed", () => {
+        const parser = ipv4({ allowPrivate: false });
+
+        const publicIps = [
+          "8.8.8.8",
+          "1.1.1.1",
+          "172.32.0.1", // Just outside 172.16.0.0/12
+          "172.15.255.255",
+          "11.0.0.1", // Just outside 10.0.0.0/8
+        ];
+
+        for (const ip of publicIps) {
+          const result = parser.parse(ip);
+          assert.ok(result.success, `Should accept public IP ${ip}`);
+        }
+      });
+    });
+
+    describe("loopback IP filtering", () => {
+      it("should allow loopback IPs by default", () => {
+        const parser = ipv4();
+
+        const loopbackIps = [
+          "127.0.0.1",
+          "127.0.0.0",
+          "127.255.255.255",
+          "127.1.2.3",
+        ];
+
+        for (const ip of loopbackIps) {
+          const result = parser.parse(ip);
+          assert.ok(result.success, `Should accept loopback IP ${ip}`);
+        }
+      });
+
+      it("should reject loopback IPs when disallowed", () => {
+        const parser = ipv4({ allowLoopback: false });
+
+        const loopbackIps = [
+          "127.0.0.1",
+          "127.0.0.0",
+          "127.255.255.255",
+          "127.1.2.3",
+        ];
+
+        for (const ip of loopbackIps) {
+          const result = parser.parse(ip);
+          assert.ok(!result.success, `Should reject loopback IP ${ip}`);
+        }
+      });
+
+      it("should accept non-loopback IPs when loopback is disallowed", () => {
+        const parser = ipv4({ allowLoopback: false });
+
+        const result = parser.parse("8.8.8.8");
+        assert.ok(result.success);
+      });
+    });
+
+    describe("link-local IP filtering", () => {
+      it("should allow link-local IPs by default", () => {
+        const parser = ipv4();
+
+        const linkLocalIps = [
+          "169.254.0.0",
+          "169.254.1.1",
+          "169.254.255.255",
+        ];
+
+        for (const ip of linkLocalIps) {
+          const result = parser.parse(ip);
+          assert.ok(result.success, `Should accept link-local IP ${ip}`);
+        }
+      });
+
+      it("should reject link-local IPs when disallowed", () => {
+        const parser = ipv4({ allowLinkLocal: false });
+
+        const linkLocalIps = [
+          "169.254.0.0",
+          "169.254.1.1",
+          "169.254.255.255",
+        ];
+
+        for (const ip of linkLocalIps) {
+          const result = parser.parse(ip);
+          assert.ok(!result.success, `Should reject link-local IP ${ip}`);
+        }
+      });
+    });
+
+    describe("multicast IP filtering", () => {
+      it("should allow multicast IPs by default", () => {
+        const parser = ipv4();
+
+        const multicastIps = [
+          "224.0.0.0",
+          "224.0.0.1",
+          "239.255.255.255",
+          "230.1.2.3",
+        ];
+
+        for (const ip of multicastIps) {
+          const result = parser.parse(ip);
+          assert.ok(result.success, `Should accept multicast IP ${ip}`);
+        }
+      });
+
+      it("should reject multicast IPs when disallowed", () => {
+        const parser = ipv4({ allowMulticast: false });
+
+        const multicastIps = [
+          "224.0.0.0",
+          "224.0.0.1",
+          "239.255.255.255",
+          "230.1.2.3",
+        ];
+
+        for (const ip of multicastIps) {
+          const result = parser.parse(ip);
+          assert.ok(!result.success, `Should reject multicast IP ${ip}`);
+        }
+      });
+    });
+
+    describe("broadcast IP filtering", () => {
+      it("should allow broadcast IP by default", () => {
+        const parser = ipv4();
+
+        const result = parser.parse("255.255.255.255");
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.value, "255.255.255.255");
+        }
+      });
+
+      it("should reject broadcast IP when disallowed", () => {
+        const parser = ipv4({ allowBroadcast: false });
+
+        const result = parser.parse("255.255.255.255");
+        assert.ok(!result.success);
+      });
+
+      it("should accept non-broadcast IPs when broadcast is disallowed", () => {
+        const parser = ipv4({ allowBroadcast: false });
+
+        const result = parser.parse("255.255.255.254");
+        assert.ok(result.success);
+      });
+    });
+
+    describe("zero address filtering", () => {
+      it("should allow zero address by default", () => {
+        const parser = ipv4();
+
+        const result = parser.parse("0.0.0.0");
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.value, "0.0.0.0");
+        }
+      });
+
+      it("should reject zero address when disallowed", () => {
+        const parser = ipv4({ allowZero: false });
+
+        const result = parser.parse("0.0.0.0");
+        assert.ok(!result.success);
+      });
+
+      it("should accept non-zero IPs when zero is disallowed", () => {
+        const parser = ipv4({ allowZero: false });
+
+        const result = parser.parse("0.0.0.1");
+        assert.ok(result.success);
+      });
+    });
+
+    describe("combined filters", () => {
+      it("should apply multiple filters", () => {
+        const parser = ipv4({
+          allowPrivate: false,
+          allowLoopback: false,
+          allowLinkLocal: false,
+        });
+
+        // Should reject private
+        assert.ok(!parser.parse("192.168.1.1").success);
+        // Should reject loopback
+        assert.ok(!parser.parse("127.0.0.1").success);
+        // Should reject link-local
+        assert.ok(!parser.parse("169.254.1.1").success);
+        // Should accept public
+        assert.ok(parser.parse("8.8.8.8").success);
+      });
+
+      it("should accept when all filters allow", () => {
+        const parser = ipv4({
+          allowPrivate: true,
+          allowLoopback: true,
+          allowLinkLocal: true,
+          allowMulticast: true,
+          allowBroadcast: true,
+          allowZero: true,
+        });
+
+        assert.ok(parser.parse("192.168.1.1").success);
+        assert.ok(parser.parse("127.0.0.1").success);
+        assert.ok(parser.parse("169.254.1.1").success);
+        assert.ok(parser.parse("224.0.0.1").success);
+        assert.ok(parser.parse("255.255.255.255").success);
+        assert.ok(parser.parse("0.0.0.0").success);
+      });
+    });
+
+    describe("custom error messages", () => {
+      it("should use custom invalidIpv4 error message", () => {
+        const customError = message`Custom IPv4 error`;
+        const parser = ipv4({
+          errors: {
+            invalidIpv4: customError,
+          },
+        });
+
+        const result = parser.parse("not-an-ip");
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.deepEqual(result.error, customError);
+        }
+      });
+
+      it("should use custom privateNotAllowed error message", () => {
+        const customError = message`Private IP not allowed`;
+        const parser = ipv4({
+          allowPrivate: false,
+          errors: {
+            privateNotAllowed: customError,
+          },
+        });
+
+        const result = parser.parse("192.168.1.1");
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.deepEqual(result.error, customError);
+        }
+      });
+
+      it("should use custom error function", () => {
+        const parser = ipv4({
+          allowLoopback: false,
+          errors: {
+            loopbackNotAllowed: (ip) => message`No loopback: ${ip}`,
+          },
+        });
+
+        const result = parser.parse("127.0.0.1");
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.deepEqual(result.error, [
+            { type: "text", text: "No loopback: " },
+            { type: "value", value: "127.0.0.1" },
+          ]);
+        }
+      });
+    });
+
+    describe("format()", () => {
+      it("should format IPv4 address", () => {
+        const parser = ipv4();
+
+        assert.equal(parser.format("192.168.1.1"), "192.168.1.1");
+        assert.equal(parser.format("8.8.8.8"), "8.8.8.8");
+      });
+    });
+
+    describe("metavar", () => {
+      it("should use default metavar", () => {
+        const parser = ipv4();
+        assert.equal(parser.metavar, "IPV4");
+      });
+
+      it("should use custom metavar", () => {
+        const parser = ipv4({ metavar: "IP_ADDRESS" });
+        assert.equal(parser.metavar, "IP_ADDRESS");
+      });
+    });
+
+    describe("edge cases", () => {
+      it("should handle boundary values for octets", () => {
+        const parser = ipv4();
+
+        assert.ok(parser.parse("0.0.0.0").success);
+        assert.ok(parser.parse("255.255.255.255").success);
+        assert.ok(!parser.parse("256.0.0.0").success);
+        assert.ok(!parser.parse("0.0.0.256").success);
+      });
+
+      it("should handle whitespace", () => {
+        const parser = ipv4();
+
+        assert.ok(!parser.parse(" 192.168.1.1").success);
+        assert.ok(!parser.parse("192.168.1.1 ").success);
+        assert.ok(!parser.parse("192. 168.1.1").success);
+      });
     });
   });
 });

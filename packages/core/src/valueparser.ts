@@ -1806,3 +1806,299 @@ export function port(
     },
   };
 }
+
+/**
+ * Options for the {@link ipv4} value parser.
+ *
+ * @since 0.10.0
+ */
+export interface Ipv4Options {
+  /**
+   * The metavariable name for this parser.
+   *
+   * @default "IPV4"
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * If `true`, allows private IP ranges (10.0.0.0/8, 172.16.0.0/12,
+   * 192.168.0.0/16).
+   *
+   * @default true
+   */
+  readonly allowPrivate?: boolean;
+
+  /**
+   * If `true`, allows loopback addresses (127.0.0.0/8).
+   *
+   * @default true
+   */
+  readonly allowLoopback?: boolean;
+
+  /**
+   * If `true`, allows link-local addresses (169.254.0.0/16).
+   *
+   * @default true
+   */
+  readonly allowLinkLocal?: boolean;
+
+  /**
+   * If `true`, allows multicast addresses (224.0.0.0/4).
+   *
+   * @default true
+   */
+  readonly allowMulticast?: boolean;
+
+  /**
+   * If `true`, allows the broadcast address (255.255.255.255).
+   *
+   * @default true
+   */
+  readonly allowBroadcast?: boolean;
+
+  /**
+   * If `true`, allows the zero address (0.0.0.0).
+   *
+   * @default true
+   */
+  readonly allowZero?: boolean;
+
+  /**
+   * Custom error messages for IPv4 parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid IPv4 address.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidIpv4?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when private IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    privateNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when loopback IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    loopbackNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when link-local IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    linkLocalNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when multicast IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    multicastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when broadcast IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    broadcastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when zero IP is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    zeroNotAllowed?: Message | ((ip: string) => Message);
+  };
+}
+
+function isPrivateIp(octets: readonly number[]): boolean {
+  // 10.0.0.0/8
+  if (octets[0] === 10) return true;
+  // 172.16.0.0/12
+  if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
+  // 192.168.0.0/16
+  if (octets[0] === 192 && octets[1] === 168) return true;
+  return false;
+}
+
+function isLoopbackIp(octets: readonly number[]): boolean {
+  return octets[0] === 127;
+}
+
+function isLinkLocalIp(octets: readonly number[]): boolean {
+  return octets[0] === 169 && octets[1] === 254;
+}
+
+function isMulticastIp(octets: readonly number[]): boolean {
+  return octets[0] >= 224 && octets[0] <= 239;
+}
+
+function isBroadcastIp(octets: readonly number[]): boolean {
+  return octets.every((o) => o === 255);
+}
+
+function isZeroIp(octets: readonly number[]): boolean {
+  return octets.every((o) => o === 0);
+}
+
+/**
+ * Creates a value parser for IPv4 addresses.
+ *
+ * This parser validates IPv4 addresses in dotted-decimal notation (e.g.,
+ * "192.168.1.1") and provides options to filter specific IP address types
+ * such as private, loopback, link-local, multicast, broadcast, and zero
+ * addresses.
+ *
+ * @param options The parser options.
+ * @returns A value parser for IPv4 addresses.
+ * @throws {TypeError} If the metavar is an empty string.
+ * @since 0.10.0
+ * @example
+ * ```typescript
+ * import { ipv4 } from "@optique/core/valueparser";
+ *
+ * // Basic IPv4 parser (allows all types)
+ * const address = ipv4();
+ *
+ * // Public IPs only (no private/loopback)
+ * const publicIp = ipv4({
+ *   allowPrivate: false,
+ *   allowLoopback: false
+ * });
+ *
+ * // Server binding (allow 0.0.0.0 and private IPs)
+ * const bindAddress = ipv4({
+ *   allowZero: true,
+ *   allowPrivate: true
+ * });
+ * ```
+ */
+export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
+  const metavar: NonEmptyString = options?.metavar ?? "IPV4";
+  ensureNonEmptyString(metavar);
+
+  const allowPrivate = options?.allowPrivate ?? true;
+  const allowLoopback = options?.allowLoopback ?? true;
+  const allowLinkLocal = options?.allowLinkLocal ?? true;
+  const allowMulticast = options?.allowMulticast ?? true;
+  const allowBroadcast = options?.allowBroadcast ?? true;
+  const allowZero = options?.allowZero ?? true;
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<string> {
+      // Parse IPv4 address into octets
+      const parts = input.split(".");
+      if (parts.length !== 4) {
+        const errorMsg = options?.errors?.invalidIpv4;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input)
+          : errorMsg ??
+            message`Expected a valid IPv4 address, but got ${input}.`;
+        return { success: false, error: msg };
+      }
+
+      const octets: number[] = [];
+      for (const part of parts) {
+        // Check for empty octet
+        if (part.length === 0) {
+          const errorMsg = options?.errors?.invalidIpv4;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid IPv4 address, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        // Check for whitespace
+        if (part.trim() !== part) {
+          const errorMsg = options?.errors?.invalidIpv4;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid IPv4 address, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        // Check for leading zeros (except single "0")
+        if (part.length > 1 && part[0] === "0") {
+          const errorMsg = options?.errors?.invalidIpv4;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid IPv4 address, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        const octet = Number(part);
+        if (!Number.isInteger(octet) || octet < 0 || octet > 255) {
+          const errorMsg = options?.errors?.invalidIpv4;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid IPv4 address, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        octets.push(octet);
+      }
+
+      const ipAddress = octets.join(".");
+
+      // Check IP address type filters
+      if (!allowPrivate && isPrivateIp(octets)) {
+        const errorMsg = options?.errors?.privateNotAllowed;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(ipAddress)
+          : errorMsg ?? message`${ipAddress} is a private IP address.`;
+        return { success: false, error: msg };
+      }
+
+      if (!allowLoopback && isLoopbackIp(octets)) {
+        const errorMsg = options?.errors?.loopbackNotAllowed;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(ipAddress)
+          : errorMsg ?? message`${ipAddress} is a loopback address.`;
+        return { success: false, error: msg };
+      }
+
+      if (!allowLinkLocal && isLinkLocalIp(octets)) {
+        const errorMsg = options?.errors?.linkLocalNotAllowed;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(ipAddress)
+          : errorMsg ?? message`${ipAddress} is a link-local address.`;
+        return { success: false, error: msg };
+      }
+
+      if (!allowMulticast && isMulticastIp(octets)) {
+        const errorMsg = options?.errors?.multicastNotAllowed;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(ipAddress)
+          : errorMsg ?? message`${ipAddress} is a multicast address.`;
+        return { success: false, error: msg };
+      }
+
+      if (!allowBroadcast && isBroadcastIp(octets)) {
+        const errorMsg = options?.errors?.broadcastNotAllowed;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(ipAddress)
+          : errorMsg ?? message`${ipAddress} is the broadcast address.`;
+        return { success: false, error: msg };
+      }
+
+      if (!allowZero && isZeroIp(octets)) {
+        const errorMsg = options?.errors?.zeroNotAllowed;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(ipAddress)
+          : errorMsg ?? message`${ipAddress} is the zero address.`;
+        return { success: false, error: msg };
+      }
+
+      return { success: true, value: ipAddress };
+    },
+    format(value: string): string {
+      return value;
+    },
+  };
+}
