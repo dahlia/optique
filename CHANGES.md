@@ -317,6 +317,29 @@ To be released.
     }))
     ~~~~
 
+ -  Added `hostname()` value parser for DNS hostname validation with support
+    for wildcards, underscores, localhost filtering, and length constraints.
+    The parser validates hostnames according to RFC 1123 with configurable
+    options for special cases like service discovery records and SSL certificate
+    domains. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { hostname } from "@optique/core/valueparser";
+
+    // Basic hostname parser
+    option("--host", hostname())
+
+    // Allow wildcards for SSL certificates
+    option("--domain", hostname({ allowWildcard: true }))
+
+    // Reject localhost for remote connections
+    option("--remote", hostname({ allowLocalhost: false }))
+
+    // Service discovery records (allow underscores)
+    option("--srv", hostname({ allowUnderscore: true }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]

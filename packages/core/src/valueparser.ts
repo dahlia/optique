@@ -2102,3 +2102,246 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
     },
   };
 }
+
+/**
+ * Options for the {@link hostname} parser.
+ *
+ * @since 0.10.0
+ */
+export interface HostnameOptions {
+  /**
+   * The metavariable name for this parser.
+   * @default "HOST"
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * If `true`, allows wildcard hostnames (e.g., "*.example.com").
+   * @default false
+   */
+  readonly allowWildcard?: boolean;
+
+  /**
+   * If `true`, allows underscores in hostnames.
+   * Technically invalid per RFC 1123, but commonly used in some contexts
+   * (e.g., service discovery records like "_service.example.com").
+   * @default false
+   */
+  readonly allowUnderscore?: boolean;
+
+  /**
+   * If `true`, allows "localhost" as a hostname.
+   * @default true
+   */
+  readonly allowLocalhost?: boolean;
+
+  /**
+   * Maximum hostname length in characters.
+   * @default 253
+   */
+  readonly maxLength?: number;
+
+  /**
+   * Custom error messages for hostname parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid hostname.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidHostname?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when wildcard hostname is used but disallowed.
+     * Can be a static message or a function that receives the hostname.
+     */
+    wildcardNotAllowed?: Message | ((hostname: string) => Message);
+
+    /**
+     * Custom error message when underscore is used but disallowed.
+     * Can be a static message or a function that receives the hostname.
+     */
+    underscoreNotAllowed?: Message | ((hostname: string) => Message);
+
+    /**
+     * Custom error message when "localhost" is used but disallowed.
+     * Can be a static message or a function that receives the hostname.
+     */
+    localhostNotAllowed?: Message | ((hostname: string) => Message);
+
+    /**
+     * Custom error message when hostname is too long.
+     * Can be a static message or a function that receives the hostname and max length.
+     */
+    tooLong?: Message | ((hostname: string, maxLength: number) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for DNS hostnames.
+ *
+ * Validates hostnames according to RFC 1123:
+ * - Labels separated by dots
+ * - Each label: 1-63 characters
+ * - Labels can contain alphanumeric characters and hyphens
+ * - Labels cannot start or end with a hyphen
+ * - Total length ≤ 253 characters (default)
+ *
+ * @param options - Options for hostname validation.
+ * @returns A value parser for hostnames.
+ * @since 0.10.0
+ *
+ * @example
+ * ```typescript
+ * import { hostname } from "@optique/core/valueparser";
+ *
+ * // Basic hostname parser
+ * const host = hostname();
+ *
+ * // Allow wildcards for certificate validation
+ * const domain = hostname({ allowWildcard: true });
+ *
+ * // Reject localhost
+ * const remoteHost = hostname({ allowLocalhost: false });
+ * ```
+ */
+export function hostname(
+  options?: HostnameOptions,
+): ValueParser<"sync", string> {
+  const metavar: NonEmptyString = options?.metavar ?? "HOST";
+  ensureNonEmptyString(metavar);
+
+  const allowWildcard = options?.allowWildcard ?? false;
+  const allowUnderscore = options?.allowUnderscore ?? false;
+  const allowLocalhost = options?.allowLocalhost ?? true;
+  const maxLength = options?.maxLength ?? 253;
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<string> {
+      // Check length constraint first
+      if (input.length > maxLength) {
+        const errorMsg = options?.errors?.tooLong;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input, maxLength)
+          : errorMsg ??
+            message`Hostname ${input} is too long (maximum ${
+              text(maxLength.toString())
+            } characters).`;
+        return { success: false, error: msg };
+      }
+
+      // Check for localhost
+      if (!allowLocalhost && input === "localhost") {
+        const errorMsg = options?.errors?.localhostNotAllowed;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input)
+          : errorMsg ?? message`Hostname 'localhost' is not allowed.`;
+        return { success: false, error: msg };
+      }
+
+      // Check for wildcard
+      if (input.startsWith("*.")) {
+        if (!allowWildcard) {
+          const errorMsg = options?.errors?.wildcardNotAllowed;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Wildcard hostname ${input} is not allowed.`;
+          return { success: false, error: msg };
+        }
+
+        // If wildcard is allowed, validate the rest of the hostname
+        const rest = input.slice(2);
+        if (!rest || rest.includes("*")) {
+          const errorMsg = options?.errors?.invalidHostname;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid hostname, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+      }
+
+      // Check for underscore
+      if (!allowUnderscore && input.includes("_")) {
+        const errorMsg = options?.errors?.underscoreNotAllowed;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input)
+          : errorMsg ??
+            message`Hostname ${input} contains underscore, which is not allowed.`;
+        return { success: false, error: msg };
+      }
+
+      // RFC 1123 hostname validation
+      // Must not be empty
+      if (input.length === 0) {
+        const errorMsg = options?.errors?.invalidHostname;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input)
+          : errorMsg ?? message`Expected a valid hostname, but got ${input}.`;
+        return { success: false, error: msg };
+      }
+
+      // Split into labels
+      const labels = input.split(".");
+
+      // Each label must be valid
+      for (const label of labels) {
+        // Label must not be empty
+        if (label.length === 0) {
+          const errorMsg = options?.errors?.invalidHostname;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid hostname, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        // Label must not exceed 63 characters
+        if (label.length > 63) {
+          const errorMsg = options?.errors?.invalidHostname;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid hostname, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        // Skip wildcard label (already validated above)
+        if (label === "*") {
+          continue;
+        }
+
+        // Label must not start or end with hyphen
+        if (label.startsWith("-") || label.endsWith("-")) {
+          const errorMsg = options?.errors?.invalidHostname;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid hostname, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        // Label must contain only alphanumeric, hyphen, or underscore (if allowed)
+        const allowedPattern = allowUnderscore
+          ? /^[a-zA-Z0-9_-]+$/
+          : /^[a-zA-Z0-9-]+$/;
+        if (!allowedPattern.test(label)) {
+          const errorMsg = options?.errors?.invalidHostname;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid hostname, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+      }
+
+      return { success: true, value: input };
+    },
+    format(value: string): string {
+      return value;
+    },
+  };
+}

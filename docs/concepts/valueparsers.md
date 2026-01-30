@@ -805,6 +805,167 @@ The parser uses `"IPV4"` as its default metavar and returns the normalized
 IPv4 address as a string (e.g., “192.168.1.1”).
 
 
+`hostname()` parser
+-------------------
+
+The `hostname()` parser validates DNS hostnames according to RFC 1123. It
+supports flexible options for wildcard hostnames, underscores, localhost
+filtering, and length constraints.
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+
+// Basic hostname parser
+const host = hostname();
+
+// Allow wildcards for certificate validation
+const domain = hostname({ allowWildcard: true });
+
+// Reject localhost
+const remoteHost = hostname({ allowLocalhost: false });
+
+// Service discovery records (with underscores)
+const srvRecord = hostname({ allowUnderscore: true });
+~~~~
+
+### Hostname validation rules
+
+The parser validates hostnames according to RFC 1123:
+
+ -  Labels are separated by dots (`.`)
+ -  Each label must be 1-63 characters long
+ -  Labels can contain alphanumeric characters and hyphens (`-`)
+ -  Labels cannot start or end with a hyphen
+ -  Total hostname length must not exceed 253 characters (by default)
+
+For example:
+
+ -  Valid: `"example.com"`, `"sub.example.com"`, `"server-01.local"`
+ -  Invalid: `"-example.com"` (starts with hyphen), `"example..com"` (empty label),
+    `"a".repeat(64) + ".com"` (label too long)
+
+### Wildcard hostnames
+
+By default, wildcard hostnames (starting with `*.`) are rejected. Enable them
+with the `allowWildcard` option:
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Allow wildcards for SSL certificate domains
+const certDomain = option("--domain", hostname({ allowWildcard: true }));
+~~~~
+
+~~~~ bash
+$ example --domain "*.example.com"   # Valid
+$ example --domain "*.*.example.com" # Invalid: multiple wildcards not allowed
+~~~~
+
+### Underscores in hostnames
+
+While technically invalid per RFC 1123, underscores are commonly used in some
+contexts like service discovery records. Enable them with `allowUnderscore`:
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Allow underscores for service discovery
+const service = option("--srv", hostname({ allowUnderscore: true }));
+~~~~
+
+~~~~ bash
+$ example --srv "_http._tcp.example.com"  # Valid with allowUnderscore
+$ example --srv "_http._tcp.example.com"  # Invalid by default
+~~~~
+
+### Localhost filtering
+
+The parser accepts `"localhost"` by default. Reject it with
+`allowLocalhost: false`:
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Require remote hosts only
+const remoteHost = option("--remote", hostname({ allowLocalhost: false }));
+~~~~
+
+~~~~ bash
+$ example --remote "localhost"    # Error: Hostname 'localhost' is not allowed.
+$ example --remote "example.com"  # Valid
+~~~~
+
+### Length constraints
+
+The default maximum hostname length is 253 characters (the RFC 1123 limit).
+Customize it with the `maxLength` option:
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Limit hostname length to 50 characters
+const shortHost = option("--host", hostname({ maxLength: 50 }));
+~~~~
+
+### Custom error messages
+
+Customize error messages for various validation failures:
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+import { message, text } from "@optique/core/message";
+import { option } from "@optique/core";
+// ---cut-before---
+const host = option("--host", hostname({
+  allowWildcard: false,
+  allowLocalhost: false,
+  errors: {
+    invalidHostname: (input) => message`Not a valid hostname: ${input}`,
+    wildcardNotAllowed: message`Wildcards are forbidden`,
+    localhostNotAllowed: message`Remote hosts only`,
+    tooLong: (hostname, max) => 
+      message`Hostname too long (max ${text(max.toString())} chars)`,
+  },
+}));
+~~~~
+
+### Common use cases
+
+**Web server host configuration:**
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+// ---cut-before---
+// Allow localhost for local development
+const serverHost = hostname({ allowLocalhost: true });
+~~~~
+
+**Remote database connections:**
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+// ---cut-before---
+// Require remote hosts only
+const dbHost = hostname({ allowLocalhost: false });
+~~~~
+
+**SSL certificate domain validation:**
+
+~~~~ typescript twoslash
+import { hostname } from "@optique/core/valueparser";
+// ---cut-before---
+// Allow wildcards for certificate domains
+const certDomain = hostname({ allowWildcard: true });
+~~~~
+
+The parser uses `"HOST"` as its default metavar and returns the hostname
+as-is, preserving the original case.
+
+
 `path()` parser
 ---------------
 

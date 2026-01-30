@@ -1,6 +1,7 @@
 import {
   choice,
   float,
+  hostname,
   integer,
   ipv4,
   isValueParser,
@@ -4854,6 +4855,406 @@ describe("port", () => {
         assert.ok(!parser.parse("192.168.1.1 ").success);
         assert.ok(!parser.parse("192. 168.1.1").success);
       });
+    });
+  });
+});
+
+describe("hostname()", () => {
+  describe("basic validation", () => {
+    it("should accept valid hostnames", () => {
+      const parser = hostname();
+
+      // Simple hostname
+      const result1 = parser.parse("example");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "example");
+
+      // FQDN
+      const result2 = parser.parse("example.com");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "example.com");
+
+      // Subdomain
+      const result3 = parser.parse("sub.example.com");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value, "sub.example.com");
+
+      // With hyphens
+      const result4 = parser.parse("my-server.example.com");
+      assert.ok(result4.success);
+      assert.strictEqual(result4.value, "my-server.example.com");
+
+      // Numbers
+      const result5 = parser.parse("server123.example.com");
+      assert.ok(result5.success);
+      assert.strictEqual(result5.value, "server123.example.com");
+
+      // localhost
+      const result6 = parser.parse("localhost");
+      assert.ok(result6.success);
+      assert.strictEqual(result6.value, "localhost");
+
+      // Long but valid (253 chars)
+      const longHostname = "a".repeat(63) + "." + "b".repeat(63) + "." +
+        "c".repeat(63) + "." + "d".repeat(59);
+      const result7 = parser.parse(longHostname);
+      assert.ok(result7.success);
+      assert.strictEqual(result7.value, longHostname);
+    });
+
+    it("should reject invalid hostnames", () => {
+      const parser = hostname();
+
+      // Empty string
+      const result1 = parser.parse("");
+      assert.ok(!result1.success);
+      assert.deepStrictEqual(result1.error, [
+        { type: "text", text: "Expected a valid hostname, but got " },
+        { type: "value", value: "" },
+        { type: "text", text: "." },
+      ]);
+
+      // Starts with hyphen
+      const result2 = parser.parse("-example.com");
+      assert.ok(!result2.success);
+
+      // Ends with hyphen
+      const result3 = parser.parse("example-.com");
+      assert.ok(!result3.success);
+
+      // Label too long (>63 chars)
+      const result4 = parser.parse("a".repeat(64) + ".example.com");
+      assert.ok(!result4.success);
+
+      // Double dots
+      const result5 = parser.parse("example..com");
+      assert.ok(!result5.success);
+
+      // Trailing dot alone not valid
+      const result6 = parser.parse("example.com.");
+      assert.ok(!result6.success);
+
+      // Contains spaces
+      const result7 = parser.parse("example .com");
+      assert.ok(!result7.success);
+
+      // Special characters
+      const result8 = parser.parse("example@.com");
+      assert.ok(!result8.success);
+
+      // Wildcard by default not allowed
+      const result9 = parser.parse("*.example.com");
+      assert.ok(!result9.success);
+
+      // Underscore by default not allowed
+      const result10 = parser.parse("_service.example.com");
+      assert.ok(!result10.success);
+    });
+  });
+
+  describe("allowWildcard option", () => {
+    it("should accept wildcard hostnames when allowWildcard is true", () => {
+      const parser = hostname({ allowWildcard: true });
+
+      const result1 = parser.parse("*.example.com");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "*.example.com");
+
+      const result2 = parser.parse("*.sub.example.com");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "*.sub.example.com");
+    });
+
+    it("should reject wildcard hostnames when allowWildcard is false", () => {
+      const parser = hostname({ allowWildcard: false });
+
+      const result = parser.parse("*.example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Wildcard hostname " },
+        { type: "value", value: "*.example.com" },
+        { type: "text", text: " is not allowed." },
+      ]);
+    });
+
+    it("should reject multiple wildcards", () => {
+      const parser = hostname({ allowWildcard: true });
+
+      const result1 = parser.parse("*.*.example.com");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("*.*");
+      assert.ok(!result2.success);
+    });
+  });
+
+  describe("allowUnderscore option", () => {
+    it("should accept underscores when allowUnderscore is true", () => {
+      const parser = hostname({ allowUnderscore: true });
+
+      const result1 = parser.parse("_service.example.com");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "_service.example.com");
+
+      const result2 = parser.parse("my_server.example.com");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "my_server.example.com");
+    });
+
+    it("should reject underscores when allowUnderscore is false", () => {
+      const parser = hostname({ allowUnderscore: false });
+
+      const result = parser.parse("_service.example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Hostname " },
+        { type: "value", value: "_service.example.com" },
+        {
+          type: "text",
+          text: " contains underscore, which is not allowed.",
+        },
+      ]);
+    });
+  });
+
+  describe("allowLocalhost option", () => {
+    it("should accept localhost when allowLocalhost is true", () => {
+      const parser = hostname({ allowLocalhost: true });
+
+      const result = parser.parse("localhost");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "localhost");
+    });
+
+    it("should reject localhost when allowLocalhost is false", () => {
+      const parser = hostname({ allowLocalhost: false });
+
+      const result = parser.parse("localhost");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Hostname 'localhost' is not allowed." },
+      ]);
+    });
+
+    it("should only reject exact localhost string", () => {
+      const parser = hostname({ allowLocalhost: false });
+
+      // These should still be valid
+      const result1 = parser.parse("localhosts");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("my-localhost.com");
+      assert.ok(result2.success);
+    });
+  });
+
+  describe("maxLength option", () => {
+    it("should accept hostnames within maxLength", () => {
+      const parser = hostname({ maxLength: 20 });
+
+      const result = parser.parse("example.com");
+      assert.ok(result.success);
+    });
+
+    it("should reject hostnames exceeding maxLength", () => {
+      const parser = hostname({ maxLength: 10 });
+
+      const result = parser.parse("example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Hostname " },
+        { type: "value", value: "example.com" },
+        { type: "text", text: " is too long (maximum " },
+        { type: "text", text: "10" },
+        { type: "text", text: " characters)." },
+      ]);
+    });
+
+    it("should default to 253 characters", () => {
+      const parser = hostname();
+
+      // 253 chars should be valid
+      const validHostname = "a".repeat(63) + "." + "b".repeat(63) + "." +
+        "c".repeat(63) + "." + "d".repeat(61);
+      const result1 = parser.parse(validHostname);
+      assert.strictEqual(validHostname.length, 253);
+      assert.ok(result1.success);
+
+      // 254 chars should be invalid
+      const invalidHostname = validHostname + "x";
+      const result2 = parser.parse(invalidHostname);
+      assert.strictEqual(invalidHostname.length, 254);
+      assert.ok(!result2.success);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom static error message for invalidHostname", () => {
+      const parser = hostname({
+        errors: {
+          invalidHostname: message`Bad hostname format!`,
+        },
+      });
+
+      const result = parser.parse("invalid..hostname");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Bad hostname format!" },
+      ]);
+    });
+
+    it("should use custom error function for invalidHostname", () => {
+      const parser = hostname({
+        errors: {
+          invalidHostname: (input) => message`Not valid: ${input}`,
+        },
+      });
+
+      const result = parser.parse("-invalid");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Not valid: " },
+        { type: "value", value: "-invalid" },
+      ]);
+    });
+
+    it("should use custom error message for wildcardNotAllowed", () => {
+      const parser = hostname({
+        allowWildcard: false,
+        errors: {
+          wildcardNotAllowed: (hostname) =>
+            message`Wildcards forbidden: ${hostname}`,
+        },
+      });
+
+      const result = parser.parse("*.example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Wildcards forbidden: " },
+        { type: "value", value: "*.example.com" },
+      ]);
+    });
+
+    it("should use custom error message for underscoreNotAllowed", () => {
+      const parser = hostname({
+        allowUnderscore: false,
+        errors: {
+          underscoreNotAllowed: message`Underscores not accepted`,
+        },
+      });
+
+      const result = parser.parse("_service.example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Underscores not accepted" },
+      ]);
+    });
+
+    it("should use custom error message for localhostNotAllowed", () => {
+      const parser = hostname({
+        allowLocalhost: false,
+        errors: {
+          localhostNotAllowed: message`No localhost allowed!`,
+        },
+      });
+
+      const result = parser.parse("localhost");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "No localhost allowed!" },
+      ]);
+    });
+
+    it("should use custom error message for tooLong", () => {
+      const parser = hostname({
+        maxLength: 10,
+        errors: {
+          tooLong: (hostname, max) =>
+            message`Too big: ${hostname} (max: ${text(max.toString())})`,
+        },
+      });
+
+      const result = parser.parse("verylonghostname.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Too big: " },
+        { type: "value", value: "verylonghostname.com" },
+        { type: "text", text: " (max: " },
+        { type: "text", text: "10" },
+        { type: "text", text: ")" },
+      ]);
+    });
+  });
+
+  describe("format()", () => {
+    it("should return hostname as-is", () => {
+      const parser = hostname();
+
+      assert.strictEqual(parser.format("example.com"), "example.com");
+      assert.strictEqual(parser.format("EXAMPLE.COM"), "EXAMPLE.COM");
+      assert.strictEqual(parser.format("localhost"), "localhost");
+    });
+  });
+
+  describe("metavar", () => {
+    it("should use default metavar HOST", () => {
+      const parser = hostname();
+
+      assert.strictEqual(parser.metavar, "HOST");
+    });
+
+    it("should use custom metavar", () => {
+      const parser = hostname({ metavar: "HOSTNAME" });
+
+      assert.strictEqual(parser.metavar, "HOSTNAME");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle case sensitivity correctly", () => {
+      const parser = hostname();
+
+      const result1 = parser.parse("EXAMPLE.COM");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "EXAMPLE.COM");
+
+      const result2 = parser.parse("Example.Com");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "Example.Com");
+    });
+
+    it("should reject hostnames with invalid label positions", () => {
+      const parser = hostname();
+
+      // Starting with dot
+      const result1 = parser.parse(".example.com");
+      assert.ok(!result1.success);
+
+      // Multiple consecutive dots
+      const result2 = parser.parse("example...com");
+      assert.ok(!result2.success);
+    });
+
+    it("should handle boundary label lengths", () => {
+      const parser = hostname();
+
+      // Exactly 63 chars (valid)
+      const validLabel = "a".repeat(63) + ".com";
+      const result1 = parser.parse(validLabel);
+      assert.ok(result1.success);
+
+      // 64 chars (invalid)
+      const invalidLabel = "a".repeat(64) + ".com";
+      const result2 = parser.parse(invalidLabel);
+      assert.ok(!result2.success);
+    });
+
+    it("should handle numeric-only labels", () => {
+      const parser = hostname();
+
+      // Numeric labels are valid in hostnames (not IPs though)
+      const result = parser.parse("123.456.789");
+      assert.ok(result.success);
     });
   });
 });
