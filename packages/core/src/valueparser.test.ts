@@ -9,6 +9,7 @@ import {
   locale,
   type NonEmptyString,
   port,
+  socketAddress,
   string,
   url,
   uuid,
@@ -5666,6 +5667,369 @@ describe("email()", () => {
         "user1@example.com",
         "user2@example.com",
       ]);
+    });
+  });
+});
+
+describe("socketAddress()", () => {
+  describe("basic validation", () => {
+    it("should accept valid socket addresses", () => {
+      const parser = socketAddress({ defaultPort: 8080 });
+
+      // Hostname with port
+      const result1 = parser.parse("localhost:3000");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "localhost");
+      assert.strictEqual(result1.value.port, 3000);
+
+      // Hostname without port (uses default)
+      const result2 = parser.parse("example.com");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value.host, "example.com");
+      assert.strictEqual(result2.value.port, 8080);
+
+      // IPv4 with port
+      const result3 = parser.parse("192.168.1.1:80");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value.host, "192.168.1.1");
+      assert.strictEqual(result3.value.port, 80);
+
+      // IPv4 without port
+      const result4 = parser.parse("10.0.0.1");
+      assert.ok(result4.success);
+      assert.strictEqual(result4.value.host, "10.0.0.1");
+      assert.strictEqual(result4.value.port, 8080);
+
+      // Subdomain with port
+      const result5 = parser.parse("api.example.com:443");
+      assert.ok(result5.success);
+      assert.strictEqual(result5.value.host, "api.example.com");
+      assert.strictEqual(result5.value.port, 443);
+    });
+
+    it("should reject invalid socket addresses", () => {
+      const parser = socketAddress({ defaultPort: 8080 });
+
+      // Invalid hostname
+      const result1 = parser.parse("-invalid.com:80");
+      assert.ok(!result1.success);
+
+      // Invalid port (too high)
+      const result2 = parser.parse("example.com:70000");
+      assert.ok(!result2.success);
+
+      // Invalid port (not a number)
+      const result3 = parser.parse("example.com:abc");
+      assert.ok(!result3.success);
+
+      // Empty string
+      const result4 = parser.parse("");
+      assert.ok(!result4.success);
+
+      // Only port
+      const result5 = parser.parse(":8080");
+      assert.ok(!result5.success);
+    });
+  });
+
+  describe("requirePort option", () => {
+    it("should require port when requirePort is true", () => {
+      const parser = socketAddress({ requirePort: true });
+
+      // With port - valid
+      const result1 = parser.parse("localhost:3000");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "localhost");
+      assert.strictEqual(result1.value.port, 3000);
+
+      // Without port - invalid
+      const result2 = parser.parse("localhost");
+      assert.ok(!result2.success);
+      assert.deepStrictEqual(result2.error, [
+        {
+          type: "text",
+          text: "Port number is required but was not specified.",
+        },
+      ]);
+    });
+
+    it("should allow omitting port when requirePort is false and defaultPort is set", () => {
+      const parser = socketAddress({ requirePort: false, defaultPort: 80 });
+
+      const result = parser.parse("example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "example.com");
+      assert.strictEqual(result.value.port, 80);
+    });
+
+    it("should reject missing port when no defaultPort and requirePort is false", () => {
+      const parser = socketAddress({ requirePort: false });
+
+      const result = parser.parse("example.com");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("separator option", () => {
+    it("should use custom separator", () => {
+      const parser = socketAddress({ separator: " " });
+
+      const result = parser.parse("localhost 3000");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "localhost");
+      assert.strictEqual(result.value.port, 3000);
+    });
+
+    it("should reject input with wrong separator", () => {
+      const parser = socketAddress({ separator: " " });
+
+      const result = parser.parse("localhost:3000");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("host.type option", () => {
+    it("should accept only hostnames when type is hostname", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "hostname" },
+      });
+
+      // Hostname - valid
+      const result1 = parser.parse("example.com:443");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "example.com");
+
+      // IPv4 - invalid
+      const result2 = parser.parse("192.168.1.1:80");
+      assert.ok(!result2.success);
+    });
+
+    it("should accept only IPs when type is ip", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "ip" },
+      });
+
+      // IPv4 - valid
+      const result1 = parser.parse("192.168.1.1:80");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value.host, "192.168.1.1");
+
+      // Hostname - invalid
+      const result2 = parser.parse("example.com:443");
+      assert.ok(!result2.success);
+    });
+
+    it("should accept both hostnames and IPs when type is both", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: { type: "both" },
+      });
+
+      // Hostname
+      const result1 = parser.parse("example.com:443");
+      assert.ok(result1.success);
+
+      // IPv4
+      const result2 = parser.parse("192.168.1.1:80");
+      assert.ok(result2.success);
+    });
+  });
+
+  describe("host options propagation", () => {
+    it("should pass hostname options to hostname parser", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: {
+          type: "hostname",
+          hostname: { allowLocalhost: false },
+        },
+      });
+
+      // localhost rejected
+      const result1 = parser.parse("localhost:80");
+      assert.ok(!result1.success);
+
+      // Regular hostname accepted
+      const result2 = parser.parse("example.com:80");
+      assert.ok(result2.success);
+    });
+
+    it("should pass IP options to IP parser", () => {
+      const parser = socketAddress({
+        defaultPort: 80,
+        host: {
+          type: "ip",
+          ip: { allowPrivate: false },
+        },
+      });
+
+      // Private IP rejected
+      const result1 = parser.parse("192.168.1.1:80");
+      assert.ok(!result1.success);
+
+      // Public IP accepted
+      const result2 = parser.parse("8.8.8.8:80");
+      assert.ok(result2.success);
+    });
+  });
+
+  describe("port options propagation", () => {
+    it("should pass port options to port parser", () => {
+      const parser = socketAddress({
+        defaultPort: 8080,
+        port: { min: 1024, max: 65535 },
+      });
+
+      // Port too low
+      const result1 = parser.parse("localhost:80");
+      assert.ok(!result1.success);
+
+      // Port in range
+      const result2 = parser.parse("localhost:8080");
+      assert.ok(result2.success);
+    });
+
+    it("should disallow well-known ports when configured", () => {
+      const parser = socketAddress({
+        defaultPort: 8080,
+        port: { disallowWellKnown: true },
+      });
+
+      // Well-known port rejected
+      const result1 = parser.parse("localhost:80");
+      assert.ok(!result1.success);
+
+      // Non-well-known port accepted
+      const result2 = parser.parse("localhost:8080");
+      assert.ok(result2.success);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom static error message for invalidFormat", () => {
+      const parser = socketAddress({
+        requirePort: true,
+        errors: {
+          invalidFormat: message`Bad socket address format`,
+        },
+      });
+
+      // Invalid hostname with port
+      const result = parser.parse("-invalid:8080");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Bad socket address format" },
+      ]);
+    });
+
+    it("should use custom error function for invalidFormat", () => {
+      const parser = socketAddress({
+        requirePort: true,
+        errors: {
+          invalidFormat: (input) => message`Cannot parse: ${input}`,
+        },
+      });
+
+      const result = parser.parse("bad:format:here");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Cannot parse: " },
+        { type: "value", value: "bad:format:here" },
+      ]);
+    });
+
+    it("should use custom error message for missingPort", () => {
+      const parser = socketAddress({
+        requirePort: true,
+        errors: {
+          missingPort: message`You must specify a port`,
+        },
+      });
+
+      const result = parser.parse("localhost");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "You must specify a port" },
+      ]);
+    });
+  });
+
+  describe("format()", () => {
+    it("should return socket address in host:port format", () => {
+      const parser = socketAddress({ defaultPort: 80 });
+
+      const formatted = parser.format({ host: "example.com", port: 443 });
+      assert.strictEqual(formatted, "example.com:443");
+    });
+
+    it("should use custom separator in format", () => {
+      const parser = socketAddress({ separator: " ", defaultPort: 80 });
+
+      const formatted = parser.format({ host: "localhost", port: 3000 });
+      assert.strictEqual(formatted, "localhost 3000");
+    });
+  });
+
+  describe("metavar", () => {
+    it("should use default metavar HOST:PORT", () => {
+      const parser = socketAddress({ defaultPort: 80 });
+      assert.strictEqual(parser.metavar, "HOST:PORT");
+    });
+
+    it("should use custom metavar", () => {
+      const parser = socketAddress({ defaultPort: 80, metavar: "ENDPOINT" });
+      assert.strictEqual(parser.metavar, "ENDPOINT");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle very high port numbers within range", () => {
+      const parser = socketAddress({ defaultPort: 8080 });
+
+      const result = parser.parse("localhost:65535");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.port, 65535);
+    });
+
+    it("should handle port 1", () => {
+      const parser = socketAddress({ defaultPort: 8080 });
+
+      const result = parser.parse("localhost:1");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.port, 1);
+    });
+
+    it("should handle complex hostnames", () => {
+      const parser = socketAddress({ defaultPort: 80 });
+
+      const result = parser.parse("very.long.subdomain.example.com:443");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.host, "very.long.subdomain.example.com");
+      assert.strictEqual(result.value.port, 443);
+    });
+
+    it("should work with mixed options", () => {
+      const parser = socketAddress({
+        defaultPort: 8080,
+        host: {
+          type: "both",
+          hostname: { allowLocalhost: true },
+          ip: { allowPrivate: true },
+        },
+        port: { min: 1024 },
+      });
+
+      const result1 = parser.parse("localhost:3000");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("192.168.1.1:8080");
+      assert.ok(result2.success);
+
+      const result3 = parser.parse("example.com");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value.port, 8080);
     });
   });
 });

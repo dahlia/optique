@@ -2673,3 +2673,265 @@ export function email(
     },
   } as ValueParser<"sync", string | readonly string[]>;
 }
+
+/**
+ * Socket address value containing host and port.
+ *
+ * @since 0.10.0
+ */
+export interface SocketAddressValue {
+  /**
+   * The host portion (hostname or IP address).
+   */
+  readonly host: string;
+
+  /**
+   * The port number.
+   */
+  readonly port: number;
+}
+
+/**
+ * Options for the {@link socketAddress} parser.
+ *
+ * @since 0.10.0
+ */
+export interface SocketAddressOptions {
+  /**
+   * The metavariable name for this parser.
+   * @default "HOST:PORT"
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Separator character(s) between host and port.
+   * @default ":"
+   */
+  readonly separator?: string;
+
+  /**
+   * Default port number if omitted from input.
+   * If not specified, port is required.
+   */
+  readonly defaultPort?: number;
+
+  /**
+   * If `true`, requires port to be specified in input
+   * (ignores `defaultPort`).
+   * @default false
+   */
+  readonly requirePort?: boolean;
+
+  /**
+   * Options for hostname/IP validation.
+   */
+  readonly host?: {
+    /**
+     * Type of host to accept.
+     * - `"hostname"`: Accept hostnames only
+     * - `"ip"`: Accept IP addresses only
+     * - `"both"`: Accept both hostnames and IP addresses
+     * @default "both"
+     */
+    readonly type?: "hostname" | "ip" | "both";
+
+    /**
+     * Options for hostname validation (when type is "hostname" or "both").
+     */
+    readonly hostname?: Omit<HostnameOptions, "metavar" | "errors">;
+
+    /**
+     * Options for IP validation (when type is "ip" or "both").
+     * Currently only supports IPv4.
+     */
+    readonly ip?: Omit<Ipv4Options, "metavar" | "errors">;
+  };
+
+  /**
+   * Options for port validation.
+   */
+  readonly port?: Omit<PortOptionsNumber, "metavar" | "errors" | "type">;
+
+  /**
+   * Custom error messages for socket address parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input format is invalid.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidFormat?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when port is missing but required.
+     * Can be a static message or a function that receives the input.
+     */
+    missingPort?: Message | ((input: string) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for socket addresses in "host:port" format.
+ *
+ * Validates socket addresses with support for:
+ * - Hostnames and IPv4 addresses (IPv6 support coming in future versions)
+ * - Configurable host:port separator
+ * - Optional default port
+ * - Host type filtering (hostname only, IP only, or both)
+ * - Port range validation
+ *
+ * @param options - Options for socket address validation.
+ * @returns A value parser for socket addresses.
+ * @since 0.10.0
+ *
+ * @example
+ * ```typescript
+ * import { socketAddress } from "@optique/core/valueparser";
+ *
+ * // Basic socket address parser
+ * const endpoint = socketAddress({ requirePort: true });
+ *
+ * // With default port
+ * const server = socketAddress({ defaultPort: 80 });
+ *
+ * // IP addresses only
+ * const bind = socketAddress({
+ *   defaultPort: 8080,
+ *   host: { type: "ip" }
+ * });
+ * ```
+ */
+export function socketAddress(
+  options?: SocketAddressOptions,
+): ValueParser<"sync", SocketAddressValue> {
+  const metavar: NonEmptyString = options?.metavar ?? "HOST:PORT";
+  ensureNonEmptyString(metavar);
+
+  const separator = options?.separator ?? ":";
+  const defaultPort = options?.defaultPort;
+  const requirePort = options?.requirePort ?? false;
+  const hostType = options?.host?.type ?? "both";
+
+  // Create host parser based on type
+  const hostnameParser = hostname({
+    ...options?.host?.hostname,
+    metavar: "HOST",
+  });
+  const ipParser = ipv4({
+    ...options?.host?.ip,
+    metavar: "HOST",
+  });
+
+  // Create port parser
+  const portParser = port({
+    ...options?.port,
+    metavar: "PORT",
+    type: "number",
+  });
+
+  function parseHost(hostInput: string): string | null {
+    if (hostType === "hostname") {
+      // Reject IP addresses when type is "hostname"
+      const ipResult = ipParser.parse(hostInput);
+      if (ipResult.success) {
+        return null; // IP address not allowed
+      }
+      const result = hostnameParser.parse(hostInput);
+      return result.success ? result.value : null;
+    } else if (hostType === "ip") {
+      const result = ipParser.parse(hostInput);
+      return result.success ? result.value : null;
+    } else {
+      // Try IP first, then hostname
+      const ipResult = ipParser.parse(hostInput);
+      if (ipResult.success) {
+        return ipResult.value;
+      }
+      const hostnameResult = hostnameParser.parse(hostInput);
+      return hostnameResult.success ? hostnameResult.value : null;
+    }
+  }
+
+  return {
+    $mode: "sync",
+    metavar,
+    parse(input: string): ValueParserResult<SocketAddressValue> {
+      const trimmed = input.trim();
+
+      // Find separator
+      const separatorIndex = trimmed.lastIndexOf(separator);
+
+      let hostPart: string;
+      let portPart: string | undefined;
+
+      if (separatorIndex === -1) {
+        // No separator found - host only
+        hostPart = trimmed;
+        portPart = undefined;
+      } else {
+        hostPart = trimmed.substring(0, separatorIndex);
+        portPart = trimmed.substring(separatorIndex + separator.length);
+      }
+
+      // Validate host
+      const validatedHost = parseHost(hostPart);
+      if (validatedHost === null) {
+        const errorMsg = options?.errors?.invalidFormat;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input)
+          : errorMsg ??
+            message`Expected a socket address in format host${separator}port, but got ${input}.`;
+        return { success: false, error: msg };
+      }
+
+      // Validate port
+      let validatedPort: number;
+
+      if (portPart === undefined || portPart === "") {
+        // Port is missing
+        if (requirePort) {
+          const errorMsg = options?.errors?.missingPort;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Port number is required but was not specified.`;
+          return { success: false, error: msg };
+        }
+
+        if (defaultPort !== undefined) {
+          validatedPort = defaultPort;
+        } else {
+          const errorMsg = options?.errors?.missingPort;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Port number is required but was not specified.`;
+          return { success: false, error: msg };
+        }
+      } else {
+        // Parse port
+        const portResult = portParser.parse(portPart);
+        if (!portResult.success) {
+          const errorMsg = options?.errors?.invalidFormat;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a socket address in format host${separator}port, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+        validatedPort = portResult.value as number;
+      }
+
+      return {
+        success: true,
+        value: {
+          host: validatedHost,
+          port: validatedPort,
+        },
+      };
+    },
+    format(value: SocketAddressValue): string {
+      return `${value.host}${separator}${value.port}`;
+    },
+  };
+}
