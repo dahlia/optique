@@ -1,5 +1,6 @@
 import {
   choice,
+  email,
   float,
   hostname,
   integer,
@@ -5255,6 +5256,416 @@ describe("hostname()", () => {
       // Numeric labels are valid in hostnames (not IPs though)
       const result = parser.parse("123.456.789");
       assert.ok(result.success);
+    });
+  });
+});
+
+describe("email()", () => {
+  describe("basic validation", () => {
+    it("should accept valid email addresses", () => {
+      const parser = email();
+
+      // Simple email
+      const result1 = parser.parse("user@example.com");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "user@example.com");
+
+      // With subdomain
+      const result2 = parser.parse("user@mail.example.com");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "user@mail.example.com");
+
+      // With dots in local part (RFC 5322 dot-atom)
+      const result3 = parser.parse("first.last@example.com");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value, "first.last@example.com");
+
+      // With hyphens
+      const result4 = parser.parse("user-name@example.com");
+      assert.ok(result4.success);
+      assert.strictEqual(result4.value, "user-name@example.com");
+
+      // With plus sign (RFC 5322 atext)
+      const result5 = parser.parse("user+tag@example.com");
+      assert.ok(result5.success);
+      assert.strictEqual(result5.value, "user+tag@example.com");
+
+      // With numbers
+      const result6 = parser.parse("user123@example456.com");
+      assert.ok(result6.success);
+      assert.strictEqual(result6.value, "user123@example456.com");
+
+      // With underscores
+      const result7 = parser.parse("user_name@example.com");
+      assert.ok(result7.success);
+      assert.strictEqual(result7.value, "user_name@example.com");
+
+      // Quoted string local part (RFC 5322)
+      const result8 = parser.parse('"user name"@example.com');
+      assert.ok(result8.success);
+      assert.strictEqual(result8.value, '"user name"@example.com');
+
+      // Quoted string with special chars
+      const result9 = parser.parse('"user@domain"@example.com');
+      assert.ok(result9.success);
+      assert.strictEqual(result9.value, '"user@domain"@example.com');
+    });
+
+    it("should reject invalid email addresses", () => {
+      const parser = email();
+
+      // No @ sign
+      const result1 = parser.parse("userexample.com");
+      assert.ok(!result1.success);
+      assert.deepStrictEqual(result1.error, [
+        { type: "text", text: "Expected a valid email address, but got " },
+        { type: "value", value: "userexample.com" },
+        { type: "text", text: "." },
+      ]);
+
+      // Multiple @ signs
+      const result2 = parser.parse("user@@example.com");
+      assert.ok(!result2.success);
+
+      // Missing local part
+      const result3 = parser.parse("@example.com");
+      assert.ok(!result3.success);
+
+      // Missing domain
+      const result4 = parser.parse("user@");
+      assert.ok(!result4.success);
+
+      // No dot in domain
+      const result5 = parser.parse("user@example");
+      assert.ok(!result5.success);
+
+      // Empty string
+      const result6 = parser.parse("");
+      assert.ok(!result6.success);
+
+      // Spaces
+      const result7 = parser.parse("user @example.com");
+      assert.ok(!result7.success);
+
+      // Special characters in local part (not allowed in simplified RFC)
+      const result8 = parser.parse("user!name@example.com");
+      assert.ok(!result8.success);
+
+      // Domain starting with dot
+      const result9 = parser.parse("user@.example.com");
+      assert.ok(!result9.success);
+
+      // Domain ending with dot
+      const result10 = parser.parse("user@example.com.");
+      assert.ok(!result10.success);
+    });
+  });
+
+  describe("allowMultiple option", () => {
+    it("should accept multiple email addresses when allowMultiple is true", () => {
+      const parser = email({ allowMultiple: true });
+
+      const result1 = parser.parse("user1@example.com,user2@example.com");
+      assert.ok(result1.success);
+      assert.deepStrictEqual(result1.value, [
+        "user1@example.com",
+        "user2@example.com",
+      ]);
+
+      const result2 = parser.parse(
+        "alice@example.com,bob@example.org,charlie@test.com",
+      );
+      assert.ok(result2.success);
+      assert.deepStrictEqual(result2.value, [
+        "alice@example.com",
+        "bob@example.org",
+        "charlie@test.com",
+      ]);
+
+      // Single email should still work
+      const result3 = parser.parse("single@example.com");
+      assert.ok(result3.success);
+      assert.deepStrictEqual(result3.value, ["single@example.com"]);
+    });
+
+    it("should trim whitespace around emails in multiple mode", () => {
+      const parser = email({ allowMultiple: true });
+
+      const result = parser.parse(
+        "user1@example.com, user2@example.com , user3@example.com",
+      );
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, [
+        "user1@example.com",
+        "user2@example.com",
+        "user3@example.com",
+      ]);
+    });
+
+    it("should reject if any email in the list is invalid", () => {
+      const parser = email({ allowMultiple: true });
+
+      const result = parser.parse("valid@example.com,invalid,another@test.com");
+      assert.ok(!result.success);
+    });
+
+    it("should return single email when allowMultiple is false", () => {
+      const parser = email({ allowMultiple: false });
+
+      const result = parser.parse("user@example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "user@example.com");
+    });
+  });
+
+  describe("allowDisplayName option", () => {
+    it("should accept display name format when allowDisplayName is true", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result1 = parser.parse("John Doe <john@example.com>");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "john@example.com");
+
+      const result2 = parser.parse("Alice Smith <alice.smith@example.com>");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "alice.smith@example.com");
+
+      // Without display name should still work
+      const result3 = parser.parse("bob@example.com");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value, "bob@example.com");
+    });
+
+    it("should reject display name format when allowDisplayName is false", () => {
+      const parser = email({ allowDisplayName: false });
+
+      const result = parser.parse("John Doe <john@example.com>");
+      assert.ok(!result.success);
+    });
+
+    it("should handle display names with special characters", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result1 = parser.parse('"Smith, John" <john.smith@example.com>');
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "john.smith@example.com");
+    });
+  });
+
+  describe("lowercase option", () => {
+    it("should convert email to lowercase when lowercase is true", () => {
+      const parser = email({ lowercase: true });
+
+      const result1 = parser.parse("User@Example.COM");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "user@example.com");
+
+      const result2 = parser.parse("ADMIN@COMPANY.NET");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "admin@company.net");
+    });
+
+    it("should preserve case when lowercase is false", () => {
+      const parser = email({ lowercase: false });
+
+      const result = parser.parse("User@Example.COM");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "User@Example.COM");
+    });
+
+    it("should work with allowMultiple", () => {
+      const parser = email({ allowMultiple: true, lowercase: true });
+
+      const result = parser.parse("User1@Example.COM,User2@Example.ORG");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, [
+        "user1@example.com",
+        "user2@example.org",
+      ]);
+    });
+  });
+
+  describe("allowedDomains option", () => {
+    it("should accept emails from allowed domains", () => {
+      const parser = email({
+        allowedDomains: ["example.com", "example.org"],
+      });
+
+      const result1 = parser.parse("user@example.com");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "user@example.com");
+
+      const result2 = parser.parse("user@example.org");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "user@example.org");
+    });
+
+    it("should reject emails from disallowed domains", () => {
+      const parser = email({
+        allowedDomains: ["example.com", "example.org"],
+      });
+
+      const result = parser.parse("user@other.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Email domain " },
+        { type: "value", value: "other.com" },
+        {
+          type: "text",
+          text: " is not allowed. Allowed domains: example.com, example.org.",
+        },
+      ]);
+    });
+
+    it("should be case-insensitive for domain matching", () => {
+      const parser = email({
+        allowedDomains: ["example.com"],
+      });
+
+      const result1 = parser.parse("user@Example.COM");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("user@EXAMPLE.com");
+      assert.ok(result2.success);
+    });
+
+    it("should work with allowMultiple", () => {
+      const parser = email({
+        allowMultiple: true,
+        allowedDomains: ["example.com"],
+      });
+
+      const result1 = parser.parse("user1@example.com,user2@example.com");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("user1@example.com,user2@other.com");
+      assert.ok(!result2.success);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom static error message for invalidEmail", () => {
+      const parser = email({
+        errors: {
+          invalidEmail: message`Not a valid email!`,
+        },
+      });
+
+      const result = parser.parse("invalid");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Not a valid email!" },
+      ]);
+    });
+
+    it("should use custom error function for invalidEmail", () => {
+      const parser = email({
+        errors: {
+          invalidEmail: (input) => message`Bad email: ${input}`,
+        },
+      });
+
+      const result = parser.parse("bad@");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Bad email: " },
+        { type: "value", value: "bad@" },
+      ]);
+    });
+
+    it("should use custom error message for domainNotAllowed", () => {
+      const parser = email({
+        allowedDomains: ["company.com"],
+        errors: {
+          domainNotAllowed: (email, _domains) =>
+            message`Domain not allowed for ${email}`,
+        },
+      });
+
+      const result = parser.parse("user@other.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Domain not allowed for " },
+        { type: "value", value: "user@other.com" },
+      ]);
+    });
+  });
+
+  describe("format()", () => {
+    it("should return single email as-is", () => {
+      const parser = email();
+
+      assert.strictEqual(parser.format("user@example.com"), "user@example.com");
+    });
+
+    it("should return multiple emails joined by comma", () => {
+      const parser = email({ allowMultiple: true });
+
+      assert.strictEqual(
+        parser.format(["user1@example.com", "user2@example.com"]),
+        "user1@example.com,user2@example.com",
+      );
+    });
+  });
+
+  describe("metavar", () => {
+    it("should use default metavar EMAIL", () => {
+      const parser = email();
+
+      assert.strictEqual(parser.metavar, "EMAIL");
+    });
+
+    it("should use custom metavar", () => {
+      const parser = email({ metavar: "ADDR" });
+
+      assert.strictEqual(parser.metavar, "ADDR");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle very long email addresses", () => {
+      const parser = email();
+
+      const longLocal = "a".repeat(64);
+      const result1 = parser.parse(`${longLocal}@example.com`);
+      assert.ok(result1.success);
+    });
+
+    it("should handle consecutive dots in local part", () => {
+      const parser = email();
+
+      // Consecutive dots are technically invalid in simplified RFC
+      const result = parser.parse("user..name@example.com");
+      assert.ok(!result.success);
+    });
+
+    it("should handle local part starting with dot", () => {
+      const parser = email();
+
+      const result = parser.parse(".user@example.com");
+      assert.ok(!result.success);
+    });
+
+    it("should handle local part ending with dot", () => {
+      const parser = email();
+
+      const result = parser.parse("user.@example.com");
+      assert.ok(!result.success);
+    });
+
+    it("should work with mixed options", () => {
+      const parser = email({
+        allowMultiple: true,
+        lowercase: true,
+        allowedDomains: ["example.com"],
+      });
+
+      const result = parser.parse("User1@Example.COM,User2@Example.COM");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, [
+        "user1@example.com",
+        "user2@example.com",
+      ]);
     });
   });
 });

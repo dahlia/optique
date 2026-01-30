@@ -340,6 +340,31 @@ To be released.
     option("--srv", hostname({ allowUnderscore: true }))
     ~~~~
 
+ -  Added `email()` value parser for email address validation with support for
+    display names, multiple addresses, domain filtering, and quoted local parts.
+    The parser validates email addresses according to simplified RFC 5322
+    addr-spec format with practical defaults for common use cases. [[#89]]
+
+    ~~~~ typescript
+    import { option } from "@optique/core/primitives";
+    import { email } from "@optique/core/valueparser";
+
+    // Basic email parser
+    option("--email", email())
+
+    // Multiple email addresses
+    option("--to", email({ allowMultiple: true }))
+
+    // Allow display names
+    option("--from", email({ allowDisplayName: true }))
+
+    // Restrict to company domains
+    option("--work-email", email({ allowedDomains: ["company.com"] }))
+
+    // Convert to lowercase
+    option("--email", email({ lowercase: true }))
+    ~~~~
+
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
     was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
     `run()` function. [[#65]]

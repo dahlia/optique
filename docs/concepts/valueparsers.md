@@ -966,6 +966,195 @@ The parser uses `"HOST"` as its default metavar and returns the hostname
 as-is, preserving the original case.
 
 
+`email()` parser
+----------------
+
+The `email()` parser validates email addresses according to simplified RFC 5322
+addr-spec format. It supports display names, multiple addresses, domain
+filtering, and quoted local parts for practical email validation use cases.
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+
+// Basic email parser
+const userEmail = email();
+
+// Multiple comma-separated addresses
+const recipients = email({ allowMultiple: true });
+
+// Allow display names
+const from = email({ allowDisplayName: true });
+
+// Restrict to specific domains
+const workEmail = email({ allowedDomains: ["company.com"] });
+~~~~
+
+### Email validation rules
+
+The parser validates email addresses using simplified RFC 5322 rules:
+
+ -  Format: `local-part@domain`
+ -  Local part: alphanumeric characters, dots (`.`), hyphens (`-`), underscores
+    (`_`), and plus signs (`+`)
+ -  Domain part: valid hostname with at least one dot
+ -  Quoted local parts (e.g., `"user name"@example.com`) allow spaces and
+    special characters
+
+For example:
+
+ -  Valid: `"user@example.com"`, `"first.last@example.com"`,
+    `"user+tag@mail.example.com"`
+ -  Invalid: `"userexample.com"` (no @ sign), `"user@example"` (no dot in
+    domain), `"user..name@example.com"` (consecutive dots)
+
+### Display name support
+
+By default, display names are rejected. Enable them with the `allowDisplayName`
+option:
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Allow "Name <email@example.com>" format
+const from = option("--from", email({ allowDisplayName: true }));
+~~~~
+
+~~~~ bash
+$ example --from "John Doe <john@example.com>"  # Valid
+$ example --from "john@example.com"             # Also valid
+~~~~
+
+The parser extracts the email address and discards the display name. Both
+formats (`"Name <email>"` and `Name <email>`) are accepted.
+
+### Multiple email addresses
+
+Parse comma-separated email lists with `allowMultiple`:
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Accept multiple comma-separated emails
+const to = option("--to", email({ allowMultiple: true }));
+~~~~
+
+~~~~ bash
+$ example --to "alice@example.com,bob@example.com"  # Valid
+$ example --to "alice@example.com, bob@example.com" # Whitespace trimmed
+~~~~
+
+When `allowMultiple` is `true`, the parser returns a `readonly string[]` instead
+of a single `string`.
+
+### Domain filtering
+
+Restrict accepted email addresses to specific domains with `allowedDomains`:
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Only accept company email addresses
+const workEmail = option(
+  "--email",
+  email({ allowedDomains: ["company.com", "company.org"] })
+);
+~~~~
+
+~~~~ bash
+$ example --email "user@company.com"  # Valid
+$ example --email "user@gmail.com"    # Error: domain not allowed
+~~~~
+
+Domain matching is case-insensitive.
+
+### Lowercase conversion
+
+Convert email addresses to lowercase with the `lowercase` option:
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+import { option } from "@optique/core";
+// ---cut-before---
+// Normalize email to lowercase
+const normalizedEmail = option("--email", email({ lowercase: true }));
+~~~~
+
+~~~~ bash
+$ example --email "User@Example.COM"  # Returns: "user@example.com"
+~~~~
+
+### Quoted local parts
+
+The parser supports quoted strings in local parts for special characters:
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+// ---cut-before---
+const parser = email();
+const result = parser.parse('"user name"@example.com');
+// result.value = '"user name"@example.com'
+~~~~
+
+Quoted strings allow spaces and special characters that are normally forbidden
+in local parts, such as `@` signs inside the quotes.
+
+### Custom error messages
+
+Customize error messages for validation failures:
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+import { option } from "@optique/core";
+// ---cut-before---
+const workEmail = option("--email", email({
+  allowedDomains: ["company.com"],
+  errors: {
+    invalidEmail: (input) => message`Invalid email format: ${input}`,
+    domainNotAllowed: (email, domains) =>
+      message`Email ${email} must use company domain`,
+  },
+}));
+~~~~
+
+### Common use cases
+
+**User registration email:**
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+// ---cut-before---
+// Normalize email for consistent storage
+const userEmail = email({ lowercase: true });
+~~~~
+
+**Notification recipients:**
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+// ---cut-before---
+// Multiple recipients with display names
+const recipients = email({ allowMultiple: true, allowDisplayName: true });
+~~~~
+
+**Corporate email restriction:**
+
+~~~~ typescript twoslash
+import { email } from "@optique/core/valueparser";
+// ---cut-before---
+// Only accept company domain emails
+const corporateEmail = email({
+  allowedDomains: ["company.com", "company.org"],
+  lowercase: true,
+});
+~~~~
+
+The parser uses `"EMAIL"` as its default metavar.
+
+
 `path()` parser
 ---------------
 

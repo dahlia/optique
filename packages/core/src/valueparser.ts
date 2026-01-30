@@ -2345,3 +2345,331 @@ export function hostname(
     },
   };
 }
+
+/**
+ * Options for the {@link email} parser.
+ *
+ * @since 0.10.0
+ */
+export interface EmailOptions {
+  /**
+   * The metavariable name for this parser.
+   * @default "EMAIL"
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * If `true`, allows multiple email addresses separated by commas.
+   * Returns an array of email addresses.
+   * @default false
+   */
+  readonly allowMultiple?: boolean;
+
+  /**
+   * If `true`, allows display names in format "Name <email@example.com>".
+   * When enabled, returns the email address only (strips display name).
+   * @default false
+   */
+  readonly allowDisplayName?: boolean;
+
+  /**
+   * If `true`, converts email to lowercase.
+   * @default false
+   */
+  readonly lowercase?: boolean;
+
+  /**
+   * List of allowed email domains (e.g., ["example.com", "test.org"]).
+   * If specified, only emails from these domains are accepted.
+   */
+  readonly allowedDomains?: readonly string[];
+
+  /**
+   * Custom error messages for email parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid email address.
+     * Can be a static message or a function that receives the input.
+     */
+    invalidEmail?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when email domain is not allowed.
+     * Can be a static message or a function that receives the email and allowed domains.
+     */
+    domainNotAllowed?:
+      | Message
+      | ((email: string, allowedDomains: readonly string[]) => Message);
+  };
+}
+
+/**
+ * Creates a value parser for email addresses according to RFC 5322 (simplified).
+ *
+ * Validates email addresses with support for:
+ * - Simplified RFC 5322 addr-spec format (local-part@domain)
+ * - Local part: alphanumeric, dots, hyphens, underscores, plus signs
+ * - Quoted strings in local part
+ * - Display names (when `allowDisplayName` is enabled)
+ * - Multiple addresses (when `allowMultiple` is enabled)
+ * - Domain filtering (when `allowedDomains` is specified)
+ *
+ * @param options - Options for email validation.
+ * @returns A value parser for email addresses.
+ * @since 0.10.0
+ *
+ * @example
+ * ```typescript
+ * import { email } from "@optique/core/valueparser";
+ *
+ * // Basic email parser
+ * const userEmail = email();
+ *
+ * // Multiple emails
+ * const recipients = email({ allowMultiple: true });
+ *
+ * // With display names
+ * const from = email({ allowDisplayName: true });
+ *
+ * // Restrict to company domains
+ * const workEmail = email({ allowedDomains: ["company.com"] });
+ * ```
+ */
+export function email(
+  options: EmailOptions & { allowMultiple: true },
+): ValueParser<"sync", readonly string[]>;
+export function email(
+  options?: EmailOptions,
+): ValueParser<"sync", string>;
+export function email(
+  options?: EmailOptions,
+): ValueParser<"sync", string | readonly string[]> {
+  const metavar: NonEmptyString = options?.metavar ?? "EMAIL";
+  ensureNonEmptyString(metavar);
+
+  const allowMultiple = options?.allowMultiple ?? false;
+  const allowDisplayName = options?.allowDisplayName ?? false;
+  const lowercase = options?.lowercase ?? false;
+  const allowedDomains = options?.allowedDomains;
+
+  // Simplified RFC 5322: alphanumeric, dots, hyphens, underscores, plus signs
+  const atextRegex = /^[a-zA-Z0-9._+-]+$/;
+
+  // Validate a single email address (RFC 5322 addr-spec)
+  function validateEmail(input: string): string | null {
+    const trimmed = input.trim();
+
+    // Handle display name format: "Name <email@example.com>"
+    let emailAddr = trimmed;
+    if (allowDisplayName && trimmed.includes("<") && trimmed.endsWith(">")) {
+      const match = trimmed.match(/<([^>]+)>$/);
+      if (match) {
+        emailAddr = match[1].trim();
+      }
+    }
+
+    // Find the @ sign that separates local part from domain
+    // Handle quoted local parts which may contain @ signs
+    let atIndex = -1;
+    if (emailAddr.startsWith('"')) {
+      // Quoted local part - find closing quote, then find @ after it
+      const closingQuoteIndex = emailAddr.indexOf('"', 1);
+      if (closingQuoteIndex === -1) {
+        return null; // Unclosed quote
+      }
+      atIndex = emailAddr.indexOf("@", closingQuoteIndex);
+    } else {
+      // Unquoted local part - find first @
+      atIndex = emailAddr.indexOf("@");
+    }
+
+    if (atIndex === -1) {
+      return null; // No @ sign found
+    }
+
+    // Ensure there's only one @ sign after the local part
+    const lastAtIndex = emailAddr.lastIndexOf("@");
+    if (atIndex !== lastAtIndex) {
+      return null; // Multiple @ signs in domain
+    }
+
+    const localPart = emailAddr.substring(0, atIndex);
+    const domain = emailAddr.substring(atIndex + 1);
+
+    // Validate local part
+    if (!localPart || localPart.length === 0) {
+      return null;
+    }
+
+    // RFC 5322: local-part = dot-atom / quoted-string
+    let isValidLocal = false;
+
+    // Check if it's a quoted-string
+    if (localPart.startsWith('"') && localPart.endsWith('"')) {
+      // Quoted string - allow most characters
+      // For simplicity, we accept quoted strings as-is (proper parsing would check escapes)
+      isValidLocal = localPart.length >= 2;
+    } else {
+      // Must be dot-atom: 1*atext *("." 1*atext)
+      const localParts = localPart.split(".");
+
+      // Cannot start or end with dot
+      if (localPart.startsWith(".") || localPart.endsWith(".")) {
+        return null;
+      }
+
+      // Check each part is valid atext
+      isValidLocal = localParts.length > 0 &&
+        localParts.every((part) => part.length > 0 && atextRegex.test(part));
+    }
+
+    if (!isValidLocal) {
+      return null;
+    }
+
+    // Validate domain part
+    if (!domain || domain.length === 0) {
+      return null;
+    }
+
+    // Domain must contain at least one dot (simplified RFC 5322)
+    if (!domain.includes(".")) {
+      return null;
+    }
+
+    // Domain cannot start or end with dot or hyphen
+    if (
+      domain.startsWith(".") || domain.endsWith(".") ||
+      domain.startsWith("-") || domain.endsWith("-")
+    ) {
+      return null;
+    }
+
+    // Check domain labels
+    const domainLabels = domain.split(".");
+    for (const label of domainLabels) {
+      if (label.length === 0 || label.length > 63) {
+        return null;
+      }
+      // Labels can contain alphanumeric and hyphens, but not start/end with hyphen
+      if (label.startsWith("-") || label.endsWith("-")) {
+        return null;
+      }
+      if (!/^[a-zA-Z0-9-]+$/.test(label)) {
+        return null;
+      }
+    }
+
+    // Return the email (preserve original form or extracted from display name)
+    const resultEmail = emailAddr;
+    return lowercase ? resultEmail.toLowerCase() : resultEmail;
+  }
+
+  return {
+    $mode: "sync" as const,
+    metavar,
+    parse(
+      input: string,
+    ): ValueParserResult<string> | ValueParserResult<readonly string[]> {
+      if (allowMultiple) {
+        // Parse multiple emails separated by commas
+        const emails = input.split(",").map((e) => e.trim());
+        const validatedEmails: string[] = [];
+
+        for (const email of emails) {
+          const validated = validateEmail(email);
+          if (validated === null) {
+            const errorMsg = options?.errors?.invalidEmail;
+            const msg = typeof errorMsg === "function"
+              ? errorMsg(email)
+              : errorMsg ??
+                message`Expected a valid email address, but got ${email}.`;
+            return { success: false, error: msg };
+          }
+
+          // Check domain restriction
+          if (allowedDomains && allowedDomains.length > 0) {
+            const atIndex = validated.indexOf("@");
+            const domain = validated.substring(atIndex + 1).toLowerCase();
+            const isAllowed = allowedDomains.some((allowed) =>
+              domain === allowed.toLowerCase()
+            );
+            if (!isAllowed) {
+              const errorMsg = options?.errors?.domainNotAllowed;
+              if (typeof errorMsg === "function") {
+                return {
+                  success: false,
+                  error: errorMsg(validated, allowedDomains),
+                };
+              }
+              const msg = errorMsg ?? [
+                { type: "text", text: "Email domain " },
+                { type: "value", value: domain },
+                {
+                  type: "text",
+                  text: ` is not allowed. Allowed domains: ${
+                    allowedDomains.join(", ")
+                  }.`,
+                },
+              ] as Message;
+              return { success: false, error: msg };
+            }
+          }
+
+          validatedEmails.push(validated);
+        }
+
+        return { success: true, value: validatedEmails };
+      } else {
+        // Parse single email
+        const validated = validateEmail(input);
+        if (validated === null) {
+          const errorMsg = options?.errors?.invalidEmail;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ??
+              message`Expected a valid email address, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        // Check domain restriction
+        if (allowedDomains && allowedDomains.length > 0) {
+          const atIndex = validated.indexOf("@");
+          const domain = validated.substring(atIndex + 1).toLowerCase();
+          const isAllowed = allowedDomains.some((allowed) =>
+            domain === allowed.toLowerCase()
+          );
+          if (!isAllowed) {
+            const errorMsg = options?.errors?.domainNotAllowed;
+            if (typeof errorMsg === "function") {
+              return {
+                success: false,
+                error: errorMsg(validated, allowedDomains),
+              };
+            }
+            const msg = errorMsg ?? [
+              { type: "text", text: "Email domain " },
+              { type: "value", value: domain },
+              {
+                type: "text",
+                text: ` is not allowed. Allowed domains: ${
+                  allowedDomains.join(", ")
+                }.`,
+              },
+            ] as Message;
+            return { success: false, error: msg };
+          }
+        }
+
+        return { success: true, value: validated };
+      }
+    },
+    format(value: string | readonly string[]): string {
+      if (Array.isArray(value)) {
+        return value.join(",");
+      }
+      return value as string;
+    },
+  } as ValueParser<"sync", string | readonly string[]>;
+}
