@@ -1,5 +1,6 @@
 import {
   choice,
+  cidr,
   domain,
   email,
   float,
@@ -7783,6 +7784,254 @@ describe("ip()", () => {
       const result = parser.parse("2001:0db8:0000:0000:0000:0000:0000:0001");
       assert.ok(result.success);
       assert.strictEqual(result.value, "2001:db8::1");
+    });
+  });
+});
+
+describe("cidr()", () => {
+  describe("basic validation", () => {
+    it("should accept IPv4 CIDR", () => {
+      const parser = cidr();
+      const result = parser.parse("192.0.2.0/24");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "192.0.2.0",
+        prefix: 24,
+        version: 4,
+      });
+    });
+
+    it("should accept IPv6 CIDR", () => {
+      const parser = cidr();
+      const result = parser.parse("2001:db8::/32");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "2001:db8::",
+        prefix: 32,
+        version: 6,
+      });
+    });
+
+    it("should reject invalid format (no slash)", () => {
+      const parser = cidr();
+      const result = parser.parse("192.0.2.0");
+      assert.ok(!result.success);
+    });
+
+    it("should reject invalid format (empty prefix)", () => {
+      const parser = cidr();
+      const result = parser.parse("192.0.2.0/");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("version option", () => {
+    it("should accept only IPv4 CIDR when version is 4", () => {
+      const parser = cidr({ version: 4 });
+      const result4 = parser.parse("192.0.2.0/24");
+      assert.ok(result4.success);
+      assert.strictEqual(result4.value.version, 4);
+
+      const result6 = parser.parse("2001:db8::/32");
+      assert.ok(!result6.success);
+    });
+
+    it("should accept only IPv6 CIDR when version is 6", () => {
+      const parser = cidr({ version: 6 });
+      const result6 = parser.parse("2001:db8::/32");
+      assert.ok(result6.success);
+      assert.strictEqual(result6.value.version, 6);
+
+      const result4 = parser.parse("192.0.2.0/24");
+      assert.ok(!result4.success);
+    });
+  });
+
+  describe("prefix validation", () => {
+    it("should accept valid IPv4 prefix (0-32)", () => {
+      const parser = cidr();
+      const result0 = parser.parse("192.0.2.0/0");
+      assert.ok(result0.success);
+      assert.strictEqual(result0.value.prefix, 0);
+
+      const result32 = parser.parse("192.0.2.0/32");
+      assert.ok(result32.success);
+      assert.strictEqual(result32.value.prefix, 32);
+    });
+
+    it("should reject invalid IPv4 prefix (>32)", () => {
+      const parser = cidr();
+      const result = parser.parse("192.0.2.0/33");
+      assert.ok(!result.success);
+    });
+
+    it("should accept valid IPv6 prefix (0-128)", () => {
+      const parser = cidr();
+      const result0 = parser.parse("2001:db8::/0");
+      assert.ok(result0.success);
+      assert.strictEqual(result0.value.prefix, 0);
+
+      const result128 = parser.parse("2001:db8::/128");
+      assert.ok(result128.success);
+      assert.strictEqual(result128.value.prefix, 128);
+    });
+
+    it("should reject invalid IPv6 prefix (>128)", () => {
+      const parser = cidr();
+      const result = parser.parse("2001:db8::/129");
+      assert.ok(!result.success);
+    });
+
+    it("should reject non-integer prefix", () => {
+      const parser = cidr();
+      const result = parser.parse("192.0.2.0/24.5");
+      assert.ok(!result.success);
+    });
+
+    it("should reject negative prefix", () => {
+      const parser = cidr();
+      const result = parser.parse("192.0.2.0/-1");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("minPrefix option", () => {
+    it("should reject prefix below minimum", () => {
+      const parser = cidr({ minPrefix: 16 });
+      const result = parser.parse("192.0.2.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length greater than or equal to ",
+        },
+        { type: "text", text: "16" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "8" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should accept prefix at minimum", () => {
+      const parser = cidr({ minPrefix: 16 });
+      const result = parser.parse("192.0.2.0/16");
+      assert.ok(result.success);
+    });
+  });
+
+  describe("maxPrefix option", () => {
+    it("should reject prefix above maximum", () => {
+      const parser = cidr({ maxPrefix: 24 });
+      const result = parser.parse("192.0.2.0/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length less than or equal to ",
+        },
+        { type: "text", text: "24" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "32" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should accept prefix at maximum", () => {
+      const parser = cidr({ maxPrefix: 24 });
+      const result = parser.parse("192.0.2.0/24");
+      assert.ok(result.success);
+    });
+  });
+
+  describe("IP address normalization", () => {
+    it("should normalize IPv4 address", () => {
+      const parser = cidr();
+      const result = parser.parse("192.0.2.0/24");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.address, "192.0.2.0");
+    });
+
+    it("should normalize IPv6 address", () => {
+      const parser = cidr();
+      const result = parser.parse("2001:0db8:0000:0000:0000:0000:0000:0000/32");
+      assert.ok(result.success);
+      assert.strictEqual(result.value.address, "2001:db8::");
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom invalidCidr message", () => {
+      const parser = cidr({
+        errors: {
+          invalidCidr: [
+            { type: "text", text: "Not a valid CIDR!" },
+          ],
+        },
+      });
+      const result = parser.parse("invalid");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Not a valid CIDR!" },
+      ]);
+    });
+
+    it("should use custom invalidPrefix message", () => {
+      const parser = cidr({
+        errors: {
+          invalidPrefix: (prefix, version) => [
+            { type: "text", text: `Bad prefix ${prefix} for IPv${version}` },
+          ],
+        },
+      });
+      const result = parser.parse("192.0.2.0/33");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Bad prefix 33 for IPv4" },
+      ]);
+    });
+
+    it("should use custom prefixBelowMinimum message", () => {
+      const parser = cidr({
+        minPrefix: 16,
+        errors: {
+          prefixBelowMinimum: [
+            { type: "text", text: "Too small!" },
+          ],
+        },
+      });
+      const result = parser.parse("192.0.2.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Too small!" },
+      ]);
+    });
+
+    it("should use custom prefixAboveMaximum message", () => {
+      const parser = cidr({
+        maxPrefix: 24,
+        errors: {
+          prefixAboveMaximum: [
+            { type: "text", text: "Too large!" },
+          ],
+        },
+      });
+      const result = parser.parse("192.0.2.0/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Too large!" },
+      ]);
+    });
+  });
+
+  describe("metavar", () => {
+    it("should return default metavar", () => {
+      const parser = cidr();
+      assert.strictEqual(parser.metavar, "CIDR");
+    });
+
+    it("should return custom metavar", () => {
+      const parser = cidr({ metavar: "IP_CIDR" });
+      assert.strictEqual(parser.metavar, "IP_CIDR");
     });
   });
 });
