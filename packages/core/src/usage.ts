@@ -387,6 +387,11 @@ export function formatUsage(
     ) {
       const lines = [];
       for (let command of lastTerm.terms) {
+        // Skip hidden commands in usage expansion
+        const firstTerm = command[0];
+        if (firstTerm?.type === "command" && firstTerm.hidden) {
+          continue;
+        }
         if (usage.length > 1) {
           command = [...usage.slice(0, -1), ...command];
         }

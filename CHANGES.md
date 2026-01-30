@@ -18,6 +18,13 @@ To be released.
     documentation is displayed normally when the hidden command is actually
     executed.  [[#88]]
 
+ -  Fixed `formatUsage()` incorrectly showing hidden commands in expanded
+    usage lines.  Previously, when using `expandCommands: true` option,
+    hidden commands would appear in the usage output even though they were
+    correctly excluded from the command list.  Now, hidden commands are
+    filtered out from expanded usage lines while remaining fully functional
+    for parsing.
+
 [#88]: https://github.com/dahlia/optique/issues/88
 
 
