@@ -7,6 +7,7 @@ import {
   ipv4,
   isValueParser,
   locale,
+  macAddress,
   type NonEmptyString,
   port,
   portRange,
@@ -6438,6 +6439,380 @@ describe("socketAddress()", () => {
       const result3 = parser.parse("example.com");
       assert.ok(result3.success);
       assert.strictEqual(result3.value.port, 8080);
+    });
+  });
+});
+
+describe("macAddress()", () => {
+  describe("basic validation with any separator", () => {
+    it("should accept colon-separated MAC addresses", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00:1A:2B:3C:4D:5E");
+    });
+
+    it("should accept lowercase colon-separated", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00:1a:2b:3c:4d:5e");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00:1a:2b:3c:4d:5e");
+    });
+
+    it("should accept hyphen-separated MAC addresses", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00-1A-2B-3C-4D-5E");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00-1A-2B-3C-4D-5E");
+    });
+
+    it("should accept dot-separated MAC addresses (Cisco format)", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("001A.2B3C.4D5E");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "001A.2B3C.4D5E");
+    });
+
+    it("should accept dot-separated with lowercase", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("001a.2b3c.4d5e");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "001a.2b3c.4d5e");
+    });
+
+    it("should accept no separator", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("001A2B3C4D5E");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "001A2B3C4D5E");
+    });
+
+    it("should accept single-digit octets with colons", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("0:1:2:3:4:5");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "0:1:2:3:4:5");
+    });
+  });
+
+  describe("separator option", () => {
+    it("should only accept colon-separated when separator is :", () => {
+      const parser = macAddress({ separator: ":" });
+
+      const result1 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("00-1A-2B-3C-4D-5E");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("001A.2B3C.4D5E");
+      assert.ok(!result3.success);
+
+      const result4 = parser.parse("001A2B3C4D5E");
+      assert.ok(!result4.success);
+    });
+
+    it("should only accept hyphen-separated when separator is -", () => {
+      const parser = macAddress({ separator: "-" });
+
+      const result1 = parser.parse("00-1A-2B-3C-4D-5E");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(!result2.success);
+    });
+
+    it("should only accept dot-separated when separator is .", () => {
+      const parser = macAddress({ separator: "." });
+
+      const result1 = parser.parse("001A.2B3C.4D5E");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(!result2.success);
+    });
+
+    it("should only accept no separator when separator is none", () => {
+      const parser = macAddress({ separator: "none" });
+
+      const result1 = parser.parse("001A2B3C4D5E");
+      assert.ok(result1.success);
+
+      const result2 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(!result2.success);
+    });
+  });
+
+  describe("case option", () => {
+    it("should preserve case by default", () => {
+      const parser = macAddress();
+
+      const result1 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "00:1A:2B:3C:4D:5E");
+
+      const result2 = parser.parse("00:1a:2b:3c:4d:5e");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "00:1a:2b:3c:4d:5e");
+    });
+
+    it("should convert to uppercase when case is upper", () => {
+      const parser = macAddress({ case: "upper" });
+
+      const result1 = parser.parse("00:1a:2b:3c:4d:5e");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "00:1A:2B:3C:4D:5E");
+
+      const result2 = parser.parse("00-1a-2b-3c-4d-5e");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "00-1A-2B-3C-4D-5E");
+
+      const result3 = parser.parse("001a.2b3c.4d5e");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value, "001A.2B3C.4D5E");
+    });
+
+    it("should convert to lowercase when case is lower", () => {
+      const parser = macAddress({ case: "lower" });
+
+      const result1 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "00:1a:2b:3c:4d:5e");
+
+      const result2 = parser.parse("00-1A-2B-3C-4D-5E");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "00-1a-2b-3c-4d-5e");
+    });
+  });
+
+  describe("outputSeparator option", () => {
+    it("should normalize to colon separator", () => {
+      const parser = macAddress({ outputSeparator: ":" });
+
+      const result1 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "00:1A:2B:3C:4D:5E");
+
+      const result2 = parser.parse("00-1A-2B-3C-4D-5E");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "00:1A:2B:3C:4D:5E");
+
+      const result3 = parser.parse("001A.2B3C.4D5E");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value, "00:1A:2B:3C:4D:5E");
+
+      const result4 = parser.parse("001A2B3C4D5E");
+      assert.ok(result4.success);
+      assert.strictEqual(result4.value, "00:1A:2B:3C:4D:5E");
+    });
+
+    it("should normalize to hyphen separator", () => {
+      const parser = macAddress({ outputSeparator: "-" });
+
+      const result1 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "00-1A-2B-3C-4D-5E");
+
+      const result2 = parser.parse("001A.2B3C.4D5E");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "00-1A-2B-3C-4D-5E");
+    });
+
+    it("should normalize to dot separator (Cisco format)", () => {
+      const parser = macAddress({ outputSeparator: "." });
+
+      const result1 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "001A.2B3C.4D5E");
+
+      const result2 = parser.parse("00-1A-2B-3C-4D-5E");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "001A.2B3C.4D5E");
+
+      const result3 = parser.parse("001A2B3C4D5E");
+      assert.ok(result3.success);
+      assert.strictEqual(result3.value, "001A.2B3C.4D5E");
+    });
+
+    it("should normalize to no separator", () => {
+      const parser = macAddress({ outputSeparator: "none" });
+
+      const result1 = parser.parse("00:1A:2B:3C:4D:5E");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "001A2B3C4D5E");
+
+      const result2 = parser.parse("001A.2B3C.4D5E");
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "001A2B3C4D5E");
+    });
+
+    it("should combine outputSeparator with case conversion", () => {
+      const parser = macAddress({ outputSeparator: ":", case: "upper" });
+
+      const result = parser.parse("00-1a-2b-3c-4d-5e");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00:1A:2B:3C:4D:5E");
+    });
+  });
+
+  describe("invalid input", () => {
+    it("should reject non-hex characters", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00:1G:2B:3C:4D:5E");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepStrictEqual(result.error, [
+          { type: "text", text: "Expected a valid MAC address, but got " },
+          { type: "value", value: "00:1G:2B:3C:4D:5E" },
+          { type: "text", text: "." },
+        ]);
+      }
+    });
+
+    it("should reject too few octets", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00:1A:2B:3C:4D");
+      assert.ok(!result.success);
+    });
+
+    it("should reject too many octets", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00:1A:2B:3C:4D:5E:FF");
+      assert.ok(!result.success);
+    });
+
+    it("should reject invalid dot format (not 3 groups)", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("001A.2B3C");
+      assert.ok(!result.success);
+    });
+
+    it("should reject invalid dot format (wrong group size)", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("001A.2B3.C4D5E");
+      assert.ok(!result.success);
+    });
+
+    it("should reject mixed separators", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00:1A-2B:3C:4D:5E");
+      assert.ok(!result.success);
+    });
+
+    it("should reject empty string", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("");
+      assert.ok(!result.success);
+    });
+
+    it("should reject octets > FF", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00:1A:2B:3C:4D:1FF");
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("custom error messages", () => {
+    it("should use custom static error message", () => {
+      const parser = macAddress({
+        errors: {
+          invalidMacAddress: message`Not a valid MAC address`,
+        },
+      });
+
+      const result = parser.parse("invalid");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepStrictEqual(result.error, [
+          { type: "text", text: "Not a valid MAC address" },
+        ]);
+      }
+    });
+
+    it("should use custom function error message", () => {
+      const parser = macAddress({
+        errors: {
+          invalidMacAddress: (input) => message`Invalid MAC: ${text(input)}`,
+        },
+      });
+
+      const result = parser.parse("00:1G:2B");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepStrictEqual(result.error, [
+          { type: "text", text: "Invalid MAC: " },
+          { type: "text", text: "00:1G:2B" },
+        ]);
+      }
+    });
+  });
+
+  describe("metavar", () => {
+    it("should return default metavar", () => {
+      const parser = macAddress();
+      assert.strictEqual(parser.metavar, "MAC");
+    });
+
+    it("should return custom metavar", () => {
+      const parser = macAddress({ metavar: "MAC_ADDR" });
+      assert.strictEqual(parser.metavar, "MAC_ADDR");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should handle all zeros", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("00:00:00:00:00:00");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "00:00:00:00:00:00");
+    });
+
+    it("should handle all Fs", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("FF:FF:FF:FF:FF:FF");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "FF:FF:FF:FF:FF:FF");
+    });
+
+    it("should handle single-digit octets in all positions", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("0:1:2:3:4:5");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "0:1:2:3:4:5");
+    });
+
+    it("should normalize single-digit octets with outputSeparator", () => {
+      const parser = macAddress({ outputSeparator: ":" });
+
+      const result = parser.parse("0:1:2:3:4:5");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "0:1:2:3:4:5");
+    });
+
+    it("should handle mixed case input with case conversion", () => {
+      const parser = macAddress({ case: "upper" });
+
+      const result = parser.parse("aA:bB:cC:dD:eE:fF");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "AA:BB:CC:DD:EE:FF");
     });
   });
 });
