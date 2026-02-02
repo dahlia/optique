@@ -1,105 +1,67 @@
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
-import type {
-  Annotations,
-  ParserValuePlaceholder,
-  SourceContext,
-} from "@optique/core/context";
-import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
-import { optional, withDefault } from "@optique/core/modifiers";
+import { optional } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { print } from "@optique/run";
 
-// This example demonstrates how to create a type-safe config file context
-// that integrates with runWith(). The key insight is using ParserValuePlaceholder
-// to declare that the caller must provide a getConfigPath function, which
-// TypeScript then types based on the parser's result type.
+// This example demonstrates how to use @optique/config for type-safe
+// configuration file integration with automatic validation.
 //
 // Usage:
 //   deno run -A examples/patterns/config-file-context.ts --host example.com
 //   deno run -A examples/patterns/config-file-context.ts --config config.json
 //   deno run -A examples/patterns/config-file-context.ts --config config.json --port 8080
+//
+// For custom SourceContext implementation, see custom-source-context.ts
 
-// Symbol for our config context annotations
-const configKey = Symbol.for("@example/config");
+// Define the config file schema using Zod
+const configSchema = z.object({
+  host: z.string().optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+});
 
-// The shape of config file data
-interface ConfigData {
-  readonly host?: string;
-  readonly port?: number;
-}
+// Create the config context with schema validation
+const configContext = createConfigContext({ schema: configSchema });
 
-// Declare required options using ParserValuePlaceholder.
-// This tells TypeScript that runWith() must provide a getConfigPath function
-// whose parameter type will be substituted with the actual parser result type.
-interface ConfigContextOptions {
-  getConfigPath: (parsed: ParserValuePlaceholder) => string | undefined;
-}
-
-// The context type extends SourceContext with our required options
-interface ConfigContext extends SourceContext<ConfigContextOptions> {
-  getConfigPath?: (parsed: unknown) => string | undefined;
-}
-
-// Factory function to create the config context
-function createConfigContext(): ConfigContext {
-  const context: ConfigContext = {
-    id: configKey,
-    async getAnnotations(parsed?: unknown): Promise<Annotations> {
-      if (!parsed) return {}; // First pass - no config yet
-
-      // Use the injected getConfigPath function
-      const configPath = context.getConfigPath?.(parsed);
-      if (!configPath) return {}; // No config file specified
-
-      try {
-        // Read and parse the config file
-        const content = await Deno.readTextFile(configPath);
-        const data: ConfigData = JSON.parse(content);
-        return { [configKey]: data };
-      } catch {
-        // Config file not found or invalid - gracefully degrade
-        return {};
-      }
-    },
-  };
-  return context;
-}
-
-// Define the CLI parser
+// Define the CLI parser with config file bindings
 const parser = object({
   config: optional(
     option("-c", "--config", string({ metavar: "FILE" }), {
       description: message`Path to config file (JSON)`,
     }),
   ),
-  host: withDefault(
+  // bindConfig() creates parsers that fall back to config values
+  host: bindConfig(
     option("-h", "--host", string({ metavar: "HOST" }), {
       description: message`Server host`,
     }),
-    "localhost",
+    {
+      context: configContext,
+      key: "host",
+      default: "localhost",
+    },
   ),
-  port: withDefault(
+  port: bindConfig(
     option("-p", "--port", integer({ metavar: "PORT", min: 1, max: 65535 }), {
       description: message`Server port`,
     }),
-    3000,
+    {
+      context: configContext,
+      key: "port",
+      default: 3000,
+    },
   ),
 });
 
-// Create the config context
-const configContext = createConfigContext();
-
-// Run with the config context.
-// TypeScript REQUIRES getConfigPath and types `parsed` from the parser!
-const result = await runWith(parser, "config-example", [configContext], {
-  args: Deno.args,
-  help: { mode: "option" },
-  // getConfigPath is required because configContext declares ConfigContextOptions.
-  // The `parsed` parameter is automatically typed as:
-  //   { config?: string; host: string; port: number }
+// Run with config file support
+// Two-pass parsing: 1) extract config path, 2) parse with config data
+const result = await runWithConfig(parser, configContext, {
   getConfigPath: (parsed) => parsed.config,
+  args: Deno.args,
 });
 
 print(message`Configuration loaded:`);
@@ -117,3 +79,6 @@ if (result.config) {
 //
 // Priority order: CLI arguments > config file > defaults
 // So: --host overrides config.host, --port overrides config.port
+//
+// The config file is automatically validated against the Zod schema.
+// Invalid config files will result in clear error messages.

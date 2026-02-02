@@ -34,25 +34,6 @@ describe("createConfigContext", () => {
     assert.ok(annotations);
     assert.deepEqual(Object.getOwnPropertySymbols(annotations).length, 0);
   });
-
-  test("uses custom parser function when provided", () => {
-    const schema = z.object({
-      value: z.number(),
-    });
-
-    const customParser = (contents: Uint8Array): unknown => {
-      const text = new TextDecoder().decode(contents);
-      return { value: parseInt(text, 10) };
-    };
-
-    const context = createConfigContext({
-      schema,
-      parser: customParser,
-    });
-
-    // The parser function is stored and will be used when loading config
-    assert.ok(context);
-  });
 });
 
 describe("bindConfig", () => {

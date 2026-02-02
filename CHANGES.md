@@ -559,9 +559,7 @@ To be released.
 
 The *@optique/config* package was introduced in this release, providing
 configuration file support with type-safe validation using [Standard Schema].
-This package enables CLI applications to load default values from configuration
-files with proper priority handling: CLI arguments > config file values >
-defaults. [[#84]]
+[[#84], [#90]]
 
  -  Added `createConfigContext()` function for creating configuration contexts
     with Standard Schema validation.
@@ -577,59 +575,23 @@ defaults. [[#84]]
 
  -  Added `configKey` symbol for storing config data in annotations.
 
-The package uses a two-phase parsing approach:
+ -  Added `SingleFileOptions` interface for single-file config loading with
+    optional `fileParser` for custom file formats.
 
-1.  First pass: Parse arguments to extract the config file path
-2.  Load and validate: Read the config file and validate using Standard Schema
-3.  Second pass: Parse arguments again with config data as annotations
+ -  Added `CustomLoadOptions` interface with `load` callback for multi-file
+    merging scenarios (system, user, project config cascading).
 
-This ensures the correct priority: CLI > config file > default values.
+ -  `RunWithConfigOptions` is a discriminated union of `SingleFileOptions`
+    and `CustomLoadOptions`.
 
-~~~~ typescript
-import { z } from "zod";
-import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
-import { object } from "@optique/core/constructs";
-import { option } from "@optique/core/primitives";
-import { string, integer } from "@optique/core/valueparser";
-import { withDefault } from "@optique/core/modifiers";
-
-const configSchema = z.object({
-  host: z.string(),
-  port: z.number(),
-});
-
-const configContext = createConfigContext({ schema: configSchema });
-
-const parser = object({
-  config: withDefault(option("--config", string()), "~/.myapp.json"),
-  host: bindConfig(option("--host", string()), {
-    context: configContext,
-    key: "host",
-    default: "localhost",
-  }),
-  port: bindConfig(option("--port", integer()), {
-    context: configContext,
-    key: "port",
-    default: 3000,
-  }),
-});
-
-const result = await runWithConfig(parser, configContext, {
-  getConfigPath: (parsed) => parsed.config,
-  args: process.argv.slice(2),
-});
-
-// Config file: { "host": "api.example.com", "port": 8080 }
-// CLI: myapp --host localhost
-// Result: { host: "localhost", port: 8080 }
-~~~~
-
-The package supports any Standard Schema-compatible validation library (Zod,
-Valibot, ArkType, etc.) and allows custom file format parsers.
+The package uses a two-phase parsing approach to ensure proper priority
+(CLI > config file > default values). See the [config file integration guide]
+for usage examples.
 
 [Standard Schema]: https://standardschema.dev/
+[config file integration guide]: https://optique.dev/integrations/config
 [#84]: https://github.com/dahlia/optique/issues/84
+[#90]: https://github.com/dahlia/optique/issues/90
 
 ### @optique/run
 

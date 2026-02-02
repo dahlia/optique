@@ -16,12 +16,12 @@ import type { ConfigContext } from "./index.ts";
 import { clearActiveConfig, configKey, setActiveConfig } from "./index.ts";
 
 /**
- * Options for runWithConfig.
+ * Options for single-file config loading.
  *
  * @template TValue The parser value type, inferred from the parser.
  * @since 0.10.0
  */
-export interface RunWithConfigOptions<TValue> {
+export interface SingleFileOptions<TValue> {
   /**
    * Function to extract the config file path from parsed CLI arguments.
    * This function receives the result of the first parse pass and should
@@ -33,6 +33,15 @@ export interface RunWithConfigOptions<TValue> {
   readonly getConfigPath: (parsed: TValue) => string | undefined;
 
   /**
+   * Custom parser function for reading config file contents.
+   * If not provided, defaults to JSON.parse.
+   *
+   * @param contents The raw file contents as Uint8Array.
+   * @returns The parsed config data (will be validated by schema).
+   */
+  readonly fileParser?: (contents: Uint8Array) => unknown;
+
+  /**
    * Command-line arguments to parse.
    * If not provided, defaults to an empty array.
    */
@@ -40,11 +49,47 @@ export interface RunWithConfigOptions<TValue> {
 }
 
 /**
+ * Options for custom config loading with multi-file merging support.
+ *
+ * @template TValue The parser value type, inferred from the parser.
+ * @since 0.10.0
+ */
+export interface CustomLoadOptions<TValue> {
+  /**
+   * Custom loader function that receives the first-pass parse result and
+   * returns the config data (or a Promise of it). This allows full control
+   * over file discovery, loading, merging, and error handling.
+   *
+   * The returned data will be validated against the schema.
+   *
+   * @param parsed The result from the first parse pass.
+   * @returns The raw config data (will be validated by schema).
+   */
+  readonly load: (parsed: TValue) => Promise<unknown> | unknown;
+
+  /**
+   * Command-line arguments to parse.
+   * If not provided, defaults to an empty array.
+   */
+  readonly args?: readonly string[];
+}
+
+/**
+ * Options for runWithConfig.
+ *
+ * @template TValue The parser value type, inferred from the parser.
+ * @since 0.10.0
+ */
+export type RunWithConfigOptions<TValue> =
+  | SingleFileOptions<TValue>
+  | CustomLoadOptions<TValue>;
+
+/**
  * Runs a parser with configuration file support using two-pass parsing.
  *
  * This function performs the following steps:
- * 1. First pass: Parse arguments to extract the config file path
- * 2. Load and validate: Read the config file and validate using Standard Schema
+ * 1. First pass: Parse arguments to extract config path or data
+ * 2. Load and validate: Load config file(s) and validate using Standard Schema
  * 3. Second pass: Parse arguments again with config data as annotations
  *
  * The priority order for values is: CLI > config file > default.
@@ -54,13 +99,13 @@ export interface RunWithConfigOptions<TValue> {
  * @template TState The parser state type.
  * @template T The config data type.
  * @param parser The parser to execute.
- * @param context The config context with schema and optional custom parser.
- * @param options Run options including getConfigPath and args.
+ * @param context The config context with schema.
+ * @param options Run options - either SingleFileOptions or CustomLoadOptions.
  * @returns Promise that resolves to the parsed result.
  * @throws Error if config file validation fails.
  * @since 0.10.0
  *
- * @example
+ * @example Single file mode
  * ```typescript
  * import { z } from "zod";
  * import { runWithConfig } from "@optique/config/run";
@@ -84,6 +129,23 @@ export interface RunWithConfigOptions<TValue> {
  *
  * const result = await runWithConfig(parser, context, {
  *   getConfigPath: (parsed) => parsed.config,
+ *   args: process.argv.slice(2),
+ * });
+ * ```
+ *
+ * @example Custom load mode (multi-file merging)
+ * ```typescript
+ * import { deepMerge } from "es-toolkit";
+ *
+ * const result = await runWithConfig(parser, context, {
+ *   load: async (parsed) => {
+ *     const configs = await Promise.all([
+ *       loadToml("/etc/app/config.toml").catch(() => ({})),
+ *       loadToml("~/.config/app/config.toml").catch(() => ({})),
+ *       loadToml("./.app.toml").catch(() => ({})),
+ *     ]);
+ *     return deepMerge(...configs);
+ *   },
  *   args: process.argv.slice(2),
  * });
  * ```
@@ -127,25 +189,16 @@ export async function runWithConfig<
     throw new Error(`Parsing failed: ${errorParts.join("")}`);
   }
 
-  // Extract config file path
-  const configPath = options.getConfigPath(firstPassResult.value);
-
   let configData: T | undefined;
 
-  if (configPath) {
-    // Load config file
+  // Check if using custom loader or single-file mode
+  if ("load" in options) {
+    // Custom load mode
+    const customOptions = options as CustomLoadOptions<TValue>;
     try {
-      const contents = await readFile(configPath);
-
-      // Parse file contents
-      let rawData: unknown;
-      if (context.parser) {
-        rawData = context.parser(contents);
-      } else {
-        // Default to JSON
-        const text = new TextDecoder().decode(contents);
-        rawData = JSON.parse(text);
-      }
+      const rawData = await Promise.resolve(
+        customOptions.load(firstPassResult.value),
+      );
 
       // Validate with Standard Schema
       const validation = context.schema["~standard"].validate(rawData);
@@ -173,9 +226,61 @@ export async function runWithConfig<
       if (error instanceof Error && error.message.includes("validation")) {
         throw error;
       }
+      // Re-throw any other errors from custom loader
+      throw error;
+    }
+  } else {
+    // Single-file mode
+    const singleFileOptions = options as SingleFileOptions<TValue>;
+    const configPath = singleFileOptions.getConfigPath(firstPassResult.value);
 
-      // File not found or parse error - continue without config
-      configData = undefined;
+    if (configPath) {
+      // Load config file
+      try {
+        const contents = await readFile(configPath);
+
+        // Parse file contents
+        let rawData: unknown;
+        if (singleFileOptions.fileParser) {
+          rawData = singleFileOptions.fileParser(contents);
+        } else {
+          // Default to JSON
+          const text = new TextDecoder().decode(contents);
+          rawData = JSON.parse(text);
+        }
+
+        // Validate with Standard Schema
+        const validation = context.schema["~standard"].validate(rawData);
+
+        let validationResult: typeof validation extends Promise<infer R> ? R
+          : typeof validation;
+
+        if (validation instanceof Promise) {
+          validationResult = await validation;
+        } else {
+          validationResult = validation;
+        }
+
+        if (validationResult.issues) {
+          // Validation failed
+          const firstIssue = validationResult.issues[0];
+          throw new Error(
+            `Config validation failed: ${
+              firstIssue?.message ?? "Unknown error"
+            }`,
+          );
+        }
+
+        configData = validationResult.value as T;
+      } catch (error) {
+        // Re-throw validation errors
+        if (error instanceof Error && error.message.includes("validation")) {
+          throw error;
+        }
+
+        // File not found or parse error - continue without config
+        configData = undefined;
+      }
     }
   }
 

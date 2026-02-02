@@ -74,15 +74,6 @@ export interface ConfigContextOptions<T> {
    * Accepts any Standard Schema-compatible library (Zod, Valibot, ArkType, etc.).
    */
   readonly schema: StandardSchemaV1<unknown, T>;
-
-  /**
-   * Custom parser function for reading config file contents.
-   * If not provided, defaults to JSON.parse.
-   *
-   * @param contents The raw file contents as Uint8Array.
-   * @returns The parsed config data (will be validated by schema).
-   */
-  readonly parser?: (contents: Uint8Array) => unknown;
 }
 
 /**
@@ -121,11 +112,6 @@ export interface ConfigContext<T>
    * The Standard Schema validator for the config file.
    */
   readonly schema: StandardSchemaV1<unknown, T>;
-
-  /**
-   * Custom parser function for reading config file contents.
-   */
-  readonly parser?: (contents: Uint8Array) => unknown;
 }
 
 /**
@@ -158,7 +144,6 @@ export function createConfigContext<T>(
   return {
     id: configKey,
     schema: options.schema,
-    parser: options.parser,
 
     getAnnotations(parsed?: unknown): Annotations {
       // Static contexts return empty on first call (without parsed)

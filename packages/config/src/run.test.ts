@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
@@ -206,7 +206,7 @@ describe("runWithConfig", () => {
     assert.equal(result.host, "localhost");
   });
 
-  test("supports custom parser function", async () => {
+  test("supports custom file parser", async () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-custom.txt");
 
@@ -234,10 +234,7 @@ describe("runWithConfig", () => {
         return result;
       };
 
-      const context = createConfigContext({
-        schema,
-        parser: customParser,
-      });
+      const context = createConfigContext({ schema });
 
       const parser = object({
         config: withDefault(option("--config", string()), configPath),
@@ -255,6 +252,7 @@ describe("runWithConfig", () => {
 
       const result = await runWithConfig(parser, context, {
         getConfigPath: (parsed) => (parsed as { config: string }).config,
+        fileParser: customParser,
         args: [],
       });
 
@@ -262,6 +260,74 @@ describe("runWithConfig", () => {
       assert.equal(result.port, 9000);
     } finally {
       await rm(configPath, { force: true });
+    }
+  });
+
+  test("supports custom load function for multi-file merging", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const baseConfigPath = join(TEST_DIR, "base-config.json");
+    const userConfigPath = join(TEST_DIR, "user-config.json");
+
+    await writeFile(
+      baseConfigPath,
+      JSON.stringify({
+        host: "base.example.com",
+        port: 3000,
+        timeout: 30,
+      }),
+    );
+
+    await writeFile(
+      userConfigPath,
+      JSON.stringify({
+        host: "user.example.com",
+        timeout: 60,
+      }),
+    );
+
+    try {
+      const schema = z.object({
+        host: z.string(),
+        port: z.number(),
+        timeout: z.number(),
+      });
+
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+        port: bindConfig(option("--port", integer()), {
+          context,
+          key: "port",
+          default: 8080,
+        }),
+        timeout: bindConfig(option("--timeout", integer()), {
+          context,
+          key: "timeout",
+          default: 10,
+        }),
+      });
+
+      const result = await runWithConfig(parser, context, {
+        load: async () => {
+          const base = JSON.parse(await readFile(baseConfigPath, "utf-8"));
+          const user = JSON.parse(await readFile(userConfigPath, "utf-8"));
+          // Simple merge: user overrides base
+          return { ...base, ...user };
+        },
+        args: [],
+      });
+
+      assert.equal(result.host, "user.example.com"); // from user config
+      assert.equal(result.port, 3000); // from base config
+      assert.equal(result.timeout, 60); // from user config (overrides base)
+    } finally {
+      await rm(baseConfigPath, { force: true });
+      await rm(userConfigPath, { force: true });
     }
   });
 

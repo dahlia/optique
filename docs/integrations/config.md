@@ -169,10 +169,10 @@ Priority order
 
 Values are resolved in this priority order:
 
-1.  **CLI argument** - Highest priority, always used when provided
-2.  **Config file value** - Used when CLI argument not provided
-3.  **Default value** - Used when neither CLI nor config provides a value
-4.  **Error** - If no value is available and no default is specified
+1.  *CLI argument*: Highest priority, always used when provided
+2.  *Config file value*: Used when CLI argument not provided
+3.  *Default value*: Used when neither CLI nor config provides a value
+4.  *Error*: If no value is available and no default is specified
 
 ~~~~ typescript twoslash
 import { z } from "zod";
@@ -255,16 +255,22 @@ Custom file formats
 -------------------
 
 By default, *@optique/config* parses JSON files. You can provide a custom
-parser for other formats:
+file parser for other formats:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
-import { createConfigContext } from "@optique/config";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
 
 const configSchema = z.object({
   host: z.string(),
   port: z.number(),
 });
+
+const configContext = createConfigContext({ schema: configSchema });
 
 // Custom parser for KEY=VALUE format
 const customParser = (contents: Uint8Array): unknown => {
@@ -282,18 +288,115 @@ const customParser = (contents: Uint8Array): unknown => {
   return result;
 };
 
-const configContext = createConfigContext({
-  schema: configSchema,
-  parser: customParser,
+const parser = object({
+  config: option("--config", string()),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+});
+
+// Pass fileParser to runWithConfig
+const result = await runWithConfig(parser, configContext, {
+  getConfigPath: (parsed) => parsed.config,
+  fileParser: customParser,
+  args: process.argv.slice(2),
 });
 ~~~~
 
-Now the config context can read files in your custom format:
+Now your application can read files in the custom KEY=VALUE format:
 
 ~~~~
 host=api.example.com
 port=8080
 ~~~~
+
+
+Multi-file configuration
+------------------------
+
+For advanced scenarios like hierarchical config merging (system → user →
+project), use the `load` callback:
+
+~~~~ typescript twoslash
+// @noErrors
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { readFile } from "node:fs/promises";
+declare function deepMerge(...objects: any[]): any;
+
+const configSchema = z.object({
+  host: z.string(),
+  port: z.number(),
+  timeout: z.number().optional(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  config: option("--config", string()).optional(),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+});
+
+const result = await runWithConfig(parser, configContext, {
+  load: async (parsed) => {
+    // Load multiple config files with different error handling
+    const tryLoad = async (path: string) => {
+      try {
+        return JSON.parse(await readFile(path, "utf-8"));
+      } catch {
+        return {}; // Silent skip on error
+      }
+    };
+
+    const system = await tryLoad("/etc/myapp/config.json");
+    const user = await tryLoad(`${process.env.HOME}/.config/myapp/config.json`);
+    const project = await tryLoad("./.myapp.json");
+
+    // Load custom config file if specified (throws on error)
+    const custom = parsed.config
+      ? JSON.parse(await readFile(parsed.config, "utf-8"))
+      : {};
+
+    // Merge with priority: custom > project > user > system
+    return deepMerge(system, user, project, custom);
+  },
+  args: process.argv.slice(2),
+});
+~~~~
+
+This approach gives you full control over:
+
+ -  File discovery and loading order
+ -  Error handling policies (silent skip vs. hard error)
+ -  Merging strategies (deep merge, shallow merge, array concatenation, etc.)
+ -  File formats (JSON, TOML, YAML, etc.)
+
+You'll need to provide your own merge utility (e.g., from
+[lodash] or
+[es-toolkit]).
+
+[lodash]: https://lodash.com/docs#merge
+[es-toolkit]: https://es-toolkit.slash.page/reference/object/merge.html
 
 
 Standard Schema support
@@ -451,8 +554,6 @@ Creates a configuration context.
 
 Parameters
 :    -  `options.schema`: Standard Schema validator for the config file
-     -  `options.parser`: Optional custom parser function for reading config files
-        (defaults to JSON.parse)
 
 Returns
 :   `ConfigContext<T>` implementing `SourceContext` interface
@@ -475,12 +576,24 @@ Returns
 
 Runs a parser with config file support using two-pass parsing.
 
+This function accepts either `SingleFileOptions` or `CustomLoadOptions`.
+
 Parameters
 :    -  `parser`: The parser to execute
      -  `context`: Config context with schema
-     -  `options.getConfigPath`: Function to extract config file path from
+     -  `options`: Either single-file or custom load options
+     -  `options.args`: Command-line arguments to parse (both modes)
+
+**Single-file mode** (`SingleFileOptions`):
+:    -  `options.getConfigPath`: Function to extract config file path from
         parsed result
-     -  `options.args`: Command-line arguments to parse
+     -  `options.fileParser`: Optional custom parser for file contents
+        (defaults to JSON.parse)
+
+**Custom load mode** (`CustomLoadOptions`):
+:    -  `options.load`: Function that receives parsed result and returns config
+        data (or Promise of it). Allows full control over multi-file loading,
+        merging, and error handling.
 
 Returns
 :   `Promise<TValue>` with the parsed result
@@ -495,11 +608,14 @@ Limitations
 
  -  *File I/O is async* — `runWithConfig()` always returns a Promise due to
     file reading
- -  *JSON only by default* — Other formats require custom parser functions
+ -  *JSON only by default* — Other formats require the `fileParser` option
+    (single-file mode) or custom loading logic (custom load mode)
  -  *Two-pass parsing* — Parsing happens twice (once to extract config path,
     once with config data), which has a performance cost
  -  *Standard Schema required* — You must use a Standard Schema-compatible
     validation library
+ -  *No built-in merge utilities* — Multi-file merging requires bringing your
+    own merge function (e.g., from lodash or es-toolkit)
 
 
 Example application

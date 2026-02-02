@@ -1202,11 +1202,15 @@ const dbParser = bindConfig(option("--db", string()), {
 ### Custom config file formats
 
 By default, config files are parsed as JSON. For YAML, TOML, or other formats,
-provide a custom parser:
+provide a custom file parser to `runWithConfig()`:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
-import { createConfigContext } from "@optique/config";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
 import { parse as parseYaml } from "yaml";
 
 const configSchema = z.object({
@@ -1214,10 +1218,27 @@ const configSchema = z.object({
   port: z.number(),
 });
 
-const configContext = createConfigContext({
-  schema: configSchema,
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  config: option("--config", string()),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+});
+
+const result = await runWithConfig(parser, configContext, {
+  getConfigPath: (parsed) => parsed.config,
   // Custom parser for YAML files
-  parser: (contents) => parseYaml(new TextDecoder().decode(contents)),
+  fileParser: (contents) => parseYaml(new TextDecoder().decode(contents)),
+  args: process.argv.slice(2),
 });
 ~~~~
 
