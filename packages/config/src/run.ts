@@ -253,7 +253,9 @@ export async function runWithConfig<
 
       configData = validationResult.value as T;
     }
-  } else if ("getConfigPath" in options && options.getConfigPath !== undefined) {
+  } else if (
+    "getConfigPath" in options && options.getConfigPath !== undefined
+  ) {
     // Single-file mode: Existing behavior
     const configPath = options.getConfigPath(firstPassResult.value);
 
@@ -288,7 +290,9 @@ export async function runWithConfig<
           // Validation failed
           const firstIssue = validationResult.issues[0];
           throw new Error(
-            `Config validation failed: ${firstIssue?.message ?? "Unknown error"}`,
+            `Config validation failed: ${
+              firstIssue?.message ?? "Unknown error"
+            }`,
           );
         }
 

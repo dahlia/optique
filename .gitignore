@@ -8,3 +8,4 @@
 /packages/*/node_modules/
 /PLAN.md
 /tmp/
+package-lock.json
