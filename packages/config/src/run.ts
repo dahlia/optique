@@ -225,7 +225,7 @@ export async function runWithConfig<
   let configData: T | undefined;
 
   // Determine loading strategy based on options
-  if ("load" in options && options.load !== undefined) {
+  if ("load" in options) {
     // Custom load mode: User handles all loading and merging
     const rawData = options.load(firstPassResult.value);
     const loadResult = rawData instanceof Promise ? await rawData : rawData;
@@ -253,9 +253,7 @@ export async function runWithConfig<
 
       configData = validationResult.value as T;
     }
-  } else if (
-    "getConfigPath" in options && options.getConfigPath !== undefined
-  ) {
+  } else if ("getConfigPath" in options) {
     // Single-file mode: Existing behavior
     const configPath = options.getConfigPath(firstPassResult.value);
 
