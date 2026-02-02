@@ -206,7 +206,7 @@ describe("runWithConfig", () => {
     assert.equal(result.host, "localhost");
   });
 
-  test("supports custom parser function", async () => {
+  test("supports custom file parser function", async () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-custom.txt");
 
@@ -234,10 +234,7 @@ describe("runWithConfig", () => {
         return result;
       };
 
-      const context = createConfigContext({
-        schema,
-        parser: customParser,
-      });
+      const context = createConfigContext({ schema });
 
       const parser = object({
         config: withDefault(option("--config", string()), configPath),
@@ -255,6 +252,7 @@ describe("runWithConfig", () => {
 
       const result = await runWithConfig(parser, context, {
         getConfigPath: (parsed) => (parsed as { config: string }).config,
+        fileParser: customParser,
         args: [],
       });
 
@@ -319,5 +317,199 @@ describe("runWithConfig", () => {
     } finally {
       await rm(configPath, { force: true });
     }
+  });
+
+  test("supports custom load function for single config", async () => {
+    const schema = z.object({
+      host: z.string(),
+      port: z.number(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    const result = await runWithConfig(parser, context, {
+      load: () => ({
+        host: "loaded.example.com",
+        port: 8080,
+      }),
+      args: [],
+    });
+
+    assert.equal(result.host, "loaded.example.com");
+    assert.equal(result.port, 8080);
+  });
+
+  test("supports async custom load function", async () => {
+    const schema = z.object({
+      host: z.string(),
+      port: z.number(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    const result = await runWithConfig(parser, context, {
+      load: async () => {
+        // Simulate async loading
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return {
+          host: "async.example.com",
+          port: 9999,
+        };
+      },
+      args: [],
+    });
+
+    assert.equal(result.host, "async.example.com");
+    assert.equal(result.port, 9999);
+  });
+
+  test("custom load function receives first-pass parsed values", async () => {
+    const schema = z.object({
+      host: z.string(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      config: withDefault(option("--config", string()), undefined),
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+    });
+
+    let receivedParsed: unknown = null;
+
+    const result = await runWithConfig(parser, context, {
+      load: (parsed) => {
+        receivedParsed = parsed;
+        return { host: "from-load.example.com" };
+      },
+      args: ["--config", "/custom/path.json"],
+    });
+
+    // Verify the load function received the parsed CLI args
+    assert.deepEqual(receivedParsed, {
+      config: "/custom/path.json",
+      host: "localhost", // default value from first pass
+    });
+    assert.equal(result.host, "from-load.example.com");
+  });
+
+  test("custom load validates against schema", async () => {
+    const schema = z.object({
+      host: z.string(),
+      port: z.number(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+    });
+
+    await assert.rejects(
+      async () => {
+        await runWithConfig(parser, context, {
+          load: () => ({
+            host: "example.com",
+            port: "not-a-number" as unknown as number, // invalid type
+          }),
+          args: [],
+        });
+      },
+      (error: Error) => {
+        assert.ok(error.message.includes("Config validation failed"));
+        return true;
+      },
+    );
+  });
+
+  test("custom load returning undefined skips config", async () => {
+    const schema = z.object({
+      host: z.string().optional(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+    });
+
+    const result = await runWithConfig(parser, context, {
+      load: () => undefined,
+      args: [],
+    });
+
+    // Should use default since load returned undefined
+    assert.equal(result.host, "localhost");
+  });
+
+  test("CLI values override custom load values", async () => {
+    const schema = z.object({
+      host: z.string(),
+      port: z.number(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    const result = await runWithConfig(parser, context, {
+      load: () => ({
+        host: "loaded.example.com",
+        port: 8080,
+      }),
+      args: ["--host", "cli.example.com"],
+    });
+
+    assert.equal(result.host, "cli.example.com"); // from CLI
+    assert.equal(result.port, 8080); // from load
   });
 });
