@@ -56,7 +56,7 @@ export interface SingleFileOptions<TValue> extends BaseRunWithConfigOptions {
   readonly fileParser?: (contents: Uint8Array) => unknown;
 
   /**
-   * Custom config loading function (mutually exclusive with getConfigPath).
+   * Not used in single-file mode. Ensures type safety with CustomLoadOptions.
    */
   readonly load?: never;
 }
@@ -91,12 +91,12 @@ export interface CustomLoadOptions<TValue, T> extends BaseRunWithConfigOptions {
   readonly load: (parsed: TValue) => T | undefined | Promise<T | undefined>;
 
   /**
-   * Function to extract config file path (mutually exclusive with load).
+   * Not used in custom load mode. Ensures type safety with SingleFileOptions.
    */
   readonly getConfigPath?: never;
 
   /**
-   * File parser function (only used with getConfigPath).
+   * Not used in custom load mode. Ensures type safety with SingleFileOptions.
    */
   readonly fileParser?: never;
 }
@@ -253,7 +253,7 @@ export async function runWithConfig<
 
       configData = validationResult.value as T;
     }
-  } else if ("getConfigPath" in options) {
+  } else {
     // Single-file mode: Existing behavior
     const configPath = options.getConfigPath(firstPassResult.value);
 
