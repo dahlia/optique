@@ -914,6 +914,27 @@ This ensures that:
  -  Dynamic contexts (like config files) can extract information from the
     first parse pass
 
+### Help and version always available
+
+The `runWith()` function ensures that help, version, and completion features
+work immediately without requiring valid configuration files or contexts:
+
+ -  `--help` displays help even if config files are missing or invalid
+ -  `--version` shows version information without loading contexts
+ -  Completion scripts generate instantly regardless of environment setup
+
+This means users can always access documentation and basic information,
+even in misconfigured environments.
+
+~~~~ typescript
+// Help works even if config file is missing or invalid
+const result = await runWith(parser, "myapp", [configContext], {
+  args: ["--help"],
+  help: { mode: "option", onShow: () => process.exit(0) },
+});
+// → Shows help immediately without errors
+~~~~
+
 ### Sync and async variants
 
 Three function variants are available:

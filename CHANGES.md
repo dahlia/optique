@@ -104,6 +104,11 @@ To be released.
 
     If all contexts are static, the second parse is skipped for optimization.
 
+    The `runWith()` function ensures that help, version, and completion
+    features always work, even when config files are missing or contexts
+    would fail to load. Users can always access `--help`, `--version`, and
+    completion without requiring a valid environment setup. [[#92]]
+
     ~~~~ typescript
     import { runWith } from "@optique/core/facade";
     import type { SourceContext } from "@optique/core/context";
@@ -434,13 +439,13 @@ To be released.
     option("--mac", macAddress())
 
     // Normalize to uppercase colon-separated
-    option("--mac", macAddress({ 
+    option("--mac", macAddress({
       outputSeparator: ":",
       case: "upper"
     }))
 
     // Cisco format only
-    option("--mac", macAddress({ 
+    option("--mac", macAddress({
       separator: ".",
       case: "lower"
     }))
@@ -554,6 +559,7 @@ To be released.
 [#83]: https://github.com/dahlia/optique/issues/83
 [#85]: https://github.com/dahlia/optique/issues/85
 [#89]: https://github.com/dahlia/optique/issues/89
+[#92]: https://github.com/dahlia/optique/issues/92
 
 ### @optique/config
 

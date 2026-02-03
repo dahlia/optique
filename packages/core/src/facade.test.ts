@@ -3251,6 +3251,196 @@ describe("runWith", () => {
       assert.equal(versionOutput, "1.0.0");
     });
   });
+
+  describe("early exit for help/version/completion", () => {
+    it("should not call context.getAnnotations() when --help option is provided", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let helpShown = false;
+      await runWith(parser, "test", [trackingContext], {
+        args: ["--help"],
+        help: {
+          mode: "option",
+          onShow: () => {
+            helpShown = true;
+            return "help" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(helpShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+
+    it("should not call context.getAnnotations() when --version option is provided", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionShown = false;
+      await runWith(parser, "test", [trackingContext], {
+        args: ["--version"],
+        version: {
+          mode: "option",
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(versionShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+
+    it("should not call context.getAnnotations() when help command is provided", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let helpShown = false;
+      await runWith(parser, "test", [trackingContext], {
+        args: ["help"],
+        help: {
+          mode: "command",
+          onShow: () => {
+            helpShown = true;
+            return "help" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(helpShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+
+    it("should not call context.getAnnotations() when version command is provided", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionShown = false;
+      await runWith(parser, "test", [trackingContext], {
+        args: ["version"],
+        version: {
+          mode: "command",
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(versionShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+
+    it("should not call context.getAnnotations() when completion command is provided", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let completionShown = false;
+      await runWith(parser, "test", [trackingContext], {
+        args: ["completion", "bash"],
+        completion: {
+          mode: "command",
+          onShow: () => {
+            completionShown = true;
+            return "completion" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(completionShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+
+    it("should not call context.getAnnotations() when --completion option is provided", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let completionShown = false;
+      await runWith(parser, "test", [trackingContext], {
+        args: ["--completion=bash"],
+        completion: {
+          mode: "option",
+          onShow: () => {
+            completionShown = true;
+            return "completion" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(completionShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+  });
 });
 
 describe("runWithSync", () => {
@@ -3326,6 +3516,102 @@ describe("runWithSync", () => {
     });
 
     assert.ok(helpShown);
+  });
+
+  describe("early exit for help/version/completion", () => {
+    it("should not call context.getAnnotations() when --help option is provided", () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let helpShown = false;
+      runWithSync(parser, "test", [trackingContext], {
+        args: ["--help"],
+        help: {
+          mode: "option",
+          onShow: () => {
+            helpShown = true;
+            return "help" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(helpShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+
+    it("should not call context.getAnnotations() when --version option is provided", () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let versionShown = false;
+      runWithSync(parser, "test", [trackingContext], {
+        args: ["--version"],
+        version: {
+          mode: "option",
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(versionShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+
+    it("should not call context.getAnnotations() when completion command is provided", () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let completionShown = false;
+      runWithSync(parser, "test", [trackingContext], {
+        args: ["completion", "bash"],
+        completion: {
+          mode: "command",
+          onShow: () => {
+            completionShown = true;
+            return "completion" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(completionShown);
+      assert.equal(annotationsCallCount, 0);
+    });
   });
 });
 

@@ -1628,6 +1628,99 @@ function indentLines(text: string, indent: number): string {
 }
 
 /**
+ * Checks if the arguments contain help, version, or completion requests
+ * that should be handled immediately without context processing.
+ *
+ * This enables early exit optimization: when users request help, version,
+ * or completion, we skip annotation collection and context processing
+ * entirely, delegating directly to runParser().
+ *
+ * @param args Command-line arguments to check.
+ * @param options Run options containing help/version/completion configuration.
+ * @returns `true` if early exit should be performed, `false` otherwise.
+ */
+function needsEarlyExit<THelp, TError>(
+  args: readonly string[],
+  options: RunWithOptions<THelp, TError>,
+): boolean {
+  // Check help
+  if (options.help) {
+    const helpMode = options.help.mode ?? "option";
+    if (
+      (helpMode === "option" || helpMode === "both") &&
+      args.includes("--help")
+    ) {
+      return true;
+    }
+    if (
+      (helpMode === "command" || helpMode === "both") &&
+      args[0] === "help"
+    ) {
+      return true;
+    }
+  }
+
+  // Check version
+  if (options.version) {
+    const versionMode = options.version.mode ?? "option";
+    if (
+      (versionMode === "option" || versionMode === "both") &&
+      args.includes("--version")
+    ) {
+      return true;
+    }
+    if (
+      (versionMode === "command" || versionMode === "both") &&
+      args[0] === "version"
+    ) {
+      return true;
+    }
+  }
+
+  // Check completion
+  if (options.completion) {
+    const completionMode = options.completion.mode ?? "both";
+    const completionName = options.completion.name ?? "both";
+
+    // Command mode
+    if (completionMode === "command" || completionMode === "both") {
+      if (
+        (completionName === "singular" || completionName === "both") &&
+        args[0] === "completion"
+      ) {
+        return true;
+      }
+      if (
+        (completionName === "plural" || completionName === "both") &&
+        args[0] === "completions"
+      ) {
+        return true;
+      }
+    }
+
+    // Option mode
+    if (completionMode === "option" || completionMode === "both") {
+      for (const arg of args) {
+        if (
+          (completionName === "singular" || completionName === "both") &&
+          (arg === "--completion" || arg.startsWith("--completion="))
+        ) {
+          return true;
+        }
+        if (
+          (completionName === "plural" || completionName === "both") &&
+          (arg === "--completions" || arg.startsWith("--completions="))
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Merges multiple annotation objects, with earlier contexts having priority.
  *
  * When the same symbol key exists in multiple annotations, the value from
@@ -1859,6 +1952,18 @@ export async function runWith<
 ): Promise<InferValue<TParser>> {
   const args = options?.args ?? [];
 
+  // Early exit: skip context processing for help/version/completion
+  if (needsEarlyExit(args, options)) {
+    if (parser.$mode === "async") {
+      return runParser(parser, programName, args, options) as Promise<
+        InferValue<TParser>
+      >;
+    }
+    return Promise.resolve(
+      runParser(parser, programName, args, options) as InferValue<TParser>,
+    );
+  }
+
   // If no contexts, just run the parser directly
   if (contexts.length === 0) {
     if (parser.$mode === "async") {
@@ -2021,6 +2126,11 @@ export function runWithSync<
     & ExtractRequiredOptions<TContexts, InferValue<TParser>>,
 ): InferValue<TParser> {
   const args = options?.args ?? [];
+
+  // Early exit: skip context processing for help/version/completion
+  if (needsEarlyExit(args, options)) {
+    return runParser(parser, programName, args, options);
+  }
 
   // If no contexts, just run the parser directly
   if (contexts.length === 0) {
