@@ -12,7 +12,7 @@ import { runWithConfig } from "./run.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 
-describe("runWithConfig", () => {
+describe("runWithConfig", { concurrency: false }, () => {
   test("performs two-pass parsing with config file", async () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-1.json");
@@ -385,5 +385,192 @@ describe("runWithConfig", () => {
     } finally {
       await rm(configPath, { force: true });
     }
+  });
+
+  describe("help/version/completion support", () => {
+    test("should show help without loading config", async () => {
+      const schema = z.object({
+        host: z.string(),
+        port: z.number(),
+      });
+
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        config: option("--config", string()),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+      });
+
+      let helpShown = false;
+      let helpOutput = "";
+
+      await runWithConfig(parser, context, {
+        getConfigPath: (parsed) => (parsed as { config?: string }).config,
+        args: ["--help"],
+        help: {
+          mode: "option",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown" as never;
+          },
+        },
+        stdout: (text) => {
+          helpOutput += text;
+        },
+      });
+
+      assert.ok(helpShown);
+      assert.ok(helpOutput.includes("Usage:"));
+    });
+
+    test("should show help even when config file doesn't exist", async () => {
+      const nonExistentPath = join(TEST_DIR, "nonexistent-config.json");
+
+      const schema = z.object({
+        host: z.string(),
+      });
+
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        config: withDefault(option("--config", string()), nonExistentPath),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+      });
+
+      let helpShown = false;
+
+      await runWithConfig(parser, context, {
+        getConfigPath: (parsed) => (parsed as { config: string }).config,
+        args: ["--help"],
+        help: {
+          mode: "option",
+          onShow: () => {
+            helpShown = true;
+            return "help-shown" as never;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(helpShown);
+    });
+
+    test("should show version without loading config", async () => {
+      const schema = z.object({
+        host: z.string(),
+      });
+
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        config: option("--config", string()),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+      });
+
+      let versionShown = false;
+      let versionOutput = "";
+
+      await runWithConfig(parser, context, {
+        getConfigPath: (parsed) => (parsed as { config?: string }).config,
+        args: ["--version"],
+        version: {
+          mode: "option",
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown" as never;
+          },
+        },
+        stdout: (text) => {
+          versionOutput += text;
+        },
+      });
+
+      assert.ok(versionShown);
+      assert.equal(versionOutput, "1.0.0");
+    });
+
+    test("should generate completion without loading config", async () => {
+      const schema = z.object({
+        host: z.string(),
+      });
+
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        config: option("--config", string()),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+      });
+
+      let completionShown = false;
+      let completionOutput = "";
+
+      await runWithConfig(parser, context, {
+        getConfigPath: (parsed) => (parsed as { config?: string }).config,
+        args: ["completion", "bash"],
+        completion: {
+          mode: "command",
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown" as never;
+          },
+        },
+        stdout: (text) => {
+          completionOutput += text;
+        },
+      });
+
+      assert.ok(completionShown);
+      assert.ok(completionOutput.length > 0);
+    });
+
+    test("should support programName option", async () => {
+      const schema = z.object({
+        host: z.string(),
+      });
+
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+      });
+
+      let helpOutput = "";
+
+      await runWithConfig(parser, context, {
+        getConfigPath: () => undefined,
+        args: ["--help"],
+        programName: "my-custom-app",
+        help: {
+          mode: "option",
+          onShow: () => "help-shown" as never,
+        },
+        stdout: (text) => {
+          helpOutput += text;
+        },
+      });
+
+      assert.ok(helpOutput.includes("Usage: my-custom-app"));
+    });
   });
 });

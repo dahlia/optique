@@ -19,7 +19,7 @@ describe("createConfigContext", () => {
     const context = createConfigContext({ schema });
 
     assert.ok(context);
-    assert.equal(context.id, configKey);
+    assert.equal(typeof context.id, "symbol");
     assert.equal(typeof context.getAnnotations, "function");
   });
 

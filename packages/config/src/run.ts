@@ -9,9 +9,12 @@
  */
 
 import { readFile } from "node:fs/promises";
-import type { Parser, Result } from "@optique/core/parser";
-import { parse } from "@optique/core/parser";
-import type { Annotations } from "@optique/core/annotations";
+import { basename } from "node:path";
+import process from "node:process";
+import type { Parser } from "@optique/core/parser";
+import type { Annotations, SourceContext } from "@optique/core/context";
+import type { RunOptions } from "@optique/core/facade";
+import { runWith } from "@optique/core/facade";
 import type { ConfigContext } from "./index.ts";
 import { clearActiveConfig, configKey, setActiveConfig } from "./index.ts";
 
@@ -19,9 +22,11 @@ import { clearActiveConfig, configKey, setActiveConfig } from "./index.ts";
  * Options for single-file config loading.
  *
  * @template TValue The parser value type, inferred from the parser.
+ * @template THelp The return type when help is shown.
+ * @template TError The return type when an error occurs.
  * @since 0.10.0
  */
-export interface SingleFileOptions<TValue> {
+export interface SingleFileOptions<TValue, THelp = void, TError = never> {
   /**
    * Function to extract the config file path from parsed CLI arguments.
    * This function receives the result of the first parse pass and should
@@ -46,15 +51,103 @@ export interface SingleFileOptions<TValue> {
    * If not provided, defaults to an empty array.
    */
   readonly args?: readonly string[];
+
+  /**
+   * Name of the program for help/error output.
+   * If not provided, inferred from process.argv[1].
+   */
+  readonly programName?: string;
+
+  /**
+   * Help configuration. See RunOptions for details.
+   */
+  readonly help?: RunOptions<THelp, TError>["help"];
+
+  /**
+   * Version configuration. See RunOptions for details.
+   */
+  readonly version?: RunOptions<THelp, TError>["version"];
+
+  /**
+   * Completion configuration. See RunOptions for details.
+   */
+  readonly completion?: RunOptions<THelp, TError>["completion"];
+
+  /**
+   * Output function for standard output. See RunOptions for details.
+   */
+  readonly stdout?: RunOptions<THelp, TError>["stdout"];
+
+  /**
+   * Output function for standard error. See RunOptions for details.
+   */
+  readonly stderr?: RunOptions<THelp, TError>["stderr"];
+
+  /**
+   * Whether to enable colored output. See RunOptions for details.
+   */
+  readonly colors?: RunOptions<THelp, TError>["colors"];
+
+  /**
+   * Maximum width for output formatting. See RunOptions for details.
+   */
+  readonly maxWidth?: RunOptions<THelp, TError>["maxWidth"];
+
+  /**
+   * Whether and how to display default values. See RunOptions for details.
+   */
+  readonly showDefault?: RunOptions<THelp, TError>["showDefault"];
+
+  /**
+   * What to display above error messages. See RunOptions for details.
+   */
+  readonly aboveError?: RunOptions<THelp, TError>["aboveError"];
+
+  /**
+   * Brief description for help text. See RunOptions for details.
+   */
+  readonly brief?: RunOptions<THelp, TError>["brief"];
+
+  /**
+   * Detailed description for help text. See RunOptions for details.
+   */
+  readonly description?: RunOptions<THelp, TError>["description"];
+
+  /**
+   * Usage examples for help text. See RunOptions for details.
+   */
+  readonly examples?: RunOptions<THelp, TError>["examples"];
+
+  /**
+   * Author information for help text. See RunOptions for details.
+   */
+  readonly author?: RunOptions<THelp, TError>["author"];
+
+  /**
+   * Bug reporting information for help text. See RunOptions for details.
+   */
+  readonly bugs?: RunOptions<THelp, TError>["bugs"];
+
+  /**
+   * Footer text for help. See RunOptions for details.
+   */
+  readonly footer?: RunOptions<THelp, TError>["footer"];
+
+  /**
+   * Error handler. See RunOptions for details.
+   */
+  readonly onError?: RunOptions<THelp, TError>["onError"];
 }
 
 /**
  * Options for custom config loading with multi-file merging support.
  *
  * @template TValue The parser value type, inferred from the parser.
+ * @template THelp The return type when help is shown.
+ * @template TError The return type when an error occurs.
  * @since 0.10.0
  */
-export interface CustomLoadOptions<TValue> {
+export interface CustomLoadOptions<TValue, THelp = void, TError = never> {
   /**
    * Custom loader function that receives the first-pass parse result and
    * returns the config data (or a Promise of it). This allows full control
@@ -72,17 +165,229 @@ export interface CustomLoadOptions<TValue> {
    * If not provided, defaults to an empty array.
    */
   readonly args?: readonly string[];
+
+  /**
+   * Name of the program for help/error output.
+   * If not provided, inferred from process.argv[1].
+   */
+  readonly programName?: string;
+
+  /**
+   * Help configuration. See RunOptions for details.
+   */
+  readonly help?: RunOptions<THelp, TError>["help"];
+
+  /**
+   * Version configuration. See RunOptions for details.
+   */
+  readonly version?: RunOptions<THelp, TError>["version"];
+
+  /**
+   * Completion configuration. See RunOptions for details.
+   */
+  readonly completion?: RunOptions<THelp, TError>["completion"];
+
+  /**
+   * Output function for standard output. See RunOptions for details.
+   */
+  readonly stdout?: RunOptions<THelp, TError>["stdout"];
+
+  /**
+   * Output function for standard error. See RunOptions for details.
+   */
+  readonly stderr?: RunOptions<THelp, TError>["stderr"];
+
+  /**
+   * Whether to enable colored output. See RunOptions for details.
+   */
+  readonly colors?: RunOptions<THelp, TError>["colors"];
+
+  /**
+   * Maximum width for output formatting. See RunOptions for details.
+   */
+  readonly maxWidth?: RunOptions<THelp, TError>["maxWidth"];
+
+  /**
+   * Whether and how to display default values. See RunOptions for details.
+   */
+  readonly showDefault?: RunOptions<THelp, TError>["showDefault"];
+
+  /**
+   * What to display above error messages. See RunOptions for details.
+   */
+  readonly aboveError?: RunOptions<THelp, TError>["aboveError"];
+
+  /**
+   * Brief description for help text. See RunOptions for details.
+   */
+  readonly brief?: RunOptions<THelp, TError>["brief"];
+
+  /**
+   * Detailed description for help text. See RunOptions for details.
+   */
+  readonly description?: RunOptions<THelp, TError>["description"];
+
+  /**
+   * Usage examples for help text. See RunOptions for details.
+   */
+  readonly examples?: RunOptions<THelp, TError>["examples"];
+
+  /**
+   * Author information for help text. See RunOptions for details.
+   */
+  readonly author?: RunOptions<THelp, TError>["author"];
+
+  /**
+   * Bug reporting information for help text. See RunOptions for details.
+   */
+  readonly bugs?: RunOptions<THelp, TError>["bugs"];
+
+  /**
+   * Footer text for help. See RunOptions for details.
+   */
+  readonly footer?: RunOptions<THelp, TError>["footer"];
+
+  /**
+   * Error handler. See RunOptions for details.
+   */
+  readonly onError?: RunOptions<THelp, TError>["onError"];
 }
 
 /**
  * Options for runWithConfig.
  *
  * @template TValue The parser value type, inferred from the parser.
+ * @template THelp The return type when help is shown.
+ * @template TError The return type when an error occurs.
  * @since 0.10.0
  */
-export type RunWithConfigOptions<TValue> =
-  | SingleFileOptions<TValue>
-  | CustomLoadOptions<TValue>;
+export type RunWithConfigOptions<TValue, THelp = void, TError = never> =
+  | SingleFileOptions<TValue, THelp, TError>
+  | CustomLoadOptions<TValue, THelp, TError>;
+
+/**
+ * Helper function to create a wrapper SourceContext for config loading.
+ * @internal
+ */
+function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
+  context: ConfigContext<T>,
+  options: RunWithConfigOptions<TValue, THelp, TError>,
+): SourceContext<void> {
+  return {
+    id: context.id,
+
+    async getAnnotations(parsed?: unknown): Promise<Annotations> {
+      if (!parsed) return {};
+
+      let configData: T | undefined;
+
+      // Check if using custom loader or single-file mode
+      if ("load" in options) {
+        // Custom load mode
+        const customOptions = options as CustomLoadOptions<TValue>;
+        try {
+          const rawData = await Promise.resolve(
+            customOptions.load(parsed as TValue),
+          );
+
+          // Validate with Standard Schema
+          const validation = context.schema["~standard"].validate(rawData);
+
+          let validationResult: typeof validation extends Promise<infer R> ? R
+            : typeof validation;
+
+          if (validation instanceof Promise) {
+            validationResult = await validation;
+          } else {
+            validationResult = validation;
+          }
+
+          if (validationResult.issues) {
+            // Validation failed
+            const firstIssue = validationResult.issues[0];
+            throw new Error(
+              `Config validation failed: ${
+                firstIssue?.message ?? "Unknown error"
+              }`,
+            );
+          }
+
+          configData = validationResult.value as T;
+        } catch (error) {
+          // Re-throw validation errors
+          if (error instanceof Error && error.message.includes("validation")) {
+            throw error;
+          }
+          // Re-throw any other errors from custom loader
+          throw error;
+        }
+      } else {
+        // Single-file mode
+        const singleFileOptions = options as SingleFileOptions<TValue>;
+        const configPath = singleFileOptions.getConfigPath(parsed as TValue);
+
+        if (configPath) {
+          // Load config file
+          try {
+            const contents = await readFile(configPath);
+
+            // Parse file contents
+            let rawData: unknown;
+            if (singleFileOptions.fileParser) {
+              rawData = singleFileOptions.fileParser(contents);
+            } else {
+              // Default to JSON
+              const text = new TextDecoder().decode(contents);
+              rawData = JSON.parse(text);
+            }
+
+            // Validate with Standard Schema
+            const validation = context.schema["~standard"].validate(rawData);
+
+            let validationResult: typeof validation extends Promise<infer R> ? R
+              : typeof validation;
+
+            if (validation instanceof Promise) {
+              validationResult = await validation;
+            } else {
+              validationResult = validation;
+            }
+
+            if (validationResult.issues) {
+              // Validation failed
+              const firstIssue = validationResult.issues[0];
+              throw new Error(
+                `Config validation failed: ${
+                  firstIssue?.message ?? "Unknown error"
+                }`,
+              );
+            }
+
+            configData = validationResult.value as T;
+          } catch (error) {
+            // Re-throw validation errors
+            if (
+              error instanceof Error && error.message.includes("validation")
+            ) {
+              throw error;
+            }
+
+            // File not found or parse error - continue without config
+            configData = undefined;
+          }
+        }
+      }
+
+      // Set active config in registry for nested parsers inside object()
+      if (configData) {
+        setActiveConfig(context.id, configData);
+        return { [configKey]: configData };
+      }
+
+      return {};
+    },
+  };
+}
 
 /**
  * Runs a parser with configuration file support using two-pass parsing.
@@ -94,10 +399,16 @@ export type RunWithConfigOptions<TValue> =
  *
  * The priority order for values is: CLI > config file > default.
  *
+ * The function also supports help, version, and completion features. When these
+ * special commands are detected, config loading is skipped entirely, ensuring
+ * these features work even when config files don't exist.
+ *
  * @template M The parser mode (sync or async).
  * @template TValue The parser value type.
  * @template TState The parser state type.
  * @template T The config data type.
+ * @template THelp The return type when help is shown.
+ * @template TError The return type when an error occurs.
  * @param parser The parser to execute.
  * @param context The config context with schema.
  * @param options Run options - either SingleFileOptions or CustomLoadOptions.
@@ -130,6 +441,8 @@ export type RunWithConfigOptions<TValue> =
  * const result = await runWithConfig(parser, context, {
  *   getConfigPath: (parsed) => parsed.config,
  *   args: process.argv.slice(2),
+ *   help: { mode: "option", onShow: () => process.exit(0) },
+ *   version: { value: "1.0.0", onShow: () => process.exit(0) },
  * });
  * ```
  *
@@ -147,6 +460,7 @@ export type RunWithConfigOptions<TValue> =
  *     return deepMerge(...configs);
  *   },
  *   args: process.argv.slice(2),
+ *   help: { mode: "option", onShow: () => process.exit(0) },
  * });
  * ```
  */
@@ -155,160 +469,42 @@ export async function runWithConfig<
   TValue,
   TState,
   T,
+  THelp = void,
+  TError = never,
 >(
   parser: Parser<M, TValue, TState>,
   context: ConfigContext<T>,
-  options: RunWithConfigOptions<TValue>,
+  options: RunWithConfigOptions<TValue, THelp, TError>,
 ): Promise<TValue> {
-  const args = options.args ?? [];
+  // Determine program name
+  const effectiveProgramName = options.programName ??
+    (typeof process !== "undefined" && process.argv?.[1]
+      ? basename(process.argv[1])
+      : "cli");
 
-  // First pass: Parse to extract config file path
-  const firstPass = parse(parser, args);
-
-  let firstPassResult: Result<TValue>;
-  if (firstPass instanceof Promise) {
-    firstPassResult = await firstPass;
-  } else {
-    firstPassResult = firstPass;
-  }
-
-  if (!firstPassResult.success) {
-    // First pass failed - format error message
-    const errorParts = firstPassResult.error.map((part) => {
-      if (part.type === "text") return part.text;
-      if (part.type === "optionName") return part.optionName;
-      if (part.type === "optionNames") return part.optionNames.join(", ");
-      if (part.type === "metavar") return part.metavar;
-      if (part.type === "value") return part.value;
-      if (part.type === "values") return part.values.join(", ");
-      if (part.type === "envVar") return part.envVar;
-      if (part.type === "commandLine") return part.commandLine;
-      if (part.type === "url") return part.url;
-      return "";
-    });
-    throw new Error(`Parsing failed: ${errorParts.join("")}`);
-  }
-
-  let configData: T | undefined;
-
-  // Check if using custom loader or single-file mode
-  if ("load" in options) {
-    // Custom load mode
-    const customOptions = options as CustomLoadOptions<TValue>;
-    try {
-      const rawData = await Promise.resolve(
-        customOptions.load(firstPassResult.value),
-      );
-
-      // Validate with Standard Schema
-      const validation = context.schema["~standard"].validate(rawData);
-
-      let validationResult: typeof validation extends Promise<infer R> ? R
-        : typeof validation;
-
-      if (validation instanceof Promise) {
-        validationResult = await validation;
-      } else {
-        validationResult = validation;
-      }
-
-      if (validationResult.issues) {
-        // Validation failed
-        const firstIssue = validationResult.issues[0];
-        throw new Error(
-          `Config validation failed: ${firstIssue?.message ?? "Unknown error"}`,
-        );
-      }
-
-      configData = validationResult.value as T;
-    } catch (error) {
-      // Re-throw validation errors
-      if (error instanceof Error && error.message.includes("validation")) {
-        throw error;
-      }
-      // Re-throw any other errors from custom loader
-      throw error;
-    }
-  } else {
-    // Single-file mode
-    const singleFileOptions = options as SingleFileOptions<TValue>;
-    const configPath = singleFileOptions.getConfigPath(firstPassResult.value);
-
-    if (configPath) {
-      // Load config file
-      try {
-        const contents = await readFile(configPath);
-
-        // Parse file contents
-        let rawData: unknown;
-        if (singleFileOptions.fileParser) {
-          rawData = singleFileOptions.fileParser(contents);
-        } else {
-          // Default to JSON
-          const text = new TextDecoder().decode(contents);
-          rawData = JSON.parse(text);
-        }
-
-        // Validate with Standard Schema
-        const validation = context.schema["~standard"].validate(rawData);
-
-        let validationResult: typeof validation extends Promise<infer R> ? R
-          : typeof validation;
-
-        if (validation instanceof Promise) {
-          validationResult = await validation;
-        } else {
-          validationResult = validation;
-        }
-
-        if (validationResult.issues) {
-          // Validation failed
-          const firstIssue = validationResult.issues[0];
-          throw new Error(
-            `Config validation failed: ${
-              firstIssue?.message ?? "Unknown error"
-            }`,
-          );
-        }
-
-        configData = validationResult.value as T;
-      } catch (error) {
-        // Re-throw validation errors
-        if (error instanceof Error && error.message.includes("validation")) {
-          throw error;
-        }
-
-        // File not found or parse error - continue without config
-        configData = undefined;
-      }
-    }
-  }
-
-  // Second pass: Parse with config annotations
-  const annotations: Annotations = configData
-    ? { [configKey]: configData }
-    : {};
-
-  // Set active config in registry for nested parsers inside object()
-  if (configData) {
-    setActiveConfig(context.id, configData);
-  }
+  // Create wrapper context for config loading
+  const wrapperContext = createConfigSourceContext(context, options);
 
   try {
-    const secondPass = parse(parser, args, { annotations });
-
-    let secondPassResult: Result<TValue>;
-    if (secondPass instanceof Promise) {
-      secondPassResult = await secondPass;
-    } else {
-      secondPassResult = secondPass;
-    }
-
-    if (!secondPassResult.success) {
-      throw new Error(`Parsing failed: ${String(secondPassResult.error)}`);
-    }
-
-    return secondPassResult.value;
+    return await runWith(parser, effectiveProgramName, [wrapperContext], {
+      args: options.args ?? [],
+      help: options.help,
+      version: options.version,
+      completion: options.completion,
+      stdout: options.stdout,
+      stderr: options.stderr,
+      colors: options.colors,
+      maxWidth: options.maxWidth,
+      showDefault: options.showDefault,
+      aboveError: options.aboveError,
+      brief: options.brief,
+      description: options.description,
+      examples: options.examples,
+      author: options.author,
+      bugs: options.bugs,
+      footer: options.footer,
+      onError: options.onError,
+    });
   } finally {
     // Always clear the active config after parsing
     clearActiveConfig(context.id);

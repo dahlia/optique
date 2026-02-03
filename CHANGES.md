@@ -574,7 +574,10 @@ configuration file support with type-safe validation using [Standard Schema].
     automatic fallback handling.
 
  -  Added `runWithConfig()` function for running parsers with two-pass parsing
-    to load and validate configuration files.
+    to load and validate configuration files. The function delegates to
+    `runWith()` internally, automatically providing help, version, and shell
+    completion support. These features work even when config files are missing
+    or invalid, ensuring users can always access help documentation. [[#93]]
 
  -  Added `ConfigContext` interface implementing `SourceContext` for composable
     data source integration.
@@ -598,6 +601,7 @@ for usage examples.
 [config file integration guide]: https://optique.dev/integrations/config
 [#84]: https://github.com/dahlia/optique/issues/84
 [#90]: https://github.com/dahlia/optique/issues/90
+[#93]: https://github.com/dahlia/optique/issues/93
 
 ### @optique/run
 

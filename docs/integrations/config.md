@@ -43,10 +43,10 @@ Why config files?
 
 Many CLI applications need configuration files for:
 
- -  **Default values** that persist across invocations
- -  **Environment-specific** settings (development, staging, production)
- -  **Complex options** that are tedious to specify on the command line
- -  **Shared settings** across team members (via version control)
+ -  *Default values* that persist across invocations
+ -  *Environment-specific* settings (development, staging, production)
+ -  *Complex options* that are tedious to specify on the command line
+ -  *Shared settings* across team members (via version control)
 
 The *@optique/config* package handles this pattern with full type safety,
 automatic validation, and seamless integration with Optique parsers.
@@ -196,6 +196,87 @@ const portRequired = bindConfig(option("--port", integer()), {
   // No default - will error if not in CLI or config
 });
 ~~~~
+
+
+Help, version, and completion
+-----------------------------
+
+The `runWithConfig()` function fully supports help messages, version display,
+and shell completion generation. These features work even when configuration
+files are missing or invalid, ensuring users can always access help:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { withDefault } from "@optique/core/modifiers";
+
+const configSchema = z.object({
+  host: z.string(),
+  port: z.number(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+});
+
+const result = await runWithConfig(parser, configContext, {
+  getConfigPath: (parsed) => parsed.config,
+  args: process.argv.slice(2),
+  // Add help support
+  help: {
+    mode: "option",
+    onShow: () => process.exit(0),
+  },
+  // Add version support
+  version: {
+    value: "1.0.0",
+    onShow: () => process.exit(0),
+  },
+  // Add shell completion
+  completion: {
+    mode: "option",
+    onGenerate: (script) => {
+      console.log(script);
+      process.exit(0);
+    },
+  },
+  // Optional: customize output
+  description: "My CLI application",
+  brief: "A tool that does things",
+});
+~~~~
+
+Now users can use:
+
+~~~~ bash
+# Show help (even if config file is missing)
+myapp --help
+
+# Show version
+myapp --version
+
+# Generate shell completion
+myapp --completion bash > myapp-completion.sh
+~~~~
+
+The key benefit is that help, version, and completion work *before* config
+file loading, so they succeed even when the config file is invalid or missing.
 
 
 Nested config values
@@ -584,13 +665,13 @@ Parameters
      -  `options`: Either single-file or custom load options
      -  `options.args`: Command-line arguments to parse (both modes)
 
-**Single-file mode** (`SingleFileOptions`):
+Single-file mode (`SingleFileOptions`):
 :    -  `options.getConfigPath`: Function to extract config file path from
         parsed result
      -  `options.fileParser`: Optional custom parser for file contents
         (defaults to JSON.parse)
 
-**Custom load mode** (`CustomLoadOptions`):
+Custom load mode (`CustomLoadOptions`):
 :    -  `options.load`: Function that receives parsed result and returns config
         data (or Promise of it). Allows full control over multi-file loading,
         merging, and error handling.

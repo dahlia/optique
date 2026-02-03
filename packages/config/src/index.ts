@@ -141,8 +141,11 @@ export interface ConfigContext<T>
 export function createConfigContext<T>(
   options: ConfigContextOptions<T>,
 ): ConfigContext<T> {
+  // Create a unique ID for this context instance
+  const contextId = Symbol.for(`@optique/config:${Math.random()}`);
+
   return {
-    id: configKey,
+    id: contextId,
     schema: options.schema,
 
     getAnnotations(parsed?: unknown): Annotations {
