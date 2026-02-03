@@ -251,14 +251,8 @@ const result = await runWithConfig(parser, configContext, {
   // Add shell completion
   completion: {
     mode: "option",
-    onGenerate: (script) => {
-      console.log(script);
-      process.exit(0);
-    },
+    onShow: () => process.exit(0),
   },
-  // Optional: customize output
-  description: "My CLI application",
-  brief: "A tool that does things",
 });
 ~~~~
 

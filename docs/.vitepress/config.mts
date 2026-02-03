@@ -197,6 +197,8 @@ export default defineConfig({
             lib: ["dom", "dom.iterable", "esnext"],
             types: ["dom", "dom.iterable", "esnext", "node"],
           },
+          // Reuse language service instance across files to reduce memory usage
+          shouldGetHoverInfo: () => true,
         },
       }),
     ],
