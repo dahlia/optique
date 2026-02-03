@@ -7,6 +7,8 @@ description: >-
 Git integration
 ===============
 
+*This API is available since Optique 0.9.0.*
+
 The *@optique/git* package provides async value parsers for validating Git
 references (branches, tags, commits, remotes) using [isomorphic-git]. These
 parsers validate input against an actual Git repository, ensuring that users

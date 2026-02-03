@@ -93,7 +93,6 @@ const REFERENCES = {
 
 const TOP_NAV = [
   { text: "Why Optique?", link: "/why" },
-  { text: "Installation", link: "/install" },
   { text: "Tutorial", link: "/tutorial" },
   { text: "Cookbook", link: "/cookbook" },
 ];
@@ -109,6 +108,7 @@ export default defineConfig({
       { text: "Home", link: "/" },
       ...TOP_NAV,
       CONCEPTS,
+      INTEGRATIONS,
       REFERENCES,
       ...extraNav,
     ],
