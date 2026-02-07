@@ -2854,6 +2854,155 @@ describe("merge", () => {
     }
   });
 
+  it("should correctly infer InferValue types for merge with 3+ parsers", () => {
+    // Regression test: merge() overloads for 3+ parsers previously used
+    // conditional return types (ExtractObjectTypes<T> extends never ? never
+    // : Parser<...>), which caused InferValue to remain as a deferred
+    // conditional type instead of resolving to the concrete value type.
+    // This was discovered via fedify2's inbox command which used a 4-parser
+    // merge() and found that InferValue produced Parser<M, TValue, TState>
+    // instead of the expected concrete type.
+
+    // 3-parser merge
+    const parser3 = merge(
+      object({ name: option("-n", "--name", string()) }),
+      object({ verbose: optional(flag("--verbose")) }),
+      object({ count: option("-c", "--count", integer()) }),
+    );
+    type Inferred3 = InferValue<typeof parser3>;
+    const _check3: Inferred3 = {} as {
+      readonly name: string;
+      readonly verbose: true | undefined;
+      readonly count: number;
+    };
+    void _check3;
+
+    const result3 = parseSync(parser3, ["-n", "foo", "-c", "3"]);
+    assert.ok(result3.success);
+    if (result3.success) {
+      assert.equal(result3.value.name, "foo");
+      assert.equal(result3.value.verbose, undefined);
+      assert.equal(result3.value.count, 3);
+    }
+
+    // 4-parser merge (the exact arity that triggered the fedify2 bug)
+    const parser4 = merge(
+      object({ name: option("-n", "--name", string()) }),
+      object({ verbose: optional(flag("--verbose")) }),
+      object({ count: option("-c", "--count", integer()) }),
+      object({
+        tags: optional(multiple(option("-t", "--tag", string()))),
+      }),
+    );
+    type Inferred4 = InferValue<typeof parser4>;
+    const _check4: Inferred4 = {} as {
+      readonly name: string;
+      readonly verbose: true | undefined;
+      readonly count: number;
+      readonly tags: readonly string[] | undefined;
+    };
+    void _check4;
+
+    const result4 = parseSync(parser4, [
+      "-n",
+      "bar",
+      "--verbose",
+      "-c",
+      "5",
+      "-t",
+      "a",
+      "-t",
+      "b",
+    ]);
+    assert.ok(result4.success);
+    if (result4.success) {
+      assert.equal(result4.value.name, "bar");
+      assert.equal(result4.value.verbose, true);
+      assert.equal(result4.value.count, 5);
+      assert.deepEqual(result4.value.tags, ["a", "b"]);
+    }
+
+    // 5-parser merge
+    const parser5 = merge(
+      object({ name: option("-n", "--name", string()) }),
+      object({ verbose: optional(flag("--verbose")) }),
+      object({ count: option("-c", "--count", integer()) }),
+      object({
+        tags: optional(multiple(option("-t", "--tag", string()))),
+      }),
+      object({
+        mode: withDefault(
+          option("-m", "--mode", choice(["dev", "prod"])),
+          "dev" as const,
+        ),
+      }),
+    );
+    type Inferred5 = InferValue<typeof parser5>;
+    const _check5: Inferred5 = {} as {
+      readonly name: string;
+      readonly verbose: true | undefined;
+      readonly count: number;
+      readonly tags: readonly string[] | undefined;
+      readonly mode: "dev" | "prod";
+    };
+    void _check5;
+
+    const result5 = parseSync(parser5, [
+      "-n",
+      "baz",
+      "-c",
+      "1",
+      "-m",
+      "prod",
+    ]);
+    assert.ok(result5.success);
+    if (result5.success) {
+      assert.equal(result5.value.name, "baz");
+      assert.equal(result5.value.count, 1);
+      assert.equal(result5.value.mode, "prod");
+    }
+
+    // InferValue with command() wrapping merge() (mirrors the fedify2 pattern)
+    const subCmd = command(
+      "inbox",
+      merge(
+        object({ host: option("-H", "--host", string()) }),
+        object({ port: option("-p", "--port", integer()) }),
+        object({
+          follow: optional(multiple(option("-f", "--follow", string()))),
+        }),
+        object({ verbose: optional(flag("--verbose")) }),
+      ),
+    );
+    type SubCmdValue = InferValue<typeof subCmd>;
+    const _checkCmd: SubCmdValue = {} as {
+      readonly host: string;
+      readonly port: number;
+      readonly follow: readonly string[] | undefined;
+      readonly verbose: true | undefined;
+    };
+    void _checkCmd;
+
+    const resultCmd = parseSync(subCmd, [
+      "inbox",
+      "-H",
+      "localhost",
+      "-p",
+      "8080",
+      "-f",
+      "user1",
+      "-f",
+      "user2",
+    ]);
+    assert.ok(resultCmd.success);
+    if (resultCmd.success) {
+      assert.equal(resultCmd.value.host, "localhost");
+      assert.equal(resultCmd.value.port, 8080);
+      assert.deepEqual(resultCmd.value.follow, ["user1", "user2"]);
+      assert.equal(resultCmd.value.verbose, undefined);
+    }
+  });
+
   it("should show subcommand help when merged with or() (#69)", () => {
     const addCommand = command(
       "add",

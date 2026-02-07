@@ -3974,19 +3974,16 @@ export function merge<
   TC extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-  c: TC,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : Parser<
-    CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+): Parser<
+  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -4011,29 +4008,25 @@ export function merge<
   TC extends Parser<Mode, unknown, unknown>,
   TD extends Parser<Mode, unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : Parser<
-    CombineModes<
-      readonly [
-        ExtractMode<TA>,
-        ExtractMode<TB>,
-        ExtractMode<TC>,
-        ExtractMode<TD>,
-      ]
-    >,
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -4062,29 +4055,25 @@ export function merge<
   TD extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : Parser<
-    CombineModes<
-      readonly [
-        ExtractMode<TA>,
-        ExtractMode<TB>,
-        ExtractMode<TC>,
-        ExtractMode<TD>,
-      ]
-    >,
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -4165,33 +4154,28 @@ export function merge<
   TE extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : Parser<
-    CombineModes<
-      readonly [
-        ExtractMode<TA>,
-        ExtractMode<TB>,
-        ExtractMode<TC>,
-        ExtractMode<TD>,
-        ExtractMode<TE>,
-      ]
-    >,
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -4223,27 +4207,31 @@ export function merge<
   TE extends Parser<Mode, unknown, unknown>,
   TF extends Parser<Mode, unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -4279,27 +4267,31 @@ export function merge<
   TF extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -4334,30 +4326,34 @@ export function merge<
   TF extends Parser<Mode, unknown, unknown>,
   TG extends Parser<Mode, unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-  g: TG,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : ExtractObjectTypes<TG> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>
-    & ExtractObjectTypes<TG>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+  g: ExtractObjectTypes<TG> extends never ? never : TG,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+      ExtractMode<TG>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>
+  & ExtractObjectTypes<TG>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -4396,30 +4392,34 @@ export function merge<
   TG extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-  g: TG,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : ExtractObjectTypes<TG> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>
-    & ExtractObjectTypes<TG>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+  g: ExtractObjectTypes<TG> extends never ? never : TG,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+      ExtractMode<TG>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>
+  & ExtractObjectTypes<TG>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -4457,33 +4457,37 @@ export function merge<
   TG extends Parser<Mode, unknown, unknown>,
   TH extends Parser<Mode, unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-  g: TG,
-  h: TH,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : ExtractObjectTypes<TG> extends never ? never
-  : ExtractObjectTypes<TH> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>
-    & ExtractObjectTypes<TG>
-    & ExtractObjectTypes<TH>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+  g: ExtractObjectTypes<TG> extends never ? never : TG,
+  h: ExtractObjectTypes<TH> extends never ? never : TH,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+      ExtractMode<TG>,
+      ExtractMode<TH>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>
+  & ExtractObjectTypes<TG>
+  & ExtractObjectTypes<TH>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -4525,33 +4529,37 @@ export function merge<
   TH extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-  g: TG,
-  h: TH,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : ExtractObjectTypes<TG> extends never ? never
-  : ExtractObjectTypes<TH> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>
-    & ExtractObjectTypes<TG>
-    & ExtractObjectTypes<TH>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+  g: ExtractObjectTypes<TG> extends never ? never : TG,
+  h: ExtractObjectTypes<TH> extends never ? never : TH,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+      ExtractMode<TG>,
+      ExtractMode<TH>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>
+  & ExtractObjectTypes<TG>
+  & ExtractObjectTypes<TH>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -4592,36 +4600,40 @@ export function merge<
   TH extends Parser<Mode, unknown, unknown>,
   TI extends Parser<Mode, unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-  g: TG,
-  h: TH,
-  i: TI,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : ExtractObjectTypes<TG> extends never ? never
-  : ExtractObjectTypes<TH> extends never ? never
-  : ExtractObjectTypes<TI> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>
-    & ExtractObjectTypes<TG>
-    & ExtractObjectTypes<TH>
-    & ExtractObjectTypes<TI>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+  g: ExtractObjectTypes<TG> extends never ? never : TG,
+  h: ExtractObjectTypes<TH> extends never ? never : TH,
+  i: ExtractObjectTypes<TI> extends never ? never : TI,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+      ExtractMode<TG>,
+      ExtractMode<TH>,
+      ExtractMode<TI>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>
+  & ExtractObjectTypes<TG>
+  & ExtractObjectTypes<TH>
+  & ExtractObjectTypes<TI>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -4666,36 +4678,40 @@ export function merge<
   TI extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-  g: TG,
-  h: TH,
-  i: TI,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : ExtractObjectTypes<TG> extends never ? never
-  : ExtractObjectTypes<TH> extends never ? never
-  : ExtractObjectTypes<TI> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>
-    & ExtractObjectTypes<TG>
-    & ExtractObjectTypes<TH>
-    & ExtractObjectTypes<TI>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+  g: ExtractObjectTypes<TG> extends never ? never : TG,
+  h: ExtractObjectTypes<TH> extends never ? never : TH,
+  i: ExtractObjectTypes<TI> extends never ? never : TI,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+      ExtractMode<TG>,
+      ExtractMode<TH>,
+      ExtractMode<TI>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>
+  & ExtractObjectTypes<TG>
+  & ExtractObjectTypes<TH>
+  & ExtractObjectTypes<TI>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser.
@@ -4739,39 +4755,43 @@ export function merge<
   TI extends Parser<Mode, unknown, unknown>,
   TJ extends Parser<Mode, unknown, unknown>,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-  g: TG,
-  h: TH,
-  i: TI,
-  j: TJ,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : ExtractObjectTypes<TG> extends never ? never
-  : ExtractObjectTypes<TH> extends never ? never
-  : ExtractObjectTypes<TI> extends never ? never
-  : ExtractObjectTypes<TJ> extends never ? never
-  : Parser<
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>
-    & ExtractObjectTypes<TG>
-    & ExtractObjectTypes<TH>
-    & ExtractObjectTypes<TI>
-    & ExtractObjectTypes<TJ>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+  g: ExtractObjectTypes<TG> extends never ? never : TG,
+  h: ExtractObjectTypes<TH> extends never ? never : TH,
+  i: ExtractObjectTypes<TI> extends never ? never : TI,
+  j: ExtractObjectTypes<TJ> extends never ? never : TJ,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+      ExtractMode<TG>,
+      ExtractMode<TH>,
+      ExtractMode<TI>,
+      ExtractMode<TJ>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>
+  & ExtractObjectTypes<TG>
+  & ExtractObjectTypes<TH>
+  & ExtractObjectTypes<TI>
+  & ExtractObjectTypes<TJ>,
+  Record<string | symbol, unknown>
+>;
 
 /**
  * Merges multiple {@link object} parsers into a single {@link object} parser
@@ -4819,53 +4839,43 @@ export function merge<
   TJ extends Parser<Mode, unknown, unknown>,
 >(
   label: string,
-  a: TA,
-  b: TB,
-  c: TC,
-  d: TD,
-  e: TE,
-  f: TF,
-  g: TG,
-  h: TH,
-  i: TI,
-  j: TJ,
-): ExtractObjectTypes<TA> extends never ? never
-  : ExtractObjectTypes<TB> extends never ? never
-  : ExtractObjectTypes<TC> extends never ? never
-  : ExtractObjectTypes<TD> extends never ? never
-  : ExtractObjectTypes<TE> extends never ? never
-  : ExtractObjectTypes<TF> extends never ? never
-  : ExtractObjectTypes<TG> extends never ? never
-  : ExtractObjectTypes<TH> extends never ? never
-  : ExtractObjectTypes<TI> extends never ? never
-  : ExtractObjectTypes<TJ> extends never ? never
-  : Parser<
-    CombineModes<
-      readonly [
-        ExtractMode<TA>,
-        ExtractMode<TB>,
-        ExtractMode<TC>,
-        ExtractMode<TD>,
-        ExtractMode<TE>,
-        ExtractMode<TF>,
-        ExtractMode<TG>,
-        ExtractMode<TH>,
-        ExtractMode<TI>,
-        ExtractMode<TJ>,
-      ]
-    >,
-    & ExtractObjectTypes<TA>
-    & ExtractObjectTypes<TB>
-    & ExtractObjectTypes<TC>
-    & ExtractObjectTypes<TD>
-    & ExtractObjectTypes<TE>
-    & ExtractObjectTypes<TF>
-    & ExtractObjectTypes<TG>
-    & ExtractObjectTypes<TH>
-    & ExtractObjectTypes<TI>
-    & ExtractObjectTypes<TJ>,
-    Record<string | symbol, unknown>
-  >;
+  a: ExtractObjectTypes<TA> extends never ? never : TA,
+  b: ExtractObjectTypes<TB> extends never ? never : TB,
+  c: ExtractObjectTypes<TC> extends never ? never : TC,
+  d: ExtractObjectTypes<TD> extends never ? never : TD,
+  e: ExtractObjectTypes<TE> extends never ? never : TE,
+  f: ExtractObjectTypes<TF> extends never ? never : TF,
+  g: ExtractObjectTypes<TG> extends never ? never : TG,
+  h: ExtractObjectTypes<TH> extends never ? never : TH,
+  i: ExtractObjectTypes<TI> extends never ? never : TI,
+  j: ExtractObjectTypes<TJ> extends never ? never : TJ,
+): Parser<
+  CombineModes<
+    readonly [
+      ExtractMode<TA>,
+      ExtractMode<TB>,
+      ExtractMode<TC>,
+      ExtractMode<TD>,
+      ExtractMode<TE>,
+      ExtractMode<TF>,
+      ExtractMode<TG>,
+      ExtractMode<TH>,
+      ExtractMode<TI>,
+      ExtractMode<TJ>,
+    ]
+  >,
+  & ExtractObjectTypes<TA>
+  & ExtractObjectTypes<TB>
+  & ExtractObjectTypes<TC>
+  & ExtractObjectTypes<TD>
+  & ExtractObjectTypes<TE>
+  & ExtractObjectTypes<TF>
+  & ExtractObjectTypes<TG>
+  & ExtractObjectTypes<TH>
+  & ExtractObjectTypes<TI>
+  & ExtractObjectTypes<TJ>,
+  Record<string | symbol, unknown>
+>;
 
 export function merge(
   ...args:
