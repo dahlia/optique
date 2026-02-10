@@ -306,7 +306,7 @@ export function bindConfig<
       const bindState = state as unknown as ConfigBindState;
 
       // Check if we have a CLI value from parse phase
-      if (bindState.hasCliValue && bindState.cliState !== undefined) {
+      if (bindState?.hasCliValue && bindState.cliState !== undefined) {
         // Use the inner parser's complete to get the CLI value
         const innerResult = parser.complete(bindState.cliState);
 

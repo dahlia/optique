@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { parse } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
-import { option } from "@optique/core/primitives";
+import { flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 
 import type { Annotations } from "@optique/core/annotations";
@@ -231,5 +231,32 @@ describe("bindConfig", () => {
     assert.ok(result.success);
     assert.equal(result.value.host, "cli.com"); // from CLI
     assert.equal(result.value.port, 3000); // from default (not config)
+  });
+
+  // Regression test for https://github.com/dahlia/optique/issues/94
+  test("does not crash when bindConfig wraps flag() inside object() with no CLI args", () => {
+    const schema = z.object({
+      myFlag: z.boolean().optional(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      myFlag: bindConfig(
+        flag("-a", "--my-flag"),
+        { context, key: "myFlag", default: false },
+      ),
+    });
+
+    // This should not crash with "Cannot read properties of undefined
+    // (reading 'hasCliValue')"
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    assert.equal(result.value.myFlag, false); // from default
+
+    // Also verify that providing the flag still works
+    const resultWithFlag = parse(parser, ["-a"]);
+    assert.ok(resultWithFlag.success);
+    assert.equal(resultWithFlag.value.myFlag, true); // from CLI
   });
 });
