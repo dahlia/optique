@@ -1,10 +1,11 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { parse } from "@optique/core/parser";
+import { getDocPage, parse } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
 import { flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 import type { Annotations } from "@optique/core/annotations";
 import { bindConfig, configKey, createConfigContext } from "./index.ts";
@@ -258,5 +259,77 @@ describe("bindConfig", () => {
     const resultWithFlag = parse(parser, ["-a"]);
     assert.ok(resultWithFlag.success);
     assert.equal(resultWithFlag.value.myFlag, true); // from CLI
+  });
+
+  test("exposes default value in help text via getDocFragments()", () => {
+    const schema = z.object({
+      host: z.string(),
+      port: z.number(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    const docPage = getDocPage(parser);
+    assert.ok(docPage);
+    assert.ok(docPage.sections.length > 0);
+
+    const entries = docPage.sections.flatMap((s) => s.entries);
+    const hostEntry = entries.find(
+      (e) =>
+        e.term.type === "option" &&
+        e.term.names.includes("--host"),
+    );
+    const portEntry = entries.find(
+      (e) =>
+        e.term.type === "option" &&
+        e.term.names.includes("--port"),
+    );
+
+    assert.ok(hostEntry);
+    assert.ok(portEntry);
+    assert.deepEqual(hostEntry.default, message`${"localhost"}`);
+    assert.deepEqual(portEntry.default, message`${"3000"}`);
+  });
+
+  test("does not set default in help text when no default is provided", () => {
+    const schema = z.object({
+      host: z.string(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        // No default
+      }),
+    });
+
+    const docPage = getDocPage(parser);
+    assert.ok(docPage);
+
+    const entries = docPage.sections.flatMap((s) => s.entries);
+    const hostEntry = entries.find(
+      (e) =>
+        e.term.type === "option" &&
+        e.term.names.includes("--host"),
+    );
+
+    assert.ok(hostEntry);
+    assert.equal(hostEntry.default, undefined);
   });
 });

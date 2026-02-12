@@ -341,7 +341,10 @@ export function bindConfig<
     },
 
     suggest: parser.suggest,
-    getDocFragments: parser.getDocFragments,
+    getDocFragments(state, upperDefaultValue?) {
+      const defaultValue = upperDefaultValue ?? options.default;
+      return parser.getDocFragments(state, defaultValue);
+    },
   };
 }
 
