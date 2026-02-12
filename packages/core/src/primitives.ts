@@ -1748,6 +1748,7 @@ export function command<M extends Mode, T, TState>(
       );
       return {
         ...innerFragments,
+        brief: innerFragments.brief ?? options.brief,
         description: innerFragments.description ?? options.description,
         footer: innerFragments.footer ?? options.footer,
       };

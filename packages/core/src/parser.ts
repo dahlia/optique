@@ -854,7 +854,7 @@ function buildDocPage(
   context: ParserContext<unknown>,
   args: readonly string[],
 ): DocPage | undefined {
-  const { description, fragments, footer } = parser.getDocFragments(
+  const { brief, description, fragments, footer } = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,
   );
@@ -887,6 +887,7 @@ function buildDocPage(
   return {
     usage,
     sections,
+    ...(brief != null && { brief }),
     ...(description != null && { description }),
     ...(footer != null && { footer }),
   };
