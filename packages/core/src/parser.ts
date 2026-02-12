@@ -467,7 +467,7 @@ export function getDocPage(
     if (!result.success) break;
     context = result.next;
   } while (context.buffer.length > 0);
-  const { description, fragments, footer } = parser.getDocFragments(
+  const { brief, description, fragments, footer } = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,
   );
@@ -499,6 +499,7 @@ export function getDocPage(
   return {
     usage,
     sections,
+    ...(brief != null && { brief }),
     ...(description != null && { description }),
     ...(footer != null && { footer }),
   };

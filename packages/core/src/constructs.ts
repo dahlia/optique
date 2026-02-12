@@ -898,7 +898,9 @@ export function or(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
     ) {
+      let brief: Message | undefined;
       let description: Message | undefined;
+      let footer: Message | undefined;
       let fragments: readonly DocFragment[];
 
       if (state.kind === "unavailable" || state.state == null) {
@@ -916,7 +918,9 @@ export function or(
           innerState,
           undefined,
         );
+        brief = docFragments.brief;
         description = docFragments.description;
+        footer = docFragments.footer;
         fragments = docFragments.fragments;
       }
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
@@ -930,7 +934,9 @@ export function or(
         }
       }
       return {
+        brief,
         description,
+        footer,
         fragments: [
           ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
           { type: "section", entries },
@@ -1342,6 +1348,7 @@ export function longestMatch(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?,
     ) {
+      let brief: Message | undefined;
       let description: Message | undefined;
       let footer: Message | undefined;
       let fragments: readonly DocFragment[];
@@ -1357,6 +1364,7 @@ export function longestMatch(
           const docResult = parsers[i].getDocFragments(
             { kind: "available", state: result.next.state },
           );
+          brief = docResult.brief;
           description = docResult.description;
           footer = docResult.footer;
           fragments = docResult.fragments;
@@ -1367,7 +1375,7 @@ export function longestMatch(
         }
       }
 
-      return { description, fragments, footer };
+      return { brief, description, fragments, footer };
     },
   };
 }
