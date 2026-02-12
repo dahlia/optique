@@ -1562,6 +1562,60 @@ describe("getDocPage", () => {
     assert.ok(cliSection.entries.length >= 3);
   });
 
+  it("should resolve nested exclusive usage for nested subcommands", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/96
+    // When using or(topLevelCommand, command("nested", or(foo, bar))),
+    // help for "nested foo" should only show foo's usage, not bar's.
+    const fooCommand = command(
+      "foo",
+      object({ flag: option("--fooflag", string()) }),
+    );
+    const barCommand = command(
+      "bar",
+      object({ flag: option("--barflag", string()) }),
+    );
+    const topLevelCommand = command(
+      "toplevel",
+      object({ flag: option("--toplevelflag", string()) }),
+    );
+    const nestedGroup = command("nested", or(fooCommand, barCommand));
+    const parser = or(topLevelCommand, nestedGroup);
+
+    const doc = getDocPage(parser, ["nested", "foo"]);
+    assert.ok(doc);
+    assert.ok(doc.usage && doc.usage.length > 0);
+
+    // The usage should show "nested foo --fooflag STRING",
+    // NOT an exclusive containing both foo and bar
+    const commandTerms = doc.usage.filter((t) => t.type === "command");
+    assert.equal(commandTerms.length, 2);
+    assert.equal(commandTerms[0].name, "nested");
+    assert.equal(commandTerms[1].name, "foo");
+
+    // Should not contain any exclusive terms (they should all be resolved)
+    const exclusiveTerms = doc.usage.filter((t) => t.type === "exclusive");
+    assert.equal(
+      exclusiveTerms.length,
+      0,
+      "Usage should not contain unresolved exclusive terms",
+    );
+
+    // Should contain --fooflag but not --barflag
+    const optionTerms = doc.usage.filter((t) => t.type === "option");
+    assert.ok(
+      optionTerms.some((t) =>
+        t.type === "option" && t.names.includes("--fooflag")
+      ),
+      "Usage should contain --fooflag",
+    );
+    assert.ok(
+      !optionTerms.some((t) =>
+        t.type === "option" && t.names.includes("--barflag")
+      ),
+      "Usage should NOT contain --barflag",
+    );
+  });
+
   it("should resolve nested exclusive usage when using longestMatch with subcommands", () => {
     // This test reproduces the bug where `help add` shows full usage instead of
     // subcommand-specific usage when the parser is combined with longestMatch()

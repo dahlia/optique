@@ -27,6 +27,7 @@ import {
   type ModeValue,
   parseAsync,
   type Parser,
+  type ParserResult,
   parseSync,
   type Result,
   suggest,
@@ -40,7 +41,7 @@ import {
   option,
   type OptionOptions,
 } from "./primitives.ts";
-import { formatUsage, type OptionName } from "./usage.ts";
+import { formatUsage, type OptionName, type Usage } from "./usage.ts";
 import { string, type ValueParser } from "./valueparser.ts";
 
 /**
@@ -1322,6 +1323,107 @@ export function runParser<
             helpGeneratorParser = (longestMatch as (
               ...parsers: Parser<Mode, unknown, unknown>[]
             ) => Parser<Mode, unknown, unknown>)(...commandParsers);
+          }
+        }
+
+        // Helper function to report invalid commands before --help
+        const reportInvalidHelpCommand = (
+          validationError: Message,
+        ): InferValue<TParser> => {
+          stderr(
+            `Usage: ${
+              indentLines(
+                formatUsage(programName, augmentedParser.usage, {
+                  colors,
+                  maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                  expandCommands: true,
+                }),
+                7,
+              )
+            }`,
+          );
+          const errorMessage = formatMessage(validationError, {
+            colors,
+            quotes: !colors,
+          });
+          stderr(`Error: ${errorMessage}`);
+          return onError(1);
+        };
+
+        // Validate that the commands before --help are actually valid
+        // by attempting to parse them step by step against the parser
+        if (classified.commands.length > 0) {
+          let validationContext: {
+            buffer: readonly string[];
+            optionsTerminated: boolean;
+            state: unknown;
+            usage: Usage;
+          } = {
+            buffer: [...classified.commands],
+            optionsTerminated: false,
+            state: helpGeneratorParser.initialState as unknown,
+            usage: helpGeneratorParser.usage,
+          };
+
+          const processStep = (
+            stepResult: ParserResult<unknown>,
+          ): Message | null | "continue" => {
+            if (!stepResult.success) {
+              return stepResult.error;
+            }
+            if (stepResult.consumed.length < 1) {
+              // Parser succeeded but didn't consume any input;
+              // this means the remaining tokens aren't recognized
+              return message`Unexpected option or subcommand: ${
+                optionName(validationContext.buffer[0])
+              }.`;
+            }
+            validationContext = {
+              ...validationContext,
+              buffer: stepResult.next.buffer,
+              optionsTerminated: stepResult.next.optionsTerminated,
+              state: stepResult.next.state,
+              usage: stepResult.next.usage ?? validationContext.usage,
+            };
+            return validationContext.buffer.length > 0 ? "continue" : null;
+          };
+
+          // Iteratively validate each command token
+          let validationResult: Message | null | "continue" = "continue";
+          while (validationResult === "continue") {
+            const stepResult = helpGeneratorParser.parse(validationContext);
+            if (stepResult instanceof Promise) {
+              // Async parser: chain remaining validation via Promise
+              const asyncValidate = async (
+                result: ParserResult<unknown>,
+              ): Promise<InferValue<TParser>> => {
+                let res = processStep(result);
+                while (res === "continue") {
+                  const next = helpGeneratorParser.parse(validationContext);
+                  const resolved = next instanceof Promise ? await next : next;
+                  res = processStep(resolved);
+                }
+                if (res != null) {
+                  return reportInvalidHelpCommand(res);
+                }
+                // Commands are valid; proceed with help display
+                const docOrPromise = getDocPage(
+                  helpGeneratorParser,
+                  classified.commands,
+                );
+                return docOrPromise instanceof Promise
+                  ? docOrPromise.then(displayHelp)
+                  : displayHelp(docOrPromise);
+              };
+              return stepResult.then(asyncValidate) as ModeValue<
+                InferMode<TParser>,
+                InferValue<TParser>
+              >;
+            }
+            validationResult = processStep(stepResult);
+          }
+          if (validationResult != null) {
+            return reportInvalidHelpCommand(validationResult);
           }
         }
 

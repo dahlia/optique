@@ -6,6 +6,24 @@ Version 0.9.3
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `run()` showing top-level help instead of an error when `--help`
+    is used with an invalid subcommand (e.g., `mycli nonexistent --help`).
+    Previously, the help handler did not validate whether the commands
+    extracted before `--help` were actually recognized by the parser,
+    so it silently fell back to displaying root-level help.  Now, the
+    commands are validated against the parser, and an appropriate error
+    message with usage information is shown instead.  [[#97]]
+ -  Fixed nested subcommand help showing sibling subcommand usage lines.
+    Previously, when using `or(topLevel, command("nested", or(foo, bar)))`,
+    running `mycli nested foo --help` would incorrectly display usage lines
+    for both `foo` and `bar` subcommands.  Now, only the selected subcommand's
+    usage is shown.  [[#96]]
+
+[#96]: https://github.com/dahlia/optique/issues/96
+[#97]: https://github.com/dahlia/optique/issues/97
+
 
 Version 0.9.2
 -------------
@@ -362,6 +380,27 @@ remotes) using [isomorphic-git].  [[#71], [#72]]
 [isomorphic-git]: https://github.com/isomorphic-git/isomorphic-git
 [#71]: https://github.com/dahlia/optique/issues/71
 [#72]: https://github.com/dahlia/optique/pull/72
+
+
+Version 0.8.9
+-------------
+
+Released on February 12, 2026.
+
+### @optique/core
+
+ -  Fixed `run()` showing top-level help instead of an error when `--help`
+    is used with an invalid subcommand (e.g., `mycli nonexistent --help`).
+    Previously, the help handler did not validate whether the commands
+    extracted before `--help` were actually recognized by the parser,
+    so it silently fell back to displaying root-level help.  Now, the
+    commands are validated against the parser, and an appropriate error
+    message with usage information is shown instead.  [[#97]]
+ -  Fixed nested subcommand help showing sibling subcommand usage lines.
+    Previously, when using `or(topLevel, command("nested", or(foo, bar)))`,
+    running `mycli nested foo --help` would incorrectly display usage lines
+    for both `foo` and `bar` subcommands.  Now, only the selected subcommand's
+    usage is shown.  [[#96]]
 
 
 Version 0.8.8
