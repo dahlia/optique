@@ -1509,7 +1509,8 @@ export function runParser<
         const displayHelp = (doc: DocPage | undefined): InferValue<TParser> => {
           if (doc != null) {
             // Augment the doc page with provided options
-            // But if showing help for a specific meta-command, don't override its description
+            // But if showing help for a specific meta-command or subcommand,
+            // don't override its description with run-level docs
             const isMetaCommandHelp = (completionName === "singular" ||
                 completionName === "both"
               ? requestedCommand === "completion"
@@ -1519,16 +1520,22 @@ export function runParser<
                 : false) ||
               requestedCommand === "help" ||
               requestedCommand === "version";
-
+            const isSubcommandHelp = classified.commands.length > 0;
             // Check if this is top-level help (empty commands array means top-level)
-            const isTopLevel = classified.commands.length === 0;
-
+            const isTopLevel = !isSubcommandHelp;
+            // For root-level help, run-level docs override parser-level docs.
+            // For subcommand/meta-command help, parser-level docs take
+            // priority, falling back to run-level docs only when the parser
+            // doesn't provide its own.
+            const shouldOverride = !isMetaCommandHelp && !isSubcommandHelp;
             const augmentedDoc = {
               ...doc,
-              brief: !isMetaCommandHelp ? (brief ?? doc.brief) : doc.brief,
-              description: !isMetaCommandHelp
+              brief: shouldOverride
+                ? (brief ?? doc.brief)
+                : (doc.brief ?? brief),
+              description: shouldOverride
                 ? (description ?? doc.description)
-                : doc.description,
+                : (doc.description ?? description),
               // Only show examples, author, and bugs for top-level help
               examples: isTopLevel && !isMetaCommandHelp
                 ? (examples ?? doc.examples)
@@ -1539,7 +1546,9 @@ export function runParser<
               bugs: isTopLevel && !isMetaCommandHelp
                 ? (bugs ?? doc.bugs)
                 : undefined,
-              footer: !isMetaCommandHelp ? (footer ?? doc.footer) : doc.footer,
+              footer: shouldOverride
+                ? (footer ?? doc.footer)
+                : (doc.footer ?? footer),
             };
             stdout(formatDocPage(programName, augmentedDoc, {
               colors,

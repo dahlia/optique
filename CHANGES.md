@@ -708,6 +708,23 @@ to generate Unix man pages that stay synchronized with parser definitions.
 [#77]: https://github.com/dahlia/optique/issues/77
 
 
+Version 0.9.4
+-------------
+
+Released on February 12, 2026.
+
+### @optique/core
+
+ -  Fixed `mycli subcommand --help` displaying the `brief` and `description`
+    passed to `run()` instead of those passed to `command()`.  Now, when
+    showing help for a specific subcommand, the subcommand's own `brief`,
+    `description`, and `footer` take priority over the `run()`-level values.
+    The `run()`-level values are used as fallback only when the subcommand
+    does not define its own.  [[#95]]
+
+[#95]: https://github.com/dahlia/optique/issues/95
+
+
 Version 0.9.3
 -------------
 

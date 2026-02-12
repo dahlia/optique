@@ -1810,6 +1810,76 @@ describe("Documentation augmentation (brief, description, footer)", () => {
     assert.ok(output.includes("Override description"));
     assert.ok(output.includes("Override footer"));
   });
+
+  it("should show subcommand docs instead of run-level docs (Issue #95)", () => {
+    const fooCommand = command(
+      "foo",
+      object({
+        verbose: flag("--verbose"),
+      }),
+      {
+        brief: message`foo brief`,
+        description: message`foo description`,
+      },
+    );
+
+    const barCommand = command(
+      "bar",
+      object({
+        force: flag("--force"),
+      }),
+      {
+        brief: message`bar brief`,
+        description: message`bar description`,
+      },
+    );
+
+    const parser = or(fooCommand, barCommand);
+
+    let helpOutput = "";
+    const result = runParser(parser, "mycli", ["foo", "--help"], {
+      help: { mode: "option", onShow: () => "help" as const },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+      brief: message`mycli brief`,
+      description: message`mycli description`,
+    });
+
+    assert.equal(result, "help");
+    // Should show subcommand's description, NOT run-level description
+    assert.ok(helpOutput.includes("foo brief"));
+    assert.ok(helpOutput.includes("foo description"));
+    assert.ok(!helpOutput.includes("mycli brief"));
+    assert.ok(!helpOutput.includes("mycli description"));
+  });
+
+  it("should fall back to run-level docs when subcommand has none (Issue #95)", () => {
+    const fooCommand = command(
+      "foo",
+      object({
+        verbose: flag("--verbose"),
+      }),
+      // No brief or description provided
+    );
+
+    const parser = fooCommand;
+
+    let helpOutput = "";
+    const result = runParser(parser, "mycli", ["foo", "--help"], {
+      help: { mode: "option", onShow: () => "help" as const },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+      brief: message`mycli brief`,
+      description: message`mycli description`,
+    });
+
+    assert.equal(result, "help");
+    // Should fall back to run-level docs since subcommand has none
+    assert.ok(helpOutput.includes("mycli brief"));
+    assert.ok(helpOutput.includes("mycli description"));
+  });
 });
 
 describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => {

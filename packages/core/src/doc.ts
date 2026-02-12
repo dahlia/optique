@@ -83,6 +83,13 @@ export type DocFragment =
  */
 export interface DocFragments {
   /**
+   * An optional brief that provides a short summary for the collection
+   * of fragments.
+   * @since 0.7.12
+   */
+  readonly brief?: Message;
+
+  /**
    * An optional description that applies to the entire collection of fragments.
    */
   readonly description?: Message;
