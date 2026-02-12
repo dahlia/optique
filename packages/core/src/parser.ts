@@ -1008,17 +1008,10 @@ function buildDocPage(
     if (term.type === "exclusive") {
       const found = findCommandInExclusive(term, arg);
       if (found) {
-        // Splice replaces 1 element with found terms, so the next position
-        // should skip over all inserted elements
         usage.splice(i, 1, ...found);
-        i += found.length;
-      } else {
-        // If no match found in exclusive, just move to next position
-        i++;
       }
-    } else {
-      i++;
     }
+    i++;
   }
   return {
     usage,

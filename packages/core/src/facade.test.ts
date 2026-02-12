@@ -9,7 +9,13 @@ import {
 } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { argument, command, flag, option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
@@ -1924,7 +1930,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     assert.ok(helpOutput2.includes("Synchronize data"));
   });
 
-  it("should handle invalid commands before --help gracefully", () => {
+  it("should error when --help is used with invalid subcommand", () => {
     const syncCommand = command(
       "sync",
       object({
@@ -1948,9 +1954,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     const parser = or(syncCommand, buildCommand);
 
     let helpShown = false;
-    let helpOutput = "";
+    let errorShown = false;
+    let stderrOutput = "";
 
-    // Test: cli invalid-cmd --help should show help with the invalid command context
+    // Test: cli invalid-cmd --help should error, not show help
     const result = runParser(parser, "cli", ["invalid-cmd", "--help"], {
       help: {
         mode: "option",
@@ -1959,15 +1966,67 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           return "help-shown";
         },
       },
-      stdout: (text) => {
-        helpOutput = text;
+      stdout: () => {},
+      stderr: (text) => {
+        stderrOutput += text + "\n";
+      },
+      onError: (code) => {
+        errorShown = true;
+        return `error-${code}` as never;
       },
     });
 
-    assert.equal(result, "help-shown");
-    assert.ok(helpShown);
-    // Should show root help since invalid-cmd doesn't match any parser
-    assert.ok(helpOutput.includes("sync") || helpOutput.includes("build"));
+    assert.equal(result, "error-1");
+    assert.ok(errorShown);
+    assert.ok(!helpShown);
+    // Should show usage and error message on stderr
+    assert.ok(stderrOutput.includes("Usage:"));
+    assert.ok(stderrOutput.includes("invalid-cmd"));
+  });
+
+  it("should suggest similar commands when --help is used with typo", () => {
+    const syncCommand = command(
+      "sync",
+      object({
+        force: flag("--force"),
+      }),
+      {
+        description: message`Synchronize data`,
+      },
+    );
+
+    const buildCommand = command(
+      "build",
+      object({
+        output: option("--output", string()),
+      }),
+      {
+        description: message`Build project`,
+      },
+    );
+
+    const parser = or(syncCommand, buildCommand);
+
+    let stderrOutput = "";
+
+    // Test: cli synk --help (typo) should error with suggestion
+    const result = runParser(parser, "cli", ["synk", "--help"], {
+      help: {
+        mode: "option",
+        onShow: () => "help-shown",
+      },
+      stdout: () => {},
+      stderr: (text) => {
+        stderrOutput += text + "\n";
+      },
+      onError: (code) => {
+        return `error-${code}` as never;
+      },
+    });
+
+    assert.equal(result, "error-1");
+    // Should include "Did you mean" suggestion
+    assert.ok(stderrOutput.includes("sync"));
   });
 
   it("should handle mixed options and commands with --help", () => {
@@ -2169,6 +2228,80 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     assert.ok(!helpOutput.includes("List branches"));
     assert.ok(!helpOutput.includes("Git operations"));
     assert.ok(!helpOutput.includes("Development tools"));
+  });
+
+  it("should show only selected nested subcommand in help usage (Issue #96)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/96
+    // `mycli nested foo --help` should NOT show usage for peer `mycli nested bar`
+    const fooCommand = command(
+      "foo",
+      object({
+        action: constant("foo"),
+        flag: option("--fooflag", string()),
+      }),
+      {
+        brief: message`foo brief`,
+        description: message`foo description`,
+      },
+    );
+    const barCommand = command(
+      "bar",
+      object({
+        action: constant("bar"),
+        flag: option("--barflag", string()),
+      }),
+      {
+        brief: message`bar brief`,
+        description: message`bar description`,
+      },
+    );
+
+    const topLevelCommand = command(
+      "toplevel",
+      object({
+        action: constant("toplevel"),
+        flag: option("--toplevelflag", string()),
+      }),
+    );
+
+    const nestedGroup = command("nested", or(fooCommand, barCommand), {
+      brief: message`nested brief`,
+      description: message`nested description`,
+    });
+
+    const parser = or(topLevelCommand, nestedGroup);
+
+    let helpShown = false;
+    let helpOutput = "";
+
+    const result = runParser(parser, "mycli", ["nested", "foo", "--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      brief: message`mycli brief`,
+      description: message`mycli description`,
+      stdout: (text) => {
+        helpOutput = text;
+      },
+    });
+
+    assert.equal(result, "help-shown");
+    assert.ok(helpShown);
+    // Should show foo's option
+    assert.ok(helpOutput.includes("--fooflag"));
+    // Should NOT show bar's usage or option
+    assert.ok(
+      !helpOutput.includes("--barflag"),
+      `Help output should not contain --barflag but got:\n${helpOutput}`,
+    );
+    assert.ok(
+      !helpOutput.includes("nested bar"),
+      `Help output should not contain 'nested bar' but got:\n${helpOutput}`,
+    );
   });
 
   describe("completion functionality", () => {
