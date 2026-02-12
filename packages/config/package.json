@@ -67,7 +67,7 @@
     "@standard-schema/spec": "catalog:"
   },
   "dependencies": {
-    "@optique/core": "workspace:"
+    "@optique/core": "workspace:*"
   },
   "devDependencies": {
     "@standard-schema/spec": "catalog:",

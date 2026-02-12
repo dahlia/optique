@@ -128,7 +128,7 @@ importers:
   packages/config:
     dependencies:
       '@optique/core':
-        specifier: 'workspace:'
+        specifier: workspace:*
         version: link:../core
     devDependencies:
       '@standard-schema/spec':
