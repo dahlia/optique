@@ -1807,7 +1807,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     assert.ok(helpOutput2.includes("Synchronize data"));
   });
 
-  it("should handle invalid commands before --help gracefully", () => {
+  it("should error when --help is used with invalid subcommand", () => {
     const syncCommand = command(
       "sync",
       object({
@@ -1831,9 +1831,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     const parser = or(syncCommand, buildCommand);
 
     let helpShown = false;
-    let helpOutput = "";
+    let errorShown = false;
+    let stderrOutput = "";
 
-    // Test: cli invalid-cmd --help should show help with the invalid command context
+    // Test: cli invalid-cmd --help should error, not show help
     const result = run(parser, "cli", ["invalid-cmd", "--help"], {
       help: {
         mode: "option",
@@ -1842,15 +1843,67 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           return "help-shown";
         },
       },
-      stdout: (text) => {
-        helpOutput = text;
+      stdout: () => {},
+      stderr: (text) => {
+        stderrOutput += text + "\n";
+      },
+      onError: (code) => {
+        errorShown = true;
+        return `error-${code}` as never;
       },
     });
 
-    assert.equal(result, "help-shown");
-    assert.ok(helpShown);
-    // Should show root help since invalid-cmd doesn't match any parser
-    assert.ok(helpOutput.includes("sync") || helpOutput.includes("build"));
+    assert.equal(result, "error-1");
+    assert.ok(errorShown);
+    assert.ok(!helpShown);
+    // Should show usage and error message on stderr
+    assert.ok(stderrOutput.includes("Usage:"));
+    assert.ok(stderrOutput.includes("invalid-cmd"));
+  });
+
+  it("should suggest similar commands when --help is used with typo", () => {
+    const syncCommand = command(
+      "sync",
+      object({
+        force: flag("--force"),
+      }),
+      {
+        description: message`Synchronize data`,
+      },
+    );
+
+    const buildCommand = command(
+      "build",
+      object({
+        output: option("--output", string()),
+      }),
+      {
+        description: message`Build project`,
+      },
+    );
+
+    const parser = or(syncCommand, buildCommand);
+
+    let stderrOutput = "";
+
+    // Test: cli synk --help (typo) should error with suggestion
+    const result = run(parser, "cli", ["synk", "--help"], {
+      help: {
+        mode: "option",
+        onShow: () => "help-shown",
+      },
+      stdout: () => {},
+      stderr: (text) => {
+        stderrOutput += text + "\n";
+      },
+      onError: (code) => {
+        return `error-${code}` as never;
+      },
+    });
+
+    assert.equal(result, "error-1");
+    // Should include "Did you mean" suggestion
+    assert.ok(stderrOutput.includes("sync"));
   });
 
   it("should handle mixed options and commands with --help", () => {
