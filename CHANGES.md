@@ -8,6 +8,13 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed `run()` showing top-level help instead of an error when `--help`
+    is used with an invalid subcommand (e.g., `mycli nonexistent --help`).
+    Previously, the help handler did not validate whether the commands
+    extracted before `--help` were actually recognized by the parser,
+    so it silently fell back to displaying root-level help.  Now, the
+    commands are validated against the parser, and an appropriate error
+    message with usage information is shown instead.  [[#97]]
  -  Fixed nested subcommand help showing sibling subcommand usage lines.
     Previously, when using `or(topLevel, command("nested", or(foo, bar)))`,
     running `mycli nested foo --help` would incorrectly display usage lines
@@ -15,6 +22,7 @@ To be released.
     usage is shown.  [[#96]]
 
 [#96]: https://github.com/dahlia/optique/issues/96
+[#97]: https://github.com/dahlia/optique/issues/97
 
 
 Version 0.8.8

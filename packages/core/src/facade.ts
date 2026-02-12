@@ -1230,6 +1230,64 @@ export function run<
         }
       }
 
+      // Validate that the commands before --help are actually valid
+      // by attempting to parse them step by step against the parser
+      if (classified.commands.length > 0) {
+        let validationContext = {
+          buffer: [...classified.commands] as readonly string[],
+          optionsTerminated: false,
+          state: helpGeneratorParser.initialState as unknown,
+          usage: helpGeneratorParser.usage,
+        };
+        let commandsValid = true;
+        let validationError: Message | undefined;
+        while (validationContext.buffer.length > 0) {
+          const stepResult = helpGeneratorParser.parse(validationContext);
+          if (!stepResult.success) {
+            commandsValid = false;
+            validationError = stepResult.error;
+            break;
+          }
+          if (stepResult.consumed.length < 1) {
+            // Parser succeeded but didn't consume any input;
+            // this means the remaining tokens aren't recognized
+            commandsValid = false;
+            validationError = message`Unexpected option or subcommand: ${
+              optionName(validationContext.buffer[0])
+            }.`;
+            break;
+          }
+          validationContext = {
+            ...validationContext,
+            buffer: stepResult.next.buffer,
+            optionsTerminated: stepResult.next.optionsTerminated,
+            state: stepResult.next.state,
+            usage: stepResult.next.usage ?? validationContext.usage,
+          };
+        }
+        if (!commandsValid && validationError != null) {
+          // The command(s) before --help are invalid; treat as error
+          stderr(
+            `Usage: ${
+              indentLines(
+                formatUsage(programName, augmentedParser.usage, {
+                  colors,
+                  maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                  expandCommands: true,
+                }),
+                7,
+              )
+            }`,
+          );
+          const errorMessage = formatMessage(validationError, {
+            colors,
+            quotes: !colors,
+          });
+          stderr(`Error: ${errorMessage}`);
+          return onError(1);
+        }
+      }
+
       const doc = getDocPage(
         helpGeneratorParser,
         classified.commands,
