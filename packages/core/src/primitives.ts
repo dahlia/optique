@@ -1343,6 +1343,7 @@ export function command<T, TState>(
       const innerFragments = parser.getDocFragments(innerState, defaultValue);
       return {
         ...innerFragments,
+        brief: innerFragments.brief ?? options.brief,
         description: innerFragments.description ?? options.description,
         footer: innerFragments.footer ?? options.footer,
       };
