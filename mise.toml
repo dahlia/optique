@@ -32,10 +32,12 @@ run = "deno task test"
 
 [tasks."test:node"]
 description = "Run the test suite using Node.js"
+depends = ["build"]
 run = "deno task test:node"
 
 [tasks."test:bun"]
 description = "Run the test suite using Bun"
+depends = ["build"]
 run = "deno task test:bun"
 
 [tasks.test]
@@ -44,4 +46,4 @@ depends = ["check", "test:*"]
 
 [tasks.build]
 description = "Build all packages for npm publishing"
-run = "pnpm run -r build"
+run = "pnpm run --filter '!{docs}' -r build"

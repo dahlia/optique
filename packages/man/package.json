@@ -97,8 +97,8 @@
     "build": "tsdown",
     "prepack": "tsdown",
     "prepublish": "tsdown",
-    "test": "tsdown && node --experimental-transform-types --test 'src/**/*.test.ts'",
-    "test:bun": "tsdown && bun test src/",
+    "test": "node --experimental-transform-types --test 'src/**/*.test.ts'",
+    "test:bun": "bun test src/",
     "test:deno": "deno test",
     "test-all": "tsdown && node --experimental-transform-types --test 'src/**/*.test.ts' && bun test src/ && deno test"
   }
