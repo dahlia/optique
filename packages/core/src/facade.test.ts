@@ -2,7 +2,13 @@ import { object, or } from "@optique/core/constructs";
 import { run, RunError } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { argument, command, flag, option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -2047,6 +2053,80 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     assert.ok(!helpOutput.includes("List branches"));
     assert.ok(!helpOutput.includes("Git operations"));
     assert.ok(!helpOutput.includes("Development tools"));
+  });
+
+  it("should show only selected nested subcommand in help usage (Issue #96)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/96
+    // `mycli nested foo --help` should NOT show usage for peer `mycli nested bar`
+    const fooCommand = command(
+      "foo",
+      object({
+        action: constant("foo"),
+        flag: option("--fooflag", string()),
+      }),
+      {
+        brief: message`foo brief`,
+        description: message`foo description`,
+      },
+    );
+    const barCommand = command(
+      "bar",
+      object({
+        action: constant("bar"),
+        flag: option("--barflag", string()),
+      }),
+      {
+        brief: message`bar brief`,
+        description: message`bar description`,
+      },
+    );
+
+    const topLevelCommand = command(
+      "toplevel",
+      object({
+        action: constant("toplevel"),
+        flag: option("--toplevelflag", string()),
+      }),
+    );
+
+    const nestedGroup = command("nested", or(fooCommand, barCommand), {
+      brief: message`nested brief`,
+      description: message`nested description`,
+    });
+
+    const parser = or(topLevelCommand, nestedGroup);
+
+    let helpShown = false;
+    let helpOutput = "";
+
+    const result = run(parser, "mycli", ["nested", "foo", "--help"], {
+      help: {
+        mode: "option",
+        onShow: () => {
+          helpShown = true;
+          return "help-shown";
+        },
+      },
+      brief: message`mycli brief`,
+      description: message`mycli description`,
+      stdout: (text) => {
+        helpOutput = text;
+      },
+    });
+
+    assert.equal(result, "help-shown");
+    assert.ok(helpShown);
+    // Should show foo's option
+    assert.ok(helpOutput.includes("--fooflag"));
+    // Should NOT show bar's usage or option
+    assert.ok(
+      !helpOutput.includes("--barflag"),
+      `Help output should not contain --barflag but got:\n${helpOutput}`,
+    );
+    assert.ok(
+      !helpOutput.includes("nested bar"),
+      `Help output should not contain 'nested bar' but got:\n${helpOutput}`,
+    );
   });
 
   describe("completion functionality", () => {

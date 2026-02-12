@@ -6,6 +6,16 @@ Version 0.8.9
 
 To be released.
 
+### @optique/core
+
+ -  Fixed nested subcommand help showing sibling subcommand usage lines.
+    Previously, when using `or(topLevel, command("nested", or(foo, bar)))`,
+    running `mycli nested foo --help` would incorrectly display usage lines
+    for both `foo` and `bar` subcommands.  Now, only the selected subcommand's
+    usage is shown.  [[#96]]
+
+[#96]: https://github.com/dahlia/optique/issues/96
+
 
 Version 0.8.8
 -------------
