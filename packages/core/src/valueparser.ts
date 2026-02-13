@@ -69,6 +69,17 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * @since 0.6.0
    */
   suggest?(prefix: string): ModeIterable<M, Suggestion>;
+
+  /**
+   * An optional array of valid choices for this parser.  When present,
+   * indicates that this parser accepts only a fixed set of values, which
+   * can be displayed in help output via the `showChoices` formatting option.
+   *
+   * This field is populated automatically by the {@link choice} function.
+   *
+   * @since 0.10.0
+   */
+  readonly choices?: readonly T[];
 }
 
 /**
@@ -282,6 +293,7 @@ export function choice<const T extends string | number>(
     return {
       $mode: "sync",
       metavar,
+      choices: choices as readonly T[],
       parse(input: string): ValueParserResult<T> {
         const parsed = Number(input);
         if (Number.isNaN(parsed)) {
@@ -320,6 +332,7 @@ export function choice<const T extends string | number>(
   return {
     $mode: "sync",
     metavar,
+    choices: choices as readonly T[],
     parse(input: string): ValueParserResult<T> {
       const normalizedInput = stringOptions.caseInsensitive
         ? input.toLowerCase()

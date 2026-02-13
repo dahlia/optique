@@ -298,6 +298,12 @@ const depth = choice([8, 10, 12]);
 > The `caseInsensitive` option is only available for string choices.
 > TypeScript will report an error if you try to use it with number choices.
 
+> [!TIP]
+> You can display valid choices in help text by enabling the `showChoices`
+> option in your runner configuration.  See the
+> [choice display](./runners.md#choice-display) section in the runners guide
+> for details.
+
 
 `url()` parser
 --------------

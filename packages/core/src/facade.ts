@@ -7,7 +7,12 @@ import {
   zsh,
 } from "./completion.ts";
 import { longestMatch, object } from "./constructs.ts";
-import { type DocPage, formatDocPage, type ShowDefaultOptions } from "./doc.ts";
+import {
+  type DocPage,
+  formatDocPage,
+  type ShowChoicesOptions,
+  type ShowDefaultOptions,
+} from "./doc.ts";
 import {
   commandLine,
   formatMessage,
@@ -787,6 +792,22 @@ export interface RunOptions<THelp, TError> {
   readonly showDefault?: boolean | ShowDefaultOptions;
 
   /**
+   * Whether and how to display valid choices for options and arguments
+   * backed by enumerated value parsers (e.g., `choice()`).
+   *
+   * - `boolean`: When `true`, displays choices using format
+   *   `(choices: a, b, c)`
+   * - `ShowChoicesOptions`: Custom formatting with configurable prefix,
+   *   suffix, label, and maximum number of items
+   *
+   * Choice values are automatically dimmed when `colors` is enabled.
+   *
+   * @default `false`
+   * @since 0.10.0
+   */
+  readonly showChoices?: boolean | ShowChoicesOptions;
+
+  /**
    * Help configuration. When provided, enables help functionality.
    */
   readonly help?: {
@@ -1181,6 +1202,7 @@ export function runParser<
     colors,
     maxWidth,
     showDefault,
+    showChoices,
     aboveError = "usage",
     onError = () => {
       throw new RunParserError("Failed to parse command line arguments.");
@@ -1608,6 +1630,7 @@ export function runParser<
               colors,
               maxWidth,
               showDefault,
+              showChoices,
             }));
           }
           try {
@@ -1652,6 +1675,7 @@ export function runParser<
                 colors,
                 maxWidth,
                 showDefault,
+                showChoices,
               }));
             }
           }

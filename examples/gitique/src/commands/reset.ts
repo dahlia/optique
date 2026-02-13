@@ -3,7 +3,12 @@ import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import type { InferValue } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
 import { choice, string } from "@optique/core/valueparser";
-import { commandLine, message, optionName } from "@optique/core/message";
+import {
+  commandLine,
+  lineBreak,
+  message,
+  optionName,
+} from "@optique/core/message";
 import { printError } from "@optique/run";
 import { getRepository, resetIndex } from "../utils/git.ts";
 import type { Repository } from "es-git";
@@ -29,17 +34,17 @@ const modeOptions = group(
     mode: withDefault(
       option("--mode", choice(resetModes, { metavar: "MODE" }), {
         description:
-          message`Reset mode: soft (keep changes staged), mixed (unstage changes), hard (discard all)`,
+          message`Reset mode: ${"soft"} (keep changes staged), ${"mixed"} (unstage changes), ${"hard"} (discard all)`,
       }),
       "mixed" as const,
     ),
     soft: option("--soft", {
-      description: message`Shorthand for ${optionName("--mode")}=soft`,
+      description: message`Shorthand for ${commandLine("--mode=soft")}`,
     }),
     hard: option("--hard", {
       description: message`Shorthand for ${
-        optionName("--mode")
-      }=hard (DANGEROUS: discards all changes)`,
+        commandLine("--mode=hard")
+      } (DANGEROUS: discards all changes)`,
     }),
   }),
 );
@@ -105,14 +110,16 @@ export const resetCommand = command("reset", resetOptionsParser, {
   } to keep changes staged, ${optionName("--mixed")} to unstage, or ${
     optionName("--hard")
   } to discard all changes (dangerous).`,
-  footer: message`Examples:
-  ${commandLine("gitique reset")}                    Mixed reset to HEAD
+  footer: message`Examples:${lineBreak()}
+  ${
+    commandLine("gitique reset")
+  }                    Mixed reset to HEAD${lineBreak()}
   ${
     commandLine("gitique reset --soft HEAD~1")
-  }      Soft reset, keep changes staged
+  }      Soft reset, keep changes staged${lineBreak()}
   ${
     commandLine("gitique reset --hard")
-  }             Hard reset (DANGER: loses changes)
+  }             Hard reset (DANGER: loses changes)${lineBreak()}
   ${commandLine("gitique reset -- file.ts")}         Unstage specific file`,
 });
 

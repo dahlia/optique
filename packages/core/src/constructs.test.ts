@@ -15,6 +15,7 @@ import {
   type Message,
   message,
   text,
+  valueSet,
 } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
@@ -995,6 +996,152 @@ describe("object", () => {
       );
       assert.ok(verboseEntry);
       assert.deepEqual(verboseEntry.description, description);
+    });
+
+    it("should include choices in doc fragments for option with choice()", () => {
+      const parser = object({
+        format: option("--format", choice(["json", "yaml", "xml"])),
+      });
+
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const formatEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--format")
+      );
+      assert.ok(formatEntry);
+      assert.ok(formatEntry.choices != null, "choices should be present");
+      assert.deepEqual(
+        formatEntry.choices,
+        valueSet(["json", "yaml", "xml"], { type: "unit" }),
+      );
+    });
+
+    it("should include choices in doc fragments for argument with choice()", () => {
+      const parser = object({
+        action: argument(choice(["start", "stop"])),
+      });
+
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const actionEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "argument"
+      );
+      assert.ok(actionEntry);
+      assert.ok(actionEntry.choices != null, "choices should be present");
+      assert.deepEqual(
+        actionEntry.choices,
+        valueSet(["start", "stop"], { type: "unit" }),
+      );
+    });
+
+    it("should not include choices for option without choice parser", () => {
+      const parser = object({
+        port: option("--port", integer()),
+      });
+
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const portEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--port")
+      );
+      assert.ok(portEntry);
+      assert.equal(portEntry.choices, undefined);
+    });
+
+    it("should not include choices for flag (no value parser)", () => {
+      const parser = object({
+        verbose: option("-v", "--verbose"),
+      });
+
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const verboseEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--verbose")
+      );
+      assert.ok(verboseEntry);
+      assert.equal(verboseEntry.choices, undefined);
+    });
+
+    it("should not include choices for hidden option with choice()", () => {
+      const parser = object({
+        format: option("--format", choice(["json", "yaml"]), { hidden: true }),
+      });
+
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
+
+      // Hidden options should not produce entries at all
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+      assert.equal(mainSection.entries.length, 0);
+    });
+
+    it("should include choices for number choice()", () => {
+      const parser = object({
+        depth: option("--depth", choice([8, 10, 12])),
+      });
+
+      const fragments = parser.getDocFragments({
+        kind: "available",
+        state: parser.initialState,
+      });
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const mainSection = sections.find((s) => s.title === undefined);
+      assert.ok(mainSection);
+
+      const depthEntry = mainSection.entries.find((e: DocEntry) =>
+        e.term.type === "option" && e.term.names.includes("--depth")
+      );
+      assert.ok(depthEntry);
+      assert.ok(depthEntry.choices != null, "choices should be present");
+      assert.deepEqual(
+        depthEntry.choices,
+        valueSet(["8", "10", "12"], { type: "unit" }),
+      );
     });
   });
 

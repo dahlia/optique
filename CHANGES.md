@@ -569,6 +569,35 @@ To be released.
     enforce valid `name` and `helpVisibility` combinations at compile time.
     [[#99]]
 
+ -  Added `showChoices` option to `formatDocPage()` and `runParser()` for
+    displaying valid choices in help output.  When enabled, options and
+    arguments backed by `choice()` value parsers automatically show their
+    valid values in help text, similar to the existing `showDefault` feature.
+    [[#106]]
+
+    ~~~~ typescript
+    import { runParser } from "@optique/core/facade";
+
+    // Basic usage — shows "(choices: json, yaml, xml)"
+    runParser(parser, "myapp", args, { showChoices: true });
+
+    // Custom format — shows "{json | yaml | xml}"
+    runParser(parser, "myapp", args, {
+      showChoices: { prefix: " {", suffix: "}", label: "" },
+    });
+    ~~~~
+
+    New APIs:
+
+     -  `ValueParser.choices`: Optional array of valid choices, populated
+        automatically by the `choice()` function.
+     -  `DocEntry.choices`: Formatted choices as a `Message` for help rendering.
+     -  `ShowChoicesOptions`: Interface for customizing choices display
+        (prefix, suffix, label, maxItems).
+     -  `DocPageFormatOptions.showChoices`: Enables choices display in
+        formatted help output.
+     -  `RunOptions.showChoices`: Passes through to `formatDocPage()`.
+
 [runtime context extension guide]: https://optique.dev/concepts/extend
 [#65]: https://github.com/dahlia/optique/issues/65
 [#74]: https://github.com/dahlia/optique/issues/74
@@ -581,6 +610,7 @@ To be released.
 [#89]: https://github.com/dahlia/optique/issues/89
 [#92]: https://github.com/dahlia/optique/issues/92
 [#99]: https://github.com/dahlia/optique/issues/99
+[#106]: https://github.com/dahlia/optique/issues/106
 
 ### @optique/config
 
@@ -654,6 +684,10 @@ for usage examples.
     completion aliases are shown in help and usage output (`"singular"`,
     `"plural"`, `"both"`, or `"none"`) independently from which aliases are
     accepted at runtime via `completion.name`. [[#99]]
+
+ -  Added `showChoices` option to `run()`, `runSync()`, and `runAsync()`.
+    This passes through to the underlying `formatDocPage()` call, enabling
+    valid choice values to be displayed in help output.  [[#106]]
 
 ### @optique/man
 

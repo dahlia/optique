@@ -1459,6 +1459,50 @@ describe("choice", () => {
       assert.ok(result2.success);
     });
   });
+
+  describe("choices metadata", () => {
+    it("should expose choices array for string choices", () => {
+      const parser = choice(["red", "green", "blue"]);
+      assert.deepEqual(parser.choices, ["red", "green", "blue"]);
+    });
+
+    it("should expose choices array for number choices", () => {
+      const parser = choice([8, 10, 12]);
+      assert.deepEqual(parser.choices, [8, 10, 12]);
+    });
+
+    it("should preserve original case for case-insensitive string choices", () => {
+      const parser = choice(["JSON", "YAML"], { caseInsensitive: true });
+      assert.deepEqual(parser.choices, ["JSON", "YAML"]);
+    });
+
+    it("should expose empty array for empty choices", () => {
+      const parser = choice([] as string[]);
+      assert.deepEqual(parser.choices, []);
+    });
+
+    it("should expose single-element array for single choice", () => {
+      const parser = choice(["only"]);
+      assert.deepEqual(parser.choices, ["only"]);
+    });
+  });
+});
+
+describe("non-choice parsers should not have choices metadata", () => {
+  it("string() should not have choices", () => {
+    const parser = string();
+    assert.equal(parser.choices, undefined);
+  });
+
+  it("integer() should not have choices", () => {
+    const parser = integer({});
+    assert.equal(parser.choices, undefined);
+  });
+
+  it("float() should not have choices", () => {
+    const parser = float({});
+    assert.equal(parser.choices, undefined);
+  });
 });
 
 describe("float", () => {

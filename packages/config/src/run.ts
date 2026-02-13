@@ -99,6 +99,11 @@ export interface SingleFileOptions<TValue, THelp = void, TError = never> {
   readonly showDefault?: RunOptions<THelp, TError>["showDefault"];
 
   /**
+   * Whether and how to display valid choices. See RunOptions for details.
+   */
+  readonly showChoices?: RunOptions<THelp, TError>["showChoices"];
+
+  /**
    * What to display above error messages. See RunOptions for details.
    */
   readonly aboveError?: RunOptions<THelp, TError>["aboveError"];
@@ -211,6 +216,11 @@ export interface CustomLoadOptions<TValue, THelp = void, TError = never> {
    * Whether and how to display default values. See RunOptions for details.
    */
   readonly showDefault?: RunOptions<THelp, TError>["showDefault"];
+
+  /**
+   * Whether and how to display valid choices. See RunOptions for details.
+   */
+  readonly showChoices?: RunOptions<THelp, TError>["showChoices"];
 
   /**
    * What to display above error messages. See RunOptions for details.
@@ -496,6 +506,7 @@ export async function runWithConfig<
       colors: options.colors,
       maxWidth: options.maxWidth,
       showDefault: options.showDefault,
+      showChoices: options.showChoices,
       aboveError: options.aboveError,
       brief: options.brief,
       description: options.description,

@@ -14,7 +14,8 @@ import {
 import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import { getDocPage, parse } from "@optique/core/parser";
 import { argument, command, constant, option } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
+import { formatDocPage } from "@optique/core/doc";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -1667,6 +1668,83 @@ describe("getDocPage", () => {
         assert.equal(firstTerm.name, "add");
       }
     }
+  });
+
+  it("should include choices in formatted help for option with choice()", () => {
+    const parser = object({
+      format: option("--format", choice(["json", "yaml", "xml"]), {
+        description: message`Output format`,
+      }),
+    });
+
+    const docPage = getDocPage(parser);
+    assert.ok(docPage);
+
+    const formatted = formatDocPage("myapp", docPage, { showChoices: true });
+    assert.ok(
+      formatted.includes("(choices: json, yaml, xml)"),
+      `Expected formatted help to include choices, got:\n${formatted}`,
+    );
+    assert.ok(formatted.includes("Output format"));
+  });
+
+  it("should include choices in formatted help for argument with choice()", () => {
+    const parser = object({
+      env: argument(choice(["dev", "staging", "prod"])),
+    });
+
+    const docPage = getDocPage(parser);
+    assert.ok(docPage);
+
+    const formatted = formatDocPage("myapp", docPage, { showChoices: true });
+    assert.ok(
+      formatted.includes("(choices: dev, staging, prod)"),
+      `Expected formatted help to include choices, got:\n${formatted}`,
+    );
+  });
+
+  it("should show both default and choices together", () => {
+    const parser = object({
+      format: withDefault(
+        option("--format", choice(["json", "yaml"]), {
+          description: message`Output format`,
+        }),
+        "json",
+      ),
+    });
+
+    const docPage = getDocPage(parser);
+    assert.ok(docPage);
+
+    const formatted = formatDocPage("myapp", docPage, {
+      showDefault: true,
+      showChoices: true,
+    });
+    assert.ok(formatted.includes('["json"]'), "Should include default value");
+    assert.ok(
+      formatted.includes("(choices: json, yaml)"),
+      "Should include choices",
+    );
+    // Verify order: default before choices
+    const defaultIdx = formatted.indexOf('["json"]');
+    const choicesIdx = formatted.indexOf("(choices:");
+    assert.ok(
+      defaultIdx < choicesIdx,
+      "Default should appear before choices",
+    );
+  });
+
+  it("should not show choices when showChoices is disabled", () => {
+    const parser = object({
+      format: option("--format", choice(["json", "yaml"])),
+    });
+
+    const docPage = getDocPage(parser);
+    assert.ok(docPage);
+
+    const formatted = formatDocPage("myapp", docPage);
+    assert.ok(!formatted.includes("choices"));
+    assert.ok(!formatted.includes("json, yaml"));
   });
 });
 

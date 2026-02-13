@@ -1,4 +1,9 @@
-import { formatMessage, type Message } from "./message.ts";
+import {
+  formatMessage,
+  type Message,
+  type MessageTerm,
+  text,
+} from "./message.ts";
 import {
   formatUsage,
   formatUsageTerm,
@@ -30,6 +35,15 @@ export interface DocEntry {
    * specified.
    */
   readonly default?: Message;
+
+  /**
+   * An optional list of valid choices for the entry, formatted as a
+   * comma-separated {@link Message}.  When present and the `showChoices`
+   * formatting option is enabled, this is appended to the entry description.
+   *
+   * @since 0.10.0
+   */
+  readonly choices?: Message;
 }
 
 /**
@@ -128,6 +142,42 @@ export interface ShowDefaultOptions {
 }
 
 /**
+ * Configuration for customizing choices display formatting.
+ *
+ * @since 0.10.0
+ */
+export interface ShowChoicesOptions {
+  /**
+   * Text to display before the choices list.
+   *
+   * @default `" ("`
+   */
+  readonly prefix?: string;
+
+  /**
+   * Text to display after the choices list.
+   *
+   * @default `")"`
+   */
+  readonly suffix?: string;
+
+  /**
+   * Label text to display before the individual choice values.
+   *
+   * @default `"choices: "`
+   */
+  readonly label?: string;
+
+  /**
+   * Maximum number of choice values to display before truncating with
+   * `...`.  Set to `Infinity` to show all choices.
+   *
+   * @default `8`
+   */
+  readonly maxItems?: number;
+}
+
+/**
  * Options for formatting a documentation page.
  */
 export interface DocPageFormatOptions {
@@ -178,6 +228,34 @@ export interface DocPageFormatOptions {
    * ```
    */
   showDefault?: boolean | ShowDefaultOptions;
+
+  /**
+   * Whether and how to display valid choices for options and arguments
+   * backed by enumerated value parsers (e.g., `choice()`).
+   *
+   * - `boolean`: When `true`, displays choices using format
+   *   `(choices: a, b, c)`
+   * - `ShowChoicesOptions`: Custom formatting with configurable prefix,
+   *   suffix, label, and maximum number of items
+   *
+   * Choice values are automatically dimmed when `colors` is enabled.
+   *
+   * @default `false`
+   * @since 0.10.0
+   *
+   * @example
+   * ```typescript
+   * // Basic usage - shows "(choices: json, yaml, xml)"
+   * { showChoices: true }
+   *
+   * // Custom format - shows "{json | yaml | xml}"
+   * { showChoices: { prefix: " {", suffix: "}", label: "" } }
+   *
+   * // Limit displayed choices
+   * { showChoices: { maxItems: 3 } }
+   * ```
+   */
+  showChoices?: boolean | ShowChoicesOptions;
 }
 
 /**
@@ -299,6 +377,56 @@ export function formatDocPage(
           ? `\x1b[2m${defaultText}\x1b[0m`
           : defaultText;
         description += formattedDefault;
+      }
+
+      // Append choices if showChoices is enabled and choices exist
+      if (options.showChoices && entry.choices != null) {
+        const prefix = typeof options.showChoices === "object"
+          ? options.showChoices.prefix ?? " ("
+          : " (";
+        const suffix = typeof options.showChoices === "object"
+          ? options.showChoices.suffix ?? ")"
+          : ")";
+        const label = typeof options.showChoices === "object"
+          ? options.showChoices.label ?? "choices: "
+          : "choices: ";
+        const maxItems = typeof options.showChoices === "object"
+          ? options.showChoices.maxItems ?? 8
+          : 8;
+        // Truncate at the Message level by counting value terms
+        const terms = Array.isArray(entry.choices) ? entry.choices : [];
+        let truncatedTerms: readonly MessageTerm[] = terms;
+        let truncated = false;
+        if (maxItems < Infinity) {
+          let valueCount = 0;
+          let cutIndex = terms.length;
+          for (let i = 0; i < terms.length; i++) {
+            if (terms[i].type === "value") {
+              valueCount++;
+              if (valueCount > maxItems) {
+                // Cut before the separator that precedes this value
+                cutIndex = i > 0 && terms[i - 1].type === "text" ? i - 1 : i;
+                truncated = true;
+                break;
+              }
+            }
+          }
+          if (truncated) {
+            truncatedTerms = [
+              ...terms.slice(0, cutIndex),
+              text(", ..."),
+            ];
+          }
+        }
+        const choicesDisplay = formatMessage(truncatedTerms, {
+          colors: options.colors ? { resetSuffix: "\x1b[2m" } : false,
+          quotes: false,
+        });
+        const choicesText = `${prefix}${label}${choicesDisplay}${suffix}`;
+        const formattedChoices = options.colors
+          ? `\x1b[2m${choicesText}\x1b[0m`
+          : choicesText;
+        description += formattedChoices;
       }
 
       output += `${" ".repeat(termIndent)}${

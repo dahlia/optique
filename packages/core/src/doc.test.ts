@@ -3,7 +3,7 @@ import {
   type DocPageFormatOptions,
   formatDocPage,
 } from "@optique/core/doc";
-import { message } from "@optique/core/message";
+import { message, valueSet } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -684,5 +684,177 @@ describe("formatDocPage", () => {
     ].join("\n");
 
     assert.equal(result, expected);
+  });
+
+  it("should not show choices when showChoices is not set", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page);
+    assert.ok(!result.includes("choices"));
+    assert.ok(!result.includes("json"));
+  });
+
+  it("should not show choices when showChoices is false", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showChoices: false });
+    assert.ok(!result.includes("choices"));
+    assert.ok(!result.includes("json, yaml, xml"));
+  });
+
+  it("should show choices when showChoices is true", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showChoices: true });
+    assert.ok(result.includes("Output format (choices: json, yaml, xml)"));
+  });
+
+  it("should show choices with custom prefix, suffix, and label", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: valueSet(["json", "yaml"], { type: "unit" }),
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, {
+      showChoices: { prefix: " {", suffix: "}", label: "" },
+    });
+    assert.ok(result.includes("Output format {json, yaml}"));
+  });
+
+  it("should show choices with custom label", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: valueSet(["json", "yaml"], { type: "unit" }),
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, {
+      showChoices: { label: "valid: " },
+    });
+    assert.ok(result.includes("Output format (valid: json, yaml)"));
+  });
+
+  it("should show choices without description", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--level"] },
+          choices: valueSet(["debug", "info", "warn"], { type: "unit" }),
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showChoices: true });
+    assert.ok(result.includes("(choices: debug, info, warn)"));
+  });
+
+  it("should not show choices when entry has no choices field", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-v", "--verbose"] },
+          description: [{ type: "text", text: "Enable verbose output" }],
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showChoices: true });
+    assert.ok(!result.includes("choices"));
+    assert.ok(result.includes("Enable verbose output"));
+  });
+
+  it("should render description, default, then choices in order", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          default: [{ type: "text", text: "json" }],
+          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, {
+      showDefault: true,
+      showChoices: true,
+    });
+    const line = result.split("\n").find((l) => l.includes("--format"))!;
+    const defaultIdx = line.indexOf("[json]");
+    const choicesIdx = line.indexOf("(choices:");
+    assert.ok(defaultIdx !== -1, "default should be present");
+    assert.ok(choicesIdx !== -1, "choices should be present");
+    assert.ok(
+      defaultIdx < choicesIdx,
+      "default should come before choices",
+    );
+  });
+
+  it("should dim choices with per-value coloring when colors are enabled", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: valueSet(["json", "yaml"], { type: "unit" }),
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, {
+      showChoices: true,
+      colors: true,
+    });
+    // Should contain dim ANSI wrapping and per-value green coloring
+    assert.ok(result.includes("\x1b[2m"));
+    assert.ok(result.includes("\x1b[0m"));
+    // Each value should get its own green color within the dim context
+    assert.ok(
+      result.includes("\x1b[32mjson\x1b[0m\x1b[2m"),
+      "json should be green with dim reset",
+    );
+    assert.ok(
+      result.includes("\x1b[32myaml\x1b[0m\x1b[2m"),
+      "yaml should be green with dim reset",
+    );
+    // Commas should be in the dim context, not inside green
+    assert.ok(
+      result.includes("\x1b[2m, \x1b[32m") ||
+        result.includes("\x1b[0m\x1b[2m, \x1b[32m"),
+      "commas should be between value color sequences",
+    );
   });
 });

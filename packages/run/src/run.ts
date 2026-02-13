@@ -8,7 +8,7 @@ import type {
   Parser,
 } from "@optique/core/parser";
 import type { Program } from "@optique/core/program";
-import type { ShowDefaultOptions } from "@optique/core/doc";
+import type { ShowChoicesOptions, ShowDefaultOptions } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
 import path from "node:path";
 import process from "node:process";
@@ -58,6 +58,22 @@ export interface RunOptions {
    * @since 0.4.0
    */
   readonly showDefault?: boolean | ShowDefaultOptions;
+
+  /**
+   * Whether and how to display valid choices for options and arguments
+   * backed by enumerated value parsers (e.g., `choice()`).
+   *
+   * - `boolean`: When `true`, displays choices using format
+   *   `(choices: a, b, c)`
+   * - `ShowChoicesOptions`: Custom formatting with configurable prefix,
+   *   suffix, label, and maximum number of items
+   *
+   * Choice values are automatically dimmed when `colors` is enabled.
+   *
+   * @default `false`
+   * @since 0.10.0
+   */
+  readonly showChoices?: boolean | ShowChoicesOptions;
 
   /**
    * Help configuration. Determines how help is made available:
@@ -431,6 +447,7 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     colors = process.stdout.isTTY,
     maxWidth = process.stdout.columns,
     showDefault,
+    showChoices,
     help,
     version,
     completion,
@@ -516,6 +533,7 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     colors,
     maxWidth,
     showDefault,
+    showChoices,
     help: helpConfig,
     version: versionConfig,
     completion: completionConfig,

@@ -688,6 +688,50 @@ const config2 = run(parser, {
 Default values are automatically dimmed when colors are enabled, making them
 visually distinct from the main help text.
 
+### Choice display
+
+*This API is available since Optique 0.10.0.*
+
+Both runner functions support displaying valid choices in help text when
+options or arguments use the `choice()` value parser:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option, argument } from "@optique/core/primitives";
+import { choice, string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({
+  name: option("-n", "--name", string()),
+  format: option("-f", "--format", choice(["json", "yaml", "xml"])),
+  level: argument(choice(["debug", "info", "warn", "error"])),
+});
+
+const config = run(parser, {
+  showChoices: true,  // Shows: --format (choices: json, yaml, xml)
+});
+
+// Custom formatting
+const config2 = run(parser, {
+  showChoices: {
+    prefix: " {",
+    suffix: "}",
+    label: "",
+  }  // Shows: --format {json, yaml, xml}
+});
+
+// Limit displayed choices
+const config3 = run(parser, {
+  showChoices: {
+    maxItems: 3,  // Shows first 3 choices, then "..."
+  }
+});
+~~~~
+
+Choice values are automatically dimmed when colors are enabled, making them
+visually distinct from the main help text.  Both `showDefault` and
+`showChoices` can be enabled simultaneously.
+
 ### Rich documentation support
 
 *This API is available since Optique 0.4.0.*

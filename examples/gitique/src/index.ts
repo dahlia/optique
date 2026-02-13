@@ -86,6 +86,7 @@ async function main() {
       aboveError: "usage", // Show usage information above error messages
       colors: true, // Force colored output for better UX
       showDefault: true, // Display default values in help text
+      showChoices: true, // Display possible choices in help text
     });
 
     // Execute the appropriate command based on the discriminated union tag

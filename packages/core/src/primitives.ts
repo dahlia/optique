@@ -62,6 +62,7 @@ import {
   metavar,
   optionName as eOptionName,
   optionNames as eOptionNames,
+  valueSet,
 } from "./message.ts";
 import type {
   DocState,
@@ -1030,6 +1031,13 @@ export function option<M extends Mode, T>(
       if (options.hidden) {
         return { fragments: [], description: options.description };
       }
+      const choicesMessage: Message | undefined =
+        valueParser?.choices != null && valueParser.choices.length > 0
+          ? valueSet(
+            valueParser.choices.map((c) => valueParser.format(c)),
+            { type: "unit" },
+          )
+          : undefined;
       const fragments: readonly DocFragment[] = [{
         type: "entry",
         term: {
@@ -1041,6 +1049,7 @@ export function option<M extends Mode, T>(
         default: defaultValue != null && valueParser != null
           ? message`${valueParser.format(defaultValue as T)}`
           : undefined,
+        choices: choicesMessage,
       }];
       return { fragments, description: options.description };
     },
@@ -1641,6 +1650,13 @@ export function argument<M extends Mode, T>(
       if (options.hidden) {
         return { fragments: [], description: options.description };
       }
+      const choicesMessage: Message | undefined =
+        valueParser.choices != null && valueParser.choices.length > 0
+          ? valueSet(
+            valueParser.choices.map((c) => valueParser.format(c)),
+            { type: "unit" },
+          )
+          : undefined;
       const fragments: readonly DocFragment[] = [{
         type: "entry",
         term,
@@ -1648,6 +1664,7 @@ export function argument<M extends Mode, T>(
         default: defaultValue == null
           ? undefined
           : message`${valueParser.format(defaultValue)}`,
+        choices: choicesMessage,
       }];
       return { fragments, description: options.description };
     },
