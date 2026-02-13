@@ -16,7 +16,14 @@ To be released.
     option.  Suggestions now only include options and commands that are valid at
     the current parse position.  [[#98]]
 
+ -  Fixed `--completion` and `--completions` without a shell value in option
+    mode reporting a generic parse error.  Previously, inputs like
+    `mycli --completion` could fall through to normal argument parsing and show
+    `Unexpected option or subcommand`, which was misleading.  These now produce
+    the dedicated completion error for a missing shell name.  [[#100]]
+
 [#98]: https://github.com/dahlia/optique/issues/98
+[#100]: https://github.com/dahlia/optique/issues/100
 
 
 Version 0.7.12
