@@ -151,6 +151,19 @@ To be released.
      -  `link()`: Alias for `url()`, useful for avoiding naming conflicts with
         the `url()` value parser from `@optique/core/valueparser`.
 
+ -  Added `lineBreak()` message component for explicit single-line breaks in
+    structured messages. Unlike single `\n` in `text()` terms (which are
+    treated as soft breaks and rendered as spaces), `lineBreak()` always
+    renders as a hard line break.
+
+    ~~~~ typescript
+    import { commandLine, lineBreak, message } from "@optique/core/message";
+
+    const examples = message`Examples:${lineBreak()}
+      Bash: ${commandLine(`eval "$(mycli completion bash)"`)}${lineBreak()}
+      zsh:  ${commandLine(`eval "$(mycli completion zsh)"`)}`;
+    ~~~~
+
  -  Added `@optique/core/program` module with `Program` and `ProgramMetadata`
     interfaces. These provide a structured way to bundle a parser with its
     metadata (name, version, description, etc.), creating a single source of

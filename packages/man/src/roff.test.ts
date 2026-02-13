@@ -4,6 +4,7 @@ import { escapeHyphens, escapeRoff, formatMessageAsRoff } from "./roff.ts";
 import {
   commandLine,
   envVar,
+  lineBreak,
   message,
   metavar,
   optionName,
@@ -207,6 +208,11 @@ describe("formatMessageAsRoff()", () => {
 
   it("handles single newlines as soft breaks", () => {
     const msg = [text("Line one.\nLine two.")];
+    assert.equal(formatMessageAsRoff(msg), "Line one.\nLine two.");
+  });
+
+  it("handles explicit lineBreak terms", () => {
+    const msg = [text("Line one."), lineBreak(), text("Line two.")];
     assert.equal(formatMessageAsRoff(msg), "Line one.\nLine two.");
   });
 

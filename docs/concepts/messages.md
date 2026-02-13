@@ -536,6 +536,30 @@ The `formatMessage()` function handles line breaks in a way similar to Markdown,
 distinguishing between soft breaks (word wrap points) and hard breaks (actual
 paragraph separations):
 
+### Explicit line break term (`lineBreak()`)
+
+*Available since Optique 0.10.0.*
+
+Use `lineBreak()` when you want an explicit single-line break between message
+parts. Unlike single newlines in `text()` terms, this is always rendered as an
+actual line break.
+
+~~~~ typescript twoslash
+import { commandLine, lineBreak, message } from "@optique/core/message";
+
+const examples = message`Examples:${lineBreak()}
+  Bash: ${commandLine(`eval "$(mycli completion bash)"`)}${lineBreak()}
+  zsh:  ${commandLine(`eval "$(mycli completion zsh)"`)}`;
+~~~~
+
+This renders as:
+
+~~~~
+Examples:
+  Bash: eval "$(mycli completion bash)"
+  zsh:  eval "$(mycli completion zsh)"
+~~~~
+
 ### Single newlines (`\n`)
 
 Single newlines in `text()` terms are treated as soft breaks and converted to

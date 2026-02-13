@@ -114,6 +114,10 @@ function formatTermAsRoff(term: MessageTerm): string {
       // Bold with escaped hyphens for command lines
       return `\\fB${escapeHyphens(escapeBackslashes(term.commandLine))}\\fR`;
 
+    case "lineBreak":
+      // Explicit single-line break
+      return "\n";
+
     case "url":
       // URLs in man pages - underline with escaped hyphens
       return `\\fI${escapeHyphens(escapeBackslashes(term.url.href))}\\fR`;
@@ -145,6 +149,7 @@ function formatTermAsRoff(term: MessageTerm): string {
  * | `values` | `"a" "b" "c"` (space-separated quoted) |
  * | `envVar` | `\fBVAR\fR` (bold) |
  * | `commandLine` | `\fBcmd\fR` (bold) |
+ * | `lineBreak` | Newline |
  *
  * @example
  * ```typescript

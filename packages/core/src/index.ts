@@ -12,6 +12,7 @@ export {
   commandLine,
   envVar,
   formatMessage,
+  lineBreak,
   link,
   type Message,
   message,

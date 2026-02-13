@@ -129,6 +129,16 @@ export type MessageTerm =
     readonly commandLine: string;
   }
   /**
+   * An explicit single-line break term in the message.
+   * @since 0.10.0
+   */
+  | {
+    /**
+     * The type of the term, which is `"lineBreak"` for an explicit line break.
+     */
+    readonly type: "lineBreak";
+  }
+  /**
    * A URL term in the message, which represents a clickable hyperlink.
    * @since 0.10.0
    */
@@ -278,6 +288,19 @@ export function envVar(envVar: string): MessageTerm {
  */
 export function commandLine(commandLine: string): MessageTerm {
   return { type: "commandLine", commandLine };
+}
+
+/**
+ * Creates a {@link MessageTerm} for an explicit single-line break.
+ *
+ * Unlike single `\n` in `text()` terms (which are treated as soft breaks and
+ * normalized to spaces), this term always renders as a hard line break.
+ *
+ * @returns A {@link MessageTerm} representing an explicit line break.
+ * @since 0.10.0
+ */
+export function lineBreak(): MessageTerm {
+  return { type: "lineBreak" };
 }
 
 /**
@@ -601,6 +624,9 @@ export function formatMessage(
             : cmd,
           width: cmd.length,
         };
+      } else if (term.type === "lineBreak") {
+        // Explicit hard line break
+        yield { text: "\n", width: -1 };
       } else if (term.type === "url") {
         const urlString = term.url.href;
         const displayText = useQuotes ? `<${urlString}>` : urlString;

@@ -2,6 +2,7 @@ import {
   commandLine,
   envVar,
   formatMessage,
+  lineBreak,
   link,
   type Message,
   message,
@@ -180,6 +181,11 @@ describe("message term constructors", () => {
     const term = commandLine("myapp completion bash > output.bash");
     assert.equal(term.type, "commandLine");
     assert.equal(term.commandLine, "myapp completion bash > output.bash");
+  });
+
+  it("should create lineBreak term", () => {
+    const term = lineBreak();
+    assert.equal(term.type, "lineBreak");
   });
 
   it("should create url term from valid HTTP URL string", () => {
@@ -773,6 +779,24 @@ describe("integration tests", () => {
 });
 
 describe("formatMessage - explicit line breaks", () => {
+  it("should render explicit lineBreak term as single hard break", () => {
+    const msg: Message = [
+      { type: "text", text: "Line 1." },
+      lineBreak(),
+      { type: "text", text: "Line 2." },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    assert.equal(formatted, "Line 1.\nLine 2.");
+  });
+
+  it("should support lineBreak in template interpolation", () => {
+    const msg = message`First:${lineBreak()}  ${optionName("--help")}`;
+    const formatted = formatMessage(msg, { quotes: false });
+
+    assert.equal(formatted, "First:\n --help");
+  });
+
   it("should treat single newline as space (soft break)", () => {
     const msg: Message = [
       { type: "text", text: "Line 1." },
