@@ -34,16 +34,9 @@ import {
   suggest,
   suggestAsync,
 } from "./parser.ts";
-import {
-  argument,
-  command,
-  constant,
-  flag,
-  option,
-  type OptionOptions,
-} from "./primitives.ts";
-import { formatUsage, type OptionName, type Usage } from "./usage.ts";
-import { string, type ValueParser } from "./valueparser.ts";
+import { argument, command, constant, flag, option } from "./primitives.ts";
+import { formatUsage, type Usage } from "./usage.ts";
+import { string, type ValueParserResult } from "./valueparser.ts";
 import { annotationKey, type Annotations } from "./annotations.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
@@ -140,13 +133,102 @@ interface CompletionParsers {
 }
 
 /**
+ * Naming style for shell completion command and option aliases.
+ *
+ * @since 0.10.0
+ */
+export type CompletionName = "singular" | "plural" | "both";
+
+/**
+ * Visibility policy for completion entries in help and usage output.
+ *
+ * @since 0.10.0
+ */
+export type CompletionHelpVisibility = CompletionName | "none";
+
+type CompletionConfigBase<THelp> = {
+  /**
+   * Determines how completion is made available:
+   *
+   * - `"command"`: Only the `completion` subcommand is available
+   * - `"option"`: Only the `--completion` option is available
+   * - `"both"`: Both `completion` subcommand and `--completion` option are available
+   *
+   * @default `"both"`
+   */
+  readonly mode?: "command" | "option" | "both";
+
+  /**
+   * Available shell completions. By default, includes `bash`, `fish`, `nu`,
+   * `pwsh`, and `zsh`. You can provide additional custom shell completions or
+   * override the defaults.
+   *
+   * @default `{ bash, fish, nu, pwsh, zsh }`
+   */
+  readonly shells?: Record<string, ShellCompletion>;
+
+  /**
+   * Callback function invoked when completion is requested. The function can
+   * optionally receive an exit code parameter.
+   *
+   * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
+   * on Deno to this option.
+   *
+   * @default Returns `void` when completion is shown.
+   */
+  readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+};
+
+type CompletionConfigBoth<THelp> = CompletionConfigBase<THelp> & {
+  /**
+   * Determines whether to use singular or plural naming for completion command/option.
+   *
+   * - `"singular"`: Use `completion` / `--completion`
+   * - `"plural"`: Use `completions` / `--completions`
+   * - `"both"`: Use both singular and plural forms
+   *
+   * @default `"both"`
+   */
+  readonly name?: "both";
+
+  /**
+   * Controls which completion entries appear in help and usage output.
+   *
+   * - `"both"`: Show both singular and plural entries
+   * - `"singular"`: Show only singular entries
+   * - `"plural"`: Show only plural entries
+   * - `"none"`: Hide completion entries from help and usage
+   *
+   * @default Matches `name`
+   * @since 0.10.0
+   */
+  readonly helpVisibility?: CompletionHelpVisibility;
+};
+
+type CompletionConfigSingular<THelp> = CompletionConfigBase<THelp> & {
+  readonly name: "singular";
+  readonly helpVisibility?: "singular" | "none";
+};
+
+type CompletionConfigPlural<THelp> = CompletionConfigBase<THelp> & {
+  readonly name: "plural";
+  readonly helpVisibility?: "plural" | "none";
+};
+
+type CompletionConfig<THelp> =
+  | CompletionConfigBoth<THelp>
+  | CompletionConfigSingular<THelp>
+  | CompletionConfigPlural<THelp>;
+
+/**
  * Creates completion parsers based on the specified mode.
  */
 function createCompletionParser(
   mode: "command" | "option" | "both",
   programName: string,
   availableShells: Record<string, ShellCompletion>,
-  name: "singular" | "plural" | "both" = "both",
+  name: CompletionName = "both",
+  helpVisibility: CompletionHelpVisibility = name,
 ): CompletionParsers {
   const shellList: MessageTerm[] = [];
   for (const shell in availableShells) {
@@ -196,14 +278,23 @@ function createCompletionParser(
     { shell: string | undefined; args: readonly string[] },
     unknown
   >[] = [];
+  const showSingular = helpVisibility === "singular" ||
+    helpVisibility === "both";
+  const showPlural = helpVisibility === "plural" || helpVisibility === "both";
   if (name === "singular" || name === "both") {
     completionCommands.push(
-      command("completion", completionInner, completionCommandConfig),
+      command("completion", completionInner, {
+        ...completionCommandConfig,
+        hidden: !showSingular,
+      }),
     );
   }
   if (name === "plural" || name === "both") {
     completionCommands.push(
-      command("completions", completionInner, completionCommandConfig),
+      command("completions", completionInner, {
+        ...completionCommandConfig,
+        hidden: !showPlural,
+      }),
     );
   }
 
@@ -219,27 +310,31 @@ function createCompletionParser(
     unknown
   >)(...completionCommands);
 
-  const completionOptionNames: OptionName[] = [];
+  const completionOptions: Parser<
+    "sync",
+    string,
+    ValueParserResult<string> | undefined
+  >[] = [];
   if (name === "singular" || name === "both") {
-    completionOptionNames.push("--completion");
+    completionOptions.push(
+      option("--completion", string({ metavar: "SHELL" }), {
+        description: message`Generate shell completion script.`,
+        hidden: !showSingular,
+      }),
+    );
   }
   if (name === "plural" || name === "both") {
-    completionOptionNames.push("--completions");
+    completionOptions.push(
+      option("--completions", string({ metavar: "SHELL" }), {
+        description: message`Generate shell completion script.`,
+        hidden: !showPlural,
+      }),
+    );
   }
 
-  const completionOptionArgs: [
-    ...OptionName[],
-    ValueParser<"sync", string>,
-    OptionOptions,
-  ] = [
-    ...completionOptionNames,
-    string({ metavar: "SHELL" }),
-    {
-      description: message`Generate shell completion script.`,
-    },
-  ];
-
-  const completionOption = option(...completionOptionArgs);
+  const completionOption = completionOptions.length === 1
+    ? completionOptions[0]
+    : longestMatch(completionOptions[0], completionOptions[1]);
 
   const argsParser = withDefault(
     multiple(
@@ -753,49 +848,7 @@ export interface RunOptions<THelp, TError> {
    * Completion configuration. When provided, enables shell completion functionality.
    * @since 0.6.0
    */
-  readonly completion?: {
-    /**
-     * Determines how completion is made available:
-     *
-     * - `"command"`: Only the `completion` subcommand is available
-     * - `"option"`: Only the `--completion` option is available
-     * - `"both"`: Both `completion` subcommand and `--completion` option are available
-     *
-     * @default `"both"`
-     */
-    readonly mode?: "command" | "option" | "both";
-
-    /**
-     * Determines whether to use singular or plural naming for completion command/option.
-     *
-     * - `"singular"`: Use `completion` / `--completion`
-     * - `"plural"`: Use `completions` / `--completions`
-     * - `"both"`: Use both singular and plural forms
-     *
-     * @default `"both"`
-     */
-    readonly name?: "singular" | "plural" | "both";
-
-    /**
-     * Available shell completions. By default, includes `bash`, `fish`, `nu`,
-     * `pwsh`, and `zsh`. You can provide additional custom shell completions or
-     * override the defaults.
-     *
-     * @default `{ bash, fish, nu, pwsh, zsh }`
-     */
-    readonly shells?: Record<string, ShellCompletion>;
-
-    /**
-     * Callback function invoked when completion is requested. The function can
-     * optionally receive an exit code parameter.
-     *
-     * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
-     * on Deno to this option.
-     *
-     * @default Returns `void` when completion is shown.
-     */
-    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-  };
+  readonly completion?: CompletionConfig<THelp>;
 
   /**
    * What to display above error messages:
@@ -1153,6 +1206,8 @@ export function runParser<
   // Extract completion configuration
   const completionMode = options.completion?.mode ?? "both";
   const completionName = options.completion?.name ?? "both";
+  const completionHelpVisibility = options.completion?.helpVisibility ??
+    completionName;
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
 
   // Get available shells (defaults + user-provided)
@@ -1188,6 +1243,7 @@ export function runParser<
       programName,
       availableShells,
       completionName,
+      completionHelpVisibility,
     );
 
   // Early return for completion requests (avoids parser conflicts)

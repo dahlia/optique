@@ -420,6 +420,43 @@ The `name` option accepts:
 `"both"` (default)
 :   Use both singular and plural forms.
 
+### Help visibility
+
+*This API is available since Optique 0.10.0.*
+
+You can control which completion aliases appear in help and usage output with
+`helpVisibility`. This is useful when you want to keep compatibility aliases
+working without showing all aliases in `--help`.
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { run } from "@optique/run";
+
+const parser = object({});
+
+run(parser, {
+  completion: {
+    mode: "both",
+    name: "both", // Accept both completion/completions at runtime
+    helpVisibility: "singular", // Show only singular form in help output
+  },
+});
+~~~~
+
+The `helpVisibility` option accepts:
+
+`"singular"`
+:   Show only `completion` and `--completion` in help/usage.
+
+`"plural"`
+:   Show only `completions` and `--completions` in help/usage.
+
+`"both"`
+:   Show both singular and plural forms.
+
+`"none"`
+:   Hide completion command and option entries from help/usage.
+
 ### Automatic handling
 
 When completion is enabled, the `run()` function automatically:

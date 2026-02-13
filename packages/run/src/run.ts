@@ -93,17 +93,16 @@ export interface RunOptions {
    * - `"both"`: Both `completion` subcommand and `--completion` option are available
    * - `object`: Advanced configuration with mode and custom shells
    *   - `mode`: "command" | "option" | "both" (default: "both")
+   *   - `name`: "singular" | "plural" | "both" (default: "both")
+   *   - `helpVisibility`: "singular" | "plural" | "both" | "none"
+   *      (default: matches `name`)
    *   - `shells`: Custom shell completions (optional)
    *
    * When not provided, completion functionality is disabled.
    *
    * @since 0.6.0
    */
-  readonly completion?: "command" | "option" | "both" | {
-    readonly mode?: "command" | "option" | "both";
-    readonly name?: "singular" | "plural" | "both";
-    readonly shells?: Record<string, ShellCompletion>;
-  };
+  readonly completion?: "command" | "option" | "both" | CompletionOptions;
 
   /**
    * What to display above error messages:
@@ -165,6 +164,51 @@ export interface RunOptions {
    */
   readonly footer?: Message;
 }
+
+type CompletionHelpVisibility = "singular" | "plural" | "both" | "none";
+
+type CompletionOptionsBase = {
+  readonly mode?: "command" | "option" | "both";
+  readonly shells?: Record<string, ShellCompletion>;
+};
+
+type CompletionOptionsBoth = CompletionOptionsBase & {
+  readonly name?: "both";
+
+  /**
+   * Controls which completion aliases are shown in help and usage output.
+   *
+   * @since 0.10.0
+   */
+  readonly helpVisibility?: CompletionHelpVisibility;
+};
+
+type CompletionOptionsSingular = CompletionOptionsBase & {
+  readonly name: "singular";
+
+  /**
+   * Controls which completion aliases are shown in help and usage output.
+   *
+   * @since 0.10.0
+   */
+  readonly helpVisibility?: "singular" | "none";
+};
+
+type CompletionOptionsPlural = CompletionOptionsBase & {
+  readonly name: "plural";
+
+  /**
+   * Controls which completion aliases are shown in help and usage output.
+   *
+   * @since 0.10.0
+   */
+  readonly helpVisibility?: "plural" | "none";
+};
+
+type CompletionOptions =
+  | CompletionOptionsBoth
+  | CompletionOptionsSingular
+  | CompletionOptionsPlural;
 
 /**
  * Runs a command-line parser with automatic process integration.
@@ -420,18 +464,47 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     : undefined;
 
   // Convert completion configuration for the base run function
-  const completionConfig = completion
-    ? {
-      mode: typeof completion === "string"
-        ? completion
-        : (completion.mode ?? "both"),
-      shells: typeof completion === "string" ? undefined : completion.shells,
-      name: typeof completion === "string"
-        ? "both"
-        : (completion.name ?? "both"),
-      onShow: () => process.exit(0) as never,
+  const completionConfig = (() => {
+    if (!completion) return undefined;
+
+    if (typeof completion === "string") {
+      return {
+        mode: completion,
+        shells: undefined,
+        name: "both" as const,
+        helpVisibility: "both" as const,
+        onShow: () => process.exit(0) as never,
+      };
     }
-    : undefined;
+
+    const mode = completion.mode ?? "both";
+    const shells = completion.shells;
+    if (completion.name === "singular") {
+      return {
+        mode,
+        shells,
+        name: "singular" as const,
+        helpVisibility: completion.helpVisibility ?? "singular",
+        onShow: () => process.exit(0) as never,
+      };
+    }
+    if (completion.name === "plural") {
+      return {
+        mode,
+        shells,
+        name: "plural" as const,
+        helpVisibility: completion.helpVisibility ?? "plural",
+        onShow: () => process.exit(0) as never,
+      };
+    }
+    return {
+      mode,
+      shells,
+      name: "both" as const,
+      helpVisibility: completion.helpVisibility ?? "both",
+      onShow: () => process.exit(0) as never,
+    };
+  })();
 
   return runParser(parser, programName, args, {
     stderr(line) {

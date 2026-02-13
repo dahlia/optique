@@ -549,6 +549,13 @@ To be released.
     This was renamed in v0.9.0 for consistency with the `runParser()` rename.
     [[#65]]
 
+ -  Added `helpVisibility` to completion configuration in `runParser()` and
+    `runWith*()` APIs. This allows keeping both singular and plural completion
+    aliases enabled at runtime while controlling whether help shows singular,
+    plural, both, or none of the completion entries. Type definitions now
+    enforce valid `name` and `helpVisibility` combinations at compile time.
+    [[#99]]
+
 [runtime context extension guide]: https://optique.dev/concepts/extend
 [#65]: https://github.com/dahlia/optique/issues/65
 [#74]: https://github.com/dahlia/optique/issues/74
@@ -560,6 +567,7 @@ To be released.
 [#85]: https://github.com/dahlia/optique/issues/85
 [#89]: https://github.com/dahlia/optique/issues/89
 [#92]: https://github.com/dahlia/optique/issues/92
+[#99]: https://github.com/dahlia/optique/issues/99
 
 ### @optique/config
 
@@ -628,6 +636,11 @@ for usage examples.
       // ...
     });
     ~~~~
+
+ -  Added `completion.helpVisibility` to `run()` options. This controls whether
+    completion aliases are shown in help and usage output (`"singular"`,
+    `"plural"`, `"both"`, or `"none"`) independently from which aliases are
+    accepted at runtime via `completion.name`. [[#99]]
 
 ### @optique/man
 

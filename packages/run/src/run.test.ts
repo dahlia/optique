@@ -5,10 +5,13 @@ import { argument, command, option } from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
+import type { RunOptions } from "@optique/run/run";
 import { run, runAsync, runSync } from "@optique/run/run";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import process from "node:process";
+
+type AssertNever<T extends never> = T;
 
 describe("run", () => {
   describe("basic parsing", () => {
@@ -229,6 +232,26 @@ describe("run", () => {
       });
 
       assert.deepEqual(result, { debug: true, name: "David" });
+    });
+
+    it("should enforce completion helpVisibility combinations at compile time", () => {
+      const validPlural: RunOptions["completion"] = {
+        mode: "both",
+        name: "plural",
+        helpVisibility: "none",
+      };
+      void validPlural;
+
+      type InvalidPluralVisibility = Extract<
+        RunOptions["completion"],
+        {
+          readonly name: "plural";
+          readonly helpVisibility: "singular";
+        }
+      >;
+      const assertInvalidPlural: AssertNever<InvalidPluralVisibility> =
+        undefined as never;
+      void assertInvalidPlural;
     });
   });
 

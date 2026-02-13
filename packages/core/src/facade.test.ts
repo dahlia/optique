@@ -1,6 +1,7 @@
 import { object, or } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
 import {
+  type RunOptions,
   runParser,
   RunParserError,
   runWith,
@@ -20,6 +21,8 @@ import type { Program } from "@optique/core/program";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+
+type AssertNever<T extends never> = T;
 
 describe("runParser", () => {
   describe("basic parsing", () => {
@@ -2801,6 +2804,86 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
+    it("should hide both completion command names in help when helpVisibility is 'none'", () => {
+      const parser = object({
+        foo: option("--foo"),
+      });
+
+      let helpOutput = "";
+
+      runParser(parser, "mycli", ["--help"], {
+        help: {
+          mode: "option",
+          onShow: () => "help-shown",
+        },
+        completion: {
+          mode: "command",
+          name: "both",
+          helpVisibility: "none",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.ok(!helpOutput.includes("mycli completion [SHELL] [ARG...]"));
+      assert.ok(!helpOutput.includes("mycli completions [SHELL] [ARG...]"));
+    });
+
+    it("should show only singular completion command in help when configured", () => {
+      const parser = object({
+        foo: option("--foo"),
+      });
+
+      let helpOutput = "";
+
+      runParser(parser, "mycli", ["--help"], {
+        help: {
+          mode: "option",
+          onShow: () => "help-shown",
+        },
+        completion: {
+          mode: "command",
+          name: "both",
+          helpVisibility: "singular",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.ok(helpOutput.includes("mycli completion [SHELL] [ARG...]"));
+      assert.ok(!helpOutput.includes("mycli completions [SHELL] [ARG...]"));
+    });
+
+    it("should keep hidden completion aliases functional at runtime", () => {
+      const parser = object({
+        foo: option("--foo"),
+      });
+
+      let completionOutput = "";
+      let completionShown = false;
+
+      const result = runParser(parser, "mycli", ["completions", "bash"], {
+        completion: {
+          mode: "command",
+          name: "both",
+          helpVisibility: "singular",
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
+
+      assert.equal(result, "completion-shown");
+      assert.ok(completionShown);
+      assert.ok(completionOutput.includes("function _mycli"));
+    });
+
     it("should restrict to singular name when configured", () => {
       const parser = object({
         verbose: option("--verbose"),
@@ -3122,6 +3205,22 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         !completionOutput.includes("'completions'"),
         "Should not include 'completions' (plural) command in generated script when name is 'singular'",
       );
+    });
+
+    it("should enforce completion helpVisibility combinations at compile time", () => {
+      const validSingular: RunOptions<void, never>["completion"] = {
+        name: "singular",
+        helpVisibility: "none",
+      };
+      void validSingular;
+
+      type InvalidSingularVisibility = Extract<
+        RunOptions<void, never>["completion"],
+        { readonly name: "singular"; readonly helpVisibility: "plural" }
+      >;
+      const assertInvalidSingular: AssertNever<InvalidSingularVisibility> =
+        undefined as never;
+      void assertInvalidSingular;
     });
   });
 
