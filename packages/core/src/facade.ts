@@ -11,6 +11,7 @@ import { type DocPage, formatDocPage, type ShowDefaultOptions } from "./doc.ts";
 import {
   commandLine,
   formatMessage,
+  lineBreak,
   type Message,
   message,
   type MessageTerm,
@@ -256,21 +257,21 @@ function createCompletionParser(
     brief: message`Generate shell completion script or provide completions.`,
     description:
       message`Generate shell completion script or provide completions.`,
-    footer: message`Examples:
-  Bash:       ${commandLine(`eval "$(${programName} ${commandName} bash)"`)}
-  zsh:        ${commandLine(`eval "$(${programName} ${commandName} zsh)"`)}
-  fish:       ${commandLine(`eval "$(${programName} ${commandName} fish)"`)}
-  PowerShell: ${
+    footer: message`Examples:${lineBreak()}  Bash:       ${
+      commandLine(`eval "$(${programName} ${commandName} bash)"`)
+    }${lineBreak()}  zsh:        ${
+      commandLine(`eval "$(${programName} ${commandName} zsh)"`)
+    }${lineBreak()}  fish:       ${
+      commandLine(`eval "$(${programName} ${commandName} fish)"`)
+    }${lineBreak()}  PowerShell: ${
       commandLine(
         `${programName} ${commandName} pwsh > ${programName}-completion.ps1; . ./${programName}-completion.ps1`,
       )
-    }
-  Nushell:    ${
+    }${lineBreak()}  Nushell:    ${
       commandLine(
         `${programName} ${commandName} nu | save ${programName}-completion.nu; source ./${programName}-completion.nu`,
       )
-    }
-`,
+    }`,
   };
 
   const completionCommands: Parser<

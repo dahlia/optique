@@ -2811,6 +2811,33 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
+    it("should render completion help examples on separate lines", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let helpOutput = "";
+
+      runParser(parser, "myapp", ["completion", "--help"], {
+        help: {
+          mode: "option",
+          onShow: () => "help-shown",
+        },
+        completion: {
+          mode: "command",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.ok(helpOutput.includes("Examples:\n  Bash:"));
+      assert.ok(helpOutput.includes("\n  zsh:"));
+      assert.ok(helpOutput.includes("\n  fish:"));
+      assert.ok(helpOutput.includes("\n  PowerShell:"));
+      assert.ok(helpOutput.includes("\n  Nushell:"));
+    });
+
     it("should support --completions (plural) option", () => {
       const parser = object({
         verbose: option("--verbose"),
