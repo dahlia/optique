@@ -6,6 +6,18 @@ Version 0.7.13
 
 To be released.
 
+### @optique/core
+
+ -  Fixed contradictory suggestion messages for subcommand-only options at the
+    root command level.  Previously, when an option that belongs to a
+    subcommand was entered before specifying the subcommand (for example,
+    `mycli --fooflag 123` where `--fooflag` belongs to `mycli foo`), the parser
+    could report `Unexpected option or subcommand` and still suggest the same
+    option.  Suggestions now only include options and commands that are valid at
+    the current parse position.  [[#98]]
+
+[#98]: https://github.com/dahlia/optique/issues/98
+
 
 Version 0.7.12
 --------------

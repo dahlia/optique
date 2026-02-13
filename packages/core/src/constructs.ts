@@ -3,6 +3,7 @@ import {
   type Message,
   message,
   optionName as eOptionName,
+  text,
   values,
 } from "./message.ts";
 import type {
@@ -11,7 +12,12 @@ import type {
   ParserContext,
   ParserResult,
 } from "./parser.ts";
-import { createErrorWithSuggestions } from "./suggestion.ts";
+import {
+  createErrorWithSuggestions,
+  createSuggestionMessage,
+  DEFAULT_FIND_SIMILAR_OPTIONS,
+  findSimilar,
+} from "./suggestion.ts";
 import {
   extractArgumentMetavars,
   extractCommandNames,
@@ -48,6 +54,88 @@ function isOptionRequiringValue(usage: Usage, token: string): boolean {
   }
 
   return traverse(usage);
+}
+
+function collectLeadingCandidates(
+  terms: Usage,
+  optionNames: Set<string>,
+  commandNames: Set<string>,
+): boolean {
+  if (!terms || !Array.isArray(terms)) return true;
+
+  for (const term of terms) {
+    if (term.type === "option") {
+      for (const name of term.names) {
+        optionNames.add(name);
+      }
+      return false;
+    }
+
+    if (term.type === "command") {
+      commandNames.add(term.name);
+      return false;
+    }
+
+    if (term.type === "argument") {
+      return false;
+    }
+
+    if (term.type === "optional") {
+      collectLeadingCandidates(term.terms, optionNames, commandNames);
+      continue;
+    }
+
+    if (term.type === "multiple") {
+      collectLeadingCandidates(term.terms, optionNames, commandNames);
+      if (term.min === 0) continue;
+      return false;
+    }
+
+    if (term.type === "exclusive") {
+      let allAlternativesSkippable = true;
+      for (const exclusiveUsage of term.terms) {
+        const alternativeSkippable = collectLeadingCandidates(
+          exclusiveUsage,
+          optionNames,
+          commandNames,
+        );
+        allAlternativesSkippable = allAlternativesSkippable &&
+          alternativeSkippable;
+      }
+      if (allAlternativesSkippable) continue;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function createUnexpectedInputErrorWithScopedSuggestions(
+  baseError: Message,
+  invalidInput: string,
+  parsers: readonly Parser<unknown, unknown>[],
+  customFormatter?: (suggestions: readonly string[]) => Message,
+): Message {
+  const options = new Set<string>();
+  const commands = new Set<string>();
+
+  for (const parser of parsers) {
+    collectLeadingCandidates(parser.usage, options, commands);
+  }
+
+  const candidates = new Set<string>([...options, ...commands]);
+  const suggestions = findSimilar(
+    invalidInput,
+    candidates,
+    DEFAULT_FIND_SIMILAR_OPTIONS,
+  );
+  const suggestionMsg = customFormatter
+    ? customFormatter(suggestions)
+    : createSuggestionMessage(suggestions);
+
+  return suggestionMsg.length > 0
+    ? [...baseError, text("\n\n"), ...suggestionMsg]
+    : baseError;
 }
 import type { ValueParserResult } from "./valueparser.ts";
 
@@ -806,11 +894,10 @@ export function or(
             }
 
             // Otherwise, add suggestions to the default message
-            return createErrorWithSuggestions(
+            return createUnexpectedInputErrorWithScopedSuggestions(
               defaultMsg,
               token,
-              context.usage,
-              "both",
+              parsers,
               options?.errors?.suggestions,
             );
           })(),
@@ -1259,11 +1346,10 @@ export function longestMatch(
             }
 
             // Otherwise, add suggestions to the default message
-            return createErrorWithSuggestions(
+            return createUnexpectedInputErrorWithScopedSuggestions(
               defaultMsg,
               token,
-              context.usage,
-              "both",
+              parsers,
               options?.errors?.suggestions,
             );
           })(),
