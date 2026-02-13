@@ -6,6 +6,25 @@ Version 0.9.5
 
 To be released.
 
+### @optique/core
+
+ -  Fixed contradictory suggestion messages for subcommand-only options at the
+    root command level.  Previously, when an option that belongs to a
+    subcommand was entered before specifying the subcommand (for example,
+    `mycli --fooflag 123` where `--fooflag` belongs to `mycli foo`), the parser
+    could report `Unexpected option or subcommand` and still suggest the same
+    option.  Suggestions now only include options and commands that are valid at
+    the current parse position.  [[#98]]
+
+ -  Fixed `--completion` and `--completions` without a shell value in option
+    mode reporting a generic parse error.  Previously, inputs like
+    `mycli --completion` could fall through to normal argument parsing and show
+    `Unexpected option or subcommand`, which was misleading.  These now produce
+    the dedicated completion error for a missing shell name.  [[#100]]
+
+[#98]: https://github.com/dahlia/optique/issues/98
+[#100]: https://github.com/dahlia/optique/issues/100
+
 
 Version 0.9.4
 -------------

@@ -3,6 +3,7 @@ import {
   type Message,
   message,
   optionName as eOptionName,
+  text,
   values,
 } from "./message.ts";
 import type {
@@ -45,7 +46,10 @@ type CombineTupleModes<T extends readonly Parser<Mode, unknown, unknown>[]> =
   CombineModes<{ readonly [K in keyof T]: ExtractMode<T[K]> }>;
 import {
   createErrorWithSuggestions,
+  createSuggestionMessage,
   deduplicateSuggestions,
+  DEFAULT_FIND_SIMILAR_OPTIONS,
+  findSimilar,
 } from "./suggestion.ts";
 import {
   extractArgumentMetavars,
@@ -54,6 +58,93 @@ import {
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
+
+/**
+ * Collects option names and command names that are valid at the current
+ * parse position by walking the usage tree.  Only "leading" candidates
+ * (those reachable before a required positional argument) are collected.
+ */
+function collectLeadingCandidates(
+  terms: Usage,
+  optionNames: Set<string>,
+  commandNames: Set<string>,
+): boolean {
+  if (!terms || !Array.isArray(terms)) return true;
+
+  for (const term of terms) {
+    if (term.type === "option") {
+      for (const name of term.names) {
+        optionNames.add(name);
+      }
+      return false;
+    }
+
+    if (term.type === "command") {
+      commandNames.add(term.name);
+      return false;
+    }
+
+    if (term.type === "argument") {
+      return false;
+    }
+
+    if (term.type === "optional") {
+      collectLeadingCandidates(term.terms, optionNames, commandNames);
+      continue;
+    }
+
+    if (term.type === "multiple") {
+      collectLeadingCandidates(term.terms, optionNames, commandNames);
+      if (term.min === 0) continue;
+      return false;
+    }
+
+    if (term.type === "exclusive") {
+      let allAlternativesSkippable = true;
+      for (const exclusiveUsage of term.terms) {
+        const alternativeSkippable = collectLeadingCandidates(
+          exclusiveUsage,
+          optionNames,
+          commandNames,
+        );
+        allAlternativesSkippable = allAlternativesSkippable &&
+          alternativeSkippable;
+      }
+      if (allAlternativesSkippable) continue;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function createUnexpectedInputErrorWithScopedSuggestions(
+  baseError: Message,
+  invalidInput: string,
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  customFormatter?: (suggestions: readonly string[]) => Message,
+): Message {
+  const options = new Set<string>();
+  const commands = new Set<string>();
+
+  for (const parser of parsers) {
+    collectLeadingCandidates(parser.usage, options, commands);
+  }
+
+  const candidates = new Set<string>([...options, ...commands]);
+  const suggestions = findSimilar(
+    invalidInput,
+    candidates,
+    DEFAULT_FIND_SIMILAR_OPTIONS,
+  );
+  const suggestionMsg = customFormatter
+    ? customFormatter(suggestions)
+    : createSuggestionMessage(suggestions);
+
+  return suggestionMsg.length > 0
+    ? [...baseError, text("\n\n"), ...suggestionMsg]
+    : baseError;
+}
 
 /**
  * Checks if the given token is an option name that requires a value
@@ -471,37 +562,6 @@ function getNoMatchError(
       ? customNoMatch(noMatchContext)
       : customNoMatch)
     : generateNoMatchError(noMatchContext);
-}
-
-/**
- * Creates default error for parse() method when buffer is not empty.
- * Shared by or() and longestMatch().
- * @internal
- */
-function createUnexpectedInputError(
-  token: string,
-  usage: Usage,
-  options: { errors?: ExclusiveErrorOptions } | undefined,
-): Message {
-  const defaultMsg = message`Unexpected option or subcommand: ${
-    eOptionName(token)
-  }.`;
-
-  // If custom error is provided, use it
-  if (options?.errors?.unexpectedInput != null) {
-    return typeof options.errors.unexpectedInput === "function"
-      ? options.errors.unexpectedInput(token)
-      : options.errors.unexpectedInput;
-  }
-
-  // Otherwise, add suggestions to the default message
-  return createErrorWithSuggestions(
-    defaultMsg,
-    token,
-    usage,
-    "both",
-    options?.errors?.suggestions,
-  );
 }
 
 /**
@@ -1242,11 +1302,27 @@ export function or(
     consumed: 0,
     error: context.buffer.length < 1
       ? getNoMatchError(options, noMatchContext)
-      : createUnexpectedInputError(
-        context.buffer[0],
-        context.usage,
-        options,
-      ),
+      : (() => {
+        const token = context.buffer[0];
+        const defaultMsg = message`Unexpected option or subcommand: ${
+          eOptionName(token)
+        }.`;
+
+        // If custom error is provided, use it
+        if (options?.errors?.unexpectedInput != null) {
+          return typeof options.errors.unexpectedInput === "function"
+            ? options.errors.unexpectedInput(token)
+            : options.errors.unexpectedInput;
+        }
+
+        // Otherwise, add suggestions scoped to current parsers
+        return createUnexpectedInputErrorWithScopedSuggestions(
+          defaultMsg,
+          token,
+          parsers,
+          options?.errors?.suggestions,
+        );
+      })(),
   });
 
   // Sync parse implementation
@@ -1770,11 +1846,27 @@ export function longestMatch(
     consumed: 0,
     error: context.buffer.length < 1
       ? getNoMatchError(options, noMatchContext)
-      : createUnexpectedInputError(
-        context.buffer[0],
-        context.usage,
-        options,
-      ),
+      : (() => {
+        const token = context.buffer[0];
+        const defaultMsg = message`Unexpected option or subcommand: ${
+          eOptionName(token)
+        }.`;
+
+        // If custom error is provided, use it
+        if (options?.errors?.unexpectedInput != null) {
+          return typeof options.errors.unexpectedInput === "function"
+            ? options.errors.unexpectedInput(token)
+            : options.errors.unexpectedInput;
+        }
+
+        // Otherwise, add suggestions scoped to current parsers
+        return createUnexpectedInputErrorWithScopedSuggestions(
+          defaultMsg,
+          token,
+          parsers,
+          options?.errors?.suggestions,
+        );
+      })(),
   });
 
   // Sync parse implementation
