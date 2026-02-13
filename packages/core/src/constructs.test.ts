@@ -351,6 +351,31 @@ describe("or() error customization", () => {
       assert.ok(!errorMessage.includes("deploy"));
     }
   });
+
+  it("should not suggest subcommand-only options before command match", () => {
+    const parser = or(
+      command(
+        "foo",
+        object({
+          fooflag: option("--fooflag", integer()),
+        }),
+      ),
+      command(
+        "bar",
+        object({
+          barflag: flag("--barflag"),
+        }),
+      ),
+    );
+
+    const result = parseSync(parser, ["--fooflag", "123"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(errorMessage.includes("Unexpected option or subcommand"));
+      assert.ok(!errorMessage.includes("Did you mean"));
+    }
+  });
 });
 
 describe("longestMatch()", () => {

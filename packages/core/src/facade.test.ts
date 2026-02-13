@@ -2517,6 +2517,32 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
+    it("should report missing shell for separated --completion option", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let errorOutput = "";
+      let errorResult: unknown;
+
+      runParser(parser, "myapp", ["--completion"], {
+        completion: {
+          mode: "option",
+        },
+        onError: (exitCode: number) => {
+          errorResult = `error-${exitCode}`;
+          return errorResult;
+        },
+        stderr: (text: string) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("Missing shell name for completion"));
+      assert.ok(!errorOutput.includes("Unexpected option"));
+    });
+
     it("should handle unsupported shell with error message", () => {
       const parser = object({
         verbose: option("--verbose"),

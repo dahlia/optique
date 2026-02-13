@@ -1321,12 +1321,9 @@ export function runParser<
               ? arg === "--completions"
               : false;
 
-          if (
-            (singularMatchExact || pluralMatchExact) &&
-            i + 1 < args.length
-          ) {
-            const shell = args[i + 1];
-            const completionArgs = args.slice(i + 2);
+          if (singularMatchExact || pluralMatchExact) {
+            const shell = i + 1 < args.length ? args[i + 1] : "";
+            const completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
             return handleCompletion(
               [shell, ...completionArgs],
               programName,
