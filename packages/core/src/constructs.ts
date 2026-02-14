@@ -5064,8 +5064,17 @@ export function merge(
   }
 
   const initialState: Record<string | symbol, unknown> = {};
-  for (const parser of parsers) {
-    if (parser.initialState && typeof parser.initialState === "object") {
+  for (let i = 0; i < parsers.length; i++) {
+    const parser = parsers[i];
+    if (parser.initialState === undefined) {
+      // For parsers with undefined initialState (like withDefault(), or()),
+      // include a __parser_N sentinel so that an outer merge's
+      // extractParserState will forward these keys when extracting state
+      // for this (inner) merge.
+      initialState[`__parser_${i}`] = undefined;
+    } else if (
+      parser.initialState && typeof parser.initialState === "object"
+    ) {
       for (const field in parser.initialState) {
         initialState[field] = parser.initialState[field];
       }

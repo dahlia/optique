@@ -3243,6 +3243,123 @@ describe("merge", () => {
     );
     assert.ok(hasVerbose, "Should include global options");
   });
+
+  describe("nested merge with withDefault(or(...))", () => {
+    it("should preserve option values through nested merge", () => {
+      // Regression test: when withDefault(or(...)) is inside a nested merge,
+      // the parsed option value should not be lost.
+      const verbosityOpt = withDefault(
+        or(
+          object({
+            verbosity: optional(
+              map(multiple(flag("--verbose", "-v")), (v) => v.length),
+            ),
+          }),
+          object({
+            verbosity: optional(map(flag("--quiet", "-q"), () => 0)),
+          }),
+        ),
+        { verbosity: undefined },
+      );
+
+      // Nested merge: merge(merge(withDefault(or(...)), object(...)), object(...))
+      const nested = merge(
+        merge(
+          verbosityOpt,
+          object({ config: optional(option("--config", string())) }),
+        ),
+        object({ text: argument(string()) }),
+      );
+
+      const result = parseSync(nested, [
+        "--verbose",
+        "--config",
+        "f.toml",
+        "hi",
+      ]);
+      assert.ok(result.success, "Parsing should succeed");
+      if (result.success) {
+        assert.equal(result.value.verbosity, 1);
+        assert.equal(result.value.config, "f.toml");
+        assert.equal(result.value.text, "hi");
+      }
+    });
+
+    it("should preserve option values with inner merge containing withDefault(or(...))", () => {
+      // The core bug: merge(object(...), merge(withDefault(or(...))))
+      // The inner merge's state uses __parser_N keys for withDefault parsers,
+      // but the outer merge's extractParserState loses them.
+      const verbosityOpt = withDefault(
+        or(
+          object({
+            verbosity: optional(
+              map(multiple(flag("--verbose", "-v")), (v) => v.length),
+            ),
+          }),
+          object({
+            verbosity: optional(map(flag("--quiet", "-q"), () => 0)),
+          }),
+        ),
+        { verbosity: undefined },
+      );
+
+      // Inner merge with only a withDefault(or(...))
+      const innerMerge = merge(
+        verbosityOpt,
+        object({ x: constant("a") }),
+      );
+
+      // Outer merge wrapping the inner merge
+      const outerMerge = merge(
+        innerMerge,
+        object({ text: argument(string()) }),
+      );
+
+      // --verbose should be captured by innerMerge's withDefault(or(...))
+      const result = parseSync(outerMerge, ["--verbose", "hello"]);
+      assert.ok(result.success, "Parsing should succeed");
+      if (result.success) {
+        assert.equal(result.value.verbosity, 1);
+        assert.equal(result.value.x, "a");
+        assert.equal(result.value.text, "hello");
+      }
+    });
+
+    it("should use default when option is not provided in nested merge", () => {
+      const verbosityOpt = withDefault(
+        or(
+          object({
+            verbosity: optional(
+              map(multiple(flag("--verbose", "-v")), (v) => v.length),
+            ),
+          }),
+          object({
+            verbosity: optional(map(flag("--quiet", "-q"), () => 0)),
+          }),
+        ),
+        { verbosity: undefined },
+      );
+
+      const innerMerge = merge(
+        verbosityOpt,
+        object({ x: constant("a") }),
+      );
+
+      const outerMerge = merge(
+        innerMerge,
+        object({ text: argument(string()) }),
+      );
+
+      // When no verbosity flags are provided, should use default
+      const result = parseSync(outerMerge, ["hello"]);
+      assert.ok(result.success, "Parsing should succeed");
+      if (result.success) {
+        assert.equal(result.value.verbosity, undefined);
+        assert.equal(result.value.x, "a");
+        assert.equal(result.value.text, "hello");
+      }
+    });
+  });
 });
 
 describe("merge() - duplicate option detection", () => {
