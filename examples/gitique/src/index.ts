@@ -81,8 +81,13 @@ Shell completion:
 async function main() {
   try {
     const result = run(program, {
-      help: "both", // Enable both --help option and help command
-      completion: "both", // Enable both completion command and --completion option
+      help: { mode: "both", group: "Meta commands" },
+      version: {
+        value: pkgJson.version,
+        mode: "both",
+        group: "Meta commands",
+      },
+      completion: { mode: "both", group: "Meta commands" },
       aboveError: "usage", // Show usage information above error messages
       colors: true, // Force colored output for better UX
       showDefault: true, // Display default values in help text

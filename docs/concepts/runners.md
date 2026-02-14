@@ -654,6 +654,60 @@ Shell completion works automatically with all parser types and value parsers,
 providing intelligent suggestions based on your parser structure. For detailed
 information, see the [*Shell completion* section](./completion.md).
 
+### Meta-command grouping
+
+*This API is available since Optique 0.10.0.*
+
+By default, meta-commands (help, version, completion) appear alongside
+user-defined commands in help output.  You can place them under titled sections
+by specifying a `group` option.  Commands sharing the same group name are
+merged into a single section:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { command, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { or } from "@optique/core/constructs";
+import { run } from "@optique/run";
+
+const parser = or(
+  command("serve", object({
+    type: constant("serve"),
+    port: option("-p", "--port", string()),
+  })),
+  command("build", object({
+    type: constant("build"),
+    output: option("-o", "--output", string()),
+  })),
+);
+
+const config = run(parser, {
+  help: { mode: "both", group: "Other" },
+  version: { value: "1.0.0", mode: "both", group: "Other" },
+  completion: { mode: "both", group: "Other" },
+});
+~~~~
+
+This produces help output with a separated “Other:” section:
+
+~~~~ ansi
+Usage: [1mmyapp[0m <command>
+
+Commands:
+  [1mserve[0m
+  [1mbuild[0m
+
+Other:
+  [1mhelp[0m
+  [1mversion[0m
+  [1mcompletion[0m [4m[2mSHELL[0m
+~~~~
+
+The `group` option is only available when the meta-command's mode includes
+a command form (`"command"` or `"both"`).  When the mode is `"option"`, the
+`group` option is blocked at the type level.  You can also group only some
+meta-commands while leaving others ungrouped.
+
 ### Default value display
 
 Both runner functions support displaying default values in help text when

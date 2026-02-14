@@ -1,4 +1,4 @@
-import { object, or } from "@optique/core/constructs";
+import { group, object, or } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
 import {
   type RunOptions,
@@ -4082,6 +4082,290 @@ describe("runWithAsync", () => {
       assert.ok(
         completionIndex > removeIndex,
         "completion should appear after remove in usage line",
+      );
+    });
+  });
+
+  describe("meta-command grouping", () => {
+    it("should group all meta-commands under the same section when given the same group name", () => {
+      const addCommand = command("add", constant("add"), {
+        brief: message`Add files`,
+      });
+      const removeCommand = command("remove", constant("remove"), {
+        brief: message`Remove files`,
+      });
+      const cli = or(addCommand, removeCommand);
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          mode: "both",
+          group: "Other",
+          onShow: () => "help-shown",
+        },
+        version: {
+          mode: "both",
+          value: "1.0.0",
+          group: "Other",
+          onShow: () => "version-shown",
+        },
+        completion: {
+          mode: "command",
+          name: "singular",
+          group: "Other",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      // User commands should appear in an untitled section
+      assert.ok(helpOutput.includes("add"));
+      assert.ok(helpOutput.includes("remove"));
+      // Meta-commands should appear under "Other:" section
+      assert.ok(helpOutput.includes("Other:"));
+      // The "Other:" label should appear only once
+      const otherCount = helpOutput.split("Other:").length - 1;
+      assert.equal(otherCount, 1, "Other: section should appear exactly once");
+      // Meta-commands should appear after the "Other:" label
+      const otherIndex = helpOutput.indexOf("Other:");
+      assert.ok(
+        helpOutput.indexOf("help", otherIndex) > otherIndex,
+        "help command should appear under Other: section",
+      );
+      assert.ok(
+        helpOutput.indexOf("version", otherIndex) > otherIndex,
+        "version command should appear under Other: section",
+      );
+      assert.ok(
+        helpOutput.indexOf("completion", otherIndex) > otherIndex,
+        "completion command should appear under Other: section",
+      );
+    });
+
+    it("should group each meta-command under different sections when given different group names", () => {
+      const cli = command("run", constant("run"), {
+        brief: message`Run command`,
+      });
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          mode: "both",
+          group: "Help",
+          onShow: () => "help-shown",
+        },
+        version: {
+          mode: "both",
+          value: "1.0.0",
+          group: "Info",
+          onShow: () => "version-shown",
+        },
+        completion: {
+          mode: "command",
+          name: "singular",
+          group: "Shell",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.ok(helpOutput.includes("Help:"), "Should have Help: section");
+      assert.ok(helpOutput.includes("Info:"), "Should have Info: section");
+      assert.ok(helpOutput.includes("Shell:"), "Should have Shell: section");
+    });
+
+    it("should group only specified meta-commands, leaving others ungrouped", () => {
+      const addCommand = command("add", constant("add"), {
+        brief: message`Add files`,
+      });
+      const removeCommand = command("remove", constant("remove"), {
+        brief: message`Remove files`,
+      });
+      const cli = or(addCommand, removeCommand);
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          mode: "both",
+          // no group - should remain ungrouped
+          onShow: () => "help-shown",
+        },
+        completion: {
+          mode: "command",
+          name: "singular",
+          group: "Other",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      // "Other:" section should exist for completion
+      assert.ok(helpOutput.includes("Other:"));
+      // completion should appear under "Other:"
+      const otherIndex = helpOutput.indexOf("Other:");
+      assert.ok(
+        helpOutput.indexOf("completion", otherIndex) > otherIndex,
+        "completion should be under Other:",
+      );
+      // help command should NOT be under "Other:" (it should be in the
+      // ungrouped section before "Other:")
+      const helpIndex = helpOutput.indexOf("  help");
+      assert.ok(
+        helpIndex < otherIndex,
+        "help command should appear before Other: section (ungrouped)",
+      );
+    });
+
+    it("should not group when group is not specified (default behavior)", () => {
+      const addCommand = command("add", constant("add"), {
+        brief: message`Add files`,
+      });
+      const cli = or(addCommand);
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          mode: "both",
+          onShow: () => "help-shown",
+        },
+        version: {
+          mode: "both",
+          value: "1.0.0",
+          onShow: () => "version-shown",
+        },
+        completion: {
+          mode: "command",
+          name: "singular",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      // No titled sections should appear - all commands in one flat list
+      assert.ok(!helpOutput.includes("Other:"));
+      // All commands should still appear
+      assert.ok(helpOutput.includes("add"));
+      assert.ok(helpOutput.includes("help"));
+      assert.ok(helpOutput.includes("version"));
+      assert.ok(helpOutput.includes("completion"));
+    });
+
+    it("should work with user-defined group() alongside meta-command grouping", () => {
+      const addCommand = command("add", constant("add"), {
+        brief: message`Add files`,
+      });
+      const removeCommand = command("remove", constant("remove"), {
+        brief: message`Remove files`,
+      });
+      const cli = or(
+        group("Core", addCommand),
+        group("Core", removeCommand),
+      );
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          mode: "both",
+          group: "Meta",
+          onShow: () => "help-shown",
+        },
+        completion: {
+          mode: "command",
+          name: "singular",
+          group: "Meta",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      // Should have both "Core:" and "Meta:" sections
+      assert.ok(helpOutput.includes("Core:"), "Should have Core: section");
+      assert.ok(helpOutput.includes("Meta:"), "Should have Meta: section");
+      // User commands under Core:
+      const coreIndex = helpOutput.indexOf("Core:");
+      const metaIndex = helpOutput.indexOf("Meta:");
+      assert.ok(
+        helpOutput.indexOf("add", coreIndex) > coreIndex &&
+          helpOutput.indexOf("add", coreIndex) < metaIndex,
+        "add should appear under Core:",
+      );
+      // Meta-commands under Meta:
+      assert.ok(
+        helpOutput.indexOf("help", metaIndex) > metaIndex,
+        "help should appear under Meta:",
+      );
+      assert.ok(
+        helpOutput.indexOf("completion", metaIndex) > metaIndex,
+        "completion should appear under Meta:",
+      );
+    });
+
+    it("should preserve group in error usage line", () => {
+      const addCommand = command("add", constant("add"), {
+        brief: message`Add files`,
+      });
+      const cli = or(addCommand);
+
+      let errorOutput = "";
+      runParser(cli, "mycli", ["--invalid"], {
+        help: {
+          mode: "both",
+          group: "Other",
+          onShow: () => "help-shown",
+        },
+        completion: {
+          mode: "command",
+          name: "singular",
+          group: "Other",
+        },
+        onError: () => "error" as never,
+        stderr: (text) => {
+          errorOutput += text + "\n";
+        },
+      });
+
+      // Even with grouping, the usage line should still contain both
+      // user commands and meta-commands
+      assert.ok(
+        errorOutput.includes("add"),
+        "Error usage should include user command",
+      );
+      assert.ok(
+        errorOutput.includes("completion"),
+        "Error usage should include meta-commands",
+      );
+    });
+
+    it("should handle completion with mode 'both' and group", () => {
+      const cli = command("run", constant("run"));
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          mode: "both",
+          group: "Plumbing",
+          onShow: () => "help-shown",
+        },
+        completion: {
+          mode: "both",
+          name: "singular",
+          group: "Plumbing",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.ok(helpOutput.includes("Plumbing:"));
+      const plumbingIndex = helpOutput.indexOf("Plumbing:");
+      assert.ok(
+        helpOutput.indexOf("completion", plumbingIndex) > plumbingIndex,
+        "completion should be under Plumbing:",
       );
     });
   });

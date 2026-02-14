@@ -598,6 +598,26 @@ To be released.
         formatted help output.
      -  `RunOptions.showChoices`: Passes through to `formatDocPage()`.
 
+ -  Added `group` option for meta-commands (help, version, completion) in
+    `RunOptions`.  When specified, the meta-command appears under a titled
+    section in help output instead of alongside user-defined commands.
+    Commands sharing the same group name are merged into a single section.
+    [[#107]]
+
+    The `group` option is only available when the meta-command has a command
+    mode (`"command"` or `"both"`).  When the mode is `"option"`, the `group`
+    option is blocked at the type level (`group?: never`).
+
+    ~~~~ typescript
+    import { runParser } from "@optique/core/facade";
+
+    runParser(parser, "myapp", args, {
+      help: { mode: "both", group: "Other" },
+      version: { mode: "both", value: "1.0.0", group: "Other" },
+      completion: { mode: "both", group: "Other" },
+    });
+    ~~~~
+
 [runtime context extension guide]: https://optique.dev/concepts/extend
 [#65]: https://github.com/dahlia/optique/issues/65
 [#74]: https://github.com/dahlia/optique/issues/74
@@ -611,6 +631,7 @@ To be released.
 [#92]: https://github.com/dahlia/optique/issues/92
 [#99]: https://github.com/dahlia/optique/issues/99
 [#106]: https://github.com/dahlia/optique/issues/106
+[#107]: https://github.com/dahlia/optique/issues/107
 
 ### @optique/config
 
@@ -688,6 +709,22 @@ for usage examples.
  -  Added `showChoices` option to `run()`, `runSync()`, and `runAsync()`.
     This passes through to the underlying `formatDocPage()` call, enabling
     valid choice values to be displayed in help output.  [[#106]]
+
+ -  Added `group` option for help, version, and completion configurations.
+    When specified, the corresponding meta-command appears under a titled
+    section in help output.  The `group` option is available when the mode
+    is `"command"` or `"both"` (blocked at the type level for `"option"` mode).
+    [[#107]]
+
+    ~~~~ typescript
+    import { run } from "@optique/run";
+
+    run(parser, {
+      help: { mode: "both", group: "Other" },
+      version: { value: "1.0.0", mode: "both", group: "Other" },
+      completion: { mode: "both", group: "Other" },
+    });
+    ~~~~
 
 ### @optique/man
 
@@ -779,8 +816,6 @@ Released on February 14, 2026.
     the usage line shown on parse errors.  When using `completion` in command
     mode with `or()`-combined commands, the error output now lists user commands
     first and meta-commands (version, completion, help) after them.  [[#107]]
-
-[#107]: https://github.com/dahlia/optique/issues/107
 
 
 Version 0.9.5

@@ -6,7 +6,7 @@ import {
   type ShellCompletion,
   zsh,
 } from "./completion.ts";
-import { longestMatch, object } from "./constructs.ts";
+import { group, longestMatch, object } from "./constructs.ts";
 import {
   type DocPage,
   formatDocPage,
@@ -152,38 +152,65 @@ export type CompletionName = "singular" | "plural" | "both";
  */
 export type CompletionHelpVisibility = CompletionName | "none";
 
-type CompletionConfigBase<THelp> = {
-  /**
-   * Determines how completion is made available:
-   *
-   * - `"command"`: Only the `completion` subcommand is available
-   * - `"option"`: Only the `--completion` option is available
-   * - `"both"`: Both `completion` subcommand and `--completion` option are available
-   *
-   * @default `"both"`
-   */
-  readonly mode?: "command" | "option" | "both";
+type CompletionConfigBase<THelp> =
+  | {
+    /**
+     * Determines how completion is made available:
+     *
+     * - `"command"`: Only the `completion` subcommand is available
+     * - `"both"`: Both `completion` subcommand and `--completion` option
+     *   are available
+     *
+     * @default `"both"`
+     */
+    readonly mode?: "command" | "both";
 
-  /**
-   * Available shell completions. By default, includes `bash`, `fish`, `nu`,
-   * `pwsh`, and `zsh`. You can provide additional custom shell completions or
-   * override the defaults.
-   *
-   * @default `{ bash, fish, nu, pwsh, zsh }`
-   */
-  readonly shells?: Record<string, ShellCompletion>;
+    /**
+     * Group label for the completion command in help output. When specified,
+     * the completion command appears under a titled section with this name
+     * instead of alongside user-defined commands.
+     *
+     * @since 0.10.0
+     */
+    readonly group?: string;
 
-  /**
-   * Callback function invoked when completion is requested. The function can
-   * optionally receive an exit code parameter.
-   *
-   * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
-   * on Deno to this option.
-   *
-   * @default Returns `void` when completion is shown.
-   */
-  readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-};
+    /**
+     * Available shell completions. By default, includes `bash`, `fish`, `nu`,
+     * `pwsh`, and `zsh`. You can provide additional custom shell completions
+     * or override the defaults.
+     *
+     * @default `{ bash, fish, nu, pwsh, zsh }`
+     */
+    readonly shells?: Record<string, ShellCompletion>;
+
+    /**
+     * Callback function invoked when completion is requested. The function
+     * can optionally receive an exit code parameter.
+     *
+     * You usually want to pass `process.exit` on Node.js or Bun and
+     * `Deno.exit` on Deno to this option.
+     *
+     * @default Returns `void` when completion is shown.
+     */
+    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+  }
+  | {
+    /**
+     * Determines how completion is made available:
+     *
+     * - `"option"`: Only the `--completion` option is available
+     */
+    readonly mode: "option";
+
+    /** @since 0.10.0 */
+    readonly group?: never;
+
+    /** @default `{ bash, fish, nu, pwsh, zsh }` */
+    readonly shells?: Record<string, ShellCompletion>;
+
+    /** @default Returns `void` when completion is shown. */
+    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+  };
 
 type CompletionConfigBoth<THelp> = CompletionConfigBase<THelp> & {
   /**
@@ -393,11 +420,18 @@ type ParsedResult =
 /**
  * Systematically combines the original parser with help, version, and completion parsers.
  */
+interface MetaCommandGroups {
+  readonly helpGroup?: string;
+  readonly versionGroup?: string;
+  readonly completionGroup?: string;
+}
+
 function combineWithHelpVersion(
   originalParser: Parser<Mode, unknown, unknown>,
   helpParsers: HelpParsers,
   versionParsers: VersionParsers,
   completionParsers: CompletionParsers,
+  groups?: MetaCommandGroups,
 ): Parser<Mode, unknown, unknown> {
   const parsers: Parser<Mode, unknown, unknown>[] = [];
 
@@ -604,7 +638,7 @@ function combineWithHelpVersion(
 
   // Add version command with optional help flag (enables version --help)
   if (versionParsers.versionCommand) {
-    parsers.push(object({
+    const versionParser = object({
       help: constant(false),
       version: constant(true),
       completion: constant(false),
@@ -612,12 +646,17 @@ function combineWithHelpVersion(
       helpFlag: helpParsers.helpOption
         ? optional(helpParsers.helpOption)
         : constant(false),
-    }));
+    });
+    parsers.push(
+      groups?.versionGroup
+        ? group(groups.versionGroup, versionParser)
+        : versionParser,
+    );
   }
 
   // Add completion command with optional help flag (enables completion --help)
   if (completionParsers.completionCommand) {
-    parsers.push(object({
+    const completionParser = object({
       help: constant(false),
       version: constant(false),
       completion: constant(true),
@@ -625,17 +664,25 @@ function combineWithHelpVersion(
       helpFlag: helpParsers.helpOption
         ? optional(helpParsers.helpOption)
         : constant(false),
-    }));
+    });
+    parsers.push(
+      groups?.completionGroup
+        ? group(groups.completionGroup, completionParser)
+        : completionParser,
+    );
   }
 
   // Add help command
   if (helpParsers.helpCommand) {
-    parsers.push(object({
+    const helpParser = object({
       help: constant(true),
       version: constant(false),
       completion: constant(false),
       commands: helpParsers.helpCommand,
-    }));
+    });
+    parsers.push(
+      groups?.helpGroup ? group(groups.helpGroup, helpParser) : helpParser,
+    );
   }
 
   // Add main parser LAST - it's the most general
@@ -838,61 +885,133 @@ export interface RunOptions<THelp, TError> {
   /**
    * Help configuration. When provided, enables help functionality.
    */
-  readonly help?: {
-    /**
-     * Determines how help is made available:
-     *
-     * - `"command"`: Only the `help` subcommand is available
-     * - `"option"`: Only the `--help` option is available
-     * - `"both"`: Both `help` subcommand and `--help` option are available
-     *
-     * @default `"option"`
-     */
-    readonly mode?: "command" | "option" | "both";
+  readonly help?:
+    | {
+      /**
+       * Determines how help is made available:
+       *
+       * - `"command"`: Only the `help` subcommand is available
+       * - `"both"`: Both `help` subcommand and `--help` option are available
+       *
+       * @default `"option"`
+       */
+      readonly mode: "command" | "both";
 
-    /**
-     * Callback function invoked when help is requested. The function can
-     * optionally receive an exit code parameter.
-     *
-     * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
-     * on Deno to this option.
-     *
-     * @default Returns `void` when help is shown.
-     */
-    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-  };
+      /**
+       * Group label for the help command in help output. When specified,
+       * the help command appears under a titled section with this name
+       * instead of alongside user-defined commands.
+       *
+       * @since 0.10.0
+       */
+      readonly group?: string;
+
+      /**
+       * Callback function invoked when help is requested. The function can
+       * optionally receive an exit code parameter.
+       *
+       * You usually want to pass `process.exit` on Node.js or Bun and
+       * `Deno.exit` on Deno to this option.
+       *
+       * @default Returns `void` when help is shown.
+       */
+      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+    }
+    | {
+      /**
+       * Determines how help is made available:
+       *
+       * - `"option"`: Only the `--help` option is available
+       *
+       * @default `"option"`
+       */
+      readonly mode?: "option";
+
+      /** @since 0.10.0 */
+      readonly group?: never;
+
+      /**
+       * Callback function invoked when help is requested. The function can
+       * optionally receive an exit code parameter.
+       *
+       * You usually want to pass `process.exit` on Node.js or Bun and
+       * `Deno.exit` on Deno to this option.
+       *
+       * @default Returns `void` when help is shown.
+       */
+      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+    };
 
   /**
    * Version configuration. When provided, enables version functionality.
    */
-  readonly version?: {
-    /**
-     * Determines how version is made available:
-     *
-     * - `"command"`: Only the `version` subcommand is available
-     * - `"option"`: Only the `--version` option is available
-     * - `"both"`: Both `version` subcommand and `--version` option are available
-     *
-     * @default `"option"`
-     */
-    readonly mode?: "command" | "option" | "both";
+  readonly version?:
+    | {
+      /**
+       * Determines how version is made available:
+       *
+       * - `"command"`: Only the `version` subcommand is available
+       * - `"both"`: Both `version` subcommand and `--version` option are
+       *   available
+       *
+       * @default `"option"`
+       */
+      readonly mode: "command" | "both";
 
-    /**
-     * The version string to display when version is requested.
-     */
-    readonly value: string;
+      /**
+       * The version string to display when version is requested.
+       */
+      readonly value: string;
 
-    /**
-     * Callback function invoked when version is requested. The function can
-     * optionally receive an exit code parameter.
-     *
-     * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
-     * on Deno to this option.
-     *
-     * @default Returns `void` when version is shown.
-     */
-    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-  };
+      /**
+       * Group label for the version command in help output. When specified,
+       * the version command appears under a titled section with this name
+       * instead of alongside user-defined commands.
+       *
+       * @since 0.10.0
+       */
+      readonly group?: string;
+
+      /**
+       * Callback function invoked when version is requested. The function can
+       * optionally receive an exit code parameter.
+       *
+       * You usually want to pass `process.exit` on Node.js or Bun and
+       * `Deno.exit` on Deno to this option.
+       *
+       * @default Returns `void` when version is shown.
+       */
+      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+    }
+    | {
+      /**
+       * Determines how version is made available:
+       *
+       * - `"option"`: Only the `--version` option is available
+       *
+       * @default `"option"`
+       */
+      readonly mode?: "option";
+
+      /**
+       * The version string to display when version is requested.
+       */
+      readonly value: string;
+
+      /** @since 0.10.0 */
+      readonly group?: never;
+
+      /**
+       * Callback function invoked when version is requested. The function can
+       * optionally receive an exit code parameter.
+       *
+       * You usually want to pass `process.exit` on Node.js or Bun and
+       * `Deno.exit` on Deno to this option.
+       *
+       * @default Returns `void` when version is shown.
+       */
+      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+    };
 
   /**
    * Completion configuration. When provided, enables shell completion functionality.
@@ -1248,11 +1367,13 @@ export function runParser<
   // Extract help configuration
   const helpMode = options.help?.mode ?? "option";
   const onHelp = options.help?.onShow ?? (() => ({} as THelp));
+  const helpGroup = options.help?.group as string | undefined;
 
   // Extract version configuration
   const versionMode = options.version?.mode ?? "option";
   const versionValue = options.version?.value ?? "";
   const onVersion = options.version?.onShow ?? (() => ({} as THelp));
+  const versionGroup = options.version?.group as string | undefined;
 
   // Extract completion configuration
   const completionMode = options.completion?.mode ?? "both";
@@ -1260,6 +1381,7 @@ export function runParser<
   const completionHelpVisibility = options.completion?.helpVisibility ??
     completionName;
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
+  const completionGroup = options.completion?.group as string | undefined;
 
   // Get available shells (defaults + user-provided)
   const defaultShells: Record<string, ShellCompletion> = {
@@ -1407,6 +1529,7 @@ export function runParser<
       helpParsers,
       versionParsers,
       completionParsers,
+      { helpGroup, versionGroup, completionGroup },
     );
 
   // Helper function to handle parsed result
@@ -1474,22 +1597,52 @@ export function runParser<
           // Collect all command parsers to include in help generation
           const commandParsers: Parser<Mode, unknown, unknown>[] = [parser];
 
-          if (helpAsCommand) {
-            if (helpParsers.helpCommand) {
-              commandParsers.push(helpParsers.helpCommand);
+          // Group meta-commands by their group label so that commands
+          // sharing the same group name appear under a single section
+          const groupedMeta: Record<
+            string,
+            Parser<Mode, unknown, unknown>[]
+          > = {};
+          const ungroupedMeta: Parser<Mode, unknown, unknown>[] = [];
+
+          const addMeta = (
+            p: Parser<Mode, unknown, unknown>,
+            groupLabel?: string,
+          ): void => {
+            if (groupLabel) {
+              (groupedMeta[groupLabel] ??= []).push(p);
+            } else {
+              ungroupedMeta.push(p);
             }
+          };
+
+          if (helpAsCommand && helpParsers.helpCommand) {
+            addMeta(helpParsers.helpCommand, helpGroup);
+          }
+          if (versionAsCommand && versionParsers.versionCommand) {
+            addMeta(versionParsers.versionCommand, versionGroup);
+          }
+          if (completionAsCommand && completionParsers.completionCommand) {
+            addMeta(completionParsers.completionCommand, completionGroup);
           }
 
-          if (versionAsCommand) {
-            if (versionParsers.versionCommand) {
-              commandParsers.push(versionParsers.versionCommand);
-            }
-          }
+          // Add ungrouped meta-commands directly
+          commandParsers.push(...ungroupedMeta);
 
-          if (completionAsCommand) {
-            // Include completion in help even though it's handled via early return
-            if (completionParsers.completionCommand) {
-              commandParsers.push(completionParsers.completionCommand);
+          // Add grouped meta-commands wrapped in group()
+          for (const [label, parsers] of Object.entries(groupedMeta)) {
+            if (parsers.length === 1) {
+              commandParsers.push(group(label, parsers[0]));
+            } else {
+              // Combine multiple commands in the same group with or()
+              commandParsers.push(
+                group(
+                  label,
+                  (longestMatch as (
+                    ...ps: Parser<Mode, unknown, unknown>[]
+                  ) => Parser<Mode, unknown, unknown>)(...parsers),
+                ),
+              );
             }
           }
 
