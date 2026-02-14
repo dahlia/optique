@@ -1,6 +1,6 @@
 {
   "name": "@optique/temporal",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "Temporal value parsers for Optique",
   "keywords": [
     "CLI",
