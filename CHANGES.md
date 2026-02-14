@@ -768,6 +768,21 @@ to generate Unix man pages that stay synchronized with parser definitions.
 [#77]: https://github.com/dahlia/optique/issues/77
 
 
+Version 0.9.6
+-------------
+
+Released on February 14, 2026.
+
+### @optique/core
+
+ -  Fixed the `completion` command appearing before user-defined commands in
+    the usage line shown on parse errors.  When using `completion` in command
+    mode with `or()`-combined commands, the error output now lists user commands
+    first and meta-commands (version, completion, help) after them.  [[#107]]
+
+[#107]: https://github.com/dahlia/optique/issues/107
+
+
 Version 0.9.5
 -------------
 
