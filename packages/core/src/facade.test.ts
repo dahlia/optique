@@ -2948,4 +2948,52 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       );
     });
   });
+
+  describe("completion command ordering in usage line", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/107
+    it("should show completion command after user commands in error usage", () => {
+      const addCommand = command("add", object({}), {
+        brief: message`Add files`,
+      });
+      const removeCommand = command("remove", object({}), {
+        brief: message`Remove files`,
+      });
+
+      const cli = or(addCommand, removeCommand);
+
+      let errorOutput = "";
+
+      run(cli, "mycli", [], {
+        completion: { mode: "command" },
+        help: { mode: "option", onShow: () => "help" as const },
+        onError: () => "handled",
+        stderr: (text) => {
+          errorOutput += text + "\n";
+        },
+      });
+
+      // Find the usage line in error output
+      const usageLine = errorOutput
+        .split("\n")
+        .find((line) => line.startsWith("Usage:"));
+      assert.ok(usageLine, "Should have a usage line in error output");
+
+      // completion command should appear after user commands (add, remove)
+      const completionIndex = usageLine.indexOf("completion");
+      const addIndex = usageLine.indexOf("add");
+      const removeIndex = usageLine.indexOf("remove");
+
+      assert.ok(completionIndex > 0, "Should contain 'completion' in usage");
+      assert.ok(addIndex > 0, "Should contain 'add' in usage");
+      assert.ok(removeIndex > 0, "Should contain 'remove' in usage");
+      assert.ok(
+        completionIndex > addIndex,
+        "completion should appear after add in usage line",
+      );
+      assert.ok(
+        completionIndex > removeIndex,
+        "completion should appear after remove in usage line",
+      );
+    });
+  });
 });
