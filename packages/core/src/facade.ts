@@ -2383,6 +2383,7 @@ export async function runWith<
   );
 
   let firstPassResult: unknown;
+  let firstPassFailed = false;
   try {
     if (parser.$mode === "async") {
       firstPassResult = await parseAsync(augmentedParser1, args);
@@ -2402,28 +2403,17 @@ export async function runWith<
       if (result.success) {
         firstPassResult = result.value;
       } else {
-        // First pass failed - run through runParser for proper error handling
-        const augmentedParser = injectAnnotationsIntoParser(
-          parser,
-          phase1Annotations,
-        );
-        if (parser.$mode === "async") {
-          return runParser(
-            augmentedParser,
-            programName,
-            args,
-            options,
-          ) as Promise<InferValue<TParser>>;
-        }
-        return Promise.resolve(
-          runParser(augmentedParser, programName, args, options) as InferValue<
-            TParser
-          >,
-        );
+        firstPassFailed = true;
       }
     }
   } catch {
-    // First pass threw an error - run through runParser for proper error handling
+    firstPassFailed = true;
+  }
+
+  // First pass failed - run through runParser for proper error handling.
+  // This is done outside the try-catch to prevent the catch block from
+  // re-invoking runParser when it throws (which caused double error output).
+  if (firstPassFailed) {
     const augmentedParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,

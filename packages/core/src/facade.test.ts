@@ -1,4 +1,4 @@
-import { group, object, or } from "@optique/core/constructs";
+import { group, merge, object, or } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
 import {
   type RunOptions,
@@ -3794,6 +3794,55 @@ describe("runWith", () => {
 
       assert.ok(completionShown);
       assert.equal(annotationsCallCount, 0);
+    });
+  });
+
+  describe("error handling", () => {
+    it("should display error only once with dynamic context and empty args", async () => {
+      const cmd1 = command("foo", object({ cmd: constant("foo") }));
+      const cmd2 = command("bar", object({ cmd: constant("bar") }));
+      const parser = merge(
+        or(cmd1, cmd2),
+        object({ debug: flag("-d") }),
+      );
+
+      const dynamicContext: SourceContext = {
+        id: Symbol("dynamic"),
+        getAnnotations(_parsed?: unknown) {
+          return Promise.resolve({});
+        },
+      };
+
+      const stderrCalls: string[] = [];
+      try {
+        await runWith(parser, "test", [dynamicContext], {
+          args: [],
+          help: { mode: "both", onShow: () => "help" },
+          stderr: (text: string) => {
+            stderrCalls.push(text);
+          },
+        });
+        assert.fail("Expected RunParserError to be thrown");
+      } catch (error) {
+        assert.ok(error instanceof RunParserError);
+      }
+
+      // Should output exactly 2 lines: Usage + Error (not duplicated)
+      assert.equal(
+        stderrCalls.length,
+        2,
+        `Expected 2 stderr calls (Usage + Error) but got ${stderrCalls.length}: ${
+          JSON.stringify(stderrCalls)
+        }`,
+      );
+      assert.ok(
+        stderrCalls[0].startsWith("Usage:"),
+        "First stderr call should be usage",
+      );
+      assert.ok(
+        stderrCalls[1].startsWith("Error:"),
+        "Second stderr call should be error",
+      );
     });
   });
 });
