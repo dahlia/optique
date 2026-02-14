@@ -526,17 +526,43 @@ function combineWithHelpVersion(
     completion: constant(false),
     result: originalParser,
   }));
+
+  // Track where the main parser is before building longestMatch
+  const mainParserIndex = parsers.length - 1;
+
+  let combined: Parser<unknown, unknown>;
   if (parsers.length === 1) {
     return parsers[0];
   } else if (parsers.length === 2) {
-    return longestMatch(parsers[0], parsers[1]);
+    combined = longestMatch(parsers[0], parsers[1]);
   } else {
     // Use variadic longestMatch for all parsers
     // Our lenient help/version parsers will win because they consume all input
-    return (longestMatch as (
+    combined = (longestMatch as (
       ...parsers: Parser<unknown, unknown>[]
     ) => Parser<unknown, unknown>)(...parsers);
   }
+
+  // Reorder the usage so that the main parser's usage appears before
+  // meta-command (version/completion/help) usage.  The parsing order
+  // remains unchanged — only the display order is affected.
+  // See https://github.com/dahlia/optique/issues/107
+  const topUsage = combined.usage[0];
+  if (topUsage?.type === "exclusive" && mainParserIndex > 0) {
+    const terms = [...topUsage.terms];
+    const [mainTerm] = terms.splice(mainParserIndex, 1);
+    // Insert main parser usage right after the lenient option parsers
+    // (which occupy the first slots) but before meta commands.
+    const lenientCount = (helpParsers.helpOption ? 1 : 0) +
+      (versionParsers.versionOption ? 1 : 0);
+    terms.splice(lenientCount, 0, mainTerm);
+    combined = {
+      ...combined,
+      usage: [{ ...topUsage, terms }],
+    };
+  }
+
+  return combined;
 }
 
 /**
