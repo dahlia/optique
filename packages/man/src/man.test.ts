@@ -202,6 +202,27 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes('"User Commands"'));
   });
 
+  it("escapes quotes in .TH header fields", () => {
+    const page: DocPage = {
+      sections: [],
+    };
+
+    const options: ManPageOptions = {
+      name: 'my"app',
+      section: 1,
+      version: '1.0"beta',
+      manual: 'User "Commands"',
+    };
+
+    const result = formatDocPageAsMan(page, options);
+    const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
+
+    assert.equal(
+      thLine,
+      '.TH MY\\"APP 1 "" "my\\"app 1.0\\"beta" "User \\"Commands\\""',
+    );
+  });
+
   it("uses brief in NAME section", () => {
     const page: DocPage = {
       brief: message`A sample CLI application`,

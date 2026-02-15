@@ -119,6 +119,12 @@ export function formatDateForMan(
   return `${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+function escapeThField(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
+}
+
 /**
  * Formats a single {@link UsageTerm} as roff markup for the SYNOPSIS section.
  *
@@ -287,7 +293,7 @@ export function formatDocPageAsMan(
 
   // .TH - Title heading
   const thParts = [
-    options.name.toUpperCase(),
+    escapeThField(options.name.toUpperCase()),
     options.section.toString(),
   ];
   // .TH format: name section [date [source [manual]]]
@@ -297,19 +303,21 @@ export function formatDocPageAsMan(
   const hasManual = options.manual != null;
 
   if (hasDate) {
-    thParts.push(`"${formatDateForMan(options.date)}"`);
+    thParts.push(`"${escapeThField(formatDateForMan(options.date)!)}"`);
   } else if (hasVersion || hasManual) {
     thParts.push('""');
   }
 
   if (hasVersion) {
-    thParts.push(`"${options.name} ${options.version}"`);
+    thParts.push(
+      `"${escapeThField(`${options.name} ${options.version}`)}"`,
+    );
   } else if (hasManual) {
     thParts.push('""');
   }
 
   if (hasManual) {
-    thParts.push(`"${options.manual}"`);
+    thParts.push(`"${escapeThField(options.manual)}"`);
   }
   lines.push(`.TH ${thParts.join(" ")}`);
 
