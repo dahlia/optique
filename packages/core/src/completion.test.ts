@@ -3,7 +3,7 @@ import { deepStrictEqual } from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import process from "node:process";
 import {
   bash,
@@ -17,14 +17,59 @@ import type { Suggestion } from "./parser.ts";
 import { message } from "./message.ts";
 
 // Helper functions for shell availability and testing
+function getStdoutFromExecError(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+
+  const maybeExecError = error as {
+    readonly code?: unknown;
+    readonly status?: unknown;
+    readonly stdout?: unknown;
+  };
+
+  // In some environments, successful subprocess execution is reported as
+  // EPERM while still returning status 0 and valid stdout.
+  if (maybeExecError.code !== "EPERM" || maybeExecError.status !== 0) {
+    return undefined;
+  }
+
+  if (typeof maybeExecError.stdout === "string") {
+    return maybeExecError.stdout;
+  }
+  if (maybeExecError.stdout instanceof Uint8Array) {
+    return new TextDecoder().decode(maybeExecError.stdout);
+  }
+  return "";
+}
+
+function runCommand(
+  command: string,
+  args: readonly string[],
+  options: {
+    readonly cwd?: string;
+    readonly stdio?: "pipe" | "ignore";
+  } = {},
+): string {
+  try {
+    return execFileSync(command, [...args], {
+      encoding: "utf8",
+      cwd: options.cwd,
+      stdio: options.stdio,
+    }) ?? "";
+  } catch (error) {
+    const stdout = getStdoutFromExecError(error);
+    if (stdout !== undefined) return stdout;
+    throw error;
+  }
+}
+
 function isShellAvailable(shell: string): boolean {
   try {
     // Try multiple methods to detect shell availability
-    execSync(`${shell} --version`, { stdio: "ignore", timeout: 5000 });
+    runCommand(shell, ["--version"], { stdio: "ignore" });
     return true;
   } catch {
     try {
-      execSync(`which ${shell}`, { stdio: "ignore", timeout: 5000 });
+      runCommand("which", [shell], { stdio: "ignore" });
       return true;
     } catch {
       return false;
@@ -88,8 +133,7 @@ ${functionName}
 printf "%s\\n" "\${COMPREPLY[@]}"
 `;
 
-    const result = execSync(`bash -c '${testScript}'`, {
-      encoding: "utf8",
+    const result = runCommand("bash", ["-c", testScript], {
       cwd: tempDir,
     });
 
@@ -129,8 +173,7 @@ CURRENT=2
 
     // For zsh, we'll test if the function runs without error
     // and check that the script generates the expected structure
-    execSync(`zsh -c '${testScript}'`, {
-      encoding: "utf8",
+    runCommand("zsh", ["-c", testScript], {
       cwd: tempDir,
       stdio: "ignore",
     });
@@ -168,14 +211,10 @@ $env:PATH = "${cliDir}${pathSep}$env:PATH"
 Write-Output "loaded"
 `;
 
-    const result = execSync(
-      `pwsh -NoProfile -NonInteractive -Command "${
-        testScript.replace(/"/g, '\\"').replace(/\$/g, "\\$")
-      }"`,
-      {
-        encoding: "utf8",
-        cwd: tempDir,
-      },
+    const result = runCommand(
+      "pwsh",
+      ["-NoProfile", "-NonInteractive", "-Command", testScript],
+      { cwd: tempDir },
     );
 
     // Return success indicator - full integration testing requires PowerShell 7.4+
@@ -230,13 +269,7 @@ ${functionName}
     const testScriptPath = join(tempDir, "test.fish");
     writeFileSync(testScriptPath, testScript);
 
-    const result = execSync(
-      `fish "${testScriptPath}" 2>/dev/null || true`,
-      {
-        encoding: "utf8",
-        cwd: tempDir,
-      },
-    );
+    const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
 
     return result.trim().split("\n").filter((line) => line.length > 0);
   } finally {
@@ -274,13 +307,7 @@ do { ${functionName} "${programName} " }
 
     let result: string;
     try {
-      result = execSync(
-        `nu "${testScriptPath}"`,
-        {
-          encoding: "utf8",
-          cwd: tempDir,
-        },
-      );
+      result = runCommand("nu", [testScriptPath], { cwd: tempDir });
     } catch {
       // If execution failed, return empty array
       return [];

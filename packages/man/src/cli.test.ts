@@ -3,11 +3,12 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import process from "node:process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, "..", "test", "fixtures");
@@ -20,6 +21,20 @@ interface RunResult {
   readonly stderr: string;
   readonly exitCode: number;
 }
+
+function isSubprocessReliable(): boolean {
+  const probe = spawnSync(
+    process.execPath,
+    ["-e", "process.stdout.write('ok')"],
+    {
+      encoding: "utf8",
+      timeout: 5000,
+    },
+  );
+  return probe.status === 0 && probe.stdout === "ok";
+}
+
+const hasReliableSubprocess = isSubprocessReliable();
 
 /**
  * Runs the CLI with the given arguments and returns the result.
@@ -71,7 +86,7 @@ function runCli(args: readonly string[]): Promise<RunResult> {
   });
 }
 
-describe("optique-man CLI", () => {
+describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
   describe("help and version", () => {
     it("shows help with --help", async () => {
       const result = await runCli(["--help"]);
@@ -119,7 +134,9 @@ describe("optique-man CLI", () => {
 
     it("generates man page when input path contains #", async () => {
       const sourceFile = join(fixturesDir, "parser.ts");
-      const tempDir = await mkdtemp(join(tmpdir(), "optique-man-hash-"));
+      const tempDir = await mkdtemp(
+        join(fixturesDir, "tmp-optique-man-hash-"),
+      );
       const parserFile = join(tempDir, "hash#parser.ts");
 
       try {
