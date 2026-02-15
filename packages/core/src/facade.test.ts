@@ -3378,6 +3378,30 @@ describe("runWith", () => {
       assert.deepEqual(result, { host: "default" });
     });
 
+    it("should call static context once in async runWith", async () => {
+      let callCount = 0;
+      const staticContext: SourceContext = {
+        id: Symbol.for("@test/static-once"),
+        getAnnotations() {
+          callCount++;
+          return {
+            [Symbol.for("@test/static-once")]: { value: true },
+          };
+        },
+      };
+
+      const parser = object({
+        host: withDefault(option("--host", string()), "default"),
+      });
+
+      const result = await runWith(parser, "test", [staticContext], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { host: "default" });
+      assert.equal(callCount, 1);
+    });
+
     it("should parse with multiple static contexts", async () => {
       const envKey = Symbol.for("@test/env");
       const configKey = Symbol.for("@test/config");
@@ -3866,6 +3890,30 @@ describe("runWithSync", () => {
     });
 
     assert.deepEqual(result, { host: "default" });
+  });
+
+  it("should call static context once in runWithSync", () => {
+    let callCount = 0;
+    const staticContext: SourceContext = {
+      id: Symbol.for("@test/static-once-sync"),
+      getAnnotations() {
+        callCount++;
+        return {
+          [Symbol.for("@test/static-once-sync")]: { value: true },
+        };
+      },
+    };
+
+    const parser = object({
+      host: withDefault(option("--host", string()), "default"),
+    });
+
+    const result = runWithSync(parser, "test", [staticContext], {
+      args: [],
+    });
+
+    assert.deepEqual(result, { host: "default" });
+    assert.equal(callCount, 1);
   });
 
   it("should throw error when context returns Promise", () => {

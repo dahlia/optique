@@ -2114,6 +2114,40 @@ function mergeAnnotations(
 }
 
 /**
+ * Collects phase 1 annotations from all contexts and determines whether
+ * two-phase parsing is needed.
+ *
+ * @param contexts Source contexts to collect annotations from.
+ * @returns Promise with merged annotations and dynamic-context hint.
+ */
+async function collectPhase1Annotations(
+  contexts: readonly SourceContext<unknown>[],
+): Promise<
+  { readonly annotations: Annotations; readonly hasDynamic: boolean }
+> {
+  const annotationsList: Annotations[] = [];
+  let hasDynamic = false;
+
+  for (const context of contexts) {
+    const result = context.getAnnotations();
+    if (result instanceof Promise) {
+      hasDynamic = true;
+      annotationsList.push(await result);
+    } else {
+      if (Object.getOwnPropertySymbols(result).length === 0) {
+        hasDynamic = true;
+      }
+      annotationsList.push(result);
+    }
+  }
+
+  return {
+    annotations: mergeAnnotations(annotationsList),
+    hasDynamic,
+  };
+}
+
+/**
  * Collects annotations from all contexts.
  *
  * @param contexts Source contexts to collect annotations from.
@@ -2128,14 +2162,44 @@ async function collectAnnotations(
 
   for (const context of contexts) {
     const result = context.getAnnotations(parsed);
-    if (result instanceof Promise) {
-      annotationsList.push(await result);
-    } else {
-      annotationsList.push(result);
-    }
+    annotationsList.push(result instanceof Promise ? await result : result);
   }
 
   return mergeAnnotations(annotationsList);
+}
+
+/**
+ * Collects phase 1 annotations from all contexts synchronously and determines
+ * whether two-phase parsing is needed.
+ *
+ * @param contexts Source contexts to collect annotations from.
+ * @returns Merged annotations with dynamic-context hint.
+ * @throws Error if any context returns a Promise.
+ */
+function collectPhase1AnnotationsSync(
+  contexts: readonly SourceContext<unknown>[],
+): { readonly annotations: Annotations; readonly hasDynamic: boolean } {
+  const annotationsList: Annotations[] = [];
+  let hasDynamic = false;
+
+  for (const context of contexts) {
+    const result = context.getAnnotations();
+    if (result instanceof Promise) {
+      throw new Error(
+        `Context ${String(context.id)} returned a Promise in sync mode. ` +
+          "Use runWith() or runWithAsync() for async contexts.",
+      );
+    }
+    if (Object.getOwnPropertySymbols(result).length === 0) {
+      hasDynamic = true;
+    }
+    annotationsList.push(result);
+  }
+
+  return {
+    annotations: mergeAnnotations(annotationsList),
+    hasDynamic,
+  };
 }
 
 /**
@@ -2164,34 +2228,6 @@ function collectAnnotationsSync(
   }
 
   return mergeAnnotations(annotationsList);
-}
-
-/**
- * Checks if any context has dynamic behavior (returns different annotations
- * when called with parsed results).
- *
- * A context is considered dynamic if:
- * - It returns a Promise
- * - It returns empty annotations without parsed results but may return
- *   non-empty annotations with parsed results
- *
- * @param contexts Source contexts to check.
- * @returns `true` if any context appears to be dynamic.
- */
-function hasDynamicContexts(
-  contexts: readonly SourceContext<unknown>[],
-): boolean {
-  for (const context of contexts) {
-    const result = context.getAnnotations();
-    if (result instanceof Promise) {
-      return true;
-    }
-    // If a context returns empty annotations, it might be dynamic
-    if (Object.getOwnPropertySymbols(result).length === 0) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /**
@@ -2347,10 +2383,8 @@ export async function runWith<
   }
 
   // Phase 1: Collect initial annotations
-  const phase1Annotations = await collectAnnotations(contexts);
-
-  // Check if we need two-phase parsing
-  const needsTwoPhase = hasDynamicContexts(contexts);
+  const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
+    await collectPhase1Annotations(contexts);
 
   if (!needsTwoPhase) {
     // All static contexts - single pass is sufficient
@@ -2498,10 +2532,8 @@ export function runWithSync<
   }
 
   // Phase 1: Collect initial annotations
-  const phase1Annotations = collectAnnotationsSync(contexts);
-
-  // Check if we need two-phase parsing
-  const needsTwoPhase = hasDynamicContexts(contexts);
+  const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
+    collectPhase1AnnotationsSync(contexts);
 
   if (!needsTwoPhase) {
     // All static contexts - single pass is sufficient
