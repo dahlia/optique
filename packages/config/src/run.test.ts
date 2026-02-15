@@ -182,6 +182,40 @@ describe("runWithConfig", { concurrency: false }, () => {
     }
   });
 
+  test("fails when config file JSON is malformed", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-malformed.json");
+    await writeFile(configPath, "{ invalid json");
+
+    try {
+      const schema = z.object({
+        host: z.string().optional(),
+      });
+
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        config: withDefault(option("--config", string()), configPath),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+      });
+
+      await assert.rejects(
+        async () => {
+          await runWithConfig(parser, context, {
+            getConfigPath: (parsed) => (parsed as { config: string }).config,
+            args: [],
+          });
+        },
+      );
+    } finally {
+      await rm(configPath, { force: true });
+    }
+  });
+
   test("handles missing config file gracefully when not required", async () => {
     const schema = z.object({
       host: z.string().optional(),

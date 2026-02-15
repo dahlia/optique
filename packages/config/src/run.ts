@@ -18,6 +18,12 @@ import { runWith } from "@optique/core/facade";
 import type { ConfigContext } from "./index.ts";
 import { clearActiveConfig, configKey, setActiveConfig } from "./index.ts";
 
+function isErrnoException(
+  error: unknown,
+): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error;
+}
+
 /**
  * Options for single-file config loading.
  *
@@ -375,15 +381,12 @@ function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
 
             configData = validationResult.value as T;
           } catch (error) {
-            // Re-throw validation errors
-            if (
-              error instanceof Error && error.message.includes("validation")
-            ) {
+            // Missing config file is optional in single-file mode.
+            if (isErrnoException(error) && error.code === "ENOENT") {
+              configData = undefined;
+            } else {
               throw error;
             }
-
-            // File not found or parse error - continue without config
-            configData = undefined;
           }
         }
       }
