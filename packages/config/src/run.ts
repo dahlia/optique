@@ -392,7 +392,7 @@ function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
       }
 
       // Set active config in registry for nested parsers inside object()
-      if (configData) {
+      if (configData !== undefined && configData !== null) {
         setActiveConfig(context.id, configData);
         return { [configKey]: configData };
       }

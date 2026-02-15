@@ -365,6 +365,24 @@ describe("runWithConfig", { concurrency: false }, () => {
     }
   });
 
+  test("preserves falsy config values from custom loader", async () => {
+    const schema = z.number();
+    const context = createConfigContext({ schema });
+
+    const parser = bindConfig(option("--timeout", integer()), {
+      context,
+      key: (config) => config,
+      default: 10,
+    });
+
+    const result = await runWithConfig(parser, context, {
+      load: () => 0,
+      args: [],
+    });
+
+    assert.equal(result, 0);
+  });
+
   test("works with nested config values", async () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-nested.json");
