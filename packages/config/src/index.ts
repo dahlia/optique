@@ -315,8 +315,8 @@ export function bindConfig<
             if (res.success) {
               return { success: true, value: res.value };
             }
-            // CLI parsing failed, fall back to config
-            return getConfigOrDefault<T, TValue>(state, options);
+            // CLI value was provided but invalid, so preserve the CLI error.
+            return res;
           }) as ModeValue<M, ValueParserResult<TValue>>;
         }
 
@@ -326,8 +326,8 @@ export function bindConfig<
             ValueParserResult<TValue>
           >;
         }
-        // CLI parsing failed, fall back to config
-        return getConfigOrDefault<T, TValue>(state, options) as ModeValue<
+        // CLI value was provided but invalid, so preserve the CLI error.
+        return innerResult as ModeValue<
           M,
           ValueParserResult<TValue>
         >;

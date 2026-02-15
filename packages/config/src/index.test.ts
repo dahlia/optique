@@ -205,6 +205,26 @@ describe("bindConfig", () => {
     assert.equal(defaultResult.value, 3000);
   });
 
+  test("does not fall back to config/default when CLI value is invalid", () => {
+    const schema = z.object({
+      port: z.number().optional(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--port", integer()), {
+      context,
+      key: "port",
+      default: 3000,
+    });
+
+    const annotations: Annotations = {
+      [configKey]: { port: 8080 },
+    };
+
+    const result = parse(parser, ["--port", "not-a-number"], { annotations });
+    assert.ok(!result.success);
+  });
+
   test("works within object() combinator", () => {
     const schema = z.object({
       host: z.string().optional(),
