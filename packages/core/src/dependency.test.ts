@@ -16,6 +16,7 @@ import {
   isDependencySource,
   isDerivedValueParser,
   parseWithDependency,
+  suggestWithDependency,
 } from "./dependency.ts";
 import { message } from "./message.ts";
 import type { NonEmptyString } from "./nonempty.ts";
@@ -2972,5 +2973,33 @@ describe("Async combinations with dependencies", () => {
       endTime - startTime < 200,
       `Total time should be ~50ms for concurrent, was ${endTime - startTime}ms`,
     );
+  });
+});
+
+describe("suggestWithDependency double factory failure", () => {
+  test("does not throw when factory fails for both dependency and default values", () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    // Factory that works on the first call (used by derive() to determine mode),
+    // but fails on subsequent calls to simulate transient failures.
+    let callCount = 0;
+    const derived = modeParser.derive({
+      metavar: "VALUE",
+      factory: (mode: "dev" | "prod") => {
+        callCount++;
+        if (callCount > 1) {
+          throw new Error(`Factory broken: ${mode}`);
+        }
+        return choice(["debug", "verbose"] as const);
+      },
+      defaultValue: () => "dev" as const,
+    });
+
+    // suggestWithDependency should not throw even when both calls fail.
+    const suggestFn = derived[suggestWithDependency];
+    assert.ok(suggestFn != null);
+    const suggestions = [
+      ...(suggestFn("d", "prod" as "dev" | "prod") as Iterable<Suggestion>),
+    ];
+    assert.deepEqual(suggestions, []);
   });
 });

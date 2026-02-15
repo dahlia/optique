@@ -822,10 +822,14 @@ function createSyncDerivedFromParser<
         );
       } catch {
         // If factory fails, fall back to default
-        const sourceValues = options.defaultValues();
-        derivedParser = options.factory(
-          ...(sourceValues as DependencyValues<Deps>),
-        );
+        try {
+          const sourceValues = options.defaultValues();
+          derivedParser = options.factory(
+            ...(sourceValues as DependencyValues<Deps>),
+          );
+        } catch {
+          return;
+        }
       }
       if (derivedParser.suggest) {
         yield* derivedParser.suggest(prefix);
@@ -914,10 +918,14 @@ function createAsyncDerivedFromParserFromAsyncFactory<
         );
       } catch {
         // If factory fails, fall back to default
-        const sourceValues = options.defaultValues();
-        derivedParser = options.factory(
-          ...(sourceValues as DependencyValues<Deps>),
-        );
+        try {
+          const sourceValues = options.defaultValues();
+          derivedParser = options.factory(
+            ...(sourceValues as DependencyValues<Deps>),
+          );
+        } catch {
+          return;
+        }
       }
       if (derivedParser.suggest) {
         for await (const suggestion of derivedParser.suggest(prefix)) {
@@ -1006,10 +1014,14 @@ function createAsyncDerivedFromParserFromSyncFactory<
         );
       } catch {
         // If factory fails, fall back to default
-        const sourceValues = options.defaultValues();
-        derivedParser = options.factory(
-          ...(sourceValues as DependencyValues<Deps>),
-        );
+        try {
+          const sourceValues = options.defaultValues();
+          derivedParser = options.factory(
+            ...(sourceValues as DependencyValues<Deps>),
+          );
+        } catch {
+          return;
+        }
       }
       if (derivedParser.suggest) {
         yield* derivedParser.suggest(prefix);
@@ -1118,7 +1130,11 @@ function createSyncDerivedParser<S, T>(
         derivedParser = options.factory(dependencyValue);
       } catch {
         // If factory fails, fall back to default
-        derivedParser = options.factory(options.defaultValue());
+        try {
+          derivedParser = options.factory(options.defaultValue());
+        } catch {
+          return;
+        }
       }
       if (derivedParser.suggest) {
         yield* derivedParser.suggest(prefix);
@@ -1189,7 +1205,11 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
         derivedParser = options.factory(dependencyValue);
       } catch {
         // If factory fails, fall back to default
-        derivedParser = options.factory(options.defaultValue());
+        try {
+          derivedParser = options.factory(options.defaultValue());
+        } catch {
+          return;
+        }
       }
       if (derivedParser.suggest) {
         for await (const suggestion of derivedParser.suggest(prefix)) {
@@ -1260,7 +1280,11 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
         derivedParser = options.factory(dependencyValue);
       } catch {
         // If factory fails, fall back to default
-        derivedParser = options.factory(options.defaultValue());
+        try {
+          derivedParser = options.factory(options.defaultValue());
+        } catch {
+          return;
+        }
       }
       if (derivedParser.suggest) {
         yield* derivedParser.suggest(prefix);
