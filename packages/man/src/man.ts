@@ -290,18 +290,25 @@ export function formatDocPageAsMan(
     options.name.toUpperCase(),
     options.section.toString(),
   ];
-  if (options.date != null) {
+  // .TH format: name section [date [source [manual]]]
+  // Earlier positional args must be present (as "") if later ones are used.
+  const hasDate = options.date != null;
+  const hasVersion = options.version != null;
+  const hasManual = options.manual != null;
+
+  if (hasDate) {
     thParts.push(`"${formatDateForMan(options.date)}"`);
+  } else if (hasVersion || hasManual) {
+    thParts.push('""');
   }
-  if (options.version != null) {
-    const dateStr = options.date != null ? "" : '""';
-    if (dateStr) thParts.push(dateStr);
+
+  if (hasVersion) {
     thParts.push(`"${options.name} ${options.version}"`);
+  } else if (hasManual) {
+    thParts.push('""');
   }
-  if (options.manual != null) {
-    // Ensure we have date and version placeholders if needed
-    if (options.date == null) thParts.push('""');
-    if (options.version == null) thParts.push('""');
+
+  if (hasManual) {
     thParts.push(`"${options.manual}"`);
   }
   lines.push(`.TH ${thParts.join(" ")}`);

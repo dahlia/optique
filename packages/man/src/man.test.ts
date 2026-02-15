@@ -145,6 +145,29 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("myapp"));
   });
 
+  it("does not duplicate date placeholder with version and manual", () => {
+    const page: DocPage = {
+      sections: [],
+    };
+
+    // When date is omitted but both version and manual are given,
+    // .TH must have exactly 5 args: name section date source manual
+    const options: ManPageOptions = {
+      name: "myapp",
+      section: 1,
+      version: "1.0.0",
+      manual: "User Commands",
+    };
+
+    const result = formatDocPageAsMan(page, options);
+    const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
+
+    assert.equal(
+      thLine,
+      '.TH MYAPP 1 "" "myapp 1.0.0" "User Commands"',
+    );
+  });
+
   it("includes version and date in header", () => {
     const page: DocPage = {
       sections: [],
