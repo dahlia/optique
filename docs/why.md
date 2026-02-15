@@ -335,6 +335,80 @@ This enables a level of reusability that's impossible with configuration-based
 approaches.
 
 
+Context-aware options and generated documentation
+-------------------------------------------------
+
+Most CLI libraries treat options as independent values—each flag is parsed in
+isolation with no knowledge of the others.  But real tools often have options
+that are logically related: the valid log levels may differ between development
+and production modes, or the available branches depend on which repository
+you've selected.
+
+Optique's [`dependency()`](./concepts/dependencies.md) system lets you express
+these relationships directly in the parser:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+
+// The mode option is a dependency source
+const modeParser = dependency(choice(["dev", "prod"] as const));
+
+// Log levels depend on the selected mode
+const logLevel = modeParser.derive({
+  metavar: "LEVEL",
+  factory: (mode) => {
+    if (mode === "dev") return choice(["debug", "info", "warn", "error"]);
+    return choice(["warn", "error"]);
+  },
+  defaultValue: () => "dev" as const,
+});
+
+const parser = object({
+  mode: option("--mode", modeParser),
+  logLevel: option("--log-level", logLevel),
+});
+~~~~
+
+This isn't just validation—shell completion also uses the dependency
+relationship to suggest only valid values.  When the user types
+`--mode prod --log-level ` and presses Tab, only `warn` and `error` are
+offered as completions.
+
+The same parser definitions that drive parsing and completion can also
+generate Unix man pages through *@optique/man*:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+import { generateManPage } from "@optique/man";
+
+const parser = object({
+  host: option("--host", string(), {
+    description: message`Hostname to bind to.`,
+  }),
+  port: option("--port", integer(), {
+    description: message`Port number to listen on.`,
+  }),
+});
+
+const manPage = generateManPage(parser, {
+  name: "myapp",
+  section: 1,
+  version: "1.0.0",
+  author: message`Jane Doe <jane@example.com>`,
+});
+~~~~
+
+Help text, completion scripts, and man pages all derive from the same source.
+When you add an option or change a description, everything stays in sync
+without separate maintenance.
+
+
 Type inference that scales
 --------------------------
 

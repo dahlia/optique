@@ -34,14 +34,22 @@ Features
 --------
 
  -  *Parser combinators*: `object()`, `or()`, `merge()`, `optional()`,
-    `multiple()`, `map()`, and more for composable CLI parsing
+    `multiple()`, `map()`, `conditional()`, `passThrough()`, and more
+    for composable CLI parsing
  -  *Full type safety*: Automatic TypeScript type inference for all parser
     compositions with compile-time validation
  -  *Rich value parsers*: Built-in parsers for strings, numbers, URLs, locales,
-    UUIDs, temporal types (via *@optique/temporal*), Zod schemas
-    (via *@optique/zod*), and Valibot schemas (via *@optique/valibot*)
+    UUIDs, networking types (`port()`, `ipv4()`, `hostname()`, `email()`, etc.),
+    Temporal types (via *@optique/temporal*), Zod schemas (via *@optique/zod*),
+    and Valibot schemas (via *@optique/valibot*)
  -  *Config file support*: Load config from files with Standard Schema validation
     (via *@optique/config*), supporting Zod, Valibot, ArkType, and more
+ -  *Inter-option dependencies*: Options whose valid values depend on other
+    options, with dynamic validation and context-aware shell completion
+ -  *Async parser support*: Type-safe sync/async mode distinction for parsers
+    that validate against external sources like git refs or remote APIs
+ -  *Man page generation*: Generate Unix man pages directly from parser
+    definitions (via *@optique/man*), keeping documentation always in sync
  -  *Shell completion*: Automatic completion script generation for Bash, zsh,
     fish, PowerShell, and Nushell
  -  *Smart error messages*: “Did you mean?” suggestions for typos with
