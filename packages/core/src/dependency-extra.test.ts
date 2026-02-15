@@ -8552,6 +8552,43 @@ describe("parseSync() with async derived parser", () => {
       assert.equal(result.value.url, "http://localhost:3000");
     }
   });
+
+  test("derive() reports mode mismatch when factory returns async parser", () => {
+    const modeParser = dependency(choice(["sync", "async"] as const));
+
+    const valueParser = modeParser.derive({
+      metavar: "VALUE",
+      defaultValue: () => "sync" as const,
+      factory: (mode: "sync" | "async") =>
+        mode === "sync"
+          ? choice(["a"] as const)
+          // TypeScript users cannot do this without casts, but JavaScript users can.
+          : asyncChoice(["b"] as const) as unknown as ValueParser<"sync", "b">,
+    });
+
+    const parser = object({
+      mode: option("--mode", modeParser),
+      value: option("--value", valueParser),
+    });
+
+    const result = parseSync(parser, [
+      "--mode",
+      "async",
+      "--value",
+      "b",
+    ]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      const errorText = result.error
+        .map((t) => ("text" in t ? t.text : ""))
+        .join("");
+      assert.ok(
+        errorText.includes("Factory returned an async parser"),
+        `Expected mode mismatch error, got: ${errorText}`,
+      );
+    }
+  });
 });
 
 describe("Mixed mode deriveFrom() with sync/async sources", () => {

@@ -751,6 +751,10 @@ function determineFactoryModeForDeriveFrom<
   return parser.$mode === "async";
 }
 
+function isAsyncModeParser(parser: { readonly $mode: Mode }): boolean {
+  return parser.$mode === "async";
+}
+
 function createSyncDerivedFromParser<
   Deps extends readonly AnyDependencySource[],
   T,
@@ -774,6 +778,13 @@ function createSyncDerivedFromParser<
       const derivedParser = options.factory(
         ...(sourceValues as DependencyValues<Deps>),
       );
+      if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
+        return {
+          success: false,
+          error:
+            message`Factory returned an async parser where a sync parser is required.`,
+        };
+      }
       return derivedParser.parse(input);
     },
 
@@ -789,6 +800,13 @@ function createSyncDerivedFromParser<
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return { success: false, error: message`Factory error: ${msg}` };
+      }
+      if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
+        return {
+          success: false,
+          error:
+            message`Factory returned an async parser where a sync parser is required.`,
+        };
       }
       return derivedParser.parse(input);
     },
@@ -1090,6 +1108,13 @@ function createSyncDerivedParser<S, T>(
     parse(input: string): ValueParserResult<T> {
       const sourceValue = options.defaultValue();
       const derivedParser = options.factory(sourceValue);
+      if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
+        return {
+          success: false,
+          error:
+            message`Factory returned an async parser where a sync parser is required.`,
+        };
+      }
       return derivedParser.parse(input);
     },
 
@@ -1103,6 +1128,13 @@ function createSyncDerivedParser<S, T>(
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return { success: false, error: message`Factory error: ${msg}` };
+      }
+      if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
+        return {
+          success: false,
+          error:
+            message`Factory returned an async parser where a sync parser is required.`,
+        };
       }
       return derivedParser.parse(input);
     },
