@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { type ChildProcess, spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -115,6 +115,29 @@ describe("optique-man CLI", () => {
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes(".TH MYPARSER 1"));
       assert.ok(result.stdout.includes("Input file to process."));
+    });
+
+    it("generates man page when input path contains #", async () => {
+      const sourceFile = join(fixturesDir, "parser.ts");
+      const tempDir = await mkdtemp(join(tmpdir(), "optique-man-hash-"));
+      const parserFile = join(tempDir, "hash#parser.ts");
+
+      try {
+        await writeFile(parserFile, await readFile(sourceFile, "utf-8"));
+
+        const result = await runCli([
+          parserFile,
+          "-s",
+          "1",
+          "--name",
+          "hashparser",
+        ]);
+
+        assert.equal(result.exitCode, 0);
+        assert.ok(result.stdout.includes(".TH HASHPARSER 1"));
+      } finally {
+        await rm(tempDir, { recursive: true });
+      }
     });
 
     it("generates man page from named export", async () => {

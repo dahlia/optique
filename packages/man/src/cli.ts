@@ -283,19 +283,13 @@ async function importModule(
   }
 
   const isTypeScript = /\.[mc]?ts$/.test(filePath);
-
-  // Deno/Bun: native TypeScript support
   // deno-lint-ignore no-explicit-any
-  if (typeof (globalThis as any).Deno !== "undefined") {
-    return await import(absolutePath);
-  }
+  const isDeno = typeof (globalThis as any).Deno !== "undefined";
   // deno-lint-ignore no-explicit-any
-  if (typeof (globalThis as any).Bun !== "undefined") {
-    return await import(absolutePath);
-  }
+  const isBun = typeof (globalThis as any).Bun !== "undefined";
 
   // Node.js + TypeScript
-  if (isTypeScript && !nodeSupportsNativeTypeScript()) {
+  if (!isDeno && !isBun && isTypeScript && !nodeSupportsNativeTypeScript()) {
     try {
       const tsx = await import("tsx/esm/api");
       tsx.register();
