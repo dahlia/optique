@@ -2332,8 +2332,14 @@ async function* suggestObjectAsync<
 function collectDependencies(
   state: unknown,
   registry: DependencyRegistry,
+  visited: WeakSet<object> = new WeakSet<object>(),
 ): void {
   if (state === null || state === undefined) return;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return;
+    visited.add(state);
+  }
 
   // Check if this is a DependencySourceState
   if (isDependencySourceState(state)) {
@@ -2348,7 +2354,7 @@ function collectDependencies(
   // Recursively search in arrays
   if (Array.isArray(state)) {
     for (const item of state) {
-      collectDependencies(item, registry);
+      collectDependencies(item, registry, visited);
     }
     return;
   }
@@ -2359,6 +2365,7 @@ function collectDependencies(
       collectDependencies(
         (state as Record<string | symbol, unknown>)[key],
         registry,
+        visited,
       );
     }
   }
@@ -2432,8 +2439,14 @@ function collectDependencyValues(
 function resolveDeferred(
   state: unknown,
   registry: DependencyRegistry,
+  visited: WeakSet<object> = new WeakSet<object>(),
 ): unknown {
   if (state === null || state === undefined) return state;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return state;
+    visited.add(state);
+  }
 
   // Check if this is a DeferredParseState - resolve it
   if (isDeferredParseState(state)) {
@@ -2464,7 +2477,7 @@ function resolveDeferred(
 
   // Recursively resolve in arrays
   if (Array.isArray(state)) {
-    return state.map((item) => resolveDeferred(item, registry));
+    return state.map((item) => resolveDeferred(item, registry, visited));
   }
 
   // Only traverse plain objects (parser state structures)
@@ -2472,7 +2485,7 @@ function resolveDeferred(
   if (isPlainObject(state)) {
     const resolved: Record<string | symbol, unknown> = {};
     for (const key of Reflect.ownKeys(state)) {
-      resolved[key] = resolveDeferred(state[key], registry);
+      resolved[key] = resolveDeferred(state[key], registry, visited);
     }
     return resolved;
   }
@@ -2511,8 +2524,14 @@ function resolveDeferredParseStates<
 async function resolveDeferredAsync(
   state: unknown,
   registry: DependencyRegistry,
+  visited: WeakSet<object> = new WeakSet<object>(),
 ): Promise<unknown> {
   if (state === null || state === undefined) return state;
+
+  if (typeof state === "object") {
+    if (visited.has(state)) return state;
+    visited.add(state);
+  }
 
   // Check if this is a DeferredParseState - resolve it
   if (isDeferredParseState(state)) {
@@ -2540,7 +2559,7 @@ async function resolveDeferredAsync(
   // Recursively resolve in arrays
   if (Array.isArray(state)) {
     return Promise.all(
-      state.map((item) => resolveDeferredAsync(item, registry)),
+      state.map((item) => resolveDeferredAsync(item, registry, visited)),
     );
   }
 
@@ -2551,7 +2570,11 @@ async function resolveDeferredAsync(
     const keys = Reflect.ownKeys(state);
     await Promise.all(
       keys.map(async (key) => {
-        resolved[key] = await resolveDeferredAsync(state[key], registry);
+        resolved[key] = await resolveDeferredAsync(
+          state[key],
+          registry,
+          visited,
+        );
       }),
     );
     return resolved;
