@@ -966,6 +966,69 @@ describe("expandCommands option", () => {
     assert.equal(lines.length, 1);
     assert.equal(lines[0], "cli some-command ARG");
   });
+
+  it("should expand commands when a branch starts with a nested exclusive", () => {
+    // Simulates the gitique case: completion: "both" produces
+    // (completion | completions) followed by trailing terms.
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--help"] }],
+          [
+            { type: "command", name: "add" },
+            { type: "argument", metavar: "FILE" },
+          ],
+          [
+            { type: "command", name: "remove" },
+            { type: "argument", metavar: "KEY" },
+          ],
+          [
+            {
+              type: "exclusive",
+              terms: [
+                [
+                  { type: "command", name: "completion" },
+                  {
+                    type: "optional",
+                    terms: [{ type: "argument", metavar: "SHELL" }],
+                  },
+                ],
+                [
+                  { type: "command", name: "completions" },
+                  {
+                    type: "optional",
+                    terms: [{ type: "argument", metavar: "SHELL" }],
+                  },
+                ],
+              ],
+            },
+            {
+              type: "optional",
+              terms: [{ type: "option", names: ["--help"] }],
+            },
+          ],
+          [
+            { type: "command", name: "help" },
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "COMMAND" }],
+            },
+          ],
+        ],
+      },
+    ];
+    const result = formatUsage("test", usage, { expandCommands: true });
+    const lines = result.split("\n");
+
+    assert.equal(lines.length, 6);
+    assert.equal(lines[0], "test --help");
+    assert.equal(lines[1], "test add FILE");
+    assert.equal(lines[2], "test remove KEY");
+    assert.equal(lines[3], "test completion [--help] [SHELL]");
+    assert.equal(lines[4], "test completions [--help] [SHELL]");
+    assert.equal(lines[5], "test help [COMMAND]");
+  });
 });
 
 describe("formatUsageTerm", () => {
@@ -1750,6 +1813,56 @@ describe("normalizeUsage", () => {
             [{ type: "option", names: ["--second", "-s"] }],
             [{ type: "option", names: ["--third", "-t"] }],
             [{ type: "option", names: ["--fourth", "-4"] }],
+          ],
+        },
+      ];
+      assert.deepEqual(result, expected);
+    });
+
+    it("should distribute exclusive first-term with trailing terms", () => {
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "command", name: "add" }],
+            [
+              {
+                type: "exclusive",
+                terms: [
+                  [{ type: "command", name: "completion" }],
+                  [{ type: "command", name: "completions" }],
+                ],
+              },
+              {
+                type: "optional",
+                terms: [{ type: "option", names: ["--help"] }],
+              },
+            ],
+            [{ type: "command", name: "help" }],
+          ],
+        },
+      ];
+      const result = normalizeUsage(usage);
+      const expected: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "command", name: "add" }],
+            [
+              { type: "command", name: "completion" },
+              {
+                type: "optional",
+                terms: [{ type: "option", names: ["--help"] }],
+              },
+            ],
+            [
+              { type: "command", name: "completions" },
+              {
+                type: "optional",
+                terms: [{ type: "option", names: ["--help"] }],
+              },
+            ],
+            [{ type: "command", name: "help" }],
           ],
         },
       ];

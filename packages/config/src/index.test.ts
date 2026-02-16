@@ -97,6 +97,26 @@ describe("bindConfig", () => {
     assert.equal(result.value, "localhost");
   });
 
+  test("marks usage as optional when default is provided", () => {
+    const schema = z.object({
+      host: z.string().optional(),
+    });
+
+    const context = createConfigContext({ schema });
+    const innerParser = option("--host", string());
+    const parser = bindConfig(innerParser, {
+      context,
+      key: "host",
+      default: "localhost",
+    });
+
+    assert.equal(parser.usage.length, 1);
+    assert.equal(parser.usage[0].type, "optional");
+    if (parser.usage[0].type === "optional") {
+      assert.deepEqual(parser.usage[0].terms, innerParser.usage);
+    }
+  });
+
   test("fails when no CLI, no config, and no default", () => {
     const schema = z.object({
       host: z.string().optional(),
