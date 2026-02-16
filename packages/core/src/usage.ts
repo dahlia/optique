@@ -472,9 +472,10 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
     const terms: Usage[] = [];
     for (const usage of term.terms) {
       const normalized = normalizeUsage(usage);
-      if (normalized.length === 1 && normalized[0].type === "exclusive") {
+      if (normalized.length >= 1 && normalized[0].type === "exclusive") {
+        const rest = normalized.slice(1);
         for (const subUsage of normalized[0].terms) {
-          terms.push(subUsage);
+          terms.push([...subUsage, ...rest]);
         }
       } else {
         terms.push(normalized);
