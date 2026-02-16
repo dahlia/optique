@@ -1,6 +1,6 @@
 {
   "name": "@optique/git",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "description": "Git value parsers for Optique",
   "keywords": [
     "CLI",
