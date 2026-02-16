@@ -2972,27 +2972,30 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      // Find the usage line in error output
-      const usageLine = errorOutput
+      // Find the usage lines in error output (may be multi-line)
+      const usageLines = errorOutput
         .split("\n")
-        .find((line) => line.startsWith("Usage:"));
-      assert.ok(usageLine, "Should have a usage line in error output");
+        .filter((line) =>
+          line.startsWith("Usage:") || line.startsWith("       ")
+        )
+        .join("\n");
+      assert.ok(usageLines, "Should have usage lines in error output");
 
       // completion command should appear after user commands (add, remove)
-      const completionIndex = usageLine.indexOf("completion");
-      const addIndex = usageLine.indexOf("add");
-      const removeIndex = usageLine.indexOf("remove");
+      const completionIndex = usageLines.indexOf("completion");
+      const addIndex = usageLines.indexOf("add");
+      const removeIndex = usageLines.indexOf("remove");
 
       assert.ok(completionIndex > 0, "Should contain 'completion' in usage");
       assert.ok(addIndex > 0, "Should contain 'add' in usage");
       assert.ok(removeIndex > 0, "Should contain 'remove' in usage");
       assert.ok(
         completionIndex > addIndex,
-        "completion should appear after add in usage line",
+        "completion should appear after add in usage",
       );
       assert.ok(
         completionIndex > removeIndex,
-        "completion should appear after remove in usage line",
+        "completion should appear after remove in usage",
       );
     });
   });
