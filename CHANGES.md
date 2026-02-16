@@ -8,6 +8,17 @@ Version 0.10.1
 
 To be released.
 
+### @optique/core
+
+ -  Fixed usage string collapsing to a single line when `completion` with
+    `name: "both"` created a nested exclusive term (e.g.,
+    `(completion | completions)`) inside an outer exclusive.
+    `normalizeUsageTerm()` now distributes an exclusive that appears as the
+    first term of a branch across the remaining terms, so that
+    `[exclusive(A, B), C]` is flattened into separate branches `[A, C]` and
+    `[B, C]`.  This allows `formatUsage()` with `expandCommands: true` to
+    properly render each alternative on its own line.
+
 ### @optique/config
 
  -  Fixed `bindConfig()` usage rendering when `default` is provided. The
@@ -815,6 +826,23 @@ to generate Unix man pages that stay synchronized with parser definitions.
         `--manual` options.
 
 [#77]: https://github.com/dahlia/optique/issues/77
+
+
+Version 0.9.7
+-------------
+
+Released on February 17, 2026.
+
+### @optique/core
+
+ -  Fixed usage string collapsing to a single line when `completion` with
+    `name: "both"` created a nested exclusive term (e.g.,
+    `(completion | completions)`) inside an outer exclusive.
+    `normalizeUsageTerm()` now distributes an exclusive that appears as the
+    first term of a branch across the remaining terms, so that
+    `[exclusive(A, B), C]` is flattened into separate branches `[A, C]` and
+    `[B, C]`.  This allows `formatUsage()` with `expandCommands: true` to
+    properly render each alternative on its own line.
 
 
 Version 0.9.6
