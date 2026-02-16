@@ -8,6 +8,12 @@ Version 0.10.1
 
 To be released.
 
+### @optique/config
+
+ -  Fixed `bindConfig()` usage rendering when `default` is provided. The
+    generated usage term is now wrapped as optional, so usage strings correctly
+    show the bound option in square brackets (`[]`).
+
 
 Version 0.10.0
 --------------

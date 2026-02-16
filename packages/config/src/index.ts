@@ -235,7 +235,9 @@ export function bindConfig<
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    usage: parser.usage,
+    usage: options.default !== undefined
+      ? [{ type: "optional", terms: parser.usage }]
+      : parser.usage,
     initialState: parser.initialState,
 
     parse: (context) => {
