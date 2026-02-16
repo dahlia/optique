@@ -1,6 +1,6 @@
 {
   "name": "@optique/zod",
-  "version": "0.8.13",
+  "version": "0.8.14",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts"
