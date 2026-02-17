@@ -8,6 +8,15 @@ Version 0.10.2
 
 To be released.
 
+### @optique/config
+
+ -  Fixed `runWithConfig()` showing a raw `SyntaxError` stack trace when
+    a config file contains malformed JSON.  It now prints a friendly error
+    message that includes the file path.
+    [[#109]]
+
+[#109]: https://github.com/dahlia/optique/issues/109
+
 
 Version 0.10.1
 --------------

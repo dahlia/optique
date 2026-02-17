@@ -203,13 +203,27 @@ describe("runWithConfig", { concurrency: false }, () => {
         }),
       });
 
+      let stderrOutput = "";
       await assert.rejects(
         async () => {
           await runWithConfig(parser, context, {
             getConfigPath: (parsed) => (parsed as { config: string }).config,
             args: [],
+            stderr: (text) => {
+              stderrOutput += text;
+            },
+            onError: () => "error-handled" as never,
           });
         },
+      );
+
+      assert.ok(
+        stderrOutput.includes(configPath),
+        "error message should include the config file path",
+      );
+      assert.ok(
+        !stderrOutput.includes("SyntaxError"),
+        "error message should not expose raw SyntaxError",
       );
     } finally {
       await rm(configPath, { force: true });

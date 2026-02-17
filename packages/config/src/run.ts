@@ -384,6 +384,10 @@ function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
             // Missing config file is optional in single-file mode.
             if (isErrnoException(error) && error.code === "ENOENT") {
               configData = undefined;
+            } else if (error instanceof SyntaxError) {
+              throw new Error(
+                `Failed to parse config file ${configPath}: ${error.message}`,
+              );
             } else {
               throw error;
             }
@@ -519,6 +523,23 @@ export async function runWithConfig<
       footer: options.footer,
       onError: options.onError,
     });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Failed to parse config file ")
+    ) {
+      const stderr = options.stderr ?? console.error;
+      stderr(`Error: ${error.message}`);
+      if (options.onError) {
+        try {
+          options.onError(1);
+        } catch {
+          (options.onError as (() => TError))();
+        }
+      }
+      throw error;
+    }
+    throw error;
   } finally {
     // Always clear the active config after parsing
     clearActiveConfig(context.id);
