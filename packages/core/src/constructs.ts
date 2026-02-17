@@ -4059,8 +4059,29 @@ export function group<TValue, TState>(
         }
       }
 
-      // Create our labeled section with all collected entries
-      const labeledSection: DocSection = { title: label, entries: allEntries };
+      // Only apply the group label when the entries still represent what
+      // the group was originally labeling.  When group() wraps command
+      // parsers (via or()), the initial state produces command entries.
+      // Once a command is selected, the inner parser's flags/options are
+      // returned instead — the group label should not apply to those.
+      // See: https://github.com/dahlia/optique/issues/114
+      const initialFragments = parser.getDocFragments(
+        { kind: "available", state: parser.initialState },
+        undefined,
+      );
+      const initialHasCommands = initialFragments.fragments.some(
+        (f) =>
+          (f.type === "entry" && f.term.type === "command") ||
+          (f.type === "section" &&
+            f.entries.some((e) => e.term.type === "command")),
+      );
+      const currentHasCommands = allEntries.some(
+        (e) => e.term.type === "command",
+      );
+      const applyLabel = !initialHasCommands || currentHasCommands;
+      const labeledSection: DocSection = applyLabel
+        ? { title: label, entries: allEntries }
+        : { entries: allEntries };
 
       return {
         description,

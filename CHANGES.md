@@ -6,6 +6,15 @@ Version 0.7.16
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `group()` incorrectly applying its label to subcommand flags
+    in help output.  When `group()` wraps `command()` parsers (via `or()`),
+    the group label is now only shown for the command list at the top level,
+    not for the inner flags/options after a command is selected.  [[#114]]
+
+[#114]: https://github.com/dahlia/optique/issues/114
+
 
 Version 0.7.15
 --------------
