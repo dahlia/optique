@@ -523,8 +523,8 @@ export function formatMessage(
             paragraphIndex++
           ) {
             if (paragraphIndex > 0) {
-              // Yield hard line break with -1 as special marker
-              yield { text: "\n", width: -1 };
+              // Yield paragraph break (double newline) with -1 as special marker
+              yield { text: "\n\n", width: -1 };
             }
 
             // Within each paragraph, replace single \n with space

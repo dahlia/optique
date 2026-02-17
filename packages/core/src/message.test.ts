@@ -825,8 +825,8 @@ describe("formatMessage - explicit line breaks", () => {
     ];
     const formatted = formatMessage(msg, { quotes: false });
 
-    // Double newline creates actual line break
-    assert.equal(formatted, "Para 1.\nPara 2.");
+    // Double newline creates paragraph break (double newline in output)
+    assert.equal(formatted, "Para 1.\n\nPara 2.");
   });
 
   it("should handle multiple double newlines", () => {
@@ -835,7 +835,7 @@ describe("formatMessage - explicit line breaks", () => {
     ];
     const formatted = formatMessage(msg, { quotes: false });
 
-    assert.equal(formatted, "A\nB\nC");
+    assert.equal(formatted, "A\n\nB\n\nC");
   });
 
   it("should handle triple+ newlines as single hard break", () => {
@@ -844,8 +844,8 @@ describe("formatMessage - explicit line breaks", () => {
     ];
     const formatted = formatMessage(msg, { quotes: false });
 
-    // Triple newlines still treated as single hard break
-    assert.equal(formatted, "Line 1\nLine 2");
+    // Triple newlines still treated as single paragraph break
+    assert.equal(formatted, "Line 1\n\nLine 2");
   });
 
   it("should handle double newline with option names", () => {
@@ -860,11 +860,11 @@ describe("formatMessage - explicit line breaks", () => {
     ];
     const formatted = formatMessage(msg, { quotes: false });
 
-    assert.ok(formatted.includes("\n"));
+    assert.ok(formatted.includes("\n\n"));
     assert.ok(formatted.includes("--verbos"));
     assert.ok(formatted.includes("--verbose"));
     const lines = formatted.split("\n");
-    assert.equal(lines.length, 2);
+    assert.equal(lines.length, 3); // paragraph break = empty line between
   });
 
   it("should reset width tracking after hard line break", () => {
@@ -874,9 +874,10 @@ describe("formatMessage - explicit line breaks", () => {
     const formatted = formatMessage(msg, { quotes: false, maxWidth: 50 });
 
     const lines = formatted.split("\n");
-    assert.equal(lines.length, 2);
+    assert.equal(lines.length, 3); // paragraph break = empty line between
     assert.ok(lines[0].startsWith("Short."));
-    assert.ok(lines[1].includes("This is a much longer second line."));
+    assert.equal(lines[1], "");
+    assert.ok(lines[2].includes("This is a much longer second line."));
   });
 
   it("should normalize single newlines in long text", () => {
@@ -907,7 +908,7 @@ describe("formatMessage - explicit line breaks", () => {
 
     assert.equal(
       formatted,
-      "Para 1 line 1. Para 1 line 2.\nPara 2 line 1. Para 2 line 2.",
+      "Para 1 line 1. Para 1 line 2.\n\nPara 2 line 1. Para 2 line 2.",
     );
   });
 
@@ -917,8 +918,8 @@ describe("formatMessage - explicit line breaks", () => {
     ];
     const formatted = formatMessage(msg, { quotes: false });
 
-    // Multiple double newlines still create single hard break
-    assert.equal(formatted, "Line 1\nLine 2");
+    // Multiple double newlines still create single paragraph break
+    assert.equal(formatted, "Line 1\n\nLine 2");
   });
 });
 

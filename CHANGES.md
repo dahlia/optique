@@ -8,6 +8,13 @@ Version 1.0.0
 
 To be released.
 
+### @optique/core
+
+ -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
+    terms as double newlines in the output, instead of collapsing them to
+    a single newline.  This makes paragraph breaks visually distinct from
+    explicit `lineBreak()` terms, which render as a single newline.
+
 
 Version 0.10.2
 --------------

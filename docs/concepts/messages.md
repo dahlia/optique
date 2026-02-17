@@ -599,12 +599,19 @@ This renders as:
 
 ~~~~
 First paragraph with important information.
+
 Second paragraph with additional details.
 ~~~~
 
 This distinction is particularly useful for multi-part error messages, such as
 those with suggestions or help text, ensuring proper spacing between the base
 error and additional information.
+
+> [!NOTE]
+> Prior to Optique 1.0.0, double newlines were rendered as a single newline
+> (`\n`) in the output, making them visually indistinguishable from
+> `lineBreak()`.  Since 1.0.0, they are rendered as a double newline (`\n\n`)
+> to clearly separate paragraphs.
 
 
 Terminal output
