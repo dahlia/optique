@@ -1718,3 +1718,55 @@ describe("Error message customization", () => {
     }
   });
 });
+
+describe("merge() should propagate brief/description/footer from inner parsers", () => {
+  it("should propagate description from command via merge(or(...), ...)", () => {
+    const syncCommand = command(
+      "sync",
+      object({
+        verbose: option("-v", "--verbose"),
+      }),
+      {
+        brief: message`Synchronize data.`,
+        description: message`Synchronize data between local and remote.`,
+        footer: message`Example: myapp sync -v`,
+      },
+    );
+
+    const buildCommand = command(
+      "build",
+      object({
+        output: option("-o", "--output", string()),
+      }),
+      {
+        brief: message`Build the project.`,
+        description: message`Build the project from source.`,
+      },
+    );
+
+    const globalOptions = object({
+      debug: option("-d", "--debug"),
+    });
+
+    const parser = merge(or(syncCommand, buildCommand), globalOptions);
+
+    // When a subcommand is selected, getDocPage should include its
+    // brief, description, and footer:
+    const syncDoc = getDocPage(parser, ["sync"]);
+    assert.ok(syncDoc, "syncDoc should not be undefined");
+    assert.deepEqual(syncDoc!.brief, message`Synchronize data.`);
+    assert.deepEqual(
+      syncDoc!.description,
+      message`Synchronize data between local and remote.`,
+    );
+    assert.deepEqual(syncDoc!.footer, message`Example: myapp sync -v`);
+
+    const buildDoc = getDocPage(parser, ["build"]);
+    assert.ok(buildDoc, "buildDoc should not be undefined");
+    assert.deepEqual(buildDoc!.brief, message`Build the project.`);
+    assert.deepEqual(
+      buildDoc!.description,
+      message`Build the project from source.`,
+    );
+  });
+});

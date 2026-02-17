@@ -13,6 +13,13 @@ To be released.
     the group label is now only shown for the command list at the top level,
     not for the inner flags/options after a command is selected.  [[#114]]
 
+ -  Fixed `merge()` not propagating `brief`, `description`, and `footer`
+    from inner parsers in help output.  When using the
+    `merge(or(...commands), globalOptions)` pattern, subcommand help
+    (e.g., `myapp subcommand --help`) now correctly displays the command's
+    description.  Previously, these fields were silently discarded by
+    `merge()`.
+
 [#114]: https://github.com/dahlia/optique/issues/114
 
 
