@@ -6,6 +6,22 @@ Version 0.9.8
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `group()` incorrectly applying its label to subcommand flags
+    in help output.  When `group()` wraps `command()` parsers (via `or()`),
+    the group label is now only shown for the command list at the top level,
+    not for the inner flags/options after a command is selected.  [[#114]]
+
+ -  Fixed `merge()` not propagating `brief`, `description`, and `footer`
+    from inner parsers in help output.  When using the
+    `merge(or(...commands), globalOptions)` pattern, subcommand help
+    (e.g., `myapp subcommand --help`) now correctly displays the command's
+    description.  Previously, these fields were silently discarded by
+    `merge()`.
+
+[#114]: https://github.com/dahlia/optique/issues/114
+
 
 Version 0.9.7
 -------------
@@ -462,6 +478,103 @@ remotes) using [isomorphic-git].  [[#71], [#72]]
 [#72]: https://github.com/dahlia/optique/pull/72
 
 
+
+Version 0.8.14
+--------------
+
+Released on February 18, 2026.
+
+### @optique/core
+
+ -  Fixed `group()` incorrectly applying its label to subcommand flags
+    in help output.  When `group()` wraps `command()` parsers (via `or()`),
+    the group label is now only shown for the command list at the top level,
+    not for the inner flags/options after a command is selected.  [[#114]]
+
+ -  Fixed `merge()` not propagating `brief`, `description`, and `footer`
+    from inner parsers in help output.  When using the
+    `merge(or(...commands), globalOptions)` pattern, subcommand help
+    (e.g., `myapp subcommand --help`) now correctly displays the command's
+    description.  Previously, these fields were silently discarded by
+    `merge()`.
+
+[#114]: https://github.com/dahlia/optique/issues/114
+
+
+Version 0.8.13
+--------------
+
+Released on February 17, 2026.
+
+### @optique/core
+
+ -  Fixed usage string collapsing to a single line when `completion` with
+    `name: "both"` created a nested exclusive term (e.g.,
+    `(completion | completions)`) inside an outer exclusive.
+    `normalizeUsageTerm()` now distributes an exclusive that appears as the
+    first term of a branch across the remaining terms, so that
+    `[exclusive(A, B), C]` is flattened into separate branches `[A, C]` and
+    `[B, C]`.  This allows `formatUsage()` with `expandCommands: true` to
+    properly render each alternative on its own line.
+
+
+Version 0.8.12
+--------------
+
+Released on February 14, 2026.
+
+### @optique/core
+
+ -  Fixed the `completion` command appearing before user-defined commands in
+    the usage line shown on parse errors.  When using `completion` in command
+    mode with `or()`-combined commands, the error output now lists user commands
+    first and meta-commands (version, completion, help) after them.  [[#107]]
+
+[#107]: https://github.com/dahlia/optique/issues/107
+
+
+Version 0.8.11
+--------------
+
+Released on February 13, 2026.
+
+### @optique/core
+
+ -  Fixed contradictory suggestion messages for subcommand-only options at the
+    root command level.  Previously, when an option that belongs to a
+    subcommand was entered before specifying the subcommand (for example,
+    `mycli --fooflag 123` where `--fooflag` belongs to `mycli foo`), the parser
+    could report `Unexpected option or subcommand` and still suggest the same
+    option.  Suggestions now only include options and commands that are valid at
+    the current parse position.  [[#98]]
+
+ -  Fixed `--completion` and `--completions` without a shell value in option
+    mode reporting a generic parse error.  Previously, inputs like
+    `mycli --completion` could fall through to normal argument parsing and show
+    `Unexpected option or subcommand`, which was misleading.  These now produce
+    the dedicated completion error for a missing shell name.  [[#100]]
+
+[#98]: https://github.com/dahlia/optique/issues/98
+[#100]: https://github.com/dahlia/optique/issues/100
+
+
+Version 0.8.10
+--------------
+
+Released on February 12, 2026.
+
+### @optique/core
+
+ -  Fixed `mycli subcommand --help` displaying the `brief` and `description`
+    passed to `run()` instead of those passed to `command()`.  Now, when
+    showing help for a specific subcommand, the subcommand's own `brief`,
+    `description`, and `footer` take priority over the `run()`-level values.
+    The `run()`-level values are used as fallback only when the subcommand
+    does not define its own.  [[#95]]
+
+[#95]: https://github.com/dahlia/optique/issues/95
+
+
 Version 0.8.9
 -------------
 
@@ -742,6 +855,139 @@ parsing strategies.
     package.
 
 [LogTape]: https://logtape.org/
+
+
+
+Version 0.7.16
+--------------
+
+Released on February 18, 2026.
+
+### @optique/core
+
+ -  Fixed `group()` incorrectly applying its label to subcommand flags
+    in help output.  When `group()` wraps `command()` parsers (via `or()`),
+    the group label is now only shown for the command list at the top level,
+    not for the inner flags/options after a command is selected.  [[#114]]
+
+ -  Fixed `merge()` not propagating `brief`, `description`, and `footer`
+    from inner parsers in help output.  When using the
+    `merge(or(...commands), globalOptions)` pattern, subcommand help
+    (e.g., `myapp subcommand --help`) now correctly displays the command's
+    description.  Previously, these fields were silently discarded by
+    `merge()`.
+
+[#114]: https://github.com/dahlia/optique/issues/114
+
+
+Version 0.7.15
+--------------
+
+Released on February 17, 2026.
+
+### @optique/core
+
+ -  Fixed usage string collapsing to a single line when `completion` with
+    `name: "both"` created a nested exclusive term (e.g.,
+    `(completion | completions)`) inside an outer exclusive.
+    `normalizeUsageTerm()` now distributes an exclusive that appears as the
+    first term of a branch across the remaining terms, so that
+    `[exclusive(A, B), C]` is flattened into separate branches `[A, C]` and
+    `[B, C]`.  This allows `formatUsage()` with `expandCommands: true` to
+    properly render each alternative on its own line.
+
+
+Version 0.7.14
+--------------
+
+Released on February 14, 2026.
+
+### @optique/core
+
+ -  Fixed the `completion` command appearing before user-defined commands in
+    the usage line shown on parse errors.  When using `completion` in command
+    mode with `or()`-combined commands, the error output now lists user commands
+    first and meta-commands (version, completion, help) after them.  [[#107]]
+
+[#107]: https://github.com/dahlia/optique/issues/107
+
+
+Version 0.7.13
+--------------
+
+Released on February 13, 2026.
+
+### @optique/core
+
+ -  Fixed contradictory suggestion messages for subcommand-only options at the
+    root command level.  Previously, when an option that belongs to a
+    subcommand was entered before specifying the subcommand (for example,
+    `mycli --fooflag 123` where `--fooflag` belongs to `mycli foo`), the parser
+    could report `Unexpected option or subcommand` and still suggest the same
+    option.  Suggestions now only include options and commands that are valid at
+    the current parse position.  [[#98]]
+
+ -  Fixed `--completion` and `--completions` without a shell value in option
+    mode reporting a generic parse error.  Previously, inputs like
+    `mycli --completion` could fall through to normal argument parsing and show
+    `Unexpected option or subcommand`, which was misleading.  These now produce
+    the dedicated completion error for a missing shell name.  [[#100]]
+
+[#98]: https://github.com/dahlia/optique/issues/98
+[#100]: https://github.com/dahlia/optique/issues/100
+
+
+Version 0.7.12
+--------------
+
+Released on February 12, 2026.
+
+### @optique/core
+
+ -  Fixed `mycli subcommand --help` displaying the `brief` and `description`
+    passed to `run()` instead of those passed to `command()`.  Now, when
+    showing help for a specific subcommand, the subcommand's own `brief`,
+    `description`, and `footer` take priority over the `run()`-level values.
+    The `run()`-level values are used as fallback only when the subcommand
+    does not define its own.  [[#95]]
+
+[#95]: https://github.com/dahlia/optique/issues/95
+
+
+Version 0.7.11
+--------------
+
+Released on February 12, 2026.
+
+### @optique/core
+
+ -  Fixed `run()` showing top-level help instead of an error when `--help`
+    is used with an invalid subcommand (e.g., `mycli nonexistent --help`).
+    Previously, the help handler did not validate whether the commands
+    extracted before `--help` were actually recognized by the parser,
+    so it silently fell back to displaying root-level help.  Now, the
+    commands are validated against the parser, and an appropriate error
+    message with usage information is shown instead.  [[#97]]
+
+[#97]: https://github.com/dahlia/optique/issues/97
+
+
+Version 0.7.10
+--------------
+
+Released on January 19, 2026.
+
+### @optique/core
+
+ -  Fixed `command()` failing to parse inner parser when buffer is empty after
+    command match.  Previously, when using `command()` with an inner parser
+    that can succeed with zero tokens (like `longestMatch()` or `object()` with
+    all optional fields), parsing `["dev"]` would fail with “No matching option,
+    command, or argument found” even though the inner parser should succeed.
+    Now, the `complete()` method first gives the inner parser a chance to run
+    with an empty buffer before completing.  [[#81]]
+
+[#81]: https://github.com/dahlia/optique/issues/81
 
 
 Version 0.7.9

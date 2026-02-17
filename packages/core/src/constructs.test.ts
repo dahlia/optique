@@ -18,6 +18,7 @@ import {
 } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
+  getDocPage,
   type InferValue,
   type ParserResult,
   parseSync,
@@ -4473,5 +4474,286 @@ describe("complex combinator interactions", () => {
       const result2 = parseSync(parser, ["-q", "-f"]);
       assert.ok(result2.success);
     });
+  });
+});
+
+describe("group() with command() - issue #114", () => {
+  // https://github.com/dahlia/optique/issues/114
+  it("should not apply group label to subcommand flags in help", () => {
+    const addCommand = command(
+      "add",
+      object({ action: constant("add"), force: option("--force") }),
+      {},
+    );
+    const removeCommand = command(
+      "remove",
+      object({ action: constant("remove"), force: option("--force") }),
+      {},
+    );
+    const cli = group("File commands", or(addCommand, removeCommand));
+
+    // Top-level help should show commands under "File commands"
+    const topDoc = getDocPage(cli, []);
+    assert.ok(topDoc);
+    const topGrouped = topDoc.sections.find((s) => s.title === "File commands");
+    assert.ok(topGrouped, "Top-level help should have 'File commands' section");
+    assert.ok(
+      topGrouped.entries.some(
+        (e) => e.term.type === "command" && e.term.name === "add",
+      ),
+    );
+
+    // Subcommand help should NOT label flags under "File commands"
+    const subDoc = getDocPage(cli, ["add"]);
+    assert.ok(subDoc);
+    const subGrouped = subDoc.sections.find(
+      (s) => s.title === "File commands",
+    );
+    assert.ok(
+      !subGrouped,
+      "Subcommand help should not have 'File commands' section for flags",
+    );
+    // The --force flag should still appear, just not under a group title
+    const allEntries = subDoc.sections.flatMap((s) => s.entries);
+    assert.ok(
+      allEntries.some(
+        (e) => e.term.type === "option" && e.term.names.includes("--force"),
+      ),
+      "Subcommand help should still show --force flag",
+    );
+  });
+
+  it("should handle multiple groups with commands", () => {
+    // Two separate groups of commands combined with or()
+    const fileGroup = group(
+      "File commands",
+      or(
+        command("add", object({ action: constant("add") }), {}),
+        command("remove", object({ action: constant("remove") }), {}),
+      ),
+    );
+    const configGroup = group(
+      "Config commands",
+      or(
+        command("set", object({ action: constant("set") }), {}),
+        command("get", object({ action: constant("get") }), {}),
+      ),
+    );
+    const cli = or(fileGroup, configGroup);
+
+    // Top-level: both group labels should appear
+    const topDoc = getDocPage(cli, []);
+    assert.ok(topDoc);
+    assert.ok(
+      topDoc.sections.some((s) => s.title === "File commands"),
+      "Top-level should have 'File commands' section",
+    );
+    assert.ok(
+      topDoc.sections.some((s) => s.title === "Config commands"),
+      "Top-level should have 'Config commands' section",
+    );
+
+    // Subcommand from first group: neither group label should appear
+    const addDoc = getDocPage(cli, ["add"]);
+    assert.ok(addDoc);
+    assert.ok(
+      !addDoc.sections.some((s) => s.title === "File commands"),
+      "'add' help should not have 'File commands' section",
+    );
+    assert.ok(
+      !addDoc.sections.some((s) => s.title === "Config commands"),
+      "'add' help should not have 'Config commands' section",
+    );
+
+    // Subcommand from second group: same behavior
+    const setDoc = getDocPage(cli, ["set"]);
+    assert.ok(setDoc);
+    assert.ok(
+      !setDoc.sections.some((s) => s.title === "Config commands"),
+      "'set' help should not have 'Config commands' section",
+    );
+  });
+
+  it("should preserve inner group labels within subcommands", () => {
+    // Commands whose inner parsers use group() for their own options
+    const buildCmd = command(
+      "build",
+      merge(
+        group(
+          "Build options",
+          object({ output: option("-o", "--output", string()) }),
+        ),
+        group(
+          "Debug options",
+          object({ verbose: flag("-v", "--verbose") }),
+        ),
+      ),
+      {},
+    );
+    const testCmd = command(
+      "test",
+      object({ coverage: flag("--coverage") }),
+      {},
+    );
+    const cli = group("Commands", or(buildCmd, testCmd));
+
+    // Top-level: "Commands" label on the command list
+    const topDoc = getDocPage(cli, []);
+    assert.ok(topDoc);
+    assert.ok(
+      topDoc.sections.some((s) => s.title === "Commands"),
+      "Top-level should have 'Commands' section",
+    );
+
+    // build --help: inner groups should appear, outer "Commands" should not
+    const buildDoc = getDocPage(cli, ["build"]);
+    assert.ok(buildDoc);
+    assert.ok(
+      !buildDoc.sections.some((s) => s.title === "Commands"),
+      "'build' help should not show outer 'Commands' label",
+    );
+    assert.ok(
+      buildDoc.sections.some((s) => s.title === "Build options"),
+      "'build' help should show inner 'Build options' label",
+    );
+    assert.ok(
+      buildDoc.sections.some((s) => s.title === "Debug options"),
+      "'build' help should show inner 'Debug options' label",
+    );
+  });
+
+  it("should handle single command wrapped in group", () => {
+    // group() wrapping a single command (not or())
+    const cli = group(
+      "Main",
+      command(
+        "serve",
+        object({
+          port: option("-p", "--port", integer()),
+          host: option("-h", "--host", string()),
+        }),
+        {},
+      ),
+    );
+
+    // Top-level: "Main" label on the command
+    const topDoc = getDocPage(cli, []);
+    assert.ok(topDoc);
+    assert.ok(
+      topDoc.sections.some((s) => s.title === "Main"),
+      "Top-level should have 'Main' section",
+    );
+
+    // serve --help: flags should not be labeled "Main"
+    const serveDoc = getDocPage(cli, ["serve"]);
+    assert.ok(serveDoc);
+    assert.ok(
+      !serveDoc.sections.some((s) => s.title === "Main"),
+      "'serve' help should not show 'Main' label on flags",
+    );
+    const allEntries = serveDoc.sections.flatMap((s) => s.entries);
+    assert.ok(
+      allEntries.some(
+        (e) => e.term.type === "option" && e.term.names.includes("--port"),
+      ),
+      "'serve' help should show --port flag",
+    );
+    assert.ok(
+      allEntries.some(
+        (e) => e.term.type === "option" && e.term.names.includes("--host"),
+      ),
+      "'serve' help should show --host flag",
+    );
+  });
+
+  it("should still label non-command options with group", () => {
+    // group() wrapping plain options (no commands) should always keep label
+    const cli = merge(
+      group(
+        "Server",
+        object({ port: option("--port", integer()) }),
+      ),
+      group(
+        "Logging",
+        object({ verbose: flag("--verbose") }),
+      ),
+    );
+
+    const doc = getDocPage(cli, []);
+    assert.ok(doc);
+    assert.ok(
+      doc.sections.some((s) => s.title === "Server"),
+      "Should have 'Server' section for option group",
+    );
+    assert.ok(
+      doc.sections.some((s) => s.title === "Logging"),
+      "Should have 'Logging' section for option group",
+    );
+  });
+
+  it("should handle deeply nested commands with groups", () => {
+    // Two-level subcommand nesting: cli > remote > add/remove
+    const remoteAddCmd = command(
+      "add",
+      object({ url: argument(string({ metavar: "URL" })) }),
+      {},
+    );
+    const remoteRemoveCmd = command(
+      "remove",
+      object({ name: argument(string({ metavar: "NAME" })) }),
+      {},
+    );
+    const remoteCmd = command(
+      "remote",
+      group("Remote actions", or(remoteAddCmd, remoteRemoveCmd)),
+      {},
+    );
+    const cli = group(
+      "Commands",
+      or(
+        remoteCmd,
+        command("status", object({}), {}),
+      ),
+    );
+
+    // Top-level: "Commands" on the command list
+    const topDoc = getDocPage(cli, []);
+    assert.ok(topDoc);
+    assert.ok(
+      topDoc.sections.some((s) => s.title === "Commands"),
+    );
+
+    // remote --help: "Remote actions" on the subcommand list,
+    // outer "Commands" should not appear
+    const remoteDoc = getDocPage(cli, ["remote"]);
+    assert.ok(remoteDoc);
+    assert.ok(
+      !remoteDoc.sections.some((s) => s.title === "Commands"),
+      "'remote' help should not show outer 'Commands' label",
+    );
+    assert.ok(
+      remoteDoc.sections.some((s) => s.title === "Remote actions"),
+      "'remote' help should show 'Remote actions' label",
+    );
+
+    // remote add --help: neither group label should appear, just the
+    // argument entry
+    const remoteAddDoc = getDocPage(cli, ["remote", "add"]);
+    assert.ok(remoteAddDoc);
+    assert.ok(
+      !remoteAddDoc.sections.some((s) => s.title === "Commands"),
+      "'remote add' help should not show 'Commands' label",
+    );
+    assert.ok(
+      !remoteAddDoc.sections.some((s) => s.title === "Remote actions"),
+      "'remote add' help should not show 'Remote actions' label",
+    );
+    const addEntries = remoteAddDoc.sections.flatMap((s) => s.entries);
+    assert.ok(
+      addEntries.some(
+        (e) => e.term.type === "argument" && e.term.metavar === "URL",
+      ),
+      "'remote add' help should show URL argument",
+    );
   });
 });
