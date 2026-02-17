@@ -3519,6 +3519,9 @@ export function merge(
       state: DocState<Record<string | symbol, unknown>>,
       _defaultValue?,
     ) {
+      let brief: Message | undefined;
+      let description: Message | undefined;
+      let footer: Message | undefined;
       const fragments = parsers.flatMap((p, i) => {
         let parserState: DocState<unknown>;
 
@@ -3552,7 +3555,11 @@ export function merge(
         // due to the way merge() handles disparate parser types.
         // The runtime logic ensures we are passing the correct state slice or unavailable.
         // deno-lint-ignore no-explicit-any
-        return p.getDocFragments(parserState as any, undefined).fragments;
+        const docFragments = p.getDocFragments(parserState as any, undefined);
+        brief ??= docFragments.brief;
+        description ??= docFragments.description;
+        footer ??= docFragments.footer;
+        return docFragments.fragments;
       });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];
@@ -3570,6 +3577,9 @@ export function merge(
         const labeledSection: DocSection = { title: label, entries };
         sections.push(labeledSection);
         return {
+          brief,
+          description,
+          footer,
           fragments: sections.map<DocFragment>((s) => ({
             ...s,
             type: "section",
@@ -3578,6 +3588,9 @@ export function merge(
       }
 
       return {
+        brief,
+        description,
+        footer,
         fragments: [
           ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
           { type: "section", entries },
@@ -3990,8 +4003,29 @@ export function group<TValue, TState>(
         }
       }
 
-      // Create our labeled section with all collected entries
-      const labeledSection: DocSection = { title: label, entries: allEntries };
+      // Only apply the group label when the entries still represent what
+      // the group was originally labeling.  When group() wraps command
+      // parsers (via or()), the initial state produces command entries.
+      // Once a command is selected, the inner parser's flags/options are
+      // returned instead — the group label should not apply to those.
+      // See: https://github.com/dahlia/optique/issues/114
+      const initialFragments = parser.getDocFragments(
+        { kind: "available", state: parser.initialState },
+        undefined,
+      );
+      const initialHasCommands = initialFragments.fragments.some(
+        (f) =>
+          (f.type === "entry" && f.term.type === "command") ||
+          (f.type === "section" &&
+            f.entries.some((e) => e.term.type === "command")),
+      );
+      const currentHasCommands = allEntries.some(
+        (e) => e.term.type === "command",
+      );
+      const applyLabel = !initialHasCommands || currentHasCommands;
+      const labeledSection: DocSection = applyLabel
+        ? { title: label, entries: allEntries }
+        : { entries: allEntries };
 
       return {
         description,
