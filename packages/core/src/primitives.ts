@@ -114,6 +114,55 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
 }
 
 /**
+ * Creates a parser that always fails without consuming any input.
+ *
+ * This is the counterpart to {@link constant}: while `constant(value)` always
+ * succeeds, `fail<T>()` always fails.  At the type level it is declared to
+ * produce a value of type `T`, so it composes seamlessly with other parsers
+ * that expect `Parser<"sync", T, …>`.
+ *
+ * The primary use case is as the inner parser for
+ * `bindConfig(fail<T>(), { … })` when a value should *only* come from a
+ * config file and has no corresponding CLI flag or argument.  Because `fail()`
+ * always fails, `bindConfig` will always fall back to the config file (or the
+ * supplied default).
+ *
+ * @template T The type of value this parser is declared to produce.
+ * @returns A {@link Parser} that always fails at parse time and always fails at
+ *          complete time.
+ * @since 1.0.0
+ */
+export function fail<T>(): Parser<"sync", T, undefined> {
+  return {
+    $valueType: [],
+    $stateType: [],
+    $mode: "sync",
+    priority: 0,
+    usage: [],
+    initialState: undefined,
+    parse(_context) {
+      return {
+        success: false,
+        consumed: 0,
+        error: message`No value provided.`,
+      };
+    },
+    complete(_state) {
+      return {
+        success: false,
+        error: message`No value provided.`,
+      };
+    },
+    suggest(_context, _prefix) {
+      return [];
+    },
+    getDocFragments(_state, _defaultValue?) {
+      return { fragments: [] };
+    },
+  };
+}
+
+/**
  * Options for the {@link option} parser.
  */
 export interface OptionOptions {

@@ -80,6 +80,70 @@ The `constant()` parser has the lowest priority (0), meaning it never interferes
 with other parsers that need to consume input.
 
 
+`fail()` parser
+---------------
+
+The `fail<T>()` parser always fails without consuming any input.  It is the
+counterpart to `constant()`: while `constant(value)` always succeeds and
+produces a value, `fail<T>()` always fails.
+
+At the type level, `fail<T>()` is declared to produce a value of type `T`, so
+it composes naturally with any parser that expects `Parser<"sync", T, …>`.
+At runtime, however, it never succeeds on its own.
+
+~~~~ typescript twoslash
+import { fail } from "@optique/core/primitives";
+
+// Declared to produce string, but always fails at runtime
+const alwaysFails = fail<string>();
+~~~~
+
+### Relationship to `constant()`
+
+| Trait          | `constant(value)`   | `fail<T>()`       |
+| -------------- | ------------------- | ----------------- |
+| Succeeds?      | Always              | Never             |
+| Input consumed | 0 tokens            | 0 tokens          |
+| Priority       | 0                   | 0                 |
+| Primary use    | Discriminator field | Config-only value |
+
+### Use with `bindConfig()`
+
+The primary use case for `fail<T>()` is as the inner parser for `bindConfig()`
+when a value should come *only* from a config file—never from a CLI flag or
+positional argument.  Because `fail()` always fails, `bindConfig()` always
+falls back to the config file (or the supplied default):
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { fail } from "@optique/core/primitives";
+
+const configSchema = z.object({
+  timeout: z.number(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+// No CLI flag for timeout — it only comes from the config file or default
+const timeoutParser = bindConfig(fail<number>(), {
+  context: configContext,
+  key: "timeout",
+  default: 30,
+});
+~~~~
+
+See [*Config file support*](../integrations/config.md#config-only-values) for a
+complete example.
+
+### Why not `constant()` instead?
+
+`constant(value)` cannot be used for this purpose because it always *succeeds*,
+causing `bindConfig()` to treat it as a provided CLI value and skip the config
+file fallback entirely.  `fail()` must always fail so that `bindConfig()` knows
+to look up the value from the config.
+
+
 `option()` parser
 -----------------
 
@@ -572,7 +636,7 @@ to ensure explicit parsers always match first:
  -  *Priority 15*: `command()` parsers
  -  *Priority 10*: `option()` and `flag()` parsers
  -  *Priority 5*: `argument()` parsers
- -  *Priority 0*: `constant()` parsers
+ -  *Priority 0*: `constant()` and `fail()` parsers
  -  *Priority −10*: `passThrough()` parsers
 
 This priority system ensures that your recognized options (like `--debug` in
@@ -617,7 +681,7 @@ parsers (like commands) are tried before more general ones (like arguments):
  -  *Priority 15*: `command()` parsers
  -  *Priority 10*: `option()` and `flag()` parsers
  -  *Priority 5*: `argument()` parsers
- -  *Priority 0*: `constant()` parsers
+ -  *Priority 0*: `constant()` and `fail()` parsers
  -  *Priority −10*: `passThrough()` parsers
 
 Higher priority parsers are always tried first, which prevents ambiguous parsing

@@ -10,10 +10,17 @@ To be released.
 
 ### @optique/core
 
+ -  Added `fail<T>()` parser: always fails without consuming input, declared
+    to produce a value of type `T`.  Its primary use is as the inner parser
+    for `bindConfig(fail<T>(), { … })` when a value should come only from a
+    config file and has no corresponding CLI flag.  [[#120]]
+
  -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
     terms as double newlines in the output, instead of collapsing them to
     a single newline.  This makes paragraph breaks visually distinct from
     explicit `lineBreak()` terms, which render as a single newline.
+
+[#120]: https://github.com/dahlia/optique/issues/120
 
 
 Version 0.10.2

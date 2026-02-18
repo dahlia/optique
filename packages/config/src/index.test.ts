@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { getDocPage, parse } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
-import { flag, option } from "@optique/core/primitives";
+import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 
@@ -371,5 +371,95 @@ describe("bindConfig", () => {
 
     assert.ok(hostEntry);
     assert.equal(hostEntry.default, undefined);
+  });
+
+  test("fail() + bindConfig() uses config value when provided", () => {
+    const schema = z.object({
+      timeout: z.number(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(fail<number>(), {
+      context,
+      key: "timeout",
+      default: 30,
+    });
+
+    const configData = { timeout: 60 };
+    const annotations: Annotations = {
+      [configKey]: configData,
+    };
+
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, 60);
+  });
+
+  test("fail() + bindConfig() uses default when config not provided", () => {
+    const schema = z.object({
+      timeout: z.number().optional(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(fail<number>(), {
+      context,
+      key: "timeout",
+      default: 30,
+    });
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    assert.equal(result.value, 30);
+  });
+
+  test("fail() + bindConfig() fails when neither config nor default provided", () => {
+    const schema = z.object({
+      timeout: z.number().optional(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(fail<number>(), {
+      context,
+      key: "timeout",
+    });
+
+    const result = parse(parser, []);
+    assert.ok(!result.success);
+  });
+
+  test("fail() + bindConfig() inside object(): falls back to default", () => {
+    // Note: config annotations only work for nested parsers when using
+    // runWithConfig (two-pass parsing). With plain parse(), nested
+    // bindConfig() falls back to default values.
+    const schema = z.object({
+      host: z.string().optional(),
+      timeout: z.number().optional(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      timeout: bindConfig(fail<number>(), {
+        context,
+        key: "timeout",
+        default: 30,
+      }),
+    });
+
+    // timeout has no CLI flag; with plain parse(), it always falls back to default
+    const result = parse(parser, ["--host", "cli.com"]);
+    assert.ok(result.success);
+    assert.equal(result.value.host, "cli.com");
+    assert.equal(result.value.timeout, 30); // default, since no runWithConfig
+
+    // Without any input, both fall back to defaults
+    const resultDefault = parse(parser, []);
+    assert.ok(resultDefault.success);
+    assert.equal(resultDefault.value.host, "localhost");
+    assert.equal(resultDefault.value.timeout, 30);
   });
 });

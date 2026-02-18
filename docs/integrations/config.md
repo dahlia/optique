@@ -326,6 +326,67 @@ With a config file:
 ~~~~
 
 
+Config-only values
+------------------
+
+Sometimes a configuration value should *never* come from a CLI flag—it lives
+entirely in the config file (or uses a default).  In that case, use
+`fail<T>()` as the inner parser for `bindConfig()`.
+
+`fail<T>()` always fails, so `bindConfig()` always falls back to the config
+file or the supplied default.  Compare this with `constant(value)`, which
+always succeeds and would prevent the config fallback from ever triggering.
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { runWithConfig } from "@optique/config/run";
+import { object } from "@optique/core/constructs";
+import { fail, option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { withDefault } from "@optique/core/modifiers";
+
+const configSchema = z.object({
+  host: z.string(),
+  port: z.number(),
+  // timeout only lives in the config file, not exposed as a CLI flag
+  timeout: z.number().optional(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+  // No CLI flag — value comes only from config file or default
+  timeout: bindConfig(fail<number>(), {
+    context: configContext,
+    key: "timeout",
+    default: 30,
+  }),
+});
+
+const result = await runWithConfig(parser, configContext, {
+  getConfigPath: (parsed) => parsed.config,
+  args: process.argv.slice(2),
+});
+
+console.log(`Timeout: ${result.timeout}s`);
+~~~~
+
+With a config file containing `"timeout": 60`, `result.timeout` will be `60`.
+Without a config file (or if `timeout` is absent), it falls back to `30`.
+
+
 Custom file formats
 -------------------
 

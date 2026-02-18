@@ -19,6 +19,7 @@ import {
   argument,
   command,
   constant,
+  fail,
   flag,
   option,
   passThrough,
@@ -155,6 +156,106 @@ describe("constant", () => {
         },
       );
     });
+  });
+});
+
+describe("fail", () => {
+  it("should have priority 0 and undefined initialState", () => {
+    const parser = fail<string>();
+    assert.equal(parser.priority, 0);
+    assert.equal(parser.initialState, undefined);
+  });
+
+  it("should fail parse without consuming any input", () => {
+    const parser = fail<number>();
+    const context = {
+      buffer: ["--option", "value"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(result.consumed, 0);
+    }
+  });
+
+  it("should fail parse with empty buffer", () => {
+    const parser = fail<string>();
+    const context = {
+      buffer: [] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(result.consumed, 0);
+    }
+  });
+
+  it("should fail complete with undefined state", () => {
+    const parser = fail<string>();
+    const result = parser.complete(undefined);
+    assert.ok(!result.success);
+  });
+
+  it("should have empty usage", () => {
+    const parser = fail<string>();
+    assert.deepEqual(parser.usage, []);
+  });
+
+  it("should return no doc fragments", () => {
+    const parser = fail<string>();
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    assert.deepEqual(fragments, { fragments: [] });
+  });
+
+  it("should return no suggestions", () => {
+    const parser = fail<string>();
+    const context = {
+      buffer: [] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const suggestions = [...parser.suggest(context, "")];
+    assert.deepEqual(suggestions, []);
+  });
+
+  it("should work with withDefault() to always use the default", () => {
+    const parser = withDefault(fail<string>(), "default-value");
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "default-value");
+    }
+  });
+
+  it("should work with optional() to always produce undefined", () => {
+    const parser = optional(fail<string>());
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, undefined);
+    }
+  });
+
+  it("should work inside object() with withDefault()", () => {
+    const parser = object({
+      name: option("--name", string()),
+      timeout: withDefault(fail<number>(), 30),
+    });
+    const result = parseSync(parser, ["--name", "Alice"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.name, "Alice");
+      assert.equal(result.value.timeout, 30);
+    }
   });
 });
 
