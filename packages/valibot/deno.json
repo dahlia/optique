@@ -1,6 +1,6 @@
 {
   "name": "@optique/valibot",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts"
