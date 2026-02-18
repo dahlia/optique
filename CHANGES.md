@@ -8,6 +8,25 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed two related problems with how `brief` and `description` are
+    displayed in subcommand help pages.  [[#118]]
+
+     -  `brief` is now strictly limited to command listings (the one-liner
+        shown next to a command name in a parent's subcommand list).  It is no
+        longer promoted to the page-level brief when the command is matched
+        and its own help page is rendered — only `description` appears there.
+        If a command defines no `description`, the description area of its
+        help page is left blank rather than falling back to `brief`.
+
+     -  The `run()`-level `brief` and `description` no longer bleed into a
+        subcommand's help page.  Previously, when a subcommand had no
+        `description` of its own, the description supplied to `run()` would
+        appear on the subcommand's help page (e.g. `repro file --help` would
+        show "Description for repro CLI" even though that text describes the
+        top-level program, not the `file` subcommand).  Now, only the
+        subcommand's own `description` (if any) is shown; run-level docs are
+        used only for the root-level help page.
+
  -  Fixed contradictory “Did you mean?” suggestion when a subcommand name is
     provided at the wrong level.  Previously, a structure like
     `command("file", or(add, remove))` given the input `add --help` would
@@ -31,6 +50,7 @@ To be released.
 
 [#116]: https://github.com/dahlia/optique/issues/116
 [#117]: https://github.com/dahlia/optique/issues/117
+[#118]: https://github.com/dahlia/optique/issues/118
 
 
 Version 0.7.16

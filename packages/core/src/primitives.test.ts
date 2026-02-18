@@ -2629,4 +2629,51 @@ describe("command() with brief option", () => {
       message`Examples:\n  myapp restore backup.tar.gz\n  myapp restore --verify backup.tar.gz`,
     );
   });
+
+  // Regression tests for https://github.com/dahlia/optique/issues/118
+  it("should not propagate brief as page-level brief when command is matched", () => {
+    const parser = command(
+      "deploy",
+      object({ env: option("-e", "--env", string()) }),
+      {
+        brief: message`Deploy the application`,
+        description:
+          message`Deploy the application to the specified environment.`,
+      },
+    );
+
+    const matchedState = ["matched", "deploy"] as ["matched", string];
+    const fragments = parser.getDocFragments({
+      kind: "available",
+      state: matchedState,
+    });
+
+    // brief is for command listings only; it must NOT appear as page-level
+    // content (DocFragments.brief) when showing the command's own help page
+    assert.equal(fragments.brief, undefined);
+    // The full description should still be shown on the command's own help page
+    assert.deepEqual(
+      fragments.description,
+      message`Deploy the application to the specified environment.`,
+    );
+  });
+
+  it("should have neither brief nor description propagated when only brief is set and command is matched", () => {
+    const parser = command(
+      "file",
+      object({}),
+      { brief: message`File operations` },
+    );
+
+    const matchedState = ["matched", "file"] as ["matched", string];
+    const fragments = parser.getDocFragments({
+      kind: "available",
+      state: matchedState,
+    });
+
+    // brief is for command listings; must NOT appear as page-level content
+    assert.equal(fragments.brief, undefined);
+    // No description was provided, so description must also be undefined
+    assert.equal(fragments.description, undefined);
+  });
 });

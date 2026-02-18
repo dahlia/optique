@@ -1341,9 +1341,14 @@ export function command<T, TState>(
         ? { kind: "available", state: state.state[1] }
         : { kind: "available", state: parser.initialState };
       const innerFragments = parser.getDocFragments(innerState, defaultValue);
+      // `brief` is intended for command listings (e.g. the one-liner shown
+      // next to the command name when listing subcommands).  When the command
+      // is matched and we are rendering its *own* help page, only
+      // `description` should appear — `brief` must not be promoted to the
+      // page-level brief.  Inner parsers' brief values (from nested commands)
+      // are still propagated via the spread.
       return {
         ...innerFragments,
-        brief: innerFragments.brief ?? options.brief,
         description: innerFragments.description ?? options.description,
         footer: innerFragments.footer ?? options.footer,
       };

@@ -1751,10 +1751,11 @@ describe("merge() should propagate brief/description/footer from inner parsers",
     const parser = merge(or(syncCommand, buildCommand), globalOptions);
 
     // When a subcommand is selected, getDocPage should include its
-    // brief, description, and footer:
+    // description and footer.  brief is only for command listings and must
+    // NOT be promoted to the page-level brief of the command's own help.
     const syncDoc = getDocPage(parser, ["sync"]);
     assert.ok(syncDoc, "syncDoc should not be undefined");
-    assert.deepEqual(syncDoc!.brief, message`Synchronize data.`);
+    assert.equal(syncDoc!.brief, undefined);
     assert.deepEqual(
       syncDoc!.description,
       message`Synchronize data between local and remote.`,
@@ -1763,7 +1764,7 @@ describe("merge() should propagate brief/description/footer from inner parsers",
 
     const buildDoc = getDocPage(parser, ["build"]);
     assert.ok(buildDoc, "buildDoc should not be undefined");
-    assert.deepEqual(buildDoc!.brief, message`Build the project.`);
+    assert.equal(buildDoc!.brief, undefined);
     assert.deepEqual(
       buildDoc!.description,
       message`Build the project from source.`,

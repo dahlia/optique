@@ -1724,14 +1724,19 @@ describe("Documentation augmentation (brief, description, footer)", () => {
     });
 
     assert.equal(result, "help");
-    // Should show subcommand's description, NOT run-level description
-    assert.ok(helpOutput.includes("foo brief"));
+    // Should show subcommand's own description, NOT run-level description.
+    // brief is for command listings only, so it must NOT appear in the
+    // subcommand's own help page.
     assert.ok(helpOutput.includes("foo description"));
+    assert.ok(!helpOutput.includes("foo brief"));
     assert.ok(!helpOutput.includes("mycli brief"));
     assert.ok(!helpOutput.includes("mycli description"));
   });
 
-  it("should fall back to run-level docs when subcommand has none (Issue #95)", () => {
+  it("should NOT fall back to run-level docs when subcommand has none (Issue #118)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/118:
+    // run-level brief/description must never bleed into a subcommand's help
+    // page, even when the subcommand defines no brief or description of its own.
     const fooCommand = command(
       "foo",
       object({
@@ -1753,9 +1758,82 @@ describe("Documentation augmentation (brief, description, footer)", () => {
     });
 
     assert.equal(result, "help");
-    // Should fall back to run-level docs since subcommand has none
-    assert.ok(helpOutput.includes("mycli brief"));
-    assert.ok(helpOutput.includes("mycli description"));
+    // Run-level brief/description must NOT appear in subcommand help
+    assert.ok(!helpOutput.includes("mycli brief"));
+    assert.ok(!helpOutput.includes("mycli description"));
+  });
+
+  it("should not show run-level description when subcommand has only brief (Issue #118)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/118
+    const addCommand = command(
+      "add",
+      object({ force: flag("--force") }),
+      { brief: message`Add something` },
+    );
+    const removeCommand = command(
+      "remove",
+      object({ force: flag("--force") }),
+      { brief: message`Remove something` },
+    );
+    const fileCommand = command(
+      "file",
+      or(addCommand, removeCommand),
+      { brief: message`File operations` },
+    );
+
+    let helpOutput = "";
+    run(fileCommand, "repro", ["file", "--help"], {
+      help: { mode: "option", onShow: () => {} },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+      brief: message`Brief for repro CLI`,
+      description: message`Description for repro CLI`,
+    });
+
+    // Run-level brief/description must NOT appear in subcommand help
+    assert.ok(!helpOutput.includes("Description for repro CLI"));
+    assert.ok(!helpOutput.includes("Brief for repro CLI"));
+    // The file command's own brief must NOT appear as page-level content either
+    // (brief is only for command listings, not for the command's own help page)
+    assert.ok(!helpOutput.includes("File operations"));
+    // The subcommand list should still be displayed correctly
+    assert.ok(helpOutput.includes("add"));
+    assert.ok(helpOutput.includes("remove"));
+    assert.ok(helpOutput.includes("Add something"));
+    assert.ok(helpOutput.includes("Remove something"));
+  });
+
+  it("should not show parent command description when subcommand has its own description (Issue #118)", () => {
+    // Regression: verifies that a subcommand with its own description does not
+    // also show the parent command's brief in its help page.
+    const fileCommand = command(
+      "file",
+      object({ verbose: flag("--verbose") }),
+      {
+        brief: message`File operations brief`,
+        description: message`File operations description`,
+      },
+    );
+
+    let helpOutput = "";
+    run(fileCommand, "repro", ["file", "--help"], {
+      help: { mode: "option", onShow: () => {} },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+      brief: message`Brief for repro CLI`,
+      description: message`Description for repro CLI`,
+    });
+
+    // The subcommand's own description should appear
+    assert.ok(helpOutput.includes("File operations description"));
+    // The subcommand's own brief must NOT appear as page-level content
+    // (brief is for command listings; description is for the command's own help)
+    assert.ok(!helpOutput.includes("File operations brief"));
+    // Run-level docs must not appear in subcommand help
+    assert.ok(!helpOutput.includes("Brief for repro CLI"));
+    assert.ok(!helpOutput.includes("Description for repro CLI"));
   });
 });
 
