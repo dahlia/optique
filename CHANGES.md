@@ -8,15 +8,12 @@ To be released.
 
 ### @optique/core
 
- -  Fixed two related problems with how `brief` and `description` are
-    displayed in subcommand help pages.  [[#118]]
+ -  Fixed how `brief` and `description` are displayed in subcommand help
+    pages.  [[#118], [#119]]
 
-     -  `brief` is now strictly limited to command listings (the one-liner
-        shown next to a command name in a parent's subcommand list).  It is no
-        longer promoted to the page-level brief when the command is matched
-        and its own help page is rendered — only `description` appears there.
-        If a command defines no `description`, the description area of its
-        help page is left blank rather than falling back to `brief`.
+     -  Each help page now shows `brief` at the very top (before the Usage
+        line) and `description` below the Usage line, consistent with how
+        the root-level help page works.
 
      -  The `run()`-level `brief` and `description` no longer bleed into a
         subcommand's help page.  Previously, when a subcommand had no
@@ -24,8 +21,13 @@ To be released.
         appear on the subcommand's help page (e.g. `repro file --help` would
         show "Description for repro CLI" even though that text describes the
         top-level program, not the `file` subcommand).  Now, only the
-        subcommand's own `description` (if any) is shown; run-level docs are
-        used only for the root-level help page.
+        subcommand's own `brief` and `description` (if any) are shown;
+        run-level docs are used only for the root-level help page.
+
+     -  When `command()` is wrapped with `group()`, the command's `brief`,
+        `description`, and `footer` are now correctly forwarded to the help
+        page.  Previously `group()` only forwarded `description`, so `brief`
+        was silently dropped and the run-level brief appeared instead.
 
  -  Fixed contradictory “Did you mean?” suggestion when a subcommand name is
     provided at the wrong level.  Previously, a structure like
@@ -51,6 +53,7 @@ To be released.
 [#116]: https://github.com/dahlia/optique/issues/116
 [#117]: https://github.com/dahlia/optique/issues/117
 [#118]: https://github.com/dahlia/optique/issues/118
+[#119]: https://github.com/dahlia/optique/issues/119
 
 
 Version 0.7.16

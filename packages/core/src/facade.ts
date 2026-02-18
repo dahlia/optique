@@ -1333,9 +1333,8 @@ export function run<
         // priority over parser-level docs, with parser-level as fallback.
         // For subcommand/meta-command help, run-level brief and description
         // must NOT bleed into the subcommand's help page — only the
-        // subcommand's own brief and description are shown.  (brief is for
-        // command listings, so it is never promoted to the page-level brief of
-        // the command's own help; see primitives.ts command() getDocFragments.)
+        // subcommand's own brief (shown at the top, before Usage) and
+        // description (shown after Usage) are displayed.
         // run-level footer still applies as a fallback for subcommands so that
         // operators can add global footer notes across all help pages.
         const shouldOverride = !isMetaCommandHelp && !isSubcommandHelp;

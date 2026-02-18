@@ -3996,7 +3996,7 @@ export function group<TValue, TState>(
     complete: (state) => parser.complete(state),
     suggest: (context, prefix) => parser.suggest(context, prefix),
     getDocFragments: (state, defaultValue) => {
-      const { description, fragments } = parser.getDocFragments(
+      const { brief, description, footer, fragments } = parser.getDocFragments(
         state,
         defaultValue,
       );
@@ -4065,7 +4065,9 @@ export function group<TValue, TState>(
         : { entries: allEntries };
 
       return {
+        brief,
         description,
+        footer,
         fragments: [
           ...titledSections.map<DocFragment>((s) => ({
             ...s,

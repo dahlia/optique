@@ -2630,8 +2630,9 @@ describe("command() with brief option", () => {
     );
   });
 
-  // Regression tests for https://github.com/dahlia/optique/issues/118
-  it("should not propagate brief as page-level brief when command is matched", () => {
+  // Regression tests for https://github.com/dahlia/optique/issues/118 and
+  // https://github.com/dahlia/optique/issues/119
+  it("should propagate brief as page-level brief when command is matched", () => {
     const parser = command(
       "deploy",
       object({ env: option("-e", "--env", string()) }),
@@ -2648,17 +2649,16 @@ describe("command() with brief option", () => {
       state: matchedState,
     });
 
-    // brief is for command listings only; it must NOT appear as page-level
-    // content (DocFragments.brief) when showing the command's own help page
-    assert.equal(fragments.brief, undefined);
-    // The full description should still be shown on the command's own help page
+    // brief appears at the top of the command's own help page
+    assert.deepEqual(fragments.brief, message`Deploy the application`);
+    // description appears below Usage in the command's own help page
     assert.deepEqual(
       fragments.description,
       message`Deploy the application to the specified environment.`,
     );
   });
 
-  it("should have neither brief nor description propagated when only brief is set and command is matched", () => {
+  it("should propagate brief but not description when only brief is set and command is matched", () => {
     const parser = command(
       "file",
       object({}),
@@ -2671,9 +2671,9 @@ describe("command() with brief option", () => {
       state: matchedState,
     });
 
-    // brief is for command listings; must NOT appear as page-level content
-    assert.equal(fragments.brief, undefined);
-    // No description was provided, so description must also be undefined
+    // brief appears at the top of the command's own help page
+    assert.deepEqual(fragments.brief, message`File operations`);
+    // No description was provided, so description must be undefined
     assert.equal(fragments.description, undefined);
   });
 });
