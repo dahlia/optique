@@ -4077,21 +4077,42 @@ export function group<TValue, TState>(
       // parsers (via or()), the initial state produces command entries.
       // Once a command is selected, the inner parser's flags/options are
       // returned instead — the group label should not apply to those.
+      //
+      // Additionally, if the selected command itself exposes further nested
+      // subcommands (e.g. `alias` containing `delete`, `set`, …), those
+      // inner commands are *not* the group's own commands, so the label
+      // must not be applied to them either.  We detect this by collecting
+      // the command names from the initial state and checking whether the
+      // currently visible command entries overlap with that set.  If none
+      // of the current commands belong to the original set, the group label
+      // is suppressed.
       // See: https://github.com/dahlia/optique/issues/114
+      // See: https://github.com/dahlia/optique/issues/116
       const initialFragments = parser.getDocFragments(
         { kind: "available", state: parser.initialState },
         undefined,
       );
-      const initialHasCommands = initialFragments.fragments.some(
-        (f) =>
-          (f.type === "entry" && f.term.type === "command") ||
-          (f.type === "section" &&
-            f.entries.some((e) => e.term.type === "command")),
+      const initialCommandNames = new Set<string>();
+      for (const f of initialFragments.fragments) {
+        if (f.type === "entry" && f.term.type === "command") {
+          initialCommandNames.add(f.term.name);
+        } else if (f.type === "section") {
+          for (const e of f.entries) {
+            if (e.term.type === "command") {
+              initialCommandNames.add(e.term.name);
+            }
+          }
+        }
+      }
+      const initialHasCommands = initialCommandNames.size > 0;
+      // True only when the visible commands are the group's own top-level
+      // commands (same set as the initial state), not inner subcommands
+      // that surfaced after a command was selected.
+      const currentCommandsAreGroupOwn = allEntries.some(
+        (e) =>
+          e.term.type === "command" && initialCommandNames.has(e.term.name),
       );
-      const currentHasCommands = allEntries.some(
-        (e) => e.term.type === "command",
-      );
-      const applyLabel = !initialHasCommands || currentHasCommands;
+      const applyLabel = !initialHasCommands || currentCommandsAreGroupOwn;
       const labeledSection: DocSection = applyLabel
         ? { title: label, entries: allEntries }
         : { entries: allEntries };

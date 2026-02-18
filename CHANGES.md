@@ -6,6 +6,20 @@ Version 0.7.17
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `group()` label leaking into a selected subcommand's own nested
+    command list.  Previously, when a `group()`-wrapped command (e.g.,
+    `alias`) itself contained further subcommands (e.g., `delete`, `set`),
+    viewing `alias --help` would show those inner commands under the outer
+    group's label (e.g., "Additional commands:"), which was incorrect.
+    The fix compares current command entries against the initial set of
+    commands that the group originally labeled; the label is now applied
+    only when the visible commands are the group's own top-level commands,
+    not commands from a deeper level.  [[#116]]
+
+[#116]: https://github.com/dahlia/optique/issues/116
+
 
 Version 0.7.16
 --------------
