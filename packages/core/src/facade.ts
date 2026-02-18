@@ -1468,19 +1468,23 @@ export function runParser<
               requestedCommand === "help" ||
               requestedCommand === "version";
             const isSubcommandHelp = classified.commands.length > 0;
-            // For root-level help, run-level docs override parser-level docs.
-            // For subcommand/meta-command help, parser-level docs take
-            // priority, falling back to run-level docs only when the parser
-            // doesn't provide its own.
+            // For root-level help, run-level docs (brief/description/footer)
+            // take priority over parser-level docs, with parser-level as
+            // fallback.
+            // For subcommand/meta-command help, run-level brief and
+            // description must NOT bleed into the subcommand's help page —
+            // only the subcommand's own brief (shown at the top, before
+            // Usage) and description (shown after Usage) are displayed.
+            // run-level footer still applies as a fallback for subcommands
+            // so that operators can add global footer notes across all help
+            // pages.
             const shouldOverride = !isMetaCommandHelp && !isSubcommandHelp;
             const augmentedDoc = {
               ...doc,
-              brief: shouldOverride
-                ? (brief ?? doc.brief)
-                : (doc.brief ?? brief),
+              brief: shouldOverride ? (brief ?? doc.brief) : doc.brief,
               description: shouldOverride
                 ? (description ?? doc.description)
-                : (doc.description ?? description),
+                : doc.description,
               footer: shouldOverride
                 ? (footer ?? doc.footer)
                 : (doc.footer ?? footer),

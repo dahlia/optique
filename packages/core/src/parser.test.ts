@@ -1774,7 +1774,7 @@ describe("Error message customization", () => {
 });
 
 describe("merge() should propagate brief/description/footer from inner parsers", () => {
-  it("should propagate description from command via merge(or(...), ...)", () => {
+  it("should propagate brief, description, and footer from command via merge(or(...), ...)", () => {
     const syncCommand = command(
       "sync",
       object({
@@ -1805,7 +1805,8 @@ describe("merge() should propagate brief/description/footer from inner parsers",
     const parser = merge(or(syncCommand, buildCommand), globalOptions);
 
     // When a subcommand is selected, getDocPage should include its
-    // brief, description, and footer:
+    // brief (shown at top of help page), description (shown below Usage),
+    // and footer.
     const syncDoc = getDocPage(parser, ["sync"]);
     assert.ok(syncDoc, "syncDoc should not be undefined");
     assert.deepEqual(syncDoc!.brief, message`Synchronize data.`);
