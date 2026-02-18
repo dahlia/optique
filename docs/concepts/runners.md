@@ -860,6 +860,47 @@ These same fields also appear when errors are displayed with
 user-provided documentation takes precedence over any documentation generated
 from parser structure.
 
+### Section ordering
+
+*This feature is available since Optique 1.0.0.*
+
+By default, help output sections are sorted in a type-aware order: sections
+containing only commands appear first, followed by sections with a mix of
+commands and options, and finally sections containing only options, flags,
+and arguments.  Within each group, the original relative order among sections
+is preserved (stable sort).
+
+This default order resolves the problem where titled command sections
+(e.g., `Other:` with subcommands) incorrectly appeared after titled option
+sections (e.g., `Global:` with `--verbose`) in help output.
+
+You can override the sort order by providing a `sectionOrder` comparator
+to `runParser()` or `run()`:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+import type { DocSection } from "@optique/core/doc";
+
+const parser = object("Options", {
+  output: option("-o", "--output", string()),
+});
+
+run(parser, {
+  programName: "myapp",
+  help: "option",
+  // Sort sections alphabetically by title
+  sectionOrder: (a: DocSection, b: DocSection) =>
+    (a.title ?? "").localeCompare(b.title ?? ""),
+});
+~~~~
+
+The comparator receives two `DocSection` objects and returns a number: negative
+to place `a` before `b`, positive to place `a` after `b`, or `0` to preserve
+their original relative order.
+
 ### Error handling behavior
 
 The *@optique/run* `run()` function automatically:

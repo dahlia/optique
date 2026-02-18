@@ -1,6 +1,7 @@
 import {
   type DocPage,
   type DocPageFormatOptions,
+  type DocSection,
   formatDocPage,
 } from "@optique/core/doc";
 import { message, valueSet } from "@optique/core/message";
@@ -256,7 +257,7 @@ describe("formatDocPage", () => {
     );
   });
 
-  it("should sort sections with untitled sections first", () => {
+  it("should sort command-only sections before argument-only sections", () => {
     const page: DocPage = {
       sections: [{
         title: "Commands",
@@ -274,7 +275,7 @@ describe("formatDocPage", () => {
 
     const result = formatDocPage("myapp", page);
     const expected =
-      "\n  untitled                    Untitled entry\n\nCommands:\n  cmd                         A command\n";
+      "\nCommands:\n  cmd                         A command\n\n  untitled                    Untitled entry\n";
     assert.equal(result, expected);
   });
 
@@ -623,13 +624,13 @@ describe("formatDocPage", () => {
       // Usage includes both program name and command name
       "\x1b[1;2mUsage:\x1b[0m \x1b[1mmyapp\x1b[0m \x1b[1mmyapp\x1b[0m",
       "",
-      "\x1b[1;2mOptions:\x1b[0m",
-      // Options are rendered with italic (code 3) by default
-      "  \x1b[3m--help\x1b[0m                      Show help",
-      "",
       "\x1b[1;2mCommands:\x1b[0m",
       // Commands are rendered with bold (code 1)
       "  \x1b[1mtest\x1b[0m                        Run tests",
+      "",
+      "\x1b[1;2mOptions:\x1b[0m",
+      // Options are rendered with italic (code 3) by default
+      "  \x1b[3m--help\x1b[0m                      Show help",
       "",
       "\x1b[1;2mExamples:\x1b[0m",
       "  myapp --help",
@@ -856,5 +857,215 @@ describe("formatDocPage", () => {
         result.includes("\x1b[0m\x1b[2m, \x1b[32m"),
       "commas should be between value color sequences",
     );
+  });
+
+  describe("smart section ordering", () => {
+    it("should sort command-only sections before option-only sections", () => {
+      const page: DocPage = {
+        sections: [
+          {
+            title: "Options",
+            entries: [{
+              term: { type: "option", names: ["--verbose"] },
+              description: [{ type: "text", text: "Verbose output" }],
+            }],
+          },
+          {
+            title: "Commands",
+            entries: [{
+              term: { type: "command", name: "serve" },
+              description: [{ type: "text", text: "Start server" }],
+            }],
+          },
+        ],
+      };
+
+      const result = formatDocPage("myapp", page);
+      const commandsPos = result.indexOf("Commands:");
+      const optionsPos = result.indexOf("Options:");
+      assert.ok(
+        commandsPos < optionsPos,
+        "Commands section should appear before Options section",
+      );
+    });
+
+    it("should sort mixed sections between command-only and option-only sections", () => {
+      const page: DocPage = {
+        sections: [
+          {
+            title: "Options",
+            entries: [{
+              term: { type: "option", names: ["--flag"] },
+              description: [{ type: "text", text: "A flag" }],
+            }],
+          },
+          {
+            title: "Mixed",
+            entries: [
+              {
+                term: { type: "command", name: "sub" },
+                description: [{ type: "text", text: "A subcommand" }],
+              },
+              {
+                term: { type: "option", names: ["--opt"] },
+                description: [{ type: "text", text: "An option" }],
+              },
+            ],
+          },
+          {
+            title: "Commands",
+            entries: [{
+              term: { type: "command", name: "build" },
+              description: [{ type: "text", text: "Build" }],
+            }],
+          },
+        ],
+      };
+
+      const result = formatDocPage("myapp", page);
+      const commandsPos = result.indexOf("Commands:");
+      const mixedPos = result.indexOf("Mixed:");
+      const optionsPos = result.indexOf("Options:");
+      assert.ok(
+        commandsPos < mixedPos,
+        "Commands section should appear before Mixed section",
+      );
+      assert.ok(
+        mixedPos < optionsPos,
+        "Mixed section should appear before Options section",
+      );
+    });
+
+    it("should sort untitled sections before titled sections within the same bucket", () => {
+      const page: DocPage = {
+        sections: [
+          {
+            title: "Named",
+            entries: [{
+              term: { type: "command", name: "named" },
+              description: [{ type: "text", text: "A named section" }],
+            }],
+          },
+          {
+            entries: [{
+              term: { type: "command", name: "ungrouped" },
+              description: [{ type: "text", text: "An ungrouped command" }],
+            }],
+          },
+        ],
+      };
+
+      const result = formatDocPage("myapp", page);
+      const namedPos = result.indexOf("Named:");
+      const ungroupedPos = result.indexOf("ungrouped");
+      assert.ok(
+        ungroupedPos < namedPos,
+        "Untitled section should appear before titled section in the same bucket",
+      );
+    });
+
+    it("should preserve relative order within the same bucket (stable sort)", () => {
+      const page: DocPage = {
+        sections: [
+          {
+            title: "Beta",
+            entries: [{
+              term: { type: "command", name: "beta" },
+              description: [{ type: "text", text: "Beta command" }],
+            }],
+          },
+          {
+            title: "Alpha",
+            entries: [{
+              term: { type: "command", name: "alpha" },
+              description: [{ type: "text", text: "Alpha command" }],
+            }],
+          },
+        ],
+      };
+
+      const result = formatDocPage("myapp", page);
+      const betaPos = result.indexOf("Beta:");
+      const alphaPos = result.indexOf("Alpha:");
+      assert.ok(
+        betaPos < alphaPos,
+        "Beta should appear before Alpha (original order preserved within same bucket)",
+      );
+    });
+
+    it("should use custom sectionOrder callback when provided", () => {
+      const page: DocPage = {
+        sections: [
+          {
+            title: "Commands",
+            entries: [{
+              term: { type: "command", name: "build" },
+              description: [{ type: "text", text: "Build" }],
+            }],
+          },
+          {
+            title: "Options",
+            entries: [{
+              term: { type: "option", names: ["--flag"] },
+              description: [{ type: "text", text: "A flag" }],
+            }],
+          },
+        ],
+      };
+
+      // Custom sort: reverse alphabetical by title, so Options before Commands
+      // (since "O" > "C", reversed comparator puts Options first)
+      const sectionOrder = (a: DocSection, b: DocSection): number => {
+        const aTitle = a.title ?? "";
+        const bTitle = b.title ?? "";
+        return bTitle.localeCompare(aTitle);
+      };
+
+      const result = formatDocPage("myapp", page, { sectionOrder });
+      const commandsPos = result.indexOf("Commands:");
+      const optionsPos = result.indexOf("Options:");
+      assert.ok(
+        optionsPos < commandsPos,
+        "Options should appear before Commands with custom reverse-alphabetical sort",
+      );
+    });
+
+    it("should use custom sectionOrder and preserve relative order on tie (stable)", () => {
+      const page: DocPage = {
+        sections: [
+          {
+            title: "First",
+            entries: [{
+              term: { type: "command", name: "a" },
+              description: [{ type: "text", text: "First" }],
+            }],
+          },
+          {
+            title: "Second",
+            entries: [{
+              term: { type: "command", name: "b" },
+              description: [{ type: "text", text: "Second" }],
+            }],
+          },
+          {
+            title: "Third",
+            entries: [{
+              term: { type: "command", name: "c" },
+              description: [{ type: "text", text: "Third" }],
+            }],
+          },
+        ],
+      };
+
+      // Always return 0 (tie) — original order should be preserved
+      const sectionOrder = (_a: DocSection, _b: DocSection): number => 0;
+
+      const result = formatDocPage("myapp", page, { sectionOrder });
+      const firstPos = result.indexOf("First:");
+      const secondPos = result.indexOf("Second:");
+      const thirdPos = result.indexOf("Third:");
+      assert.ok(firstPos < secondPos, "First should appear before Second");
+      assert.ok(secondPos < thirdPos, "Second should appear before Third");
+    });
   });
 });

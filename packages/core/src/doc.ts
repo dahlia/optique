@@ -256,6 +256,53 @@ export interface DocPageFormatOptions {
    * ```
    */
   showChoices?: boolean | ShowChoicesOptions;
+
+  /**
+   * A custom comparator function to control the order of sections in the
+   * help output.  When provided, it is used instead of the default smart
+   * sort (command-only sections first, then mixed, then option/argument-only
+   * sections).  Sections that compare equal (return `0`) preserve their
+   * original relative order (stable sort).
+   *
+   * @param a The first section to compare.
+   * @param b The second section to compare.
+   * @returns A negative number if `a` should appear before `b`, a positive
+   *   number if `a` should appear after `b`, or `0` if they are equal.
+   * @since 1.0.0
+   *
+   * @example
+   * ```typescript
+   * // Sort sections alphabetically by title
+   * {
+   *   sectionOrder: (a, b) => (a.title ?? "").localeCompare(b.title ?? "")
+   * }
+   * ```
+   */
+  sectionOrder?: (a: DocSection, b: DocSection) => number;
+}
+
+/**
+ * Classifies a {@link DocSection} by its content type for use in the
+ * default smart sort.
+ *
+ * @returns `0` for command-only sections, `1` for mixed sections, `2` for
+ *   option/argument/passthrough-only sections.
+ */
+function classifySection(section: DocSection): 0 | 1 | 2 {
+  const hasCommand = section.entries.some((e) => e.term.type === "command");
+  const hasNonCommand = section.entries.some((e) => e.term.type !== "command");
+  if (hasCommand && !hasNonCommand) return 0;
+  if (hasCommand && hasNonCommand) return 1;
+  return 2;
+}
+
+/**
+ * The default section comparator: command-only sections come first, then
+ * mixed sections, then option/argument-only sections.  Sections with the
+ * same score preserve their original relative order (stable sort).
+ */
+function defaultSectionOrder(a: DocSection, b: DocSection): number {
+  return classifySection(a) - classifySection(b);
 }
 
 /**
@@ -327,9 +374,21 @@ export function formatDocPage(
     });
     output += "\n";
   }
-  const sections = page.sections.toSorted((a, b) =>
-    a.title == null && b.title == null ? 0 : a.title == null ? -1 : 1
-  );
+  const comparator = options.sectionOrder ?? defaultSectionOrder;
+  // Stable sort with three-level tie-breaking:
+  // 1. comparator result (primary)
+  // 2. untitled sections before titled sections (secondary)
+  // 3. original index (tertiary, preserves relative order)
+  const sections = page.sections
+    .map((s, i) => ({ section: s, index: i }))
+    .toSorted((a, b) => {
+      const cmp = comparator(a.section, b.section);
+      if (cmp !== 0) return cmp;
+      const titleCmp = (a.section.title == null ? 0 : 1) -
+        (b.section.title == null ? 0 : 1);
+      return titleCmp !== 0 ? titleCmp : a.index - b.index;
+    })
+    .map(({ section }) => section);
   for (const section of sections) {
     // Skip sections with no entries
     if (section.entries.length < 1) continue;

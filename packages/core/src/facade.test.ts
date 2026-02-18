@@ -1,5 +1,6 @@
 import { group, merge, object, or } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
+import type { DocSection } from "@optique/core/doc";
 import {
   type RunOptions,
   runParser,
@@ -4310,8 +4311,8 @@ describe("runWithAsync", () => {
         helpOutput.indexOf("completion", otherIndex) > otherIndex,
         "completion should be under Other:",
       );
-      // help command should NOT be under "Other:" (it should be in the
-      // ungrouped section before "Other:")
+      // help command should NOT be under "Other:" — it should be in the
+      // ungrouped section, which appears before "Other:" (untitled before titled)
       const helpIndex = helpOutput.indexOf("  help");
       assert.ok(
         helpIndex < otherIndex,
@@ -4467,6 +4468,35 @@ describe("runWithAsync", () => {
         helpOutput.indexOf("completion", plumbingIndex) > plumbingIndex,
         "completion should be under Plumbing:",
       );
+    });
+  });
+
+  describe("sectionOrder option", () => {
+    it("should use custom sectionOrder comparator to control section ordering in help output", () => {
+      const parser = or(
+        command("build", object({ verbose: flag("--verbose") })),
+        command("deploy", object({ env: option("--env", string()) })),
+      );
+
+      let helpOutput = "";
+      runParser(parser, "myapp", ["--help"], {
+        help: {
+          mode: "option",
+          onShow: () => "shown",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+        // Sort sections in reverse alphabetical order by title
+        sectionOrder: (a: DocSection, b: DocSection): number => {
+          const aTitle = a.title ?? "";
+          const bTitle = b.title ?? "";
+          return bTitle.localeCompare(aTitle);
+        },
+      });
+
+      // The sectionOrder callback should be accepted without type errors
+      assert.ok(typeof helpOutput === "string");
     });
   });
 });

@@ -9,7 +9,11 @@ import type {
   Parser,
 } from "@optique/core/parser";
 import type { Program } from "@optique/core/program";
-import type { ShowChoicesOptions, ShowDefaultOptions } from "@optique/core/doc";
+import type {
+  DocSection,
+  ShowChoicesOptions,
+  ShowDefaultOptions,
+} from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
 import path from "node:path";
 import process from "node:process";
@@ -75,6 +79,21 @@ export interface RunOptions {
    * @since 0.10.0
    */
   readonly showChoices?: boolean | ShowChoicesOptions;
+
+  /**
+   * A custom comparator function to control the order of sections in the
+   * help output.  When provided, it is used instead of the default smart
+   * sort (command-only sections first, then mixed, then option/argument-only
+   * sections).  Sections that compare equal (return `0`) preserve their
+   * original relative order.
+   *
+   * @param a The first section to compare.
+   * @param b The second section to compare.
+   * @returns A negative number if `a` should appear before `b`, a positive
+   *   number if `a` should appear after `b`, or `0` if they are equal.
+   * @since 1.0.0
+   */
+  readonly sectionOrder?: (a: DocSection, b: DocSection) => number;
 
   /**
    * Help configuration. Determines how help is made available:
@@ -488,6 +507,7 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     maxWidth = process.stdout.columns,
     showDefault,
     showChoices,
+    sectionOrder,
     help,
     version,
     completion,
@@ -608,6 +628,7 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     maxWidth,
     showDefault,
     showChoices,
+    sectionOrder,
     help: helpConfig,
     version: versionConfig,
     completion: completionConfig,

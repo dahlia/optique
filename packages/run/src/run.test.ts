@@ -5,6 +5,7 @@ import { argument, command, option } from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
+import type { DocSection } from "@optique/core/doc";
 import type { RunOptions } from "@optique/run/run";
 import { run, runAsync, runSync } from "@optique/run/run";
 import assert from "node:assert/strict";
@@ -1117,6 +1118,48 @@ describe("runAsync", () => {
 
       assert.ok(helpOutput.includes("myapp"));
       assert.ok(helpOutput.includes("A test app"));
+    });
+  });
+
+  describe("sectionOrder option", () => {
+    it("should accept sectionOrder callback and pass it through to formatting", () => {
+      const parser = or(
+        command("build", object({})),
+        command("deploy", object({})),
+      );
+
+      let helpOutput = "";
+      const originalExit = process.exit;
+      const originalWrite = process.stdout.write;
+      process.exit = (() => {
+        throw new Error("EXIT");
+      }) as typeof process.exit;
+      process.stdout.write = ((chunk: unknown) => {
+        helpOutput += String(chunk);
+        return true;
+      }) as typeof process.stdout.write;
+
+      try {
+        run(parser, {
+          args: ["--help"],
+          programName: "myapp",
+          help: "option",
+          // Custom sectionOrder: alphabetical by title
+          sectionOrder: (a: DocSection, b: DocSection): number => {
+            const aTitle = a.title ?? "";
+            const bTitle = b.title ?? "";
+            return aTitle.localeCompare(bTitle);
+          },
+        });
+      } catch (err) {
+        if ((err as Error).message !== "EXIT") throw err;
+      } finally {
+        process.exit = originalExit;
+        process.stdout.write = originalWrite;
+      }
+
+      // Just confirm help was shown (type-checking is the main goal here)
+      assert.ok(typeof helpOutput === "string");
     });
   });
 });

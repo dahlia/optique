@@ -20,6 +20,20 @@ To be released.
     a single newline.  This makes paragraph breaks visually distinct from
     explicit `lineBreak()` terms, which render as a single newline.
 
+ -  Changed the default section ordering in help output to use a smart
+    type-aware sort: sections containing only commands appear first, followed
+    by mixed sections, and then sections containing only options, flags, and
+    arguments.  Within each group, the original relative order is preserved.
+    Previously, untitled sections were sorted first regardless of content
+    type.  This is a breaking change for help output layout.  [[#115]]
+
+ -  Added `sectionOrder` option to `DocPageFormatOptions` (in
+    `formatDocPage()`), `RunOptions` (in `runParser()`), and `RunOptions`
+    (in *@optique/run*'s `run()`).  When provided, the callback overrides
+    the default smart sort to give full control over section ordering in
+    help output.  [[#115]]
+
+[#115]: https://github.com/dahlia/optique/issues/115
 [#120]: https://github.com/dahlia/optique/issues/120
 
 

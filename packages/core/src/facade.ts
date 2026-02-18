@@ -9,6 +9,7 @@ import {
 import { group, longestMatch, object } from "./constructs.ts";
 import {
   type DocPage,
+  type DocSection,
   formatDocPage,
   type ShowChoicesOptions,
   type ShowDefaultOptions,
@@ -883,6 +884,21 @@ export interface RunOptions<THelp, TError> {
   readonly showChoices?: boolean | ShowChoicesOptions;
 
   /**
+   * A custom comparator function to control the order of sections in the
+   * help output.  When provided, it is used instead of the default smart
+   * sort (command-only sections first, then mixed, then option/argument-only
+   * sections).  Sections that compare equal (return `0`) preserve their
+   * original relative order.
+   *
+   * @param a The first section to compare.
+   * @param b The second section to compare.
+   * @returns A negative number if `a` should appear before `b`, a positive
+   *   number if `a` should appear after `b`, or `0` if they are equal.
+   * @since 1.0.0
+   */
+  readonly sectionOrder?: (a: DocSection, b: DocSection) => number;
+
+  /**
    * Help configuration. When provided, enables help functionality.
    */
   readonly help?:
@@ -1116,6 +1132,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   maxWidth?: number,
   completionMode?: "command" | "option" | "both",
   completionName?: "singular" | "plural" | "both",
+  sectionOrder?: (a: DocSection, b: DocSection) => number,
 ): ModeValue<M, THelp | TError> {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -1144,7 +1161,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
     if (completionParser) {
       const doc = getDocPage(completionParser, ["completion"]);
       if (doc) {
-        stderr(formatDocPage(programName, doc, { colors, maxWidth }));
+        stderr(
+          formatDocPage(programName, doc, { colors, maxWidth, sectionOrder }),
+        );
       }
     }
 
@@ -1350,6 +1369,7 @@ export function runParser<
     maxWidth,
     showDefault,
     showChoices,
+    sectionOrder,
     aboveError = "usage",
     onError = () => {
       throw new RunParserError("Failed to parse command line arguments.");
@@ -1450,6 +1470,7 @@ export function runParser<
         maxWidth,
         completionMode,
         completionName,
+        sectionOrder,
       ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
     }
 
@@ -1483,6 +1504,7 @@ export function runParser<
             maxWidth,
             completionMode,
             completionName,
+            sectionOrder,
           ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
         } else {
           const singularMatchExact =
@@ -1511,6 +1533,7 @@ export function runParser<
               maxWidth,
               completionMode,
               completionName,
+              sectionOrder,
             ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
           }
         }
@@ -1812,6 +1835,7 @@ export function runParser<
               maxWidth,
               showDefault,
               showChoices,
+              sectionOrder,
             }));
           }
           try {
