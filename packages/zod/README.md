@@ -1,9 +1,6 @@
 @optique/zod
 ============
 
-> [!WARNING]
-> The API is stabilizing, but may change before the 1.0 release.
-
 Zod value parsers for Optique. This package provides seamless integration
 between [Zod] schemas and *@optique/core*, enabling powerful validation and
 type-safe parsing of command-line arguments.

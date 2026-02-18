@@ -1,9 +1,6 @@
 @optique/core
 =============
 
-> [!WARNING]
-> The API is stabilizing, but may change before the 1.0 release.
-
 The core package of Optique which provides the shared types and parser
 combinators. It is designed to be used in universal JavaScript runtimes,
 including Node.js, Deno, Bun, edge functions, and web browsers—although

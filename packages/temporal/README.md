@@ -1,9 +1,6 @@
 @optique/temporal
 =================
 
-> [!WARNING]
-> The API is stabilizing, but may change before the 1.0 release.
-
 Value parsers for [`Temporal`] date/time types. This package provides
 `ValueParser` functions that can be used with *@optique/core* to parse
 command-line arguments into `Temporal` objects like [`Temporal.Instant`],

@@ -1,9 +1,6 @@
 @optique/run
 ============
 
-> [!WARNING]
-> The API is stabilizing, but may change before the 1.0 release.
-
 Process-integrated CLI parser for Node.js, Bun, and Deno that provides a
 batteries-included interface for *@optique/core* with automatic `process.argv`
 handling, `process.exit()`, and terminal capabilities.

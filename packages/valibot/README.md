@@ -1,9 +1,6 @@
 @optique/valibot
 ================
 
-> [!WARNING]
-> The API is stabilizing, but may change before the 1.0 release.
-
 Valibot value parsers for Optique. This package provides seamless integration
 between [Valibot] schemas and *@optique/core*, enabling powerful validation and
 type-safe parsing of command-line arguments with minimal bundle size.
