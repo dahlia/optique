@@ -8,6 +8,17 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed contradictory “Did you mean?” suggestion when a subcommand name is
+    provided at the wrong level.  Previously, a structure like
+    `command("file", or(add, remove))` given the input `add --help` would
+    report `Expected command file, but got add.` and then illogically suggest
+    `Did you mean add?`—even though `add` is only valid *inside* `file`.
+    Suggestions in `command()` errors now derive from
+    `extractLeadingCommandNames()`, which limits candidates to commands that
+    are actually valid at the current parse position, not commands nested
+    inside other commands.  The same scoping is applied when a custom
+    `notMatched` callback receives its `suggestions` argument.  [[#117]]
+
  -  Fixed `group()` label leaking into a selected subcommand's own nested
     command list.  Previously, when a `group()`-wrapped command (e.g.,
     `alias`) itself contained further subcommands (e.g., `delete`, `set`),
@@ -19,6 +30,7 @@ To be released.
     not commands from a deeper level.  [[#116]]
 
 [#116]: https://github.com/dahlia/optique/issues/116
+[#117]: https://github.com/dahlia/optique/issues/117
 
 
 Version 0.7.16

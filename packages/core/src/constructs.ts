@@ -25,6 +25,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
+import { collectLeadingCandidates } from "./usage-internals.ts";
 
 /**
  * Checks if the given token is an option name that requires a value
@@ -54,60 +55,6 @@ function isOptionRequiringValue(usage: Usage, token: string): boolean {
   }
 
   return traverse(usage);
-}
-
-function collectLeadingCandidates(
-  terms: Usage,
-  optionNames: Set<string>,
-  commandNames: Set<string>,
-): boolean {
-  if (!terms || !Array.isArray(terms)) return true;
-
-  for (const term of terms) {
-    if (term.type === "option") {
-      for (const name of term.names) {
-        optionNames.add(name);
-      }
-      return false;
-    }
-
-    if (term.type === "command") {
-      commandNames.add(term.name);
-      return false;
-    }
-
-    if (term.type === "argument") {
-      return false;
-    }
-
-    if (term.type === "optional") {
-      collectLeadingCandidates(term.terms, optionNames, commandNames);
-      continue;
-    }
-
-    if (term.type === "multiple") {
-      collectLeadingCandidates(term.terms, optionNames, commandNames);
-      if (term.min === 0) continue;
-      return false;
-    }
-
-    if (term.type === "exclusive") {
-      let allAlternativesSkippable = true;
-      for (const exclusiveUsage of term.terms) {
-        const alternativeSkippable = collectLeadingCandidates(
-          exclusiveUsage,
-          optionNames,
-          commandNames,
-        );
-        allAlternativesSkippable = allAlternativesSkippable &&
-          alternativeSkippable;
-      }
-      if (allAlternativesSkippable) continue;
-      return false;
-    }
-  }
-
-  return true;
 }
 
 function createUnexpectedInputErrorWithScopedSuggestions(
