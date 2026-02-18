@@ -4,7 +4,7 @@ Optique changelog
 Version 0.8.15
 --------------
 
-To be released.
+Released on February 18, 2026.
 
 ### @optique/core
 
@@ -29,7 +29,7 @@ To be released.
         page.  Previously `group()` only forwarded `description`, so `brief`
         was silently dropped and the run-level brief appeared instead.
 
- -  Fixed contradictory "Did you mean?" suggestion when a subcommand name is
+ -  Fixed contradictory “Did you mean?” suggestion when a subcommand name is
     provided at the wrong level.  Previously, a structure like
     `command("file", or(add, remove))` given the input `add --help` would
     report `Expected command file, but got add.` and then illogically suggest
