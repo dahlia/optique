@@ -2047,6 +2047,86 @@ describe("command", () => {
     });
   });
 
+  // Regression tests for issue #117:
+  // https://github.com/dahlia/optique/issues/117
+  it("should not suggest sub-commands when parent command name does not match", () => {
+    // When command("file", or(add, remove)) is given "add" as input,
+    // it should say "Expected command file, but got add."
+    // It should NOT suggest "add" because "add" is only valid *inside* "file".
+    const addCmd = command(
+      "add",
+      object({ force: optional(flag("--force")) }),
+    );
+    const removeCmd = command(
+      "remove",
+      object({ force: optional(flag("--force")) }),
+    );
+    const fileCmd = command("file", or(addCmd, removeCmd));
+
+    const result = parse(fileCmd, ["add", "--force"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assertErrorIncludes(result.error, "Expected command `file`");
+      assert.ok(
+        !errorMessage.includes("Did you mean"),
+        `Error message should not contain "Did you mean", got: ${errorMessage}`,
+      );
+    }
+  });
+
+  it("should not suggest sub-command names even when similar to input", () => {
+    // "ad" is close to "add" (a sub-command), but "add" is not valid at the
+    // current position — only "file" is. So no suggestion should appear.
+    const addCmd = command("add", object({}));
+    const fileCmd = command("file", or(addCmd));
+
+    const result = parse(fileCmd, ["ad"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assertErrorIncludes(result.error, "Expected command `file`");
+      assert.ok(
+        !errorMessage.includes("Did you mean"),
+        `Error message should not contain "Did you mean", got: ${errorMessage}`,
+      );
+    }
+  });
+
+  it("should still suggest the parent command name when a typo is given", () => {
+    // "fiel" is a typo for "file". The fix should still suggest "file".
+    const addCmd = command("add", object({}));
+    const fileCmd = command("file", or(addCmd));
+
+    const result = parse(fileCmd, ["fiel"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "Expected command `file`");
+      assertErrorIncludes(result.error, "Did you mean");
+      assertErrorIncludes(result.error, "`file`");
+    }
+  });
+
+  it("should not suggest nested sub-commands in or() sibling context", () => {
+    // or(command("file", or(add, remove)), command("other", ...))
+    // When "add" is given, "add" should not be suggested (it's a child of "file").
+    const addCmd = command("add", object({}));
+    const removeCmd = command("remove", object({}));
+    const fileCmd = command("file", or(addCmd, removeCmd));
+    const otherCmd = command("other", object({}));
+    const topParser = or(fileCmd, otherCmd);
+
+    const result = parse(topParser, ["add"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const errorMessage = formatMessage(result.error);
+      assert.ok(
+        !errorMessage.includes("Did you mean"),
+        `Error should not have "Did you mean" for "add" among top-level commands, got: ${errorMessage}`,
+      );
+    }
+  });
+
   // Regression test for issue #81:
   // https://github.com/dahlia/optique/issues/81
   it("should parse inner parser that succeeds with zero tokens", () => {
@@ -2246,6 +2326,87 @@ describe("command() error customization", () => {
       );
       assert.ok(!errorMessage.includes("Did you mean"));
     }
+  });
+
+  // Regression tests for issue #117:
+  // https://github.com/dahlia/optique/issues/117
+  it("should not pass sub-command names to custom notMatched suggestions", () => {
+    // command("file", or(add, remove)) — "add" is typed
+    // The custom notMatched receives suggestions from context.usage.
+    // After the fix, the suggestions should NOT contain "add" or "remove"
+    // because they are only valid *after* "file" has been consumed.
+    const addCmd = command("add", object({}));
+    const removeCmd = command("remove", object({}));
+    let capturedSuggestions: readonly string[] = ["not-set"];
+
+    const fileCmd = command("file", or(addCmd, removeCmd), {
+      errors: {
+        notMatched: (_expected, _actual, suggestions) => {
+          capturedSuggestions = suggestions ?? [];
+          return [];
+        },
+      },
+    });
+
+    const result = fileCmd.parse({
+      buffer: ["add"],
+      state: fileCmd.initialState,
+      optionsTerminated: false,
+      usage: fileCmd.usage,
+    });
+    assert.ok(!result.success);
+    assert.ok(
+      !capturedSuggestions.includes("add"),
+      `"add" should not appear in notMatched suggestions, got: [${
+        capturedSuggestions.join(", ")
+      }]`,
+    );
+    assert.ok(
+      !capturedSuggestions.includes("remove"),
+      `"remove" should not appear in notMatched suggestions, got: [${
+        capturedSuggestions.join(", ")
+      }]`,
+    );
+  });
+
+  it("should pass leading-level command names to custom notMatched suggestions", () => {
+    // When or(command("file", ...), command("other", ...)) context is used,
+    // the custom notMatched of an inner command() should receive "file" and
+    // "other" as suggestions (the commands at the SAME level), not sub-commands.
+    const addCmd = command("add", object({}));
+    const fileCmd = command("file", or(addCmd));
+    const otherCmd = command("other", object({}));
+    const topParser = or(fileCmd, otherCmd);
+    let capturedSuggestions: readonly string[] = ["not-set"];
+
+    const innerFileCmd = command("file", or(addCmd), {
+      errors: {
+        notMatched: (_expected, _actual, suggestions) => {
+          capturedSuggestions = suggestions ?? [];
+          return [];
+        },
+      },
+    });
+
+    innerFileCmd.parse({
+      buffer: ["fil"],
+      state: innerFileCmd.initialState,
+      optionsTerminated: false,
+      usage: topParser.usage, // full context includes "file", "other" as leading
+    });
+    // "file" should be suggested (typo correction), "add" should not
+    assert.ok(
+      capturedSuggestions.includes("file"),
+      `"file" should appear in suggestions (typo for "file"), got: [${
+        capturedSuggestions.join(", ")
+      }]`,
+    );
+    assert.ok(
+      !capturedSuggestions.includes("add"),
+      `"add" (sub-command) should not appear in suggestions, got: [${
+        capturedSuggestions.join(", ")
+      }]`,
+    );
   });
 });
 
@@ -2476,6 +2637,53 @@ describe("command() with brief option", () => {
       detailFragments.footer,
       message`Examples:\n  myapp restore backup.tar.gz\n  myapp restore --verify backup.tar.gz`,
     );
+  });
+
+  // Regression tests for https://github.com/dahlia/optique/issues/118 and
+  // https://github.com/dahlia/optique/issues/119
+  it("should propagate brief as page-level brief when command is matched", () => {
+    const parser = command(
+      "deploy",
+      object({ env: option("-e", "--env", string()) }),
+      {
+        brief: message`Deploy the application`,
+        description:
+          message`Deploy the application to the specified environment.`,
+      },
+    );
+
+    const matchedState = ["matched", "deploy"] as ["matched", string];
+    const fragments = parser.getDocFragments({
+      kind: "available",
+      state: matchedState,
+    });
+
+    // brief appears at the top of the command's own help page
+    assert.deepEqual(fragments.brief, message`Deploy the application`);
+    // description appears below Usage in the command's own help page
+    assert.deepEqual(
+      fragments.description,
+      message`Deploy the application to the specified environment.`,
+    );
+  });
+
+  it("should propagate brief but not description when only brief is set and command is matched", () => {
+    const parser = command(
+      "file",
+      object({}),
+      { brief: message`File operations` },
+    );
+
+    const matchedState = ["matched", "file"] as ["matched", string];
+    const fragments = parser.getDocFragments({
+      kind: "available",
+      state: matchedState,
+    });
+
+    // brief appears at the top of the command's own help page
+    assert.deepEqual(fragments.brief, message`File operations`);
+    // No description was provided, so description must be undefined
+    assert.equal(fragments.description, undefined);
   });
 });
 

@@ -1,4 +1,4 @@
-import { object, or } from "@optique/core/constructs";
+import { group, object, or } from "@optique/core/constructs";
 import { run, RunError } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
@@ -1730,14 +1730,34 @@ describe("Documentation augmentation (brief, description, footer)", () => {
     });
 
     assert.equal(result, "help");
-    // Should show subcommand's description, NOT run-level description
-    assert.ok(helpOutput.includes("foo brief"));
-    assert.ok(helpOutput.includes("foo description"));
-    assert.ok(!helpOutput.includes("mycli brief"));
-    assert.ok(!helpOutput.includes("mycli description"));
+    // The subcommand's own brief must appear at the top, before Usage.
+    // The subcommand's own description must appear after Usage.
+    // Run-level docs must NOT appear at all.
+    const fooBriefPos = helpOutput.indexOf("foo brief");
+    const usagePos = helpOutput.indexOf("Usage:");
+    const fooDescPos = helpOutput.indexOf("foo description");
+    assert.ok(fooBriefPos !== -1, "subcommand's own brief must be present");
+    assert.ok(usagePos !== -1, "Usage line must be present");
+    assert.ok(
+      fooDescPos !== -1,
+      "subcommand's own description must be present",
+    );
+    assert.ok(fooBriefPos < usagePos, "brief must precede the Usage line");
+    assert.ok(usagePos < fooDescPos, "description must follow the Usage line");
+    assert.ok(
+      !helpOutput.includes("mycli brief"),
+      "run-level brief must not appear",
+    );
+    assert.ok(
+      !helpOutput.includes("mycli description"),
+      "run-level description must not appear",
+    );
   });
 
-  it("should fall back to run-level docs when subcommand has none (Issue #95)", () => {
+  it("should NOT fall back to run-level docs when subcommand has none (Issue #118)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/118:
+    // run-level brief/description must never bleed into a subcommand's help
+    // page, even when the subcommand defines no brief or description of its own.
     const fooCommand = command(
       "foo",
       object({
@@ -1759,9 +1779,180 @@ describe("Documentation augmentation (brief, description, footer)", () => {
     });
 
     assert.equal(result, "help");
-    // Should fall back to run-level docs since subcommand has none
-    assert.ok(helpOutput.includes("mycli brief"));
-    assert.ok(helpOutput.includes("mycli description"));
+    // Run-level brief/description must NOT appear in subcommand help
+    assert.ok(!helpOutput.includes("mycli brief"));
+    assert.ok(!helpOutput.includes("mycli description"));
+  });
+
+  it("should show subcommand's own brief at top when it has only brief (Issue #118/#119)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/118 and
+    // https://github.com/dahlia/optique/issues/119.
+    // A subcommand's own brief appears at the top of its help page, before
+    // Usage.  Run-level docs must NOT bleed in.
+    const addCommand = command(
+      "add",
+      object({ force: flag("--force") }),
+      { brief: message`Add something` },
+    );
+    const removeCommand = command(
+      "remove",
+      object({ force: flag("--force") }),
+      { brief: message`Remove something` },
+    );
+    const fileCommand = command(
+      "file",
+      or(addCommand, removeCommand),
+      { brief: message`File operations` },
+    );
+
+    let helpOutput = "";
+    run(fileCommand, "repro", ["file", "--help"], {
+      help: { mode: "option", onShow: () => {} },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+      brief: message`Brief for repro CLI`,
+      description: message`Description for repro CLI`,
+    });
+
+    // The file command's own brief must appear before the Usage line
+    const fileBriefPos = helpOutput.indexOf("File operations");
+    const usagePos = helpOutput.indexOf("Usage:");
+    assert.ok(fileBriefPos !== -1, "file command's brief must be present");
+    assert.ok(usagePos !== -1, "Usage line must be present");
+    assert.ok(fileBriefPos < usagePos, "brief must precede the Usage line");
+    // Run-level brief/description must NOT appear in subcommand help
+    assert.ok(
+      !helpOutput.includes("Description for repro CLI"),
+      "run-level description must not appear",
+    );
+    assert.ok(
+      !helpOutput.includes("Brief for repro CLI"),
+      "run-level brief must not appear",
+    );
+    // The subcommand list should still be displayed correctly
+    assert.ok(helpOutput.includes("add"), "add subcommand must be listed");
+    assert.ok(
+      helpOutput.includes("remove"),
+      "remove subcommand must be listed",
+    );
+    assert.ok(
+      helpOutput.includes("Add something"),
+      "add brief must be shown in listing",
+    );
+    assert.ok(
+      helpOutput.includes("Remove something"),
+      "remove brief must be shown in listing",
+    );
+  });
+
+  it("should show subcommand's own brief and description, not parent's (Issue #118/#119)", () => {
+    // Regression: verifies that a subcommand shows its own brief at top
+    // (before Usage) and its own description after Usage.  Run-level docs
+    // must not appear.
+    const fileCommand = command(
+      "file",
+      object({ verbose: flag("--verbose") }),
+      {
+        brief: message`File operations brief`,
+        description: message`File operations description`,
+      },
+    );
+
+    let helpOutput = "";
+    run(fileCommand, "repro", ["file", "--help"], {
+      help: { mode: "option", onShow: () => {} },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+      brief: message`Brief for repro CLI`,
+      description: message`Description for repro CLI`,
+    });
+
+    // brief must precede Usage; description must follow Usage
+    const briefPos = helpOutput.indexOf("File operations brief");
+    const usagePos = helpOutput.indexOf("Usage:");
+    const descPos = helpOutput.indexOf("File operations description");
+    assert.ok(briefPos !== -1, "subcommand's own brief must be present");
+    assert.ok(usagePos !== -1, "Usage line must be present");
+    assert.ok(descPos !== -1, "subcommand's own description must be present");
+    assert.ok(briefPos < usagePos, "brief must precede the Usage line");
+    assert.ok(usagePos < descPos, "description must follow the Usage line");
+    // Run-level docs must not appear in subcommand help
+    assert.ok(
+      !helpOutput.includes("Brief for repro CLI"),
+      "run-level brief must not appear",
+    );
+    assert.ok(
+      !helpOutput.includes("Description for repro CLI"),
+      "run-level description must not appear",
+    );
+  });
+
+  it("should show nested command's brief at top when wrapped in group() (Issue #119)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/119.
+    // When a command is wrapped in group(), its own brief must still appear
+    // at the top of the help page (not the run-level brief), and its own
+    // description must appear below Usage.
+    const addCommand = command(
+      "add",
+      object({ force: flag("--force") }),
+      { brief: message`brief for add command` },
+    );
+    const removeCommand = command(
+      "remove",
+      object({ force: flag("--force") }),
+      { brief: message`brief for remove command` },
+    );
+    const fileCommands = command(
+      "file",
+      or(addCommand, removeCommand),
+      {
+        brief: message`brief for file command group`,
+        description: message`description for file command group`,
+      },
+    );
+    const cli = group("File commands", fileCommands);
+
+    let helpOutput = "";
+    run(cli, "repro", ["file", "--help"], {
+      help: { mode: "option", onShow: () => {} },
+      stdout: (text) => {
+        helpOutput = text;
+      },
+      brief: message`Brief for repro CLI`,
+      description: message`Description for repro CLI`,
+    });
+
+    // brief must appear before Usage; description must appear after Usage
+    const fileBriefPos = helpOutput.indexOf("brief for file command group");
+    const usagePos = helpOutput.indexOf("Usage:");
+    const fileDescPos = helpOutput.indexOf(
+      "description for file command group",
+    );
+    assert.ok(fileBriefPos !== -1, "file command's brief must be present");
+    assert.ok(usagePos !== -1, "Usage line must be present");
+    assert.ok(fileDescPos !== -1, "file command's description must be present");
+    assert.ok(fileBriefPos < usagePos, "brief must precede the Usage line");
+    assert.ok(usagePos < fileDescPos, "description must follow the Usage line");
+    // Run-level brief/description must NOT appear in subcommand help
+    assert.ok(
+      !helpOutput.includes("Brief for repro CLI"),
+      "run-level brief must not appear",
+    );
+    assert.ok(
+      !helpOutput.includes("Description for repro CLI"),
+      "run-level description must not appear",
+    );
+    // Subcommand list must still be shown with their own briefs
+    assert.ok(
+      helpOutput.includes("brief for add command"),
+      "add brief must be shown",
+    );
+    assert.ok(
+      helpOutput.includes("brief for remove command"),
+      "remove brief must be shown",
+    );
   });
 });
 

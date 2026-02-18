@@ -6,6 +6,50 @@ Version 0.8.15
 
 To be released.
 
+### @optique/core
+
+ -  Fixed how `brief` and `description` are displayed in subcommand help
+    pages.  [[#118], [#119]]
+
+     -  Each help page now shows `brief` at the very top (before the Usage
+        line) and `description` below the Usage line, consistent with how
+        the root-level help page works.
+
+     -  The `run()`-level `brief` and `description` no longer bleed into a
+        subcommand's help page.  Previously, when a subcommand had no
+        `description` of its own, the description supplied to `run()` would
+        appear on the subcommand's help page (e.g. `repro file --help` would
+        show "Description for repro CLI" even though that text describes the
+        top-level program, not the `file` subcommand).  Now, only the
+        subcommand's own `brief` and `description` (if any) are shown;
+        run-level docs are used only for the root-level help page.
+
+     -  When `command()` is wrapped with `group()`, the command's `brief`,
+        `description`, and `footer` are now correctly forwarded to the help
+        page.  Previously `group()` only forwarded `description`, so `brief`
+        was silently dropped and the run-level brief appeared instead.
+
+ -  Fixed contradictory "Did you mean?" suggestion when a subcommand name is
+    provided at the wrong level.  Previously, a structure like
+    `command("file", or(add, remove))` given the input `add --help` would
+    report `Expected command file, but got add.` and then illogically suggest
+    `Did you mean add?` even though `add` is only valid *inside* `file`.
+    Suggestions in `command()` errors now derive from
+    `extractLeadingCommandNames()`, which limits candidates to commands that
+    are actually valid at the current parse position, not commands nested
+    inside other commands.  The same scoping is applied when a custom
+    `notMatched` callback receives its `suggestions` argument.  [[#117]]
+
+ -  Fixed `group()` label leaking into a selected subcommand's own nested
+    command list.  Previously, when a `group()`-wrapped command (e.g.,
+    `alias`) itself contained further subcommands (e.g., `delete`, `set`),
+    viewing `alias --help` would show those inner commands under the outer
+    group's label (e.g., "Additional commands:"), which was incorrect.
+    The fix compares current command entries against the initial set of
+    commands that the group originally labeled; the label is now applied
+    only when the visible commands are the group's own top-level commands,
+    not commands from a deeper level.  [[#116]]
+
 
 Version 0.8.14
 --------------
@@ -387,6 +431,61 @@ parsing strategies.
 
 [LogTape]: https://logtape.org/
 
+
+
+Version 0.7.17
+--------------
+
+Released on February 18, 2026.
+
+### @optique/core
+
+ -  Fixed how `brief` and `description` are displayed in subcommand help
+    pages.  [[#118], [#119]]
+
+     -  Each help page now shows `brief` at the very top (before the Usage
+        line) and `description` below the Usage line, consistent with how
+        the root-level help page works.
+
+     -  The `run()`-level `brief` and `description` no longer bleed into a
+        subcommand's help page.  Previously, when a subcommand had no
+        `description` of its own, the description supplied to `run()` would
+        appear on the subcommand's help page (e.g. `repro file --help` would
+        show "Description for repro CLI" even though that text describes the
+        top-level program, not the `file` subcommand).  Now, only the
+        subcommand's own `brief` and `description` (if any) are shown;
+        run-level docs are used only for the root-level help page.
+
+     -  When `command()` is wrapped with `group()`, the command's `brief`,
+        `description`, and `footer` are now correctly forwarded to the help
+        page.  Previously `group()` only forwarded `description`, so `brief`
+        was silently dropped and the run-level brief appeared instead.
+
+ -  Fixed contradictory “Did you mean?” suggestion when a subcommand name is
+    provided at the wrong level.  Previously, a structure like
+    `command("file", or(add, remove))` given the input `add --help` would
+    report `Expected command file, but got add.` and then illogically suggest
+    `Did you mean add?`—even though `add` is only valid *inside* `file`.
+    Suggestions in `command()` errors now derive from
+    `extractLeadingCommandNames()`, which limits candidates to commands that
+    are actually valid at the current parse position, not commands nested
+    inside other commands.  The same scoping is applied when a custom
+    `notMatched` callback receives its `suggestions` argument.  [[#117]]
+
+ -  Fixed `group()` label leaking into a selected subcommand's own nested
+    command list.  Previously, when a `group()`-wrapped command (e.g.,
+    `alias`) itself contained further subcommands (e.g., `delete`, `set`),
+    viewing `alias --help` would show those inner commands under the outer
+    group's label (e.g., "Additional commands:"), which was incorrect.
+    The fix compares current command entries against the initial set of
+    commands that the group originally labeled; the label is now applied
+    only when the visible commands are the group's own top-level commands,
+    not commands from a deeper level.  [[#116]]
+
+[#116]: https://github.com/dahlia/optique/issues/116
+[#117]: https://github.com/dahlia/optique/issues/117
+[#118]: https://github.com/dahlia/optique/issues/118
+[#119]: https://github.com/dahlia/optique/issues/119
 
 
 Version 0.7.16

@@ -4327,6 +4327,212 @@ describe("complex combinator interactions", () => {
   });
 });
 
+describe("group() with command() - issue #116", () => {
+  // https://github.com/dahlia/optique/issues/116
+  // Follow-up to #114: top-level group label leaks into a selected
+  // subcommand's own nested command list (the "children").
+  it("group label should not appear on nested subcommand list", () => {
+    const deleteCmd = command(
+      "delete",
+      object({ all: flag("--all") }),
+      {},
+    );
+    const setCmd = command(
+      "set",
+      object({ shell: flag("-s", "--shell") }),
+      {},
+    );
+    const aliasCmd = command("alias", or(deleteCmd, setCmd), {});
+    const apiCmd = command(
+      "api",
+      object({ hostname: option("--hostname", string()) }),
+      {},
+    );
+    const cli = group("Additional commands", or(aliasCmd, apiCmd));
+
+    // Top-level: group label should appear with alias and api listed
+    const topDoc = getDocPage(cli, []);
+    assert.ok(topDoc);
+    const topSection = topDoc.sections.find(
+      (s) => s.title === "Additional commands",
+    );
+    assert.ok(
+      topSection,
+      "Top-level should have 'Additional commands' section",
+    );
+    assert.ok(
+      topSection.entries.some((e) =>
+        e.term.type === "command" && e.term.name === "alias"
+      ),
+      "Top-level 'Additional commands' section should list 'alias'",
+    );
+
+    // alias --help: group label must NOT appear on alias's own subcommands
+    const aliasDoc = getDocPage(cli, ["alias"]);
+    assert.ok(aliasDoc);
+    const aliasSection = aliasDoc.sections.find(
+      (s) => s.title === "Additional commands",
+    );
+    assert.ok(
+      !aliasSection,
+      "'alias' help should not have 'Additional commands' section for its subcommands",
+    );
+    // Subcommands of alias should still be visible
+    const aliasEntries = aliasDoc.sections.flatMap((s) => s.entries);
+    assert.ok(
+      aliasEntries.some((e) =>
+        e.term.type === "command" && e.term.name === "delete"
+      ),
+      "'alias' help should show 'delete' subcommand",
+    );
+    assert.ok(
+      aliasEntries.some((e) =>
+        e.term.type === "command" && e.term.name === "set"
+      ),
+      "'alias' help should show 'set' subcommand",
+    );
+  });
+
+  it("group label should not appear after two levels of nesting", () => {
+    // cli > remote (command with subcommands) > add/remove
+    const remoteAddCmd = command(
+      "add",
+      object({ url: argument(string({ metavar: "URL" })) }),
+      {},
+    );
+    const remoteRemoveCmd = command(
+      "remove",
+      object({ name: argument(string({ metavar: "NAME" })) }),
+      {},
+    );
+    const remoteCmd = command("remote", or(remoteAddCmd, remoteRemoveCmd), {});
+    const logCmd = command("log", object({}), {});
+    const cli = group("Core commands", or(remoteCmd, logCmd));
+
+    // Top-level: "Core commands" with remote and log
+    const topDoc = getDocPage(cli, []);
+    assert.ok(topDoc);
+    assert.ok(
+      topDoc.sections.some((s) => s.title === "Core commands"),
+      "Top-level should have 'Core commands' section",
+    );
+
+    // remote --help: "Core commands" should NOT appear; add/remove should appear
+    const remoteDoc = getDocPage(cli, ["remote"]);
+    assert.ok(remoteDoc);
+    assert.ok(
+      !remoteDoc.sections.some((s) => s.title === "Core commands"),
+      "'remote' help should not show outer 'Core commands' label on its subcommands",
+    );
+    const remoteEntries = remoteDoc.sections.flatMap((s) => s.entries);
+    assert.ok(
+      remoteEntries.some((e) =>
+        e.term.type === "command" && e.term.name === "add"
+      ),
+      "'remote' help should show 'add' subcommand",
+    );
+
+    // remote add --help: "Core commands" should NOT appear
+    const remoteAddDoc = getDocPage(cli, ["remote", "add"]);
+    assert.ok(remoteAddDoc);
+    assert.ok(
+      !remoteAddDoc.sections.some((s) => s.title === "Core commands"),
+      "'remote add' help should not show 'Core commands' label",
+    );
+  });
+
+  it("inner group label on nested commands is preserved; outer is not", () => {
+    // The inner command uses its own group() for its subcommands
+    const deleteCmd = command("delete", object({}), {});
+    const setCmd = command("set", object({}), {});
+    const aliasCmd = command(
+      "alias",
+      group("Alias subcommands", or(deleteCmd, setCmd)),
+      {},
+    );
+    const cli = group("Additional commands", or(aliasCmd));
+
+    // alias --help: "Alias subcommands" should appear; "Additional commands" should NOT
+    const aliasDoc = getDocPage(cli, ["alias"]);
+    assert.ok(aliasDoc);
+    assert.ok(
+      !aliasDoc.sections.some((s) => s.title === "Additional commands"),
+      "'alias' help should not show outer 'Additional commands' label",
+    );
+    assert.ok(
+      aliasDoc.sections.some((s) => s.title === "Alias subcommands"),
+      "'alias' help should show inner 'Alias subcommands' label",
+    );
+  });
+
+  it("multiple top-level groups: neither leaks into the other's subcommand help", () => {
+    const coreGroup = group(
+      "Core commands",
+      or(
+        command("auth", object({}), {}),
+        command("repo", object({}), {}),
+      ),
+    );
+    const actionsGroup = group(
+      "Actions commands",
+      or(
+        command("run", object({}), {}),
+        command("workflow", object({ verbose: flag("--verbose") }), {}),
+      ),
+    );
+    const cli = or(coreGroup, actionsGroup);
+
+    // auth --help: neither group label should appear on auth's content
+    const authDoc = getDocPage(cli, ["auth"]);
+    assert.ok(authDoc);
+    assert.ok(
+      !authDoc.sections.some((s) => s.title === "Core commands"),
+      "'auth' help should not show 'Core commands' label",
+    );
+    assert.ok(
+      !authDoc.sections.some((s) => s.title === "Actions commands"),
+      "'auth' help should not show 'Actions commands' label",
+    );
+
+    // workflow --help: same
+    const workflowDoc = getDocPage(cli, ["workflow"]);
+    assert.ok(workflowDoc);
+    assert.ok(
+      !workflowDoc.sections.some((s) => s.title === "Actions commands"),
+      "'workflow' help should not show 'Actions commands' label",
+    );
+  });
+
+  it("nested commands with own subcommand group inside or() keep outer group at top level", () => {
+    // Validates the top-level behaviour is NOT broken by the fix
+    const aliasDeleteCmd = command("delete", object({}), {});
+    const aliasCmd = command("alias", or(aliasDeleteCmd), {});
+    const apiCmd = command("api", object({}), {});
+    const cli = group("Additional commands", or(aliasCmd, apiCmd));
+
+    // Top-level must still show "Additional commands" with alias and api
+    const topDoc = getDocPage(cli, []);
+    assert.ok(topDoc);
+    const topSection = topDoc.sections.find(
+      (s) => s.title === "Additional commands",
+    );
+    assert.ok(
+      topSection,
+      "Top-level must still have 'Additional commands' section",
+    );
+    assert.ok(
+      topSection.entries.some((e) =>
+        e.term.type === "command" && e.term.name === "alias"
+      ),
+    );
+    assert.ok(
+      topSection.entries.some((e) =>
+        e.term.type === "command" && e.term.name === "api"
+      ),
+    );
+  });
+});
+
 describe("group() with command() - issue #114", () => {
   // https://github.com/dahlia/optique/issues/114
   it("should not apply group label to subcommand flags in help", () => {
