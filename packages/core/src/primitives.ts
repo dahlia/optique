@@ -62,6 +62,7 @@ import {
   metavar,
   optionName as eOptionName,
   optionNames as eOptionNames,
+  text,
   valueSet,
 } from "./message.ts";
 import type {
@@ -74,11 +75,13 @@ import type {
 } from "./parser.ts";
 import {
   createErrorWithSuggestions,
+  createSuggestionMessage,
   DEFAULT_FIND_SIMILAR_OPTIONS,
   findSimilar,
 } from "./suggestion.ts";
 import type { OptionName, UsageTerm } from "./usage.ts";
-import { extractCommandNames, extractOptionNames } from "./usage.ts";
+import { extractOptionNames } from "./usage.ts";
+import { extractLeadingCommandNames } from "./usage-internals.ts";
 import {
   isValueParser,
   type ValueParser,
@@ -1876,19 +1879,18 @@ export function command<M extends Mode, T, TState>(
         if (context.buffer.length < 1 || context.buffer[0] !== name) {
           const actual = context.buffer.length > 0 ? context.buffer[0] : null;
 
+          // Only suggest commands that are valid at the current parse position
+          // (i.e., leading candidates), not sub-commands nested inside other
+          // commands that the user has not yet entered.
+          // See: https://github.com/dahlia/optique/issues/117
+          const leadingCmds = extractLeadingCommandNames(context.usage);
+          const suggestions = actual
+            ? findSimilar(actual, leadingCmds, DEFAULT_FIND_SIMILAR_OPTIONS)
+            : [];
+
           // If custom error is provided, use it
           if (options.errors?.notMatched) {
             const errorMessage = options.errors.notMatched;
-
-            // Calculate suggestions for custom error
-            const candidates = new Set<string>();
-            for (const cmdName of extractCommandNames(context.usage)) {
-              candidates.add(cmdName);
-            }
-            const suggestions = actual
-              ? findSimilar(actual, candidates, DEFAULT_FIND_SIMILAR_OPTIONS)
-              : [];
-
             return {
               success: false,
               consumed: 0,
@@ -1914,15 +1916,13 @@ export function command<M extends Mode, T, TState>(
             eOptionName(name)
           }, but got ${actual}.`;
 
+          const suggestionMsg = createSuggestionMessage(suggestions);
           return {
             success: false,
             consumed: 0,
-            error: createErrorWithSuggestions(
-              baseError,
-              actual,
-              context.usage,
-              "command",
-            ),
+            error: suggestionMsg.length > 0
+              ? [...baseError, text("\n\n"), ...suggestionMsg]
+              : baseError,
           };
         }
         // Command matched, consume it and move to "matched" state
@@ -2080,6 +2080,10 @@ export function command<M extends Mode, T, TState>(
         innerState,
         defaultValue,
       );
+      // When the command is matched and we are rendering its *own* help page,
+      // `brief` appears at the very top (before Usage) and `description`
+      // appears below the Usage line.  Inner parsers' values take precedence
+      // via the spread; this command's own values fill in any gaps.
       return {
         ...innerFragments,
         brief: innerFragments.brief ?? options.brief,
