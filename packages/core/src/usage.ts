@@ -16,6 +16,50 @@ export type OptionName =
   | `+${string}`;
 
 /**
+ * Visibility control for parser terms.
+ *
+ * - `true`: hidden from usage, documentation, and suggestions
+ * - `"usage"`: hidden from usage only
+ * - `"doc"`: hidden from documentation only
+ */
+export type HiddenVisibility = boolean | "usage" | "doc";
+
+/**
+ * Returns whether the term should be hidden from usage output.
+ */
+export function isUsageHidden(hidden?: HiddenVisibility): boolean {
+  return hidden === true || hidden === "usage";
+}
+
+/**
+ * Returns whether the term should be hidden from documentation output.
+ */
+export function isDocHidden(hidden?: HiddenVisibility): boolean {
+  return hidden === true || hidden === "doc";
+}
+
+/**
+ * Returns whether the term should be hidden from suggestion/error candidates.
+ */
+export function isSuggestionHidden(hidden?: HiddenVisibility): boolean {
+  return hidden === true;
+}
+
+/**
+ * Merges two hidden visibility settings by taking the union of restrictions.
+ */
+export function mergeHidden(
+  a?: HiddenVisibility,
+  b?: HiddenVisibility,
+): HiddenVisibility | undefined {
+  if (a == null) return b;
+  if (b == null) return a;
+  if (a === true || b === true) return true;
+  if (a !== b) return true;
+  return a;
+}
+
+/**
  * Represents a single term in a command-line usage description.
  */
 export type UsageTerm =
@@ -34,11 +78,10 @@ export type UsageTerm =
      */
     readonly metavar: NonEmptyString;
     /**
-     * When `true`, hides the argument from help text, shell completion
-     * suggestions, and error suggestions.
+     * Visibility controls for this term.
      * @since 0.9.0
      */
-    readonly hidden?: boolean;
+    readonly hidden?: HiddenVisibility;
   }
   /**
    * An option term, which represents a command-line option that can
@@ -60,11 +103,10 @@ export type UsageTerm =
      */
     readonly metavar?: NonEmptyString;
     /**
-     * When `true`, hides the option from help text, shell completion
-     * suggestions, and "Did you mean?" error suggestions.
+     * Visibility controls for this term.
      * @since 0.9.0
      */
-    readonly hidden?: boolean;
+    readonly hidden?: HiddenVisibility;
   }
   /**
    * A command term, which represents a subcommand in the command-line
@@ -81,11 +123,10 @@ export type UsageTerm =
      */
     readonly name: string;
     /**
-     * When `true`, hides the command from help text, shell completion
-     * suggestions, and "Did you mean?" error suggestions.
+     * Visibility controls for this term.
      * @since 0.9.0
      */
-    readonly hidden?: boolean;
+    readonly hidden?: HiddenVisibility;
   }
   /**
    * An optional term, which represents an optional component
@@ -163,11 +204,10 @@ export type UsageTerm =
      */
     readonly type: "passthrough";
     /**
-     * When `true`, hides the pass-through from help text and shell
-     * completion suggestions.
+     * Visibility controls for this term.
      * @since 0.9.0
      */
-    readonly hidden?: boolean;
+    readonly hidden?: HiddenVisibility;
   };
 
 /**
@@ -205,7 +245,7 @@ export function extractOptionNames(usage: Usage): Set<string> {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "option") {
-        if (term.hidden) continue;
+        if (isSuggestionHidden(term.hidden)) continue;
         for (const name of term.names) {
           names.add(name);
         }
@@ -250,7 +290,7 @@ export function extractCommandNames(usage: Usage): Set<string> {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "command") {
-        if (term.hidden) continue;
+        if (isSuggestionHidden(term.hidden)) continue;
         names.add(term.name);
       } else if (term.type === "optional" || term.type === "multiple") {
         traverseUsage(term.terms);
@@ -294,7 +334,7 @@ export function extractArgumentMetavars(usage: Usage): Set<string> {
     if (!terms || !Array.isArray(terms)) return;
     for (const term of terms) {
       if (term.type === "argument") {
-        if (term.hidden) continue;
+        if (isSuggestionHidden(term.hidden)) continue;
         metavars.add(term.metavar);
       } else if (term.type === "optional" || term.type === "multiple") {
         traverseUsage(term.terms);
@@ -369,7 +409,7 @@ export function formatUsage(
   usage: Usage,
   options: UsageFormatOptions = {},
 ): string {
-  usage = normalizeUsage(usage);
+  usage = normalizeUsage(filterUsageForDisplay(usage));
   if (options.expandCommands) {
     const lastTerm = usage.at(-1)!;
     if (
@@ -389,7 +429,10 @@ export function formatUsage(
       for (let command of lastTerm.terms) {
         // Skip hidden commands in usage expansion
         const firstTerm = command[0];
-        if (firstTerm?.type === "command" && firstTerm.hidden) {
+        if (
+          firstTerm?.type === "command" &&
+          isUsageHidden(firstTerm.hidden)
+        ) {
           continue;
         }
         if (usage.length > 1) {
@@ -487,12 +530,67 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
   }
 }
 
+function filterUsageForDisplay(usage: Usage): Usage {
+  const terms: UsageTerm[] = [];
+  for (const term of usage) {
+    if (
+      (term.type === "argument" || term.type === "option" ||
+        term.type === "command" || term.type === "passthrough") &&
+      isUsageHidden(term.hidden)
+    ) {
+      continue;
+    }
+    if (term.type === "optional") {
+      const filtered = filterUsageForDisplay(term.terms);
+      if (filtered.length > 0) {
+        terms.push({ type: "optional", terms: filtered });
+      }
+      continue;
+    }
+    if (term.type === "multiple") {
+      const filtered = filterUsageForDisplay(term.terms);
+      if (filtered.length > 0) {
+        terms.push({ type: "multiple", terms: filtered, min: term.min });
+      }
+      continue;
+    }
+    if (term.type === "exclusive") {
+      const filteredBranches = term.terms
+        .map((branch) => {
+          const first = branch[0];
+          if (
+            first?.type === "command" &&
+            isUsageHidden(first.hidden)
+          ) {
+            return [] as Usage;
+          }
+          return filterUsageForDisplay(branch);
+        })
+        .filter((branch) => branch.length > 0);
+      if (filteredBranches.length > 0) {
+        terms.push({ type: "exclusive", terms: filteredBranches });
+      }
+      continue;
+    }
+    terms.push(term);
+  }
+  return terms;
+}
+
 function* formatUsageTerms(
   terms: readonly UsageTerm[],
   options: UsageFormatOptions,
 ): Generator<{ text: string; width: number }> {
   let i = 0;
   for (const t of terms) {
+    if (
+      "hidden" in t &&
+      (t.type === "argument" || t.type === "option" || t.type === "command" ||
+        t.type === "passthrough") &&
+      isUsageHidden(t.hidden)
+    ) {
+      continue;
+    }
     if (i > 0) {
       yield { text: " ", width: 1 };
     }
@@ -525,9 +623,14 @@ export function formatUsageTerm(
   term: UsageTerm,
   options: UsageTermFormatOptions = {},
 ): string {
+  const visibleTerms = filterUsageForDisplay([term]);
+  if (visibleTerms.length < 1) return "";
+
   let lineWidth = 0;
   let output = "";
-  for (const { text, width } of formatUsageTermInternal(term, options)) {
+  for (
+    const { text, width } of formatUsageTermInternal(visibleTerms[0], options)
+  ) {
     if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
       output += "\n";
       lineWidth = 0;

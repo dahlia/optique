@@ -2487,6 +2487,16 @@ describe("extractOptionNames", () => {
     const result = extractOptionNames(usage);
     assert.deepEqual(result, new Set(["--visible"]));
   });
+
+  it("should include options hidden only from usage or docs", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--usage-only"], hidden: "usage" },
+      { type: "option", names: ["--doc-only"], hidden: "doc" },
+      { type: "option", names: ["--fully-hidden"], hidden: true },
+    ];
+    const result = extractOptionNames(usage);
+    assert.deepEqual(result, new Set(["--usage-only", "--doc-only"]));
+  });
 });
 
 describe("extractCommandNames hidden filtering", () => {
@@ -2512,6 +2522,16 @@ describe("extractCommandNames hidden filtering", () => {
     const result = extractCommandNames(usage);
     assert.deepEqual(result, new Set(["visible"]));
   });
+
+  it("should include commands hidden only from usage or docs", () => {
+    const usage: Usage = [
+      { type: "command", name: "usage-only", hidden: "usage" },
+      { type: "command", name: "doc-only", hidden: "doc" },
+      { type: "command", name: "fully-hidden", hidden: true },
+    ];
+    const result = extractCommandNames(usage);
+    assert.deepEqual(result, new Set(["usage-only", "doc-only"]));
+  });
 });
 
 describe("extractArgumentMetavars hidden filtering", () => {
@@ -2536,5 +2556,41 @@ describe("extractArgumentMetavars hidden filtering", () => {
     ];
     const result = extractArgumentMetavars(usage);
     assert.deepEqual(result, new Set(["VISIBLE"]));
+  });
+
+  it("should include arguments hidden only from usage or docs", () => {
+    const usage: Usage = [
+      { type: "argument", metavar: "USAGE_ONLY", hidden: "usage" },
+      { type: "argument", metavar: "DOC_ONLY", hidden: "doc" },
+      { type: "argument", metavar: "FULLY_HIDDEN", hidden: true },
+    ];
+    const result = extractArgumentMetavars(usage);
+    assert.deepEqual(result, new Set(["USAGE_ONLY", "DOC_ONLY"]));
+  });
+});
+
+describe("formatUsage hidden visibility", () => {
+  it("should exclude terms hidden from usage", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--visible"] },
+      { type: "option", names: ["--hidden-usage"], hidden: "usage" },
+      { type: "option", names: ["--hidden-all"], hidden: true },
+      { type: "option", names: ["--hidden-doc"], hidden: "doc" },
+    ];
+    const result = formatUsage("app", usage);
+    assert.equal(result, "app --visible --hidden-doc");
+  });
+
+  it("should exclude commands hidden from usage in expanded output", () => {
+    const usage: Usage = [{
+      type: "exclusive",
+      terms: [
+        [{ type: "command", name: "visible" }],
+        [{ type: "command", name: "usage-hidden", hidden: "usage" }],
+        [{ type: "command", name: "doc-hidden", hidden: "doc" }],
+      ],
+    }];
+    const result = formatUsage("app", usage, { expandCommands: true });
+    assert.equal(result, "app visible\napp doc-hidden");
   });
 });

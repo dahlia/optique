@@ -1706,7 +1706,12 @@ Hidden and deprecated options
 As CLIs evolve, you may need to deprecate old options while maintaining
 backward compatibility, or add internal debugging options that shouldn't
 appear in user-facing documentation. The `hidden` option lets you keep
-parsers functional while excluding them from help text and completions.
+parsers functional while controlling visibility:
+
+ -  `hidden: true`: hide from usage, help entries, completions, and
+    “Did you mean?” suggestions
+ -  `hidden: "usage"`: hide from usage only
+ -  `hidden: "doc"`: hide from help entries only
 
 ### Deprecation pattern
 

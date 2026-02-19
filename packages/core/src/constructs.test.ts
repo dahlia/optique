@@ -31,6 +31,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
+import { formatUsage } from "@optique/core/usage";
 import { choice, integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -5380,5 +5381,80 @@ describe("group() with command() - issue #114", () => {
       ),
       "'remote add' help should show URL argument",
     );
+  });
+});
+
+describe("hidden option in group/object/merge", () => {
+  it('should hide object usage only with hidden: "usage"', () => {
+    const parser = object(
+      {
+        visible: option("--visible"),
+        hiddenInUsage: option("--hidden-usage"),
+      },
+      { hidden: "usage" },
+    );
+    const usage = formatUsage("app", parser.usage);
+    assert.equal(usage.trimEnd(), "app");
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const entries = fragments.fragments.flatMap((f) =>
+      f.type === "section" ? f.entries : [f]
+    );
+    assert.equal(entries.length, 2);
+  });
+
+  it('should hide object docs only with hidden: "doc"', () => {
+    const parser = object(
+      {
+        visible: option("--visible"),
+        another: option("--another"),
+      },
+      { hidden: "doc" },
+    );
+    const usage = formatUsage("app", parser.usage);
+    assert.equal(usage, "app [--visible] [--another]");
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const entries = fragments.fragments.flatMap((f) =>
+      f.type === "section" ? f.entries : [f]
+    );
+    assert.equal(entries.length, 0);
+  });
+
+  it("should apply union of group and child hidden restrictions", () => {
+    const parser = group(
+      "Global",
+      object({
+        usageOnly: option("--usage-only", string(), { hidden: "usage" }),
+        docOnly: option("--doc-only", string(), { hidden: "doc" }),
+      }),
+      { hidden: "usage" },
+    );
+
+    const usage = formatUsage("app", parser.usage);
+    assert.equal(usage.trimEnd(), "app");
+
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const entries = fragments.fragments.flatMap((f) =>
+      f.type === "section" ? f.entries : [f]
+    );
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].term.type, "option");
+    if (entries[0].term.type === "option") {
+      assert.equal(entries[0].term.names[0], "--usage-only");
+    }
+  });
+
+  it('should hide merge docs only with hidden: "doc"', () => {
+    const parser = merge(
+      object({ a: option("--a") }),
+      object({ b: option("--b") }),
+      { hidden: "doc" },
+    );
+    const usage = formatUsage("app", parser.usage);
+    assert.equal(usage, "app [--a] [--b]");
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const entries = fragments.fragments.flatMap((f) =>
+      f.type === "section" ? f.entries : [f]
+    );
+    assert.equal(entries.length, 0);
   });
 });

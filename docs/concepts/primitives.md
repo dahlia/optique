@@ -825,14 +825,18 @@ Hidden parsers
 --------------
 
 All primitive parsers—`option()`, `flag()`, `argument()`, `command()`,
-and `passThrough()`—support a `hidden` option that excludes them from:
+and `passThrough()`—support a `hidden` option:
 
- -  Help text generation
- -  Shell completion suggestions
- -  “Did you mean?” error suggestions
+ -  `true`: hide from usage, help entries, shell completions, and
+    “Did you mean?” suggestions
+ -  `"usage"`: hide from usage only
+ -  `"doc"`: hide from help entries only
 
-Hidden parsers remain fully functional for parsing; they simply aren't
-visible to users through the standard discovery mechanisms.
+Hidden parsers remain fully functional for parsing.
+
+`group()`, `object()`, and `merge()` also support `hidden` with the same
+values.  When both a wrapper parser and an inner primitive specify `hidden`,
+restrictions are combined as a union.
 
 ### When to use hidden parsers
 
@@ -850,14 +854,14 @@ Hidden parsers are useful for:
 ### Examples
 
 ~~~~ typescript twoslash
-import { object, or } from "@optique/core/constructs";
+import { group, object, or } from "@optique/core/constructs";
 import { argument, command, flag, option, passThrough } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 
 // Hidden option (deprecated)
 const parser1 = object({
   output: option("-o", "--output", string()),
-  // Keep old --out working but hide it from help
+  // Keep old --out working but hide it from all user discovery
   outputLegacy: option("--out", string(), { hidden: true }),
 });
 
@@ -884,10 +888,16 @@ const parser3 = object({
   // Debug parameter not shown in usage
   debugLevel: argument(integer(), { hidden: true }),
 });
+
+// Hide global options from usage lines, but keep them in help
+const parser4 = group("Global", object({
+  verbose: flag("-v", "--verbose"),
+  config: option("--config", string()),
+}), { hidden: "usage" });
 ~~~~
 
-Hidden parsers still parse input normally—they just don't appear in
-help text or completions. Users who know about them can still use them:
+Hidden parsers still parse input normally. Users who know about them can
+still use them:
 
 ~~~~ bash
 # These all work, even though they're hidden

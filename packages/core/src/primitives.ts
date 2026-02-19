@@ -79,8 +79,12 @@ import {
   DEFAULT_FIND_SIMILAR_OPTIONS,
   findSimilar,
 } from "./suggestion.ts";
-import type { OptionName, UsageTerm } from "./usage.ts";
-import { extractOptionNames } from "./usage.ts";
+import type { HiddenVisibility, OptionName, UsageTerm } from "./usage.ts";
+import {
+  extractOptionNames,
+  isDocHidden,
+  isSuggestionHidden,
+} from "./usage.ts";
 import { extractLeadingCommandNames } from "./usage-internals.ts";
 import {
   isValueParser,
@@ -175,12 +179,15 @@ export interface OptionOptions {
   readonly description?: Message;
 
   /**
-   * When `true`, hides the option from help text, shell completion
-   * suggestions, and "Did you mean?" error suggestions. The option
-   * remains fully functional for parsing.
+   * Controls option visibility:
+   *
+   * - `true`: hide from usage, docs, and suggestions
+   * - `"usage"`: hide from usage only
+   * - `"doc"`: hide from docs only
+   *
    * @since 0.9.0
    */
-  readonly hidden?: boolean;
+  readonly hidden?: HiddenVisibility;
 
   /**
    * Error message customization options.
@@ -702,14 +709,14 @@ export function option<M extends Mode, T>(
           terms: [{
             type: "option",
             names: optionNames,
-            ...(options.hidden && { hidden: true }),
+            ...(options.hidden != null && { hidden: options.hidden }),
           }],
         }
         : {
           type: "option",
           names: optionNames,
           metavar: valueParser.metavar,
-          ...(options.hidden && { hidden: true }),
+          ...(options.hidden != null && { hidden: options.hidden }),
         },
     ],
     initialState: valueParser == null
@@ -1063,7 +1070,7 @@ export function option<M extends Mode, T>(
         return suggestOptionAsync(
           optionNames,
           valueParser,
-          options.hidden ?? false,
+          isSuggestionHidden(options.hidden),
           context,
           prefix,
         );
@@ -1071,7 +1078,7 @@ export function option<M extends Mode, T>(
       return suggestOptionSync(
         optionNames,
         valueParser as ValueParser<"sync", T> | undefined,
-        options.hidden ?? false,
+        isSuggestionHidden(options.hidden),
         context,
         prefix,
       );
@@ -1080,7 +1087,7 @@ export function option<M extends Mode, T>(
       _state: DocState<ValueParserResult<T | boolean> | undefined>,
       defaultValue?: T | boolean,
     ) {
-      if (options.hidden) {
+      if (isDocHidden(options.hidden)) {
         return { fragments: [], description: options.description };
       }
       const choicesMessage: Message | undefined =
@@ -1131,12 +1138,15 @@ export interface FlagOptions {
   readonly description?: Message;
 
   /**
-   * When `true`, hides the flag from help text, shell completion
-   * suggestions, and "Did you mean?" error suggestions. The flag
-   * remains fully functional for parsing.
+   * Controls flag visibility:
+   *
+   * - `true`: hide from usage, docs, and suggestions
+   * - `"usage"`: hide from usage only
+   * - `"doc"`: hide from docs only
+   *
    * @since 0.9.0
    */
-  readonly hidden?: boolean;
+  readonly hidden?: HiddenVisibility;
 
   /**
    * Error message customization options.
@@ -1242,7 +1252,7 @@ export function flag(
     usage: [{
       type: "option",
       names: optionNames,
-      ...(options.hidden && { hidden: true }),
+      ...(options.hidden != null && { hidden: options.hidden }),
     }],
     initialState: undefined,
     parse(context) {
@@ -1412,7 +1422,7 @@ export function flag(
       };
     },
     suggest(_context, prefix) {
-      if (options.hidden) {
+      if (isSuggestionHidden(options.hidden)) {
         return [];
       }
       const suggestions: Suggestion[] = [];
@@ -1439,7 +1449,7 @@ export function flag(
       _state: DocState<ValueParserResult<true> | undefined>,
       _defaultValue?,
     ) {
-      if (options.hidden) {
+      if (isDocHidden(options.hidden)) {
         return { fragments: [], description: options.description };
       }
       const fragments: readonly DocFragment[] = [{
@@ -1468,12 +1478,15 @@ export interface ArgumentOptions {
   readonly description?: Message;
 
   /**
-   * When `true`, hides the argument from help text, shell completion
-   * suggestions, and error suggestions. The argument remains fully
-   * functional for parsing.
+   * Controls argument visibility:
+   *
+   * - `true`: hide from usage, docs, and suggestions
+   * - `"usage"`: hide from usage only
+   * - `"doc"`: hide from docs only
+   *
    * @since 0.9.0
    */
-  readonly hidden?: boolean;
+  readonly hidden?: HiddenVisibility;
 
   /**
    * Error message customization options.
@@ -1528,7 +1541,7 @@ export function argument<M extends Mode, T>(
   const term: UsageTerm = {
     type: "argument",
     metavar: valueParser.metavar,
-    ...(options.hidden && { hidden: true }),
+    ...(options.hidden != null && { hidden: options.hidden }),
   };
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
@@ -1683,14 +1696,14 @@ export function argument<M extends Mode, T>(
       if (isAsync) {
         return suggestArgumentAsync(
           valueParser,
-          options.hidden ?? false,
+          isSuggestionHidden(options.hidden),
           prefix,
           context.dependencyRegistry,
         );
       }
       return suggestArgumentSync(
         valueParser as ValueParser<"sync", T>,
-        options.hidden ?? false,
+        isSuggestionHidden(options.hidden),
         prefix,
         context.dependencyRegistry,
       );
@@ -1699,7 +1712,7 @@ export function argument<M extends Mode, T>(
       _state: DocState<ValueParserResult<T> | undefined>,
       defaultValue?: T,
     ) {
-      if (options.hidden) {
+      if (isDocHidden(options.hidden)) {
         return { fragments: [], description: options.description };
       }
       const choicesMessage: Message | undefined =
@@ -1757,12 +1770,15 @@ export interface CommandOptions {
   readonly footer?: Message;
 
   /**
-   * When `true`, hides the command from help text, shell completion
-   * suggestions, and "Did you mean?" error suggestions. The command
-   * remains fully functional for parsing.
+   * Controls command visibility:
+   *
+   * - `true`: hide from usage, docs, and suggestions
+   * - `"usage"`: hide from usage only
+   * - `"doc"`: hide from docs only
+   *
    * @since 0.9.0
    */
-  readonly hidden?: boolean;
+  readonly hidden?: HiddenVisibility;
 
   /**
    * Error messages customization.
@@ -1818,7 +1834,7 @@ function* suggestCommandSync<T, TState>(
   parser: Parser<"sync", T, TState>,
   options: CommandOptions,
 ): Generator<Suggestion> {
-  if (options.hidden) {
+  if (isSuggestionHidden(options.hidden)) {
     return;
   }
 
@@ -1854,7 +1870,7 @@ async function* suggestCommandAsync<T, TState>(
   parser: Parser<Mode, T, TState>,
   options: CommandOptions,
 ): AsyncGenerator<Suggestion> {
-  if (options.hidden) {
+  if (isSuggestionHidden(options.hidden)) {
     return;
   }
 
@@ -1917,7 +1933,11 @@ export function command<M extends Mode, T, TState>(
     $stateType: [],
     priority: 15, // Higher than options to match commands first
     usage: [
-      { type: "command", name, ...(options.hidden && { hidden: true }) },
+      {
+        type: "command",
+        name,
+        ...(options.hidden != null && { hidden: options.hidden }),
+      },
       ...parser.usage,
     ],
     initialState: undefined,
@@ -2104,7 +2124,7 @@ export function command<M extends Mode, T, TState>(
     getDocFragments(state: DocState<CommandState<TState>>, defaultValue?: T) {
       if (state.kind === "unavailable" || typeof state.state === "undefined") {
         // When the command is not matched (showing in a list), apply hidden option
-        if (options.hidden) {
+        if (isDocHidden(options.hidden)) {
           return { fragments: [], description: options.description };
         }
         // When showing command in a list, use brief if available,
@@ -2182,11 +2202,15 @@ export interface PassThroughOptions {
   readonly description?: Message;
 
   /**
-   * When `true`, hides the pass-through from help text and shell
-   * completion suggestions. The parser remains fully functional.
+   * Controls pass-through visibility:
+   *
+   * - `true`: hide from usage, docs, and suggestions
+   * - `"usage"`: hide from usage only
+   * - `"doc"`: hide from docs only
+   *
    * @since 0.9.0
    */
-  readonly hidden?: boolean;
+  readonly hidden?: HiddenVisibility;
 }
 
 /**
@@ -2247,7 +2271,10 @@ export function passThrough(
     $stateType: [],
     $mode: "sync",
     priority: -10, // Lowest priority to be tried last
-    usage: [{ type: "passthrough", ...(options.hidden && { hidden: true }) }],
+    usage: [{
+      type: "passthrough",
+      ...(options.hidden != null && { hidden: options.hidden }),
+    }],
     initialState: [],
 
     parse(context) {
@@ -2374,7 +2401,7 @@ export function passThrough(
     },
 
     getDocFragments(_state, _defaultValue?) {
-      if (options.hidden) {
+      if (isDocHidden(options.hidden)) {
         return { fragments: [], description: options.description };
       }
       return {

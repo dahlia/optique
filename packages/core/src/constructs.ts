@@ -67,6 +67,9 @@ import {
   extractArgumentMetavars,
   extractCommandNames,
   extractOptionNames,
+  type HiddenVisibility,
+  isDocHidden,
+  mergeHidden,
   type Usage,
   type UsageTerm,
 } from "./usage.ts";
@@ -98,6 +101,90 @@ function createUnexpectedInputErrorWithScopedSuggestions(
   return suggestionMsg.length > 0
     ? [...baseError, text("\n\n"), ...suggestionMsg]
     : baseError;
+}
+
+function applyHiddenToUsageTerm(
+  term: UsageTerm,
+  hidden: HiddenVisibility | undefined,
+): UsageTerm {
+  if (hidden == null) return term;
+  if (term.type === "optional") {
+    return {
+      type: "optional",
+      terms: applyHiddenToUsage(term.terms, hidden),
+    };
+  }
+  if (term.type === "multiple") {
+    return {
+      type: "multiple",
+      terms: applyHiddenToUsage(term.terms, hidden),
+      min: term.min,
+    };
+  }
+  if (term.type === "exclusive") {
+    return {
+      type: "exclusive",
+      terms: term.terms.map((u) => applyHiddenToUsage(u, hidden)),
+    };
+  }
+  if (
+    term.type === "argument" || term.type === "option" ||
+    term.type === "command" ||
+    term.type === "passthrough"
+  ) {
+    return {
+      ...term,
+      hidden: mergeHidden(term.hidden, hidden),
+    };
+  }
+  return term;
+}
+
+function applyHiddenToUsage(
+  usage: Usage,
+  hidden: HiddenVisibility | undefined,
+): Usage {
+  if (hidden == null) return usage;
+  return usage.map((term) => applyHiddenToUsageTerm(term, hidden));
+}
+
+function applyHiddenToDocEntry(
+  entry: DocEntry,
+  hidden: HiddenVisibility | undefined,
+): DocEntry | undefined {
+  const mergedTerm = applyHiddenToUsageTerm(entry.term, hidden);
+  if (
+    (mergedTerm.type === "argument" || mergedTerm.type === "option" ||
+      mergedTerm.type === "command" || mergedTerm.type === "passthrough") &&
+    isDocHidden(mergedTerm.hidden)
+  ) {
+    return undefined;
+  }
+  return { ...entry, term: mergedTerm };
+}
+
+function applyHiddenToDocFragments(
+  fragments: readonly DocFragment[],
+  hidden: HiddenVisibility | undefined,
+): readonly DocFragment[] {
+  if (hidden == null) return fragments;
+  const result: DocFragment[] = [];
+  for (const fragment of fragments) {
+    if (fragment.type === "entry") {
+      const entry = applyHiddenToDocEntry(fragment, hidden);
+      if (entry != null) result.push({ ...entry, type: "entry" });
+      continue;
+    }
+    const entries = fragment.entries
+      .map((entry) => applyHiddenToDocEntry(entry, hidden))
+      .filter((entry): entry is DocEntry => entry != null);
+    result.push({
+      type: "section",
+      title: fragment.title,
+      entries,
+    });
+  }
+  return result;
 }
 
 /**
@@ -2068,6 +2155,12 @@ export interface ObjectOptions {
    * @since 0.7.0
    */
   readonly allowDuplicates?: boolean;
+
+  /**
+   * Controls visibility of all terms emitted by this object parser.
+   * @since 1.0.0
+   */
+  readonly hidden?: HiddenVisibility;
 }
 
 /**
@@ -2944,7 +3037,10 @@ export function object<
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parserKeys.map((k) => parsers[k].priority)),
-    usage: parserPairs.flatMap(([_, p]) => p.usage),
+    usage: applyHiddenToUsage(
+      parserPairs.flatMap(([_, p]) => p.usage),
+      options.hidden,
+    ),
     initialState: initialState as {
       readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
         ? U3
@@ -3178,6 +3274,13 @@ export function object<
       context: ParserContext<{ readonly [K in keyof T]: unknown }>,
       prefix: string,
     ) {
+      if (options.hidden === true) {
+        return dispatchIterableByMode(
+          combinedMode,
+          function* () {},
+          async function* () {},
+        );
+      }
       return dispatchIterableByMode(
         combinedMode,
         () => {
@@ -3205,9 +3308,15 @@ export function object<
           : { kind: "available", state: state.state[field] };
         return p.getDocFragments(fieldState, defaultValue?.[field]).fragments;
       });
-      const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
+      const hiddenAwareFragments = applyHiddenToDocFragments(
+        fragments,
+        options.hidden,
+      );
+      const entries: DocEntry[] = hiddenAwareFragments.filter((d) =>
+        d.type === "entry"
+      );
       const sections: DocSection[] = [];
-      for (const fragment of fragments) {
+      for (const fragment of hiddenAwareFragments) {
         if (fragment.type !== "section") continue;
         if (fragment.title == null) {
           entries.push(...fragment.entries);
@@ -3898,6 +4007,12 @@ export interface MergeOptions {
    * @since 0.7.0
    */
   readonly allowDuplicates?: boolean;
+
+  /**
+   * Controls visibility of all terms emitted by this merged parser.
+   * @since 1.0.0
+   */
+  readonly hidden?: HiddenVisibility;
 }
 
 /**
@@ -5247,7 +5362,10 @@ export function merge(
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
-    usage: parsers.flatMap((p) => p.usage),
+    usage: applyHiddenToUsage(
+      parsers.flatMap((p) => p.usage),
+      options.hidden,
+    ),
     initialState,
     parse(context: ParserContext<MergeState>) {
       if (isAsync) {
@@ -5332,6 +5450,13 @@ export function merge(
       context: ParserContext<MergeState>,
       prefix: string,
     ) {
+      if (options.hidden === true) {
+        return dispatchIterableByMode(
+          combinedMode,
+          function* () {},
+          async function* () {},
+        );
+      }
       // Helper to extract parser state for a given index
       const extractState = (
         p: Parser<Mode, Record<string | symbol, unknown>, unknown>,
@@ -5457,9 +5582,15 @@ export function merge(
         footer ??= docFragments.footer;
         return docFragments.fragments;
       });
-      const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
+      const hiddenAwareFragments = applyHiddenToDocFragments(
+        fragments,
+        options.hidden,
+      );
+      const entries: DocEntry[] = hiddenAwareFragments.filter((f) =>
+        f.type === "entry"
+      );
       const sections: DocSection[] = [];
-      for (const fragment of fragments) {
+      for (const fragment of hiddenAwareFragments) {
         if (fragment.type !== "section") continue;
         if (fragment.title == null) {
           entries.push(...fragment.entries);
@@ -6097,35 +6228,61 @@ export function concat(
  * @param label A descriptive label for this parser group, used for
  *              documentation and help text organization.
  * @param parser The parser to wrap with a group label.
+ * @param options Optional visibility controls for the wrapped parser terms.
  * @returns A new parser that behaves identically to the input parser
  *          but generates documentation within a labeled section.
  * @since 0.4.0
  */
+/**
+ * Options for the {@link group} parser wrapper.
+ * @since 1.0.0
+ */
+export interface GroupOptions {
+  /**
+   * Controls visibility of all terms emitted by this group.
+   */
+  readonly hidden?: HiddenVisibility;
+}
+
 export function group<M extends Mode, TValue, TState>(
   label: string,
   parser: Parser<M, TValue, TState>,
+  options: GroupOptions = {},
 ): Parser<M, TValue, TState> {
   return {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    usage: parser.usage,
+    usage: applyHiddenToUsage(parser.usage, options.hidden),
     initialState: parser.initialState,
     parse: (context) => parser.parse(context),
     complete: (state) => parser.complete(state),
-    suggest: (context, prefix) => parser.suggest(context, prefix),
+    suggest: (context, prefix) => {
+      if (options.hidden === true) {
+        return dispatchIterableByMode(
+          parser.$mode,
+          function* () {},
+          async function* () {},
+        );
+      }
+      return parser.suggest(context, prefix);
+    },
     getDocFragments: (state, defaultValue) => {
       const { brief, description, footer, fragments } = parser.getDocFragments(
         state,
         defaultValue,
+      );
+      const hiddenAwareFragments = applyHiddenToDocFragments(
+        fragments,
+        options.hidden,
       );
 
       // Collect all entries and titled sections
       const allEntries: DocEntry[] = [];
       const titledSections: DocSection[] = [];
 
-      for (const fragment of fragments) {
+      for (const fragment of hiddenAwareFragments) {
         if (fragment.type === "entry") {
           allEntries.push(fragment);
         } else if (fragment.type === "section") {

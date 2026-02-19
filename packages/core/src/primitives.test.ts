@@ -3899,6 +3899,54 @@ describe("hidden option", () => {
       assert.equal(term.type, "option");
       assert.equal("hidden" in term && term.hidden, true);
     });
+
+    it('should hide option from usage only with hidden: "usage"', () => {
+      const parser = option("--secret", string(), { hidden: "usage" });
+      const term = parser.usage[0];
+      assert.equal(term.type, "option");
+      assert.equal("hidden" in term && term.hidden, "usage");
+
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.equal(fragments.fragments.length, 1);
+
+      const suggestions = Array.from(parser.suggest(
+        {
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "--sec",
+      ));
+      assert.equal(suggestions.length, 1);
+    });
+
+    it('should hide option from docs only with hidden: "doc"', () => {
+      const parser = option("--secret", string(), { hidden: "doc" });
+      const term = parser.usage[0];
+      assert.equal(term.type, "option");
+      assert.equal("hidden" in term && term.hidden, "doc");
+
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.deepEqual(fragments.fragments, []);
+
+      const suggestions = Array.from(parser.suggest(
+        {
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "--sec",
+      ));
+      assert.equal(suggestions.length, 1);
+    });
   });
 
   describe("flag()", () => {
@@ -3933,6 +3981,25 @@ describe("hidden option", () => {
       ));
       assert.deepEqual(suggestions, []);
     });
+
+    it('should keep docs and suggestions for hidden: "usage"', () => {
+      const parser = flag("--debug", { hidden: "usage" });
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.equal(fragments.fragments.length, 1);
+      const suggestions = Array.from(parser.suggest(
+        {
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "--deb",
+      ));
+      assert.equal(suggestions.length, 1);
+    });
   });
 
   describe("argument()", () => {
@@ -3966,6 +4033,15 @@ describe("hidden option", () => {
         "",
       ));
       assert.deepEqual(suggestions, []);
+    });
+
+    it('should hide argument docs only with hidden: "doc"', () => {
+      const parser = argument(string(), { hidden: "doc" });
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.deepEqual(fragments.fragments, []);
     });
   });
 
@@ -4012,6 +4088,34 @@ describe("hidden option", () => {
         "sec",
       ));
       assert.deepEqual(suggestions, []);
+    });
+
+    it('should hide command from usage only with hidden: "usage"', () => {
+      const parser = command(
+        "secret",
+        object({ value: option("--value", string()) }),
+        { hidden: "usage" },
+      );
+      const term = parser.usage[0];
+      assert.equal(term.type, "command");
+      assert.equal("hidden" in term && term.hidden, "usage");
+
+      const fragments = parser.getDocFragments(
+        { kind: "unavailable" },
+        undefined,
+      );
+      assert.equal(fragments.fragments.length, 1);
+
+      const suggestions = Array.from(parser.suggest(
+        {
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "sec",
+      ));
+      assert.equal(suggestions.length, 1);
     });
 
     it("should show inner argument/option descriptions when hidden command is matched", () => {
@@ -4088,6 +4192,18 @@ describe("hidden option", () => {
       const term = parser.usage[0];
       assert.equal(term.type, "passthrough");
       assert.equal("hidden" in term && term.hidden, true);
+    });
+
+    it('should hide passThrough docs only with hidden: "doc"', () => {
+      const parser = passThrough({ hidden: "doc" });
+      const term = parser.usage[0];
+      assert.equal(term.type, "passthrough");
+      assert.equal("hidden" in term && term.hidden, "doc");
+      const fragments = parser.getDocFragments(
+        { kind: "available", state: [] },
+        undefined,
+      );
+      assert.deepEqual(fragments.fragments, []);
     });
   });
 });
