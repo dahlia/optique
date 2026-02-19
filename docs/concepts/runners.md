@@ -1172,26 +1172,14 @@ Choose your execution strategy based on your application's needs.
 For guidance on whether to use `Program` objects or pass metadata directly,
 see [*Bundling parsers with metadata*](#bundling-parsers-with-metadata).
 
-### Use *@optique/run* when:
-
- -  Building CLI applications for Node.js, Bun, or Deno
- -  You want automatic `process.argv` parsing and `process.exit()` handling
- -  You need automatic terminal capability detection (colors, width)
- -  You prefer a simple, batteries-included approach
-
-### Use *@optique/core* instead when:
-
- -  Building web applications or libraries
- -  You need full control over argument sources and error handling
- -  Working in environments without `process` (browsers, web workers)
- -  Building reusable parser components
-
 ### Use `parse()` when:
 
  -  *Testing parsers*: You need to inspect parsing results in tests
  -  *Complex integration*: Parsing is part of a larger application flow
  -  *Custom error handling*: You need application-specific error recovery
  -  *Multiple attempts*: You want to try different parsers or arguments
+ -  *Reusable components*: Building parser components for use in libraries
+ -  *Environment constraints*: Running without `process` (browsers, web workers)
 
 ### Use `runParser()` from `@optique/core/facade` when:
 
@@ -1199,13 +1187,15 @@ see [*Bundling parsers with metadata*](#bundling-parsers-with-metadata).
  -  *Library development*: Building CLI libraries for other applications
  -  *Custom I/O*: You need non-standard input/output handling
  -  *Controlled exit*: The application manages its own lifecycle
+ -  *Non-CLI contexts*: Building tools that embed a CLI interface in a larger app
 
 ### Use `run()` from `@optique/run` when:
 
- -  *Standalone CLIs*: Building command-line applications
+ -  *Standalone CLIs*: Building command-line applications for Node.js, Bun, or Deno
  -  *Rapid prototyping*: You want to get a CLI running quickly
  -  *Standard behavior*: Your application follows typical CLI conventions
- -  *Node.js/Bun/Deno*: You're running in a standard JavaScript runtime
+ -  *Batteries-included*: You want automatic argument extraction, terminal
+    detection, and process exit handling
 
 The progression from `parse()` to *@optique/run*'s `run()` trades control for
 convenience. Start with the highest-level approach that meets your needs, then

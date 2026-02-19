@@ -509,22 +509,44 @@ export function formatMessage(
 
   function* stream(): Generator<{ text: string; width: number }> {
     const wordPattern = /\s*\S+\s*/g;
+    let prevWasLineBreak = false;
     for (const term of msg) {
+      // Capture and reset before processing each term so non-text terms
+      // (e.g. optionName, commandLine) also clear the flag.
+      const isAfterLineBreak = prevWasLineBreak;
+      prevWasLineBreak = false;
+
       if (term.type === "text") {
+        // Strip a lone leading \n immediately following a lineBreak() term.
+        // In template literals such as `${lineBreak()}\nContent`, the parser
+        // produces a text("\n…") term; that \n is a source-formatting artifact
+        // that should be dropped rather than normalized to a space.
+        // Only a lone \n is stripped; \n\n (paragraph break) is intentional
+        // and must be preserved so the double-newline → hard-break logic works.
+        const rawText = isAfterLineBreak
+          ? term.text.replace(/^\n(?!\n)/, "")
+          : term.text;
+
         // Handle explicit line breaks:
         // - Single \n: treated as space (soft break, word wrap friendly)
         // - Double \n\n or more: treated as hard line break (paragraph break)
-        if (term.text.includes("\n\n")) {
+        if (rawText.includes("\n\n")) {
           // Split on double newlines to find paragraph breaks
-          const paragraphs = term.text.split(/\n\n+/);
+          const paragraphs = rawText.split(/\n\n+/);
           for (
             let paragraphIndex = 0;
             paragraphIndex < paragraphs.length;
             paragraphIndex++
           ) {
             if (paragraphIndex > 0) {
-              // Yield paragraph break (double newline) with -1 as special marker
-              yield { text: "\n\n", width: -1 };
+              // Yield paragraph break with -1 as special marker.
+              // When preceded by lineBreak() (isAfterLineBreak && first break),
+              // that term already emitted one \n, so emit only one more to total
+              // two (\n\n).  Otherwise emit \n\n directly.
+              const breakText = isAfterLineBreak && paragraphIndex === 1
+                ? "\n"
+                : "\n\n";
+              yield { text: breakText, width: -1 };
             }
 
             // Within each paragraph, replace single \n with space
@@ -538,7 +560,7 @@ export function formatMessage(
           }
         } else {
           // Text without double newlines: replace single \n with space
-          const normalizedText = term.text.replace(/\n/g, " ");
+          const normalizedText = rawText.replace(/\n/g, " ");
 
           // Handle whitespace-only text specially to preserve spaces
           if (normalizedText.trim() === "" && normalizedText.length > 0) {
@@ -627,6 +649,7 @@ export function formatMessage(
       } else if (term.type === "lineBreak") {
         // Explicit hard line break
         yield { text: "\n", width: -1 };
+        prevWasLineBreak = true;
       } else if (term.type === "url") {
         const urlString = term.url.href;
         const displayText = useQuotes ? `<${urlString}>` : urlString;

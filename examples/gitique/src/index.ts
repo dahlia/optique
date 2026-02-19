@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { or } from "@optique/core/constructs";
 import { defineProgram } from "@optique/core/program";
-import { commandLine, message, url } from "@optique/core/message";
+import { commandLine, lineBreak, message, url } from "@optique/core/message";
 import { printError, run } from "@optique/run";
 import { addCommand, executeAdd } from "./commands/add.ts";
 import { commitCommand, executeCommit } from "./commands/commit.ts";
@@ -48,21 +48,28 @@ const program = defineProgram({
     author: message`Hong Minhee ${url("https://hongminhee.org/")}`,
     examples: message`Common commands:
 
-  ${commandLine("gitique add .")}                     Stage all changes
-
-  ${commandLine('gitique commit -m "message"')}       Create a commit
-
-  ${commandLine("gitique status")}                    Show working tree status
-
-  ${commandLine("gitique log --oneline")}             View commit history
-
-  ${commandLine("gitique diff --cached")}             Show staged changes
+${
+      commandLine("gitique add .")
+    }                     Stage all changes${lineBreak()}
+${
+      commandLine('gitique commit -m "message"')
+    }       Create a commit${lineBreak()}
+${
+      commandLine("gitique status")
+    }                    Show working tree status${lineBreak()}
+${
+      commandLine("gitique log --oneline")
+    }             View commit history${lineBreak()}
+${
+      commandLine("gitique diff --cached")
+    }             Show staged changes${lineBreak()}
 
 Shell completion:
 
-  ${commandLine("gitique completion bash > ~/.bashrc.d/gitique.bash")}
-
-  ${commandLine("gitique completion zsh > ~/.zsh/completions/_gitique")}`,
+${
+      commandLine("gitique completion bash > ~/.bashrc.d/gitique.bash")
+    }${lineBreak()}
+${commandLine("gitique completion zsh > ~/.zsh/completions/_gitique")}`,
     footer: message`For more information, visit ${
       url("https://github.com/dahlia/optique")
     }.`,

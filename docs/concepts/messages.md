@@ -560,6 +560,13 @@ Examples:
   zsh:  eval "$(mycli completion zsh)"
 ~~~~
 
+Note that `lineBreak()` absorbs the newline that immediately follows it in a
+template literal.  In the example above, each `${lineBreak()}` is followed by
+a real newline character in the source, but that newline is dropped rather than
+being normalized to a space.  This means you can write multi-line template
+literals naturally—breaking the source line right after `${lineBreak()}`—and
+the output will not gain a spurious leading space on the next line.
+
 ### Single newlines (`\n`)
 
 Single newlines in `text()` terms are treated as soft breaks and converted to

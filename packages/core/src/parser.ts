@@ -932,11 +932,11 @@ function getDocPageSyncImpl(
     state: initialState,
     usage: parser.usage,
   };
-  do {
+  while (context.buffer.length > 0) {
     const result = parser.parse(context);
     if (!result.success) break;
     context = result.next;
-  } while (context.buffer.length > 0);
+  }
   return buildDocPage(parser, context, args);
 }
 
@@ -966,11 +966,11 @@ async function getDocPageAsyncImpl(
     state: initialState,
     usage: parser.usage,
   };
-  do {
+  while (context.buffer.length > 0) {
     const result = await parser.parse(context);
     if (!result.success) break;
     context = result.next;
-  } while (context.buffer.length > 0);
+  }
   return buildDocPage(parser, context, args);
 }
 
