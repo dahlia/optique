@@ -1,6 +1,6 @@
 {
   "name": "@optique/core",
-  "version": "0.7.18",
+  "version": "0.7.19",
   "description": "Type-safe combinatorial command-line interface parser",
   "keywords": [
     "CLI",
