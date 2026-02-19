@@ -1,6 +1,6 @@
 {
   "name": "@optique/logtape",
-  "version": "0.8.17",
+  "version": "0.8.18",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts"
