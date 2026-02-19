@@ -2676,7 +2676,9 @@ function injectAnnotationsIntoParser<
 ): Parser<M, TValue, TState> {
   // Create a new initial state with annotations
   const newInitialState = {
-    ...parser.initialState,
+    ...(typeof parser.initialState === "object" && parser.initialState !== null
+      ? parser.initialState
+      : {}),
     [annotationKey]: annotations,
   } as TState;
 

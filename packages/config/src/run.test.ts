@@ -4,7 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
-import { option } from "@optique/core/primitives";
+import { flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
 import { bindConfig, createConfigContext } from "./index.ts";
@@ -638,5 +638,50 @@ describe("runWithConfig", { concurrency: false }, () => {
 
       assert.ok(helpOutput.includes("Usage: my-custom-app"));
     });
+  });
+
+  test("withDefault(object(...)) returns default on empty args", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/131
+    // runWithConfig() crashed with TypeError when withDefault(object(...))
+    // took the default path (no tokens consumed).
+    const schema = z.object({});
+    const context = createConfigContext({ schema });
+
+    const parser = withDefault(
+      object({
+        enabled: flag("--enabled"),
+        dependent: option("--dependent", string()),
+      }),
+      { enabled: false as const } as const,
+    );
+
+    const result = await runWithConfig(parser, context, {
+      load: () => ({}),
+      args: [],
+    });
+
+    assert.deepEqual(result, { enabled: false });
+  });
+
+  test("withDefault(object(...)) returns parsed value when args given", async () => {
+    // Companion test for https://github.com/dahlia/optique/issues/131
+    // Verify that when tokens are consumed, the parser works correctly.
+    const schema = z.object({});
+    const context = createConfigContext({ schema });
+
+    const parser = withDefault(
+      object({
+        enabled: flag("--enabled"),
+        dependent: option("--dependent", string()),
+      }),
+      { enabled: false as const } as const,
+    );
+
+    const result = await runWithConfig(parser, context, {
+      load: () => ({}),
+      args: ["--enabled", "--dependent", "foo"],
+    });
+
+    assert.deepEqual(result, { enabled: true, dependent: "foo" });
   });
 });

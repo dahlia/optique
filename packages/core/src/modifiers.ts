@@ -34,9 +34,9 @@ function parseOptionalStyleSync<TState>(
   context: ParserContext<[TState] | undefined>,
   parser: Parser<"sync", unknown, TState>,
 ): ParserResult<[TState] | undefined> {
-  const innerState = typeof context.state === "undefined"
-    ? parser.initialState
-    : context.state[0];
+  const innerState = Array.isArray(context.state)
+    ? context.state[0]
+    : parser.initialState;
 
   const result = parser.parse({
     ...context,
@@ -54,9 +54,9 @@ async function parseOptionalStyleAsync<TState>(
   context: ParserContext<[TState] | undefined>,
   parser: Parser<Mode, unknown, TState>,
 ): Promise<ParserResult<[TState] | undefined>> {
-  const innerState = typeof context.state === "undefined"
-    ? parser.initialState
-    : context.state[0];
+  const innerState = Array.isArray(context.state)
+    ? context.state[0]
+    : parser.initialState;
 
   const result = await parser.parse({
     ...context,
@@ -137,9 +137,9 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = typeof context.state === "undefined"
-      ? syncParser.initialState
-      : context.state[0];
+    const innerState = Array.isArray(context.state)
+      ? context.state[0]
+      : syncParser.initialState;
     yield* syncParser.suggest({ ...context, state: innerState }, prefix);
   }
 
@@ -148,9 +148,9 @@ export function optional<M extends Mode, TValue, TState>(
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = typeof context.state === "undefined"
-      ? syncParser.initialState
-      : context.state[0];
+    const innerState = Array.isArray(context.state)
+      ? context.state[0]
+      : syncParser.initialState;
     const suggestions = parser.suggest(
       { ...context, state: innerState },
       prefix,
@@ -206,8 +206,9 @@ export function optional<M extends Mode, TValue, TState>(
       );
     },
     complete(state: [TState] | undefined) {
-      // If state is undefined and this optional wraps a dependency source:
-      if (typeof state === "undefined") {
+      // If state was not wrapped (inner parser didn't match) and this
+      // optional wraps a dependency source:
+      if (!Array.isArray(state)) {
         // Case 1: Inner parser has a wrapped dependency source (e.g., optional(withDefault(...)))
         // Delegate to inner parser which will provide its default value and register dependency
         if (innerHasWrappedDependency && wrappedPendingState) {
@@ -422,9 +423,9 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): Generator<Suggestion> {
-    const innerState = typeof context.state === "undefined"
-      ? syncParser.initialState
-      : context.state[0];
+    const innerState = Array.isArray(context.state)
+      ? context.state[0]
+      : syncParser.initialState;
     yield* syncParser.suggest({ ...context, state: innerState }, prefix);
   }
 
@@ -433,9 +434,9 @@ export function withDefault<
     context: ParserContext<[TState] | undefined>,
     prefix: string,
   ): AsyncGenerator<Suggestion> {
-    const innerState = typeof context.state === "undefined"
-      ? syncParser.initialState
-      : context.state[0];
+    const innerState = Array.isArray(context.state)
+      ? context.state[0]
+      : syncParser.initialState;
     const suggestions = parser.suggest(
       { ...context, state: innerState },
       prefix,
@@ -475,7 +476,7 @@ export function withDefault<
       );
     },
     complete(state: [TState] | undefined) {
-      if (typeof state === "undefined") {
+      if (!Array.isArray(state)) {
         // If inner parser transforms the dependency value (e.g., map()),
         // we need to delegate to see if the chain actually wants to register.
         // A transform means our default value is NOT a valid dependency source value.

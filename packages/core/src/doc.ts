@@ -298,12 +298,23 @@ function classifySection(section: DocSection): 0 | 1 | 2 {
 }
 
 /**
+ * Scores a section for the default smart sort.  Untitled sections receive
+ * a bonus of `-1` so that the main (untitled) section appears before titled
+ * sections of a similar classification.
+ */
+function scoreSection(section: DocSection): number {
+  return classifySection(section) + (section.title == null ? -1 : 0);
+}
+
+/**
  * The default section comparator: command-only sections come first, then
- * mixed sections, then option/argument-only sections.  Sections with the
+ * mixed sections, then option/argument-only sections.  Untitled sections
+ * receive a slight priority boost so the main (untitled) section appears
+ * before titled sections of a similar classification.  Sections with the
  * same score preserve their original relative order (stable sort).
  */
 function defaultSectionOrder(a: DocSection, b: DocSection): number {
-  return classifySection(a) - classifySection(b);
+  return scoreSection(a) - scoreSection(b);
 }
 
 /**
@@ -413,13 +424,37 @@ export function formatDocPage(
         ? undefined
         : options.maxWidth - termIndent - termWidth - 2;
 
+      // When the rendered term is physically wider than termWidth, the
+      // description column starts further right on the first output line,
+      // shrinking the first-line budget.  extraTermOffset captures that
+      // surplus so we can pass it as startWidth to formatMessage, making
+      // word-wrapping account for the narrower first-line space.
+      const termVisibleWidth = lastLineVisibleLength(term);
+      const extraTermOffset = descColumnWidth != null
+        ? Math.max(0, termVisibleWidth - termWidth)
+        : 0;
+
+      // Once any content has caused a line break inside the description
+      // string, the extra physical offset no longer applies — subsequent
+      // content lands on a fresh continuation line indented by
+      // termIndent + termWidth + 2, not by termIndent + termVisibleWidth + 2.
+      const currentExtraOffset = () =>
+        description.includes("\n") ? 0 : extraTermOffset;
+
+      // See the comment above the defaultFormatOptions variable for why
+      // startWidth is passed via a typed variable rather than an inline
+      // object literal.
+      const descFormatOptions: MessageFormatOptions & {
+        readonly startWidth?: number;
+      } = {
+        colors: options.colors,
+        quotes: !options.colors,
+        maxWidth: descColumnWidth,
+        startWidth: extraTermOffset > 0 ? extraTermOffset : undefined,
+      };
       let description = entry.description == null
         ? ""
-        : formatMessage(entry.description, {
-          colors: options.colors,
-          quotes: !options.colors,
-          maxWidth: descColumnWidth,
-        });
+        : formatMessage(entry.description, descFormatOptions);
 
       // Append default value if showDefault is enabled and default exists
       if (options.showDefault && entry.default != null) {
@@ -432,14 +467,17 @@ export function formatDocPage(
 
         // Determine startWidth so that word-wrapping in the default value
         // continues correctly from the current line position.
+        // effectiveLastW adds the extra physical offset for the first line
+        // when the term extends past termWidth.
         let defaultStartWidth: number | undefined;
         if (descColumnWidth != null) {
           const lastW = lastLineVisibleLength(description);
-          if (lastW + prefix.length >= descColumnWidth) {
+          const effectiveLastW = lastW + currentExtraOffset();
+          if (effectiveLastW + prefix.length >= descColumnWidth) {
             description += "\n";
             defaultStartWidth = prefix.length;
           } else {
-            defaultStartWidth = lastW + prefix.length;
+            defaultStartWidth = effectiveLastW + prefix.length;
           }
         }
 
@@ -449,12 +487,17 @@ export function formatDocPage(
         // keeping it out of the public API.  Because the intersection type is
         // a subtype of MessageFormatOptions, the call below remains
         // type-safe.
+        //
+        // maxWidth is reduced by suffix.length so that the closing suffix
+        // (e.g. "]") can always be appended without exceeding descColumnWidth.
         const defaultFormatOptions: MessageFormatOptions & {
           readonly startWidth?: number;
         } = {
           colors: options.colors ? { resetSuffix: "\x1b[2m" } : false,
           quotes: !options.colors,
-          maxWidth: descColumnWidth,
+          maxWidth: descColumnWidth == null
+            ? undefined
+            : descColumnWidth - suffix.length,
           startWidth: defaultStartWidth,
         };
         const defaultContent = formatMessage(
@@ -509,27 +552,35 @@ export function formatDocPage(
         }
         // Determine startWidth so that word-wrapping in the choices list
         // continues correctly from the current line position.
+        // effectiveLastW adds the extra physical offset for the first line
+        // when the term extends past termWidth.
         let choicesStartWidth: number | undefined;
         if (descColumnWidth != null) {
           const lastW = lastLineVisibleLength(description);
+          const effectiveLastW = lastW + currentExtraOffset();
           const prefixLabelLen = prefix.length + label.length;
-          if (lastW + prefixLabelLen >= descColumnWidth) {
+          if (effectiveLastW + prefixLabelLen >= descColumnWidth) {
             description += "\n";
             choicesStartWidth = prefixLabelLen;
           } else {
-            choicesStartWidth = lastW + prefixLabelLen;
+            choicesStartWidth = effectiveLastW + prefixLabelLen;
           }
         }
 
         // See the comment above the defaultFormatOptions variable for why
         // startWidth is passed via a typed variable rather than an inline
         // object literal.
+        //
+        // maxWidth is reduced by suffix.length so that the closing suffix
+        // (e.g. ")") can always be appended without exceeding descColumnWidth.
         const choicesFormatOptions: MessageFormatOptions & {
           readonly startWidth?: number;
         } = {
           colors: options.colors ? { resetSuffix: "\x1b[2m" } : false,
           quotes: false,
-          maxWidth: descColumnWidth,
+          maxWidth: descColumnWidth == null
+            ? undefined
+            : descColumnWidth - suffix.length,
           startWidth: choicesStartWidth,
         };
         const choicesDisplay = formatMessage(

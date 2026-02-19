@@ -1069,7 +1069,350 @@ describe("formatDocPage", () => {
     });
   });
 
+  // Helper: strip ANSI escape codes to measure visible line width
+  // deno-lint-ignore no-control-regex
+  const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+
   describe("maxWidth with showDefault and showChoices", () => {
+    // Issue #132: when a term is wider than termWidth (default: 26), the
+    // description column starts further right than descColumnWidth assumes,
+    // but formatMessage is still given the full descColumnWidth budget.
+    // This causes the first line to overflow maxWidth.
+
+    it("should not exceed maxWidth when term is wider than termWidth with showChoices (issue #132)", () => {
+      // "-p, --package-manager PACKAGE_MANAGER" is 38 chars > termWidth 26.
+      // descColumnWidth = 100 - 2 - 26 - 2 = 70, but first-line budget is
+      // only 100 - (2 + 38 + 2) = 58 chars.  Without the fix, the combined
+      // description + choices text fills 69 chars in the desc column, and the
+      // full line becomes 2 + 38 + 2 + 69 = 111 chars (observed in the issue).
+      const page: DocPage = {
+        sections: [{
+          title: "Options",
+          entries: [{
+            term: {
+              type: "option",
+              names: ["-p", "--package-manager"],
+              metavar: "PACKAGE_MANAGER" as const,
+            },
+            description: [
+              {
+                type: "text",
+                text: "The package manager to use for installing dependencies.",
+              },
+            ],
+            choices: valueSet(
+              ["deno", "pnpm", "bun", "yarn", "npm"],
+              { type: "unit" },
+            ),
+          }],
+        }],
+      };
+
+      const result = formatDocPage("repro", page, {
+        showChoices: true,
+        maxWidth: 100,
+        colors: false,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 100,
+          `Line exceeds maxWidth 100: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should not exceed maxWidth when term is wider than termWidth with showDefault", () => {
+      // Same pattern as issue #132, but with showDefault instead of showChoices.
+      // The defaultStartWidth calculation has the same bug: it uses
+      // lastLineVisibleLength(description) without accounting for the extra
+      // physical offset caused by the wide term.
+      // Term "-p, --package-manager PACKAGE_MANAGER" is 38 chars.
+      // descColumnWidth = 80 - 2 - 26 - 2 = 50.
+      // First-line budget = 80 - (2 + 38 + 2) = 38 chars.
+      // Without fix: "The package manager to use for your project." (44 chars)
+      // fits in 50 but not 38, so the full line becomes 2+38+2+44 = 86 > 80.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["-p", "--package-manager"],
+              metavar: "PACKAGE_MANAGER" as const,
+            },
+            description: [
+              {
+                type: "text",
+                text: "The package manager to use for your project.",
+              },
+            ],
+            default: [{ type: "text", text: "npm" }],
+          }],
+        }],
+      };
+
+      const result = formatDocPage("repro", page, {
+        showDefault: true,
+        maxWidth: 80,
+        colors: false,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 80,
+          `Line exceeds maxWidth 80: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should not exceed maxWidth when term is wider than termWidth with both showDefault and showChoices", () => {
+      // Combined case: wide term + both options active.  The accumulated
+      // description + default + choices text on the first output line must
+      // still respect maxWidth.
+      // Term "-w, --web-framework WEB_FRAMEWORK" is 34 chars > 26.
+      // descColumnWidth = 100 - 2 - 26 - 2 = 70.
+      // First-line budget = 100 - (2 + 34 + 2) = 62 chars.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["-w", "--web-framework"],
+              metavar: "WEB_FRAMEWORK" as const,
+            },
+            description: [
+              { type: "text", text: "The web framework to integrate." },
+            ],
+            default: [{ type: "text", text: "hono" }],
+            choices: valueSet(
+              ["hono", "nitro", "next", "elysia", "express"],
+              { type: "unit" },
+            ),
+          }],
+        }],
+      };
+
+      const result = formatDocPage("repro", page, {
+        showDefault: true,
+        showChoices: true,
+        maxWidth: 100,
+        colors: false,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 100,
+          `Line exceeds maxWidth 100: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should wrap description itself when it would overflow due to wide term", () => {
+      // When the description text itself is longer than the narrowed first-line
+      // budget (maxWidth - termIndent - actualTermWidth - 2), it must be wrapped
+      // within that budget, not within the wider descColumnWidth.
+      // Term is 38 chars, maxWidth = 80, first-line budget = 38 chars.
+      // Description "The package manager to use for your project." is 44 chars:
+      // - Without fix: fits in descColumnWidth=50, stays on one line → full
+      //   line = 2+38+2+44 = 86 > 80.
+      // - With fix: wrapped at 38-char budget, first line ≤ 38 chars → fine.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["-p", "--package-manager"],
+              metavar: "PACKAGE_MANAGER" as const,
+            },
+            description: [
+              {
+                type: "text",
+                text: "The package manager to use for your project.",
+              },
+            ],
+          }],
+        }],
+      };
+
+      const result = formatDocPage("repro", page, {
+        maxWidth: 80,
+        colors: false,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 80,
+          `Line exceeds maxWidth 80: "${line}" (${line.length} chars)`,
+        );
+      }
+      // Description must have wrapped onto a new line
+      assert.ok(result.includes("\n"), "Expected a wrapped line in output");
+    });
+
+    it("should not exceed maxWidth when term is wider than termWidth with colors enabled", () => {
+      // ANSI escape codes inflate the raw string length but must not be counted
+      // toward visible width.  lastLineVisibleLength() strips them correctly,
+      // so the overflow logic should still trigger for wide terms even when
+      // colors: true adds ANSI codes to the term string.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["-p", "--package-manager"],
+              metavar: "PACKAGE_MANAGER" as const,
+            },
+            description: [
+              {
+                type: "text",
+                text: "The package manager to use for installing dependencies.",
+              },
+            ],
+            choices: valueSet(
+              ["deno", "pnpm", "bun", "yarn", "npm"],
+              { type: "unit" },
+            ),
+          }],
+        }],
+      };
+
+      const result = formatDocPage("repro", page, {
+        showChoices: true,
+        maxWidth: 100,
+        colors: true,
+      });
+
+      for (const line of result.split("\n")) {
+        const visibleLength = stripAnsi(line).length;
+        assert.ok(
+          visibleLength <= 100,
+          `Line visible length exceeds maxWidth 100: ${visibleLength} chars`,
+        );
+      }
+    });
+
+    it("should not overflow when term is exactly termWidth wide (boundary)", () => {
+      // When term visible width equals termWidth (26), extraTermOffset = 0
+      // and behaviour should be identical to the pre-fix code path.
+      // "--verbose-mode VERBOSE_MOD" is exactly 26 chars.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["--verbose-mode"],
+              metavar: "VERBOSE_MOD" as const,
+            },
+            description: [
+              { type: "text", text: "Enable verbose mode output." },
+            ],
+            choices: valueSet(
+              ["trace", "debug", "info", "warn", "error"],
+              { type: "unit" },
+            ),
+          }],
+        }],
+      };
+
+      const result = formatDocPage("repro", page, {
+        showChoices: true,
+        maxWidth: 80,
+        colors: false,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 80,
+          `Line exceeds maxWidth 80: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should not overflow when term is 1 char wider than termWidth (boundary)", () => {
+      // Minimal extra offset: term is just 1 char wider than termWidth.
+      // "--verbose-mode VERBOSE_MODE" is 27 chars (termWidth 26 + 1).
+      // descColumnWidth = 80 - 2 - 26 - 2 = 50.  First-line budget = 49.
+      //
+      // "Enable verbose mode output for entire running sys." is exactly 50 chars:
+      // tokens = ["Enable "(7), "verbose "(8), "mode "(5), "output "(7),
+      //           "for "(4), "entire "(7), "running "(8), "sys."(4)] = 50 total.
+      //
+      // Without fix (startWidth=0): running totals stay ≤ 50, no wrap.
+      //   Full first line = 2+27+2+50 = 81 > 80 → OVERFLOW.
+      // With fix (startWidth=1): total hits 51 at "sys.", so it wraps.
+      //   Full first line ≤ 80 ✓.
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["--verbose-mode"],
+              metavar: "VERBOSE_MODE" as const,
+            },
+            description: [
+              {
+                type: "text",
+                text: "Enable verbose mode output for entire running sys.",
+              },
+            ],
+          }],
+        }],
+      };
+
+      const result = formatDocPage("repro", page, {
+        maxWidth: 80,
+        colors: false,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 80,
+          `Line exceeds maxWidth 80: "${line}" (${line.length} chars)`,
+        );
+      }
+      // With the fix the description must have wrapped
+      assert.ok(result.includes("\n"), "Expected wrapped line");
+    });
+
+    it("should not overflow when choices suffix ) would push the last line over maxWidth", () => {
+      // The closing suffix ")" is appended outside of formatMessage, so it is
+      // not counted in the maxWidth budget.  If the choices content is allowed
+      // to fill the description column to the very last char, adding ")"
+      // produces a line that is 1 char too wide.
+      //
+      // Setup (all default termIndent=2, termWidth=26):
+      //   maxWidth = 50  →  descColumnWidth = 50-2-26-2 = 20
+      //   term "--option" (8 chars) fits in termWidth, no extra offset
+      //   description = "" (empty)
+      //   prefix = " (" (2), label = "choices: " (9)  →  prefixLabelLen = 11
+      //   choicesStartWidth = 0 + 11 = 11
+      //   value "aaaaaaaaa" (9 chars): 11+9 = 20 = descColumnWidth → no wrap
+      //   choicesDisplay = "aaaaaaaaa"
+      //   choicesText = " (choices: aaaaaaaaa)" = 21 chars
+      //   full line = 2 + 26 + 2 + 21 = 51 > 50
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["--option"] },
+            choices: valueSet(["aaaaaaaaa"], { type: "unit" }),
+          }],
+        }],
+      };
+
+      const result = formatDocPage("repro", page, {
+        showChoices: true,
+        maxWidth: 50,
+        colors: false,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 50,
+          `Line exceeds maxWidth 50: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
     it("should not exceed maxWidth when showDefault overflows the line", () => {
       const page: DocPage = {
         sections: [{

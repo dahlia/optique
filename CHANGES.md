@@ -23,9 +23,12 @@ To be released.
  -  Changed the default section ordering in help output to use a smart
     type-aware sort: sections containing only commands appear first, followed
     by mixed sections, and then sections containing only options, flags, and
-    arguments.  Within each group, the original relative order is preserved.
-    Previously, untitled sections were sorted first regardless of content
-    type.  This is a breaking change for help output layout.  [[#115]]
+    arguments.  Untitled sections receive a slight priority boost so the
+    main (untitled) section appears before titled sections of a similar
+    classification.  Within each group, the original relative order is
+    preserved.  Previously, untitled sections were sorted first regardless
+    of content type.  This is a breaking change for help output layout.
+    [[#115]]
 
  -  Added `sectionOrder` option to `DocPageFormatOptions` (in
     `formatDocPage()`), `RunOptions` (in `runParser()`), and `RunOptions`
@@ -33,8 +36,58 @@ To be released.
     the default smart sort to give full control over section ordering in
     help output.  [[#115]]
 
+ -  Fixed `optional()` and `withDefault()` crashing when the parser's state
+    is an annotation-injected object instead of `undefined`.  The state
+    discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
+    distinguish the wrapped inner state `[TState]` from the initial state,
+    instead of `typeof state === "undefined"`.  This allows annotation
+    injection to work correctly for parsers with `undefined` initial states
+    (e.g., `fail()` used with `bindConfig()`), which was broken by the
+    earlier 0.10.6 fix that skipped injection entirely.  [[#131]]
+
 [#115]: https://github.com/dahlia/optique/issues/115
 [#120]: https://github.com/dahlia/optique/issues/120
+[#131]: https://github.com/dahlia/optique/issues/131
+
+
+Version 0.10.6
+--------------
+
+Released on February 20, 2026.
+
+### @optique/core
+
+ -  Fixed `runWith()` (and by extension `runWithConfig()`) crashing with
+    `TypeError: Cannot read properties of undefined` when the top-level parser
+    has an `undefined` initial state, such as `withDefault(object({...}))`.
+    The root cause was that `injectAnnotationsIntoParser()` unconditionally
+    spread `parser.initialState` into a new object with the annotation key,
+    turning `undefined` into `{ [annotationKey]: annotations }`.  This corrupted
+    the state for parsers like `withDefault()` and `optional()` that rely on
+    `typeof state === "undefined"` to distinguish the uninitialized state from
+    a wrapped inner state.  The fix skips annotation injection when the initial
+    state is `null` or `undefined`.  The same guard was applied to annotation
+    injection in `parseSync()`, `parseAsync()`, `suggestSync()`,
+    `suggestAsync()`, and `getDocPage()`.  [[#131]]
+
+ -  Fixed `formatDocPage()` to respect `maxWidth` when the rendered option
+    term is wider than `termWidth` (default: 26).  Previously, the description
+    column width was calculated assuming the term occupied exactly `termWidth`
+    characters.  When the actual term was wider (e.g.,
+    `-p, --package-manager PACKAGE_MANAGER` at 38 chars), the description
+    column started further right on the first output line, but `formatMessage()`
+    was still given the full `descColumnWidth` budget, allowing lines to exceed
+    `maxWidth` by as much as the term's extra width.  The fix passes the extra
+    width as `startWidth` to `formatMessage()` so the first-line budget is
+    correctly narrowed.  The same correction is applied when appending default
+    values (`showDefault`) and available choices (`showChoices`).  [[#132]]
+
+ -  Fixed `formatDocPage()` to account for the closing suffix (`]` for default
+    values, `)` for choices) when word-wrapping content.  Previously, the suffix
+    was appended after `formatMessage()` had already filled the description
+    column to capacity, producing lines that were one character too wide.
+
+[#132]: https://github.com/dahlia/optique/issues/132
 
 
 Version 0.10.5
