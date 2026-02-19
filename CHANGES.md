@@ -6,6 +6,21 @@ Version 0.7.18
 
 To be released.
 
+### @optique/core
+
+ -  Fixed meta commands (`help`, `version`, `completion`, `completions`)
+    disappearing from the subcommand list in help output when the parser uses
+    a `withDefault(or(...))` construct.  The root cause was that
+    `getDocPage()` used a `do...while` loop, which ran the parser at least
+    once even with an empty argument buffer.  Because `withDefault(or(...))`
+    allows the inner parser to succeed without consuming any tokens, the
+    `longestMatch` combinator would record the user's parser as "selected"
+    and subsequently return only that parser's doc fragments—silently
+    dropping the meta command entries.  The loop is now a `while` loop that
+    skips parsing entirely when the buffer is empty.  [[#121]]
+
+[#121]: https://github.com/dahlia/optique/issues/121
+
 
 Version 0.7.17
 --------------

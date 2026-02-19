@@ -13,7 +13,13 @@ import {
 } from "@optique/core/message";
 import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import { getDocPage, parse } from "@optique/core/parser";
-import { argument, command, constant, option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -1768,6 +1774,77 @@ describe("merge() should propagate brief/description/footer from inner parsers",
     assert.deepEqual(
       buildDoc!.description,
       message`Build the project from source.`,
+    );
+  });
+});
+
+describe("getDocPage regression: meta commands with withDefault(or(...))", () => {
+  // Regression test for https://github.com/dahlia/optique/issues/121
+  // Meta commands were missing from the command list when the user parser
+  // included withDefault(or(...)), because getDocPage's do...while loop
+  // ran the parser once even with an empty buffer, causing longestMatch to
+  // record the user parser as "selected" and skip all other parsers in
+  // getDocFragments.
+  it("should include all commands when longestMatch wraps a parser with withDefault(or(...))", () => {
+    // Reproduce the issue: a user parser where withDefault(or(...)) allows
+    // the merge to succeed with zero consumed tokens.
+    const configOption = withDefault(
+      or(
+        object({ ignoreConfig: flag("--ignore-config") }),
+        object({ configPath: option("--config", string({ metavar: "PATH" })) }),
+      ),
+      { ignoreConfig: false, configPath: undefined } as {
+        readonly ignoreConfig: boolean;
+        readonly configPath: string | undefined;
+      },
+    );
+
+    const userParser = merge(
+      or(
+        command("foo", object({}), { description: message`foo cmd` }),
+        command("bar", object({}), { description: message`bar cmd` }),
+      ),
+      configOption,
+    );
+
+    // Simulate what run() does: combine the user parser with meta commands
+    // via longestMatch.
+    const helpCmd = command("help", object({}));
+    const versionCmd = command("version", object({}));
+    const combined = longestMatch(helpCmd, versionCmd, userParser);
+
+    // Root-level help: getDocPage called with empty args (no subcommand selected).
+    const doc = getDocPage(combined, []);
+    assert.ok(doc, "doc should not be undefined");
+
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    const commandNames = allEntries
+      .filter((e) => e.term.type === "command")
+      .map((e) => (e.term.type === "command" ? e.term.name : ""));
+
+    assert.ok(
+      commandNames.includes("help"),
+      `"help" should appear in the command list, got: [${
+        commandNames.join(", ")
+      }]`,
+    );
+    assert.ok(
+      commandNames.includes("version"),
+      `"version" should appear in the command list, got: [${
+        commandNames.join(", ")
+      }]`,
+    );
+    assert.ok(
+      commandNames.includes("foo"),
+      `"foo" should appear in the command list, got: [${
+        commandNames.join(", ")
+      }]`,
+    );
+    assert.ok(
+      commandNames.includes("bar"),
+      `"bar" should appear in the command list, got: [${
+        commandNames.join(", ")
+      }]`,
     );
   });
 });

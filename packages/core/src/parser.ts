@@ -462,11 +462,11 @@ export function getDocPage(
     state: parser.initialState,
     usage: parser.usage,
   };
-  do {
+  while (context.buffer.length > 0) {
     const result = parser.parse(context);
     if (!result.success) break;
     context = result.next;
-  } while (context.buffer.length > 0);
+  }
   const { brief, description, fragments, footer } = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,
