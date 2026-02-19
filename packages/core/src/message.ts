@@ -496,7 +496,17 @@ export interface MessageFormatOptions {
  */
 export function formatMessage(
   msg: Message,
-  options: MessageFormatOptions = {},
+  options?: MessageFormatOptions,
+): string;
+// The implementation accepts an additional `startWidth` field that is not
+// part of the public API.  Other formatters within this package (e.g.,
+// formatDocPage() in doc.ts) pass it as a plain object variable — not as
+// an inline object literal — so TypeScript's excess-property check does not
+// apply and the field reaches the implementation without being part of the
+// declared public type.
+export function formatMessage(
+  msg: Message,
+  options: MessageFormatOptions & { readonly startWidth?: number } = {},
 ): string {
   // Apply defaults
   const colorConfig = options.colors ?? false;
@@ -677,7 +687,7 @@ export function formatMessage(
   }
 
   let output = "";
-  let totalWidth = 0;
+  let totalWidth = options.startWidth ?? 0;
   for (const { text, width } of stream()) {
     // Handle hard line breaks (marked with width -1)
     if (width === -1) {
