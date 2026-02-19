@@ -10,6 +10,19 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed `runWith()` (and by extension `runWithConfig()`) crashing with
+    `TypeError: Cannot read properties of undefined` when the top-level parser
+    has an `undefined` initial state, such as `withDefault(object({...}))`.
+    The root cause was that `injectAnnotationsIntoParser()` unconditionally
+    spread `parser.initialState` into a new object with the annotation key,
+    turning `undefined` into `{ [annotationKey]: annotations }`.  This corrupted
+    the state for parsers like `withDefault()` and `optional()` that rely on
+    `typeof state === "undefined"` to distinguish the uninitialized state from
+    a wrapped inner state.  The fix skips annotation injection when the initial
+    state is `null` or `undefined`.  The same guard was applied to annotation
+    injection in `parseSync()`, `parseAsync()`, `suggestSync()`,
+    `suggestAsync()`, and `getDocPage()`.  [[#131]]
+
  -  Fixed `formatDocPage()` to respect `maxWidth` when the rendered option
     term is wider than `termWidth` (default: 26).  Previously, the description
     column width was calculated assuming the term occupied exactly `termWidth`
@@ -27,6 +40,7 @@ To be released.
     was appended after `formatMessage()` had already filled the description
     column to capacity, producing lines that were one character too wide.
 
+[#131]: https://github.com/dahlia/optique/issues/131
 [#132]: https://github.com/dahlia/optique/issues/132
 
 

@@ -383,12 +383,13 @@ export function parseSync<T>(
 ): Result<T> {
   let initialState = parser.initialState;
 
-  // Inject annotations into state if provided
-  if (options?.annotations) {
+  // Inject annotations into state if provided, but skip for null/undefined
+  // initial states (e.g., undefined for withDefault/optional) to preserve
+  // their semantic meaning.  Corrupting undefined to { [annotationKey]: ... }
+  // breaks parsers that rely on typeof state === "undefined" checks.
+  if (options?.annotations && initialState != null) {
     initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
+      ...(typeof initialState === "object" ? initialState : {}),
       [annotationKey]: options.annotations,
     } as unknown;
   }
@@ -452,12 +453,13 @@ export async function parseAsync<T>(
 ): Promise<Result<T>> {
   let initialState = parser.initialState;
 
-  // Inject annotations into state if provided
-  if (options?.annotations) {
+  // Inject annotations into state if provided, but skip for null/undefined
+  // initial states (e.g., undefined for withDefault/optional) to preserve
+  // their semantic meaning.  Corrupting undefined to { [annotationKey]: ... }
+  // breaks parsers that rely on typeof state === "undefined" checks.
+  if (options?.annotations && initialState != null) {
     initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
+      ...(typeof initialState === "object" ? initialState : {}),
       [annotationKey]: options.annotations,
     } as unknown;
   }
@@ -578,12 +580,13 @@ export function suggestSync<T>(
 
   let initialState = parser.initialState;
 
-  // Inject annotations into state if provided
-  if (options?.annotations) {
+  // Inject annotations into state if provided, but skip for null/undefined
+  // initial states (e.g., undefined for withDefault/optional) to preserve
+  // their semantic meaning.  Corrupting undefined to { [annotationKey]: ... }
+  // breaks parsers that rely on typeof state === "undefined" checks.
+  if (options?.annotations && initialState != null) {
     initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
+      ...(typeof initialState === "object" ? initialState : {}),
       [annotationKey]: options.annotations,
     } as unknown;
   }
@@ -650,12 +653,13 @@ export async function suggestAsync<T>(
 
   let initialState = parser.initialState;
 
-  // Inject annotations into state if provided
-  if (options?.annotations) {
+  // Inject annotations into state if provided, but skip for null/undefined
+  // initial states (e.g., undefined for withDefault/optional) to preserve
+  // their semantic meaning.  Corrupting undefined to { [annotationKey]: ... }
+  // breaks parsers that rely on typeof state === "undefined" checks.
+  if (options?.annotations && initialState != null) {
     initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
+      ...(typeof initialState === "object" ? initialState : {}),
       [annotationKey]: options.annotations,
     } as unknown;
   }
@@ -916,12 +920,13 @@ function getDocPageSyncImpl(
 ): DocPage | undefined {
   let initialState = parser.initialState;
 
-  // Inject annotations into state if provided
-  if (options?.annotations) {
+  // Inject annotations into state if provided, but skip for null/undefined
+  // initial states (e.g., undefined for withDefault/optional) to preserve
+  // their semantic meaning.  Corrupting undefined to { [annotationKey]: ... }
+  // breaks parsers that rely on typeof state === "undefined" checks.
+  if (options?.annotations && initialState != null) {
     initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
+      ...(typeof initialState === "object" ? initialState : {}),
       [annotationKey]: options.annotations,
     } as unknown;
   }
@@ -950,12 +955,13 @@ async function getDocPageAsyncImpl(
 ): Promise<DocPage | undefined> {
   let initialState = parser.initialState;
 
-  // Inject annotations into state if provided
-  if (options?.annotations) {
+  // Inject annotations into state if provided, but skip for null/undefined
+  // initial states (e.g., undefined for withDefault/optional) to preserve
+  // their semantic meaning.  Corrupting undefined to { [annotationKey]: ... }
+  // breaks parsers that rely on typeof state === "undefined" checks.
+  if (options?.annotations && initialState != null) {
     initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
+      ...(typeof initialState === "object" ? initialState : {}),
       [annotationKey]: options.annotations,
     } as unknown;
   }

@@ -2650,6 +2650,14 @@ function injectAnnotationsIntoParser<
   parser: Parser<M, TValue, TState>,
   annotations: Annotations,
 ): Parser<M, TValue, TState> {
+  // Skip annotation injection for null/undefined initial states (e.g.,
+  // undefined for withDefault/optional) to preserve their semantic meaning.
+  // Corrupting undefined to { [annotationKey]: ... } breaks parsers that
+  // rely on typeof state === "undefined" checks.
+  if (parser.initialState == null) {
+    return parser;
+  }
+
   // Create a new initial state with annotations
   const newInitialState = {
     ...parser.initialState,
