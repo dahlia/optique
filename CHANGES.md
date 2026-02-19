@@ -8,6 +8,27 @@ Version 0.10.6
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `formatDocPage()` to respect `maxWidth` when the rendered option
+    term is wider than `termWidth` (default: 26).  Previously, the description
+    column width was calculated assuming the term occupied exactly `termWidth`
+    characters.  When the actual term was wider (e.g.,
+    `-p, --package-manager PACKAGE_MANAGER` at 38 chars), the description
+    column started further right on the first output line, but `formatMessage()`
+    was still given the full `descColumnWidth` budget, allowing lines to exceed
+    `maxWidth` by as much as the term's extra width.  The fix passes the extra
+    width as `startWidth` to `formatMessage()` so the first-line budget is
+    correctly narrowed.  The same correction is applied when appending default
+    values (`showDefault`) and available choices (`showChoices`).  [[#132]]
+
+ -  Fixed `formatDocPage()` to account for the closing suffix (`]` for default
+    values, `)` for choices) when word-wrapping content.  Previously, the suffix
+    was appended after `formatMessage()` had already filled the description
+    column to capacity, producing lines that were one character too wide.
+
+[#132]: https://github.com/dahlia/optique/issues/132
+
 
 Version 0.10.5
 --------------
