@@ -920,6 +920,74 @@ describe("formatMessage - explicit line breaks", () => {
     // Multiple double newlines still create single hard break
     assert.equal(formatted, "Line 1\nLine 2");
   });
+
+  it("should strip leading newline from text immediately after lineBreak()", () => {
+    // When lineBreak() is followed by a text term starting with \n (as happens in
+    // template literals like `${lineBreak()}\nContent`), the leading \n must be
+    // dropped to avoid yielding an extra space.
+    const msg: Message = [
+      { type: "text", text: "Before" },
+      lineBreak(),
+      { type: "text", text: "\nAfter" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    assert.equal(formatted, "Before\nAfter");
+  });
+
+  it("should strip leading newline but preserve remaining indentation after lineBreak()", () => {
+    // The leading \n must be stripped, but subsequent whitespace (indentation)
+    // must be preserved.
+    const msg: Message = [
+      { type: "text", text: "Before" },
+      lineBreak(),
+      { type: "text", text: "\n  indented" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    assert.equal(formatted, "Before\n  indented");
+  });
+
+  it("should not add extra space between lineBreak() and commandLine() in template literal", () => {
+    // Regression test: template literals produce a text("\n") between lineBreak()
+    // and the next interpolated value.  That \n was being normalized to a space,
+    // creating a spurious leading space on the next line.
+    const msg = message`Common:${lineBreak()}
+${commandLine("myapp add .")}         Stage changes${lineBreak()}
+${commandLine("myapp status")}        Show status`;
+    const formatted = formatMessage(msg, { quotes: false });
+
+    const lines = formatted.split("\n");
+    assert.equal(lines.length, 3);
+    assert.equal(lines[0], "Common:");
+    assert.ok(
+      lines[1].startsWith("myapp add ."),
+      `Expected line to start with "myapp add .", got: ${
+        JSON.stringify(lines[1])
+      }`,
+    );
+    assert.ok(
+      lines[2].startsWith("myapp status"),
+      `Expected line to start with "myapp status", got: ${
+        JSON.stringify(lines[2])
+      }`,
+    );
+  });
+
+  it("should preserve paragraph break (\\n\\n) following lineBreak()", () => {
+    // A double newline after lineBreak() is an intentional paragraph separator
+    // and must NOT be stripped.  Only a lone \n (soft-break artifact) is absorbed.
+    const msg: Message = [
+      { type: "text", text: "Line 1" },
+      lineBreak(),
+      { type: "text", text: "\n\nSection header" },
+    ];
+    const formatted = formatMessage(msg, { quotes: false });
+
+    // lineBreak() yields one \n; the \n\n yields another \n (paragraph break);
+    // total: two \n before "Section header".
+    assert.equal(formatted, "Line 1\n\nSection header");
+  });
 });
 
 describe("valueSet", () => {

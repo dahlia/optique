@@ -8,6 +8,15 @@ Version 0.10.4
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `formatMessage()` to correctly handle a `lineBreak()` term that is
+    immediately followed by a newline character in the source template literal.
+    Previously, the newline after `${lineBreak()}` was normalized to a space
+    (as single `\n` characters in text terms are), producing a spurious leading
+    space at the start of the next line.  The newline immediately following a
+    `lineBreak()` term is now dropped instead of being converted to a space.
+
 
 Version 0.10.3
 --------------
