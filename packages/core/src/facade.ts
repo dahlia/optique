@@ -1219,10 +1219,21 @@ export function run<
         // Collect all command parsers to include in help generation
         const commandParsers: Parser<unknown, unknown>[] = [parser];
 
+        const helpAsOption = help === "option" || help === "both";
+        const versionAsOption = version === "option" || version === "both";
+        const completionAsOption = completion === "option" ||
+          completion === "both";
+
         if (helpAsCommand) {
           if (helpParsers.helpCommand) {
             commandParsers.push(helpParsers.helpCommand);
           }
+        }
+
+        // Include meta options so they appear in the help page usage line and
+        // options list.  See https://github.com/dahlia/optique/issues/127
+        if (helpAsOption && helpParsers.helpOption) {
+          commandParsers.push(helpParsers.helpOption);
         }
 
         if (versionAsCommand) {
@@ -1231,11 +1242,19 @@ export function run<
           }
         }
 
+        if (versionAsOption && versionParsers.versionOption) {
+          commandParsers.push(versionParsers.versionOption);
+        }
+
         if (completionAsCommand) {
           // Include completion in help even though it's handled via early return
           if (completionParsers.completionCommand) {
             commandParsers.push(completionParsers.completionCommand);
           }
+        }
+
+        if (completionAsOption && completionParsers.completionOption) {
+          commandParsers.push(completionParsers.completionOption);
         }
 
         // Use longestMatch to combine all parsers
