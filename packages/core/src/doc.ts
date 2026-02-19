@@ -1,6 +1,7 @@
 import {
   formatMessage,
   type Message,
+  type MessageFormatOptions,
   type MessageTerm,
   text,
 } from "./message.ts";
@@ -349,14 +350,16 @@ export function formatDocPage(
           : options.maxWidth - termIndent,
       });
 
+      const descColumnWidth = options.maxWidth == null
+        ? undefined
+        : options.maxWidth - termIndent - termWidth - 2;
+
       let description = entry.description == null
         ? ""
         : formatMessage(entry.description, {
           colors: options.colors,
           quotes: !options.colors,
-          maxWidth: options.maxWidth == null
-            ? undefined
-            : options.maxWidth - termIndent - termWidth - 2,
+          maxWidth: descColumnWidth,
         });
 
       // Append default value if showDefault is enabled and default exists
@@ -367,12 +370,39 @@ export function formatDocPage(
         const suffix = typeof options.showDefault === "object"
           ? options.showDefault.suffix ?? "]"
           : "]";
-        const defaultText = `${prefix}${
-          formatMessage(entry.default, {
-            colors: options.colors ? { resetSuffix: "\x1b[2m" } : false,
-            quotes: !options.colors,
-          })
-        }${suffix}`;
+
+        // Determine startWidth so that word-wrapping in the default value
+        // continues correctly from the current line position.
+        let defaultStartWidth: number | undefined;
+        if (descColumnWidth != null) {
+          const lastW = lastLineVisibleLength(description);
+          if (lastW + prefix.length >= descColumnWidth) {
+            description += "\n";
+            defaultStartWidth = prefix.length;
+          } else {
+            defaultStartWidth = lastW + prefix.length;
+          }
+        }
+
+        // `startWidth` is accepted by the formatMessage() implementation but
+        // is absent from the public MessageFormatOptions type.  The inline
+        // intersection type makes TypeScript accept the field here while
+        // keeping it out of the public API.  Because the intersection type is
+        // a subtype of MessageFormatOptions, the call below remains
+        // type-safe.
+        const defaultFormatOptions: MessageFormatOptions & {
+          readonly startWidth?: number;
+        } = {
+          colors: options.colors ? { resetSuffix: "\x1b[2m" } : false,
+          quotes: !options.colors,
+          maxWidth: descColumnWidth,
+          startWidth: defaultStartWidth,
+        };
+        const defaultContent = formatMessage(
+          entry.default,
+          defaultFormatOptions,
+        );
+        const defaultText = `${prefix}${defaultContent}${suffix}`;
         const formattedDefault = options.colors
           ? `\x1b[2m${defaultText}\x1b[0m`
           : defaultText;
@@ -418,10 +448,35 @@ export function formatDocPage(
             ];
           }
         }
-        const choicesDisplay = formatMessage(truncatedTerms, {
+        // Determine startWidth so that word-wrapping in the choices list
+        // continues correctly from the current line position.
+        let choicesStartWidth: number | undefined;
+        if (descColumnWidth != null) {
+          const lastW = lastLineVisibleLength(description);
+          const prefixLabelLen = prefix.length + label.length;
+          if (lastW + prefixLabelLen >= descColumnWidth) {
+            description += "\n";
+            choicesStartWidth = prefixLabelLen;
+          } else {
+            choicesStartWidth = lastW + prefixLabelLen;
+          }
+        }
+
+        // See the comment above the defaultFormatOptions variable for why
+        // startWidth is passed via a typed variable rather than an inline
+        // object literal.
+        const choicesFormatOptions: MessageFormatOptions & {
+          readonly startWidth?: number;
+        } = {
           colors: options.colors ? { resetSuffix: "\x1b[2m" } : false,
           quotes: false,
-        });
+          maxWidth: descColumnWidth,
+          startWidth: choicesStartWidth,
+        };
+        const choicesDisplay = formatMessage(
+          truncatedTerms,
+          choicesFormatOptions,
+        );
         const choicesText = `${prefix}${label}${choicesDisplay}${suffix}`;
         const formattedChoices = options.colors
           ? `\x1b[2m${choicesText}\x1b[0m`
@@ -494,16 +549,23 @@ function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));
 }
 
+// deno-lint-ignore no-control-regex
+const ansiEscapeCodeRegex = /\x1B\[[0-9;]*[a-zA-Z]/g;
+
 function ansiAwareRightPad(
   text: string,
   length: number,
   char: string = " ",
 ): string {
-  // deno-lint-ignore no-control-regex
-  const ansiEscapeCodeRegex = /\x1B\[[0-9;]*[a-zA-Z]/g;
   const strippedText = text.replace(ansiEscapeCodeRegex, "");
   if (strippedText.length >= length) {
     return text;
   }
   return text + char.repeat(length - strippedText.length);
+}
+
+function lastLineVisibleLength(text: string): number {
+  const lastNewline = text.lastIndexOf("\n");
+  const lastLine = lastNewline === -1 ? text : text.slice(lastNewline + 1);
+  return lastLine.replace(ansiEscapeCodeRegex, "").length;
 }

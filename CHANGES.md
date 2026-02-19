@@ -8,6 +8,17 @@ Version 0.10.5
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `formatDocPage()` to respect `maxWidth` when appending default values
+    and available choices via `showDefault` and `showChoices`.  Previously,
+    the appended text was concatenated onto the description string after
+    word-wrapping had already been applied, with no awareness of how much of
+    the current line was already occupied, so lines could far exceed `maxWidth`.
+    [[#129]]
+
+[#129]: https://github.com/dahlia/optique/issues/129
+
 
 Version 0.10.4
 --------------

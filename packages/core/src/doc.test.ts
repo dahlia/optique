@@ -857,4 +857,86 @@ describe("formatDocPage", () => {
       "commas should be between value color sequences",
     );
   });
+
+  describe("maxWidth with showDefault and showChoices", () => {
+    it("should not exceed maxWidth when showDefault overflows the line", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["--opt"] },
+            description: [{ type: "text", text: "Some option" }],
+            default: [{ type: "text", text: "a very long default value" }],
+          }],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, {
+        showDefault: true,
+        maxWidth: 50,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 50,
+          `Line exceeds maxWidth 50: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should not exceed maxWidth when showChoices overflows the line", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["-f", "--format"] },
+            description: [{ type: "text", text: "Output format" }],
+            choices: valueSet(
+              ["json", "yaml", "toml", "xml", "csv", "tsv", "html", "markdown"],
+              { type: "unit" },
+            ),
+          }],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, {
+        showChoices: true,
+        maxWidth: 60,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 60,
+          `Line exceeds maxWidth 60: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should not exceed maxWidth when both showDefault and showChoices overflow", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["-f", "--format"] },
+            description: [{ type: "text", text: "Output format" }],
+            default: [{ type: "text", text: "json" }],
+            choices: valueSet(
+              ["json", "yaml", "toml", "xml", "csv", "tsv", "html", "markdown"],
+              { type: "unit" },
+            ),
+          }],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, {
+        showDefault: true,
+        showChoices: true,
+        maxWidth: 60,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= 60,
+          `Line exceeds maxWidth 60: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+  });
 });
