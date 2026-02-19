@@ -1,4 +1,4 @@
-import { group, object, or } from "@optique/core/constructs";
+import { group, merge, object, or } from "@optique/core/constructs";
 import { runParser, RunParserError } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
@@ -606,6 +606,57 @@ describe("runParser", () => {
 
       assert.equal(result, "help-shown");
       assert.ok(helpShown);
+    });
+
+    // Regression test for https://github.com/dahlia/optique/issues/127
+    it("should include meta options in help page usage and options list", () => {
+      const parser = merge(
+        or(
+          command("foo", object({}), { description: message`foo cmd` }),
+          command("bar", object({}), { description: message`bar cmd` }),
+        ),
+        object({
+          debug: flag("-d", "--debug", {
+            description: message`Enable debug mode`,
+          }),
+        }),
+      );
+
+      let helpOutput = "";
+
+      runParser(parser, "myapp", ["--help"], {
+        help: { mode: "option" },
+        version: { mode: "option", value: "1.2.3" },
+        completion: { mode: "option", name: "both" },
+        onError: () => {},
+        stdout: (text: string) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      // --help should appear in the usage line of the help page
+      const usageLines = helpOutput
+        .split("\n")
+        .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+        .join("\n");
+      assert.ok(
+        usageLines.includes("--help"),
+        `--help should appear in help page usage line, but got:\n${usageLines}`,
+      );
+      assert.ok(
+        usageLines.includes("--version"),
+        `--version should appear in help page usage line, but got:\n${usageLines}`,
+      );
+
+      // --help and --version should appear in the options list
+      assert.ok(
+        helpOutput.split("\n").some((l) => /^\s+--help/.test(l)),
+        `--help should appear in help page options list, but got:\n${helpOutput}`,
+      );
+      assert.ok(
+        helpOutput.split("\n").some((l) => /^\s+--version/.test(l)),
+        `--version should appear in help page options list, but got:\n${helpOutput}`,
+      );
     });
   });
 
