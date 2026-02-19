@@ -10,6 +10,17 @@ To be released.
 
 ### @optique/core
 
+ -  Fixed meta options (`--help`, `--version`, `--completion`) being absent
+    from both the usage line and the options list in the full help page, even
+    though they appear correctly in the usage line shown above parse errors.
+    The root cause was that `helpGeneratorParser`—the parser used to produce
+    the help page—was built from the user's parser and any meta *commands*,
+    but never included the meta *option* parsers (`helpOption`, `versionOption`,
+    `completionOption`).  As a result, `getDocFragments()` was never called on
+    those parsers, so their entries were silently omitted.  The fix adds the
+    meta option parsers to the `commandParsers` list whenever the corresponding
+    mode is `"option"` or `"both"`.  [[#127]]
+
  -  Fixed `formatDocPage()` to respect `maxWidth` when appending default values
     and available choices via `showDefault` and `showChoices`.  Previously,
     the appended text was concatenated onto the description string after
@@ -17,6 +28,7 @@ To be released.
     the current line was already occupied, so lines could far exceed `maxWidth`.
     [[#129]]
 
+[#127]: https://github.com/dahlia/optique/issues/127
 [#129]: https://github.com/dahlia/optique/issues/129
 
 
