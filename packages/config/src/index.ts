@@ -31,12 +31,41 @@ import { message } from "@optique/core/message";
 export const configKey: unique symbol = Symbol.for("@optique/config");
 
 /**
+ * Unique symbol for config metadata in annotations.
+ * @since 1.0.0
+ */
+export const configMetaKey: unique symbol = Symbol.for("@optique/config/meta");
+
+/**
+ * Metadata about the loaded config source.
+ *
+ * @since 1.0.0
+ */
+export interface ConfigMeta {
+  /**
+   * Directory containing the config file.
+   */
+  readonly configDir: string;
+
+  /**
+   * Absolute path to the config file.
+   */
+  readonly configPath: string;
+}
+
+/**
  * Internal registry for active config data during runWithConfig execution.
  * This is a workaround for the limitation that object() doesn't propagate
  * annotations to child field parsers.
  * @internal
  */
 const activeConfigRegistry: Map<symbol, unknown> = new Map();
+
+/**
+ * Internal registry for active config metadata during runWithConfig execution.
+ * @internal
+ */
+const activeConfigMetaRegistry: Map<symbol, unknown> = new Map();
 
 /**
  * Sets active config data for a context.
@@ -60,6 +89,30 @@ export function getActiveConfig<T>(contextId: symbol): T | undefined {
  */
 export function clearActiveConfig(contextId: symbol): void {
   activeConfigRegistry.delete(contextId);
+}
+
+/**
+ * Sets active config metadata for a context.
+ * @internal
+ */
+export function setActiveConfigMeta<T>(contextId: symbol, meta: T): void {
+  activeConfigMetaRegistry.set(contextId, meta);
+}
+
+/**
+ * Gets active config metadata for a context.
+ * @internal
+ */
+export function getActiveConfigMeta<T>(contextId: symbol): T | undefined {
+  return activeConfigMetaRegistry.get(contextId) as T | undefined;
+}
+
+/**
+ * Clears active config metadata for a context.
+ * @internal
+ */
+export function clearActiveConfigMeta(contextId: symbol): void {
+  activeConfigMetaRegistry.delete(contextId);
 }
 
 /**
@@ -106,7 +159,7 @@ export interface ConfigContextRequiredOptions {
  * @template T The validated config data type.
  * @since 0.10.0
  */
-export interface ConfigContext<T>
+export interface ConfigContext<T, TConfigMeta = ConfigMeta>
   extends SourceContext<ConfigContextRequiredOptions> {
   /**
    * The Standard Schema validator for the config file.
@@ -121,6 +174,7 @@ export interface ConfigContext<T>
  * with runWith() or runWithConfig() to provide configuration file support.
  *
  * @template T The output type of the config schema.
+ * @template TConfigMeta The metadata type for config sources.
  * @param options Configuration options including schema and optional parser.
  * @returns A config context that can be used with bindConfig() and runWithConfig().
  * @since 0.10.0
@@ -138,9 +192,9 @@ export interface ConfigContext<T>
  * const configContext = createConfigContext({ schema });
  * ```
  */
-export function createConfigContext<T>(
+export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   options: ConfigContextOptions<T>,
-): ConfigContext<T> {
+): ConfigContext<T, TConfigMeta> {
   // Create a unique ID for this context instance
   const contextId = Symbol.for(`@optique/config:${Math.random()}`);
 
@@ -168,18 +222,19 @@ export function createConfigContext<T>(
  * @template TValue The value type extracted from config.
  * @since 0.10.0
  */
-export interface BindConfigOptions<T, TValue> {
+export interface BindConfigOptions<T, TValue, TConfigMeta = ConfigMeta> {
   /**
    * The config context to use for fallback values.
    */
-  readonly context: ConfigContext<T>;
+  readonly context: ConfigContext<T, TConfigMeta>;
 
   /**
    * Key or accessor function to extract the value from config.
    * Can be a property key (for top-level config values) or a function
-   * that extracts nested values.
+   * that extracts nested values. Accessor callbacks receive config metadata
+   * as the second argument.
    */
-  readonly key: keyof T | ((config: T) => TValue);
+  readonly key: keyof T | ((config: T, meta: TConfigMeta) => TValue);
 
   /**
    * Default value to use when neither CLI nor config provides a value.
@@ -224,9 +279,10 @@ export function bindConfig<
   TValue,
   TState,
   T,
+  TConfigMeta = ConfigMeta,
 >(
   parser: Parser<M, TValue, TState>,
-  options: BindConfigOptions<T, TValue>,
+  options: BindConfigOptions<T, TValue, TConfigMeta>,
 ): Parser<M, TValue, TState> {
   type ConfigBindState = { hasCliValue: boolean; cliState?: TState };
 
@@ -336,7 +392,7 @@ export function bindConfig<
       }
 
       // No CLI value, check config
-      return getConfigOrDefault<T, TValue>(state, options) as ModeValue<
+      return getConfigOrDefault(state, options) as ModeValue<
         M,
         ValueParserResult<TValue>
       >;
@@ -355,19 +411,21 @@ export function bindConfig<
  * Checks both annotations (for top-level parsers) and the active config
  * registry (for parsers nested inside object() when used with runWithConfig).
  */
-function getConfigOrDefault<T, TValue>(
+function getConfigOrDefault<T, TValue, TConfigMeta>(
   state: unknown,
-  options: BindConfigOptions<T, TValue>,
+  options: BindConfigOptions<T, TValue, TConfigMeta>,
 ): Result<TValue> {
   // First, try to get config from annotations (works for top-level parsers)
   const annotations = getAnnotations(state);
   let configData = annotations?.[configKey] as T | undefined;
+  let configMeta = annotations?.[configMetaKey] as TConfigMeta | undefined;
 
   // If not found in annotations, check the active config registry
   // (this handles the case when used inside object() with runWithConfig)
   if (configData === undefined || configData === null) {
     const contextId = options.context.id;
     configData = getActiveConfig<T>(contextId);
+    configMeta = getActiveConfigMeta<TConfigMeta>(contextId);
   }
 
   let configValue: TValue | undefined;
@@ -376,7 +434,7 @@ function getConfigOrDefault<T, TValue>(
     // Extract value from config
     if (typeof options.key === "function") {
       try {
-        configValue = options.key(configData);
+        configValue = options.key(configData, configMeta as TConfigMeta);
       } catch {
         configValue = undefined;
       }

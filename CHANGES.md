@@ -59,6 +59,22 @@ To be released.
 [#120]: https://github.com/dahlia/optique/issues/120
 [#131]: https://github.com/dahlia/optique/issues/131
 
+### @optique/config
+
+ -  Added config-source metadata support for `bindConfig()` key accessors.
+    Accessor callbacks now receive a second `meta` argument, and single-file
+    mode now provides default `ConfigMeta` values (`configPath`, `configDir`)
+    so path-like options can be resolved relative to the config file location.
+    [[#111]]
+
+ -  Changed `CustomLoadOptions.load` to return
+    `{ config, meta }` (`ConfigLoadResult<TConfigMeta>`) instead of raw config
+    data.  This makes metadata extensible for custom multi-file loaders and
+    allows `createConfigContext<T, TConfigMeta>()` to carry a custom metadata
+    type through to `bindConfig()` key callbacks.  [[#111]]
+
+[#111]: https://github.com/dahlia/optique/issues/111
+
 
 Version 0.10.6
 --------------

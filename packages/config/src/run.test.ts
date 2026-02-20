@@ -1,13 +1,15 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import process from "node:process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
 import { flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
 import { bindConfig, createConfigContext } from "./index.ts";
+import type { ConfigMeta } from "./index.ts";
 import { runWithConfig } from "./run.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
@@ -365,7 +367,13 @@ describe("runWithConfig", { concurrency: false }, () => {
           const base = JSON.parse(await readFile(baseConfigPath, "utf-8"));
           const user = JSON.parse(await readFile(userConfigPath, "utf-8"));
           // Simple merge: user overrides base
-          return { ...base, ...user };
+          return {
+            config: { ...base, ...user },
+            meta: {
+              configDir: TEST_DIR,
+              configPath: join(TEST_DIR, "merged-config.json"),
+            } satisfies ConfigMeta,
+          };
         },
         args: [],
       });
@@ -390,7 +398,13 @@ describe("runWithConfig", { concurrency: false }, () => {
     });
 
     const result = await runWithConfig(parser, context, {
-      load: () => 0,
+      load: () => ({
+        config: 0,
+        meta: {
+          configDir: TEST_DIR,
+          configPath: join(TEST_DIR, "custom-loader-number.json"),
+        } satisfies ConfigMeta,
+      }),
       args: [],
     });
 
@@ -451,6 +465,128 @@ describe("runWithConfig", { concurrency: false }, () => {
     } finally {
       await rm(configPath, { force: true });
     }
+  });
+
+  test("single-file mode passes config metadata to key callback", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-path-meta.json");
+
+    await writeFile(configPath, JSON.stringify({ outDir: "./output" }));
+
+    try {
+      const schema = z.object({
+        outDir: z.string(),
+      });
+
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        config: withDefault(option("--config", string()), configPath),
+        outDir: bindConfig(option("--out-dir", string()), {
+          context,
+          key: (config, meta) => resolve(meta.configDir, config.outDir),
+          default: "./fallback",
+        }),
+      });
+
+      const result = await runWithConfig(parser, context, {
+        getConfigPath: (parsed) => (parsed as { config: string }).config,
+        args: [],
+      });
+
+      assert.equal(result.outDir, resolve(TEST_DIR, "output"));
+    } finally {
+      await rm(configPath, { force: true });
+    }
+  });
+
+  test("single-file metadata normalizes relative config path to absolute", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-relative-meta.json");
+    const relativeConfigPath = relative(process.cwd(), configPath);
+
+    await writeFile(configPath, JSON.stringify({ name: "demo" }));
+
+    try {
+      const schema = z.object({
+        name: z.string(),
+      });
+
+      const context = createConfigContext({ schema });
+      const parser = bindConfig(option("--name", string()), {
+        context,
+        key: (_config, meta) => meta.configPath,
+        default: "unused",
+      });
+
+      const result = await runWithConfig(parser, context, {
+        getConfigPath: () => relativeConfigPath,
+        args: [],
+      });
+
+      assert.equal(result, resolve(configPath));
+    } finally {
+      await rm(configPath, { force: true });
+    }
+  });
+
+  test("custom load mode passes custom metadata to key callback", async () => {
+    interface CustomMeta {
+      readonly source: "project" | "user" | "system";
+      readonly dir: string;
+    }
+
+    const schema = z.object({
+      outDir: z.string(),
+    });
+
+    const context = createConfigContext<z.infer<typeof schema>, CustomMeta>({
+      schema,
+    });
+
+    const parser = bindConfig(option("--out-dir", string()), {
+      context,
+      key: (config, meta) =>
+        `${meta.source}:${resolve(meta.dir, config.outDir)}`,
+      default: "unused",
+    });
+
+    const result = await runWithConfig(parser, context, {
+      load: () => ({
+        config: { outDir: "./cache" },
+        meta: { source: "project", dir: "/workspace" },
+      }),
+      args: [],
+    });
+
+    assert.equal(result, "project:/workspace/cache");
+  });
+
+  test("custom load mode keeps default ConfigMeta type", async () => {
+    const schema = z.object({
+      outDir: z.string(),
+    });
+
+    const context = createConfigContext({ schema });
+
+    const parser = bindConfig(option("--out-dir", string()), {
+      context,
+      key: (config, meta) => resolve(meta.configDir, config.outDir),
+      default: "unused",
+    });
+
+    const result = await runWithConfig(parser, context, {
+      load: () => ({
+        config: { outDir: "./build" },
+        meta: {
+          configDir: "/repo",
+          configPath: "/repo/myapp.json",
+        } satisfies ConfigMeta,
+      }),
+      args: [],
+    });
+
+    assert.equal(result, "/repo/build");
   });
 
   describe("help/version/completion support", () => {
@@ -656,7 +792,13 @@ describe("runWithConfig", { concurrency: false }, () => {
     );
 
     const result = await runWithConfig(parser, context, {
-      load: () => ({}),
+      load: () => ({
+        config: {},
+        meta: {
+          configDir: TEST_DIR,
+          configPath: join(TEST_DIR, "issue-131-default.json"),
+        } satisfies ConfigMeta,
+      }),
       args: [],
     });
 
@@ -678,7 +820,13 @@ describe("runWithConfig", { concurrency: false }, () => {
     );
 
     const result = await runWithConfig(parser, context, {
-      load: () => ({}),
+      load: () => ({
+        config: {},
+        meta: {
+          configDir: TEST_DIR,
+          configPath: join(TEST_DIR, "issue-131-parsed.json"),
+        } satisfies ConfigMeta,
+      }),
       args: ["--enabled", "--dependent", "foo"],
     });
 

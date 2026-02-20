@@ -326,6 +326,46 @@ With a config file:
 ~~~~
 
 
+Resolving paths relative to config files
+----------------------------------------
+
+For path-like options, CLI values and config values often need different base
+directories:
+
+ -  CLI values are usually interpreted relative to the current working
+    directory
+ -  Config values are usually interpreted relative to the config file location
+
+`bindConfig()` key callbacks receive metadata as a second argument, so you can
+resolve config-relative paths reliably.
+
+~~~~ typescript twoslash
+import { resolve } from "node:path";
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { map } from "@optique/core/modifiers";
+
+const configContext = createConfigContext({
+  schema: z.object({
+    outDir: z.string(),
+  }),
+});
+
+const parser = bindConfig(
+  map(option("--out-dir", string()), (value) => resolve(process.cwd(), value)),
+  {
+    context: configContext,
+    key: (config, meta) => resolve(meta.configDir, config.outDir),
+  },
+);
+~~~~
+
+In single-file mode, Optique provides `meta.configPath` and `meta.configDir`
+automatically.
+
+
 Config-only values
 ------------------
 
@@ -469,6 +509,7 @@ import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 declare function deepMerge(...objects: any[]): any;
 
 const configSchema = z.object({
@@ -513,8 +554,16 @@ const result = await runWithConfig(parser, configContext, {
       ? JSON.parse(await readFile(parsed.config, "utf-8"))
       : {};
 
+    const customPath = resolve(parsed.config ?? "./.myapp.json");
+
     // Merge with priority: custom > project > user > system
-    return deepMerge(system, user, project, custom);
+    return {
+      config: deepMerge(system, user, project, custom),
+      meta: {
+        configPath: customPath,
+        configDir: dirname(customPath),
+      },
+    };
   },
   args: process.argv.slice(2),
 });
@@ -692,7 +741,7 @@ Parameters
 :    -  `options.schema`: Standard Schema validator for the config file
 
 Returns
-:   `ConfigContext<T>` implementing `SourceContext` interface
+:   `ConfigContext<T, TConfigMeta>` implementing `SourceContext` interface
 
 ### `bindConfig(parser, options)`
 
@@ -700,9 +749,15 @@ Binds a parser to configuration values with fallback priority.
 
 Parameters
 :    -  `parser`: The parser to bind
+
      -  `options.context`: Config context to use
+
      -  `options.key`: Property key or accessor function to extract value from
-        config
+        config. Accessor functions receive two arguments:
+
+         1)  `config`: validated config data
+         2)  `meta`: config metadata (`ConfigMeta` by default)
+
      -  `options.default`: Optional default value
 
 Returns
@@ -727,9 +782,14 @@ Single-file mode (`SingleFileOptions`):
         (defaults to JSON.parse)
 
 Custom load mode (`CustomLoadOptions`):
-:    -  `options.load`: Function that receives parsed result and returns config
-        data (or Promise of it). Allows full control over multi-file loading,
-        merging, and error handling.
+:    -  `options.load`: Function that receives parsed result and returns
+        `ConfigLoadResult<TConfigMeta>` (or Promise of it):
+
+          -  `config`: raw config data to validate
+          -  `meta`: metadata passed to `bindConfig()` key callbacks
+
+        This allows full control over multi-file loading, merging, and
+        metadata tracking.
 
 Returns
 :   `Promise<TValue>` with the parsed result
@@ -737,6 +797,17 @@ Returns
 ### `configKey`
 
 Symbol key used to store config data in annotations.
+
+### `configMetaKey`
+
+Symbol key used to store config metadata in annotations.
+
+### `ConfigMeta`
+
+Default config metadata shape:
+
+ -  `configPath`: Absolute path to the config file
+ -  `configDir`: Directory containing the config file
 
 
 Limitations

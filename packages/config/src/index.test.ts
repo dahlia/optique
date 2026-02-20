@@ -8,7 +8,13 @@ import { integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 
 import type { Annotations } from "@optique/core/annotations";
-import { bindConfig, configKey, createConfigContext } from "./index.ts";
+import {
+  bindConfig,
+  configKey,
+  configMetaKey,
+  createConfigContext,
+} from "./index.ts";
+import type { ConfigMeta } from "./index.ts";
 
 describe("createConfigContext", () => {
   test("creates a config context with Standard Schema", () => {
@@ -162,6 +168,52 @@ describe("bindConfig", () => {
     const result = parse(parser, [], { annotations });
     assert.ok(result.success);
     assert.equal(result.value, "nested.example.com");
+  });
+
+  test("passes config metadata to key accessor callback", () => {
+    const schema = z.object({
+      outDir: z.string(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--out-dir", string()), {
+      context,
+      key: (config, meta) => `${meta.configDir}:${config.outDir}`,
+      default: "unused",
+    });
+
+    const annotations: Annotations = {
+      [configKey]: { outDir: "./dist" },
+      [configMetaKey]: {
+        configDir: "/project",
+        configPath: "/project/app.json",
+      } satisfies ConfigMeta,
+    };
+
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, "/project:./dist");
+  });
+
+  test("passes undefined metadata when none is available", () => {
+    const schema = z.object({
+      outDir: z.string(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--out-dir", string()), {
+      context,
+      key: (config, meta) => `${meta?.configDir ?? "no-meta"}:${config.outDir}`,
+      default: "unused",
+    });
+
+    const annotations: Annotations = {
+      [configKey]: { outDir: "./dist" },
+    };
+
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, "no-meta:./dist");
   });
 
   test("supports nested key access with string key path", () => {

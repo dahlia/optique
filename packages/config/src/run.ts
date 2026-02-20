@@ -9,14 +9,21 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { basename, dirname, resolve as resolvePath } from "node:path";
 import process from "node:process";
 import type { Parser } from "@optique/core/parser";
 import type { Annotations, SourceContext } from "@optique/core/context";
 import type { RunOptions } from "@optique/core/facade";
 import { runWith } from "@optique/core/facade";
-import type { ConfigContext } from "./index.ts";
-import { clearActiveConfig, configKey, setActiveConfig } from "./index.ts";
+import type { ConfigContext, ConfigMeta } from "./index.ts";
+import {
+  clearActiveConfig,
+  clearActiveConfigMeta,
+  configKey,
+  configMetaKey,
+  setActiveConfig,
+  setActiveConfigMeta,
+} from "./index.ts";
 
 function isErrnoException(
   error: unknown,
@@ -151,6 +158,24 @@ export interface SingleFileOptions<TValue, THelp = void, TError = never> {
 }
 
 /**
+ * Result type for custom config loading.
+ *
+ * @template TConfigMeta Metadata type associated with loaded config data.
+ * @since 1.0.0
+ */
+export interface ConfigLoadResult<TConfigMeta = ConfigMeta> {
+  /**
+   * Raw config data to validate against the schema.
+   */
+  readonly config: unknown;
+
+  /**
+   * Metadata about where the config came from.
+   */
+  readonly meta: TConfigMeta;
+}
+
+/**
  * Options for custom config loading with multi-file merging support.
  *
  * @template TValue The parser value type, inferred from the parser.
@@ -158,7 +183,12 @@ export interface SingleFileOptions<TValue, THelp = void, TError = never> {
  * @template TError The return type when an error occurs.
  * @since 0.10.0
  */
-export interface CustomLoadOptions<TValue, THelp = void, TError = never> {
+export interface CustomLoadOptions<
+  TValue,
+  TConfigMeta = ConfigMeta,
+  THelp = void,
+  TError = never,
+> {
   /**
    * Custom loader function that receives the first-pass parse result and
    * returns the config data (or a Promise of it). This allows full control
@@ -167,9 +197,11 @@ export interface CustomLoadOptions<TValue, THelp = void, TError = never> {
    * The returned data will be validated against the schema.
    *
    * @param parsed The result from the first parse pass.
-   * @returns The raw config data (will be validated by schema).
+   * @returns Config data and metadata (config is validated by schema).
    */
-  readonly load: (parsed: TValue) => Promise<unknown> | unknown;
+  readonly load: (parsed: TValue) =>
+    | Promise<ConfigLoadResult<TConfigMeta>>
+    | ConfigLoadResult<TConfigMeta>;
 
   /**
    * Command-line arguments to parse.
@@ -277,17 +309,28 @@ export interface CustomLoadOptions<TValue, THelp = void, TError = never> {
  * @template TError The return type when an error occurs.
  * @since 0.10.0
  */
-export type RunWithConfigOptions<TValue, THelp = void, TError = never> =
+export type RunWithConfigOptions<
+  TValue,
+  TConfigMeta = ConfigMeta,
+  THelp = void,
+  TError = never,
+> =
   | SingleFileOptions<TValue, THelp, TError>
-  | CustomLoadOptions<TValue, THelp, TError>;
+  | CustomLoadOptions<TValue, TConfigMeta, THelp, TError>;
 
 /**
  * Helper function to create a wrapper SourceContext for config loading.
  * @internal
  */
-function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
-  context: ConfigContext<T>,
-  options: RunWithConfigOptions<TValue, THelp, TError>,
+function createConfigSourceContext<
+  T,
+  TConfigMeta,
+  TValue,
+  THelp = void,
+  TError = never,
+>(
+  context: ConfigContext<T, TConfigMeta>,
+  options: RunWithConfigOptions<TValue, TConfigMeta, THelp, TError>,
 ): SourceContext<void> {
   return {
     id: context.id,
@@ -296,56 +339,55 @@ function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
       if (!parsed) return {};
 
       let configData: T | undefined;
+      let configMeta: TConfigMeta | undefined;
 
       // Check if using custom loader or single-file mode
       if ("load" in options) {
         // Custom load mode
-        const customOptions = options as CustomLoadOptions<TValue>;
-        try {
-          const rawData = await Promise.resolve(
-            customOptions.load(parsed as TValue),
-          );
+        const customOptions = options as CustomLoadOptions<TValue, TConfigMeta>;
+        const loaded = await Promise.resolve(
+          customOptions.load(parsed as TValue),
+        );
 
-          // Validate with Standard Schema
-          const validation = context.schema["~standard"].validate(rawData);
+        // Validate with Standard Schema
+        const validation = context.schema["~standard"].validate(loaded.config);
 
-          let validationResult: typeof validation extends Promise<infer R> ? R
-            : typeof validation;
+        let validationResult: typeof validation extends Promise<infer R> ? R
+          : typeof validation;
 
-          if (validation instanceof Promise) {
-            validationResult = await validation;
-          } else {
-            validationResult = validation;
-          }
-
-          if (validationResult.issues) {
-            // Validation failed
-            const firstIssue = validationResult.issues[0];
-            throw new Error(
-              `Config validation failed: ${
-                firstIssue?.message ?? "Unknown error"
-              }`,
-            );
-          }
-
-          configData = validationResult.value as T;
-        } catch (error) {
-          // Re-throw validation errors
-          if (error instanceof Error && error.message.includes("validation")) {
-            throw error;
-          }
-          // Re-throw any other errors from custom loader
-          throw error;
+        if (validation instanceof Promise) {
+          validationResult = await validation;
+        } else {
+          validationResult = validation;
         }
+
+        if (validationResult.issues) {
+          // Validation failed
+          const firstIssue = validationResult.issues[0];
+          throw new Error(
+            `Config validation failed: ${
+              firstIssue?.message ?? "Unknown error"
+            }`,
+          );
+        }
+
+        configData = validationResult.value as T;
+        configMeta = loaded.meta;
       } else {
         // Single-file mode
         const singleFileOptions = options as SingleFileOptions<TValue>;
         const configPath = singleFileOptions.getConfigPath(parsed as TValue);
 
         if (configPath) {
+          const absoluteConfigPath = resolvePath(configPath);
+          const singleFileMeta: ConfigMeta = {
+            configDir: dirname(absoluteConfigPath),
+            configPath: absoluteConfigPath,
+          };
+
           // Load config file
           try {
-            const contents = await readFile(configPath);
+            const contents = await readFile(absoluteConfigPath);
 
             // Parse file contents
             let rawData: unknown;
@@ -380,13 +422,14 @@ function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
             }
 
             configData = validationResult.value as T;
+            configMeta = singleFileMeta as TConfigMeta;
           } catch (error) {
             // Missing config file is optional in single-file mode.
             if (isErrnoException(error) && error.code === "ENOENT") {
               configData = undefined;
             } else if (error instanceof SyntaxError) {
               throw new Error(
-                `Failed to parse config file ${configPath}: ${error.message}`,
+                `Failed to parse config file ${absoluteConfigPath}: ${error.message}`,
               );
             } else {
               throw error;
@@ -398,6 +441,14 @@ function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
       // Set active config in registry for nested parsers inside object()
       if (configData !== undefined && configData !== null) {
         setActiveConfig(context.id, configData);
+        if (configMeta !== undefined) {
+          setActiveConfigMeta(context.id, configMeta);
+          return {
+            [configKey]: configData,
+            [configMetaKey]: configMeta,
+          };
+        }
+
         return { [configKey]: configData };
       }
 
@@ -424,6 +475,7 @@ function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
  * @template TValue The parser value type.
  * @template TState The parser state type.
  * @template T The config data type.
+ * @template TConfigMeta The config metadata type.
  * @template THelp The return type when help is shown.
  * @template TError The return type when an error occurs.
  * @param parser The parser to execute.
@@ -474,7 +526,15 @@ function createConfigSourceContext<T, TValue, THelp = void, TError = never>(
  *       loadToml("~/.config/app/config.toml").catch(() => ({})),
  *       loadToml("./.app.toml").catch(() => ({})),
  *     ]);
- *     return deepMerge(...configs);
+ *
+ *     const configPath = parsed.config ?? "./.app.toml";
+ *     return {
+ *       config: deepMerge(...configs),
+ *       meta: {
+ *         configPath,
+ *         configDir: configPath.slice(0, configPath.lastIndexOf("/")),
+ *       },
+ *     };
  *   },
  *   args: process.argv.slice(2),
  *   help: { mode: "option", onShow: () => process.exit(0) },
@@ -490,8 +550,36 @@ export async function runWithConfig<
   TError = never,
 >(
   parser: Parser<M, TValue, TState>,
-  context: ConfigContext<T>,
-  options: RunWithConfigOptions<TValue, THelp, TError>,
+  context: ConfigContext<T, ConfigMeta>,
+  options: SingleFileOptions<TValue, THelp, TError>,
+): Promise<TValue>;
+
+export async function runWithConfig<
+  M extends "sync" | "async",
+  TValue,
+  TState,
+  T,
+  TConfigMeta = ConfigMeta,
+  THelp = void,
+  TError = never,
+>(
+  parser: Parser<M, TValue, TState>,
+  context: ConfigContext<T, TConfigMeta>,
+  options: CustomLoadOptions<TValue, TConfigMeta, THelp, TError>,
+): Promise<TValue>;
+
+export async function runWithConfig<
+  M extends "sync" | "async",
+  TValue,
+  TState,
+  T,
+  TConfigMeta = ConfigMeta,
+  THelp = void,
+  TError = never,
+>(
+  parser: Parser<M, TValue, TState>,
+  context: ConfigContext<T, TConfigMeta>,
+  options: RunWithConfigOptions<TValue, TConfigMeta, THelp, TError>,
 ): Promise<TValue> {
   // Determine program name
   const effectiveProgramName = options.programName ??
@@ -543,5 +631,6 @@ export async function runWithConfig<
   } finally {
     // Always clear the active config after parsing
     clearActiveConfig(context.id);
+    clearActiveConfigMeta(context.id);
   }
 }
