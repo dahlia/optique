@@ -2164,10 +2164,12 @@ function mergeAnnotations(
  * two-phase parsing is needed.
  *
  * @param contexts Source contexts to collect annotations from.
+ * @param options Optional context-required options to pass to each context.
  * @returns Promise with merged annotations and dynamic-context hint.
  */
 async function collectPhase1Annotations(
   contexts: readonly SourceContext<unknown>[],
+  options?: unknown,
 ): Promise<
   { readonly annotations: Annotations; readonly hasDynamic: boolean }
 > {
@@ -2175,7 +2177,7 @@ async function collectPhase1Annotations(
   let hasDynamic = false;
 
   for (const context of contexts) {
-    const result = context.getAnnotations();
+    const result = context.getAnnotations(undefined, options);
     if (result instanceof Promise) {
       hasDynamic = true;
       annotationsList.push(await result);
@@ -2198,16 +2200,18 @@ async function collectPhase1Annotations(
  *
  * @param contexts Source contexts to collect annotations from.
  * @param parsed Optional parsed result from a previous parse pass.
+ * @param options Optional context-required options to pass to each context.
  * @returns Promise that resolves to merged annotations.
  */
 async function collectAnnotations(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
+  options?: unknown,
 ): Promise<Annotations> {
   const annotationsList: Annotations[] = [];
 
   for (const context of contexts) {
-    const result = context.getAnnotations(parsed);
+    const result = context.getAnnotations(parsed, options);
     annotationsList.push(result instanceof Promise ? await result : result);
   }
 
@@ -2219,17 +2223,19 @@ async function collectAnnotations(
  * whether two-phase parsing is needed.
  *
  * @param contexts Source contexts to collect annotations from.
+ * @param options Optional context-required options to pass to each context.
  * @returns Merged annotations with dynamic-context hint.
  * @throws Error if any context returns a Promise.
  */
 function collectPhase1AnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
+  options?: unknown,
 ): { readonly annotations: Annotations; readonly hasDynamic: boolean } {
   const annotationsList: Annotations[] = [];
   let hasDynamic = false;
 
   for (const context of contexts) {
-    const result = context.getAnnotations();
+    const result = context.getAnnotations(undefined, options);
     if (result instanceof Promise) {
       throw new Error(
         `Context ${String(context.id)} returned a Promise in sync mode. ` +
@@ -2253,17 +2259,19 @@ function collectPhase1AnnotationsSync(
  *
  * @param contexts Source contexts to collect annotations from.
  * @param parsed Optional parsed result from a previous parse pass.
+ * @param options Optional context-required options to pass to each context.
  * @returns Merged annotations.
  * @throws Error if any context returns a Promise.
  */
 function collectAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
+  options?: unknown,
 ): Annotations {
   const annotationsList: Annotations[] = [];
 
   for (const context of contexts) {
-    const result = context.getAnnotations(parsed);
+    const result = context.getAnnotations(parsed, options);
     if (result instanceof Promise) {
       throw new Error(
         `Context ${String(context.id)} returned a Promise in sync mode. ` +
@@ -2274,6 +2282,48 @@ function collectAnnotationsSync(
   }
 
   return mergeAnnotations(annotationsList);
+}
+
+/**
+ * Disposes all contexts that implement `AsyncDisposable` or `Disposable`.
+ * Prefers `[Symbol.asyncDispose]` over `[Symbol.dispose]`.
+ *
+ * @param contexts Source contexts to dispose.
+ */
+async function disposeContexts(
+  contexts: readonly SourceContext<unknown>[],
+): Promise<void> {
+  for (const context of contexts) {
+    if (
+      Symbol.asyncDispose in context &&
+      typeof context[Symbol.asyncDispose] === "function"
+    ) {
+      await context[Symbol.asyncDispose]!();
+    } else if (
+      Symbol.dispose in context &&
+      typeof context[Symbol.dispose] === "function"
+    ) {
+      context[Symbol.dispose]!();
+    }
+  }
+}
+
+/**
+ * Disposes all contexts that implement `Disposable` synchronously.
+ *
+ * @param contexts Source contexts to dispose.
+ */
+function disposeContextsSync(
+  contexts: readonly SourceContext<unknown>[],
+): void {
+  for (const context of contexts) {
+    if (
+      Symbol.dispose in context &&
+      typeof context[Symbol.dispose] === "function"
+    ) {
+      context[Symbol.dispose]!();
+    }
+  }
 }
 
 /**
@@ -2428,111 +2478,124 @@ export async function runWith<
     );
   }
 
-  // Phase 1: Collect initial annotations
-  const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
-    await collectPhase1Annotations(contexts);
-
-  if (!needsTwoPhase) {
-    // All static contexts - single pass is sufficient
-    // Inject annotations into the parser's initial state
-    const augmentedParser = injectAnnotationsIntoParser(
-      parser,
-      phase1Annotations,
-    );
-
-    if (parser.$mode === "async") {
-      return runParser(
-        augmentedParser,
-        programName,
-        args,
-        options,
-      ) as Promise<InferValue<TParser>>;
-    }
-    return Promise.resolve(
-      runParser(augmentedParser, programName, args, options) as InferValue<
-        TParser
-      >,
-    );
-  }
-
-  // Two-phase parsing for dynamic contexts
-  // First pass: parse with Phase 1 annotations to get initial result
-  const augmentedParser1 = injectAnnotationsIntoParser(
-    parser,
-    phase1Annotations,
-  );
-
-  let firstPassResult: unknown;
-  let firstPassFailed = false;
   try {
-    if (parser.$mode === "async") {
-      firstPassResult = await parseAsync(augmentedParser1, args);
-    } else {
-      firstPassResult = parseSync(
-        augmentedParser1 as Parser<"sync", unknown, unknown>,
-        args,
+    // Phase 1: Collect initial annotations
+    const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
+      await collectPhase1Annotations(contexts, options);
+
+    if (!needsTwoPhase) {
+      // All static contexts - single pass is sufficient
+      // Inject annotations into the parser's initial state
+      const augmentedParser = injectAnnotationsIntoParser(
+        parser,
+        phase1Annotations,
+      );
+
+      if (parser.$mode === "async") {
+        return runParser(
+          augmentedParser,
+          programName,
+          args,
+          options,
+        ) as Promise<InferValue<TParser>>;
+      }
+      return Promise.resolve(
+        runParser(augmentedParser, programName, args, options) as InferValue<
+          TParser
+        >,
       );
     }
 
-    // Extract value from result
-    if (
-      typeof firstPassResult === "object" && firstPassResult !== null &&
-      "success" in firstPassResult
-    ) {
-      const result = firstPassResult as Result<unknown>;
-      if (result.success) {
-        firstPassResult = result.value;
-      } else {
-        firstPassFailed = true;
-      }
-    }
-  } catch {
-    firstPassFailed = true;
-  }
-
-  // First pass failed - run through runParser for proper error handling.
-  // This is done outside the try-catch to prevent the catch block from
-  // re-invoking runParser when it throws (which caused double error output).
-  if (firstPassFailed) {
-    const augmentedParser = injectAnnotationsIntoParser(
+    // Two-phase parsing for dynamic contexts
+    // First pass: parse with Phase 1 annotations to get initial result
+    const augmentedParser1 = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
+
+    let firstPassResult: unknown;
+    let firstPassFailed = false;
+    try {
+      if (parser.$mode === "async") {
+        firstPassResult = await parseAsync(augmentedParser1, args);
+      } else {
+        firstPassResult = parseSync(
+          augmentedParser1 as Parser<"sync", unknown, unknown>,
+          args,
+        );
+      }
+
+      // Extract value from result
+      if (
+        typeof firstPassResult === "object" && firstPassResult !== null &&
+        "success" in firstPassResult
+      ) {
+        const result = firstPassResult as Result<unknown>;
+        if (result.success) {
+          firstPassResult = result.value;
+        } else {
+          firstPassFailed = true;
+        }
+      }
+    } catch {
+      firstPassFailed = true;
+    }
+
+    // First pass failed - run through runParser for proper error handling.
+    // This is done outside the try-catch to prevent the catch block from
+    // re-invoking runParser when it throws (which caused double error output).
+    if (firstPassFailed) {
+      const augmentedParser = injectAnnotationsIntoParser(
+        parser,
+        phase1Annotations,
+      );
+      if (parser.$mode === "async") {
+        return runParser(
+          augmentedParser,
+          programName,
+          args,
+          options,
+        ) as Promise<
+          InferValue<TParser>
+        >;
+      }
+      return Promise.resolve(
+        runParser(augmentedParser, programName, args, options) as InferValue<
+          TParser
+        >,
+      );
+    }
+
+    // Phase 2: Collect annotations with parsed result
+    const phase2Annotations = await collectAnnotations(
+      contexts,
+      firstPassResult,
+      options,
+    );
+
+    // Final parse with merged annotations
+    const finalAnnotations = mergeAnnotations([
+      phase1Annotations,
+      phase2Annotations,
+    ]);
+    const augmentedParser2 = injectAnnotationsIntoParser(
+      parser,
+      finalAnnotations,
+    );
+
     if (parser.$mode === "async") {
-      return runParser(augmentedParser, programName, args, options) as Promise<
+      return runParser(augmentedParser2, programName, args, options) as Promise<
         InferValue<TParser>
       >;
     }
     return Promise.resolve(
-      runParser(augmentedParser, programName, args, options) as InferValue<
+      runParser(augmentedParser2, programName, args, options) as InferValue<
         TParser
       >,
     );
+  } finally {
+    await disposeContexts(contexts);
   }
-
-  // Phase 2: Collect annotations with parsed result
-  const phase2Annotations = await collectAnnotations(contexts, firstPassResult);
-
-  // Final parse with merged annotations
-  const finalAnnotations = mergeAnnotations([
-    phase1Annotations,
-    phase2Annotations,
-  ]);
-  const augmentedParser2 = injectAnnotationsIntoParser(
-    parser,
-    finalAnnotations,
-  );
-
-  if (parser.$mode === "async") {
-    return runParser(augmentedParser2, programName, args, options) as Promise<
-      InferValue<TParser>
-    >;
-  }
-  return Promise.resolve(
-    runParser(augmentedParser2, programName, args, options) as InferValue<
-      TParser
-    >,
-  );
 }
 
 /**
@@ -2577,54 +2640,62 @@ export function runWithSync<
     return runParser(parser, programName, args, options);
   }
 
-  // Phase 1: Collect initial annotations
-  const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
-    collectPhase1AnnotationsSync(contexts);
+  try {
+    // Phase 1: Collect initial annotations
+    const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
+      collectPhase1AnnotationsSync(contexts, options);
 
-  if (!needsTwoPhase) {
-    // All static contexts - single pass is sufficient
-    const augmentedParser = injectAnnotationsIntoParser(
+    if (!needsTwoPhase) {
+      // All static contexts - single pass is sufficient
+      const augmentedParser = injectAnnotationsIntoParser(
+        parser,
+        phase1Annotations,
+      );
+      return runParser(augmentedParser, programName, args, options);
+    }
+
+    // Two-phase parsing for dynamic contexts
+    // First pass: parse with Phase 1 annotations
+    const augmentedParser1 = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
-    return runParser(augmentedParser, programName, args, options);
-  }
 
-  // Two-phase parsing for dynamic contexts
-  // First pass: parse with Phase 1 annotations
-  const augmentedParser1 = injectAnnotationsIntoParser(
-    parser,
-    phase1Annotations,
-  );
-
-  let firstPassResult: unknown;
-  try {
-    const result = parseSync(augmentedParser1, args);
-    if (result.success) {
-      firstPassResult = result.value;
-    } else {
-      // First pass failed - run through runParser for proper error handling
+    let firstPassResult: unknown;
+    try {
+      const result = parseSync(augmentedParser1, args);
+      if (result.success) {
+        firstPassResult = result.value;
+      } else {
+        // First pass failed - run through runParser for proper error handling
+        return runParser(augmentedParser1, programName, args, options);
+      }
+    } catch {
+      // First pass threw - run through runParser for proper error handling
       return runParser(augmentedParser1, programName, args, options);
     }
-  } catch {
-    // First pass threw - run through runParser for proper error handling
-    return runParser(augmentedParser1, programName, args, options);
+
+    // Phase 2: Collect annotations with parsed result
+    const phase2Annotations = collectAnnotationsSync(
+      contexts,
+      firstPassResult,
+      options,
+    );
+
+    // Final parse with merged annotations
+    const finalAnnotations = mergeAnnotations([
+      phase1Annotations,
+      phase2Annotations,
+    ]);
+    const augmentedParser2 = injectAnnotationsIntoParser(
+      parser,
+      finalAnnotations,
+    );
+
+    return runParser(augmentedParser2, programName, args, options);
+  } finally {
+    disposeContextsSync(contexts);
   }
-
-  // Phase 2: Collect annotations with parsed result
-  const phase2Annotations = collectAnnotationsSync(contexts, firstPassResult);
-
-  // Final parse with merged annotations
-  const finalAnnotations = mergeAnnotations([
-    phase1Annotations,
-    phase2Annotations,
-  ]);
-  const augmentedParser2 = injectAnnotationsIntoParser(
-    parser,
-    finalAnnotations,
-  );
-
-  return runParser(augmentedParser2, programName, args, options);
 }
 
 /**

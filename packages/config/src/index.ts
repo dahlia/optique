@@ -8,6 +8,8 @@
  * @since 0.10.0
  */
 
+import { readFile } from "node:fs/promises";
+import { dirname, resolve as resolvePath } from "node:path";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type {
   Annotations,
@@ -54,7 +56,7 @@ export interface ConfigMeta {
 }
 
 /**
- * Internal registry for active config data during runWithConfig execution.
+ * Internal registry for active config data during config context execution.
  * This is a workaround for the limitation that object() doesn't propagate
  * annotations to child field parsers.
  * @internal
@@ -62,7 +64,7 @@ export interface ConfigMeta {
 const activeConfigRegistry: Map<symbol, unknown> = new Map();
 
 /**
- * Internal registry for active config metadata during runWithConfig execution.
+ * Internal registry for active config metadata during config context execution.
  * @internal
  */
 const activeConfigMetaRegistry: Map<symbol, unknown> = new Map();
@@ -127,56 +129,145 @@ export interface ConfigContextOptions<T> {
    * Accepts any Standard Schema-compatible library (Zod, Valibot, ArkType, etc.).
    */
   readonly schema: StandardSchemaV1<unknown, T>;
+
+  /**
+   * Custom parser function for reading config file contents.
+   * If not provided, defaults to JSON.parse.
+   *
+   * This option is only used in single-file mode (with `getConfigPath`).
+   * When using the `load` callback, file parsing is handled by the loader.
+   *
+   * @param contents The raw file contents as Uint8Array.
+   * @returns The parsed config data (will be validated by schema).
+   * @since 1.0.0
+   */
+  readonly fileParser?: (contents: Uint8Array) => unknown;
 }
 
 /**
- * Required options for ConfigContext when used with runWith().
- * The `ParserValuePlaceholder` will be substituted with the actual parser
- * result type by runWith().
+ * Result type for custom config loading.
  *
+ * @template TConfigMeta Metadata type associated with loaded config data.
+ * @since 1.0.0
+ */
+export interface ConfigLoadResult<TConfigMeta = ConfigMeta> {
+  /**
+   * Raw config data to validate against the schema.
+   */
+  readonly config: unknown;
+
+  /**
+   * Metadata about where the config came from.
+   */
+  readonly meta: TConfigMeta;
+}
+
+/**
+ * Required options for ConfigContext when used with `runWith()` or `run()`.
+ * The `ParserValuePlaceholder` will be substituted with the actual parser
+ * result type by `runWith()`.
+ *
+ * Provide *either* `getConfigPath` (single-file mode) *or* `load` (custom
+ * multi-file mode).  At least one must be provided; a runtime error is
+ * thrown otherwise.
+ *
+ * @template TConfigMeta Metadata type for config sources.
  * @since 0.10.0
  */
-export interface ConfigContextRequiredOptions {
+export interface ConfigContextRequiredOptions<TConfigMeta = ConfigMeta> {
   /**
    * Function to extract config file path from parsed CLI arguments.
-   * The `parsed` parameter is typed as the parser's result type.
+   * Used in single-file mode.  The `parsed` parameter is typed as the
+   * parser's result type.
    *
    * @param parsed The parsed CLI arguments (typed from parser).
    * @returns The config file path, or undefined if not specified.
    */
-  readonly getConfigPath: (
+  readonly getConfigPath?: (
     parsed: ParserValuePlaceholder,
   ) => string | undefined;
+
+  /**
+   * Custom loader function that receives the first-pass parse result and
+   * returns the config data (or a Promise of it).  This allows full control
+   * over file discovery, loading, merging, and error handling.
+   *
+   * The returned data will be validated against the schema.
+   *
+   * When `load` is provided, `getConfigPath` is ignored.
+   *
+   * @param parsed The result from the first parse pass.
+   * @returns Config data and metadata (config is validated by schema).
+   * @since 1.0.0
+   */
+  readonly load?: (
+    parsed: ParserValuePlaceholder,
+  ) =>
+    | Promise<ConfigLoadResult<TConfigMeta>>
+    | ConfigLoadResult<TConfigMeta>;
 }
 
 /**
  * A config context that provides configuration data via annotations.
  *
- * When used with `runWith()`, the options must include `getConfigPath` with
- * the correct parser result type. The `ParserValuePlaceholder` in
- * `ConfigContextRequiredOptions` is substituted with the actual parser type.
+ * When used with `runWith()` or `run()`, the options must include either
+ * `getConfigPath` or `load` with the correct parser result type.  The
+ * `ParserValuePlaceholder` in `ConfigContextRequiredOptions` is substituted
+ * with the actual parser type.
  *
  * @template T The validated config data type.
+ * @template TConfigMeta Metadata type for config sources.
  * @since 0.10.0
  */
 export interface ConfigContext<T, TConfigMeta = ConfigMeta>
-  extends SourceContext<ConfigContextRequiredOptions> {
+  extends SourceContext<ConfigContextRequiredOptions<TConfigMeta>> {
   /**
    * The Standard Schema validator for the config file.
    */
   readonly schema: StandardSchemaV1<unknown, T>;
 }
 
+function isErrnoException(
+  error: unknown,
+): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error;
+}
+
+/**
+ * Validates raw data against a Standard Schema and returns the validated value.
+ * @internal
+ */
+async function validateWithSchema<T>(
+  schema: StandardSchemaV1<unknown, T>,
+  rawData: unknown,
+): Promise<T> {
+  const validation = schema["~standard"].validate(rawData);
+  const validationResult = validation instanceof Promise
+    ? await validation
+    : validation;
+
+  if (validationResult.issues) {
+    const firstIssue = validationResult.issues[0];
+    throw new Error(
+      `Config validation failed: ${firstIssue?.message ?? "Unknown error"}`,
+    );
+  }
+
+  return validationResult.value as T;
+}
+
 /**
  * Creates a config context for use with Optique parsers.
  *
- * The config context implements the SourceContext interface and can be used
- * with runWith() or runWithConfig() to provide configuration file support.
+ * The config context implements the `SourceContext` interface and can be used
+ * with `runWith()` from *@optique/core* or `run()`/`runAsync()` from
+ * *@optique/run* to provide configuration file support.
  *
  * @template T The output type of the config schema.
  * @template TConfigMeta The metadata type for config sources.
- * @param options Configuration options including schema and optional parser.
- * @returns A config context that can be used with bindConfig() and runWithConfig().
+ * @param options Configuration options including schema and optional file
+ *   parser.
+ * @returns A config context that can be used with `bindConfig()` and runners.
  * @since 0.10.0
  *
  * @example
@@ -202,15 +293,99 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
     id: contextId,
     schema: options.schema,
 
-    getAnnotations(parsed?: unknown): Annotations {
-      // Static contexts return empty on first call (without parsed)
-      // Dynamic contexts load config based on parsed result
+    async getAnnotations(
+      parsed?: unknown,
+      runtimeOptions?: unknown,
+    ): Promise<Annotations> {
+      // Phase 1 (no parsed result): return empty — this is a dynamic context
       if (!parsed) {
         return {};
       }
 
-      // This will be populated by runWithConfig
+      const opts = runtimeOptions as
+        | ConfigContextRequiredOptions<TConfigMeta>
+        | undefined;
+      if (!opts || (!opts.getConfigPath && !opts.load)) {
+        throw new TypeError(
+          "Either getConfigPath or load must be provided " +
+            "in the runner options when using ConfigContext.",
+        );
+      }
+
+      let configData: T | undefined;
+      let configMeta: TConfigMeta | undefined;
+
+      // At runtime, `parsed` is the actual parser value.  The
+      // ParserValuePlaceholder brand is compile-time only.
+      const parsedValue = parsed as ParserValuePlaceholder;
+
+      if (opts.load) {
+        // Custom load mode
+        const loaded = await Promise.resolve(opts.load(parsedValue));
+        configData = await validateWithSchema(options.schema, loaded.config);
+        configMeta = loaded.meta;
+      } else if (opts.getConfigPath) {
+        // Single-file mode
+        const configPath = opts.getConfigPath(parsedValue);
+
+        if (configPath) {
+          const absoluteConfigPath = resolvePath(configPath);
+          const singleFileMeta: ConfigMeta = {
+            configDir: dirname(absoluteConfigPath),
+            configPath: absoluteConfigPath,
+          };
+
+          try {
+            const contents = await readFile(absoluteConfigPath);
+
+            // Parse file contents
+            let rawData: unknown;
+            if (options.fileParser) {
+              rawData = options.fileParser(contents);
+            } else {
+              // Default to JSON
+              const text = new TextDecoder().decode(contents);
+              rawData = JSON.parse(text);
+            }
+
+            configData = await validateWithSchema(options.schema, rawData);
+            configMeta = singleFileMeta as TConfigMeta;
+          } catch (error) {
+            // Missing config file is optional in single-file mode.
+            if (isErrnoException(error) && error.code === "ENOENT") {
+              configData = undefined;
+            } else if (error instanceof SyntaxError) {
+              throw new Error(
+                `Failed to parse config file ` +
+                  `${absoluteConfigPath}: ${error.message}`,
+              );
+            } else {
+              throw error;
+            }
+          }
+        }
+      }
+
+      // Set active config in registry for nested parsers inside object()
+      if (configData !== undefined && configData !== null) {
+        setActiveConfig(contextId, configData);
+        if (configMeta !== undefined) {
+          setActiveConfigMeta(contextId, configMeta);
+          return {
+            [configKey]: configData,
+            [configMetaKey]: configMeta,
+          };
+        }
+
+        return { [configKey]: configData };
+      }
+
       return {};
+    },
+
+    [Symbol.dispose]() {
+      clearActiveConfig(contextId);
+      clearActiveConfigMeta(contextId);
     },
   };
 }
@@ -409,7 +584,8 @@ export function bindConfig<
 /**
  * Helper function to get value from config or default.
  * Checks both annotations (for top-level parsers) and the active config
- * registry (for parsers nested inside object() when used with runWithConfig).
+ * registry (for parsers nested inside object() when used with context-aware
+ * runners).
  */
 function getConfigOrDefault<T, TValue, TConfigMeta>(
   state: unknown,
@@ -421,7 +597,7 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
   let configMeta = annotations?.[configMetaKey] as TConfigMeta | undefined;
 
   // If not found in annotations, check the active config registry
-  // (this handles the case when used inside object() with runWithConfig)
+  // (this handles the case when used inside object() with context-aware runners)
   if (configData === undefined || configData === null) {
     const contextId = options.context.id;
     configData = getActiveConfig<T>(contextId);

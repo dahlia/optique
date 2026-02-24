@@ -1,4 +1,5 @@
 import { longestMatch, object, or } from "@optique/core/constructs";
+import type { SourceContext } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { argument, command, option } from "@optique/core/primitives";
@@ -1161,5 +1162,236 @@ describe("runAsync", () => {
       // Just confirm help was shown (type-checking is the main goal here)
       assert.ok(typeof helpOutput === "string");
     });
+  });
+});
+
+describe("run with contexts", () => {
+  it("should delegate to runWith and return a Promise when contexts are provided", async () => {
+    const envKey = Symbol.for("@test/env-run");
+    const context: SourceContext = {
+      id: envKey,
+      getAnnotations() {
+        return { [envKey]: { HOST: "localhost" } };
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    const result = run(parser, {
+      args: ["--name", "Alice"],
+      programName: "test",
+      contexts: [context],
+    });
+
+    // run() with contexts always returns a Promise
+    assert.ok(result instanceof Promise);
+    const value = await result;
+    assert.deepEqual(value, { name: "Alice" });
+  });
+
+  it("should extract context-required options from RunOptions", async () => {
+    let receivedOptions: unknown;
+    const key = Symbol.for("@test/run-extract");
+
+    const context: SourceContext = {
+      id: key,
+      getAnnotations(_parsed?: unknown, options?: unknown) {
+        receivedOptions = options;
+        if (!_parsed) return {};
+        return { [key]: { value: true } };
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    await run(parser, {
+      args: [],
+      programName: "test",
+      contexts: [context],
+    });
+
+    // Options should be passed through (minus known RunOptions keys)
+    assert.ok(receivedOptions !== undefined);
+  });
+
+  it("should dispose contexts via run()", async () => {
+    let disposed = false;
+    const key = Symbol.for("@test/run-dispose");
+
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        return { [key]: { value: true } };
+      },
+      [Symbol.dispose]() {
+        disposed = true;
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    await run(parser, {
+      args: [],
+      programName: "test",
+      contexts: [context],
+    });
+
+    assert.ok(disposed);
+  });
+});
+
+describe("runSync with contexts", () => {
+  it("should delegate to runWithSync when contexts are provided", () => {
+    const envKey = Symbol.for("@test/env-runsync");
+    const context: SourceContext = {
+      id: envKey,
+      getAnnotations() {
+        return { [envKey]: { HOST: "localhost" } };
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    const result = runSync(parser, {
+      args: ["--name", "Bob"],
+      programName: "test",
+      contexts: [context],
+    });
+
+    // runSync returns synchronously
+    assert.deepEqual(result, { name: "Bob" });
+  });
+
+  it("should dispose contexts via runSync()", () => {
+    let disposed = false;
+    const key = Symbol.for("@test/runsync-dispose");
+
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        return { [key]: { value: true } };
+      },
+      [Symbol.dispose]() {
+        disposed = true;
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    runSync(parser, {
+      args: [],
+      programName: "test",
+      contexts: [context],
+    });
+
+    assert.ok(disposed);
+  });
+
+  it("should handle help with contexts in runSync", () => {
+    const key = Symbol.for("@test/runsync-help");
+    let annotationsCallCount = 0;
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        annotationsCallCount++;
+        return {};
+      },
+    };
+
+    const parser = object({
+      name: argument(string()),
+    });
+
+    let helpShown = false;
+    const originalExit = process.exit;
+    process.exit = (() => {
+      throw new Error("EXIT");
+    }) as typeof process.exit;
+
+    const originalWrite = process.stdout.write;
+    process.stdout.write = (() => true) as typeof process.stdout.write;
+
+    try {
+      runSync(parser, {
+        args: ["--help"],
+        programName: "test",
+        help: "option",
+        contexts: [context],
+      });
+    } catch (err) {
+      if ((err as Error).message === "EXIT") {
+        helpShown = true;
+      } else {
+        throw err;
+      }
+    } finally {
+      process.exit = originalExit;
+      process.stdout.write = originalWrite;
+    }
+
+    assert.ok(helpShown);
+    // Contexts should not be called for early exits
+    assert.equal(annotationsCallCount, 0);
+  });
+});
+
+describe("runAsync with contexts", () => {
+  it("should delegate to runWith via runImpl when contexts are provided", async () => {
+    const envKey = Symbol.for("@test/env-runasync");
+    const context: SourceContext = {
+      id: envKey,
+      getAnnotations() {
+        return { [envKey]: { HOST: "localhost" } };
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    const result = await runAsync(parser, {
+      args: ["--name", "Charlie"],
+      programName: "test",
+      contexts: [context],
+    });
+
+    assert.deepEqual(result, { name: "Charlie" });
+  });
+
+  it("should dispose contexts via runAsync()", async () => {
+    let disposed = false;
+    const key = Symbol.for("@test/runasync-dispose");
+
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        return { [key]: { value: true } };
+      },
+      [Symbol.dispose]() {
+        disposed = true;
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    await runAsync(parser, {
+      args: [],
+      programName: "test",
+      contexts: [context],
+    });
+
+    assert.ok(disposed);
   });
 });

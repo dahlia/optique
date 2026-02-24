@@ -60,6 +60,10 @@ export type ParserValuePlaceholder = {
  * - *Dynamic*: Data depends on parsing results (e.g., config files whose path
  *   is determined by a CLI option)
  *
+ * Contexts may optionally implement `Disposable` or `AsyncDisposable` for
+ * cleanup.  When present, `runWith()` and `runWithSync()` call the dispose
+ * method in a `finally` block after parsing completes.
+ *
  * @template TRequiredOptions Additional options that `runWith()` must provide
  *   when this context is used. Use `void` (the default) for contexts that
  *   don't require extra options. Use {@link ParserValuePlaceholder} in option
@@ -103,7 +107,7 @@ export interface SourceContext<TRequiredOptions = void> {
    * Type-level marker for the required options. Not used at runtime.
    * @internal
    */
-  readonly _requiredOptions?: TRequiredOptions;
+  readonly $requiredOptions?: TRequiredOptions;
 
   /**
    * Get annotations to inject into parsing.
@@ -119,10 +123,29 @@ export interface SourceContext<TRequiredOptions = void> {
    * @param parsed Optional parsed result from a previous parse pass.
    *               Static contexts can ignore this parameter.
    *               Dynamic contexts use this to extract necessary data.
+   * @param options Optional context-required options provided by the caller
+   *               of `runWith()`. These are the options declared via the
+   *               `TRequiredOptions` type parameter.
    * @returns Annotations to merge into the parsing session. Can be a Promise
    *          for async operations (e.g., loading config files).
    */
-  getAnnotations(parsed?: unknown): Promise<Annotations> | Annotations;
+  getAnnotations(
+    parsed?: unknown,
+    options?: unknown,
+  ): Promise<Annotations> | Annotations;
+
+  /**
+   * Optional synchronous cleanup method.  Called by `runWith()` and
+   * `runWithSync()` in a `finally` block after parsing completes.
+   */
+  [Symbol.dispose]?(): void;
+
+  /**
+   * Optional asynchronous cleanup method.  Called by `runWith()` in a
+   * `finally` block after parsing completes.  Takes precedence over
+   * `[Symbol.dispose]` in async runners.
+   */
+  [Symbol.asyncDispose]?(): void | PromiseLike<void>;
 }
 
 /**

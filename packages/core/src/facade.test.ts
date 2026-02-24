@@ -4062,6 +4062,70 @@ describe("runWith", () => {
       assert.ok(completionShown);
       assert.equal(annotationsCallCount, 0);
     });
+
+    it("should not call context.getAnnotations() when completions (plural) command is provided", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let completionShown = false;
+      await runWith(parser, "test", [trackingContext], {
+        args: ["completions", "bash"],
+        completion: {
+          mode: "command",
+          name: "plural",
+          onShow: () => {
+            completionShown = true;
+            return "completion" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(completionShown);
+      assert.equal(annotationsCallCount, 0);
+    });
+
+    it("should not call context.getAnnotations() when --completions (plural) option is provided", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let completionShown = false;
+      await runWith(parser, "test", [trackingContext], {
+        args: ["--completions=bash"],
+        completion: {
+          mode: "option",
+          name: "plural",
+          onShow: () => {
+            completionShown = true;
+            return "completion" as const;
+          },
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(completionShown);
+      assert.equal(annotationsCallCount, 0);
+    });
   });
 
   describe("error handling", () => {
@@ -4110,6 +4174,194 @@ describe("runWith", () => {
         stderrCalls[1].startsWith("Error:"),
         "Second stderr call should be error",
       );
+    });
+  });
+
+  describe("dispose lifecycle", () => {
+    it("should dispose contexts after successful parsing", async () => {
+      let disposed = false;
+      const context: SourceContext = {
+        id: Symbol.for("@test/disposable"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/disposable")]: { value: true },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed = true;
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      await runWith(parser, "test", [context], { args: [] });
+      assert.ok(disposed);
+    });
+
+    it("should dispose contexts even when parsing throws", async () => {
+      let disposed = false;
+      const context: SourceContext = {
+        id: Symbol.for("@test/disposable-error"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/disposable-error")]: { value: true },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed = true;
+        },
+      };
+
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      let errorCaught = false;
+      try {
+        await runWith(parser, "test", [context], {
+          args: ["not-a-number"],
+        });
+      } catch {
+        errorCaught = true;
+      }
+
+      assert.ok(errorCaught);
+      assert.ok(disposed);
+    });
+
+    it("should prefer Symbol.asyncDispose over Symbol.dispose in async mode", async () => {
+      const disposed: string[] = [];
+      const context: SourceContext = {
+        id: Symbol.for("@test/async-disposable"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/async-disposable")]: { value: true },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed.push("sync");
+        },
+        [Symbol.asyncDispose]() {
+          disposed.push("async");
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      await runWith(parser, "test", [context], { args: [] });
+      assert.deepEqual(disposed, ["async"]);
+    });
+
+    it("should dispose multiple contexts in order", async () => {
+      const disposed: string[] = [];
+
+      const context1: SourceContext = {
+        id: Symbol.for("@test/dispose1"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/dispose1")]: { value: 1 },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed.push("context1");
+        },
+      };
+
+      const context2: SourceContext = {
+        id: Symbol.for("@test/dispose2"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/dispose2")]: { value: 2 },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed.push("context2");
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      await runWith(parser, "test", [context1, context2], { args: [] });
+      assert.deepEqual(disposed, ["context1", "context2"]);
+    });
+
+    it("should handle context without dispose methods", async () => {
+      const context: SourceContext = {
+        id: Symbol.for("@test/no-dispose"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/no-dispose")]: { value: true },
+          };
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      // Should not throw
+      const result = await runWith(parser, "test", [context], { args: [] });
+      assert.deepEqual(result, { name: "default" });
+    });
+  });
+
+  describe("options passthrough", () => {
+    it("should pass options to getAnnotations in async runWith", async () => {
+      let receivedOptions: unknown;
+      const passthroughKey = Symbol.for("@test/passthrough");
+
+      // Use SourceContext (void required options) so runWith doesn't need
+      // extra fields.  The context reads options from the untyped second arg.
+      const context: SourceContext = {
+        id: passthroughKey,
+        getAnnotations(_parsed?: unknown, options?: unknown) {
+          receivedOptions = options;
+          if (!_parsed) return {};
+          return { [passthroughKey]: { value: "loaded" } };
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      await runWith(parser, "test", [context], {
+        args: [],
+      });
+
+      // The options object (minus args) is passed through as-is
+      assert.ok(receivedOptions !== undefined);
+    });
+
+    it("should pass options to getAnnotations in both phases", async () => {
+      const receivedOptionsPerCall: unknown[] = [];
+      const dynamicKey = Symbol.for("@test/passthrough-phases");
+
+      const context: SourceContext = {
+        id: dynamicKey,
+        getAnnotations(parsed?: unknown, options?: unknown) {
+          receivedOptionsPerCall.push(options);
+          if (!parsed) return {};
+          return { [dynamicKey]: { value: "loaded" } };
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      await runWith(parser, "test", [context], {
+        args: [],
+      });
+
+      // Should have been called twice (phase 1 and phase 2)
+      assert.equal(receivedOptionsPerCall.length, 2);
     });
   });
 });
@@ -4174,6 +4426,28 @@ describe("runWithSync", () => {
 
     assert.throws(() => {
       runWithSync(parser, "test", [asyncContext], {
+        args: [],
+      });
+    }, /returned a Promise in sync mode/);
+  });
+
+  it("should throw when context returns Promise in phase 2", () => {
+    // A context that is sync in phase 1 but async in phase 2
+    const mixedKey = Symbol.for("@test/mixed-async");
+    const mixedContext: SourceContext = {
+      id: mixedKey,
+      getAnnotations(parsed?: unknown) {
+        if (!parsed) return {}; // sync (empty → dynamic)
+        return Promise.resolve({ [mixedKey]: { value: "loaded" } });
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    assert.throws(() => {
+      runWithSync(parser, "test", [mixedContext], {
         args: [],
       });
     }, /returned a Promise in sync mode/);
@@ -4306,6 +4580,114 @@ describe("runWithSync", () => {
 
       assert.ok(completionShown);
       assert.equal(annotationsCallCount, 0);
+    });
+  });
+
+  describe("dispose lifecycle (sync)", () => {
+    it("should dispose contexts after successful sync parsing", () => {
+      let disposed = false;
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-disposable"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/sync-disposable")]: { value: true },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed = true;
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      runWithSync(parser, "test", [context], { args: [] });
+      assert.ok(disposed);
+    });
+
+    it("should dispose contexts even when sync parsing throws", () => {
+      let disposed = false;
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-disposable-error"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/sync-disposable-error")]: { value: true },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed = true;
+        },
+      };
+
+      const parser = object({
+        port: argument(integer()),
+      });
+
+      let errorCaught = false;
+      try {
+        runWithSync(parser, "test", [context], {
+          args: ["not-a-number"],
+        });
+      } catch {
+        errorCaught = true;
+      }
+
+      assert.ok(errorCaught);
+      assert.ok(disposed);
+    });
+
+    it("should ignore Symbol.asyncDispose in sync mode", () => {
+      const disposed: string[] = [];
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-no-async-dispose"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/sync-no-async-dispose")]: { value: true },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed.push("sync");
+        },
+        [Symbol.asyncDispose]() {
+          disposed.push("async");
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      runWithSync(parser, "test", [context], { args: [] });
+      // disposeContextsSync only calls Symbol.dispose
+      assert.deepEqual(disposed, ["sync"]);
+    });
+  });
+
+  describe("options passthrough (sync)", () => {
+    it("should pass options to getAnnotations in runWithSync", () => {
+      let receivedOptions: unknown;
+      const syncKey = Symbol.for("@test/sync-passthrough");
+
+      const context: SourceContext = {
+        id: syncKey,
+        getAnnotations(_parsed?: unknown, options?: unknown) {
+          receivedOptions = options;
+          if (!_parsed) return {};
+          return { [syncKey]: { value: "loaded" } };
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      runWithSync(parser, "test", [context], {
+        args: [],
+      });
+
+      // The options object is passed through to getAnnotations
+      assert.ok(receivedOptions !== undefined);
     });
   });
 });

@@ -29,11 +29,11 @@ Quick start
 ~~~~ typescript
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
+import { runAsync } from "@optique/run";
 
 // 1. Define config schema
 const configSchema = z.object({
@@ -58,8 +58,9 @@ const parser = object({
   }),
 });
 
-// 3. Run with config support
-const result = await runWithConfig(parser, configContext, {
+// 3. Run with config support via contexts
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
   args: process.argv.slice(2),
 });

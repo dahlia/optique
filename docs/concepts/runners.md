@@ -1117,6 +1117,59 @@ const asyncResult = await runAsync(asyncParser, { args });
     based on the parser's mode. For sync parsers it returns directly;
     for async parsers it returns a `Promise`.
 
+### Source context support
+
+*This API is available since Optique 1.0.0.*
+
+The `run()`, `runSync()`, and `runAsync()` functions support source contexts
+for integrating external data sources like configuration files and environment
+variables.  Pass a `contexts` array to enable two-phase parsing with automatic
+annotation collection:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { object } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string, integer } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
+
+const configSchema = z.object({
+  host: z.string().optional(),
+  port: z.number().optional(),
+});
+
+const configContext = createConfigContext({ schema: configSchema });
+
+const parser = object({
+  config: optional(option("-c", "--config", string())),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+  port: bindConfig(option("--port", integer()), {
+    context: configContext,
+    key: "port",
+    default: 3000,
+  }),
+});
+
+const result = await runAsync(parser, {
+  contexts: [configContext],
+  getConfigPath: (parsed) => parsed.config,
+});
+~~~~
+
+When `contexts` is provided, the runner delegates to `runWith()` (or
+`runWithSync()` for sync parsers) from `@optique/core/facade`, which handles
+the two-phase parsing automatically.  Context-specific options like
+`getConfigPath` are passed through to the contexts.
+
+For more details on config file integration, see the
+[config file integration guide](../integrations/config.md).
+
 
 Type inference with `InferValue<T>`
 -----------------------------------

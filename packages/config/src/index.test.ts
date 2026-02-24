@@ -13,6 +13,10 @@ import {
   configKey,
   configMetaKey,
   createConfigContext,
+  getActiveConfig,
+  getActiveConfigMeta,
+  setActiveConfig,
+  setActiveConfigMeta,
 } from "./index.ts";
 import type { ConfigMeta } from "./index.ts";
 
@@ -513,5 +517,247 @@ describe("bindConfig", () => {
     assert.ok(resultDefault.success);
     assert.equal(resultDefault.value.host, "localhost");
     assert.equal(resultDefault.value.timeout, 30);
+  });
+});
+
+describe("createConfigContext error paths", () => {
+  test("getAnnotations throws TypeError when neither getConfigPath nor load is provided", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    // Phase 2 call (parsed is truthy) without required options
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations({ config: "test.json" }, undefined),
+      TypeError,
+    );
+  });
+
+  test("getAnnotations throws TypeError when runtimeOptions is empty object", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    await assert.rejects(
+      async () => await context.getAnnotations({ config: "test.json" }, {}),
+      TypeError,
+    );
+  });
+
+  test("getAnnotations returns empty annotations for phase 1 call", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    // Phase 1: parsed is undefined
+    const annotations = await context.getAnnotations();
+    assert.deepEqual(Object.getOwnPropertySymbols(annotations).length, 0);
+  });
+
+  test("getAnnotations with getConfigPath returning undefined skips file loading", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    const annotations = await context.getAnnotations(
+      { config: undefined },
+      { getConfigPath: () => undefined },
+    );
+
+    // No config loaded, should be empty
+    assert.deepEqual(Object.getOwnPropertySymbols(annotations).length, 0);
+  });
+
+  test("getAnnotations with getConfigPath pointing to non-existent file returns empty", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    // ENOENT should be handled gracefully (optional config file)
+    const annotations = await context.getAnnotations(
+      { config: "/nonexistent/path/config.json" },
+      {
+        getConfigPath: () => "/nonexistent/path/does-not-exist.json",
+      },
+    );
+
+    assert.deepEqual(Object.getOwnPropertySymbols(annotations).length, 0);
+  });
+
+  test("getAnnotations with fileParser that throws non-SyntaxError propagates", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({
+      schema,
+      fileParser: () => {
+        throw new RangeError("Custom parse error.");
+      },
+    });
+
+    // Create a temporary config file for this test
+    const tmpDir = (await import("node:os")).tmpdir();
+    const tmpFile = `${tmpDir}/optique-test-${Date.now()}.json`;
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(tmpFile, "{}");
+
+    try {
+      await assert.rejects(
+        async () =>
+          await context.getAnnotations(
+            { config: tmpFile },
+            { getConfigPath: () => tmpFile },
+          ),
+        RangeError,
+      );
+    } finally {
+      await fs.unlink(tmpFile).catch(() => {});
+    }
+  });
+
+  test("getAnnotations with fileParser that throws SyntaxError wraps it", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({
+      schema,
+      fileParser: () => {
+        throw new SyntaxError("Unexpected token");
+      },
+    });
+
+    const tmpDir = (await import("node:os")).tmpdir();
+    const tmpFile = `${tmpDir}/optique-test-syntax-${Date.now()}.json`;
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(tmpFile, "not-json");
+
+    try {
+      await assert.rejects(
+        async () =>
+          await context.getAnnotations(
+            { config: tmpFile },
+            { getConfigPath: () => tmpFile },
+          ),
+        (error: Error) => {
+          assert.ok(error.message.includes("Failed to parse config file"));
+          return true;
+        },
+      );
+    } finally {
+      await fs.unlink(tmpFile).catch(() => {});
+    }
+  });
+
+  test("key accessor function that throws falls through to default", () => {
+    const schema = z.object({
+      nested: z.object({
+        value: z.string(),
+      }).optional(),
+    });
+
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--value", string()), {
+      context,
+      // This accessor will throw when nested is undefined
+      key: (config) => config.nested!.value,
+      default: "fallback",
+    });
+
+    // Config has nested as undefined, so accessor throws
+    const annotations: Annotations = {
+      [configKey]: { nested: undefined },
+    };
+
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, "fallback");
+  });
+
+  test("Symbol.dispose clears active config registry", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    // Simulate what happens during context-aware parsing
+    setActiveConfig(context.id, { host: "test-host" });
+    setActiveConfigMeta(context.id, {
+      configDir: "/test",
+      configPath: "/test/config.json",
+    });
+
+    // Verify it's set
+    assert.ok(getActiveConfig(context.id) !== undefined);
+    assert.ok(getActiveConfigMeta(context.id) !== undefined);
+
+    // Dispose should clear both registries
+    context[Symbol.dispose]!();
+
+    assert.equal(getActiveConfig(context.id), undefined);
+    assert.equal(getActiveConfigMeta(context.id), undefined);
+  });
+
+  test("load function receives parsed value and returns config", async () => {
+    const schema = z.object({ host: z.string(), port: z.number() });
+    const context = createConfigContext({ schema });
+
+    let receivedParsed: unknown;
+    const annotations = await context.getAnnotations(
+      { configPath: "/app/config.json" },
+      {
+        load: (parsed: unknown) => {
+          receivedParsed = parsed;
+          return {
+            config: { host: "loaded-host", port: 8080 },
+            meta: { configDir: "/app", configPath: "/app/config.json" },
+          };
+        },
+      },
+    );
+
+    // Verify the parsed value was forwarded
+    assert.deepEqual(receivedParsed, { configPath: "/app/config.json" });
+
+    // Verify annotations contain loaded config
+    assert.deepEqual(annotations[configKey], {
+      host: "loaded-host",
+      port: 8080,
+    });
+    assert.deepEqual(annotations[configMetaKey], {
+      configDir: "/app",
+      configPath: "/app/config.json",
+    });
+  });
+
+  test("load function that throws propagates the error", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations(
+          { config: "test" },
+          {
+            load: () => {
+              throw new Error("Load failed.");
+            },
+          },
+        ),
+      (error: Error) => {
+        assert.equal(error.message, "Load failed.");
+        return true;
+      },
+    );
+  });
+
+  test("schema validation failure in load mode throws", async () => {
+    const schema = z.object({ host: z.string(), port: z.number() });
+    const context = createConfigContext({ schema });
+
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations(
+          { config: "test" },
+          {
+            load: () => ({
+              config: { host: 123, port: "not-a-number" }, // invalid types
+            }),
+          },
+        ),
+      (error: Error) => {
+        assert.ok(error.message.includes("Config validation failed"));
+        return true;
+      },
+    );
   });
 });

@@ -1,12 +1,11 @@
 import { z } from "zod";
 import { bindConfig, createConfigContext } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
 import { optional } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
-import { print } from "@optique/run";
+import { print, runAsync } from "@optique/run";
 
 // This example demonstrates how to use @optique/config for type-safe
 // configuration file integration with automatic validation.
@@ -59,7 +58,8 @@ const parser = object({
 
 // Run with config file support
 // Two-pass parsing: 1) extract config path, 2) parse with config data
-const result = await runWithConfig(parser, configContext, {
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
   args: Deno.args,
 });

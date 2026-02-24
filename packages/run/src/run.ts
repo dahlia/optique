@@ -1,6 +1,10 @@
 import type { ShellCompletion } from "@optique/core/completion";
-import { runParser } from "@optique/core/facade";
-import type { RunOptions as CoreRunOptions } from "@optique/core/facade";
+import type { SourceContext } from "@optique/core/context";
+import { runParser, runWith, runWithSync } from "@optique/core/facade";
+import type {
+  ExtractRequiredOptions,
+  RunOptions as CoreRunOptions,
+} from "@optique/core/facade";
 import type {
   InferMode,
   InferValue,
@@ -227,6 +231,16 @@ export interface RunOptions {
    * @since 0.4.0
    */
   readonly footer?: Message;
+
+  /**
+   * Source contexts to use for two-phase parsing.  When provided, the
+   * runner delegates to `runWith()` (or `runWithSync()` for sync parsers)
+   * from `@optique/core/facade`, which handles annotation collection and
+   * multi-phase parsing automatically.
+   *
+   * @since 1.0.0
+   */
+  readonly contexts?: readonly SourceContext<unknown>[];
 }
 
 type CompletionHelpVisibility = "singular" | "plural" | "both" | "none";
@@ -350,6 +364,18 @@ type CompletionOptions =
  *
  * @since 0.11.0 Added support for {@link Program} objects.
  */
+// Overload: parser with contexts — always returns Promise
+export function run<
+  T extends Parser<Mode, unknown, unknown>,
+  TContexts extends readonly SourceContext<unknown>[],
+>(
+  parser: T,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & ExtractRequiredOptions<TContexts, InferValue<T>>,
+): Promise<InferValue<T>>;
+
 // Overload: Program with sync parser
 export function run<T>(
   program: Program<"sync", T>,
@@ -384,11 +410,10 @@ export function run<T extends Parser<Mode, unknown, unknown>>(
 export function run<T extends Parser<Mode, unknown, unknown>>(
   parserOrProgram: T | Program<Mode, unknown>,
   options: RunOptions = {},
-): ModeValue<InferMode<T>, InferValue<T>> {
-  return runImpl(parserOrProgram, options) as ModeValue<
-    InferMode<T>,
-    InferValue<T>
-  >;
+): ModeValue<InferMode<T>, InferValue<T>> | Promise<InferValue<T>> {
+  return runImpl(parserOrProgram, options) as
+    | ModeValue<InferMode<T>, InferValue<T>>
+    | Promise<InferValue<T>>;
 }
 
 /**
@@ -404,6 +429,18 @@ export function run<T extends Parser<Mode, unknown, unknown>>(
  * @returns The parsed result if successful.
  * @since 0.9.0
  */
+// Overload: parser with contexts
+export function runSync<
+  T extends Parser<"sync", unknown, unknown>,
+  TContexts extends readonly SourceContext<unknown>[],
+>(
+  parser: T,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & ExtractRequiredOptions<TContexts, InferValue<T>>,
+): InferValue<T>;
+
 // Overload: Program with sync parser
 export function runSync<T>(
   program: Program<"sync", T>,
@@ -421,6 +458,66 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
   parserOrProgram: T | Program<"sync", unknown>,
   options: RunOptions = {},
 ): InferValue<T> {
+  // For sync parsers with contexts, use runWithSync() instead of async runWith()
+  const contexts = options.contexts;
+  if (contexts && contexts.length > 0) {
+    const isProgram = "parser" in parserOrProgram &&
+      "metadata" in parserOrProgram;
+    let parser: T;
+    let programMetadata: {
+      brief?: Message;
+      description?: Message;
+      examples?: Message;
+      author?: Message;
+      bugs?: Message;
+      footer?: Message;
+    } | undefined;
+
+    if (isProgram) {
+      const program = parserOrProgram as Program<"sync", unknown>;
+      parser = program.parser as T;
+      if (!options.programName) {
+        options = { ...options, programName: program.metadata.name };
+      }
+      programMetadata = {
+        brief: program.metadata.brief,
+        description: program.metadata.description,
+        examples: program.metadata.examples,
+        author: program.metadata.author,
+        bugs: program.metadata.bugs,
+        footer: program.metadata.footer,
+      };
+    } else {
+      parser = parserOrProgram as T;
+    }
+
+    const { programName, args, coreOptions } = buildCoreOptions(
+      options,
+      programMetadata,
+    );
+
+    // Extract context-required options
+    const contextOptions: Record<string, unknown> = {};
+    for (const key of Object.keys(options)) {
+      if (!knownRunOptionsKeys.has(key)) {
+        contextOptions[key] = (options as Record<string, unknown>)[key];
+      }
+    }
+
+    const runWithOptions = {
+      ...coreOptions,
+      ...contextOptions,
+      args,
+    };
+
+    return runWithSync(
+      parser,
+      programName,
+      contexts,
+      runWithOptions as Parameters<typeof runWithSync>[3],
+    ) as InferValue<T>;
+  }
+
   return runImpl(parserOrProgram, options) as InferValue<T>;
 }
 
@@ -437,6 +534,18 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
  * @returns A Promise of the parsed result if successful.
  * @since 0.9.0
  */
+// Overload: parser with contexts
+export function runAsync<
+  T extends Parser<Mode, unknown, unknown>,
+  TContexts extends readonly SourceContext<unknown>[],
+>(
+  parser: T,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & ExtractRequiredOptions<TContexts, InferValue<T>>,
+): Promise<InferValue<T>>;
+
 // Overload: Program with sync parser
 export function runAsync<T>(
   program: Program<"sync", T>,
@@ -464,44 +573,32 @@ export function runAsync<T extends Parser<Mode, unknown, unknown>>(
   return Promise.resolve(result) as Promise<InferValue<T>>;
 }
 
-function runImpl<T extends Parser<Mode, unknown, unknown>>(
-  parserOrProgram: T | Program<Mode, unknown>,
-  options: RunOptions = {},
-): ModeValue<InferMode<T>, InferValue<T>> {
-  // Determine if we're using the new Program API
-  const isProgram = "parser" in parserOrProgram &&
-    "metadata" in parserOrProgram;
-
-  let parser: T;
-  let programNameFromProgram: string | undefined;
-  let programMetadata: {
+/**
+ * Builds core run options from the simplified RunOptions format.
+ *
+ * Converts the user-friendly RunOptions (string-based help/version/completion)
+ * into the verbose CoreRunOptions format expected by `runParser()`, `runWith()`,
+ * and `runWithSync()` from `@optique/core/facade`.
+ *
+ * @internal
+ */
+function buildCoreOptions(
+  options: RunOptions,
+  programMetadata?: {
     brief?: Message;
     description?: Message;
     examples?: Message;
     author?: Message;
     bugs?: Message;
     footer?: Message;
-  } | undefined;
-
-  if (isProgram) {
-    const program = parserOrProgram as Program<Mode, unknown>;
-    parser = program.parser as T;
-    programNameFromProgram = program.metadata.name;
-    programMetadata = {
-      brief: program.metadata.brief,
-      description: program.metadata.description,
-      examples: program.metadata.examples,
-      author: program.metadata.author,
-      bugs: program.metadata.bugs,
-      footer: program.metadata.footer,
-    };
-  } else {
-    parser = parserOrProgram as T;
-  }
-
+  },
+): {
+  programName: string;
+  args: readonly string[];
+  coreOptions: CoreRunOptions<never, never>;
+} {
   const {
-    programName = programNameFromProgram ??
-      path.basename(process.argv[1] || "cli"),
+    programName = path.basename(process.argv[1] || "cli"),
     args = process.argv.slice(2),
     colors = process.stdout.isTTY,
     maxWidth = process.stdout.columns,
@@ -617,7 +714,7 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     };
   })() as CoreRunOptions<never, never>["completion"];
 
-  return runParser(parser, programName, args, {
+  const coreOptions: CoreRunOptions<never, never> = {
     stderr(line) {
       process.stderr.write(`${line}\n`);
     },
@@ -642,5 +739,112 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
     onError() {
       return process.exit(errorExitCode) as never;
     },
-  });
+  };
+
+  return { programName, args, coreOptions };
+}
+
+/**
+ * Set of known RunOptions field names.  Used by `runImpl()` to separate
+ * RunOptions fields from context-required options via rest-spread.
+ */
+const knownRunOptionsKeys = new Set([
+  "programName",
+  "args",
+  "colors",
+  "maxWidth",
+  "showDefault",
+  "showChoices",
+  "sectionOrder",
+  "help",
+  "version",
+  "completion",
+  "aboveError",
+  "errorExitCode",
+  "brief",
+  "description",
+  "examples",
+  "author",
+  "bugs",
+  "footer",
+  "contexts",
+]);
+
+function runImpl<T extends Parser<Mode, unknown, unknown>>(
+  parserOrProgram: T | Program<Mode, unknown>,
+  options: RunOptions = {},
+): ModeValue<InferMode<T>, InferValue<T>> | Promise<InferValue<T>> {
+  // Determine if we're using the new Program API
+  const isProgram = "parser" in parserOrProgram &&
+    "metadata" in parserOrProgram;
+
+  let parser: T;
+  let programMetadata: {
+    brief?: Message;
+    description?: Message;
+    examples?: Message;
+    author?: Message;
+    bugs?: Message;
+    footer?: Message;
+  } | undefined;
+
+  if (isProgram) {
+    const program = parserOrProgram as Program<Mode, unknown>;
+    parser = program.parser as T;
+    const programNameFromProgram = program.metadata.name;
+    programMetadata = {
+      brief: program.metadata.brief,
+      description: program.metadata.description,
+      examples: program.metadata.examples,
+      author: program.metadata.author,
+      bugs: program.metadata.bugs,
+      footer: program.metadata.footer,
+    };
+    // Inject program name as default if not provided
+    if (!options.programName) {
+      options = { ...options, programName: programNameFromProgram };
+    }
+  } else {
+    parser = parserOrProgram as T;
+  }
+
+  // If contexts are present, delegate to runWith() (always async)
+  const contexts = options.contexts;
+  if (contexts && contexts.length > 0) {
+    const { programName, args, coreOptions } = buildCoreOptions(
+      options,
+      programMetadata,
+    );
+
+    // Extract context-required options (anything not in knownRunOptionsKeys)
+    const contextOptions: Record<string, unknown> = {};
+    for (const key of Object.keys(options)) {
+      if (!knownRunOptionsKeys.has(key)) {
+        contextOptions[key] = (options as Record<string, unknown>)[key];
+      }
+    }
+
+    // Build RunWithOptions = CoreRunOptions + { args }
+    const runWithOptions = {
+      ...coreOptions,
+      ...contextOptions,
+      args,
+    };
+
+    // Context-aware parsing is always async (runWith returns Promise)
+    return runWith(
+      parser,
+      programName,
+      contexts,
+      runWithOptions as Parameters<typeof runWith>[3],
+    ) as Promise<InferValue<T>>;
+  }
+
+  // No contexts — use runParser directly
+  const { programName, args, coreOptions } = buildCoreOptions(
+    options,
+    programMetadata,
+  );
+
+  return runParser(parser, programName, args, coreOptions);
 }

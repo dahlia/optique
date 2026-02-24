@@ -10,6 +10,21 @@ To be released.
 
 ### @optique/core
 
+ -  Added `options` parameter to `SourceContext.getAnnotations()`.  Contexts
+    now receive runtime options (e.g., `getConfigPath`, `load`) passed by
+    the runner, enabling config contexts to load files without a separate
+    `runWithConfig()` wrapper.  [[#110]]
+
+ -  Renamed `SourceContext._requiredOptions` to `$requiredOptions` to follow
+    the `$` prefix convention used by `ValueParser.$mode`, `Parser.$mode`,
+    etc.  [[#110]]
+
+ -  Added optional `Symbol.dispose` and `Symbol.asyncDispose` methods to
+    `SourceContext`.  Contexts that hold resources (e.g., global registries)
+    can now implement `Disposable` / `AsyncDisposable` for automatic cleanup.
+    `runWith()` and `runWithSync()` call dispose on all contexts in a
+    `finally` block.  [[#110]]
+
  -  Added `fail<T>()` parser: always fails without consuming input, declared
     to produce a value of type `T`.  Its primary use is as the inner parser
     for `bindConfig(fail<T>(), { … })` when a value should come only from a
@@ -54,12 +69,31 @@ To be released.
     and suggestions), while `"usage"` and `"doc"` allow partial hiding.
     [[#113]]
 
+[#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
 [#120]: https://github.com/dahlia/optique/issues/120
 [#131]: https://github.com/dahlia/optique/issues/131
 
 ### @optique/config
+
+ -  Removed `runWithConfig()` and the `@optique/config/run` subpath export.
+    Config contexts are now used directly with `run()`, `runSync()`, or
+    `runAsync()` from *@optique/run* (or `runWith()` from
+    `@optique/core/facade`) via the `contexts` option.  Context-specific
+    options like `getConfigPath` and `load` are passed alongside the standard
+    runner options.  This is a breaking change.  [[#110]]
+
+ -  Moved `fileParser` option from `runWithConfig()` runtime options into
+    `createConfigContext()` options.  The file parser is now stored in the
+    context at creation time.  [[#110]]
+
+ -  Changed `ConfigContextRequiredOptions` to make both `getConfigPath` and
+    `load` optional fields (with runtime validation that at least one is
+    provided).  [[#110]]
+
+ -  Added `ConfigContext` implementation of `Symbol.dispose` for automatic
+    cleanup of the global config registry.  [[#110]]
 
  -  Added config-source metadata support for `bindConfig()` key accessors.
     Accessor callbacks now receive a second `meta` argument, and single-file
@@ -955,6 +989,23 @@ for usage examples.
 [#93]: https://github.com/dahlia/optique/issues/93
 
 ### @optique/run
+
+ -  Added `contexts` option to `run()`, `runSync()`, and `runAsync()` for
+    source context support.  When provided, the runner delegates to
+    `runWith()` (or `runWithSync()`) from `@optique/core/facade`, which
+    handles annotation collection, two-phase parsing, and context disposal
+    automatically.  Context-specific options (e.g., `getConfigPath`, `load`)
+    are passed through alongside the standard runner options.  [[#110]]
+
+    ~~~~ typescript
+    import { runAsync } from "@optique/run";
+
+    const result = await runAsync(parser, {
+      contexts: [configContext],
+      getConfigPath: (parsed) => parsed.config,
+      help: "both",
+    });
+    ~~~~
 
  -  Updated `run()`, `runSync()`, and `runAsync()` to accept `Program` objects
     directly. The new API automatically extracts program name and metadata from

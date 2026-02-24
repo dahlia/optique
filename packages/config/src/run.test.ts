@@ -8,13 +8,18 @@ import { object } from "@optique/core/constructs";
 import { flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
-import { bindConfig, createConfigContext } from "./index.ts";
+import { runWith } from "@optique/core/facade";
+import {
+  bindConfig,
+  createConfigContext,
+  getActiveConfig,
+  getActiveConfigMeta,
+} from "./index.ts";
 import type { ConfigMeta } from "./index.ts";
-import { runWithConfig } from "./run.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 
-describe("runWithConfig", { concurrency: false }, () => {
+describe("run with config context", { concurrency: false }, () => {
   test("performs two-pass parsing with config file", async () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-1.json");
@@ -47,8 +52,8 @@ describe("runWithConfig", { concurrency: false }, () => {
         }),
       });
 
-      const result = await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config: string }).config,
+      const result = await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
         args: [],
       });
 
@@ -91,8 +96,8 @@ describe("runWithConfig", { concurrency: false }, () => {
         }),
       });
 
-      const result = await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config: string }).config,
+      const result = await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
         args: ["--host", "cli.example.com"],
       });
 
@@ -125,8 +130,8 @@ describe("runWithConfig", { concurrency: false }, () => {
       }),
     });
 
-    const result = await runWithConfig(parser, context, {
-      getConfigPath: (parsed) => (parsed as { config?: string }).config,
+    const result = await runWith(parser, "test", [context], {
+      getConfigPath: (parsed: { config?: string }) => parsed.config,
       args: [],
     });
 
@@ -169,8 +174,8 @@ describe("runWithConfig", { concurrency: false }, () => {
 
       await assert.rejects(
         async () => {
-          await runWithConfig(parser, context, {
-            getConfigPath: (parsed) => (parsed as { config: string }).config,
+          await runWith(parser, "test", [context], {
+            getConfigPath: (parsed: { config: string }) => parsed.config,
             args: [],
           });
         },
@@ -205,27 +210,20 @@ describe("runWithConfig", { concurrency: false }, () => {
         }),
       });
 
-      let stderrOutput = "";
       await assert.rejects(
         async () => {
-          await runWithConfig(parser, context, {
-            getConfigPath: (parsed) => (parsed as { config: string }).config,
+          await runWith(parser, "test", [context], {
+            getConfigPath: (parsed: { config: string }) => parsed.config,
             args: [],
-            stderr: (text) => {
-              stderrOutput += text;
-            },
-            onError: () => "error-handled" as never,
           });
         },
-      );
-
-      assert.ok(
-        stderrOutput.includes(configPath),
-        "error message should include the config file path",
-      );
-      assert.ok(
-        !stderrOutput.includes("SyntaxError"),
-        "error message should not expose raw SyntaxError",
+        (error: Error) => {
+          assert.ok(
+            error.message.includes(configPath),
+            "error message should include the config file path",
+          );
+          return true;
+        },
       );
     } finally {
       await rm(configPath, { force: true });
@@ -248,7 +246,7 @@ describe("runWithConfig", { concurrency: false }, () => {
     });
 
     // No config file specified
-    const result = await runWithConfig(parser, context, {
+    const result = await runWith(parser, "test", [context], {
       getConfigPath: () => undefined,
       args: [],
     });
@@ -284,7 +282,10 @@ describe("runWithConfig", { concurrency: false }, () => {
         return result;
       };
 
-      const context = createConfigContext({ schema });
+      const context = createConfigContext({
+        schema,
+        fileParser: customParser,
+      });
 
       const parser = object({
         config: withDefault(option("--config", string()), configPath),
@@ -300,9 +301,8 @@ describe("runWithConfig", { concurrency: false }, () => {
         }),
       });
 
-      const result = await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config: string }).config,
-        fileParser: customParser,
+      const result = await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
         args: [],
       });
 
@@ -362,7 +362,7 @@ describe("runWithConfig", { concurrency: false }, () => {
         }),
       });
 
-      const result = await runWithConfig(parser, context, {
+      const result = await runWith(parser, "test", [context], {
         load: async () => {
           const base = JSON.parse(await readFile(baseConfigPath, "utf-8"));
           const user = JSON.parse(await readFile(userConfigPath, "utf-8"));
@@ -397,7 +397,7 @@ describe("runWithConfig", { concurrency: false }, () => {
       default: 10,
     });
 
-    const result = await runWithConfig(parser, context, {
+    const result = await runWith(parser, "test", [context], {
       load: () => ({
         config: 0,
         meta: {
@@ -455,8 +455,8 @@ describe("runWithConfig", { concurrency: false }, () => {
         }),
       });
 
-      const result = await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config: string }).config,
+      const result = await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
         args: [],
       });
 
@@ -489,8 +489,8 @@ describe("runWithConfig", { concurrency: false }, () => {
         }),
       });
 
-      const result = await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config: string }).config,
+      const result = await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
         args: [],
       });
 
@@ -519,7 +519,7 @@ describe("runWithConfig", { concurrency: false }, () => {
         default: "unused",
       });
 
-      const result = await runWithConfig(parser, context, {
+      const result = await runWith(parser, "test", [context], {
         getConfigPath: () => relativeConfigPath,
         args: [],
       });
@@ -551,7 +551,7 @@ describe("runWithConfig", { concurrency: false }, () => {
       default: "unused",
     });
 
-    const result = await runWithConfig(parser, context, {
+    const result = await runWith(parser, "test", [context], {
       load: () => ({
         config: { outDir: "./cache" },
         meta: { source: "project", dir: "/workspace" },
@@ -575,7 +575,7 @@ describe("runWithConfig", { concurrency: false }, () => {
       default: "unused",
     });
 
-    const result = await runWithConfig(parser, context, {
+    const result = await runWith(parser, "test", [context], {
       load: () => ({
         config: { outDir: "./build" },
         meta: {
@@ -610,8 +610,8 @@ describe("runWithConfig", { concurrency: false }, () => {
       let helpShown = false;
       let helpOutput = "";
 
-      await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config?: string }).config,
+      await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config?: string }) => parsed.config,
         args: ["--help"],
         help: {
           mode: "option",
@@ -649,8 +649,8 @@ describe("runWithConfig", { concurrency: false }, () => {
 
       let helpShown = false;
 
-      await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config: string }).config,
+      await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
         args: ["--help"],
         help: {
           mode: "option",
@@ -684,8 +684,8 @@ describe("runWithConfig", { concurrency: false }, () => {
       let versionShown = false;
       let versionOutput = "";
 
-      await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config?: string }).config,
+      await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config?: string }) => parsed.config,
         args: ["--version"],
         version: {
           mode: "option",
@@ -723,8 +723,8 @@ describe("runWithConfig", { concurrency: false }, () => {
       let completionShown = false;
       let completionOutput = "";
 
-      await runWithConfig(parser, context, {
-        getConfigPath: (parsed) => (parsed as { config?: string }).config,
+      await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config?: string }) => parsed.config,
         args: ["completion", "bash"],
         completion: {
           mode: "command",
@@ -759,10 +759,9 @@ describe("runWithConfig", { concurrency: false }, () => {
 
       let helpOutput = "";
 
-      await runWithConfig(parser, context, {
+      await runWith(parser, "my-custom-app", [context], {
         getConfigPath: () => undefined,
         args: ["--help"],
-        programName: "my-custom-app",
         help: {
           mode: "option",
           onShow: () => "help-shown" as never,
@@ -778,7 +777,7 @@ describe("runWithConfig", { concurrency: false }, () => {
 
   test("withDefault(object(...)) returns default on empty args", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/131
-    // runWithConfig() crashed with TypeError when withDefault(object(...))
+    // runWith() crashed with TypeError when withDefault(object(...))
     // took the default path (no tokens consumed).
     const schema = z.object({});
     const context = createConfigContext({ schema });
@@ -791,7 +790,7 @@ describe("runWithConfig", { concurrency: false }, () => {
       { enabled: false as const } as const,
     );
 
-    const result = await runWithConfig(parser, context, {
+    const result = await runWith(parser, "test", [context], {
       load: () => ({
         config: {},
         meta: {
@@ -819,7 +818,7 @@ describe("runWithConfig", { concurrency: false }, () => {
       { enabled: false as const } as const,
     );
 
-    const result = await runWithConfig(parser, context, {
+    const result = await runWith(parser, "test", [context], {
       load: () => ({
         config: {},
         meta: {
@@ -831,5 +830,132 @@ describe("runWithConfig", { concurrency: false }, () => {
     });
 
     assert.deepEqual(result, { enabled: true, dependent: "foo" });
+  });
+
+  test("dispose clears active config registry after runWith", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-dispose.json");
+    await writeFile(
+      configPath,
+      JSON.stringify({ host: "dispose-test.com" }),
+    );
+
+    try {
+      const schema = z.object({ host: z.string() });
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        config: withDefault(option("--config", string()), configPath),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+      });
+
+      await runWith(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
+        args: [],
+      });
+
+      // After runWith completes, dispose should have cleared the registries
+      assert.equal(getActiveConfig(context.id), undefined);
+      assert.equal(getActiveConfigMeta(context.id), undefined);
+    } finally {
+      await rm(configPath, { force: true });
+    }
+  });
+
+  test("ENOENT file (non-existent config) returns defaults", async () => {
+    const schema = z.object({
+      host: z.string(),
+      port: z.number(),
+    });
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      config: withDefault(
+        option("--config", string()),
+        "/nonexistent/path/config.json",
+      ),
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      getConfigPath: (parsed: { config: string }) => parsed.config,
+      args: [],
+    });
+
+    // Non-existent config file should be treated as optional
+    assert.equal(result.host, "localhost");
+    assert.equal(result.port, 3000);
+  });
+
+  test("load function that throws propagates through runWith", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+    });
+
+    await assert.rejects(
+      () =>
+        runWith(parser, "test", [context], {
+          load: () => {
+            throw new Error("Custom load failure.");
+          },
+          args: [],
+        }),
+      (error: Error) => {
+        assert.equal(error.message, "Custom load failure.");
+        return true;
+      },
+    );
+  });
+
+  test("load function returning sync ConfigLoadResult works", async () => {
+    const schema = z.object({ host: z.string(), port: z.number() });
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      load: () => ({
+        config: { host: "sync-host", port: 9999 },
+        meta: {
+          configDir: "/test",
+          configPath: "/test/config.json",
+        } satisfies ConfigMeta,
+      }),
+      args: [],
+    });
+
+    assert.equal(result.host, "sync-host");
+    assert.equal(result.port, 9999);
   });
 });

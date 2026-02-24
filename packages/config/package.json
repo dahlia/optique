@@ -52,14 +52,6 @@
       },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    },
-    "./run": {
-      "types": {
-        "import": "./dist/run.d.ts",
-        "require": "./dist/run.d.cts"
-      },
-      "import": "./dist/run.js",
-      "require": "./dist/run.cjs"
     }
   },
   "sideEffects": false,

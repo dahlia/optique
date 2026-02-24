@@ -1082,11 +1082,11 @@ define your config structure:
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
 
 // Define the config schema
 const configSchema = z.object({
@@ -1118,9 +1118,9 @@ const parser = object({
   }),
 });
 
-// Run with config file support
-const result = await runWithConfig(parser, configContext, {
-  args: process.argv.slice(2),
+// Run with config file support via contexts
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
 });
 
@@ -1143,11 +1143,11 @@ TypeScript ensures you're accessing a field that actually exists:
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
 
 const configSchema = z.object({ host: z.string().optional() });
 const configContext = createConfigContext({ schema: configSchema });
@@ -1157,8 +1157,8 @@ const parser = object({
   host: option("--host", string()),
 });
 
-const result = await runWithConfig(parser, configContext, {
-  args: process.argv.slice(2),
+const result = await runAsync(parser, {
+  contexts: [configContext],
   // `parsed` is typed as { configFile?: string; host: string }
   getConfigPath: (parsed) => parsed.configFile,
 });
@@ -1202,15 +1202,15 @@ const dbParser = bindConfig(option("--db", string()), {
 ### Custom config file formats
 
 By default, config files are parsed as JSON. For YAML, TOML, or other formats,
-provide a custom file parser to `runWithConfig()`:
+provide a custom file parser to `createConfigContext()`:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
 import { parse as parseYaml } from "yaml";
 
 const configSchema = z.object({
@@ -1218,7 +1218,11 @@ const configSchema = z.object({
   port: z.number(),
 });
 
-const configContext = createConfigContext({ schema: configSchema });
+// Pass fileParser when creating the context
+const configContext = createConfigContext({
+  schema: configSchema,
+  fileParser: (contents) => parseYaml(new TextDecoder().decode(contents)),
+});
 
 const parser = object({
   config: option("--config", string()),
@@ -1234,11 +1238,9 @@ const parser = object({
   }),
 });
 
-const result = await runWithConfig(parser, configContext, {
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
-  // Custom parser for YAML files
-  fileParser: (contents) => parseYaml(new TextDecoder().decode(contents)),
-  args: process.argv.slice(2),
 });
 ~~~~
 
@@ -1250,11 +1252,11 @@ values. Use `bindConfig()` with environment variable fallbacks:
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
 
 const configSchema = z.object({
   host: z.string().optional(),
@@ -1278,8 +1280,8 @@ const parser = object({
   }),
 });
 
-const result = await runWithConfig(parser, configContext, {
-  args: process.argv.slice(2),
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
 });
 ~~~~

@@ -100,9 +100,9 @@ const portParser = bindConfig(option("--port", integer()), {
 });
 ~~~~
 
-### 3. Run with config file
+### 3. Run with config support
 
-Use `runWithConfig()` to automatically load and validate configuration:
+Pass the config context to `runAsync()` (or `run()`) via the `contexts` option:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
@@ -133,11 +133,11 @@ const parser = object({
   }),
 });
 // ---cut-before---
-import { runWithConfig } from "@optique/config/run";
+import { runAsync } from "@optique/run";
 
-const result = await runWithConfig(parser, configContext, {
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
-  args: process.argv.slice(2),
 });
 
 console.log(`Connecting to ${result.host}:${result.port}`);
@@ -201,14 +201,14 @@ const portRequired = bindConfig(option("--port", integer()), {
 Help, version, and completion
 -----------------------------
 
-The `runWithConfig()` function fully supports help messages, version display,
-and shell completion generation. These features work even when configuration
-files are missing or invalid, ensuring users can always access help:
+When using `run()` or `runAsync()` with config contexts, help messages,
+version display, and shell completion generation all work seamlessly.
+These features work even when configuration files are missing or invalid,
+ensuring users can always access help:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
@@ -234,25 +234,15 @@ const parser = object({
     default: 3000,
   }),
 });
+// ---cut-before---
+import { runAsync } from "@optique/run";
 
-const result = await runWithConfig(parser, configContext, {
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
-  args: process.argv.slice(2),
-  // Add help support
-  help: {
-    mode: "option",
-    onShow: () => process.exit(0),
-  },
-  // Add version support
-  version: {
-    value: "1.0.0",
-    onShow: () => process.exit(0),
-  },
-  // Add shell completion
-  completion: {
-    mode: "option",
-    onShow: () => process.exit(0),
-  },
+  help: "option",
+  version: "1.0.0",
+  completion: "option",
 });
 ~~~~
 
@@ -380,11 +370,11 @@ always succeeds and would prevent the config fallback from ever triggering.
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { bindConfig, createConfigContext } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { fail, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
+import { runAsync } from "@optique/run";
 
 const configSchema = z.object({
   host: z.string(),
@@ -415,9 +405,9 @@ const parser = object({
   }),
 });
 
-const result = await runWithConfig(parser, configContext, {
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
-  args: process.argv.slice(2),
 });
 
 console.log(`Timeout: ${result.timeout}s`);
@@ -430,23 +420,21 @@ Without a config file (or if `timeout` is absent), it falls back to `30`.
 Custom file formats
 -------------------
 
-By default, *@optique/config* parses JSON files. You can provide a custom
-file parser for other formats:
+By default, *@optique/config* parses JSON files.  You can provide a custom
+file parser when creating the config context:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
 
 const configSchema = z.object({
   host: z.string(),
   port: z.number(),
 });
-
-const configContext = createConfigContext({ schema: configSchema });
 
 // Custom parser for KEY=VALUE format
 const customParser = (contents: Uint8Array): unknown => {
@@ -464,6 +452,12 @@ const customParser = (contents: Uint8Array): unknown => {
   return result;
 };
 
+// Pass fileParser to createConfigContext
+const configContext = createConfigContext({
+  schema: configSchema,
+  fileParser: customParser,
+});
+
 const parser = object({
   config: option("--config", string()),
   host: bindConfig(option("--host", string()), {
@@ -478,11 +472,9 @@ const parser = object({
   }),
 });
 
-// Pass fileParser to runWithConfig
-const result = await runWithConfig(parser, configContext, {
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
-  fileParser: customParser,
-  args: process.argv.slice(2),
 });
 ~~~~
 
@@ -498,16 +490,16 @@ Multi-file configuration
 ------------------------
 
 For advanced scenarios like hierarchical config merging (system → user →
-project), use the `load` callback:
+project), use the `load` callback in the runtime options:
 
 ~~~~ typescript twoslash
 // @noErrors
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 declare function deepMerge(...objects: any[]): any;
@@ -534,7 +526,8 @@ const parser = object({
   }),
 });
 
-const result = await runWithConfig(parser, configContext, {
+const result = await runAsync(parser, {
+  contexts: [configContext],
   load: async (parsed) => {
     // Load multiple config files with different error handling
     const tryLoad = async (path: string) => {
@@ -565,7 +558,6 @@ const result = await runWithConfig(parser, configContext, {
       },
     };
   },
-  args: process.argv.slice(2),
 });
 ~~~~
 
@@ -637,8 +629,41 @@ Composable with other sources
 -----------------------------
 
 Config contexts implement the `SourceContext` interface, allowing composition
-with other data sources via `runWith()`. When using `ConfigContext` with
-`runWith()`, you must provide `getConfigPath` in the options:
+with other data sources.  When using `run()` or `runAsync()` with multiple
+contexts, you can pass them all in the `contexts` array.  Earlier contexts
+override later ones, enabling natural priority chains like CLI > environment
+variables > config file > defaults:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+const configContext = createConfigContext({ schema: z.object({ host: z.string() }) });
+const parser = object({
+  config: option("--config", string()),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+});
+// ---cut-before---
+import { runAsync } from "@optique/run";
+
+// Combine config with other sources (e.g., environment variables)
+const result = await runAsync(parser, {
+  contexts: [configContext],
+  getConfigPath: (parsed) => parsed.config,  // Typed from parser result!
+});
+~~~~
+
+The `getConfigPath` callback is fully typed based on the parser's result type,
+providing type safety without manual type assertions.
+
+You can also use `runWith()` from `@optique/core/facade` directly for
+process-agnostic environments:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
@@ -658,16 +683,11 @@ const parser = object({
 // ---cut-before---
 import { runWith } from "@optique/core/facade";
 
-// Combine config with other sources (e.g., environment variables)
-// getConfigPath is required when using ConfigContext with runWith()
 const result = await runWith(parser, "myapp", [configContext], {
   args: process.argv.slice(2),
-  getConfigPath: (parsed) => parsed.config,  // Typed from parser result!
+  getConfigPath: (parsed) => parsed.config,
 });
 ~~~~
-
-The `getConfigPath` callback is fully typed based on the parser's result type,
-providing type safety without manual type assertions.
 
 
 Error handling
@@ -684,7 +704,7 @@ import { createConfigContext, bindConfig } from "@optique/config";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
-import { runWithConfig } from "@optique/config/run";
+import { runAsync } from "@optique/run";
 
 const configContext = createConfigContext({
   schema: z.object({ host: z.string() }),
@@ -700,7 +720,8 @@ const parser = object({
 });
 
 // Config file not found or not specified - uses default
-const result = await runWithConfig(parser, configContext, {
+const result = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
   args: [],
 });
@@ -713,14 +734,22 @@ console.log(result.host); // "localhost" (default)
 If the config file fails validation, an error is thrown:
 
 ~~~~ typescript twoslash
-// @errors: 2304
-const configContext = {} as any;
-const parser = {} as any;
+import { z } from "zod";
+import { createConfigContext, bindConfig } from "@optique/config";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+const configContext = createConfigContext({ schema: z.object({ host: z.string() }) });
+const parser = object({
+  config: option("--config", string()),
+  host: bindConfig(option("--host", string()), { context: configContext, key: "host" }),
+});
 // ---cut-before---
-import { runWithConfig } from "@optique/config/run";
+import { runAsync } from "@optique/run";
 
 try {
-  const result = await runWithConfig(parser, configContext, {
+  const result = await runAsync(parser, {
+    contexts: [configContext],
     getConfigPath: (parsed) => "/path/to/invalid-config.json",
     args: [],
   });
@@ -739,6 +768,8 @@ Creates a configuration context.
 
 Parameters
 :    -  `options.schema`: Standard Schema validator for the config file
+     -  `options.fileParser`: Optional custom parser for file contents
+        (defaults to `JSON.parse`)
 
 Returns
 :   `ConfigContext<T, TConfigMeta>` implementing `SourceContext` interface
@@ -763,36 +794,22 @@ Parameters
 Returns
 :   A new parser with config fallback behavior
 
-### `runWithConfig(parser, context, options)`
+### Runtime options
 
-Runs a parser with config file support using two-pass parsing.
+When using a config context with `run()`, `runAsync()`, or `runWith()`, the
+following context-specific options are passed alongside the standard runner
+options:
 
-This function accepts either `SingleFileOptions` or `CustomLoadOptions`.
+`getConfigPath`
+:   Function to extract config file path from parsed result.  Optional when
+    using the `load` callback.
 
-Parameters
-:    -  `parser`: The parser to execute
-     -  `context`: Config context with schema
-     -  `options`: Either single-file or custom load options
-     -  `options.args`: Command-line arguments to parse (both modes)
+`load`
+:   Function that receives parsed result and returns
+    `ConfigLoadResult<TConfigMeta>` (or Promise of it).  Use this for
+    multi-file merging scenarios.  Optional when using `getConfigPath`.
 
-Single-file mode (`SingleFileOptions`):
-:    -  `options.getConfigPath`: Function to extract config file path from
-        parsed result
-     -  `options.fileParser`: Optional custom parser for file contents
-        (defaults to JSON.parse)
-
-Custom load mode (`CustomLoadOptions`):
-:    -  `options.load`: Function that receives parsed result and returns
-        `ConfigLoadResult<TConfigMeta>` (or Promise of it):
-
-          -  `config`: raw config data to validate
-          -  `meta`: metadata passed to `bindConfig()` key callbacks
-
-        This allows full control over multi-file loading, merging, and
-        metadata tracking.
-
-Returns
-:   `Promise<TValue>` with the parsed result
+At least one of `getConfigPath` or `load` must be provided.
 
 ### `configKey`
 
@@ -813,10 +830,11 @@ Default config metadata shape:
 Limitations
 -----------
 
- -  *File I/O is async* — `runWithConfig()` always returns a Promise due to
-    file reading
+ -  *File I/O is async* — config loading always returns a Promise due to
+    file reading, so use `runAsync()` or `run()` (which returns a Promise
+    when contexts are provided)
  -  *JSON only by default* — Other formats require the `fileParser` option
-    (single-file mode) or custom loading logic (custom load mode)
+    on `createConfigContext()` or a custom `load` callback
  -  *Two-pass parsing* — Parsing happens twice (once to extract config path,
     once with config data), which has a performance cost
  -  *Standard Schema required* — You must use a Standard Schema-compatible
@@ -833,11 +851,11 @@ Here's a complete example of a CLI application with config file support:
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { runWithConfig } from "@optique/config/run";
 import { object } from "@optique/core/constructs";
 import { option, flag } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
+import { runAsync } from "@optique/run";
 
 // Define config schema
 const configSchema = z.object({
@@ -875,9 +893,9 @@ const parser = object({
 });
 
 // Run with config support
-const config = await runWithConfig(parser, configContext, {
+const config = await runAsync(parser, {
+  contexts: [configContext],
   getConfigPath: (parsed) => parsed.config,
-  args: process.argv.slice(2),
 });
 
 if (config.verbose) {

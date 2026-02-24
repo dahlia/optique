@@ -130,6 +130,19 @@ describe("SourceContext", () => {
 
       assert.ok(!isStaticContext(context));
     });
+
+    it("should only check symbol-keyed annotations (ignore string keys)", () => {
+      // isStaticContext checks Object.getOwnPropertySymbols().length,
+      // so annotations with only string keys should return false
+      const stringKeyContext: SourceContext = {
+        id: Symbol.for("@test/string-keys"),
+        getAnnotations() {
+          return { someStringKey: "value" } as Annotations;
+        },
+      };
+
+      assert.ok(!isStaticContext(stringKeyContext));
+    });
   });
 
   describe("context composition patterns", () => {
