@@ -34,13 +34,13 @@ describe("createConfigContext", () => {
     assert.equal(typeof context.getAnnotations, "function");
   });
 
-  test("returns empty annotations when called without parsed result", () => {
+  test("returns empty annotations when called without parsed result", async () => {
     const schema = z.object({
       host: z.string(),
     });
 
     const context = createConfigContext({ schema });
-    const annotations = context.getAnnotations();
+    const annotations = await context.getAnnotations();
 
     assert.ok(annotations);
     assert.deepEqual(Object.getOwnPropertySymbols(annotations).length, 0);
