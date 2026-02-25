@@ -874,8 +874,8 @@ const parser = object({
 
 const result = await runWith(parser, "myapp", [envContext], {
   args: process.argv.slice(2),
-  help: { mode: "option" },
-  version: { mode: "option", value: "1.0.0" },
+  help: { option: true },
+  version: { option: true, value: "1.0.0" },
 });
 ~~~~
 
@@ -930,7 +930,7 @@ even in misconfigured environments.
 // Help works even if config file is missing or invalid
 const result = await runWith(parser, "myapp", [configContext], {
   args: ["--help"],
-  help: { mode: "option", onShow: () => process.exit(0) },
+  help: { option: true, onShow: () => process.exit(0) },
 });
 // → Shows help immediately without errors
 ~~~~

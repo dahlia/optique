@@ -189,11 +189,12 @@ const config = runParser(
   process.argv.slice(2),          // arguments
   {
     help: {                       // Enable help functionality
-      mode: "both",               // Enable --help and help command
+      command: true,              // Enable help command
+      option: true,               // Enable --help option
       onShow: process.exit,       // Exit after showing help
     },
     version: {                    // Enable version functionality
-      mode: "option",             // Enable --version flag
+      option: true,               // Enable --version flag
       value: prog.metadata.version!, // Use version from metadata
       onShow: process.exit,       // Exit after showing version
     },
@@ -234,11 +235,12 @@ const config = runParser(
   {
     brief: message`A powerful server application`,
     help: {
-      mode: "both",
+      command: true,
+      option: true,
       onShow: process.exit,
     },
     version: {
-      mode: "option",
+      option: true,
       value: "1.0.0",
       onShow: process.exit,
     },
@@ -288,15 +290,16 @@ const result = runParser(prog, ["--name", "test"], {
   maxWidth: 80,          // Wrap text at 80 columns
   showDefault: true,     // Show default values in help text
   help: {                // Grouped help API
-    mode: "option",      // Only --help option, no help command
+    option: true,        // Only --help option, no help command
   },
   version: {             // Version functionality
-    mode: "both",        // Both --version option and version command
+    command: true,       // Both --version option and version command
+    option: true,
     value: prog.metadata.version!, // Use version from metadata
   },
   completion: {          // Shell completion functionality
-    mode: "both",        // "command" | "option" | "both"
-    name: "plural",      // "singular" | "plural" | "both"
+    command: { names: ["completions"] }, // Use plural command name
+    option: true,
   },
   aboveError: "help",    // Show full help before error messages
   stderr: (text) => {    // Custom error output handler
@@ -463,7 +466,7 @@ const config = run(prog, {
   help: "both",               // Enable both --help and help command
   version: {                  // Advanced version configuration
     value: prog.metadata.version!, // Version from metadata
-    mode: "command"           // Only version command, no --version option
+    command: true,            // Only version command, no --version option
   },
   aboveError: "usage",        // Show usage on errors
   errorExitCode: 2            // Exit code for errors
@@ -526,25 +529,26 @@ const result1 = run(prog, {
   version: prog.metadata.version,  // Adds --version option only
 });
 
-// Advanced object-based API with mode selection
+// Advanced object-based API
 const result2 = run(prog, {
   version: {
     value: prog.metadata.version!,
-    mode: "option",   // Adds --version option only
+    option: true,     // Adds --version option only
   }
 });
 
 const result3 = run(prog, {
   version: {
     value: prog.metadata.version!,
-    mode: "command",  // Adds version subcommand only
+    command: true,    // Adds version subcommand only
   }
 });
 
 const result4 = run(prog, {
   version: {
     value: prog.metadata.version!,
-    mode: "both",     // Adds both --version and version command
+    command: true,    // Adds both --version and version command
+    option: true,
   }
 });
 
@@ -576,26 +580,23 @@ const config = run(parser, {
 });
 ~~~~
 
-### Completion modes
+### Completion configuration
 
-The `mode` option controls how completion is triggered:
+The `command` and `option` properties control how completion is triggered:
 
-`"command"`
+`command: true`
 :   Completion via subcommand (`myapp completion bash`)
 
-`"option"`
+`option: true`
 :   Completion via option (`myapp --completion bash`)
 
-`"both"`
-:   Both patterns supported
+Both can be enabled simultaneously.
 
-### Naming conventions
+### Command name customization
 
-*This API is available since Optique 0.7.0.*
-
-You can configure whether to use singular (`completion`), plural
-(`completions`), or both naming conventions for the completion command and
-option:
+By default, the completion command is named `completion` and the option is
+`--completion`.  You can customize the command name by passing a configuration
+object:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -605,22 +606,29 @@ const parser = object({});
 
 const config = run(parser, {
   completion: {
-    mode: "both",
-    name: "plural", // Use "completions" and "--completions"
+    command: { names: ["completions"] }, // Use "completions" command name
+    option: true,
   }
 });
 ~~~~
 
-The `name` option accepts:
+To register multiple command names (e.g., both singular and plural), pass
+an array. Additional names after the first are hidden from help output by
+default:
 
-`"singular"`
-:   Use `completion` command and `--completion` option.
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { run } from "@optique/run";
 
-`"plural"`
-:   Use `completions` command and `--completions` option.
+const parser = object({});
 
-`"both"` (default)
-:   Use both singular and plural forms.
+const config = run(parser, {
+  completion: {
+    command: { names: ["completion", "completions"] },
+    option: true,
+  }
+});
+~~~~
 
 Users can generate and install completion scripts:
 
@@ -682,9 +690,9 @@ const parser = or(
 );
 
 const config = run(parser, {
-  help: { mode: "both", group: "Other" },
-  version: { value: "1.0.0", mode: "both", group: "Other" },
-  completion: { mode: "both", group: "Other" },
+  help: { command: { group: "Other" }, option: true },
+  version: { value: "1.0.0", command: { group: "Other" }, option: true },
+  completion: { command: { group: "Other" }, option: true },
 });
 ~~~~
 
@@ -703,10 +711,10 @@ Other:
   [1mcompletion[0m [4m[2mSHELL[0m
 ~~~~
 
-The `group` option is only available when the meta-command's mode includes
-a command form (`"command"` or `"both"`).  When the mode is `"option"`, the
-`group` option is blocked at the type level.  You can also group only some
-meta-commands while leaving others ungrouped.
+The `group` option is only available on the `command` property.  When a
+meta-command is configured with only `option: true`, there is no command to
+group.  You can also group only some meta-commands while leaving others
+ungrouped.
 
 ### Default value display
 

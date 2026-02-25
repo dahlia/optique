@@ -369,7 +369,7 @@ export async function main(): Promise<void> {
     help: "option",
     version: {
       value: denoJson.version,
-      mode: "option",
+      option: true,
     },
   });
 

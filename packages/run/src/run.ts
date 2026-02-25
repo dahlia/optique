@@ -2,7 +2,9 @@ import type { ShellCompletion } from "@optique/core/completion";
 import type { SourceContext } from "@optique/core/context";
 import { runParser, runWith, runWithSync } from "@optique/core/facade";
 import type {
+  CommandSubConfig,
   ExtractRequiredOptions,
+  OptionSubConfig,
   RunOptions as CoreRunOptions,
 } from "@optique/core/facade";
 import type {
@@ -105,72 +107,91 @@ export interface RunOptions {
    * - `"command"`: Only the `help` subcommand is available
    * - `"option"`: Only the `--help` option is available
    * - `"both"`: Both `help` subcommand and `--help` option are available
-   * - `object`: Advanced configuration with mode and group
-   *   - `mode`: "command" | "both"
-   *   - `group`: Group label for help command in help output (optional)
+   * - `object`: Advanced configuration with `command` and/or `option`
+   *   sub-configs.  At least one of `command` or `option` must be specified.
    *
    * When not provided, help functionality is disabled.
+   *
+   * @since 1.0.0
    */
   readonly help?:
     | "command"
     | "option"
     | "both"
-    | {
-      readonly mode: "command" | "both";
-      /**
-       * Group label for the help command in help output.
-       * @since 0.10.0
-       */
-      readonly group?: string;
-    };
+    | ((
+      | {
+        readonly command: true | CommandSubConfig;
+        readonly option?: true | OptionSubConfig;
+      }
+      | {
+        readonly option: true | OptionSubConfig;
+        readonly command?: true | CommandSubConfig;
+      }
+    ));
 
   /**
    * Version configuration. Determines how version is made available:
    *
    * - `string`: Version value with default `"option"` mode (--version only)
-   * - `object`: Advanced configuration with version value and mode
-   *   - `value`: The version string to display
-   *   - `mode`: "command" | "option" | "both" (default: "option")
-   *   - `group`: Group label for version command in help output (only
-   *     when mode is "command" or "both")
+   * - `object`: Advanced configuration with version value and `command`
+   *   and/or `option` sub-configs.  At least one of `command` or `option`
+   *   must be specified.
    *
    * When not provided, version functionality is disabled.
+   *
+   * @since 1.0.0
    */
   readonly version?:
     | string
-    | {
-      readonly value: string;
-      readonly mode: "command" | "both";
-      /**
-       * Group label for the version command in help output.
-       * @since 0.10.0
-       */
-      readonly group?: string;
-    }
-    | {
-      readonly value: string;
-      readonly mode?: "option";
-      readonly group?: never;
-    };
+    | (
+      & { readonly value: string }
+      & (
+        | {
+          readonly command: true | CommandSubConfig;
+          readonly option?: true | OptionSubConfig;
+        }
+        | {
+          readonly option: true | OptionSubConfig;
+          readonly command?: true | CommandSubConfig;
+        }
+      )
+    );
 
   /**
-   * Completion configuration. Determines how shell completion is made available:
+   * Completion configuration. Determines how shell completion is made
+   * available:
    *
    * - `"command"`: Only the `completion` subcommand is available
    * - `"option"`: Only the `--completion` option is available
-   * - `"both"`: Both `completion` subcommand and `--completion` option are available
-   * - `object`: Advanced configuration with mode and custom shells
-   *   - `mode`: "command" | "option" | "both" (default: "both")
-   *   - `name`: "singular" | "plural" | "both" (default: "both")
-   *   - `helpVisibility`: "singular" | "plural" | "both" | "none"
-   *      (default: matches `name`)
-   *   - `shells`: Custom shell completions (optional)
+   * - `"both"`: Both `completion` subcommand and `--completion` option
+   *   are available
+   * - `object`: Advanced configuration with `command` and/or `option`
+   *   sub-configs and optional custom shells.  At least one of `command`
+   *   or `option` must be specified.
    *
    * When not provided, completion functionality is disabled.
    *
-   * @since 0.6.0
+   * @since 1.0.0
    */
-  readonly completion?: "command" | "option" | "both" | CompletionOptions;
+  readonly completion?:
+    | "command"
+    | "option"
+    | "both"
+    | (
+      & {
+        readonly shells?: Record<string, ShellCompletion>;
+      }
+      & (
+        | {
+          readonly command: true | CommandSubConfig;
+          readonly option?: true | OptionSubConfig;
+        }
+        | {
+          readonly option: true | OptionSubConfig;
+          readonly command?: true | CommandSubConfig;
+        }
+      )
+    );
 
   /**
    * What to display above error messages:
@@ -242,62 +263,6 @@ export interface RunOptions {
    */
   readonly contexts?: readonly SourceContext<unknown>[];
 }
-
-type CompletionHelpVisibility = "singular" | "plural" | "both" | "none";
-
-type CompletionOptionsBase =
-  | {
-    readonly mode?: "command" | "both";
-    /**
-     * Group label for the completion command in help output.
-     * @since 0.10.0
-     */
-    readonly group?: string;
-    readonly shells?: Record<string, ShellCompletion>;
-  }
-  | {
-    readonly mode: "option";
-    readonly group?: never;
-    readonly shells?: Record<string, ShellCompletion>;
-  };
-
-type CompletionOptionsBoth = CompletionOptionsBase & {
-  readonly name?: "both";
-
-  /**
-   * Controls which completion aliases are shown in help and usage output.
-   *
-   * @since 0.10.0
-   */
-  readonly helpVisibility?: CompletionHelpVisibility;
-};
-
-type CompletionOptionsSingular = CompletionOptionsBase & {
-  readonly name: "singular";
-
-  /**
-   * Controls which completion aliases are shown in help and usage output.
-   *
-   * @since 0.10.0
-   */
-  readonly helpVisibility?: "singular" | "none";
-};
-
-type CompletionOptionsPlural = CompletionOptionsBase & {
-  readonly name: "plural";
-
-  /**
-   * Controls which completion aliases are shown in help and usage output.
-   *
-   * @since 0.10.0
-   */
-  readonly helpVisibility?: "plural" | "none";
-};
-
-type CompletionOptions =
-  | CompletionOptionsBoth
-  | CompletionOptionsSingular
-  | CompletionOptionsPlural;
 
 /**
  * Runs a command-line parser with automatic process integration.
@@ -618,100 +583,48 @@ function buildCoreOptions(
     footer = programMetadata?.footer,
   } = options;
 
-  // Convert help configuration for the base run function
-  const helpConfig = help
-    ? typeof help === "string"
-      ? {
-        mode: help,
-        onShow: () => process.exit(0) as never,
-      }
-      : {
-        mode: help.mode,
-        group: help.group,
-        onShow: () => process.exit(0) as never,
-      }
-    : undefined;
+  const onShow = () => process.exit(0) as never;
 
-  // Convert version configuration for the base run function
-  const versionConfig = (() => {
+  // Convert help shorthand strings to sub-config objects, then pass through
+  // object configs with onShow injected.
+  const helpConfig: CoreRunOptions<never, never>["help"] = (() => {
+    if (!help) return undefined;
+    if (typeof help === "string") {
+      switch (help) {
+        case "command":
+          return { command: true as const, onShow };
+        case "option":
+          return { option: true as const, onShow };
+        case "both":
+          return { command: true as const, option: true as const, onShow };
+      }
+    }
+    return { ...help, onShow };
+  })() as CoreRunOptions<never, never>["help"];
+
+  // Convert version shorthand (string = option-only) to sub-config objects.
+  const versionConfig: CoreRunOptions<never, never>["version"] = (() => {
     if (!version) return undefined;
     if (typeof version === "string") {
-      return {
-        mode: "option" as const,
-        value: version,
-        onShow: () => process.exit(0) as never,
-      };
+      return { value: version, option: true as const, onShow };
     }
-    const mode = version.mode ?? ("option" as const);
-    if (mode === "command" || mode === "both") {
-      return {
-        mode,
-        value: version.value,
-        group: (version as { group?: string }).group,
-        onShow: () => process.exit(0) as never,
-      };
-    }
-    return {
-      mode,
-      value: version.value,
-      onShow: () => process.exit(0) as never,
-    };
-  })();
+    return { ...version, onShow };
+  })() as CoreRunOptions<never, never>["version"];
 
-  // Convert completion configuration for the base run function.
-  // We use a type assertion here because TypeScript cannot narrow the
-  // CompletionConfigBase union (mode-based) through conditional object
-  // construction.  The RunOptions types in @optique/run already enforce
-  // that group is only allowed when mode is not "option", so the runtime
-  // values are always correct.
+  // Convert completion shorthand strings to sub-config objects.
   const completionConfig: CoreRunOptions<never, never>["completion"] = (() => {
     if (!completion) return undefined;
-
-    const onShow = () => process.exit(0) as never;
-
     if (typeof completion === "string") {
-      return {
-        mode: completion,
-        name: "both" as const,
-        helpVisibility: "both" as const,
-        onShow,
-      };
+      switch (completion) {
+        case "command":
+          return { command: true as const, onShow };
+        case "option":
+          return { option: true as const, onShow };
+        case "both":
+          return { command: true as const, option: true as const, onShow };
+      }
     }
-
-    const mode = completion.mode ?? ("both" as const);
-    const shells = completion.shells;
-    const cGroup = (completion as { group?: string }).group;
-
-    if (completion.name === "singular") {
-      return {
-        mode,
-        shells,
-        ...(cGroup != null && { group: cGroup }),
-        name: "singular" as const,
-        helpVisibility: completion.helpVisibility ?? ("singular" as const),
-        onShow,
-      };
-    }
-    if (completion.name === "plural") {
-      return {
-        mode,
-        shells,
-        ...(cGroup != null && { group: cGroup }),
-        name: "plural" as const,
-        helpVisibility: completion.helpVisibility ?? ("plural" as const),
-        onShow,
-      };
-    }
-    return {
-      mode,
-      shells,
-      ...(cGroup != null && { group: cGroup }),
-      name: "both" as const,
-      helpVisibility:
-        (completion as { helpVisibility?: CompletionHelpVisibility })
-          .helpVisibility ?? ("both" as const),
-      onShow,
-    };
+    return { ...completion, onShow };
   })() as CoreRunOptions<never, never>["completion"];
 
   const coreOptions: CoreRunOptions<never, never> = {

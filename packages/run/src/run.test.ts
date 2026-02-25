@@ -13,8 +13,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import process from "node:process";
 
-type AssertNever<T extends never> = T;
-
 describe("run", () => {
   describe("basic parsing", () => {
     it("should parse simple arguments when provided explicitly", () => {
@@ -153,7 +151,8 @@ describe("run", () => {
         args: ["Alice"],
         version: {
           value: "1.0.0",
-          mode: "both" as const,
+          command: true as const,
+          option: true as const,
         },
       };
 
@@ -236,24 +235,28 @@ describe("run", () => {
       assert.deepEqual(result, { debug: true, name: "David" });
     });
 
-    it("should enforce completion helpVisibility combinations at compile time", () => {
-      const validPlural: RunOptions["completion"] = {
-        mode: "both",
-        name: "plural",
-        helpVisibility: "none",
+    it("should enforce at least one of command/option at compile time", () => {
+      const validCommand: RunOptions["completion"] = {
+        command: true,
       };
-      void validPlural;
+      void validCommand;
 
-      type InvalidPluralVisibility = Extract<
-        RunOptions["completion"],
-        {
-          readonly name: "plural";
-          readonly helpVisibility: "singular";
-        }
-      >;
-      const assertInvalidPlural: AssertNever<InvalidPluralVisibility> =
-        undefined as never;
-      void assertInvalidPlural;
+      const validOption: RunOptions["completion"] = {
+        option: true,
+      };
+      void validOption;
+
+      const validBoth: RunOptions["completion"] = {
+        command: true,
+        option: true,
+      };
+      void validBoth;
+
+      const validSubConfig: RunOptions["completion"] = {
+        command: { names: ["completions"] },
+        option: { names: ["--completions"] },
+      };
+      void validSubConfig;
     });
   });
 
@@ -491,8 +494,8 @@ describe("run", () => {
           args: ["--verbose", "world"],
           programName: "test",
           help: "both",
-          version: { value: "2.0.0", mode: "both" },
-          completion: { mode: "both" },
+          version: { value: "2.0.0", command: true, option: true },
+          completion: { command: true, option: true },
           colors: false,
           maxWidth: 80,
           brief: message`Test program`,

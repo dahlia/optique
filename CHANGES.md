@@ -69,10 +69,26 @@ To be released.
     and suggestions), while `"usage"` and `"doc"` allow partial hiding.
     [[#113]]
 
+ -  Redesigned meta command configuration (help, version, completion) in
+    `RunOptions` to use independent `command`/`option` sub-configs instead
+    of `mode: "command" | "option" | "both"`.  Each meta command now accepts
+    `{ command?: true | CommandSubConfig; option?: true | OptionSubConfig }`
+    where at least one must be specified (enforced at the type level).
+    `CommandSubConfig` supports `names` (first = display name, rest = hidden
+    aliases via `longestMatch()`), `group`, and `hidden`.  `OptionSubConfig`
+    supports `names` (all shown in help), `group`, and `hidden`.  This is
+    a breaking change.  [[#130]]
+
+ -  Removed `CompletionName`, `CompletionHelpVisibility`, `CompletionConfig`,
+    `CompletionConfigBoth`, `CompletionConfigSingular`, and
+    `CompletionConfigPlural` types.  Completion naming is now controlled via
+    `CommandSubConfig.names` and `OptionSubConfig.names`.  [[#130]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
 [#120]: https://github.com/dahlia/optique/issues/120
+[#130]: https://github.com/dahlia/optique/issues/130
 [#131]: https://github.com/dahlia/optique/issues/131
 
 ### @optique/config
@@ -108,6 +124,19 @@ To be released.
     type through to `bindConfig()` key callbacks.  [[#111]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
+
+### @optique/run
+
+ -  Redesigned `RunOptions.help`, `RunOptions.version`, and
+    `RunOptions.completion` to use the new `command`/`option` sub-config
+    structure from *@optique/core*.  String shorthands (`"command"`,
+    `"option"`, `"both"`) and the version string shorthand are preserved
+    for convenience.  Object configurations now use `{ command, option }`
+    instead of `{ mode }`.  [[#130]]
+
+ -  Removed `CompletionHelpVisibility`, `CompletionOptionsBase`,
+    `CompletionOptionsBoth`, `CompletionOptionsSingular`,
+    `CompletionOptionsPlural`, and `CompletionOptions` types.  [[#130]]
 
 
 Version 0.10.6

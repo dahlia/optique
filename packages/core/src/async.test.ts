@@ -6348,7 +6348,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       const result = await runParser(parser, "myapp", ["completion", "bash"], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => {
             completionShown = true;
             return "completion-shown" as never;
@@ -6376,7 +6376,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       await runParser(parser, "myapp", ["completion", "zsh"], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => "completion-shown" as never,
         },
         stdout(text) {
@@ -6398,7 +6398,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       await runParser(parser, "myapp", ["--completion=fish"], {
         completion: {
-          mode: "option",
+          option: true,
           onShow: () => "completion-shown" as never,
         },
         stdout(text) {
@@ -6422,7 +6422,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       await runParser(parser, "myapp", ["completion", "bash", "--"], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => "completion-shown" as never,
         },
         stdout(text) {
@@ -6447,7 +6447,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       await runParser(parser, "myapp", ["completion", "bash", "--format", ""], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => "completion-shown" as never,
         },
         stdout(text) {
@@ -6470,7 +6470,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       await runParser(parser, "myapp", ["completion", "zsh", "--"], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => "completion-shown" as never,
         },
         stdout(text) {
@@ -6494,7 +6494,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       await runParser(parser, "myapp", ["completion", "bash", ""], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => "completion-shown" as never,
         },
         stdout(text) {
@@ -6517,7 +6517,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       await runParser(parser, "myapp", ["completion", "bash", "build", "--"], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => "completion-shown" as never,
         },
         stdout(text) {
@@ -6539,14 +6539,14 @@ describe("shell completion with async parsers in runParser", () => {
       // Test completion
       let completionOutput = "";
       await runParser(parser, "myapp", ["--completion=bash"], {
-        help: { mode: "option", onShow: () => "help-shown" as never },
+        help: { option: true, onShow: () => "help-shown" as never },
         version: {
           value: "1.0.0",
-          mode: "option",
+          option: true,
           onShow: () => "version-shown" as never,
         },
         completion: {
-          mode: "option",
+          option: true,
           onShow: () => "completion-shown" as never,
         },
         stdout(text) {
@@ -6569,7 +6569,7 @@ describe("shell completion with async parsers in runParser", () => {
 
       await runParser(parser, "myapp", ["completion"], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => "completion-shown" as never,
         },
         stdout() {},
@@ -6598,7 +6598,7 @@ describe("shell completion with async parsers in runParser", () => {
         "myapp",
         ["--name", "alice", "-v"],
         {
-          completion: { mode: "both" },
+          completion: { command: true, option: true },
           stdout() {},
           stderr() {},
         },
@@ -7478,7 +7478,7 @@ describe("runParserSync", () => {
     let helpShown = false;
     runParserSync(parser, "test", ["--help"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
         },
@@ -7549,7 +7549,7 @@ describe("runParserAsync", () => {
     let helpShown = false;
     await runParserAsync(parser, "test", ["--help"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
         },

@@ -88,13 +88,19 @@ ${commandLine("gitique completion zsh > ~/.zsh/completions/_gitique")}`,
 async function main() {
   try {
     const result = run(program, {
-      help: { mode: "both", group: "Meta commands" },
+      help: {
+        command: { group: "Meta commands" },
+        option: { group: "Meta commands" },
+      },
       version: {
         value: pkgJson.version,
-        mode: "both",
-        group: "Meta commands",
+        command: { group: "Meta commands" },
+        option: { group: "Meta commands" },
       },
-      completion: { mode: "both", group: "Meta commands" },
+      completion: {
+        command: { group: "Meta commands" },
+        option: { group: "Meta commands" },
+      },
       aboveError: "usage", // Show usage information above error messages
       colors: true, // Force colored output for better UX
       showDefault: true, // Display default values in help text

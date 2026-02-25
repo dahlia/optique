@@ -45,6 +45,6 @@ const parser = or(addCommand, removeCommand, editCommand, listCommand);
 
 const result = run(parser, {
   help: "both",
-  version: { mode: "both", value: "1.0.0" },
+  version: { command: true, option: true, value: "1.0.0" },
 });
 print(message`${JSON.stringify(result, null, 2)}`);

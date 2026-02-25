@@ -374,26 +374,23 @@ const parser = object({
 const config = run(parser, { completion: "both" });
 ~~~~
 
-### Completion modes
+### Completion configuration
 
-The `mode` option controls how completion is triggered:
+The `command` and `option` properties control how completion is triggered:
 
-`"command"`
+`command: true`
 :   Completion via subcommand (`myapp completion bash`)
 
-`"option"`
+`option: true`
 :   Completion via option (`myapp --completion bash`)
 
-`"both"`
-:   Both command and option patterns supported
+Both can be enabled simultaneously.
 
-### Naming conventions
+### Command name customization
 
-*This API is available since Optique 0.7.0.*
-
-You can configure whether to use singular (`completion`), plural
-(`completions`), or both naming conventions for the completion command and
-option:
+By default, the completion command is named `completion` and the option is
+`--completion`.  You can customize the command name by passing a configuration
+object instead of `true`:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -403,30 +400,15 @@ const parser = object({});
 
 const config = run(parser, {
   completion: {
-    mode: "both",
-    name: "plural", // Use "completions" and "--completions"
+    command: { names: ["completions"] }, // Use "completions" command name
+    option: true,
   }
 });
 ~~~~
 
-The `name` option accepts:
-
-`"singular"`
-:   Use `completion` command and `--completion` option.
-
-`"plural"`
-:   Use `completions` command and `--completions` option.
-
-`"both"` (default)
-:   Use both singular and plural forms.
-
-### Help visibility
-
-*This API is available since Optique 0.10.0.*
-
-You can control which completion aliases appear in help and usage output with
-`helpVisibility`. This is useful when you want to keep compatibility aliases
-working without showing all aliases in `--help`.
+To register multiple command names (e.g., both singular and plural), pass
+an array.  Additional names after the first are hidden from help output by
+default:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -436,26 +418,11 @@ const parser = object({});
 
 run(parser, {
   completion: {
-    mode: "both",
-    name: "both", // Accept both completion/completions at runtime
-    helpVisibility: "singular", // Show only singular form in help output
+    command: { names: ["completion", "completions"] },
+    option: true,
   },
 });
 ~~~~
-
-The `helpVisibility` option accepts:
-
-`"singular"`
-:   Show only `completion` and `--completion` in help/usage.
-
-`"plural"`
-:   Show only `completions` and `--completions` in help/usage.
-
-`"both"`
-:   Show both singular and plural forms.
-
-`"none"`
-:   Hide completion command and option entries from help/usage.
 
 ### Automatic handling
 
@@ -501,7 +468,8 @@ const customShell: ShellCompletion = {
 
 run(parser, {
   completion: {
-    mode: "both",
+    command: true,
+    option: true,
     shells: { custom: customShell }, // Add custom shell
   },
 });

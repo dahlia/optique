@@ -42,7 +42,12 @@ import {
   suggestAsync,
 } from "./parser.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
-import { formatUsage, type Usage } from "./usage.ts";
+import {
+  formatUsage,
+  type HiddenVisibility,
+  type OptionName,
+  type Usage,
+} from "./usage.ts";
 import { string, type ValueParserResult } from "./valueparser.ts";
 import { annotationKey, type Annotations } from "./annotations.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
@@ -65,61 +70,107 @@ interface VersionParsers {
 }
 
 /**
- * Creates help parsers based on the specified mode.
+ * Creates help parsers based on the sub-config.
  */
-function createHelpParser(mode: "command" | "option" | "both"): HelpParsers {
-  const helpCommand = command(
-    "help",
-    multiple(
+function createHelpParser(
+  commandConfig?: CommandSubConfig,
+  optionConfig?: OptionSubConfig,
+): HelpParsers {
+  let helpCommand: HelpParsers["helpCommand"] = null;
+  let helpOption: HelpParsers["helpOption"] = null;
+
+  if (commandConfig) {
+    const names = commandConfig.names ?? ["help"];
+    const innerParser = multiple(
       argument(string({ metavar: "COMMAND" }), {
         description: message`Command name to show help for.`,
       }),
-    ),
-    {
-      description: message`Show help information.`,
-    },
-  );
-
-  const helpOption = flag("--help", {
-    description: message`Show help information.`,
-  });
-
-  switch (mode) {
-    case "command":
-      return { helpCommand, helpOption: null };
-    case "option":
-      return { helpCommand: null, helpOption };
-    case "both":
-      return { helpCommand, helpOption };
+    );
+    const commandParsers: Parser<
+      "sync",
+      readonly string[],
+      unknown
+    >[] = [];
+    for (let i = 0; i < names.length; i++) {
+      commandParsers.push(
+        command(names[i], innerParser, {
+          description: message`Show help information.`,
+          hidden: i === 0
+            ? commandConfig.hidden
+            : (commandConfig.hidden === true ? true : true),
+        }),
+      );
+    }
+    helpCommand = commandParsers.length === 1
+      ? commandParsers[0]
+      : (longestMatch as (
+        ...parsers: Parser<"sync", readonly string[], unknown>[]
+      ) => Parser<"sync", readonly string[], unknown>)(
+        ...commandParsers,
+      );
   }
+
+  if (optionConfig) {
+    const names = optionConfig.names ?? ["--help"];
+    helpOption = flag(...names, {
+      description: message`Show help information.`,
+      hidden: optionConfig.hidden,
+    });
+  }
+
+  return { helpCommand, helpOption };
 }
 
 /**
- * Creates version parsers based on the specified mode.
+ * Creates version parsers based on the sub-config.
  */
 function createVersionParser(
-  mode: "command" | "option" | "both",
+  commandConfig?: CommandSubConfig,
+  optionConfig?: OptionSubConfig,
 ): VersionParsers {
-  const versionCommand = command(
-    "version",
-    object({}),
-    {
-      description: message`Show version information.`,
-    },
-  );
+  let versionCommand: VersionParsers["versionCommand"] = null;
+  let versionOption: VersionParsers["versionOption"] = null;
 
-  const versionOption = flag("--version", {
-    description: message`Show version information.`,
-  });
-
-  switch (mode) {
-    case "command":
-      return { versionCommand, versionOption: null };
-    case "option":
-      return { versionCommand: null, versionOption };
-    case "both":
-      return { versionCommand, versionOption };
+  if (commandConfig) {
+    const names = commandConfig.names ?? ["version"];
+    const innerParser = object({});
+    const commandParsers: Parser<
+      "sync",
+      Record<PropertyKey, never>,
+      unknown
+    >[] = [];
+    for (let i = 0; i < names.length; i++) {
+      commandParsers.push(
+        command(names[i], innerParser, {
+          description: message`Show version information.`,
+          hidden: i === 0
+            ? commandConfig.hidden
+            : (commandConfig.hidden === true ? true : true),
+        }),
+      );
+    }
+    versionCommand = commandParsers.length === 1
+      ? commandParsers[0]
+      : (longestMatch as (
+        ...parsers: Parser<
+          "sync",
+          Record<PropertyKey, never>,
+          unknown
+        >[]
+      ) => Parser<"sync", Record<PropertyKey, never>, unknown>)(
+        ...commandParsers,
+      );
   }
+
+  if (optionConfig) {
+    const names = optionConfig.names ?? ["--version"];
+    versionOption = flag(...names, {
+      description: message`Show version information.`,
+      hidden: optionConfig.hidden,
+    });
+  }
+
+  return { versionCommand, versionOption };
 }
 
 interface CompletionParsers {
@@ -140,135 +191,79 @@ interface CompletionParsers {
 }
 
 /**
- * Naming style for shell completion command and option aliases.
+ * Sub-configuration for a meta command's command form.
  *
- * @since 0.10.0
+ * @since 1.0.0
  */
-export type CompletionName = "singular" | "plural" | "both";
-
-/**
- * Visibility policy for completion entries in help and usage output.
- *
- * @since 0.10.0
- */
-export type CompletionHelpVisibility = CompletionName | "none";
-
-type CompletionConfigBase<THelp> =
-  | {
-    /**
-     * Determines how completion is made available:
-     *
-     * - `"command"`: Only the `completion` subcommand is available
-     * - `"both"`: Both `completion` subcommand and `--completion` option
-     *   are available
-     *
-     * @default `"both"`
-     */
-    readonly mode?: "command" | "both";
-
-    /**
-     * Group label for the completion command in help output. When specified,
-     * the completion command appears under a titled section with this name
-     * instead of alongside user-defined commands.
-     *
-     * @since 0.10.0
-     */
-    readonly group?: string;
-
-    /**
-     * Available shell completions. By default, includes `bash`, `fish`, `nu`,
-     * `pwsh`, and `zsh`. You can provide additional custom shell completions
-     * or override the defaults.
-     *
-     * @default `{ bash, fish, nu, pwsh, zsh }`
-     */
-    readonly shells?: Record<string, ShellCompletion>;
-
-    /**
-     * Callback function invoked when completion is requested. The function
-     * can optionally receive an exit code parameter.
-     *
-     * You usually want to pass `process.exit` on Node.js or Bun and
-     * `Deno.exit` on Deno to this option.
-     *
-     * @default Returns `void` when completion is shown.
-     */
-    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-  }
-  | {
-    /**
-     * Determines how completion is made available:
-     *
-     * - `"option"`: Only the `--completion` option is available
-     */
-    readonly mode: "option";
-
-    /** @since 0.10.0 */
-    readonly group?: never;
-
-    /** @default `{ bash, fish, nu, pwsh, zsh }` */
-    readonly shells?: Record<string, ShellCompletion>;
-
-    /** @default Returns `void` when completion is shown. */
-    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-  };
-
-type CompletionConfigBoth<THelp> = CompletionConfigBase<THelp> & {
+export interface CommandSubConfig {
   /**
-   * Determines whether to use singular or plural naming for completion command/option.
-   *
-   * - `"singular"`: Use `completion` / `--completion`
-   * - `"plural"`: Use `completions` / `--completions`
-   * - `"both"`: Use both singular and plural forms
-   *
-   * @default `"both"`
+   * Command names.  The first element is the display name shown in help
+   * output; additional elements are hidden aliases that are accepted but
+   * not shown.
    */
-  readonly name?: "both";
+  readonly names?: readonly [string, ...string[]];
 
   /**
-   * Controls which completion entries appear in help and usage output.
-   *
-   * - `"both"`: Show both singular and plural entries
-   * - `"singular"`: Show only singular entries
-   * - `"plural"`: Show only plural entries
-   * - `"none"`: Hide completion entries from help and usage
-   *
-   * @default Matches `name`
-   * @since 0.10.0
+   * Group label for the command in help output.  When specified, the command
+   * appears under a titled section with this name instead of alongside
+   * user-defined commands.
    */
-  readonly helpVisibility?: CompletionHelpVisibility;
-};
+  readonly group?: string;
 
-type CompletionConfigSingular<THelp> = CompletionConfigBase<THelp> & {
-  readonly name: "singular";
-  readonly helpVisibility?: "singular" | "none";
-};
-
-type CompletionConfigPlural<THelp> = CompletionConfigBase<THelp> & {
-  readonly name: "plural";
-  readonly helpVisibility?: "plural" | "none";
-};
-
-type CompletionConfig<THelp> =
-  | CompletionConfigBoth<THelp>
-  | CompletionConfigSingular<THelp>
-  | CompletionConfigPlural<THelp>;
+  /**
+   * Granular visibility control.
+   *
+   * - `true`: Hidden from usage, documentation, and suggestions.
+   * - `"usage"`: Hidden from usage lines only.
+   * - `"doc"`: Hidden from documentation only.
+   */
+  readonly hidden?: HiddenVisibility;
+}
 
 /**
- * Creates completion parsers based on the specified mode.
+ * Sub-configuration for a meta command's option form.
+ *
+ * @since 1.0.0
+ */
+export interface OptionSubConfig {
+  /**
+   * Option names (all shown in help, e.g., `"-h"`, `"--help"`).
+   */
+  readonly names?: readonly [OptionName, ...OptionName[]];
+
+  /**
+   * Group label for the option in help output.
+   */
+  readonly group?: string;
+
+  /**
+   * Granular visibility control.
+   *
+   * - `true`: Hidden from usage, documentation, and suggestions.
+   * - `"usage"`: Hidden from usage lines only.
+   * - `"doc"`: Hidden from documentation only.
+   */
+  readonly hidden?: HiddenVisibility;
+}
+
+/**
+ * Creates completion parsers based on the sub-config.
  */
 function createCompletionParser(
-  mode: "command" | "option" | "both",
   programName: string,
   availableShells: Record<string, ShellCompletion>,
-  name: CompletionName = "both",
-  helpVisibility: CompletionHelpVisibility = name,
+  commandConfig?: CommandSubConfig,
+  optionConfig?: OptionSubConfig,
 ): CompletionParsers {
+  let completionCommand: CompletionParsers["completionCommand"] = null;
+  let completionOption: CompletionParsers["completionOption"] = null;
+
   const shellList: MessageTerm[] = [];
   for (const shell in availableShells) {
     if (shellList.length > 0) shellList.push(text(", "));
     shellList.push(value(shell));
   }
+
   const completionInner = object({
     shell: optional(
       argument(string({ metavar: "SHELL" }), {
@@ -284,124 +279,114 @@ function createCompletionParser(
     ),
   });
 
-  const commandName = name === "plural" ? "completions" : "completion";
+  if (commandConfig) {
+    const names = commandConfig.names ?? ["completion"];
+    const displayName = names[0];
 
-  const completionCommandConfig = {
-    brief: message`Generate shell completion script or provide completions.`,
-    description:
-      message`Generate shell completion script or provide completions.`,
-    footer: message`Examples:${lineBreak()}  Bash:       ${
-      commandLine(`eval "$(${programName} ${commandName} bash)"`)
-    }${lineBreak()}  zsh:        ${
-      commandLine(`eval "$(${programName} ${commandName} zsh)"`)
-    }${lineBreak()}  fish:       ${
-      commandLine(`eval "$(${programName} ${commandName} fish)"`)
-    }${lineBreak()}  PowerShell: ${
-      commandLine(
-        `${programName} ${commandName} pwsh > ${programName}-completion.ps1; . ./${programName}-completion.ps1`,
-      )
-    }${lineBreak()}  Nushell:    ${
-      commandLine(
-        `${programName} ${commandName} nu | save ${programName}-completion.nu; source ./${programName}-completion.nu`,
-      )
-    }`,
-  };
+    const completionCommandConfig = {
+      brief: message`Generate shell completion script or provide completions.`,
+      description:
+        message`Generate shell completion script or provide completions.`,
+      footer: message`Examples:${lineBreak()}  Bash:       ${
+        commandLine(`eval "$(${programName} ${displayName} bash)"`)
+      }${lineBreak()}  zsh:        ${
+        commandLine(`eval "$(${programName} ${displayName} zsh)"`)
+      }${lineBreak()}  fish:       ${
+        commandLine(`eval "$(${programName} ${displayName} fish)"`)
+      }${lineBreak()}  PowerShell: ${
+        commandLine(
+          `${programName} ${displayName} pwsh > ${programName}-completion.ps1; . ./${programName}-completion.ps1`,
+        )
+      }${lineBreak()}  Nushell:    ${
+        commandLine(
+          `${programName} ${displayName} nu | save ${programName}-completion.nu; source ./${programName}-completion.nu`,
+        )
+      }`,
+    };
 
-  const completionCommands: Parser<
-    "sync",
-    { shell: string | undefined; args: readonly string[] },
-    unknown
-  >[] = [];
-  const showSingular = helpVisibility === "singular" ||
-    helpVisibility === "both";
-  const showPlural = helpVisibility === "plural" || helpVisibility === "both";
-  if (name === "singular" || name === "both") {
-    completionCommands.push(
-      command("completion", completionInner, {
-        ...completionCommandConfig,
-        hidden: !showSingular,
-      }),
-    );
-  }
-  if (name === "plural" || name === "both") {
-    completionCommands.push(
-      command("completions", completionInner, {
-        ...completionCommandConfig,
-        hidden: !showPlural,
-      }),
-    );
-  }
-
-  const completionCommand = (longestMatch as (
-    ...parsers: Parser<
+    const commandParsers: Parser<
       "sync",
       { shell: string | undefined; args: readonly string[] },
       unknown
-    >[]
-  ) => Parser<
-    "sync",
-    { shell: string | undefined; args: readonly string[] },
-    unknown
-  >)(...completionCommands);
+    >[] = [];
+    for (let i = 0; i < names.length; i++) {
+      commandParsers.push(
+        command(names[i], completionInner, {
+          ...completionCommandConfig,
+          hidden: i === 0
+            ? commandConfig.hidden
+            : (commandConfig.hidden === true ? true : true),
+        }),
+      );
+    }
 
-  const completionOptions: Parser<
-    "sync",
-    string,
-    ValueParserResult<string> | undefined
-  >[] = [];
-  if (name === "singular" || name === "both") {
-    completionOptions.push(
-      option("--completion", string({ metavar: "SHELL" }), {
-        description: message`Generate shell completion script.`,
-        hidden: !showSingular,
-      }),
+    completionCommand = commandParsers.length === 1
+      ? commandParsers[0]
+      : (longestMatch as (
+        ...parsers: Parser<
+          "sync",
+          { shell: string | undefined; args: readonly string[] },
+          unknown
+        >[]
+      ) => Parser<
+        "sync",
+        { shell: string | undefined; args: readonly string[] },
+        unknown
+      >)(...commandParsers);
+  }
+
+  if (optionConfig) {
+    const names = optionConfig.names ?? ["--completion"];
+
+    const completionOptions: Parser<
+      "sync",
+      string,
+      ValueParserResult<string> | undefined
+    >[] = [];
+    for (const name of names) {
+      completionOptions.push(
+        option(name, string({ metavar: "SHELL" }), {
+          description: message`Generate shell completion script.`,
+          hidden: optionConfig.hidden,
+        }),
+      );
+    }
+
+    const completionOptionParser = completionOptions.length === 1
+      ? completionOptions[0]
+      : (longestMatch as (
+        ...parsers: Parser<
+          "sync",
+          string,
+          ValueParserResult<string> | undefined
+        >[]
+      ) => Parser<
+        "sync",
+        string,
+        ValueParserResult<string> | undefined
+      >)(...completionOptions);
+
+    const argsParser = withDefault(
+      multiple(
+        argument(string({ metavar: "ARG" }), {
+          description:
+            message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+        }),
+      ),
+      [] as readonly string[],
     );
+
+    completionOption = object({
+      shell: completionOptionParser,
+      args: argsParser,
+    }) as Parser<
+      "sync",
+      { shell: string; args: readonly string[] },
+      unknown
+    >;
   }
-  if (name === "plural" || name === "both") {
-    completionOptions.push(
-      option("--completions", string({ metavar: "SHELL" }), {
-        description: message`Generate shell completion script.`,
-        hidden: !showPlural,
-      }),
-    );
-  }
 
-  const completionOption = completionOptions.length === 1
-    ? completionOptions[0]
-    : longestMatch(completionOptions[0], completionOptions[1]);
-
-  const argsParser = withDefault(
-    multiple(
-      argument(string({ metavar: "ARG" }), {
-        description:
-          message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
-      }),
-    ),
-    [] as readonly string[],
-  );
-
-  const optionParser = object({
-    shell: completionOption,
-    args: argsParser,
-  }) as Parser<"sync", { shell: string; args: readonly string[] }, unknown>;
-
-  switch (mode) {
-    case "command":
-      return {
-        completionCommand,
-        completionOption: null,
-      };
-    case "option":
-      return {
-        completionCommand: null,
-        completionOption: optionParser,
-      };
-    case "both":
-      return {
-        completionCommand,
-        completionOption: optionParser,
-      };
-  }
+  return { completionCommand, completionOption };
 }
 
 /**
@@ -422,9 +407,12 @@ type ParsedResult =
  * Systematically combines the original parser with help, version, and completion parsers.
  */
 interface MetaCommandGroups {
-  readonly helpGroup?: string;
-  readonly versionGroup?: string;
-  readonly completionGroup?: string;
+  readonly helpCommandGroup?: string;
+  readonly helpOptionGroup?: string;
+  readonly versionCommandGroup?: string;
+  readonly versionOptionGroup?: string;
+  readonly completionCommandGroup?: string;
+  readonly completionOptionGroup?: string;
 }
 
 function combineWithHelpVersion(
@@ -433,8 +421,13 @@ function combineWithHelpVersion(
   versionParsers: VersionParsers,
   completionParsers: CompletionParsers,
   groups?: MetaCommandGroups,
+  helpOptionNames?: readonly string[],
+  versionOptionNames?: readonly string[],
 ): Parser<Mode, unknown, unknown> {
   const parsers: Parser<Mode, unknown, unknown>[] = [];
+
+  const effectiveHelpOptionNames = helpOptionNames ?? ["--help"];
+  const effectiveVersionOptionNames = versionOptionNames ?? ["--version"];
 
   // Add options FIRST - they are more specific and should have priority
 
@@ -465,20 +458,22 @@ function combineWithHelpVersion(
         let helpFound = false;
         let helpIndex = -1;
 
-        // Look for --help and --version to implement last-option-wins
+        // Look for help option names and version option names to implement
+        // last-option-wins
         let versionIndex = -1;
         for (let i = 0; i < buffer.length; i++) {
           if (buffer[i] === "--") break; // Stop at options terminator
-          if (buffer[i] === "--help") {
+          if (effectiveHelpOptionNames.includes(buffer[i])) {
             helpFound = true;
             helpIndex = i;
           }
-          if (buffer[i] === "--version") {
+          if (effectiveVersionOptionNames.includes(buffer[i])) {
             versionIndex = i;
           }
         }
 
-        // If both --help and --version are present, but version comes last, don't match
+        // If both help and version options are present, but version comes
+        // last, don't match
         if (helpFound && versionIndex > helpIndex) {
           return {
             success: false,
@@ -487,10 +482,10 @@ function combineWithHelpVersion(
           };
         }
 
-        // Multiple --help is OK - just show help
+        // Multiple help options is OK - just show help
 
         if (helpFound) {
-          // Extract command names that appear before --help
+          // Extract command names that appear before the help option
           const commands: string[] = [];
           for (let i = 0; i < helpIndex; i++) {
             const arg = buffer[i];
@@ -517,10 +512,12 @@ function combineWithHelpVersion(
           };
         }
 
-        // --help not found
+        // Help option not found
         return {
           success: false,
-          error: message`Flag ${optionName("--help")} not found.`,
+          error: message`Flag ${
+            optionName(effectiveHelpOptionNames[0])
+          } not found.`,
           consumed: 0,
         };
       },
@@ -530,9 +527,10 @@ function combineWithHelpVersion(
       },
 
       *suggest(_context, prefix) {
-        // Suggest --help if it matches the prefix
-        if ("--help".startsWith(prefix)) {
-          yield { kind: "literal", text: "--help" } as const;
+        for (const name of effectiveHelpOptionNames) {
+          if (name.startsWith(prefix)) {
+            yield { kind: "literal", text: name } as const;
+          }
         }
       },
 
@@ -542,7 +540,10 @@ function combineWithHelpVersion(
       },
     };
 
-    parsers.push(lenientHelpParser);
+    const wrappedHelp = groups?.helpOptionGroup
+      ? group(groups.helpOptionGroup, lenientHelpParser)
+      : lenientHelpParser;
+    parsers.push(wrappedHelp);
   }
 
   // Add version option (standalone) - accepts any mix of options and arguments
@@ -572,20 +573,22 @@ function combineWithHelpVersion(
         let versionFound = false;
         let versionIndex = -1;
 
-        // Look for --version and --help to implement last-option-wins
+        // Look for version option names and help option names to implement
+        // last-option-wins
         let helpIndex = -1;
         for (let i = 0; i < buffer.length; i++) {
           if (buffer[i] === "--") break; // Stop at options terminator
-          if (buffer[i] === "--version") {
+          if (effectiveVersionOptionNames.includes(buffer[i])) {
             versionFound = true;
             versionIndex = i;
           }
-          if (buffer[i] === "--help") {
+          if (effectiveHelpOptionNames.includes(buffer[i])) {
             helpIndex = i;
           }
         }
 
-        // If both --version and --help are present, but help comes last, don't match
+        // If both version and help options are present, but help comes last,
+        // don't match
         if (versionFound && helpIndex > versionIndex) {
           return {
             success: false,
@@ -594,7 +597,7 @@ function combineWithHelpVersion(
           };
         }
 
-        // Multiple --version is OK - just show version
+        // Multiple version options is OK - just show version
 
         if (versionFound) {
           // Consume all remaining arguments and return success
@@ -609,10 +612,12 @@ function combineWithHelpVersion(
           };
         }
 
-        // --version not found
+        // Version option not found
         return {
           success: false,
-          error: message`Flag ${optionName("--version")} not found.`,
+          error: message`Flag ${
+            optionName(effectiveVersionOptionNames[0])
+          } not found.`,
           consumed: 0,
         };
       },
@@ -622,9 +627,10 @@ function combineWithHelpVersion(
       },
 
       *suggest(_context, prefix) {
-        // Suggest --version if it matches the prefix
-        if ("--version".startsWith(prefix)) {
-          yield { kind: "literal", text: "--version" } as const;
+        for (const name of effectiveVersionOptionNames) {
+          if (name.startsWith(prefix)) {
+            yield { kind: "literal", text: name } as const;
+          }
         }
       },
 
@@ -634,7 +640,10 @@ function combineWithHelpVersion(
       },
     };
 
-    parsers.push(lenientVersionParser);
+    const wrappedVersion = groups?.versionOptionGroup
+      ? group(groups.versionOptionGroup, lenientVersionParser)
+      : lenientVersionParser;
+    parsers.push(wrappedVersion);
   }
 
   // Add version command with optional help flag (enables version --help)
@@ -649,8 +658,8 @@ function combineWithHelpVersion(
         : constant(false),
     });
     parsers.push(
-      groups?.versionGroup
-        ? group(groups.versionGroup, versionParser)
+      groups?.versionCommandGroup
+        ? group(groups.versionCommandGroup, versionParser)
         : versionParser,
     );
   }
@@ -667,8 +676,8 @@ function combineWithHelpVersion(
         : constant(false),
     });
     parsers.push(
-      groups?.completionGroup
-        ? group(groups.completionGroup, completionParser)
+      groups?.completionCommandGroup
+        ? group(groups.completionCommandGroup, completionParser)
         : completionParser,
     );
   }
@@ -682,9 +691,19 @@ function combineWithHelpVersion(
       commands: helpParsers.helpCommand,
     });
     parsers.push(
-      groups?.helpGroup ? group(groups.helpGroup, helpParser) : helpParser,
+      groups?.helpCommandGroup
+        ? group(groups.helpCommandGroup, helpParser)
+        : helpParser,
     );
   }
+
+  // NOTE: completion *option* (e.g. `--completion SHELL`) is intentionally
+  // NOT added here.  Unlike `--help` and `--version` which use lenient
+  // scanners, the completion option requires a value argument and would
+  // create a branch that fails when `--completion` is absent.  Completion
+  // option requests are handled by the early-return code in `runParser()`
+  // before the combined parser runs.  The completion option still appears
+  // in help text via the help generation code in `handleResult()`.
 
   // Add main parser LAST - it's the most general
   parsers.push(object({
@@ -735,11 +754,17 @@ function combineWithHelpVersion(
 }
 
 /**
- * Classifies the parsing result into a discriminated union for cleaner handling.
+ * Classifies the parsing result into a discriminated union for cleaner
+ * handling.
  */
 function classifyResult(
   result: Result<unknown>,
   args: readonly string[],
+  helpOptionNames: readonly string[],
+  helpCommandNames: readonly string[],
+  versionOptionNames: readonly string[],
+  versionCommandNames: readonly string[],
+  completionCommandNames: readonly string[],
 ): ParsedResult {
   if (!result.success) {
     return { type: "error", error: result.error };
@@ -761,15 +786,19 @@ function classifyResult(
       versionFlag?: boolean;
     };
 
-    const hasVersionOption = args.includes("--version");
-    const hasVersionCommand = args.length > 0 && args[0] === "version";
-    const hasHelpOption = args.includes("--help");
-    const hasHelpCommand = args.length > 0 && args[0] === "help";
-    const hasCompletionCommand = args.length > 0 && args[0] === "completion";
+    const hasVersionOption = versionOptionNames.some((n) => args.includes(n));
+    const hasVersionCommand = args.length > 0 &&
+      versionCommandNames.includes(args[0]);
+    const hasHelpOption = helpOptionNames.some((n) => args.includes(n));
+    const hasHelpCommand = args.length > 0 &&
+      helpCommandNames.includes(args[0]);
+    const hasCompletionCommand = args.length > 0 &&
+      completionCommandNames.includes(args[0]);
 
     // Standard CLI behavior:
     // 1. `command --help` should show help for that command
-    // 2. `--help --version` or `--version --help` should cause error (conflicting options)
+    // 2. `--help --version` or `--version --help` should cause error
+    //    (conflicting options)
     // 3. `--version` alone should show version
     // 4. `--help` alone should show help
     // 5. `completion --help` should show help for completion command
@@ -783,14 +812,16 @@ function classifyResult(
       // This will result in a parse error
     }
 
-    // If we have both version command and help flag, help takes precedence (show help for version)
+    // If we have both version command and help flag, help takes precedence
+    // (show help for version)
     if (hasVersionCommand && hasHelpOption && parsedValue.helpFlag) {
-      return { type: "help", commands: ["version"] };
+      return { type: "help", commands: [args[0]] };
     }
 
-    // If we have both completion command and help flag, help takes precedence (show help for completion)
+    // If we have both completion command and help flag, help takes precedence
+    // (show help for completion)
     if (hasCompletionCommand && hasHelpOption && parsedValue.helpFlag) {
-      return { type: "help", commands: ["completion"] };
+      return { type: "help", commands: [args[0]] };
     }
 
     // If we have help command or help option, show help
@@ -827,7 +858,7 @@ function classifyResult(
       };
     }
 
-    // Neither help nor version nor completion requested, return the actual result
+    // Neither help nor version nor completion requested, return actual result
     return { type: "success", value: parsedValue.result ?? value };
   }
 
@@ -899,141 +930,79 @@ export interface RunOptions<THelp, TError> {
   readonly sectionOrder?: (a: DocSection, b: DocSection) => number;
 
   /**
-   * Help configuration. When provided, enables help functionality.
+   * Help configuration.  When provided, enables help functionality.
+   * At least one of `command` or `option` must be specified.
+   *
+   * @since 1.0.0
    */
   readonly help?:
-    | {
-      /**
-       * Determines how help is made available:
-       *
-       * - `"command"`: Only the `help` subcommand is available
-       * - `"both"`: Both `help` subcommand and `--help` option are available
-       *
-       * @default `"option"`
-       */
-      readonly mode: "command" | "both";
-
-      /**
-       * Group label for the help command in help output. When specified,
-       * the help command appears under a titled section with this name
-       * instead of alongside user-defined commands.
-       *
-       * @since 0.10.0
-       */
-      readonly group?: string;
-
-      /**
-       * Callback function invoked when help is requested. The function can
-       * optionally receive an exit code parameter.
-       *
-       * You usually want to pass `process.exit` on Node.js or Bun and
-       * `Deno.exit` on Deno to this option.
-       *
-       * @default Returns `void` when help is shown.
-       */
+    & {
+      /** Callback invoked when help is requested. */
       readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
     }
-    | {
-      /**
-       * Determines how help is made available:
-       *
-       * - `"option"`: Only the `--help` option is available
-       *
-       * @default `"option"`
-       */
-      readonly mode?: "option";
-
-      /** @since 0.10.0 */
-      readonly group?: never;
-
-      /**
-       * Callback function invoked when help is requested. The function can
-       * optionally receive an exit code parameter.
-       *
-       * You usually want to pass `process.exit` on Node.js or Bun and
-       * `Deno.exit` on Deno to this option.
-       *
-       * @default Returns `void` when help is shown.
-       */
-      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-    };
+    & (
+      | {
+        readonly command: true | CommandSubConfig;
+        readonly option?: true | OptionSubConfig;
+      }
+      | {
+        readonly option: true | OptionSubConfig;
+        readonly command?: true | CommandSubConfig;
+      }
+    );
 
   /**
-   * Version configuration. When provided, enables version functionality.
+   * Version configuration.  When provided, enables version functionality.
+   * At least one of `command` or `option` must be specified.
+   *
+   * @since 1.0.0
    */
   readonly version?:
-    | {
-      /**
-       * Determines how version is made available:
-       *
-       * - `"command"`: Only the `version` subcommand is available
-       * - `"both"`: Both `version` subcommand and `--version` option are
-       *   available
-       *
-       * @default `"option"`
-       */
-      readonly mode: "command" | "both";
-
-      /**
-       * The version string to display when version is requested.
-       */
+    & {
+      /** The version string to display when version is requested. */
       readonly value: string;
-
-      /**
-       * Group label for the version command in help output. When specified,
-       * the version command appears under a titled section with this name
-       * instead of alongside user-defined commands.
-       *
-       * @since 0.10.0
-       */
-      readonly group?: string;
-
-      /**
-       * Callback function invoked when version is requested. The function can
-       * optionally receive an exit code parameter.
-       *
-       * You usually want to pass `process.exit` on Node.js or Bun and
-       * `Deno.exit` on Deno to this option.
-       *
-       * @default Returns `void` when version is shown.
-       */
+      /** Callback invoked when version is requested. */
       readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
     }
-    | {
-      /**
-       * Determines how version is made available:
-       *
-       * - `"option"`: Only the `--version` option is available
-       *
-       * @default `"option"`
-       */
-      readonly mode?: "option";
-
-      /**
-       * The version string to display when version is requested.
-       */
-      readonly value: string;
-
-      /** @since 0.10.0 */
-      readonly group?: never;
-
-      /**
-       * Callback function invoked when version is requested. The function can
-       * optionally receive an exit code parameter.
-       *
-       * You usually want to pass `process.exit` on Node.js or Bun and
-       * `Deno.exit` on Deno to this option.
-       *
-       * @default Returns `void` when version is shown.
-       */
-      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-    };
+    & (
+      | {
+        readonly command: true | CommandSubConfig;
+        readonly option?: true | OptionSubConfig;
+      }
+      | {
+        readonly option: true | OptionSubConfig;
+        readonly command?: true | CommandSubConfig;
+      }
+    );
 
   /**
-   * Completion configuration. When provided, enables shell completion functionality.
-   * @since 0.6.0
+   * Completion configuration.  When provided, enables shell completion.
+   * At least one of `command` or `option` must be specified.
+   *
+   * @since 1.0.0
    */
-  readonly completion?: CompletionConfig<THelp>;
+  readonly completion?:
+    & {
+      /**
+       * Available shell completions.  By default, includes `bash`, `fish`,
+       * `nu`, `pwsh`, and `zsh`.
+       *
+       * @default `{ bash, fish, nu, pwsh, zsh }`
+       */
+      readonly shells?: Record<string, ShellCompletion>;
+      /** Callback invoked when completion is requested. */
+      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+    }
+    & (
+      | {
+        readonly command: true | CommandSubConfig;
+        readonly option?: true | OptionSubConfig;
+      }
+      | {
+        readonly option: true | OptionSubConfig;
+        readonly command?: true | CommandSubConfig;
+      }
+    );
 
   /**
    * What to display above error messages:
@@ -1130,8 +1099,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
   availableShells: Record<string, ShellCompletion>,
   colors?: boolean,
   maxWidth?: number,
-  completionMode?: "command" | "option" | "both",
-  completionName?: "singular" | "plural" | "both",
+  completionCommandDisplayName?: string,
+  completionOptionDisplayName?: string,
+  isOptionMode?: boolean,
   sectionOrder?: (a: DocSection, b: DocSection) => number,
 ): ModeValue<M, THelp | TError> {
   const shellName = completionArgs[0] || "";
@@ -1159,7 +1129,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
     // Show help for completion command if parser is available
     if (completionParser) {
-      const doc = getDocPage(completionParser, ["completion"]);
+      const displayName = completionCommandDisplayName ?? "completion";
+      const doc = getDocPage(completionParser, [displayName]);
       if (doc) {
         stderr(
           formatDocPage(programName, doc, { colors, maxWidth, sectionOrder }),
@@ -1195,10 +1166,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
   if (args.length === 0) {
     // Generate completion script
-    const usePlural = completionName === "plural";
-    const completionArg = completionMode === "option"
-      ? (usePlural ? "--completions" : "--completion")
-      : (usePlural ? "completions" : "completion");
+    const completionArg = isOptionMode
+      ? (completionOptionDisplayName ?? "--completion")
+      : (completionCommandDisplayName ?? "completion");
     const script = shell.generateScript(programName, [
       completionArg,
       shellName,
@@ -1384,24 +1354,43 @@ export function runParser<
     footer,
   } = options;
 
+  // Normalize sub-configs: true -> {}, undefined stays undefined
+  const norm = <T>(c: true | T | undefined): T | undefined =>
+    c === true ? ({} as T) : c;
+
   // Extract help configuration
-  const helpMode = options.help?.mode ?? "option";
+  const helpCommandConfig = norm<CommandSubConfig>(options.help?.command);
+  const helpOptionConfig = norm<OptionSubConfig>(options.help?.option);
   const onHelp = options.help?.onShow ?? (() => ({} as THelp));
-  const helpGroup = options.help?.group as string | undefined;
 
   // Extract version configuration
-  const versionMode = options.version?.mode ?? "option";
+  const versionCommandConfig = norm<CommandSubConfig>(options.version?.command);
+  const versionOptionConfig = norm<OptionSubConfig>(options.version?.option);
   const versionValue = options.version?.value ?? "";
   const onVersion = options.version?.onShow ?? (() => ({} as THelp));
-  const versionGroup = options.version?.group as string | undefined;
 
   // Extract completion configuration
-  const completionMode = options.completion?.mode ?? "both";
-  const completionName = options.completion?.name ?? "both";
-  const completionHelpVisibility = options.completion?.helpVisibility ??
-    completionName;
+  const completionCommandConfig = norm<CommandSubConfig>(
+    options.completion?.command,
+  );
+  const completionOptionConfig = norm<OptionSubConfig>(
+    options.completion?.option,
+  );
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
-  const completionGroup = options.completion?.group as string | undefined;
+
+  // Resolved name arrays for matching
+  const helpOptionNames: readonly string[] = helpOptionConfig?.names ??
+    ["--help"];
+  const helpCommandNames: readonly string[] = helpCommandConfig?.names ??
+    ["help"];
+  const versionOptionNames: readonly string[] = versionOptionConfig?.names ??
+    ["--version"];
+  const versionCommandNames: readonly string[] = versionCommandConfig?.names ??
+    ["version"];
+  const completionCommandNames: readonly string[] =
+    completionCommandConfig?.names ?? ["completion"];
+  const completionOptionNames: readonly string[] =
+    completionOptionConfig?.names ?? ["--completion"];
 
   // Get available shells (defaults + user-provided)
   const defaultShells: Record<string, ShellCompletion> = {
@@ -1416,44 +1405,35 @@ export function runParser<
     : defaultShells;
 
   // Create help and version parsers using the helper functions
-  const help = options.help ? helpMode : "none";
-  const version = options.version ? versionMode : "none";
-  const completion = options.completion ? completionMode : "none";
+  const helpParsers = options.help
+    ? createHelpParser(helpCommandConfig, helpOptionConfig)
+    : { helpCommand: null, helpOption: null };
 
-  const helpParsers = help === "none"
-    ? { helpCommand: null, helpOption: null }
-    : createHelpParser(help);
+  const versionParsers = options.version
+    ? createVersionParser(versionCommandConfig, versionOptionConfig)
+    : { versionCommand: null, versionOption: null };
 
-  const versionParsers = version === "none"
-    ? { versionCommand: null, versionOption: null }
-    : createVersionParser(version);
-
-  // Completion parsers for help generation only (not for actual parsing)
-  const completionParsers = completion === "none"
-    ? { completionCommand: null, completionOption: null }
-    : createCompletionParser(
-      completion,
+  const completionParsers = options.completion
+    ? createCompletionParser(
       programName,
       availableShells,
-      completionName,
-      completionHelpVisibility,
-    );
+      completionCommandConfig,
+      completionOptionConfig,
+    )
+    : { completionCommand: null, completionOption: null };
 
   // Early return for completion requests (avoids parser conflicts)
-  // Exception: if --help is present, let the parser handle it
+  // Exception: if a help option is present, let the parser handle it
   if (options.completion) {
-    const hasHelpOption = args.includes("--help");
+    const hasHelpOption = helpOptionConfig
+      ? helpOptionNames.some((n) => args.includes(n))
+      : false;
 
     // Handle completion command format: "completion <shell> [args...]"
     if (
-      (completionMode === "command" || completionMode === "both") &&
+      completionCommandConfig &&
       args.length >= 1 &&
-      ((completionName === "singular" || completionName === "both"
-        ? args[0] === "completion"
-        : false) ||
-        (completionName === "plural" || completionName === "both"
-          ? args[0] === "completions"
-          : false)) &&
+      completionCommandNames.includes(args[0]) &&
       !hasHelpOption // Let parser handle "completion --help"
     ) {
       return handleCompletion(
@@ -1468,27 +1448,24 @@ export function runParser<
         availableShells,
         colors,
         maxWidth,
-        completionMode,
-        completionName,
+        completionCommandNames[0],
+        completionOptionNames[0],
+        false,
         sectionOrder,
       ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
     }
 
     // Handle completion option format: "--completion=<shell> [args...]"
-    if (completionMode === "option" || completionMode === "both") {
+    if (completionOptionConfig) {
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
-        const singularMatch =
-          completionName === "singular" || completionName === "both"
-            ? arg.startsWith("--completion=")
-            : false;
-        const pluralMatch =
-          completionName === "plural" || completionName === "both"
-            ? arg.startsWith("--completions=")
-            : false;
 
-        if (singularMatch || pluralMatch) {
-          const shell = arg.slice(arg.indexOf("=") + 1);
+        // Check for "--completion=<shell>" format
+        const equalsMatch = completionOptionNames.find((n) =>
+          arg.startsWith(n + "=")
+        );
+        if (equalsMatch) {
+          const shell = arg.slice(equalsMatch.length + 1);
           const completionArgs = args.slice(i + 1);
           return handleCompletion(
             [shell, ...completionArgs],
@@ -1502,57 +1479,59 @@ export function runParser<
             availableShells,
             colors,
             maxWidth,
-            completionMode,
-            completionName,
+            completionCommandNames[0],
+            completionOptionNames[0],
+            true,
             sectionOrder,
           ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
-        } else {
-          const singularMatchExact =
-            completionName === "singular" || completionName === "both"
-              ? arg === "--completion"
-              : false;
-          const pluralMatchExact =
-            completionName === "plural" || completionName === "both"
-              ? arg === "--completions"
-              : false;
+        }
 
-          if (singularMatchExact || pluralMatchExact) {
-            const shell = i + 1 < args.length ? args[i + 1] : "";
-            const completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
-            return handleCompletion(
-              [shell, ...completionArgs],
-              programName,
-              parser,
-              completionParsers.completionCommand,
-              stdout,
-              stderr,
-              onCompletion,
-              onError,
-              availableShells,
-              colors,
-              maxWidth,
-              completionMode,
-              completionName,
-              sectionOrder,
-            ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
-          }
+        // Check for "--completion <shell>" format (separate arg)
+        const exactMatch = completionOptionNames.includes(arg);
+        if (exactMatch) {
+          const shell = i + 1 < args.length ? args[i + 1] : "";
+          const completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
+          return handleCompletion(
+            [shell, ...completionArgs],
+            programName,
+            parser,
+            completionParsers.completionCommand,
+            stdout,
+            stderr,
+            onCompletion,
+            onError,
+            availableShells,
+            colors,
+            maxWidth,
+            completionCommandNames[0],
+            completionOptionNames[0],
+            true,
+            sectionOrder,
+          ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
         }
       }
     }
   }
 
   // Build augmented parser with help, version, and completion functionality
-  // Completion command is included for help support, but actual completion
-  // requests are handled via early return to avoid parser conflicts
-  const augmentedParser = help === "none" && version === "none" &&
-      completion === "none"
+  const augmentedParser = !options.help && !options.version &&
+      !options.completion
     ? parser
     : combineWithHelpVersion(
       parser,
       helpParsers,
       versionParsers,
       completionParsers,
-      { helpGroup, versionGroup, completionGroup },
+      {
+        helpCommandGroup: helpCommandConfig?.group,
+        helpOptionGroup: helpOptionConfig?.group,
+        versionCommandGroup: versionCommandConfig?.group,
+        versionOptionGroup: versionOptionConfig?.group,
+        completionCommandGroup: completionCommandConfig?.group,
+        completionOptionGroup: completionOptionConfig?.group,
+      },
+      helpOptionConfig ? [...helpOptionNames] : undefined,
+      versionOptionConfig ? [...versionOptionNames] : undefined,
     );
 
   // Helper function to handle parsed result
@@ -1563,7 +1542,15 @@ export function runParser<
   const handleResult = (
     result: Result<unknown>,
   ): InferValue<TParser> | Promise<InferValue<TParser>> => {
-    const classified = classifyResult(result, args);
+    const classified = classifyResult(
+      result,
+      args,
+      helpOptionConfig ? [...helpOptionNames] : [],
+      helpCommandConfig ? [...helpCommandNames] : [],
+      versionOptionConfig ? [...versionOptionNames] : [],
+      versionCommandConfig ? [...versionCommandNames] : [],
+      completionCommandConfig ? [...completionCommandNames] : [],
+    );
 
     switch (classified.type) {
       case "success":
@@ -1585,36 +1572,39 @@ export function runParser<
         );
 
       case "help": {
-        // Handle help request - determine which parser to use for help generation
-        // Include completion command in help even though it's handled via early return
+        // Handle help request - determine which parser to use for help
+        // generation.  Include completion command in help even though it's
+        // handled via early return.
         let helpGeneratorParser: Parser<Mode, unknown, unknown>;
-        const helpAsCommand = help === "command" || help === "both";
-        const versionAsCommand = version === "command" || version === "both";
-        const completionAsCommand = completion === "command" ||
-          completion === "both";
-        const helpAsOption = help === "option" || help === "both";
-        const versionAsOption = version === "option" || version === "both";
-        const completionAsOption = completion === "option" ||
-          completion === "both";
+        const helpAsCommand = helpCommandConfig != null;
+        const versionAsCommand = versionCommandConfig != null;
+        const completionAsCommand = completionCommandConfig != null;
+        const helpAsOption = helpOptionConfig != null;
+        const versionAsOption = versionOptionConfig != null;
+        const completionAsOption = completionOptionConfig != null;
 
         // Check if user is requesting help for a specific meta-command
         const requestedCommand = classified.commands[0];
         if (
-          (requestedCommand === "completion" ||
-            requestedCommand === "completions") &&
+          requestedCommand != null &&
+          completionCommandNames.includes(requestedCommand) &&
           completionAsCommand &&
           completionParsers.completionCommand
         ) {
           // User wants help for completion command specifically
           helpGeneratorParser = completionParsers.completionCommand;
         } else if (
-          requestedCommand === "help" && helpAsCommand &&
+          requestedCommand != null &&
+          helpCommandNames.includes(requestedCommand) &&
+          helpAsCommand &&
           helpParsers.helpCommand
         ) {
           // User wants help for help command specifically
           helpGeneratorParser = helpParsers.helpCommand;
         } else if (
-          requestedCommand === "version" && versionAsCommand &&
+          requestedCommand != null &&
+          versionCommandNames.includes(requestedCommand) &&
+          versionAsCommand &&
           versionParsers.versionCommand
         ) {
           // User wants help for version command specifically
@@ -1644,13 +1634,16 @@ export function runParser<
           };
 
           if (helpAsCommand && helpParsers.helpCommand) {
-            addMeta(helpParsers.helpCommand, helpGroup);
+            addMeta(helpParsers.helpCommand, helpCommandConfig?.group);
           }
           if (versionAsCommand && versionParsers.versionCommand) {
-            addMeta(versionParsers.versionCommand, versionGroup);
+            addMeta(versionParsers.versionCommand, versionCommandConfig?.group);
           }
           if (completionAsCommand && completionParsers.completionCommand) {
-            addMeta(completionParsers.completionCommand, completionGroup);
+            addMeta(
+              completionParsers.completionCommand,
+              completionCommandConfig?.group,
+            );
           }
 
           // Add ungrouped meta-commands directly
@@ -1675,16 +1668,63 @@ export function runParser<
 
           // Include meta options so they appear in the help page usage line and
           // options list.  See https://github.com/dahlia/optique/issues/127
+          // Group meta-options by their group label so that options sharing the
+          // same group name appear under a single section
+          const groupedMetaOptions: Record<
+            string,
+            Parser<Mode, unknown, unknown>[]
+          > = {};
+          const ungroupedMetaOptions: Parser<Mode, unknown, unknown>[] = [];
+
+          const addMetaOption = (
+            p: Parser<Mode, unknown, unknown>,
+            groupLabel?: string,
+          ): void => {
+            if (groupLabel) {
+              (groupedMetaOptions[groupLabel] ??= []).push(p);
+            } else {
+              ungroupedMetaOptions.push(p);
+            }
+          };
+
           if (helpAsOption && helpParsers.helpOption) {
-            commandParsers.push(helpParsers.helpOption);
+            addMetaOption(helpParsers.helpOption, helpOptionConfig?.group);
           }
 
           if (versionAsOption && versionParsers.versionOption) {
-            commandParsers.push(versionParsers.versionOption);
+            addMetaOption(
+              versionParsers.versionOption,
+              versionOptionConfig?.group,
+            );
           }
 
           if (completionAsOption && completionParsers.completionOption) {
-            commandParsers.push(completionParsers.completionOption);
+            addMetaOption(
+              completionParsers.completionOption,
+              completionOptionConfig?.group,
+            );
+          }
+
+          // Add ungrouped meta-options directly
+          commandParsers.push(...ungroupedMetaOptions);
+
+          // Add grouped meta-options wrapped in group()
+          for (
+            const [label, optParsers] of Object.entries(groupedMetaOptions)
+          ) {
+            if (optParsers.length === 1) {
+              commandParsers.push(group(label, optParsers[0]));
+            } else {
+              // Combine multiple options in the same group with longestMatch
+              commandParsers.push(
+                group(
+                  label,
+                  (longestMatch as (
+                    ...ps: Parser<Mode, unknown, unknown>[]
+                  ) => Parser<Mode, unknown, unknown>)(...optParsers),
+                ),
+              );
+            }
           }
 
           // Use longestMatch to combine all parsers
@@ -1809,15 +1849,12 @@ export function runParser<
             // Augment the doc page with provided options
             // But if showing help for a specific meta-command or subcommand,
             // don't override its description with run-level docs
-            const isMetaCommandHelp = (completionName === "singular" ||
-                completionName === "both"
-              ? requestedCommand === "completion"
-              : false) ||
-              (completionName === "plural" || completionName === "both"
-                ? requestedCommand === "completions"
-                : false) ||
-              requestedCommand === "help" ||
-              requestedCommand === "version";
+            const isMetaCommandHelp = (requestedCommand != null &&
+              completionCommandNames.includes(requestedCommand)) ||
+              (requestedCommand != null &&
+                helpCommandNames.includes(requestedCommand)) ||
+              (requestedCommand != null &&
+                versionCommandNames.includes(requestedCommand));
             const isSubcommandHelp = classified.commands.length > 0;
             // Check if this is top-level help (empty commands array means top-level)
             const isTopLevel = !isSubcommandHelp;
@@ -2059,75 +2096,73 @@ function needsEarlyExit<THelp, TError>(
   args: readonly string[],
   options: RunWithOptions<THelp, TError>,
 ): boolean {
+  const norm = <T>(c: true | T | undefined): T | undefined =>
+    c === true ? ({} as T) : c;
+
   // Check help
   if (options.help) {
-    const helpMode = options.help.mode ?? "option";
-    if (
-      (helpMode === "option" || helpMode === "both") &&
-      args.includes("--help")
-    ) {
+    const helpOptionConfig = norm<OptionSubConfig>(options.help.option);
+    const helpCommandConfig = norm<CommandSubConfig>(options.help.command);
+    const helpOptionNames: readonly string[] = helpOptionConfig?.names ??
+      ["--help"];
+    const helpCommandNames: readonly string[] = helpCommandConfig?.names ??
+      ["help"];
+
+    if (helpOptionConfig && helpOptionNames.some((n) => args.includes(n))) {
       return true;
     }
-    if (
-      (helpMode === "command" || helpMode === "both") &&
-      args[0] === "help"
-    ) {
+    if (helpCommandConfig && helpCommandNames.includes(args[0])) {
       return true;
     }
   }
 
   // Check version
   if (options.version) {
-    const versionMode = options.version.mode ?? "option";
+    const versionOptionConfig = norm<OptionSubConfig>(options.version.option);
+    const versionCommandConfig = norm<CommandSubConfig>(
+      options.version.command,
+    );
+    const versionOptionNames: readonly string[] = versionOptionConfig?.names ??
+      ["--version"];
+    const versionCommandNames: readonly string[] =
+      versionCommandConfig?.names ?? ["version"];
+
     if (
-      (versionMode === "option" || versionMode === "both") &&
-      args.includes("--version")
+      versionOptionConfig &&
+      versionOptionNames.some((n) => args.includes(n))
     ) {
       return true;
     }
-    if (
-      (versionMode === "command" || versionMode === "both") &&
-      args[0] === "version"
-    ) {
+    if (versionCommandConfig && versionCommandNames.includes(args[0])) {
       return true;
     }
   }
 
   // Check completion
   if (options.completion) {
-    const completionMode = options.completion.mode ?? "both";
-    const completionName = options.completion.name ?? "both";
+    const completionCommandConfig = norm<CommandSubConfig>(
+      options.completion.command,
+    );
+    const completionOptionConfig = norm<OptionSubConfig>(
+      options.completion.option,
+    );
+    const completionCommandNames: readonly string[] =
+      completionCommandConfig?.names ?? ["completion"];
+    const completionOptionNames: readonly string[] =
+      completionOptionConfig?.names ?? ["--completion"];
 
     // Command mode
-    if (completionMode === "command" || completionMode === "both") {
-      if (
-        (completionName === "singular" || completionName === "both") &&
-        args[0] === "completion"
-      ) {
-        return true;
-      }
-      if (
-        (completionName === "plural" || completionName === "both") &&
-        args[0] === "completions"
-      ) {
-        return true;
-      }
+    if (completionCommandConfig && completionCommandNames.includes(args[0])) {
+      return true;
     }
 
     // Option mode
-    if (completionMode === "option" || completionMode === "both") {
+    if (completionOptionConfig) {
       for (const arg of args) {
-        if (
-          (completionName === "singular" || completionName === "both") &&
-          (arg === "--completion" || arg.startsWith("--completion="))
-        ) {
-          return true;
-        }
-        if (
-          (completionName === "plural" || completionName === "both") &&
-          (arg === "--completions" || arg.startsWith("--completions="))
-        ) {
-          return true;
+        for (const name of completionOptionNames) {
+          if (arg === name || arg.startsWith(name + "=")) {
+            return true;
+          }
         }
       }
     }

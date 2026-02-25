@@ -73,7 +73,8 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -109,7 +110,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -138,7 +139,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["help"], {
         help: {
-          mode: "command",
+          command: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -161,7 +162,7 @@ describe("runParser", () => {
 
       runParser(parser, "test", ["--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => "help-shown",
         },
         examples: message`test Alice\ntest Bob`,
@@ -207,7 +208,8 @@ describe("runParser", () => {
 
       runParser(parser, "test", ["help", "serve"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => "help-shown",
         },
         examples: message`test serve 3000\ntest build dist`,
@@ -244,7 +246,7 @@ describe("runParser", () => {
 
       runParser(parser, "test", ["serve", "--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => "help-shown",
         },
         examples: message`test serve 3000`,
@@ -273,7 +275,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--version"], {
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: () => {
             versionShown = true;
@@ -300,7 +302,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["version"], {
         version: {
-          mode: "command",
+          command: true,
           value: "2.1.0",
           onShow: () => {
             versionShown = true;
@@ -328,7 +330,8 @@ describe("runParser", () => {
       // Test --version option
       const result1 = runParser(parser, "test", ["--version"], {
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "3.0.0",
           onShow: () => "version-shown",
         },
@@ -344,7 +347,8 @@ describe("runParser", () => {
       versionOutput = "";
       const result2 = runParser(parser, "test", ["version"], {
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "3.0.0",
           onShow: () => "version-shown",
         },
@@ -377,7 +381,7 @@ describe("runParser", () => {
 
       runParser(parser, "test", ["--version"], {
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: (exitCode) => {
             receivedExitCode = exitCode;
@@ -402,14 +406,14 @@ describe("runParser", () => {
 
       const result1 = runParser(parser, "test", ["--version", "--help"], {
         help: {
-          mode: "option", // Use option mode to avoid contextual parser issues
+          option: true, // Use option mode to avoid contextual parser issues
           onShow: () => {
             helpShown1 = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: () => {
             versionShown1 = true;
@@ -433,14 +437,14 @@ describe("runParser", () => {
 
       const result2 = runParser(parser, "test", ["--help", "--version"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown2 = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: () => {
             versionShown2 = true;
@@ -468,11 +472,12 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["version"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => "help-shown",
         },
         version: {
-          mode: "command",
+          command: true,
           value: "2.0.0",
           onShow: () => {
             versionShown = true;
@@ -500,14 +505,15 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["help"], {
         help: {
-          mode: "command",
+          command: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "3.0.0",
           onShow: () => "version-shown",
         },
@@ -531,7 +537,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--version"], {
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: () => {
             versionCalled = true;
@@ -556,14 +562,15 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--help", "--version"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "option",
+          option: true,
           value: "2.0.0",
           onShow: () => {
             versionShown = true;
@@ -592,14 +599,16 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["version", "--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "3.0.0",
           onShow: () => {
             versionShown = true;
@@ -629,14 +638,16 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["help", "--version"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "4.0.0",
           onShow: () => {
             versionShown = true;
@@ -663,7 +674,7 @@ describe("runParser", () => {
       // Multiple --version flags should just show version (not an error)
       const result = runParser(parser, "test", ["--version", "--version"], {
         version: {
-          mode: "option",
+          option: true,
           value: "5.0.0",
           onShow: () => {
             versionShown = true;
@@ -692,7 +703,7 @@ describe("runParser", () => {
       // (similar to help with extra arguments)
       const result = runParser(parser, "test", ["--version", "extra", "args"], {
         version: {
-          mode: "option",
+          option: true,
           value: "6.0.0",
           onShow: () => {
             versionShown = true;
@@ -716,7 +727,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--help", "extra", "args"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -746,9 +757,9 @@ describe("runParser", () => {
       let helpOutput = "";
 
       runParser(parser, "myapp", ["--help"], {
-        help: { mode: "option" },
-        version: { mode: "option", value: "1.2.3" },
-        completion: { mode: "option", name: "both" },
+        help: { option: true },
+        version: { option: true, value: "1.2.3" },
+        completion: { option: { names: ["--completion", "--completions"] } },
         onError: () => {},
         stdout: (text: string) => {
           helpOutput += text + "\n";
@@ -901,7 +912,8 @@ describe("runParser", () => {
 
       runParser(parser, "test", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => "help-shown",
         },
         stdout: (text) => {
@@ -940,7 +952,8 @@ describe("runParser", () => {
 
       runParser(parser, "test", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => "help-shown",
         },
         colors: true,
@@ -964,7 +977,8 @@ describe("runParser", () => {
 
       runParser(parser, "test", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => "help-shown",
         },
         maxWidth: 20,
@@ -988,7 +1002,8 @@ describe("runParser", () => {
 
       runParser(parser, "test", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: (exitCode) => {
             receivedExitCode = exitCode;
             return "help-shown";
@@ -1009,7 +1024,8 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpCalled = true;
             return "help-shown";
@@ -1090,14 +1106,16 @@ describe("runParser", () => {
 
       const result = runParser(parser, "myapp", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "1.0.0",
           onShow: () => "version-shown",
         },
@@ -1131,7 +1149,8 @@ describe("runParser", () => {
 
       const result = runParser(parser, "myapp", ["serve", "--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -1167,7 +1186,8 @@ describe("runParser", () => {
 
       const result = runParser(parser, "myapp", ["help", "deploy"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -1216,7 +1236,7 @@ describe("runParser", () => {
       // Test: cli sync --help should show sync-specific help, not root help
       const result = runParser(parser, "cli", ["sync", "--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -1275,7 +1295,7 @@ describe("runParser", () => {
         "out.js",
       ], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -1310,11 +1330,13 @@ describe("runParser", () => {
 
       const result = runParser(parser, "complex-tool", ["--version"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => "help-shown",
         },
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "2.1.0",
           onShow: () => {
             versionShown = true;
@@ -1341,7 +1363,8 @@ describe("runParser", () => {
 
       const result = runParser(parser, "file-tool", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -1371,7 +1394,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "transform-tool", ["--version"], {
         version: {
-          mode: "option",
+          option: true,
           value: "3.0.0-beta",
           onShow: () => "version-shown",
         },
@@ -1391,35 +1414,38 @@ describe("runParser", () => {
         name: argument(string()),
       });
 
-      const helpModes: Array<"command" | "option" | "both"> = [
-        "command",
-        "option",
-        "both",
-      ];
-      const versionModes: Array<"command" | "option" | "both"> = [
-        "command",
-        "option",
-        "both",
-      ];
+      const helpConfigs = [
+        { command: true },
+        { option: true },
+        { command: true, option: true },
+      ] as const;
+      const versionConfigs = [
+        { command: true },
+        { option: true },
+        { command: true, option: true },
+      ] as const;
 
       // Test all 9 combinations
-      for (const helpMode of helpModes) {
-        for (const versionMode of versionModes) {
+      for (const helpConfig of helpConfigs) {
+        for (const versionConfig of versionConfigs) {
           let helpShown = false;
           let versionShown = false;
+
+          const helpHasOption = "option" in helpConfig;
+          const versionHasOption = "option" in versionConfig;
 
           // Test last-option-wins: --version --help should show help
           try {
             const result1 = runParser(parser, "test", ["--version", "--help"], {
               help: {
-                mode: helpMode,
+                ...helpConfig,
                 onShow: () => {
                   helpShown = true;
                   return "help-shown";
                 },
               },
               version: {
-                mode: versionMode,
+                ...versionConfig,
                 value: "1.0.0",
                 onShow: () => {
                   versionShown = true;
@@ -1432,18 +1458,21 @@ describe("runParser", () => {
 
             // Last-option-wins: --version --help should show help (help is last)
             // Only test when both help and version options are available
-            if (
-              (helpMode === "option" || helpMode === "both") &&
-              (versionMode === "option" || versionMode === "both")
-            ) {
+            if (helpHasOption && versionHasOption) {
               assert.equal(
                 result1,
                 "help-shown",
-                `Expected help-shown for helpMode=${helpMode}, versionMode=${versionMode}, got ${result1}`,
+                `Expected help-shown for helpConfig=${
+                  JSON.stringify(helpConfig)
+                }, versionConfig=${
+                  JSON.stringify(versionConfig)
+                }, got ${result1}`,
               );
               assert.ok(
                 helpShown && !versionShown,
-                `Expected help to win for helpMode=${helpMode}, versionMode=${versionMode}`,
+                `Expected help to win for helpConfig=${
+                  JSON.stringify(helpConfig)
+                }, versionConfig=${JSON.stringify(versionConfig)}`,
               );
             }
           } catch (error) {
@@ -1452,7 +1481,11 @@ describe("runParser", () => {
               ? error.message
               : String(error);
             console.log(
-              `Mode combination helpMode=${helpMode}, versionMode=${versionMode} failed as expected:`,
+              `Config combination helpConfig=${
+                JSON.stringify(helpConfig)
+              }, versionConfig=${
+                JSON.stringify(versionConfig)
+              } failed as expected:`,
               errorMsg.slice(0, 50),
             );
           }
@@ -1473,14 +1506,16 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--", "--help", "--version"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "1.0.0",
           onShow: () => "version-shown",
         },
@@ -1509,7 +1544,8 @@ describe("runParser", () => {
         "test.txt",
       ], {
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "2.0.0",
           onShow: () => {
             versionShown = true;
@@ -1555,7 +1591,8 @@ describe("runParser", () => {
 
       const result = runParser(parser, "mygit", ["git", "--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -1580,7 +1617,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--version"], {
         version: {
-          mode: "option",
+          option: true,
           value: "",
           onShow: () => "version-shown",
         },
@@ -1604,7 +1641,7 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--version"], {
         version: {
-          mode: "option",
+          option: true,
           value: longVersion,
           onShow: () => "version-shown",
         },
@@ -1625,7 +1662,7 @@ describe("runParser", () => {
       // Test onHelp exception handling
       const result1 = runParser(parser, "test", ["--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: (exitCode?: number) => {
             if (exitCode !== undefined) {
               throw new Error("Exit code provided");
@@ -1641,7 +1678,7 @@ describe("runParser", () => {
       // Test onVersion exception handling
       const result2 = runParser(parser, "test", ["--version"], {
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: (exitCode?: number) => {
             if (exitCode !== undefined) {
@@ -1666,11 +1703,13 @@ describe("runParser", () => {
       try {
         const result = runParser(parser, "test", [], {
           help: {
-            mode: "both",
+            command: true,
+            option: true,
             onShow: () => "help-shown",
           },
           version: {
-            mode: "both",
+            command: true,
+            option: true,
             value: "1.0.0",
             onShow: () => "version-shown",
           },
@@ -1702,14 +1741,16 @@ describe("runParser", () => {
 
       const result = runParser(parser, "test", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
           },
         },
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "1.0.0",
           onShow: () => "version-shown",
         },
@@ -1744,7 +1785,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let output = "";
     const result = runParser(parser, "test", ["--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         output = text;
       },
@@ -1762,7 +1803,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let output = "";
     const result = runParser(parser, "test", ["--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         output = text;
       },
@@ -1781,7 +1822,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let output = "";
     const result = runParser(parser, "test", ["--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         output = text;
       },
@@ -1801,7 +1842,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let output = "";
     const result = runParser(parser, "test", ["--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         output = text;
       },
@@ -1851,7 +1892,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let output = "";
     const result = runParser(parser, "test", ["--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         output = text;
       },
@@ -1893,7 +1934,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let helpOutput = "";
     const result = runParser(parser, "mycli", ["foo", "--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         helpOutput = text;
       },
@@ -1942,7 +1983,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let helpOutput = "";
     const result = runParser(parser, "mycli", ["foo", "--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         helpOutput = text;
       },
@@ -1979,7 +2020,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let helpOutput = "";
     runParser(fileCommand, "repro", ["file", "--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         helpOutput = text;
       },
@@ -2033,7 +2074,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let helpOutput = "";
     runParser(fileCommand, "repro", ["file", "--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         helpOutput = text;
       },
@@ -2088,7 +2129,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
 
     let helpOutput = "";
     runParser(cli, "repro", ["file", "--help"], {
-      help: { mode: "option", onShow: () => "help" as const },
+      help: { option: true, onShow: () => "help" as const },
       stdout: (text) => {
         helpOutput = text;
       },
@@ -2139,7 +2180,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     // Test: cli -- --help should NOT show help (--help is treated as argument)
     const result = runParser(parser, "cli", ["--", "--help"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
           return "help-shown";
@@ -2179,7 +2220,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     // Test: cli git add --help should show help for the full command chain
     const result = runParser(parser, "cli", ["git", "add", "--help"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
           return "help-shown";
@@ -2216,7 +2257,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     let helpOutput1 = "";
     const result1 = runParser(parser, "cli", ["--help", "sync"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => "help-shown",
       },
       stdout: (text) => {
@@ -2232,7 +2273,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     let helpOutput2 = "";
     const result2 = runParser(parser, "cli", ["sync", "--help", "--force"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => "help-shown",
       },
       stdout: (text) => {
@@ -2276,7 +2317,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     // Test: cli invalid-cmd --help should error, not show help
     const result = runParser(parser, "cli", ["invalid-cmd", "--help"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
           return "help-shown";
@@ -2328,7 +2369,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     // Test: cli synk --help (typo) should error with suggestion
     const result = runParser(parser, "cli", ["synk", "--help"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => "help-shown",
       },
       stdout: () => {},
@@ -2372,7 +2413,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       "target",
     ], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
           return "help-shown";
@@ -2410,14 +2451,14 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     // Test: cli sync --help --version should follow last-option-wins
     const result = runParser(parser, "cli", ["sync", "--help", "--version"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
           return "help-shown";
         },
       },
       version: {
-        mode: "option",
+        option: true,
         value: "1.0.0",
         onShow: () => {
           versionShown = true;
@@ -2455,7 +2496,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     // Test: cli --help (no command) should show root help
     const result = runParser(parser, "cli", ["--help"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
           return "help-shown";
@@ -2523,7 +2564,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       ["dev", "git", "status", "--help"],
       {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -2592,7 +2633,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
     const result = runParser(parser, "mycli", ["nested", "foo", "--help"], {
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
           return "help-shown";
@@ -2632,7 +2673,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       const result = runParser(parser, "myapp", ["completion", "bash"], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => {
             completionShown = true;
             return "completion-shown";
@@ -2660,7 +2701,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["completion", "zsh"], {
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => "completion-shown",
         },
         stdout: (text) => {
@@ -2684,7 +2725,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["completion", "bash", "--"], {
         completion: {
-          mode: "command",
+          command: true,
         },
         stdout: (text) => {
           completionOutput += text;
@@ -2709,7 +2750,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["completion", "zsh", "--"], {
         completion: {
-          mode: "command",
+          command: true,
         },
         stdout: (text) => {
           completionOutput += text;
@@ -2730,7 +2771,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["--completion=bash"], {
         completion: {
-          mode: "option",
+          option: true,
         },
         stdout: (text) => {
           completionOutput = text;
@@ -2750,7 +2791,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["--completion", "bash"], {
         completion: {
-          mode: "option",
+          option: true,
         },
         stdout: (text) => {
           completionOutput = text;
@@ -2770,7 +2811,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["--completion"], {
         completion: {
-          mode: "option",
+          option: true,
         },
         onError: (exitCode: number) => {
           errorResult = `error-${exitCode}`;
@@ -2796,7 +2837,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["completion", "powershell"], {
         completion: {
-          mode: "command",
+          command: true,
         },
         onError: (exitCode) => {
           errorResult = `error-${exitCode}`;
@@ -2823,7 +2864,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["completion"], {
         completion: {
-          mode: "command",
+          command: true,
         },
         onError: (exitCode) => {
           errorResult = `error-${exitCode}`;
@@ -2853,7 +2894,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       // Test command mode
       let commandOutput = "";
       runParser(parser, "myapp", ["completion", "bash"], {
-        completion: { mode: "both" },
+        completion: { command: true, option: true },
         stdout: (text) => {
           commandOutput = text;
         },
@@ -2862,7 +2903,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       // Test option mode
       let optionOutput = "";
       runParser(parser, "myapp", ["--completion=bash"], {
-        completion: { mode: "both" },
+        completion: { command: true, option: true },
         stdout: (text) => {
           optionOutput = text;
         },
@@ -2879,7 +2920,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       });
 
       const result = runParser(parser, "myapp", ["--verbose", "Alice"], {
-        completion: { mode: "both" },
+        completion: { command: true, option: true },
       });
 
       assert.deepEqual(result, { verbose: true, name: "Alice" });
@@ -2911,7 +2952,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["completion", "bash", "git", "add", "--"], {
-        completion: { mode: "command" },
+        completion: { command: true },
         stdout: (text) => {
           completionOutput += text;
         },
@@ -2948,7 +2989,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["completion", "custom"], {
         completion: {
-          mode: "command",
+          command: true,
           shells: { custom: customShell },
         },
         stdout: (text) => {
@@ -2985,7 +3026,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["completion", "bash"], {
         completion: {
-          mode: "command",
+          command: true,
           shells: { bash: customBash },
         },
         stdout: (text) => {
@@ -3016,7 +3057,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       // Should still be able to use zsh even with custom shell added
       runParser(parser, "myapp", ["completion", "zsh"], {
         completion: {
-          mode: "command",
+          command: true,
           shells: { custom: customShell },
         },
         stdout: (text) => {
@@ -3038,7 +3079,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       const result = runParser(parser, "myapp", ["completions", "bash"], {
         completion: {
-          mode: "command",
+          command: { names: ["completions"] },
           onShow: () => {
             completionShown = true;
             return "completion-shown";
@@ -3063,11 +3104,11 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["completion", "--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => "help-shown",
         },
         completion: {
-          mode: "command",
+          command: true,
         },
         stdout: (text) => {
           helpOutput = text;
@@ -3090,7 +3131,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "myapp", ["--completions=bash"], {
         completion: {
-          mode: "option",
+          option: { names: ["--completions"] },
         },
         stdout: (text) => {
           completionOutput = text;
@@ -3109,13 +3150,11 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "mycli", ["--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => "help-shown",
         },
         completion: {
-          mode: "command",
-          name: "both",
-          helpVisibility: "none",
+          command: { names: ["completion", "completions"], hidden: true },
         },
         stdout: (text) => {
           helpOutput = text;
@@ -3135,13 +3174,11 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       runParser(parser, "mycli", ["--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => "help-shown",
         },
         completion: {
-          mode: "command",
-          name: "both",
-          helpVisibility: "singular",
+          command: { names: ["completion", "completions"] },
         },
         stdout: (text) => {
           helpOutput = text;
@@ -3162,9 +3199,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       const result = runParser(parser, "mycli", ["completions", "bash"], {
         completion: {
-          mode: "command",
-          name: "both",
-          helpVisibility: "singular",
+          command: { names: ["completion", "completions"] },
           onShow: () => {
             completionShown = true;
             return "completion-shown";
@@ -3189,8 +3224,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       runParser(parser, "myapp", ["completion", "bash"], {
         completion: {
-          mode: "command",
-          name: "singular",
+          command: true,
           onShow: () => {
             completionShown = true;
             return "completion-shown";
@@ -3206,8 +3240,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       try {
         runParser(parser, "myapp", ["completions", "bash"], {
           completion: {
-            mode: "command",
-            name: "singular",
+            command: true,
           },
           onError: () => {
             errorCalled = true;
@@ -3230,8 +3263,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       runParser(parser, "myapp", ["completions", "bash"], {
         completion: {
-          mode: "command",
-          name: "plural",
+          command: { names: ["completions"] },
           onShow: () => {
             completionShown = true;
             return "completion-shown";
@@ -3246,8 +3278,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       try {
         runParser(parser, "myapp", ["completion", "bash"], {
           completion: {
-            mode: "command",
-            name: "plural",
+            command: { names: ["completions"] },
           },
           onError: () => {
             errorCalled = true;
@@ -3271,8 +3302,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       runParser(parser, "myapp", ["--completions=bash"], {
         completion: {
-          mode: "option",
-          name: "plural",
+          option: { names: ["--completions"] },
           onShow: () => {
             completionShown = true;
             return "completion-shown";
@@ -3287,8 +3317,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       try {
         runParser(parser, "myapp", ["--completion=bash"], {
           completion: {
-            mode: "option",
-            name: "plural",
+            option: { names: ["--completions"] },
           },
           onError: () => {
             errorCalled = true;
@@ -3310,7 +3339,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["--completion", "fish"], {
-        completion: { mode: "option" },
+        completion: { option: true },
         stdout: (text) => {
           completionOutput = text;
         },
@@ -3336,7 +3365,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["completion", "fish"], {
-        completion: { mode: "command" },
+        completion: { command: true },
         stdout: (text) => {
           completionOutput = text;
         },
@@ -3361,7 +3390,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["completion", "fish"], {
-        completion: { mode: "both" },
+        completion: { command: true, option: true },
         stdout: (text) => {
           completionOutput = text;
         },
@@ -3386,7 +3415,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["--completion=bash"], {
-        completion: { mode: "option" },
+        completion: { option: true },
         stdout: (text) => {
           completionOutput = text;
         },
@@ -3411,7 +3440,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["--completions", "fish"], {
-        completion: { mode: "option", name: "plural" },
+        completion: { option: { names: ["--completions"] } },
         stdout: (text) => {
           completionOutput = text;
         },
@@ -3436,7 +3465,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["completions", "fish"], {
-        completion: { mode: "command", name: "plural" },
+        completion: { command: { names: ["completions"] } },
         stdout: (text) => {
           completionOutput = text;
         },
@@ -3461,7 +3490,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["--completion", "fish"], {
-        completion: { mode: "option", name: "singular" },
+        completion: { option: true },
         stdout: (text) => {
           completionOutput = text;
         },
@@ -3486,7 +3515,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionOutput = "";
 
       runParser(parser, "myapp", ["completion", "fish"], {
-        completion: { mode: "command", name: "singular" },
+        completion: { command: true },
         stdout: (text) => {
           completionOutput = text;
         },
@@ -3503,20 +3532,39 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       );
     });
 
-    it("should enforce completion helpVisibility combinations at compile time", () => {
-      const validSingular: RunOptions<void, never>["completion"] = {
-        name: "singular",
-        helpVisibility: "none",
+    it("should enforce that at least one of command or option is provided at compile time", () => {
+      // Valid: command only
+      const validCommand: RunOptions<void, never>["completion"] = {
+        command: true,
       };
-      void validSingular;
+      void validCommand;
 
-      type InvalidSingularVisibility = Extract<
+      // Valid: option only
+      const validOption: RunOptions<void, never>["completion"] = {
+        option: true,
+      };
+      void validOption;
+
+      // Valid: both command and option
+      const validBoth: RunOptions<void, never>["completion"] = {
+        command: true,
+        option: true,
+      };
+      void validBoth;
+
+      // Valid: command with sub-config
+      const validCommandConfig: RunOptions<void, never>["completion"] = {
+        command: { names: ["completion", "completions"] },
+      };
+      void validCommandConfig;
+
+      // Invalid: neither command nor option → should be never
+      type InvalidEmpty = Extract<
         RunOptions<void, never>["completion"],
-        { readonly name: "singular"; readonly helpVisibility: "plural" }
+        { readonly command?: undefined; readonly option?: undefined }
       >;
-      const assertInvalidSingular: AssertNever<InvalidSingularVisibility> =
-        undefined as never;
-      void assertInvalidSingular;
+      const assertInvalidEmpty: AssertNever<InvalidEmpty> = undefined as never;
+      void assertInvalidEmpty;
     });
   });
 
@@ -3553,7 +3601,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let helpOutput = "";
       runParser(prog, ["--help"], {
-        help: { mode: "option" },
+        help: { option: true },
         stdout: (text) => {
           helpOutput += text + "\n";
         },
@@ -3576,7 +3624,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let versionOutput = "";
       runParser(prog, ["--version"], {
-        version: { mode: "option", value: prog.metadata.version! },
+        version: { option: true, value: prog.metadata.version! },
         stdout: (text) => {
           versionOutput += text;
         },
@@ -3831,7 +3879,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [], {
         args: ["--help"],
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown";
@@ -3857,7 +3905,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [], {
         args: ["--version"],
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: () => {
             versionShown = true;
@@ -3893,7 +3941,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [trackingContext], {
         args: ["--help"],
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help" as const;
@@ -3924,7 +3972,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [trackingContext], {
         args: ["--version"],
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: () => {
             versionShown = true;
@@ -3956,7 +4004,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [trackingContext], {
         args: ["help"],
         help: {
-          mode: "command",
+          command: true,
           onShow: () => {
             helpShown = true;
             return "help" as const;
@@ -3987,7 +4035,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [trackingContext], {
         args: ["version"],
         version: {
-          mode: "command",
+          command: true,
           value: "1.0.0",
           onShow: () => {
             versionShown = true;
@@ -4019,7 +4067,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [trackingContext], {
         args: ["completion", "bash"],
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => {
             completionShown = true;
             return "completion" as const;
@@ -4050,7 +4098,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [trackingContext], {
         args: ["--completion=bash"],
         completion: {
-          mode: "option",
+          option: true,
           onShow: () => {
             completionShown = true;
             return "completion" as const;
@@ -4081,8 +4129,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [trackingContext], {
         args: ["completions", "bash"],
         completion: {
-          mode: "command",
-          name: "plural",
+          command: { names: ["completions"] },
           onShow: () => {
             completionShown = true;
             return "completion" as const;
@@ -4113,8 +4160,7 @@ describe("runWith", () => {
       await runWith(parser, "test", [trackingContext], {
         args: ["--completions=bash"],
         completion: {
-          mode: "option",
-          name: "plural",
+          option: { names: ["--completions"] },
           onShow: () => {
             completionShown = true;
             return "completion" as const;
@@ -4148,7 +4194,7 @@ describe("runWith", () => {
       try {
         await runWith(parser, "test", [dynamicContext], {
           args: [],
-          help: { mode: "both", onShow: () => "help" },
+          help: { command: true, option: true, onShow: () => "help" },
           stderr: (text: string) => {
             stderrCalls.push(text);
           },
@@ -4475,7 +4521,7 @@ describe("runWithSync", () => {
     runWithSync(parser, "test", [], {
       args: ["--help"],
       help: {
-        mode: "option",
+        option: true,
         onShow: () => {
           helpShown = true;
           return "help-shown";
@@ -4506,7 +4552,7 @@ describe("runWithSync", () => {
       runWithSync(parser, "test", [trackingContext], {
         args: ["--help"],
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help" as const;
@@ -4537,7 +4583,7 @@ describe("runWithSync", () => {
       runWithSync(parser, "test", [trackingContext], {
         args: ["--version"],
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: () => {
             versionShown = true;
@@ -4569,7 +4615,7 @@ describe("runWithSync", () => {
       runWithSync(parser, "test", [trackingContext], {
         args: ["completion", "bash"],
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => {
             completionShown = true;
             return "completion" as const;
@@ -4775,8 +4821,8 @@ describe("runWithAsync", () => {
       let errorOutput = "";
 
       runParser(cli, "mycli", [], {
-        completion: { mode: "command" },
-        help: { mode: "option", onShow: () => "help" as const },
+        completion: { command: true },
+        help: { option: true, onShow: () => "help" as const },
         onError: () => "handled",
         stderr: (text: string) => {
           errorOutput += text + "\n";
@@ -4824,20 +4870,18 @@ describe("runWithAsync", () => {
       let helpOutput = "";
       runParser(cli, "mycli", ["--help"], {
         help: {
-          mode: "both",
-          group: "Other",
+          command: { group: "Other" },
+          option: true,
           onShow: () => "help-shown",
         },
         version: {
-          mode: "both",
+          command: { group: "Other" },
+          option: true,
           value: "1.0.0",
-          group: "Other",
           onShow: () => "version-shown",
         },
         completion: {
-          mode: "command",
-          name: "singular",
-          group: "Other",
+          command: { group: "Other" },
         },
         stdout: (text) => {
           helpOutput = text;
@@ -4876,20 +4920,18 @@ describe("runWithAsync", () => {
       let helpOutput = "";
       runParser(cli, "mycli", ["--help"], {
         help: {
-          mode: "both",
-          group: "Help",
+          command: { group: "Help" },
+          option: true,
           onShow: () => "help-shown",
         },
         version: {
-          mode: "both",
+          command: { group: "Info" },
+          option: true,
           value: "1.0.0",
-          group: "Info",
           onShow: () => "version-shown",
         },
         completion: {
-          mode: "command",
-          name: "singular",
-          group: "Shell",
+          command: { group: "Shell" },
         },
         stdout: (text) => {
           helpOutput = text;
@@ -4913,14 +4955,13 @@ describe("runWithAsync", () => {
       let helpOutput = "";
       runParser(cli, "mycli", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           // no group - should remain ungrouped
           onShow: () => "help-shown",
         },
         completion: {
-          mode: "command",
-          name: "singular",
-          group: "Other",
+          command: { group: "Other" },
         },
         stdout: (text) => {
           helpOutput = text;
@@ -4953,17 +4994,18 @@ describe("runWithAsync", () => {
       let helpOutput = "";
       runParser(cli, "mycli", ["--help"], {
         help: {
-          mode: "both",
+          command: true,
+          option: true,
           onShow: () => "help-shown",
         },
         version: {
-          mode: "both",
+          command: true,
+          option: true,
           value: "1.0.0",
           onShow: () => "version-shown",
         },
         completion: {
-          mode: "command",
-          name: "singular",
+          command: true,
         },
         stdout: (text) => {
           helpOutput = text;
@@ -4994,14 +5036,12 @@ describe("runWithAsync", () => {
       let helpOutput = "";
       runParser(cli, "mycli", ["--help"], {
         help: {
-          mode: "both",
-          group: "Meta",
+          command: { group: "Meta" },
+          option: true,
           onShow: () => "help-shown",
         },
         completion: {
-          mode: "command",
-          name: "singular",
-          group: "Meta",
+          command: { group: "Meta" },
         },
         stdout: (text) => {
           helpOutput = text;
@@ -5039,14 +5079,12 @@ describe("runWithAsync", () => {
       let errorOutput = "";
       runParser(cli, "mycli", ["--invalid"], {
         help: {
-          mode: "both",
-          group: "Other",
+          command: { group: "Other" },
+          option: true,
           onShow: () => "help-shown",
         },
         completion: {
-          mode: "command",
-          name: "singular",
-          group: "Other",
+          command: { group: "Other" },
         },
         onError: () => "error" as never,
         stderr: (text) => {
@@ -5072,14 +5110,13 @@ describe("runWithAsync", () => {
       let helpOutput = "";
       runParser(cli, "mycli", ["--help"], {
         help: {
-          mode: "both",
-          group: "Plumbing",
+          command: { group: "Plumbing" },
+          option: true,
           onShow: () => "help-shown",
         },
         completion: {
-          mode: "both",
-          name: "singular",
-          group: "Plumbing",
+          command: { group: "Plumbing" },
+          option: true,
         },
         stdout: (text) => {
           helpOutput = text;
@@ -5105,7 +5142,7 @@ describe("runWithAsync", () => {
       let helpOutput = "";
       runParser(parser, "myapp", ["--help"], {
         help: {
-          mode: "option",
+          option: true,
           onShow: () => "shown",
         },
         stdout: (text) => {
@@ -5121,6 +5158,951 @@ describe("runWithAsync", () => {
 
       // The sectionOrder callback should be accepted without type errors
       assert.ok(typeof helpOutput === "string");
+    });
+  });
+
+  describe("custom names in CommandSubConfig and OptionSubConfig", () => {
+    describe("help command custom names", () => {
+      it("should trigger help with a single custom command name", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpShown = false;
+        const result = runParser(parser, "test", ["h"], {
+          help: {
+            command: { names: ["h"] },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: () => {},
+        });
+
+        assert.equal(result, "help-shown");
+        assert.ok(helpShown);
+      });
+
+      it("should not respond to default 'help' when custom name is set", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpShown = false;
+        runParser(parser, "test", ["help"], {
+          help: {
+            command: { names: ["h"] },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          onError: () => "error",
+          stdout: () => {},
+          stderr: () => {},
+        });
+
+        assert.ok(
+          !helpShown,
+          "default 'help' should not trigger with custom name",
+        );
+      });
+
+      it("should show custom command name in usage line", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpOutput = "";
+        runParser(parser, "test", ["h"], {
+          help: {
+            command: { names: ["h"] },
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        const usageLines = helpOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          usageLines.includes("h"),
+          `custom name 'h' should appear in usage, got:\n${usageLines}`,
+        );
+      });
+
+      it("should support aliases: first name visible, rest hidden but functional", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpShown = false;
+
+        // "help" is the display name, "h" is the hidden alias
+        const resultViaDisplay = runParser(parser, "test", ["help"], {
+          help: {
+            command: { names: ["help", "h"] },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(resultViaDisplay, "help-shown");
+        assert.ok(helpShown);
+
+        // Hidden alias also works at runtime
+        helpShown = false;
+        const resultViaAlias = runParser(parser, "test", ["h"], {
+          help: {
+            command: { names: ["help", "h"] },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(resultViaAlias, "help-shown");
+        assert.ok(helpShown);
+      });
+
+      it("should show only the first name in help output, not hidden aliases", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpOutput = "";
+        runParser(parser, "test", ["help"], {
+          help: {
+            command: { names: ["help", "h"] },
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        // "help" should appear in the commands section
+        assert.ok(
+          helpOutput.includes("help"),
+          "display name 'help' should appear in help output",
+        );
+        // Check usage line doesn't contain the alias as a separate branch
+        const usageLines = helpOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        // The alias "h" should not appear as an independent entry in usage
+        // (it's a hidden alias, only the display name is shown)
+        const usageLineCount = usageLines
+          .split("\n")
+          .filter((l) => /test h\b/.test(l)).length;
+        assert.equal(
+          usageLineCount,
+          0,
+          `hidden alias 'h' should not appear as its own usage line, got:\n${usageLines}`,
+        );
+      });
+    });
+
+    describe("version command custom names", () => {
+      it("should trigger version with a custom command name", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        const result = runParser(parser, "test", ["ver"], {
+          version: {
+            command: { names: ["ver"] },
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          stdout: () => {},
+        });
+
+        assert.equal(result, "version-shown");
+        assert.ok(versionShown);
+      });
+
+      it("should not respond to default 'version' when custom name is set", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        runParser(parser, "test", ["version"], {
+          version: {
+            command: { names: ["ver"] },
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          onError: () => "error",
+          stdout: () => {},
+          stderr: () => {},
+        });
+
+        assert.ok(
+          !versionShown,
+          "default 'version' should not trigger with custom name",
+        );
+      });
+
+      it("should support version command aliases", () => {
+        const parser = object({ name: argument(string()) });
+
+        // "version" visible, "ver" hidden alias
+        const resultViaDisplay = runParser(parser, "test", ["version"], {
+          version: {
+            command: { names: ["version", "ver"] },
+            value: "2.0.0",
+            onShow: () => "version-shown",
+          },
+          stdout: () => {},
+        });
+        assert.equal(resultViaDisplay, "version-shown");
+
+        const resultViaAlias = runParser(parser, "test", ["ver"], {
+          version: {
+            command: { names: ["version", "ver"] },
+            value: "2.0.0",
+            onShow: () => "version-shown",
+          },
+          stdout: () => {},
+        });
+        assert.equal(resultViaAlias, "version-shown");
+      });
+    });
+
+    describe("help option custom names", () => {
+      it("should trigger help via lenient scanner with custom option name", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpShown = false;
+        const result = runParser(parser, "test", ["-h"], {
+          help: {
+            option: { names: ["-h"] },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: () => {},
+        });
+
+        assert.equal(result, "help-shown");
+        assert.ok(helpShown);
+      });
+
+      it("should not respond to default '--help' when custom option name is set", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpShown = false;
+        runParser(parser, "test", ["--help"], {
+          help: {
+            option: { names: ["-h"] },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          onError: () => "error",
+          stdout: () => {},
+          stderr: () => {},
+        });
+
+        assert.ok(
+          !helpShown,
+          "default '--help' should not trigger with custom option name",
+        );
+      });
+
+      it("should find custom option name anywhere in args (lenient scanner)", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpShown = false;
+        // The lenient scanner should find -h even when it's not first
+        const result = runParser(
+          parser,
+          "test",
+          ["--verbose", "-h", "extra-arg"],
+          {
+            help: {
+              option: { names: ["-h", "--help"] },
+              onShow: () => {
+                helpShown = true;
+                return "help-shown";
+              },
+            },
+            stdout: () => {},
+          },
+        );
+
+        assert.equal(result, "help-shown");
+        assert.ok(helpShown);
+      });
+
+      it("should support multiple option names — all shown in help output", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpOutput = "";
+        runParser(parser, "test", ["-h"], {
+          help: {
+            option: { names: ["-h", "--help"] },
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        // Both -h and --help should appear in help output (OptionSubConfig shows all names)
+        assert.ok(
+          helpOutput.includes("-h"),
+          `-h should appear in help output, got:\n${helpOutput}`,
+        );
+        assert.ok(
+          helpOutput.includes("--help"),
+          `--help should appear in help output, got:\n${helpOutput}`,
+        );
+      });
+
+      it("should trigger with any of multiple option names via lenient scanner", () => {
+        const parser = object({ name: argument(string()) });
+
+        // Trigger with -h
+        let helpShown = false;
+        runParser(parser, "test", ["-h"], {
+          help: {
+            option: { names: ["-h", "--help"] },
+            onShow: () => {
+              helpShown = true;
+              return "shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.ok(helpShown, "'-h' should trigger help");
+
+        // Trigger with --help
+        helpShown = false;
+        runParser(parser, "test", ["--help"], {
+          help: {
+            option: { names: ["-h", "--help"] },
+            onShow: () => {
+              helpShown = true;
+              return "shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.ok(helpShown, "'--help' should trigger help");
+      });
+    });
+
+    describe("version option custom names", () => {
+      it("should trigger version via lenient scanner with custom option name", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        const result = runParser(parser, "test", ["-V"], {
+          version: {
+            option: { names: ["-V"] },
+            value: "3.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          stdout: () => {},
+        });
+
+        assert.equal(result, "version-shown");
+        assert.ok(versionShown);
+      });
+
+      it("should not respond to default '--version' when custom option name is set", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        runParser(parser, "test", ["--version"], {
+          version: {
+            option: { names: ["-V"] },
+            value: "3.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          onError: () => "error",
+          stdout: () => {},
+          stderr: () => {},
+        });
+
+        assert.ok(
+          !versionShown,
+          "default '--version' should not trigger with custom option name",
+        );
+      });
+
+      it("should find custom version option anywhere in args (lenient scanner)", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        const result = runParser(
+          parser,
+          "test",
+          ["--verbose", "-V"],
+          {
+            version: {
+              option: { names: ["-V", "--version"] },
+              value: "3.0.0",
+              onShow: () => {
+                versionShown = true;
+                return "version-shown";
+              },
+            },
+            stdout: () => {},
+          },
+        );
+
+        assert.equal(result, "version-shown");
+        assert.ok(versionShown);
+      });
+
+      it("should show all version option names in help output", () => {
+        const parser = object({ name: argument(string()) });
+
+        // Trigger help (not version) to check the help page's options listing
+        let helpOutput = "";
+        runParser(parser, "test", ["-h"], {
+          help: {
+            option: { names: ["-h", "--help"] },
+            onShow: () => "shown",
+          },
+          version: {
+            option: { names: ["-V", "--version"] },
+            value: "3.0.0",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        // Both -V and --version should appear in help output options section
+        assert.ok(
+          helpOutput.includes("-V"),
+          `-V should appear in help output, got:\n${helpOutput}`,
+        );
+        assert.ok(
+          helpOutput.includes("--version"),
+          `--version should appear in help output, got:\n${helpOutput}`,
+        );
+      });
+    });
+  });
+
+  describe("hidden visibility in CommandSubConfig and OptionSubConfig", () => {
+    describe("command hidden: true", () => {
+      it("should hide help command from usage and doc, but still trigger at runtime", () => {
+        const parser = object({ name: argument(string()) });
+
+        // 'help' command is fully hidden but still functional
+        let helpShown = false;
+        const result = runParser(parser, "test", ["help"], {
+          help: {
+            command: { hidden: true },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(result, "help-shown");
+        assert.ok(helpShown);
+
+        // Verify it doesn't appear in error usage line
+        let errorOutput = "";
+        runParser(parser, "test", ["--invalid"], {
+          help: { command: { hidden: true } },
+          onError: () => "error",
+          stderr: (text) => {
+            errorOutput += text + "\n";
+          },
+        });
+        assert.ok(
+          !errorOutput.includes("help"),
+          `hidden help command should not appear in error usage, got:\n${errorOutput}`,
+        );
+      });
+
+      it("should hide version command from usage and doc, but still trigger at runtime", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        const result = runParser(parser, "test", ["version"], {
+          version: {
+            command: { hidden: true },
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(result, "version-shown");
+        assert.ok(versionShown);
+
+        let errorOutput = "";
+        runParser(parser, "test", ["--invalid"], {
+          version: { command: { hidden: true }, value: "1.0.0" },
+          onError: () => "error",
+          stderr: (text) => {
+            errorOutput += text + "\n";
+          },
+        });
+        assert.ok(
+          !errorOutput.includes("version"),
+          `hidden version command should not appear in error usage, got:\n${errorOutput}`,
+        );
+      });
+    });
+
+    describe('command hidden: "usage"', () => {
+      it("should hide help command from usage line but show in help doc", () => {
+        const parser = object({ name: argument(string()) });
+
+        // Should not appear in error usage line
+        let errorOutput = "";
+        runParser(parser, "test", ["--invalid"], {
+          help: { command: { hidden: "usage" } },
+          onError: () => "error",
+          stderr: (text) => {
+            errorOutput += text + "\n";
+          },
+        });
+
+        const usageLines = errorOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          !usageLines.includes("help"),
+          `help command should be absent from usage line when hidden: "usage", got:\n${usageLines}`,
+        );
+
+        // But should still appear in full help doc
+        let helpOutput = "";
+        runParser(parser, "test", ["help"], {
+          help: {
+            command: { hidden: "usage" },
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+        assert.ok(
+          helpOutput.includes("help"),
+          `help command should appear in doc page even when hidden: "usage", got:\n${helpOutput}`,
+        );
+      });
+
+      it("should hide version command from usage line but show in help doc", () => {
+        const parser = object({ name: argument(string()) });
+
+        let errorOutput = "";
+        runParser(parser, "test", ["--invalid"], {
+          version: { command: { hidden: "usage" }, value: "1.0.0" },
+          onError: () => "error",
+          stderr: (text) => {
+            errorOutput += text + "\n";
+          },
+        });
+
+        const usageLines = errorOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          !usageLines.includes("version"),
+          `version command should be absent from usage line when hidden: "usage", got:\n${usageLines}`,
+        );
+      });
+    });
+
+    describe('command hidden: "doc"', () => {
+      it("should show help command in usage line but hide from doc listing", () => {
+        const parser = object({ name: argument(string()) });
+
+        // Should appear in error usage line
+        let errorOutput = "";
+        runParser(parser, "test", ["--invalid"], {
+          help: { command: { hidden: "doc" } },
+          onError: () => "error",
+          stderr: (text) => {
+            errorOutput += text + "\n";
+          },
+        });
+
+        const usageLines = errorOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          usageLines.includes("help"),
+          `help command should appear in usage line when hidden: "doc", got:\n${usageLines}`,
+        );
+
+        // But should be hidden from the doc page commands section
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: {
+            command: { hidden: "doc" },
+            option: true,
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        // The commands section should NOT list 'help' as a sub-command entry in the doc
+        // (usage line at top may still show it due to the combined parser, but the
+        //  doc section listing for commands should hide it)
+        // We verify this by checking that "help" doesn't appear as a listed command
+        // in the section body (it may appear in the top Usage: line which is different)
+        const docLines = helpOutput
+          .split("\n")
+          .filter(
+            (l) =>
+              !l.startsWith("Usage:") &&
+              !l.startsWith("       ") &&
+              l.trim().length > 0,
+          );
+        const hasHelpInDocSection = docLines.some((l) => /^\s+help\b/.test(l));
+        assert.ok(
+          !hasHelpInDocSection,
+          `help command should not appear in doc section when hidden: "doc", got lines:\n${
+            docLines.join("\n")
+          }`,
+        );
+      });
+    });
+
+    describe("option hidden: true", () => {
+      it("should hide --help option from usage and doc, but lenient scanner still works", () => {
+        const parser = object({ name: argument(string()) });
+
+        // Lenient scanner should still work even when option is hidden
+        let helpShown = false;
+        const result = runParser(parser, "test", ["--help"], {
+          help: {
+            option: { hidden: true },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(result, "help-shown");
+        assert.ok(helpShown);
+
+        // Should not appear in usage line or doc
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: {
+            option: { hidden: true },
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+        assert.ok(
+          !helpOutput.includes("--help"),
+          `--help should not appear in help output when hidden: true, got:\n${helpOutput}`,
+        );
+      });
+
+      it("should hide --version option from help output, but lenient scanner still works", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        const result = runParser(parser, "test", ["--version"], {
+          version: {
+            option: { hidden: true },
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(result, "version-shown");
+        assert.ok(versionShown);
+
+        // Should not appear in usage line when requesting help
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: { option: true, onShow: () => "shown" },
+          version: { option: { hidden: true }, value: "1.0.0" },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+        const usageLines = helpOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          !usageLines.includes("--version"),
+          `--version should not appear in usage line when hidden: true, got:\n${usageLines}`,
+        );
+      });
+    });
+
+    describe('option hidden: "usage"', () => {
+      it("should hide --help option from usage line but show in help doc options list", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: {
+            option: { hidden: "usage" },
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        // Should appear in the options section of the doc
+        assert.ok(
+          helpOutput.includes("--help"),
+          `--help should appear in doc options when hidden: "usage", got:\n${helpOutput}`,
+        );
+
+        // But should NOT appear in the usage lines at the top
+        const usageLines = helpOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          !usageLines.includes("--help"),
+          `--help should NOT appear in usage lines when hidden: "usage", got:\n${usageLines}`,
+        );
+      });
+
+      it("should hide --version option from usage line but show in doc options", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: { option: true, onShow: () => "shown" },
+          version: { option: { hidden: "usage" }, value: "1.0.0" },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        // --version should appear in the options section of the doc
+        assert.ok(
+          helpOutput.includes("--version"),
+          `--version should appear in doc options when hidden: "usage", got:\n${helpOutput}`,
+        );
+
+        // But should NOT appear in the usage lines
+        const usageLines = helpOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          !usageLines.includes("--version"),
+          `--version should NOT appear in usage lines when hidden: "usage", got:\n${usageLines}`,
+        );
+      });
+    });
+
+    describe('option hidden: "doc"', () => {
+      it("should show --help option in usage line but hide from doc options list", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: {
+            option: { hidden: "doc" },
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        // Should appear in the usage line at the top
+        const usageLines = helpOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          usageLines.includes("--help"),
+          `--help should appear in usage lines when hidden: "doc", got:\n${usageLines}`,
+        );
+
+        // But should NOT appear in the doc options section
+        const docOptionLines = helpOutput
+          .split("\n")
+          .filter(
+            (l) =>
+              !l.startsWith("Usage:") &&
+              !l.startsWith("       ") &&
+              l.includes("--help"),
+          );
+        assert.equal(
+          docOptionLines.length,
+          0,
+          `--help should NOT appear in doc options when hidden: "doc", found:\n${
+            docOptionLines.join("\n")
+          }`,
+        );
+      });
+    });
+  });
+
+  describe("OptionSubConfig.group", () => {
+    it("should group --help option under a titled section in help output", () => {
+      const parser = object({ name: argument(string()) });
+
+      let helpOutput = "";
+      runParser(parser, "test", ["--help"], {
+        help: {
+          option: { group: "Meta Options" },
+          onShow: () => "shown",
+        },
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      assert.ok(
+        helpOutput.includes("Meta Options"),
+        `"Meta Options" group header should appear in help output, got:\n${helpOutput}`,
+      );
+      assert.ok(
+        helpOutput.includes("--help"),
+        `--help should appear in the grouped section, got:\n${helpOutput}`,
+      );
+    });
+
+    it("should group --version option under a titled section in help output", () => {
+      const parser = object({ name: argument(string()) });
+
+      let helpOutput = "";
+      runParser(parser, "test", ["--help"], {
+        help: { option: true, onShow: () => "shown" },
+        version: { option: { group: "Meta Options" }, value: "1.0.0" },
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      assert.ok(
+        helpOutput.includes("Meta Options"),
+        `"Meta Options" group header should appear in help output, got:\n${helpOutput}`,
+      );
+      assert.ok(
+        helpOutput.includes("--version"),
+        `--version should appear in the grouped section, got:\n${helpOutput}`,
+      );
+    });
+
+    it("should group --completion option under a titled section in help output", () => {
+      const parser = object({ name: argument(string()) });
+
+      let helpOutput = "";
+      runParser(parser, "test", ["--help"], {
+        help: { option: true, onShow: () => "shown" },
+        completion: { option: { group: "Shell Completion" } },
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      assert.ok(
+        helpOutput.includes("Shell Completion"),
+        `"Shell Completion" group header should appear in help output, got:\n${helpOutput}`,
+      );
+      assert.ok(
+        helpOutput.includes("--completion"),
+        `--completion should appear in the grouped section, got:\n${helpOutput}`,
+      );
+    });
+
+    it("should place help and version options in different groups", () => {
+      const parser = object({ name: argument(string()) });
+
+      let helpOutput = "";
+      runParser(parser, "test", ["--help"], {
+        help: {
+          option: { group: "Help" },
+          onShow: () => "shown",
+        },
+        version: {
+          option: { group: "Info" },
+          value: "1.0.0",
+        },
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      assert.ok(
+        helpOutput.includes("Help"),
+        `"Help" group header should appear, got:\n${helpOutput}`,
+      );
+      assert.ok(
+        helpOutput.includes("Info"),
+        `"Info" group header should appear, got:\n${helpOutput}`,
+      );
+    });
+
+    it("should place help and version options in the same group when group names match", () => {
+      const parser = object({ name: argument(string()) });
+
+      let helpOutput = "";
+      runParser(parser, "test", ["--help"], {
+        help: {
+          option: { group: "Meta" },
+          onShow: () => "shown",
+        },
+        version: {
+          option: { group: "Meta" },
+          value: "1.0.0",
+        },
+        stdout: (text) => {
+          helpOutput += text + "\n";
+        },
+      });
+
+      // "Meta" should appear once (not twice) as a section header
+      // Section headers appear as "Meta:" (with a trailing colon)
+      const metaCount =
+        helpOutput.split("\n").filter((l) => l.trim() === "Meta:").length;
+      assert.equal(
+        metaCount,
+        1,
+        `"Meta" section header should appear exactly once, got ${metaCount} times in:\n${helpOutput}`,
+      );
+      assert.ok(
+        helpOutput.includes("--help"),
+        `--help should appear in the Meta section, got:\n${helpOutput}`,
+      );
+      assert.ok(
+        helpOutput.includes("--version"),
+        `--version should appear in the Meta section, got:\n${helpOutput}`,
+      );
     });
   });
 });

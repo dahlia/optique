@@ -614,7 +614,7 @@ describe("run with config context", { concurrency: false }, () => {
         getConfigPath: (parsed: { config?: string }) => parsed.config,
         args: ["--help"],
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown" as never;
@@ -653,7 +653,7 @@ describe("run with config context", { concurrency: false }, () => {
         getConfigPath: (parsed: { config: string }) => parsed.config,
         args: ["--help"],
         help: {
-          mode: "option",
+          option: true,
           onShow: () => {
             helpShown = true;
             return "help-shown" as never;
@@ -688,7 +688,7 @@ describe("run with config context", { concurrency: false }, () => {
         getConfigPath: (parsed: { config?: string }) => parsed.config,
         args: ["--version"],
         version: {
-          mode: "option",
+          option: true,
           value: "1.0.0",
           onShow: () => {
             versionShown = true;
@@ -727,7 +727,7 @@ describe("run with config context", { concurrency: false }, () => {
         getConfigPath: (parsed: { config?: string }) => parsed.config,
         args: ["completion", "bash"],
         completion: {
-          mode: "command",
+          command: true,
           onShow: () => {
             completionShown = true;
             return "completion-shown" as never;
@@ -763,7 +763,7 @@ describe("run with config context", { concurrency: false }, () => {
         getConfigPath: () => undefined,
         args: ["--help"],
         help: {
-          mode: "option",
+          option: true,
           onShow: () => "help-shown" as never,
         },
         stdout: (text) => {

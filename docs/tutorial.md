@@ -958,12 +958,8 @@ const config = runParser(prog, process.argv.slice(2), {
 
 
 
-
-
-
-
   onError: process.exit,
-  help: { onShow: process.exit },
+  help: { option: true, onShow: process.exit },
 });
 
 console.log(`Processing ${config.input} -> ${config.output}.`);
