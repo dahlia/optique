@@ -17,6 +17,7 @@ import {
   suggestWithDependency,
 } from "./dependency.ts";
 import type { DocFragment } from "./doc.ts";
+import { dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 
 /**
@@ -1692,6 +1693,13 @@ export function argument<M extends Mode, T>(
       >,
       prefix: string,
     ) {
+      if (context.state != null) {
+        return dispatchIterableByMode<M, Suggestion>(
+          valueParser.$mode,
+          function* () {},
+          async function* () {},
+        );
+      }
       // For async parsers, use async generator; for sync parsers, use sync generator
       if (isAsync) {
         return suggestArgumentAsync(

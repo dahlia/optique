@@ -235,6 +235,19 @@ describe("Parser suggest() methods", () => {
       const result = Array.from(parser.suggest(context, "test"));
       deepStrictEqual(result, []);
     });
+
+    it("should not suggest after argument is already consumed", () => {
+      const parser = argument(choice(["start", "stop", "restart", "status"]));
+      const context: ParserContext<{ success: true; value: "start" }> = {
+        buffer: [],
+        state: { success: true, value: "start" },
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = Array.from(parser.suggest(context, "st"));
+      deepStrictEqual(result, []);
+    });
   });
 
   describe("command parser", () => {
