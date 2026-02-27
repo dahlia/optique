@@ -127,6 +127,14 @@ To be released.
 
 ### @optique/run
 
+ -  Added `stdout`, `stderr`, and `onExit` options to `run()`, `runSync()`,
+    and `runAsync()` for dependency injection of process-integrated behavior.
+    This allows embedding and test environments to capture output and control
+    exit handling without monkey-patching `process.stdout`/`process.stderr`
+    or `process.exit`.  By default, behavior is unchanged
+    (`process.stdout.write`, `process.stderr.write`, and `process.exit`).
+    [[#112]]
+
  -  Redesigned `RunOptions.help`, `RunOptions.version`, and
     `RunOptions.completion` to use the new `command`/`option` sub-config
     structure from *@optique/core*.  String shorthands (`"command"`,
@@ -137,6 +145,8 @@ To be released.
  -  Removed `CompletionHelpVisibility`, `CompletionOptionsBase`,
     `CompletionOptionsBoth`, `CompletionOptionsSingular`,
     `CompletionOptionsPlural`, and `CompletionOptions` types.  [[#130]]
+
+[#112]: https://github.com/dahlia/optique/issues/112
 
 
 Version 0.10.6

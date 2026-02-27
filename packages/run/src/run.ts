@@ -43,6 +43,29 @@ export interface RunOptions {
   readonly args?: readonly string[];
 
   /**
+   * Function used to output help and usage messages.  Assumes it prints the
+   * ending newline.
+   *
+   * @default Writes to `process.stdout` with a trailing newline
+   */
+  readonly stdout?: (text: string) => void;
+
+  /**
+   * Function used to output error messages.  Assumes it prints the ending
+   * newline.
+   *
+   * @default Writes to `process.stderr` with a trailing newline
+   */
+  readonly stderr?: (text: string) => void;
+
+  /**
+   * Function used to exit the process on help/version display or parse error.
+   *
+   * @default `process.exit`
+   */
+  readonly onExit?: (exitCode: number) => never;
+
+  /**
    * Whether to enable colored output in help and error messages.
    *
    * @default `process.stdout.isTTY` (auto-detect based on terminal)
@@ -565,6 +588,13 @@ function buildCoreOptions(
   const {
     programName = path.basename(process.argv[1] || "cli"),
     args = process.argv.slice(2),
+    stdout = (line) => {
+      process.stdout.write(`${line}\n`);
+    },
+    stderr = (line) => {
+      process.stderr.write(`${line}\n`);
+    },
+    onExit = (exitCode) => process.exit(exitCode) as never,
     colors = process.stdout.isTTY,
     maxWidth = process.stdout.columns,
     showDefault,
@@ -583,7 +613,7 @@ function buildCoreOptions(
     footer = programMetadata?.footer,
   } = options;
 
-  const onShow = () => process.exit(0) as never;
+  const onShow = () => onExit(0);
 
   // Convert help shorthand strings to sub-config objects, then pass through
   // object configs with onShow injected.
@@ -628,12 +658,8 @@ function buildCoreOptions(
   })() as CoreRunOptions<never, never>["completion"];
 
   const coreOptions: CoreRunOptions<never, never> = {
-    stderr(line) {
-      process.stderr.write(`${line}\n`);
-    },
-    stdout(line) {
-      process.stdout.write(`${line}\n`);
-    },
+    stderr,
+    stdout,
     colors,
     maxWidth,
     showDefault,
@@ -650,7 +676,7 @@ function buildCoreOptions(
     bugs,
     footer,
     onError() {
-      return process.exit(errorExitCode) as never;
+      return onExit(errorExitCode);
     },
   };
 
@@ -664,6 +690,9 @@ function buildCoreOptions(
 const knownRunOptionsKeys = new Set([
   "programName",
   "args",
+  "stdout",
+  "stderr",
+  "onExit",
   "colors",
   "maxWidth",
   "showDefault",

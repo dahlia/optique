@@ -11,7 +11,6 @@ import type { RunOptions } from "@optique/run/run";
 import { run, runAsync, runSync } from "@optique/run/run";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import process from "node:process";
 
 describe("run", () => {
   describe("basic parsing", () => {
@@ -98,66 +97,146 @@ describe("run", () => {
 
       assert.deepEqual(result, { name: "test-value" });
     });
+
+    it("should route parse errors to injected stderr and onExit", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let stderrOutput = "";
+      let exitCode: number | undefined;
+
+      assert.throws(
+        () => {
+          run(parser, {
+            args: [],
+            programName: "test",
+            stderr: (text) => {
+              stderrOutput += `${text}\n`;
+            },
+            onExit: (code) => {
+              exitCode = code;
+              throw new Error("EXIT");
+            },
+          });
+        },
+        /EXIT/,
+      );
+
+      assert.equal(exitCode, 1);
+      assert.ok(stderrOutput.includes("Error:"));
+    });
+
+    it("should use custom errorExitCode with injected onExit", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let exitCode: number | undefined;
+
+      assert.throws(
+        () => {
+          run(parser, {
+            args: [],
+            programName: "test",
+            errorExitCode: 7,
+            stderr: () => {},
+            onExit: (code) => {
+              exitCode = code;
+              throw new Error("EXIT");
+            },
+          });
+        },
+        /EXIT/,
+      );
+
+      assert.equal(exitCode, 7);
+    });
+
+    it("should route completion errors to injected stderr and onExit", () => {
+      const parser = object({});
+      let stderrOutput = "";
+      let exitCode: number | undefined;
+
+      assert.throws(
+        () => {
+          run(parser, {
+            args: ["completion"],
+            programName: "test",
+            completion: "command",
+            stderr: (text) => {
+              stderrOutput += `${text}\n`;
+            },
+            onExit: (code) => {
+              exitCode = code;
+              throw new Error("EXIT");
+            },
+          });
+        },
+        /EXIT/,
+      );
+
+      assert.equal(exitCode, 1);
+      assert.ok(stderrOutput.includes("Missing shell name for completion"));
+    });
   });
 
   describe("version functionality", () => {
     it("should handle version as string with default option mode", () => {
-      const _parser = object({
-        name: argument(string()),
-      });
-
-      // Version as string should work but exit the process
-      // Since we can't test process.exit directly, we'll skip this test in the real environment
-      // This test documents the expected behavior
-      assert.ok(typeof run === "function");
-    });
-
-    it("should handle version as object with custom mode", () => {
-      const _parser = object({
-        name: argument(string()),
-      });
-
-      // Version as object should work but exit the process
-      // Since we can't test process.exit directly, we'll skip this test in the real environment
-      // This test documents the expected behavior
-      assert.ok(typeof run === "function");
-    });
-
-    it("should support version configuration options", () => {
       const parser = object({
         name: argument(string()),
       });
 
-      // Test that version configuration is properly typed and accepted
-      // We can't test the actual functionality due to process.exit, but we can test the types
+      let output = "";
+      let exitCode: number | undefined;
       const options = {
         programName: "test",
-        args: ["Alice"],
+        args: ["--version"],
         version: "1.0.0",
-      };
-
-      const result = run(parser, options);
-      assert.deepEqual(result, { name: "Alice" });
-    });
-
-    it("should support version object configuration", () => {
-      const parser = object({
-        name: argument(string()),
-      });
-
-      // Test that version object configuration is properly typed
-      const options = {
-        programName: "test",
-        args: ["Alice"],
-        version: {
-          value: "1.0.0",
-          command: true as const,
-          option: true as const,
+        stdout: (text: string) => {
+          output += `${text}\n`;
+        },
+        onExit: (code: number) => {
+          exitCode = code;
+          throw new Error("EXIT");
         },
       };
 
-      const result = run(parser, options);
-      assert.deepEqual(result, { name: "Alice" });
+      assert.throws(() => run(parser, options), /EXIT/);
+      assert.equal(exitCode, 0);
+      assert.equal(output, "1.0.0\n");
+    });
+
+    it("should handle version as object with custom mode", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+
+      let output = "";
+      let exitCode: number | undefined;
+      assert.throws(
+        () => {
+          run(parser, {
+            programName: "test",
+            args: ["version"],
+            version: {
+              value: "2.1.0",
+              command: true,
+            },
+            stdout: (text: string) => {
+              output += `${text}\n`;
+            },
+            onExit: (code: number) => {
+              exitCode = code;
+              throw new Error("EXIT");
+            },
+          });
+        },
+        /EXIT/,
+      );
+
+      assert.equal(exitCode, 0);
+      assert.equal(output, "2.1.0\n");
     });
   });
 
@@ -853,31 +932,26 @@ describe("runSync", () => {
       };
 
       let helpOutput = "";
-      const originalExit = process.exit;
-      process.exit = ((code?: number) => {
-        void code;
-        throw new Error("exit");
-      }) as typeof process.exit;
-
-      const originalWrite = process.stdout.write;
-      process.stdout.write = ((chunk: unknown) => {
-        helpOutput += chunk;
-        return true;
-      }) as typeof process.stdout.write;
+      let exitCode: number | undefined;
 
       try {
         runSync(prog, {
           args: ["--help"],
           help: "option",
+          stdout: (text) => {
+            helpOutput += `${text}\n`;
+          },
+          onExit: (code) => {
+            exitCode = code;
+            throw new Error("exit");
+          },
         });
       } catch {
         // Expected exit
-      } finally {
-        process.exit = originalExit;
-        process.stdout.write = originalWrite;
       }
 
       assert.ok(helpOutput.includes("myapp-sync"));
+      assert.equal(exitCode, 0);
     });
   });
 });
@@ -1057,28 +1131,21 @@ describe("runAsync", () => {
 
       let helpOutput = "";
       let exitCode = 0;
-      const originalExit = process.exit;
-      process.exit = ((code?: number) => {
-        exitCode = code ?? 0;
-        throw new Error("EXIT");
-      }) as typeof process.exit;
-
-      const originalWrite = process.stdout.write;
-      process.stdout.write = ((chunk: unknown) => {
-        helpOutput += String(chunk);
-        return true;
-      }) as typeof process.stdout.write;
 
       try {
         run(prog, {
           args: ["--help"],
           help: "option",
+          stdout: (text) => {
+            helpOutput += `${text}\n`;
+          },
+          onExit: (code) => {
+            exitCode = code;
+            throw new Error("EXIT");
+          },
         });
       } catch (err) {
         if ((err as Error).message !== "EXIT") throw err;
-      } finally {
-        process.exit = originalExit;
-        process.stdout.write = originalWrite;
       }
 
       assert.ok(helpOutput.includes("myapp"));
@@ -1097,72 +1164,55 @@ describe("runAsync", () => {
       };
 
       let helpOutput = "";
-      const originalExit = process.exit;
-      process.exit = (() => {
-        throw new Error("EXIT");
-      }) as typeof process.exit;
-
-      const originalWrite = process.stdout.write;
-      process.stdout.write = ((chunk: unknown) => {
-        helpOutput += String(chunk);
-        return true;
-      }) as typeof process.stdout.write;
 
       try {
         run(prog, {
           args: ["--help"],
           help: "option",
+          stdout: (text) => {
+            helpOutput += `${text}\n`;
+          },
+          onExit: () => {
+            throw new Error("EXIT");
+          },
         });
       } catch (err) {
         if ((err as Error).message !== "EXIT") throw err;
-      } finally {
-        process.exit = originalExit;
-        process.stdout.write = originalWrite;
       }
 
       assert.ok(helpOutput.includes("myapp"));
       assert.ok(helpOutput.includes("A test app"));
     });
-  });
 
-  describe("sectionOrder option", () => {
-    it("should accept sectionOrder callback and pass it through to formatting", () => {
+    it("should accept custom sectionOrder callback", () => {
       const parser = or(
         command("build", object({})),
         command("deploy", object({})),
       );
 
       let helpOutput = "";
-      const originalExit = process.exit;
-      const originalWrite = process.stdout.write;
-      process.exit = (() => {
-        throw new Error("EXIT");
-      }) as typeof process.exit;
-      process.stdout.write = ((chunk: unknown) => {
-        helpOutput += String(chunk);
-        return true;
-      }) as typeof process.stdout.write;
 
       try {
         run(parser, {
           args: ["--help"],
           programName: "myapp",
           help: "option",
-          // Custom sectionOrder: alphabetical by title
           sectionOrder: (a: DocSection, b: DocSection): number => {
             const aTitle = a.title ?? "";
             const bTitle = b.title ?? "";
             return aTitle.localeCompare(bTitle);
           },
+          stdout: (text) => {
+            helpOutput += `${text}\n`;
+          },
+          onExit: () => {
+            throw new Error("EXIT");
+          },
         });
       } catch (err) {
         if ((err as Error).message !== "EXIT") throw err;
-      } finally {
-        process.exit = originalExit;
-        process.stdout.write = originalWrite;
       }
 
-      // Just confirm help was shown (type-checking is the main goal here)
       assert.ok(typeof helpOutput === "string");
     });
   });
@@ -1316,13 +1366,6 @@ describe("runSync with contexts", () => {
     });
 
     let helpShown = false;
-    const originalExit = process.exit;
-    process.exit = (() => {
-      throw new Error("EXIT");
-    }) as typeof process.exit;
-
-    const originalWrite = process.stdout.write;
-    process.stdout.write = (() => true) as typeof process.stdout.write;
 
     try {
       runSync(parser, {
@@ -1330,6 +1373,10 @@ describe("runSync with contexts", () => {
         programName: "test",
         help: "option",
         contexts: [context],
+        stdout: () => {},
+        onExit: () => {
+          throw new Error("EXIT");
+        },
       });
     } catch (err) {
       if ((err as Error).message === "EXIT") {
@@ -1337,9 +1384,6 @@ describe("runSync with contexts", () => {
       } else {
         throw err;
       }
-    } finally {
-      process.exit = originalExit;
-      process.stdout.write = originalWrite;
     }
 
     assert.ok(helpShown);

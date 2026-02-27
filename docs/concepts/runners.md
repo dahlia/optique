@@ -462,6 +462,9 @@ const config = run(prog, {
   args: ["custom", "args"],   // Override process.argv
   colors: true,               // Force colored output
   maxWidth: 100,              // Set output width
+  stdout: console.log,        // Inject output writer for help/version/completion
+  stderr: console.error,      // Inject error writer
+  onExit: process.exit,       // Inject exit handler
   showDefault: true,          // Show default values in help text
   help: "both",               // Enable both --help and help command
   version: {                  // Advanced version configuration
@@ -917,7 +920,48 @@ The *@optique/run* `run()` function automatically:
  -  Exits with code `0` for help requests
  -  Exits with code `0` for version requests
  -  Exits with code `1` (or custom) for parse errors
- -  Never returns on errors (always calls `process.exit()`)
+ -  Never returns on errors by default (calls `process.exit()`)
+
+You can override this process integration by injecting custom handlers:
+
+ -  `stdout`: controls where help/version/completion output is written
+ -  `stderr`: controls where parse/completion errors are written
+ -  `onExit`: controls how exits are handled (`0` for help/version,
+    `errorExitCode` for errors)
+
+This is useful for embedding and testing, where calling `process.exit()` is
+undesirable.
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { run } from "@optique/run";
+
+const parser = object({});
+
+let output = "";
+let errorOutput = "";
+let exitCode = -1;
+
+try {
+  run(parser, {
+    args: ["--help"],
+    programName: "myapp",
+    help: "option",
+    stdout: (text) => {
+      output += `${text}\n`;
+    },
+    stderr: (text) => {
+      errorOutput += `${text}\n`;
+    },
+    onExit: (code) => {
+      exitCode = code;
+      throw new Error("EXIT");
+    },
+  });
+} catch {
+  // expected in tests
+}
+~~~~
 
 
 Async parser execution
