@@ -226,7 +226,7 @@ export function bindEnv<
       const innerState = stateObj != null &&
           typeof stateObj === "object" &&
           "hasCliValue" in stateObj
-        ? (stateObj.hasCliValue && stateObj.cliState !== undefined
+        ? (stateObj.hasCliValue
           ? (stateObj.cliState as unknown as TState)
           : parser.initialState)
         : context.state;
@@ -289,8 +289,8 @@ export function bindEnv<
 
     complete: (state) => {
       const bindState = state as unknown as EnvBindState;
-      if (bindState?.hasCliValue && bindState.cliState !== undefined) {
-        return parser.complete(bindState.cliState);
+      if (bindState?.hasCliValue) {
+        return parser.complete(bindState.cliState!);
       }
 
       return getEnvOrDefault(
