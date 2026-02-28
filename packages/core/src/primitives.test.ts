@@ -731,17 +731,10 @@ describe("option", () => {
 
       const result = parser.parse(context);
       assert.ok(result.success);
-      if (result.success) {
-        assert.ok(result.next.state);
-        if (result.next.state) {
-          assert.ok(result.next.state.success);
-          if (result.next.state.success) {
-            assert.equal(result.next.state.value, 42);
-          }
-        }
-        assert.deepEqual(result.next.buffer, []);
-        assert.deepEqual(result.consumed, ["-seed=42"]);
-      }
+      assert.ok(result.next.state?.success);
+      assert.equal(result.next.state.value, 42);
+      assert.deepEqual(result.next.buffer, []);
+      assert.deepEqual(result.consumed, ["-seed=42"]);
     });
 
     it("should parse -key=value with underscore in name", () => {
@@ -755,17 +748,10 @@ describe("option", () => {
 
       const result = parser.parse(context);
       assert.ok(result.success);
-      if (result.success) {
-        assert.ok(result.next.state);
-        if (result.next.state) {
-          assert.ok(result.next.state.success);
-          if (result.next.state.success) {
-            assert.equal(result.next.state.value, 1000);
-          }
-        }
-        assert.deepEqual(result.next.buffer, []);
-        assert.deepEqual(result.consumed, ["-max_len=1000"]);
-      }
+      assert.ok(result.next.state?.success);
+      assert.equal(result.next.state.value, 1000);
+      assert.deepEqual(result.next.buffer, []);
+      assert.deepEqual(result.consumed, ["-max_len=1000"]);
     });
 
     it("should parse -key=value with string value", () => {
@@ -779,17 +765,10 @@ describe("option", () => {
 
       const result = parser.parse(context);
       assert.ok(result.success);
-      if (result.success) {
-        assert.ok(result.next.state);
-        if (result.next.state) {
-          assert.ok(result.next.state.success);
-          if (result.next.state.success) {
-            assert.equal(result.next.state.value, "DICTIONARY_FILE");
-          }
-        }
-        assert.deepEqual(result.next.buffer, []);
-        assert.deepEqual(result.consumed, ["-dict=DICTIONARY_FILE"]);
-      }
+      assert.ok(result.next.state?.success);
+      assert.equal(result.next.state.value, "DICTIONARY_FILE");
+      assert.deepEqual(result.next.buffer, []);
+      assert.deepEqual(result.consumed, ["-dict=DICTIONARY_FILE"]);
     });
 
     it("should still parse space-separated values for single-dash multi-char options", () => {
@@ -803,17 +782,10 @@ describe("option", () => {
 
       const result = parser.parse(context);
       assert.ok(result.success);
-      if (result.success) {
-        assert.ok(result.next.state);
-        if (result.next.state) {
-          assert.ok(result.next.state.success);
-          if (result.next.state.success) {
-            assert.equal(result.next.state.value, 42);
-          }
-        }
-        assert.deepEqual(result.next.buffer, []);
-        assert.deepEqual(result.consumed, ["-seed", "42"]);
-      }
+      assert.ok(result.next.state?.success);
+      assert.equal(result.next.state.value, 42);
+      assert.deepEqual(result.next.buffer, []);
+      assert.deepEqual(result.consumed, ["-seed", "42"]);
     });
 
     it("should not treat single-char option as equals-joined", () => {
@@ -835,9 +807,7 @@ describe("option", () => {
       const combined = object({ v: parserV, d: parserD });
       const result = parseSync(combined, ["-vd"]);
       assert.ok(result.success);
-      if (result.success) {
-        assert.deepEqual(result.value, { v: true, d: true });
-      }
+      assert.deepEqual(result.value, { v: true, d: true });
     });
 
     it("should detect duplicate -key=value", () => {
@@ -890,13 +860,11 @@ describe("option", () => {
         ["-seed=42", "-max_len=1000", "-dict=words.txt"],
       );
       assert.ok(result.success);
-      if (result.success) {
-        assert.deepEqual(result.value, {
-          seed: 42,
-          maxLen: 1000,
-          dict: "words.txt",
-        });
-      }
+      assert.deepEqual(result.value, {
+        seed: 42,
+        maxLen: 1000,
+        dict: "words.txt",
+      });
     });
 
     it("should handle mixed equals-joined and space-separated styles", () => {
@@ -906,9 +874,7 @@ describe("option", () => {
       });
       const result = parseSync(parser, ["-seed=42", "-timeout", "1200"]);
       assert.ok(result.success);
-      if (result.success) {
-        assert.deepEqual(result.value, { seed: 42, timeout: 1200 });
-      }
+      assert.deepEqual(result.value, { seed: 42, timeout: 1200 });
     });
   });
 });
