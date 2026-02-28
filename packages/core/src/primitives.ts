@@ -610,7 +610,8 @@ async function* suggestArgumentAsync<T>(
 
 /**
  * Creates a parser for various styles of command-line options that take an
- * argument value, such as `--option=value`, `-o value`, or `/option:value`.
+ * argument value, such as `--option=value`, `-option=value`, `-o value`,
+ * or `/option:value`.
  * @template M The execution mode of the parser.
  * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
@@ -626,7 +627,8 @@ export function option<M extends Mode, T>(
 
 /**
  * Creates a parser for various styles of command-line options that take an
- * argument value, such as `--option=value`, `-o value`, or `/option:value`.
+ * argument value, such as `--option=value`, `-option=value`, `-o value`,
+ * or `/option:value`.
  * @template M The execution mode of the parser.
  * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
@@ -653,7 +655,8 @@ export function option(
 
 /**
  * Creates a parser for various styles of command-line options that take an
- * argument value, such as `--option=value`, `-o value`, or `/option:value`.
+ * argument value, such as `--option=value`, `-option=value`, `-o value`,
+ * or `/option:value`.
  * @param args The {@link OptionName}s to parse, followed by
  *             an optional {@link OptionOptions} object that allows you to
  *             specify a description or other metadata.
@@ -849,7 +852,11 @@ export function option<M extends Mode, T>(
       // When the input is not split by spaces, but joined by = or :
       // E.g., `--option=value` or `/O:value`
       const prefixes = optionNames
-        .filter((name) => name.startsWith("--") || name.startsWith("/"))
+        .filter((name) =>
+          name.startsWith("--") ||
+          name.startsWith("/") ||
+          (name.startsWith("-") && name.length > 2)
+        )
         .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
       for (const prefix of prefixes) {
         if (!context.buffer[0].startsWith(prefix)) continue;
@@ -1315,7 +1322,11 @@ export function flag(
 
       // Check for joined format (e.g., --flag=value) which should fail for flags
       const prefixes = optionNames
-        .filter((name) => name.startsWith("--") || name.startsWith("/"))
+        .filter((name) =>
+          name.startsWith("--") ||
+          name.startsWith("/") ||
+          (name.startsWith("-") && name.length > 2)
+        )
         .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
       for (const prefix of prefixes) {
         if (context.buffer[0].startsWith(prefix)) {

@@ -193,7 +193,7 @@ Space-separated
 :   `-p 8080`, `--port 8080`
 
 Equals-separated
-:   `--port=8080`
+:   `--port=8080`, `-port=8080`
 
 Java-style
 :   `-port 8080`

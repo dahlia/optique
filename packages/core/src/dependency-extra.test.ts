@@ -5533,8 +5533,8 @@ describe("Short option clustering with dependencies", () => {
       level: option("-l", "--level", levelParser),
     });
 
-    // Test with --mode=fast --level=1 format (note: -m=fast is not supported,
-    // as equals format is only for long options starting with --)
+    // Test with --mode=fast --level=1 format (note: -m=fast is not supported
+    // for single-char options, as equals format requires multi-char names)
     const result = await parseAsync(parser, ["--mode=fast", "--level=1"]);
     assert.ok(result.success);
     if (result.success) {
