@@ -216,9 +216,10 @@ export function bindEnv<
 
     parse: (context) => {
       const annotations = getAnnotations(context.state);
-      const result = parser.parse(context);
 
-      if (!(result instanceof Promise)) {
+      const processResult = (
+        result: ParserResult<TState>,
+      ): ParserResult<TState> => {
         if (result.success) {
           const nextState = {
             hasCliValue: true,
@@ -229,7 +230,7 @@ export function bindEnv<
             success: true,
             next: { ...result.next, state: nextState },
             consumed: result.consumed,
-          } as ModeValue<M, ParserResult<TState>>;
+          };
         }
 
         // If the inner parser consumed tokens before failing, propagate
@@ -237,36 +238,7 @@ export function bindEnv<
         // value") are preserved instead of being replaced by a generic
         // "Unexpected option or argument" message.
         if (result.consumed > 0) {
-          return result as ModeValue<M, ParserResult<TState>>;
-        }
-
-        const nextState = {
-          hasCliValue: false,
-          ...(annotations && { [annotationKey]: annotations }),
-        } as unknown as TState;
-        return {
-          success: true,
-          next: { ...context, state: nextState },
-          consumed: [],
-        } as unknown as ModeValue<M, ParserResult<TState>>;
-      }
-
-      return result.then((resolvedResult) => {
-        if (resolvedResult.success) {
-          const nextState = {
-            hasCliValue: true,
-            cliState: resolvedResult.next.state,
-            ...(annotations && { [annotationKey]: annotations }),
-          } as unknown as TState;
-          return {
-            success: true,
-            next: { ...resolvedResult.next, state: nextState },
-            consumed: resolvedResult.consumed,
-          };
-        }
-
-        if (resolvedResult.consumed > 0) {
-          return resolvedResult;
+          return result;
         }
 
         const nextState = {
@@ -278,7 +250,18 @@ export function bindEnv<
           next: { ...context, state: nextState },
           consumed: [],
         };
-      }) as ModeValue<M, ParserResult<TState>>;
+      };
+
+      const result = parser.parse(context);
+
+      if (result instanceof Promise) {
+        return result.then(processResult) as ModeValue<
+          M,
+          ParserResult<TState>
+        >;
+      }
+
+      return processResult(result) as ModeValue<M, ParserResult<TState>>;
     },
 
     complete: (state) => {
