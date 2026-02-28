@@ -217,6 +217,23 @@ export function bindEnv<
     parse: (context) => {
       const annotations = getAnnotations(context.state);
 
+      // Unwrap state from a previous parse() call.  After a successful
+      // parse, object() stores the wrapped { hasCliValue, cliState }
+      // state and passes it back on the next iteration.  The inner
+      // parser expects its own native state, so we unwrap cliState
+      // before delegating.
+      const stateObj = context.state as unknown as EnvBindState | null;
+      const innerState = stateObj != null &&
+          typeof stateObj === "object" &&
+          "hasCliValue" in stateObj
+        ? (stateObj.hasCliValue && stateObj.cliState !== undefined
+          ? (stateObj.cliState as unknown as TState)
+          : parser.initialState)
+        : context.state;
+      const innerContext = innerState !== context.state
+        ? { ...context, state: innerState }
+        : context;
+
       const processResult = (
         result: ParserResult<TState>,
       ): ParserResult<TState> => {
@@ -247,12 +264,12 @@ export function bindEnv<
         } as unknown as TState;
         return {
           success: true,
-          next: { ...context, state: nextState },
+          next: { ...innerContext, state: nextState },
           consumed: [],
         };
       };
 
-      const result = parser.parse(context);
+      const result = parser.parse(innerContext);
 
       if (result instanceof Promise) {
         return result.then(processResult) as ModeValue<

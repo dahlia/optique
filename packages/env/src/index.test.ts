@@ -328,6 +328,26 @@ describe("bindEnv()", () => {
     assert.equal(result.timeout, 30);
   });
 
+  it("preserves inner parser state across object() iterations", () => {
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = object({
+      port: bindEnv(option("--port", integer()), {
+        context,
+        key: "PORT",
+        parser: integer(),
+        default: 3000,
+      }),
+    });
+
+    // --port provided twice: inner parser should detect the duplicate
+    // and fail with "cannot be used multiple times".
+    const result = parse(parser, ["--port", "8080", "--port", "9090"]);
+    assert.ok(!result.success);
+  });
+
   it("returns a Promise from complete() in async mode for default path", async () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
