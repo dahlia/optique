@@ -95,7 +95,7 @@ const port = bindEnv(option("--port", integer()), {
   default: 3000,
 });
 
-const verbose = bindEnv(option("--verbose", bool()), {
+const verbose = bindEnv(option("--verbose"), {
   context: envContext,
   key: "VERBOSE",
   parser: bool(),
