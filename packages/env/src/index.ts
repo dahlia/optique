@@ -210,6 +210,12 @@ export function bindEnv<
       readonly cliState?: TState;
     };
 
+  function isEnvBindState(value: unknown): value is EnvBindState {
+    return value != null &&
+      typeof value === "object" &&
+      envBindStateKey in value;
+  }
+
   return {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
@@ -228,12 +234,9 @@ export function bindEnv<
       // state and passes it back on the next iteration.  The inner
       // parser expects its own native state, so we unwrap cliState
       // before delegating.
-      const stateObj = context.state as unknown as EnvBindState | null;
-      const innerState = stateObj != null &&
-          typeof stateObj === "object" &&
-          envBindStateKey in stateObj
-        ? (stateObj.hasCliValue
-          ? (stateObj.cliState as unknown as TState)
+      const innerState = isEnvBindState(context.state)
+        ? (context.state.hasCliValue
+          ? (context.state.cliState as TState)
           : parser.initialState)
         : context.state;
       const innerContext = innerState !== context.state
@@ -296,12 +299,8 @@ export function bindEnv<
     },
 
     complete: (state) => {
-      const bindState = state as unknown as EnvBindState | null;
-      const isBound = bindState != null &&
-        typeof bindState === "object" &&
-        envBindStateKey in bindState;
-      if (isBound && bindState.hasCliValue) {
-        return parser.complete(bindState.cliState!);
+      if (isEnvBindState(state) && state.hasCliValue) {
+        return parser.complete(state.cliState!);
       }
 
       return getEnvOrDefault(
@@ -309,7 +308,7 @@ export function bindEnv<
         options,
         parser.$mode,
         parser,
-        isBound ? bindState.cliState : undefined,
+        isEnvBindState(state) ? state.cliState : undefined,
       ) as ModeValue<
         M,
         ValueParserResult<TValue>
