@@ -199,10 +199,16 @@ export function bindEnv<
   parser: Parser<M, TValue, TState>,
   options: BindEnvOptions<M, TValue>,
 ): Parser<M, TValue, TState> {
-  type EnvBindState = {
-    readonly hasCliValue: boolean;
-    readonly cliState?: TState;
-  };
+  const envBindStateKey: unique symbol = Symbol("@optique/env/bindState");
+
+  type EnvBindState =
+    & {
+      readonly [K in typeof envBindStateKey]: true;
+    }
+    & {
+      readonly hasCliValue: boolean;
+      readonly cliState?: TState;
+    };
 
   return {
     $mode: parser.$mode,
@@ -225,7 +231,7 @@ export function bindEnv<
       const stateObj = context.state as unknown as EnvBindState | null;
       const innerState = stateObj != null &&
           typeof stateObj === "object" &&
-          "hasCliValue" in stateObj
+          envBindStateKey in stateObj
         ? (stateObj.hasCliValue
           ? (stateObj.cliState as unknown as TState)
           : parser.initialState)
@@ -245,6 +251,7 @@ export function bindEnv<
           // fallback and break composition.
           const cliConsumed = result.consumed.length > 0;
           const nextState = {
+            [envBindStateKey]: true as const,
             hasCliValue: cliConsumed,
             cliState: result.next.state,
             ...(annotations && { [annotationKey]: annotations }),
@@ -265,6 +272,7 @@ export function bindEnv<
         }
 
         const nextState = {
+          [envBindStateKey]: true as const,
           hasCliValue: false,
           ...(annotations && { [annotationKey]: annotations }),
         } as unknown as TState;
@@ -288,8 +296,11 @@ export function bindEnv<
     },
 
     complete: (state) => {
-      const bindState = state as unknown as EnvBindState;
-      if (bindState?.hasCliValue) {
+      const bindState = state as unknown as EnvBindState | null;
+      const isBound = bindState != null &&
+        typeof bindState === "object" &&
+        envBindStateKey in bindState;
+      if (isBound && bindState.hasCliValue) {
         return parser.complete(bindState.cliState!);
       }
 
@@ -298,7 +309,7 @@ export function bindEnv<
         options,
         parser.$mode,
         parser,
-        bindState?.cliState,
+        isBound ? bindState.cliState : undefined,
       ) as ModeValue<
         M,
         ValueParserResult<TValue>
