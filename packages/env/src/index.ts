@@ -127,7 +127,7 @@ function defaultEnvSource(key: string): string | undefined {
  * @since 1.0.0
  */
 export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
-  const contextId = Symbol.for(`@optique/env:${Math.random()}`);
+  const contextId = Symbol(`@optique/env context:${Math.random()}`);
   const source = options.source ?? defaultEnvSource;
   const prefix = options.prefix ?? "";
 
