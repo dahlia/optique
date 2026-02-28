@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { object } from "@optique/core/constructs";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { parse } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
@@ -325,5 +326,138 @@ describe("bindEnv()", () => {
     assert.equal(result.host, "env.example.com");
     assert.equal(result.verbose, true);
     assert.equal(result.timeout, 30);
+  });
+
+  it("returns a Promise from complete() in async mode for default path", async () => {
+    const asyncInt: ValueParser<"async", number> = {
+      $mode: "async",
+      metavar: "INT",
+      parse(input: string): Promise<ValueParserResult<number>> {
+        const n = parseInt(input, 10);
+        if (isNaN(n)) {
+          return Promise.resolve({
+            success: false,
+            error: message`Invalid integer: ${input}`,
+          });
+        }
+        return Promise.resolve({ success: true, value: n });
+      },
+      format(v: number): string {
+        return v.toString();
+      },
+    };
+
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", asyncInt), {
+      context,
+      key: "PORT",
+      parser: asyncInt,
+      default: 3000,
+    });
+
+    // complete() with a state that has no CLI value should fall through
+    // to getEnvOrDefault, which takes the default path.  In async mode
+    // the return value must be a Promise.
+    const completeResult = parser.complete(
+      // deno-lint-ignore no-explicit-any
+      { hasCliValue: false } as any,
+    );
+    assert.ok(
+      completeResult instanceof Promise,
+      "Expected complete() to return a Promise in async mode",
+    );
+    const value = await completeResult;
+    assert.ok(value.success);
+    assert.equal(value.value, 3000);
+  });
+
+  it("returns a Promise from complete() in async mode for error path", async () => {
+    const asyncInt: ValueParser<"async", number> = {
+      $mode: "async",
+      metavar: "INT",
+      parse(input: string): Promise<ValueParserResult<number>> {
+        const n = parseInt(input, 10);
+        if (isNaN(n)) {
+          return Promise.resolve({
+            success: false,
+            error: message`Invalid integer: ${input}`,
+          });
+        }
+        return Promise.resolve({ success: true, value: n });
+      },
+      format(v: number): string {
+        return v.toString();
+      },
+    };
+
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", asyncInt), {
+      context,
+      key: "PORT",
+      parser: asyncInt,
+      // No default — should take the error path.
+    });
+
+    const completeResult = parser.complete(
+      // deno-lint-ignore no-explicit-any
+      { hasCliValue: false } as any,
+    );
+    assert.ok(
+      completeResult instanceof Promise,
+      "Expected complete() to return a Promise in async mode",
+    );
+    const value = await completeResult;
+    assert.ok(!value.success);
+  });
+
+  it("returns a Promise from complete() in async mode for env path", async () => {
+    const asyncInt: ValueParser<"async", number> = {
+      $mode: "async",
+      metavar: "INT",
+      parse(input: string): Promise<ValueParserResult<number>> {
+        const n = parseInt(input, 10);
+        if (isNaN(n)) {
+          return Promise.resolve({
+            success: false,
+            error: message`Invalid integer: ${input}`,
+          });
+        }
+        return Promise.resolve({ success: true, value: n });
+      },
+      format(v: number): string {
+        return v.toString();
+      },
+    };
+
+    const context = createEnvContext({
+      source: (key) => ({ APP_PORT: "8080" })[key],
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", asyncInt), {
+      context,
+      key: "PORT",
+      parser: asyncInt,
+    });
+
+    // Register the active env source (normally done by the runner).
+    context.getAnnotations();
+
+    const completeResult = parser.complete(
+      // deno-lint-ignore no-explicit-any
+      { hasCliValue: false } as any,
+    );
+    assert.ok(
+      completeResult instanceof Promise,
+      "Expected complete() to return a Promise in async mode",
+    );
+    const value = await completeResult;
+    assert.ok(value.success);
+    assert.equal(value.value, 8080);
   });
 });

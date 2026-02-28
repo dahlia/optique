@@ -287,7 +287,7 @@ export function bindEnv<
         return parser.complete(bindState.cliState);
       }
 
-      return getEnvOrDefault(state, options) as ModeValue<
+      return getEnvOrDefault(state, options, parser.$mode) as ModeValue<
         M,
         ValueParserResult<TValue>
       >;
@@ -304,6 +304,7 @@ export function bindEnv<
 function getEnvOrDefault<M extends Mode, TValue>(
   state: unknown,
   options: BindEnvOptions<M, TValue>,
+  mode: M,
 ): ModeValue<M, Result<TValue>> {
   const annotations = getAnnotations(state);
   const sourceData = (annotations?.[envKey] as EnvSourceData | undefined) ??
@@ -315,23 +316,31 @@ function getEnvOrDefault<M extends Mode, TValue>(
   const rawValue = sourceData?.source(fullKey);
   if (rawValue !== undefined) {
     const parsed = options.parser.parse(rawValue);
-    if (parsed instanceof Promise) {
+    if (mode !== "async") {
       return parsed as ModeValue<M, Result<TValue>>;
     }
-    return parsed as ModeValue<M, Result<TValue>>;
+    return Promise.resolve(parsed) as unknown as ModeValue<
+      M,
+      Result<TValue>
+    >;
   }
 
   if (options.default !== undefined) {
-    return {
-      success: true,
-      value: options.default,
-    } as ModeValue<M, Result<TValue>>;
+    const result: Result<TValue> = { success: true, value: options.default };
+    if (mode !== "async") {
+      return result as ModeValue<M, Result<TValue>>;
+    }
+    return Promise.resolve(result) as ModeValue<M, Result<TValue>>;
   }
 
-  return {
+  const errorResult: Result<TValue> = {
     success: false,
     error: message`Missing required environment variable: ${fullKey}.`,
-  } as ModeValue<M, Result<TValue>>;
+  };
+  if (mode !== "async") {
+    return errorResult as ModeValue<M, Result<TValue>>;
+  }
+  return Promise.resolve(errorResult) as ModeValue<M, Result<TValue>>;
 }
 
 /**
