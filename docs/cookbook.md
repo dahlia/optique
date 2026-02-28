@@ -1065,6 +1065,51 @@ you want to guide users to provide at least some configuration while still
 supporting sensible defaults once they start configuring.
 
 
+Environment variable fallbacks
+------------------------------
+
+*This API is available since Optique 1.0.0.*
+
+When a CLI argument is not provided, `bindEnv()` from *@optique/env* checks
+the corresponding environment variable before falling back to a default.
+
+~~~~ typescript twoslash
+import { bindEnv, bool, createEnvContext } from "@optique/env";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { runAsync } from "@optique/run";
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+
+const parser = object({
+  host: bindEnv(
+    option("-h", "--host", string()),
+    { context: envContext, key: "HOST", parser: string(), default: "localhost" },
+  ),
+  port: bindEnv(
+    option("-p", "--port", integer()),
+    { context: envContext, key: "PORT", parser: integer(), default: 3000 },
+  ),
+  debug: bindEnv(
+    option("-d", "--debug", bool()),
+    { context: envContext, key: "DEBUG", parser: bool(), default: false },
+  ),
+});
+
+const result = await runAsync(parser, {
+  contexts: [envContext],
+});
+~~~~
+
+The priority order is: CLI argument > environment variable > default value.
+With the `MYAPP_` prefix, the parser reads `MYAPP_HOST`, `MYAPP_PORT`, and
+`MYAPP_DEBUG`.
+
+For more details, see the
+[environment variable guide](./integrations/env.md).
+
+
 Config file integration
 -----------------------
 
@@ -1246,12 +1291,14 @@ const result = await runAsync(parser, {
 
 ### Combining with environment variables
 
-A common pattern is to allow environment variables to override config file
-values. Use `bindConfig()` with environment variable fallbacks:
+Use `bindEnv()` from *@optique/env* together with `bindConfig()` to create
+a four-level fallback chain. The nesting order determines priority:
+`bindEnv(bindConfig(option(...)))` gives CLI > env > config > default.
 
 ~~~~ typescript twoslash
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
+import { bindEnv, createEnvContext } from "@optique/env";
 import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
@@ -1263,34 +1310,38 @@ const configSchema = z.object({
   port: z.number().optional(),
 });
 
+const envContext = createEnvContext({ prefix: "MYAPP_" });
 const configContext = createConfigContext({ schema: configSchema });
 
 const parser = object({
   config: optional(option("-c", "--config", string())),
   // Priority: CLI > env var > config file > default
-  host: bindConfig(option("-h", "--host", string()), {
-    context: configContext,
-    key: "host",
-    default: process.env.MYAPP_HOST ?? "localhost",
-  }),
-  port: bindConfig(option("-p", "--port", integer()), {
-    context: configContext,
-    key: "port",
-    default: parseInt(process.env.MYAPP_PORT ?? "3000", 10),
-  }),
+  host: bindEnv(
+    bindConfig(option("-h", "--host", string()), {
+      context: configContext,
+      key: "host",
+      default: "localhost",
+    }),
+    { context: envContext, key: "HOST", parser: string() },
+  ),
+  port: bindEnv(
+    bindConfig(option("-p", "--port", integer()), {
+      context: configContext,
+      key: "port",
+      default: 3000,
+    }),
+    { context: envContext, key: "PORT", parser: integer() },
+  ),
 });
 
 const result = await runAsync(parser, {
-  contexts: [configContext],
+  contexts: [envContext, configContext],
   getConfigPath: (parsed) => parsed.config,
 });
 ~~~~
 
-This pattern achieves the priority order: CLI > environment variables >
-config file > hardcoded defaults, by using environment variables as the
-default value in `bindConfig()`.
-
-For more details on config file integration, see the
+For more details, see the
+[environment variable guide](./integrations/env.md) and
 [config file integration guide](./integrations/config.md).
 
 

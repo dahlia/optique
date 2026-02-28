@@ -44,6 +44,8 @@ Features
     and Valibot schemas (via *@optique/valibot*)
  -  *Config file support*: Load config from files with Standard Schema validation
     (via *@optique/config*), supporting Zod, Valibot, ArkType, and more
+ -  *Environment variable support*: Bind options to environment variables
+    with type-safe parsing and fallback behavior (via *@optique/env*)
  -  *Inter-option dependencies*: Options whose valid values depend on other
     options, with dynamic validation and context-aware shell completion
  -  *Async parser support*: Type-safe sync/async mode distinction for parsers
@@ -152,6 +154,7 @@ The following is a list of the available packages:
 | [@optique/core](/packages/core/)         | [JSR][jsr:@optique/core]     | [npm][npm:@optique/core]     | Shared types and parser combinators         |
 | [@optique/run](/packages/run/)           | [JSR][jsr:@optique/run]      | [npm][npm:@optique/run]      | Runner for Node.js/Deno/Bun                 |
 | [@optique/config](/packages/config/)     | [JSR][jsr:@optique/config]   | [npm][npm:@optique/config]   | Config file support with [Standard Schema]  |
+| [@optique/env](/packages/env/)           | [JSR][jsr:@optique/env]      | [npm][npm:@optique/env]      | Environment variable integration            |
 | [@optique/git](/packages/git/)           | [JSR][jsr:@optique/git]      | [npm][npm:@optique/git]      | Git reference parsers (branches, tags, etc) |
 | [@optique/logtape](/packages/logtape/)   | [JSR][jsr:@optique/logtape]  | [npm][npm:@optique/logtape]  | [LogTape] logging integration               |
 | [@optique/man](/packages/man/)           | [JSR][jsr:@optique/man]      | [npm][npm:@optique/man]      | Man page generation from parsers            |
@@ -166,6 +169,8 @@ The following is a list of the available packages:
 [jsr:@optique/config]: https://jsr.io/@optique/config
 [npm:@optique/config]: https://www.npmjs.com/package/@optique/config
 [Standard Schema]: https://standardschema.dev/
+[jsr:@optique/env]: https://jsr.io/@optique/env
+[npm:@optique/env]: https://www.npmjs.com/package/@optique/env
 [jsr:@optique/git]: https://jsr.io/@optique/git
 [npm:@optique/git]: https://www.npmjs.com/package/@optique/git
 [jsr:@optique/logtape]: https://jsr.io/@optique/logtape

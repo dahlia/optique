@@ -125,6 +125,10 @@ Architecture
  -  *@optique/run* (*packages/run/*): CLI integration wrapper.  Provides
     process-integrated `run()` function, argument reading from `process.argv`
     or `Deno.args`, and `process.exit()` handling.
+ -  *@optique/config* (*packages/config/*): Configuration file integration.
+    Provides `createConfigContext()` and `bindConfig()` for config fallbacks.
+ -  *@optique/env* (*packages/env/*): Environment variable integration.
+    Provides `createEnvContext()`, `bindEnv()`, and `bool()`.
  -  *@optique/temporal* (*packages/temporal/*): Temporal/Date parsers.
     Provides parsers for date and time values.
  -  *@optique/git* (*packages/git/*): Git reference parsers. Provides async

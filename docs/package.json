@@ -3,6 +3,7 @@
     "@logtape/logtape": "catalog:",
     "@optique/config": "workspace:",
     "@optique/core": "workspace:",
+    "@optique/env": "workspace:",
     "@optique/git": "workspace:",
     "@optique/logtape": "workspace:",
     "@optique/man": "workspace:",
