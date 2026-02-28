@@ -222,3 +222,241 @@ await runAsync(parser, {
   getConfigPath: (parsed) => parsed.config,
 });
 ~~~~
+
+
+Prefix and key resolution
+-------------------------
+
+When `bindEnv()` looks up an environment variable, it concatenates the
+context's `prefix` with the `key` you pass.  For example:
+
+| `prefix`   | `key`      | Looked-up variable |
+| ---------- | ---------- | ------------------ |
+| `"MYAPP_"` | `"HOST"`   | `MYAPP_HOST`       |
+| `"MYAPP_"` | `"PORT"`   | `MYAPP_PORT`       |
+| `""`       | `"EDITOR"` | `EDITOR`           |
+
+If you omit `prefix` (or pass `""`), the key is used as-is.  This is useful
+when binding to well-known variables like `EDITOR` or `HOME` that have no
+application-specific prefix:
+
+~~~~ typescript twoslash
+import { bindEnv, createEnvContext } from "@optique/env";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const envContext = createEnvContext();  // no prefix
+
+const editor = bindEnv(option("--editor", string()), {
+  context: envContext,
+  key: "EDITOR",
+  parser: string(),
+  default: "vi",
+});
+~~~~
+
+
+Using other value parsers
+-------------------------
+
+The `parser` option in `bindEnv()` accepts any Optique `ValueParser`.
+Because environment variables are always strings, the value parser converts
+the raw string into the target type.  All built-in value parsers from
+*@optique/core* work here:
+
+~~~~ typescript twoslash
+import { bindEnv, createEnvContext } from "@optique/env";
+import { option } from "@optique/core/primitives";
+import { port, url, string } from "@optique/core/valueparser";
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+
+// Parse as a URL
+const apiUrl = bindEnv(option("--api-url", url()), {
+  context: envContext,
+  key: "API_URL",
+  parser: url(),
+});
+
+// Parse as a port number (validated range 0–65535)
+const listenPort = bindEnv(option("--port", port()), {
+  context: envContext,
+  key: "PORT",
+  parser: port(),
+  default: 8080,
+});
+~~~~
+
+You can also use value parsers from integration packages such as
+*@optique/zod* or *@optique/valibot* if you need richer validation:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { bindEnv, createEnvContext } from "@optique/env";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { zod } from "@optique/zod";
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+
+const logLevel = bindEnv(
+  option("--log-level", zod(z.enum(["debug", "info", "warn", "error"]))),
+  {
+    context: envContext,
+    key: "LOG_LEVEL",
+    parser: zod(z.enum(["debug", "info", "warn", "error"])),
+    default: "info" as const,
+  },
+);
+~~~~
+
+
+Error handling
+--------------
+
+### Missing environment variable
+
+When the environment variable is not set and no `default` is provided,
+`bindEnv()` produces an error message that includes the full variable name
+(prefix + key):
+
+~~~~ text
+Missing required environment variable: MYAPP_API_KEY.
+~~~~
+
+If a `default` is provided, the default is used silently.
+
+### Invalid value
+
+When the environment variable is set but the value parser rejects it,
+the error from the value parser propagates directly.  For example, if
+`MYAPP_PORT` is set to `"abc"` and the parser is `integer()`:
+
+~~~~ text
+Expected an integer, but received "abc".
+~~~~
+
+Similarly, `bool()` rejects unrecognized literals:
+
+~~~~ text
+Invalid Boolean value: "maybe". Expected one of "true", "1", "yes", "on",
+"false", "0", "no", or "off"
+~~~~
+
+### Help, version, and completion
+
+Like config contexts, environment contexts work seamlessly with help,
+version, and completion features.  These are handled before environment
+variable lookup, so `--help` always works even when required environment
+variables are missing:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
+import { runAsync } from "@optique/run";
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+
+const parser = object({
+  apiKey: bindEnv(option("--api-key", string()), {
+    context: envContext,
+    key: "API_KEY",
+    parser: string(),
+    // No default — required from CLI or env
+  }),
+});
+
+await runAsync(parser, {
+  contexts: [envContext],
+  help: "option",
+  version: "1.0.0",
+});
+~~~~
+
+
+API reference
+-------------
+
+### `createEnvContext(options?)`
+
+Creates an environment context for use with Optique runners.
+
+Parameters
+:    -  `options.prefix`: String prefix prepended to all keys when looking
+        up environment variables.  Defaults to `""`.
+     -  `options.source`: Custom function `(key: string) => string | undefined`
+        for reading environment values.  Defaults to `Deno.env.get` on Deno
+        and `process.env` on Node.js/Bun.
+
+Returns
+:   `EnvContext` implementing `SourceContext` and `Disposable`.
+
+### `bindEnv(parser, options)`
+
+Binds a parser to environment variables with fallback priority
+(CLI > environment > default > error).
+
+Parameters
+:    -  `parser`: The inner parser to wrap.
+
+     -  `options.context`: `EnvContext` to read from.
+
+     -  `options.key`: Environment variable key *without* the prefix.
+        The actual variable looked up is `prefix + key`.
+
+     -  `options.parser`: A `ValueParser` used to parse the raw string value
+        from the environment.
+
+     -  `options.default`: Optional default value used when neither CLI
+        nor environment provides a value.
+
+Returns
+:   A new parser with environment fallback behavior.
+
+### `bool(options?)`
+
+Creates a synchronous `ValueParser<"sync", boolean>` that accepts common
+Boolean literals (case-insensitive).
+
+Parameters
+:    -  `options.metavar`: Metavariable name shown in help text.
+        Defaults to `"BOOLEAN"`.
+     -  `options.errors.invalidFormat`: Custom error message or function
+        for unrecognized input.
+
+Returns
+:   `ValueParser<"sync", boolean>`
+
+### `envKey`
+
+Symbol key (`Symbol.for("@optique/env")`) used to store environment source
+data in annotations.
+
+### `EnvContext`
+
+Interface extending `SourceContext` with two additional properties:
+
+ -  `prefix`: The prefix string passed to `createEnvContext()`
+ -  `source`: The `EnvSource` function used to read variables
+
+
+Limitations
+-----------
+
+ -  *String-only input* — Environment variables are always strings, so a
+    `parser` is required in every `bindEnv()` call to convert the raw string
+    into the target type.  Unlike `bindConfig()`, there is no way to skip
+    the parser.
+ -  *Flat keys only* — Environment variables have no native nesting structure.
+    Unlike config files, you cannot use accessor functions to navigate nested
+    objects.  Use naming conventions (e.g., `DB_HOST`, `DB_PORT`) to
+    represent structure.
+ -  *No schema validation* — Unlike *@optique/config*, there is no schema that
+    validates the set of environment variables as a whole.  Each binding is
+    validated independently.
+ -  *Synchronous reads* — `createEnvContext()` reads environment variables
+    synchronously via `Deno.env.get` or `process.env`.  The context itself
+    does not add async overhead, but if the `parser` used in `bindEnv()` is
+    async, the overall parsing becomes async.
