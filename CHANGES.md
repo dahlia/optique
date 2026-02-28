@@ -101,6 +101,12 @@ To be released.
 
 ### @optique/config
 
+ -  Removed `configKey` symbol.  Each `ConfigContext` instance now stores
+    its data under its own unique `id` symbol (i.e., `context.id`) so that
+    multiple config contexts can coexist without overwriting each other in
+    merged annotations.  This is a breaking change for any code that accessed
+    annotations directly via `configKey`.  [[#136]]
+
  -  Removed `runWithConfig()` and the `@optique/config/run` subpath export.
     Config contexts are now used directly with `run()`, `runSync()`, or
     `runAsync()` from *@optique/run* (or `runWith()` from
@@ -132,6 +138,7 @@ To be released.
     type through to `bindConfig()` key callbacks.  [[#111]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
+[#136]: https://github.com/dahlia/optique/issues/136
 
 ### @optique/env
 

@@ -605,4 +605,46 @@ describe("bindEnv()", () => {
     assert.ok(value.success);
     assert.equal(value.value, 8080);
   });
+
+  it("supports multiple env contexts with different prefixes and sources", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/136
+    // When two EnvContext instances are passed to runWith(), each parser
+    // bound to its own context must read from the correct source, even
+    // through the annotation path (not just the active-registry fallback).
+    //
+    // The bug: both contexts write annotations under the same shared
+    // envKey symbol, so mergeAnnotations() keeps only the first context's
+    // data.  A parser bound to the second context then reads the wrong
+    // source via the annotation path.
+    //
+    // Using a top-level (non-object) bindEnv parser ensures the annotation
+    // path is exercised: injectAnnotationsIntoParser() sets annotations on
+    // the parser's initialState, so bindEnv.parse() sees them and stores
+    // them in the EnvBindState; bindEnv.complete() then reads from
+    // annotations[envKey] (wrong context) instead of annotations[context.id].
+    const context1 = createEnvContext({
+      source: (key) => ({ APP_HOST: "app.example.com" })[key],
+      prefix: "APP_",
+    });
+    const context2 = createEnvContext({
+      source: (key) => ({ DB_HOST: "db.example.com" })[key],
+      prefix: "DB_",
+    });
+
+    // Top-level parser bound to context2 — context1 is only present so
+    // its annotations overwrite context2's in the merge, exposing the bug.
+    const parser = bindEnv(option("--db-host", string()), {
+      context: context2,
+      key: "HOST",
+      parser: string(),
+      default: "fallback",
+    });
+
+    const result = await runWith(parser, "test", [context1, context2], {
+      args: [],
+    });
+
+    // Must read from context2's source, not context1's.
+    assert.equal(result, "db.example.com");
+  });
 });

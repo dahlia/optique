@@ -958,4 +958,57 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(result.host, "sync-host");
     assert.equal(result.port, 9999);
   });
+
+  test("supports multiple config contexts with different schemas", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/136
+    // When two ConfigContext instances are passed to runWith(), each parser
+    // bound to its own context must read from the correct source, even
+    // through the annotation path (not just the active-registry fallback).
+    //
+    // The bug: both contexts write annotations under the same shared
+    // configKey symbol.  mergeAnnotations() keeps only one value, so a
+    // parser bound to the losing context reads from the wrong config data.
+    //
+    // Using a top-level (non-object) bindConfig parser exercises the
+    // annotation path: injectAnnotationsIntoParser() sets annotations on
+    // the parser's initialState, so bindConfig.parse() stores them in its
+    // state and bindConfig.complete() reads from annotations[configKey]
+    // (which may be the wrong context's data) rather than the registry.
+    //
+    // schema1 validates only { host }, schema2 validates only { port }.
+    // After Zod strips extra fields, context1 produces { host } and
+    // context2 produces { port }.  With the bug, context1's data
+    // overwrites context2's at configKey, so the port parser falls back to
+    // the default instead of reading 8080.
+    const schema1 = z.object({ host: z.string() });
+    const schema2 = z.object({ port: z.number() });
+
+    const context1 = createConfigContext({ schema: schema1 });
+    const context2 = createConfigContext({ schema: schema2 });
+
+    // Top-level parser bound to context2.  context1 is present so its
+    // annotations overwrite context2's in the merged result, exposing the
+    // bug.
+    const parser = bindConfig(option("--port", integer()), {
+      context: context2,
+      key: "port",
+      default: 3000,
+    });
+
+    // Both contexts share the same load function.  Each validates the raw
+    // config against its own schema.
+    const result = await runWith(parser, "test", [context1, context2], {
+      load: () => ({
+        config: { host: "config.example.com", port: 8080 },
+        meta: {
+          configDir: "/test",
+          configPath: "/test/config.json",
+        } satisfies ConfigMeta,
+      }),
+      args: [],
+    });
+
+    // Must read from context2's validated config, not context1's.
+    assert.equal(result, 8080);
+  });
 });

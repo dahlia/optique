@@ -27,18 +27,6 @@ import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import { message } from "@optique/core/message";
 
 /**
- * Unique symbol for config data in annotations.
- * @since 0.10.0
- */
-export const configKey: unique symbol = Symbol.for("@optique/config");
-
-/**
- * Unique symbol for config metadata in annotations.
- * @since 1.0.0
- */
-export const configMetaKey: unique symbol = Symbol.for("@optique/config/meta");
-
-/**
  * Metadata about the loaded config source.
  *
  * @since 1.0.0
@@ -369,15 +357,19 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       // Set active config in registry for nested parsers inside object()
       if (configData !== undefined && configData !== null) {
         setActiveConfig(contextId, configData);
+        // Use the per-instance contextId as the annotation key so that
+        // multiple ConfigContext instances can coexist without overwriting
+        // each other during mergeAnnotations().  Data and metadata are
+        // stored together under a single key.
+        // See: https://github.com/dahlia/optique/issues/136
         if (configMeta !== undefined) {
           setActiveConfigMeta(contextId, configMeta);
           return {
-            [configKey]: configData,
-            [configMetaKey]: configMeta,
+            [contextId]: { data: configData, meta: configMeta },
           };
         }
 
-        return { [configKey]: configData };
+        return { [contextId]: { data: configData } };
       }
 
       return {};
@@ -591,15 +583,21 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
   state: unknown,
   options: BindConfigOptions<T, TValue, TConfigMeta>,
 ): Result<TValue> {
-  // First, try to get config from annotations (works for top-level parsers)
+  // First, try to get config from annotations (works for top-level parsers).
+  // Read from the per-instance context id so that the correct config data is
+  // selected even when annotations from multiple config contexts are merged.
+  // See: https://github.com/dahlia/optique/issues/136
   const annotations = getAnnotations(state);
-  let configData = annotations?.[configKey] as T | undefined;
-  let configMeta = annotations?.[configMetaKey] as TConfigMeta | undefined;
+  const contextId = options.context.id;
+  const annotationValue = annotations?.[contextId] as
+    | { readonly data: T; readonly meta?: TConfigMeta }
+    | undefined;
+  let configData = annotationValue?.data;
+  let configMeta = annotationValue?.meta;
 
   // If not found in annotations, check the active config registry
   // (this handles the case when used inside object() with context-aware runners)
   if (configData === undefined || configData === null) {
-    const contextId = options.context.id;
     configData = getActiveConfig<T>(contextId);
     configMeta = getActiveConfigMeta<TConfigMeta>(contextId);
   }

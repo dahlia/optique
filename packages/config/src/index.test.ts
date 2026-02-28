@@ -10,8 +10,6 @@ import { message } from "@optique/core/message";
 import type { Annotations } from "@optique/core/annotations";
 import {
   bindConfig,
-  configKey,
-  configMetaKey,
   createConfigContext,
   getActiveConfig,
   getActiveConfigMeta,
@@ -78,10 +76,12 @@ describe("bindConfig", () => {
       default: "localhost",
     });
 
-    // Without CLI value, but with config annotation
+    // Without CLI value, but with config annotation.
+    // Annotations are keyed by context.id (per-instance symbol) so that
+    // multiple config contexts can coexist without overwriting each other.
     const configData = { host: "config.example.com" };
     const annotations: Annotations = {
-      [configKey]: configData,
+      [context.id]: { data: configData },
     };
 
     const result = parse(parser, [], { annotations });
@@ -166,7 +166,7 @@ describe("bindConfig", () => {
       },
     };
     const annotations: Annotations = {
-      [configKey]: configData,
+      [context.id]: { data: configData },
     };
 
     const result = parse(parser, [], { annotations });
@@ -186,12 +186,15 @@ describe("bindConfig", () => {
       default: "unused",
     });
 
+    // Data and metadata are stored together under context.id.
     const annotations: Annotations = {
-      [configKey]: { outDir: "./dist" },
-      [configMetaKey]: {
-        configDir: "/project",
-        configPath: "/project/app.json",
-      } satisfies ConfigMeta,
+      [context.id]: {
+        data: { outDir: "./dist" },
+        meta: {
+          configDir: "/project",
+          configPath: "/project/app.json",
+        } satisfies ConfigMeta,
+      },
     };
 
     const result = parse(parser, [], { annotations });
@@ -211,8 +214,9 @@ describe("bindConfig", () => {
       default: "unused",
     });
 
+    // No meta field — only data is present.
     const annotations: Annotations = {
-      [configKey]: { outDir: "./dist" },
+      [context.id]: { data: { outDir: "./dist" } },
     };
 
     const result = parse(parser, [], { annotations });
@@ -240,7 +244,7 @@ describe("bindConfig", () => {
       },
     };
     const annotations: Annotations = {
-      [configKey]: configData,
+      [context.id]: { data: configData },
     };
 
     const result = parse(parser, [], { annotations });
@@ -263,7 +267,7 @@ describe("bindConfig", () => {
     // Test CLI priority
     const configData = { port: 8080 };
     const annotations: Annotations = {
-      [configKey]: configData,
+      [context.id]: { data: configData },
     };
 
     const cliResult = parse(parser, ["--port", "9000"], { annotations });
@@ -294,7 +298,7 @@ describe("bindConfig", () => {
     });
 
     const annotations: Annotations = {
-      [configKey]: { port: 8080 },
+      [context.id]: { data: { port: 8080 } },
     };
 
     const result = parse(parser, ["--port", "not-a-number"], { annotations });
@@ -443,7 +447,7 @@ describe("bindConfig", () => {
 
     const configData = { timeout: 60 };
     const annotations: Annotations = {
-      [configKey]: configData,
+      [context.id]: { data: configData },
     };
 
     const result = parse(parser, [], { annotations });
@@ -657,7 +661,7 @@ describe("createConfigContext error paths", () => {
 
     // Config has nested as undefined, so accessor throws
     const annotations: Annotations = {
-      [configKey]: { nested: undefined },
+      [context.id]: { data: { nested: undefined } },
     };
 
     const result = parse(parser, [], { annotations });
@@ -708,12 +712,17 @@ describe("createConfigContext error paths", () => {
     // Verify the parsed value was forwarded
     assert.deepEqual(receivedParsed, { configPath: "/app/config.json" });
 
-    // Verify annotations contain loaded config
-    assert.deepEqual(annotations[configKey], {
+    // Verify annotations contain loaded config under the per-instance context id.
+    // Data and metadata are stored together as { data, meta }.
+    const contextAnnotation = annotations[context.id] as
+      | { readonly data: unknown; readonly meta: unknown }
+      | undefined;
+    assert.ok(contextAnnotation != null);
+    assert.deepEqual(contextAnnotation.data, {
       host: "loaded-host",
       port: 8080,
     });
-    assert.deepEqual(annotations[configMetaKey], {
+    assert.deepEqual(contextAnnotation.meta, {
       configDir: "/app",
       configPath: "/app/config.json",
     });

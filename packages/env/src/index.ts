@@ -16,13 +16,6 @@ import {
 } from "@optique/core/valueparser";
 
 /**
- * Unique symbol for environment source data in annotations.
- *
- * @since 1.0.0
- */
-export const envKey: unique symbol = Symbol.for("@optique/env");
-
-/**
  * Function type for reading environment variable values.
  *
  * @since 1.0.0
@@ -139,7 +132,11 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
     getAnnotations(): Annotations {
       const sourceData: EnvSourceData = { prefix, source };
       setActiveEnvSource(contextId, sourceData);
-      return { [envKey]: sourceData };
+      // Use the per-instance contextId as the annotation key so that
+      // multiple EnvContext instances can coexist without overwriting each
+      // other during mergeAnnotations().  See:
+      // https://github.com/dahlia/optique/issues/136
+      return { [contextId]: sourceData };
     },
 
     [Symbol.dispose]() {
@@ -341,8 +338,12 @@ function getEnvOrDefault<M extends Mode, TValue>(
   innerState?: unknown,
 ): ModeValue<M, Result<TValue>> {
   const annotations = getAnnotations(state);
-  const sourceData = (annotations?.[envKey] as EnvSourceData | undefined) ??
-    getActiveEnvSource(options.context.id);
+  // Read from the per-instance context id so that the correct source is
+  // selected even when annotations from multiple env contexts are merged.
+  // See: https://github.com/dahlia/optique/issues/136
+  const sourceData =
+    (annotations?.[options.context.id] as EnvSourceData | undefined) ??
+      getActiveEnvSource(options.context.id);
 
   const fullKey = `${
     sourceData?.prefix ?? options.context.prefix
