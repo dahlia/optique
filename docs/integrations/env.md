@@ -404,15 +404,11 @@ Binds a parser to environment variables with fallback priority
 
 Parameters
 :    -  `parser`: The inner parser to wrap.
-
      -  `options.context`: `EnvContext` to read from.
-
      -  `options.key`: Environment variable key *without* the prefix.
         The actual variable looked up is `prefix + key`.
-
      -  `options.parser`: A `ValueParser` used to parse the raw string value
         from the environment.
-
      -  `options.default`: Optional default value used when neither CLI
         nor environment provides a value.
 
