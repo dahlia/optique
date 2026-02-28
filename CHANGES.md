@@ -84,12 +84,20 @@ To be released.
     `CompletionConfigPlural` types.  Completion naming is now controlled via
     `CommandSubConfig.names` and `OptionSubConfig.names`.  [[#130]]
 
+ -  Added support for equals-joined values on single-dash multi-character
+    options in `option()` (e.g., `-seed=42`, `-max_len=1000`), in addition to
+    existing `--option=value` and `/option:value` formats.  Single-character
+    short options (e.g., `-v`) remain excluded from this joined form to avoid
+    conflicts with short-option clustering.  `flag()` now also rejects this
+    joined form consistently for Boolean flags.  [[#134] by Maxwell Koo]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
 [#120]: https://github.com/dahlia/optique/issues/120
 [#130]: https://github.com/dahlia/optique/issues/130
 [#131]: https://github.com/dahlia/optique/issues/131
+[#134]: https://github.com/dahlia/optique/pull/134
 
 ### @optique/config
 
