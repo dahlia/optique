@@ -301,6 +301,16 @@ export function bindEnv<
   };
 }
 
+function wrapForMode<M extends Mode, T>(
+  mode: M,
+  value: T,
+): ModeValue<M, T> {
+  if (mode === "async") {
+    return Promise.resolve(value) as ModeValue<M, T>;
+  }
+  return value as ModeValue<M, T>;
+}
+
 function getEnvOrDefault<M extends Mode, TValue>(
   state: unknown,
   options: BindEnvOptions<M, TValue>,
@@ -315,32 +325,20 @@ function getEnvOrDefault<M extends Mode, TValue>(
   }${options.key}`;
   const rawValue = sourceData?.source(fullKey);
   if (rawValue !== undefined) {
-    const parsed = options.parser.parse(rawValue);
-    if (mode !== "async") {
-      return parsed as ModeValue<M, Result<TValue>>;
-    }
-    return Promise.resolve(parsed) as unknown as ModeValue<
-      M,
-      Result<TValue>
-    >;
+    return wrapForMode(mode, options.parser.parse(rawValue) as Result<TValue>);
   }
 
   if (options.default !== undefined) {
-    const result: Result<TValue> = { success: true, value: options.default };
-    if (mode !== "async") {
-      return result as ModeValue<M, Result<TValue>>;
-    }
-    return Promise.resolve(result) as ModeValue<M, Result<TValue>>;
+    return wrapForMode(mode, {
+      success: true as const,
+      value: options.default,
+    });
   }
 
-  const errorResult: Result<TValue> = {
-    success: false,
+  return wrapForMode(mode, {
+    success: false as const,
     error: message`Missing required environment variable: ${fullKey}.`,
-  };
-  if (mode !== "async") {
-    return errorResult as ModeValue<M, Result<TValue>>;
-  }
-  return Promise.resolve(errorResult) as ModeValue<M, Result<TValue>>;
+  });
 }
 
 /**
