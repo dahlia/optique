@@ -14,11 +14,12 @@ CLI arguments > environment variables > defaults.
 Installation
 ------------
 
-~~~~ bash [Deno]
+~~~~ bash
 deno add jsr:@optique/env
-npm  add     @optique/env
-pnpm add     @optique/env
-bun  add     @optique/env
+npm add @optique/env
+pnpm add @optique/env
+yarn add @optique/env
+bun add @optique/env
 ~~~~
 
 
