@@ -193,7 +193,7 @@ import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { createConfigContext, bindConfig } from "@optique/config";
-import { createEnvContext, bindEnv } from "@optique/env";
+import { bindEnv, createEnvContext } from "@optique/env";
 import { runAsync } from "@optique/run";
 
 const envContext = createEnvContext({ prefix: "MYAPP_" });
@@ -217,10 +217,8 @@ const parser = object({
   ),
 });
 
-const runOptions = {
-  contexts: [envContext, configContext] as const,
-  getConfigPath: (parsed: { config: string }) => parsed.config,
-};
-
-await runAsync(parser, runOptions);
+await runAsync(parser, {
+  contexts: [envContext, configContext],
+  getConfigPath: (parsed) => parsed.config,
+});
 ~~~~

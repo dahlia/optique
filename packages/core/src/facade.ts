@@ -2403,11 +2403,16 @@ type UnionToIntersection<U> = (
 export type ExtractRequiredOptions<
   TContexts extends readonly SourceContext<unknown>[],
   TValue,
-> = UnionToIntersection<
-  TContexts[number] extends SourceContext<infer O> ? O extends void ? unknown
+> = [
+  TContexts[number] extends SourceContext<infer O> ? O extends void ? never
     : SubstituteParserValue<O, TValue>
-    : unknown
->;
+    : never,
+] extends [never] ? unknown
+  : UnionToIntersection<
+    TContexts[number] extends SourceContext<infer O> ? O extends void ? never
+      : SubstituteParserValue<O, TValue>
+      : never
+  >;
 
 /**
  * Options for runWith functions.
