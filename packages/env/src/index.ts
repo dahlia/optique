@@ -339,7 +339,11 @@ function getEnvOrDefault<M extends Mode, TValue>(
   }${options.key}`;
   const rawValue = sourceData?.source(fullKey);
   if (rawValue !== undefined) {
-    return wrapForMode(mode, options.parser.parse(rawValue) as Result<TValue>);
+    const parsed = options.parser.parse(rawValue);
+    if (parsed instanceof Promise) {
+      return parsed as ModeValue<M, Result<TValue>>;
+    }
+    return wrapForMode(mode, parsed as Result<TValue>);
   }
 
   if (options.default !== undefined) {
