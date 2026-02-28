@@ -232,6 +232,14 @@ export function bindEnv<
           } as ModeValue<M, ParserResult<TState>>;
         }
 
+        // If the inner parser consumed tokens before failing, propagate
+        // the failure so that specific error messages (e.g., "requires a
+        // value") are preserved instead of being replaced by a generic
+        // "Unexpected option or argument" message.
+        if (result.consumed > 0) {
+          return result as ModeValue<M, ParserResult<TState>>;
+        }
+
         const nextState = {
           hasCliValue: false,
           ...(annotations && { [annotationKey]: annotations }),
@@ -255,6 +263,10 @@ export function bindEnv<
             next: { ...resolvedResult.next, state: nextState },
             consumed: resolvedResult.consumed,
           };
+        }
+
+        if (resolvedResult.consumed > 0) {
+          return resolvedResult;
         }
 
         const nextState = {

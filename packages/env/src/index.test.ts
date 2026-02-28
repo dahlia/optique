@@ -237,6 +237,56 @@ describe("bindEnv()", () => {
     assert.equal(result.value, 60);
   });
 
+  it("propagates CLI parse failure when tokens were consumed", () => {
+    const context = createEnvContext({
+      source: (key) => ({ APP_PORT: "8080" })[key],
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+
+    // --port without a value: inner parser consumes the token and fails.
+    // bindEnv must propagate this failure, not silently fall back to env/default.
+    const result = parse(parser, ["--port"]);
+    assert.ok(!result.success);
+    // Should show the specific "requires a value" error, not a generic
+    // "Unexpected option or argument" message:
+    const errorText = result.error
+      .map((s) => "text" in s ? s.text : "")
+      .join("");
+    assert.ok(
+      errorText.includes("requires a value"),
+      `Expected "requires a value" error, got: ${JSON.stringify(result.error)}`,
+    );
+  });
+
+  it("falls back to env when CLI parse failure consumed no tokens", () => {
+    const context = createEnvContext({
+      source: (key) => ({ APP_PORT: "8080" })[key],
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+
+    // No --port at all: inner parser fails with consumed=0.
+    // bindEnv should fall back to env value.
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, 8080);
+  });
+
   it("works with object() via runWith() contexts", async () => {
     const context = createEnvContext({
       source: (key) =>
