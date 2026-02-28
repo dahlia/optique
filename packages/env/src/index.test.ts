@@ -4,6 +4,7 @@ import { object } from "@optique/core/constructs";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type { Parser } from "@optique/core/parser";
 import { parse } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
@@ -346,6 +347,130 @@ describe("bindEnv()", () => {
     // and fail with "cannot be used multiple times".
     const result = parse(parser, ["--port", "8080", "--port", "9090"]);
     assert.ok(!result.success);
+  });
+
+  it("only marks hasCliValue when inner parser consumed tokens", () => {
+    // A mock inner parser that always succeeds with consumed: [] and
+    // provides a value through complete().  This simulates wrappers
+    // like bindConfig or withDefault.
+    const mockParser = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: (context: { readonly buffer: readonly string[] }) => ({
+        success: true as const,
+        next: context,
+        consumed: [] as string[],
+      }),
+      complete: () => ({
+        success: true as const,
+        value: "from-inner-complete",
+      }),
+      suggest: () => [],
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+
+    const context = createEnvContext({
+      source: () => undefined, // no env value
+      prefix: "APP_",
+    });
+    const parser = bindEnv(mockParser, {
+      context,
+      key: "HOST",
+      parser: string(),
+      // No default — if hasCliValue is wrongly true, it would call
+      // mockParser.complete() which returns "from-inner-complete".
+      // If hasCliValue is correctly false and env is absent, we want
+      // to fall through to the inner parser's complete() so downstream
+      // wrappers can provide their value.
+    });
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    assert.equal(result.value, "from-inner-complete");
+  });
+
+  it("falls back to inner parser complete() when env is absent", () => {
+    // Simulates bindConfig(option(...)) wrapped by bindEnv:
+    // bindEnv(mockConfigParser, {...}).  When CLI has no match and env
+    // is absent, bindEnv should delegate to the inner parser's complete()
+    // so that the config layer can provide its value.
+    const mockConfigParser = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: (context: { readonly buffer: readonly string[] }) => ({
+        success: true as const,
+        next: context,
+        consumed: [] as string[],
+      }),
+      complete: () => ({
+        success: true as const,
+        value: "from-config",
+      }),
+      suggest: () => [],
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(mockConfigParser, {
+      context,
+      key: "HOST",
+      parser: string(),
+      // No default — should fall through to inner parser's complete()
+    });
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    assert.equal(result.value, "from-config");
+  });
+
+  it("prefers env value over inner parser complete()", () => {
+    const mockConfigParser = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: (context: { readonly buffer: readonly string[] }) => ({
+        success: true as const,
+        next: context,
+        consumed: [] as string[],
+      }),
+      complete: () => ({
+        success: true as const,
+        value: "from-config",
+      }),
+      suggest: () => [],
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+
+    const context = createEnvContext({
+      source: (key) => ({ APP_HOST: "from-env" })[key],
+      prefix: "APP_",
+    });
+    const parser = bindEnv(mockConfigParser, {
+      context,
+      key: "HOST",
+      parser: string(),
+    });
+
+    // Register env source
+    context.getAnnotations();
+
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    assert.equal(result.value, "from-env");
   });
 
   it("returns a Promise from complete() in async mode for default path", async () => {

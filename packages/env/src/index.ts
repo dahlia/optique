@@ -238,8 +238,14 @@ export function bindEnv<
         result: ParserResult<TState>,
       ): ParserResult<TState> => {
         if (result.success) {
+          // Only mark hasCliValue when the inner parser actually consumed
+          // input tokens.  Wrappers like bindConfig or withDefault may
+          // return success with consumed: [] when the CLI option is
+          // absent; treating those as "CLI provided" would skip the env
+          // fallback and break composition.
+          const cliConsumed = result.consumed.length > 0;
           const nextState = {
-            hasCliValue: true,
+            hasCliValue: cliConsumed,
             cliState: result.next.state,
             ...(annotations && { [annotationKey]: annotations }),
           } as unknown as TState;
@@ -287,7 +293,13 @@ export function bindEnv<
         return parser.complete(bindState.cliState);
       }
 
-      return getEnvOrDefault(state, options, parser.$mode) as ModeValue<
+      return getEnvOrDefault(
+        state,
+        options,
+        parser.$mode,
+        parser,
+        bindState?.cliState,
+      ) as ModeValue<
         M,
         ValueParserResult<TValue>
       >;
@@ -315,6 +327,8 @@ function getEnvOrDefault<M extends Mode, TValue>(
   state: unknown,
   options: BindEnvOptions<M, TValue>,
   mode: M,
+  innerParser?: Parser<M, TValue, unknown>,
+  innerState?: unknown,
 ): ModeValue<M, Result<TValue>> {
   const annotations = getAnnotations(state);
   const sourceData = (annotations?.[envKey] as EnvSourceData | undefined) ??
@@ -333,6 +347,21 @@ function getEnvOrDefault<M extends Mode, TValue>(
       success: true as const,
       value: options.default,
     });
+  }
+
+  // When the env variable is absent and no default is provided, fall back
+  // to the inner parser's complete() so that downstream wrappers (e.g.,
+  // bindConfig) can still supply their own value.  Without this, composing
+  // bindEnv(bindConfig(...)) would always fail with "Missing required
+  // environment variable" when the env var is unset, even if the config
+  // layer has a value.
+  if (innerParser != null) {
+    const completeState = innerState ?? innerParser.initialState;
+    const result = innerParser.complete(completeState);
+    if (result instanceof Promise) {
+      return result as ModeValue<M, Result<TValue>>;
+    }
+    return wrapForMode(mode, result as Result<TValue>);
   }
 
   return wrapForMode(mode, {
