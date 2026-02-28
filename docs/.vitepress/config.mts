@@ -68,6 +68,7 @@ const INTEGRATIONS = {
   text: "Integrations",
   items: [
     { text: "Config files", link: "/integrations/config" },
+    { text: "Environment variables", link: "/integrations/env" },
     { text: "Git", link: "/integrations/git" },
     { text: "LogTape", link: "/integrations/logtape" },
     { text: "Temporal", link: "/integrations/temporal" },
@@ -81,6 +82,7 @@ const REFERENCES = {
   items: [
     { text: "@optique/config", link: "https://jsr.io/@optique/config/doc" },
     { text: "@optique/core", link: "https://jsr.io/@optique/core/doc" },
+    { text: "@optique/env", link: "https://jsr.io/@optique/env/doc" },
     { text: "@optique/git", link: "https://jsr.io/@optique/git/doc" },
     { text: "@optique/logtape", link: "https://jsr.io/@optique/logtape/doc" },
     { text: "@optique/man", link: "https://jsr.io/@optique/man/doc" },
