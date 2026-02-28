@@ -185,7 +185,11 @@ Composing with other contexts
 -----------------------------
 
 Environment context is a regular `SourceContext`, so it composes naturally
-with configuration contexts:
+with configuration contexts.  The *outermost* wrapper is checked first
+during completion, so nesting order determines fallback priority.
+Wrapping as `bindEnv(bindConfig(option(...)))` gives:
+
+CLI argument > Environment variable > Config file > Default value
 
 ~~~~ typescript twoslash
 import { z } from "zod";
