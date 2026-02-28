@@ -125,7 +125,7 @@ describe("zod()", () => {
 
       assert.ok(result.success);
       assert.ok(result.value instanceof Date);
-      assert.equal(result.value.getFullYear(), 2025);
+      assert.equal(result.value.getUTCFullYear(), 2025);
     });
   });
 
@@ -305,7 +305,8 @@ describe("zod()", () => {
 
     it("should format date values", () => {
       const parser = zod(z.string().transform((s) => new Date(s)));
-      const date = new Date("2025-01-01T00:00:00.000Z");
+      // Use a mid-year date so that local-time rendering cannot roll the year backward in any timezone.
+      const date = new Date("2025-06-15T00:00:00.000Z");
       const formatted = parser.format(date);
       assert.ok(formatted.includes("2025"));
     });
