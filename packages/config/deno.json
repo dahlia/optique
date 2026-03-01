@@ -12,7 +12,7 @@
   ],
   "tasks": {
     "build": "pnpm build",
-    "test": "deno test",
+    "test": "deno test --allow-read --allow-write --allow-env",
     "test:node": {
       "dependencies": [
         "build"
