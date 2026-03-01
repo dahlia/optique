@@ -128,6 +128,7 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
     id: contextId,
     prefix,
     source,
+    isStatic: true,
 
     getAnnotations(): Annotations {
       const sourceData: EnvSourceData = { prefix, source };

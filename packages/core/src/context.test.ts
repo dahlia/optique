@@ -143,6 +143,51 @@ describe("SourceContext", () => {
 
       assert.ok(!isStaticContext(stringKeyContext));
     });
+
+    it("does not call getAnnotations() when isStatic field is present", () => {
+      // isStaticContext() should not call getAnnotations() as a side effect
+      // when the context declares its own isStatic field.  This matters for
+      // contexts like EnvContext whose getAnnotations() mutates global state.
+      let getAnnotationsCalled = false;
+      const contextId = Symbol("@test/side-effect-check");
+
+      const context: SourceContext = {
+        id: contextId,
+        isStatic: true,
+        getAnnotations() {
+          getAnnotationsCalled = true;
+          return { [contextId]: { value: "x" } };
+        },
+      };
+
+      const result = isStaticContext(context);
+      assert.ok(result, "Expected isStatic: true to report as static");
+      assert.ok(
+        !getAnnotationsCalled,
+        "isStaticContext() must not call getAnnotations() when isStatic field is set",
+      );
+    });
+
+    it("returns false without calling getAnnotations() for isStatic: false", () => {
+      let getAnnotationsCalled = false;
+      const contextId = Symbol("@test/side-effect-false");
+
+      const context: SourceContext = {
+        id: contextId,
+        isStatic: false,
+        getAnnotations() {
+          getAnnotationsCalled = true;
+          return { [contextId]: { value: "x" } };
+        },
+      };
+
+      const result = isStaticContext(context);
+      assert.ok(!result, "Expected isStatic: false to report as dynamic");
+      assert.ok(
+        !getAnnotationsCalled,
+        "isStaticContext() must not call getAnnotations() when isStatic field is set",
+      );
+    });
   });
 
   describe("context composition patterns", () => {

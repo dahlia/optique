@@ -110,6 +110,23 @@ export interface SourceContext<TRequiredOptions = void> {
   readonly $requiredOptions?: TRequiredOptions;
 
   /**
+   * Optional declaration of whether this context is static.
+   *
+   * When present, {@link isStaticContext} reads this field directly instead
+   * of calling {@link getAnnotations}, avoiding any side effects that
+   * `getAnnotations` might have (such as mutating a global registry).
+   *
+   * - `true`: the context always returns non-empty annotations synchronously.
+   * - `false`: the context is dynamic (depends on a prior parse pass).
+   *
+   * If omitted, {@link isStaticContext} falls back to calling
+   * `getAnnotations()` with no arguments to determine static-ness.
+   *
+   * @since 1.0.0
+   */
+  readonly isStatic?: boolean;
+
+  /**
    * Get annotations to inject into parsing.
    *
    * This method is called twice during `runWith()` execution:
@@ -160,6 +177,13 @@ export interface SourceContext<TRequiredOptions = void> {
  * @since 0.10.0
  */
 export function isStaticContext(context: SourceContext<unknown>): boolean {
+  // If the context explicitly declares its static-ness, use that directly
+  // to avoid calling getAnnotations() and triggering any side effects it
+  // might have (e.g. mutating a global registry as EnvContext does).
+  if (context.isStatic !== undefined) {
+    return context.isStatic;
+  }
+
   const result = context.getAnnotations();
   if (result instanceof Promise) {
     return false;
