@@ -15,6 +15,18 @@ import type { Annotations } from "./annotations.ts";
 export type { Annotations } from "./annotations.ts";
 
 /**
+ * Declares whether a {@link SourceContext} provides its annotations
+ * immediately (`"static"`) or only after a prior parse pass (`"dynamic"`).
+ *
+ * Used as the type of the optional `mode` field on {@link SourceContext}.
+ * When set, {@link isStaticContext} reads this value directly instead of
+ * calling `getAnnotations()`, preventing any side effects.
+ *
+ * @since 1.0.0
+ */
+export type SourceContextMode = "static" | "dynamic";
+
+/**
  * Brand symbol for ParserValuePlaceholder type.
  * @internal
  */
@@ -110,21 +122,18 @@ export interface SourceContext<TRequiredOptions = void> {
   readonly $requiredOptions?: TRequiredOptions;
 
   /**
-   * Optional declaration of whether this context is static.
+   * Optional declaration of whether this context is static or dynamic.
    *
    * When present, {@link isStaticContext} reads this field directly instead
    * of calling {@link getAnnotations}, avoiding any side effects that
    * `getAnnotations` might have (such as mutating a global registry).
-   *
-   * - `true`: the context always returns non-empty annotations synchronously.
-   * - `false`: the context is dynamic (depends on a prior parse pass).
    *
    * If omitted, {@link isStaticContext} falls back to calling
    * `getAnnotations()` with no arguments to determine static-ness.
    *
    * @since 1.0.0
    */
-  readonly isStatic?: boolean;
+  readonly mode?: SourceContextMode;
 
   /**
    * Get annotations to inject into parsing.
@@ -180,8 +189,8 @@ export function isStaticContext(context: SourceContext<unknown>): boolean {
   // If the context explicitly declares its static-ness, use that directly
   // to avoid calling getAnnotations() and triggering any side effects it
   // might have (e.g. mutating a global registry as EnvContext does).
-  if (context.isStatic !== undefined) {
-    return context.isStatic;
+  if (context.mode !== undefined) {
+    return context.mode === "static";
   }
 
   const result = context.getAnnotations();

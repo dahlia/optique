@@ -280,7 +280,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   return {
     id: contextId,
     schema: options.schema,
-    isStatic: false,
+    mode: "dynamic",
 
     async getAnnotations(
       parsed?: unknown,

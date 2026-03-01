@@ -144,16 +144,16 @@ describe("SourceContext", () => {
       assert.ok(!isStaticContext(stringKeyContext));
     });
 
-    it("does not call getAnnotations() when isStatic field is present", () => {
+    it('does not call getAnnotations() when mode field is "static"', () => {
       // isStaticContext() should not call getAnnotations() as a side effect
-      // when the context declares its own isStatic field.  This matters for
+      // when the context declares its own mode field.  This matters for
       // contexts like EnvContext whose getAnnotations() mutates global state.
       let getAnnotationsCalled = false;
       const contextId = Symbol("@test/side-effect-check");
 
       const context: SourceContext = {
         id: contextId,
-        isStatic: true,
+        mode: "static",
         getAnnotations() {
           getAnnotationsCalled = true;
           return { [contextId]: { value: "x" } };
@@ -161,20 +161,20 @@ describe("SourceContext", () => {
       };
 
       const result = isStaticContext(context);
-      assert.ok(result, "Expected isStatic: true to report as static");
+      assert.ok(result, 'Expected mode: "static" to report as static');
       assert.ok(
         !getAnnotationsCalled,
-        "isStaticContext() must not call getAnnotations() when isStatic field is set",
+        "isStaticContext() must not call getAnnotations() when mode field is set",
       );
     });
 
-    it("returns false without calling getAnnotations() for isStatic: false", () => {
+    it('returns false without calling getAnnotations() for mode: "dynamic"', () => {
       let getAnnotationsCalled = false;
       const contextId = Symbol("@test/side-effect-false");
 
       const context: SourceContext = {
         id: contextId,
-        isStatic: false,
+        mode: "dynamic",
         getAnnotations() {
           getAnnotationsCalled = true;
           return { [contextId]: { value: "x" } };
@@ -182,10 +182,10 @@ describe("SourceContext", () => {
       };
 
       const result = isStaticContext(context);
-      assert.ok(!result, "Expected isStatic: false to report as dynamic");
+      assert.ok(!result, 'Expected mode: "dynamic" to report as dynamic');
       assert.ok(
         !getAnnotationsCalled,
-        "isStaticContext() must not call getAnnotations() when isStatic field is set",
+        "isStaticContext() must not call getAnnotations() when mode field is set",
       );
     });
   });
