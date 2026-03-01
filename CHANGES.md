@@ -91,6 +91,13 @@ To be released.
     conflicts with short-option clustering.  `flag()` now also rejects this
     joined form consistently for Boolean flags.  [[#134] by Maxwell Koo]
 
+ -  Added optional `isStatic` field to `SourceContext`.  When set,
+    `isStaticContext()` reads this field directly instead of calling
+    `getAnnotations()`, preventing any side effects that `getAnnotations()`
+    might have (such as mutating a global registry).  `createEnvContext()` sets
+    `isStatic: true`; `createConfigContext()` sets `isStatic: false`.  Existing
+    custom contexts that omit the field are unaffected.
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -124,6 +131,11 @@ To be released.
 
  -  Added `ConfigContext` implementation of `Symbol.dispose` for automatic
     cleanup of the global config registry.  [[#110]]
+
+ -  Fixed `bindConfig()` composition with `bindEnv()`: when no CLI token is
+    consumed, `bindConfig()` no longer incorrectly marks the result as
+    “CLI-provided”, which was causing `bindEnv(bindConfig(…))` to skip the
+    environment-variable fallback even when the CLI option was absent.
 
  -  Added config-source metadata support for `bindConfig()` key accessors.
     Accessor callbacks now receive a second `meta` argument, and single-file
