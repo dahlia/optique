@@ -275,7 +275,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   options: ConfigContextOptions<T>,
 ): ConfigContext<T, TConfigMeta> {
   // Create a unique ID for this context instance
-  const contextId = Symbol.for(`@optique/config:${Math.random()}`);
+  const contextId = Symbol(`@optique/config:${Math.random()}`);
 
   return {
     id: contextId,

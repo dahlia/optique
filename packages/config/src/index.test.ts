@@ -32,6 +32,22 @@ describe("createConfigContext", () => {
     assert.equal(typeof context.getAnnotations, "function");
   });
 
+  test("context id is not registered in the global Symbol registry", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    // Symbol.for() would register the symbol so that Symbol.for(description)
+    // returns the *same* symbol — making it accessible by any code that knows
+    // the description string.  Symbol() does not register, so looking it up
+    // via Symbol.for(description) produces a different symbol.
+    const lookedUp = Symbol.for(context.id.description!);
+    assert.notEqual(
+      context.id,
+      lookedUp,
+      "Context id should not be retrievable from the global Symbol registry",
+    );
+  });
+
   test("returns empty annotations when called without parsed result", async () => {
     const schema = z.object({
       host: z.string(),
