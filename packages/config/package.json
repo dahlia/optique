@@ -62,6 +62,7 @@
     "@optique/core": "workspace:*"
   },
   "devDependencies": {
+    "@optique/env": "workspace:*",
     "@standard-schema/spec": "catalog:",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
