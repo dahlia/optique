@@ -6,6 +6,7 @@ import { object } from "@optique/core/constructs";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
+import { bindEnv, createEnvContext } from "@optique/env";
 
 import type { Annotations } from "@optique/core/annotations";
 import {
@@ -537,6 +538,131 @@ describe("bindConfig", () => {
     assert.ok(resultDefault.success);
     assert.equal(resultDefault.value.host, "localhost");
     assert.equal(resultDefault.value.timeout, 30);
+  });
+});
+
+describe("bindConfig parity with bindEnv", () => {
+  test("does not treat withDefault success (consumed: []) as CLI value (issue 2)", () => {
+    // When bindConfig wraps a parser that returns success with consumed: []
+    // (e.g. withDefault or another bindConfig), the inner success should NOT
+    // be treated as a CLI-provided value.  If it were, the config fallback
+    // would be skipped.
+    const schema = z.object({ port: z.number() });
+    const context = createConfigContext({ schema });
+
+    // fail() always fails, so bindConfig falls through to config/default.
+    // Wrapping it in another bindConfig with a default simulates the case
+    // where the inner layer returns success with consumed: [].
+    const inner = bindConfig(fail<number>(), {
+      context,
+      key: "port",
+      default: 9999,
+    });
+
+    const outer = bindConfig(inner, {
+      context,
+      key: "port",
+      default: 1111,
+    });
+
+    // When the inner bindConfig returns consumed: [] (no CLI tokens), the
+    // outer bindConfig must NOT mark hasCliValue = true.  Otherwise the
+    // config annotation would be ignored in the outer layer.
+    const configData = { port: 8080 };
+    const annotations: Annotations = { [context.id]: { data: configData } };
+
+    // The outer layer should see the config annotation and return 8080, not
+    // 9999 (inner default) or 1111 (outer default).
+    const result = parse(outer, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, 8080);
+  });
+
+  test("propagates failure when inner parser consumed tokens (issue 5)", () => {
+    // If the inner parser consumed tokens but then failed (e.g. --port with
+    // no value following), bindConfig must propagate that specific failure
+    // instead of converting it to success with consumed: [].
+    const schema = z.object({ port: z.number() });
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--port", integer()), {
+      context,
+      key: "port",
+      default: 3000,
+    });
+
+    // "--port" with no value: the inner option parser will consume "--port"
+    // and then fail because there's no value token.
+    const result = parse(parser, ["--port"]);
+    assert.ok(!result.success);
+  });
+
+  test("bindEnv(bindConfig(...)) composition: env fallback works (issue 2)", () => {
+    // When composing bindEnv(bindConfig(...)), the env fallback should still
+    // activate when no CLI value is provided.  The bug was that bindConfig
+    // returned success with consumed: [] (from withDefault / no CLI), and
+    // bindEnv was seeing that as "CLI provided a value", so it skipped the
+    // env fallback.
+    const schema = z.object({ port: z.number() });
+    const configCtx = createConfigContext({ schema });
+
+    const envCtx = createEnvContext({
+      source: (key) => key === "PORT" ? "7777" : undefined,
+    });
+
+    const parser = bindEnv(
+      bindConfig(option("--port", integer()), {
+        context: configCtx,
+        key: "port",
+        default: 3000,
+      }),
+      { context: envCtx, key: "PORT", parser: integer() },
+    );
+
+    // Provide env annotations (as a static context, getAnnotations() is called
+    // manually here to simulate what runWith() does).
+    const envAnnotations = envCtx.getAnnotations();
+    if (envAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous env annotations.");
+    }
+
+    // No CLI arg, no config annotation → env should supply 7777
+    const result = parse(parser, [], { annotations: envAnnotations });
+    assert.ok(result.success);
+    assert.equal(result.value, 7777);
+  });
+
+  test("state unwrapping: parse() correctly handles wrapped ConfigBindState (issue 4)", () => {
+    // When object() calls parse() multiple times on the same parser
+    // (iterating over tokens), it passes the wrapped state back each time.
+    // bindConfig must unwrap the state before delegating to the inner parser,
+    // otherwise the inner parser receives a foreign state object.
+    const schema = z.object({ host: z.string(), port: z.number() });
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+      port: bindConfig(option("--port", integer()), {
+        context,
+        key: "port",
+        default: 3000,
+      }),
+    });
+
+    // With multiple CLI args, object() will iterate and pass wrapped states
+    // back to each field parser.  Both values should be correctly parsed.
+    const result = parse(parser, [
+      "--host",
+      "cli.example.com",
+      "--port",
+      "9000",
+    ]);
+    assert.ok(result.success);
+    assert.equal(result.value.host, "cli.example.com");
+    assert.equal(result.value.port, 9000);
   });
 });
 

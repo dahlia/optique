@@ -280,6 +280,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   return {
     id: contextId,
     schema: options.schema,
+    isStatic: false,
 
     async getAnnotations(
       parsed?: unknown,
@@ -451,7 +452,23 @@ export function bindConfig<
   parser: Parser<M, TValue, TState>,
   options: BindConfigOptions<T, TValue, TConfigMeta>,
 ): Parser<M, TValue, TState> {
-  type ConfigBindState = { hasCliValue: boolean; cliState?: TState };
+  // Unique brand symbol scoped to this bindConfig call, mirroring the
+  // approach used by bindEnv.  This prevents complete() from accidentally
+  // treating an unrelated state object with a `hasCliValue` property as a
+  // ConfigBindState.
+  const configBindStateKey: unique symbol = Symbol(
+    "@optique/config/bindState",
+  );
+
+  type ConfigBindState =
+    & { readonly [K in typeof configBindStateKey]: true }
+    & { readonly hasCliValue: boolean; readonly cliState?: TState };
+
+  function isConfigBindState(value: unknown): value is ConfigBindState {
+    return value != null &&
+      typeof value === "object" &&
+      configBindStateKey in value;
+  }
 
   return {
     $mode: parser.$mode,
@@ -467,95 +484,80 @@ export function bindConfig<
       // Extract annotations from context to preserve them
       const annotations = getAnnotations(context.state);
 
-      // Try parsing with the inner parser
-      const result = parser.parse(context);
+      // Unwrap state from a previous parse() call.  After a successful
+      // parse, object() stores the wrapped ConfigBindState and passes it
+      // back on the next iteration.  The inner parser expects its own
+      // native state, so we unwrap cliState before delegating, mirroring
+      // the pattern used by bindEnv.
+      const innerState = isConfigBindState(context.state)
+        ? (context.state.hasCliValue
+          ? (context.state.cliState as TState)
+          : parser.initialState)
+        : context.state;
+      const innerContext = innerState !== context.state
+        ? { ...context, state: innerState }
+        : context;
 
-      // For sync mode
-      if (!(result instanceof Promise)) {
+      const processResult = (
+        result: ParserResult<TState>,
+      ): ParserResult<TState> => {
         if (result.success) {
-          // CLI value provided - store the next state for complete phase
+          // Only mark hasCliValue when the inner parser actually consumed
+          // input tokens.  Wrappers like withDefault may return success
+          // with consumed: [] when the CLI option is absent; treating those
+          // as "CLI provided" would skip the config fallback and break
+          // composition with bindEnv.
+          const cliConsumed = result.consumed.length > 0;
           const newState = {
-            hasCliValue: true,
+            [configBindStateKey]: true as const,
+            hasCliValue: cliConsumed,
             cliState: result.next.state,
             ...(annotations && { [annotationKey]: annotations }),
           } as unknown as TState;
-
           return {
             success: true,
             next: { ...result.next, state: newState },
             consumed: result.consumed,
-          } as ModeValue<M, ParserResult<TState>>;
-        }
-
-        // No CLI value, return success with empty state but preserve annotations
-        const newState = {
-          hasCliValue: false,
-          ...(annotations && { [annotationKey]: annotations }),
-        } as unknown as TState;
-        return {
-          success: true,
-          next: { ...context, state: newState },
-          consumed: [],
-        } as unknown as ModeValue<M, ParserResult<TState>>;
-      }
-
-      // For async mode
-      return result.then((res) => {
-        if (res.success) {
-          const newState = {
-            hasCliValue: true,
-            cliState: res.next.state,
-            ...(annotations && { [annotationKey]: annotations }),
-          } as unknown as TState;
-
-          return {
-            success: true,
-            next: { ...res.next, state: newState },
-            consumed: res.consumed,
           };
         }
 
+        // If the inner parser consumed tokens before failing, propagate
+        // the failure so that specific error messages (e.g., "requires a
+        // value") are preserved instead of being replaced by a generic
+        // "Unexpected option or argument" message.
+        if (result.consumed > 0) {
+          return result;
+        }
+
         const newState = {
+          [configBindStateKey]: true as const,
           hasCliValue: false,
           ...(annotations && { [annotationKey]: annotations }),
         } as unknown as TState;
         return {
           success: true,
-          next: { ...context, state: newState },
+          next: { ...innerContext, state: newState },
           consumed: [],
         };
-      }) as ModeValue<M, ParserResult<TState>>;
+      };
+
+      const result = parser.parse(innerContext);
+
+      if (result instanceof Promise) {
+        return result.then(processResult) as ModeValue<
+          M,
+          ParserResult<TState>
+        >;
+      }
+
+      return processResult(result) as ModeValue<M, ParserResult<TState>>;
     },
 
     complete: (state) => {
-      const bindState = state as unknown as ConfigBindState;
-
-      // Check if we have a CLI value from parse phase
-      if (bindState?.hasCliValue && bindState.cliState !== undefined) {
-        // Use the inner parser's complete to get the CLI value
-        const innerResult = parser.complete(bindState.cliState);
-
-        if (innerResult instanceof Promise) {
-          return innerResult.then((res) => {
-            if (res.success) {
-              return { success: true, value: res.value };
-            }
-            // CLI value was provided but invalid, so preserve the CLI error.
-            return res;
-          }) as ModeValue<M, ValueParserResult<TValue>>;
-        }
-
-        if (innerResult.success) {
-          return { success: true, value: innerResult.value } as ModeValue<
-            M,
-            ValueParserResult<TValue>
-          >;
-        }
-        // CLI value was provided but invalid, so preserve the CLI error.
-        return innerResult as ModeValue<
-          M,
-          ValueParserResult<TValue>
-        >;
+      // Check if we have a CLI value from parse phase using the branded
+      // type guard instead of an unsafe `as unknown as` cast.
+      if (isConfigBindState(state) && state.hasCliValue) {
+        return parser.complete(state.cliState!);
       }
 
       // No CLI value, check config
