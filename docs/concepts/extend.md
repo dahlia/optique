@@ -661,6 +661,11 @@ API reference
 
 ### Types from `@optique/core/context`
 
+`SourceContextMode`
+:   Type alias for `"static" | "dynamic"`. Indicates whether a context is
+    static (can provide data without any parsed results) or dynamic (needs
+    parsed results from a first pass to do its work).
+
 `SourceContext<TRequiredOptions = void>`
 :   Interface for data sources that provide annotations. The `TRequiredOptions`
     type parameter specifies additional options that `runWith()` must provide
@@ -669,6 +674,9 @@ API reference
     Members:
 
      -  `id: symbol` - Unique identifier for the context
+     -  `mode?: SourceContextMode` - Optional hint declaring whether this
+        context is `"static"` or `"dynamic"`. When set, `isStaticContext()`
+        uses this field directly instead of probing `getAnnotations()`.
      -  `getAnnotations(parsed?: unknown): Promise<Annotations> | Annotations` -
         Returns annotations to inject into parsing
 
@@ -710,7 +718,10 @@ API reference
 
 `isStaticContext(context: SourceContext): boolean`
 :   Checks whether a context is static (returns non-empty annotations without
-    needing parsed results).
+    needing parsed results). When the context has a `mode` field set,
+    `isStaticContext()` uses it directly (`"static"` → `true`,
+    `"dynamic"` → `false`). When `mode` is absent, the function probes
+    `getAnnotations()` with no arguments to determine the answer.
 
 ### Functions from `@optique/core/facade`
 
@@ -772,6 +783,7 @@ import type { SourceContext } from "@optique/core/context";
 
 const envContext: SourceContext = {
   id: Symbol.for("@myapp/env"),
+  mode: "static",
   getAnnotations() {
     return {
       [Symbol.for("@myapp/env")]: {
@@ -784,6 +796,8 @@ const envContext: SourceContext = {
 ~~~~
 
 The `id` symbol identifies this context for debugging and priority resolution.
+The optional `mode` field declares whether the context is `"static"` or
+`"dynamic"`, which lets `isStaticContext()` skip probing `getAnnotations()`.
 The `getAnnotations()` method returns an object mapping annotation keys to
 their values. Parsers can then access these values using `getAnnotations()`.
 
@@ -804,6 +818,7 @@ import type { SourceContext } from "@optique/core/context";
 // Static context: data is always available
 const envContext: SourceContext = {
   id: Symbol.for("@myapp/env"),
+  mode: "static",
   getAnnotations() {
     // Returns immediately - no need for parsing results
     return {
@@ -815,6 +830,7 @@ const envContext: SourceContext = {
 // Dynamic context: needs parsed result to load config
 const configContext: SourceContext = {
   id: Symbol.for("@myapp/config"),
+  mode: "dynamic",
   async getAnnotations(parsed?: unknown) {
     if (!parsed) return {}; // Return empty on first pass
     
@@ -985,6 +1001,7 @@ interface EnvData {
 export function createEnvContext(prefix: string = ""): SourceContext {
   return {
     id: envKey,
+    mode: "static",
     getAnnotations(): Annotations {
       const data: EnvData = {
         HOST: process.env[`${prefix}HOST`],
@@ -1024,6 +1041,7 @@ interface ConfigData {
 export function createConfigContext(): SourceContext {
   return {
     id: configKey,
+    mode: "dynamic",
     async getAnnotations(parsed?: unknown): Promise<Annotations> {
       if (!parsed) return {}; // First pass - no config yet
       
@@ -1085,6 +1103,7 @@ interface ConfigContext extends SourceContext<ConfigContextOptions> {
 export function createConfigContext(): ConfigContext {
   const context: ConfigContext = {
     id: configKey,
+    mode: "dynamic",
     async getAnnotations(parsed?: unknown): Promise<Annotations> {
       if (!parsed) return {};
       
@@ -1143,6 +1162,9 @@ guide for a complete implementation.
 
  -  *Use unique symbols*: Always use `Symbol.for()` with a namespaced string
     matching your package name
+ -  *Declare `mode` explicitly*: Set `mode: "static"` or `mode: "dynamic"` on
+    every context so `isStaticContext()` can determine the mode without probing
+    `getAnnotations()`
  -  *Handle missing data gracefully*: Return empty objects instead of throwing
     errors
  -  *Keep contexts focused*: Each context should handle one data source
