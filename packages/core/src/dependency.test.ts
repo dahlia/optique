@@ -31,6 +31,7 @@ import {
 import { conditional, merge, object, or, tuple } from "./constructs.ts";
 import { command, constant, option } from "./primitives.ts";
 import { map, multiple, optional, withDefault } from "./modifiers.ts";
+import * as fc from "fast-check";
 
 // =============================================================================
 // Test Helpers: Async Value Parsers
@@ -3001,5 +3002,87 @@ describe("suggestWithDependency double factory failure", () => {
       ...(suggestFn("d", "prod" as "dev" | "prod") as Iterable<Suggestion>),
     ];
     assert.deepEqual(suggestions, []);
+  });
+});
+
+describe("property-based tests", () => {
+  const propertyParameters = { numRuns: 120 } as const;
+
+  test("DependencyRegistry should match map-model semantics", () => {
+    const operationArbitrary = fc.oneof(
+      fc.record({
+        kind: fc.constant<"set">("set"),
+        key: fc.integer({ min: 0, max: 4 }),
+        value: fc.string({ minLength: 0, maxLength: 16 }),
+      }),
+      fc.record({
+        kind: fc.constant<"get">("get"),
+        key: fc.integer({ min: 0, max: 4 }),
+      }),
+      fc.record({
+        kind: fc.constant<"has">("has"),
+        key: fc.integer({ min: 0, max: 4 }),
+      }),
+      fc.record({
+        kind: fc.constant<"cloneSet">("cloneSet"),
+        key: fc.integer({ min: 0, max: 4 }),
+        value: fc.string({ minLength: 0, maxLength: 16 }),
+      }),
+    );
+
+    fc.assert(
+      fc.property(
+        fc.array(operationArbitrary, { minLength: 0, maxLength: 120 }),
+        (operations) => {
+          const symbols = Array.from(
+            { length: 5 },
+            (_unused, index) => Symbol(`dep-${index}`),
+          );
+          const registry = new DependencyRegistry();
+          const model = new Map<number, string>();
+
+          for (const operation of operations) {
+            if (operation.kind === "set") {
+              registry.set(symbols[operation.key], operation.value);
+              model.set(operation.key, operation.value);
+              continue;
+            }
+
+            if (operation.kind === "get") {
+              assert.equal(
+                registry.get<string>(symbols[operation.key]),
+                model.get(operation.key),
+              );
+              continue;
+            }
+
+            if (operation.kind === "has") {
+              assert.equal(
+                registry.has(symbols[operation.key]),
+                model.has(operation.key),
+              );
+              continue;
+            }
+
+            const clone = registry.clone();
+            for (let i = 0; i < symbols.length; i++) {
+              assert.equal(clone.get<string>(symbols[i]), model.get(i));
+              assert.equal(clone.has(symbols[i]), model.has(i));
+            }
+
+            clone.set(symbols[operation.key], operation.value);
+            assert.equal(
+              clone.get<string>(symbols[operation.key]),
+              operation.value,
+            );
+            assert.equal(
+              registry.get<string>(symbols[operation.key]),
+              model.get(operation.key),
+            );
+          }
+        },
+      ),
+      propertyParameters,
+    );
   });
 });
