@@ -8098,5 +8098,251 @@ describe("cidr()", () => {
   });
 });
 
+describe("branch coverage regressions", () => {
+  it("covers bigint-only custom port error branches", () => {
+    const parser = port({
+      type: "bigint",
+      min: 2000n,
+      max: 9000n,
+      disallowWellKnown: true,
+      errors: {
+        invalidPort: message`invalid bigint port`,
+        belowMinimum: message`too small bigint port`,
+        aboveMaximum: message`too large bigint port`,
+        wellKnownNotAllowed: message`well-known bigint port denied`,
+      },
+    });
+
+    const invalid = parser.parse("abc");
+    assert.ok(!invalid.success);
+    if (!invalid.success) {
+      assert.deepStrictEqual(invalid.error, [
+        { type: "text", text: "invalid bigint port" },
+      ]);
+    }
+
+    const below = parser.parse("1024");
+    assert.ok(!below.success);
+    if (!below.success) {
+      assert.deepStrictEqual(below.error, [
+        { type: "text", text: "too small bigint port" },
+      ]);
+    }
+
+    const above = parser.parse("10000");
+    assert.ok(!above.success);
+    if (!above.success) {
+      assert.deepStrictEqual(above.error, [
+        { type: "text", text: "too large bigint port" },
+      ]);
+    }
+
+    const wellKnown = parser.parse("80");
+    assert.ok(!wellKnown.success);
+    if (!wellKnown.success) {
+      assert.deepStrictEqual(wellKnown.error, [
+        { type: "text", text: "well-known bigint port denied" },
+      ]);
+    }
+  });
+
+  it("covers hostname wildcard and label custom invalid branches", () => {
+    const parser = hostname({
+      allowWildcard: true,
+      errors: {
+        invalidHostname: (input) => message`invalid host: ${input}`,
+      },
+    });
+
+    const wildcard = parser.parse("*.*.example.com");
+    assert.ok(!wildcard.success);
+
+    const emptyLabel = parser.parse("example..com");
+    assert.ok(!emptyLabel.success);
+
+    const longLabel = parser.parse(`${"a".repeat(64)}.example.com`);
+    assert.ok(!longLabel.success);
+  });
+
+  it("covers email quoted/local/domain edge branches", () => {
+    const parser = email();
+
+    const unclosedQuote = parser.parse('"abc@example.com');
+    assert.ok(!unclosedQuote.success);
+
+    const hyphenLabel = parser.parse("user@-example.com");
+    assert.ok(!hyphenLabel.success);
+
+    const badLabelChar = parser.parse("user@exam_ple.com");
+    assert.ok(!badLabelChar.success);
+
+    const longLabel = parser.parse(`user@${"a".repeat(64)}.com`);
+    assert.ok(!longLabel.success);
+  });
+
+  it("covers email allowMultiple domainNotAllowed function branch", () => {
+    const parser = email({
+      allowMultiple: true,
+      allowedDomains: ["example.com"],
+      errors: {
+        domainNotAllowed: (addr, domains) =>
+          message`${addr} not in ${text(domains.join(","))}`,
+      },
+    });
+
+    const result = parser.parse("one@example.com,two@other.com");
+    assert.ok(!result.success);
+  });
+
+  it("covers socketAddress missingPort function branches", () => {
+    const required = socketAddress({
+      requirePort: true,
+      errors: {
+        missingPort: (input) => message`missing port from ${input}`,
+      },
+    });
+    const requiredResult = required.parse("localhost");
+    assert.ok(!requiredResult.success);
+
+    const noDefault = socketAddress({
+      requirePort: false,
+      errors: {
+        missingPort: (input) => message`still missing: ${input}`,
+      },
+    });
+    const noDefaultResult = noDefault.parse("example.com");
+    assert.ok(!noDefaultResult.success);
+  });
+
+  it("covers portRange allowSingle failure and bigint invalidRange", () => {
+    const allowSingle = portRange({ allowSingle: true });
+    const singleInvalid = allowSingle.parse("abc");
+    assert.ok(!singleInvalid.success);
+
+    const bigintRange = portRange({
+      type: "bigint",
+      errors: {
+        invalidRange: (start, end) =>
+          message`${text(start.toString())} > ${text(end.toString())}`,
+      },
+    });
+    const reversed = bigintRange.parse("9000-8000");
+    assert.ok(!reversed.success);
+  });
+
+  it("covers domain invalidDomain function branches", () => {
+    const parser = domain({
+      errors: {
+        invalidDomain: (input) => message`invalid domain: ${input}`,
+      },
+    });
+
+    const empty = parser.parse("");
+    assert.ok(!empty.success);
+
+    const invalidLabel = parser.parse("foo_.example.com");
+    assert.ok(!invalidLabel.success);
+  });
+
+  it("covers ipv6 custom function error branches", () => {
+    const invalid = ipv6({
+      errors: {
+        invalidIpv6: (input) => message`invalid ipv6: ${input}`,
+      },
+    });
+    const invalidResult = invalid.parse("::ffff:1.2.3");
+    assert.ok(!invalidResult.success);
+
+    const zero = ipv6({
+      allowZero: false,
+      errors: {
+        zeroNotAllowed: (addr) => message`zero denied: ${addr}`,
+      },
+    });
+    const zeroResult = zero.parse("::");
+    assert.ok(!zeroResult.success);
+
+    const loopback = ipv6({
+      allowLoopback: false,
+      errors: {
+        loopbackNotAllowed: (addr) => message`loopback denied: ${addr}`,
+      },
+    });
+    const loopbackResult = loopback.parse("::1");
+    assert.ok(!loopbackResult.success);
+
+    const linkLocal = ipv6({
+      allowLinkLocal: false,
+      errors: {
+        linkLocalNotAllowed: (addr) => message`link-local denied: ${addr}`,
+      },
+    });
+    const linkLocalResult = linkLocal.parse("fe80::1");
+    assert.ok(!linkLocalResult.success);
+
+    const uniqueLocal = ipv6({
+      allowUniqueLocal: false,
+      errors: {
+        uniqueLocalNotAllowed: (addr) => message`ula denied: ${addr}`,
+      },
+    });
+    const uniqueLocalResult = uniqueLocal.parse("fc00::1");
+    assert.ok(!uniqueLocalResult.success);
+
+    const multicast = ipv6({
+      allowMulticast: false,
+      errors: {
+        multicastNotAllowed: (addr) => message`multicast denied: ${addr}`,
+      },
+    });
+    const multicastResult = multicast.parse("ff02::1");
+    assert.ok(!multicastResult.success);
+  });
+
+  it("covers cidr custom function branches", () => {
+    const invalidCidr = cidr({
+      errors: {
+        invalidCidr: (input) => message`bad cidr: ${input}`,
+      },
+    });
+
+    const noSlash = invalidCidr.parse("192.0.2.0");
+    assert.ok(!noSlash.success);
+
+    const nonNumericPrefix = invalidCidr.parse("192.0.2.0/abc");
+    assert.ok(!nonNumericPrefix.success);
+
+    const invalidAddress = invalidCidr.parse("999.0.2.0/24");
+    assert.ok(!invalidAddress.success);
+
+    const invalidPrefix = cidr({
+      errors: {
+        invalidPrefix: (prefix, version) =>
+          message`prefix ${text(prefix.toString())} invalid for v${
+            text(version.toString())
+          }`,
+      },
+    });
+    const ipv6TooWide = invalidPrefix.parse("2001:db8::/129");
+    assert.ok(!ipv6TooWide.success);
+
+    const constrained = cidr({
+      minPrefix: 16,
+      maxPrefix: 24,
+      errors: {
+        prefixBelowMinimum: (prefix, min) =>
+          message`${text(prefix.toString())} < ${text(min.toString())}`,
+        prefixAboveMaximum: (prefix, max) =>
+          message`${text(prefix.toString())} > ${text(max.toString())}`,
+      },
+    });
+    const below = constrained.parse("192.0.2.0/8");
+    assert.ok(!below.success);
+
+    const above = constrained.parse("192.0.2.0/30");
+    assert.ok(!above.success);
+  });
+});
+
 // cSpell: ignore résumé phonebk toolongcode hanidec jpan hebr arabext
 // cSpell: ignore localhosts lojban rozaj Resian
