@@ -81,6 +81,31 @@ const unknownEqualsOptionTokenArbitrary = fc
   )
   .map(([name, value]: readonly [string, string]) => `--${name}=${value}`);
 
+const adversarialTokenArbitrary = fc.oneof(
+  fc.string({ minLength: 0, maxLength: 64 }),
+  fc.constantFrom(
+    "",
+    "-",
+    "--",
+    "---",
+    "--=",
+    "=",
+    "\\",
+    '"',
+    "'",
+    " ",
+    "\t",
+    "\n",
+    "--help",
+    "--version",
+    "--unknown",
+    "-xyz",
+    "--mode=dev",
+    "--mode=",
+    "\u0000",
+  ),
+);
+
 function longOptionName(name: string): `--${string}` {
   return `--${name}` as `--${string}`;
 }
@@ -1160,6 +1185,58 @@ describe("property-based tests", () => {
             const base = parseSync(parser, args);
             const transformed = parseSync(parser, [...args, "--"]);
             assert.deepEqual(transformed, base);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("parse should never throw on adversarial token streams", async () => {
+    const parser = object({
+      mode: optional(option("--mode", choice(["dev", "prod"] as const))),
+      verbose: optional(option("--verbose")),
+      target: optional(argument(string())),
+      extra: passThrough({ format: "nextToken" }),
+    });
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(adversarialTokenArbitrary, { minLength: 0, maxLength: 12 }),
+        async (args: readonly string[]) => {
+          assert.doesNotThrow(() => parseSync(parser, args));
+          const syncResult = parseSync(parser, args);
+          const asyncResult = await parseAsync(parser, args);
+
+          assert.deepEqual(asyncResult, syncResult);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("suggest should remain well-formed on adversarial prefixes", async () => {
+    const parser = object({
+      mode: optional(option("--mode", choice(["dev", "prod"] as const))),
+      verbose: optional(option("--verbose")),
+      passthrough: passThrough(),
+    });
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(adversarialTokenArbitrary, { minLength: 1, maxLength: 8 }),
+        async (args: readonly string[]) => {
+          const argv = args as [string, ...readonly string[]];
+          assert.doesNotThrow(() => suggestSync(parser, argv));
+
+          const syncSuggestions = suggestSync(parser, argv);
+          const asyncSuggestions = await suggestAsync(parser, argv);
+
+          assert.deepEqual(asyncSuggestions, syncSuggestions);
+          for (const suggestion of syncSuggestions) {
+            if (suggestion.kind === "literal") {
+              assert.equal(typeof suggestion.text, "string");
+            }
           }
         },
       ),
