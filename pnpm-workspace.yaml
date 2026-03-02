@@ -9,6 +9,7 @@ catalog:
   "@logtape/logtape": ^1.2.2
   "@standard-schema/spec": ^1.1.0
   "@types/node": ^20.19.9
+  fast-check: ^4.5.3
   isomorphic-git: ^1.36.1
   tsdown: ^0.13.0
   tsx: ^4.21.0

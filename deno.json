@@ -10,6 +10,7 @@
     "@std/fs": "jsr:@std/fs@^1.0.19",
     "@std/path": "jsr:@std/path@^1.1.1",
     "@types/node": "npm:@types/node@^20.19.9",
+    "fast-check": "npm:fast-check@^4.5.3",
     "isomorphic-git": "npm:isomorphic-git@^1.36.1",
     "markdownlint-cli2": "npm:markdownlint-cli2@^0.20.0",
     "tsdown": "npm:tsdown@^0.13.0",

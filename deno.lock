@@ -11,6 +11,7 @@
     "npm:@standard-schema/spec@^1.1.0": "1.1.0",
     "npm:@types/node@^20.19.9": "20.19.9",
     "npm:es-git@0.4": "0.4.0",
+    "npm:fast-check@^4.5.3": "4.5.3",
     "npm:hongdown@0.1.0-dev.21": "0.1.0-dev.21",
     "npm:hongdown@0.1.0-dev.22": "0.1.0-dev.22",
     "npm:hongdown@0.1.0-dev.23": "0.1.0-dev.23",
@@ -1327,6 +1328,12 @@
     "events@3.3.0": {
       "integrity": "sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q=="
     },
+    "fast-check@4.5.3": {
+      "integrity": "sha512-IE9csY7lnhxBnA8g/WI5eg/hygA6MGWJMSNfFRrBlXUciADEhS1EDB0SIsMSvzubzIlOBbVITSsypCsW717poA==",
+      "dependencies": [
+        "pure-rand"
+      ]
+    },
     "fast-glob@3.3.3": {
       "integrity": "sha512-7MptL8U0cqcFdzIzwOTHoilX9x5BrNqye7Z/LuC7kCMRio1EMSyqRK3BEAUD7sXRq4iT4AzTVuZdhgQ2TCvYLg==",
       "dependencies": [
@@ -2043,6 +2050,9 @@
     "punycode.js@2.3.1": {
       "integrity": "sha512-uxFIHU0YlHYhDQtV4R9J6a52SLx28BCjT+4ieh7IGbgwVJWO+km431c4yRlREUAsAmt/uMjQUyQHNEPf0M39CA=="
     },
+    "pure-rand@7.0.1": {
+      "integrity": "sha512-oTUZM/NAZS8p7ANR3SHh30kXB+zK2r2BPcEn/awJIbOvq82WoMN4p62AWWp3Hhw50G0xMsw1mhIBLqHw64EcNQ=="
+    },
     "quansync@0.2.10": {
       "integrity": "sha512-t41VRkMYbkHyCYmOvx/6URnN80H7k4X0lLdBMGsz+maAwrJQYB1djpV6vHrQIBE0WBSGqhtEHrK9U3DWWH8v7A=="
     },
@@ -2303,6 +2313,7 @@
       "npm:@inquirer/prompts@^8.3.0",
       "npm:@standard-schema/spec@^1.1.0",
       "npm:@types/node@^20.19.9",
+      "npm:fast-check@^4.5.3",
       "npm:isomorphic-git@^1.36.1",
       "npm:markdownlint-cli2@0.20",
       "npm:tsdown@0.13",

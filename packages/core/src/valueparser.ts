@@ -434,7 +434,15 @@ export function string(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<string> {
-      if (options.pattern != null && !options.pattern.test(input)) {
+      if (options.pattern != null) {
+        const pattern = new RegExp(
+          options.pattern.source,
+          options.pattern.flags,
+        );
+        if (pattern.test(input)) {
+          return { success: true, value: input };
+        }
+
         return {
           success: false,
           error: options.errors?.patternMismatch

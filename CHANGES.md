@@ -99,6 +99,11 @@ To be released.
     `createConfigContext()` sets `mode: "dynamic"`.  Existing custom contexts
     that omit the field are unaffected.
 
+ -  Fixed `string({ pattern })` to avoid stateful `RegExp` behavior leaking
+    across parse calls when the pattern uses `g` or `y` flags.  The parser now
+    evaluates a fresh regular expression per parse, so repeated calls are
+    deterministic and no longer mutate the caller's `pattern.lastIndex`.
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
