@@ -2,6 +2,7 @@ import type { Annotations } from "@optique/core/annotations";
 import { isStaticContext, type SourceContext } from "@optique/core/context";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as fc from "fast-check";
 
 describe("SourceContext", () => {
   describe("interface implementation", () => {
@@ -252,6 +253,87 @@ describe("SourceContext", () => {
         source: "context2",
         priority: 2,
       });
+    });
+  });
+
+  describe("property-based tests", () => {
+    const propertyParameters = { numRuns: 150 } as const;
+
+    it("mode should determine static-ness without calling getAnnotations", () => {
+      fc.assert(
+        fc.property(
+          fc.constantFrom<"static" | "dynamic">("static", "dynamic"),
+          fc.boolean(),
+          (mode: "static" | "dynamic", asyncResult: boolean) => {
+            let calls = 0;
+            const marker = Symbol("@test/mode-controlled");
+            const context: SourceContext = {
+              id: marker,
+              mode,
+              getAnnotations() {
+                calls++;
+                if (asyncResult) {
+                  return Promise.resolve({ [marker]: true });
+                }
+                return { [marker]: true };
+              },
+            };
+
+            assert.equal(isStaticContext(context), mode === "static");
+            assert.equal(calls, 0);
+          },
+        ),
+        propertyParameters,
+      );
+    });
+
+    it("fallback static detection should depend on sync symbol annotations", () => {
+      fc.assert(
+        fc.property(
+          fc.boolean(),
+          fc.integer({ min: 0, max: 3 }),
+          fc.integer({ min: 0, max: 3 }),
+          (
+            asyncResult: boolean,
+            symbolKeyCount: number,
+            stringKeyCount: number,
+          ) => {
+            let calls = 0;
+            const symbolEntries = Array.from(
+              { length: symbolKeyCount },
+              (_unused, i) => [Symbol(`@test/symbol-${i}`), i] as const,
+            );
+            const stringEntries = Array.from(
+              { length: stringKeyCount },
+              (_unused, i) => [`k${i}`, i] as const,
+            );
+
+            const syncAnnotations: Annotations = {};
+            for (const [key, value] of symbolEntries) {
+              syncAnnotations[key] = value;
+            }
+            for (const [key, value] of stringEntries) {
+              (syncAnnotations as unknown as Record<string, unknown>)[key] =
+                value;
+            }
+
+            const context: SourceContext = {
+              id: Symbol("@test/fallback"),
+              getAnnotations() {
+                calls++;
+                return asyncResult
+                  ? Promise.resolve(syncAnnotations)
+                  : syncAnnotations;
+              },
+            };
+
+            const result = isStaticContext(context);
+            assert.equal(calls, 1);
+            assert.equal(result, !asyncResult && symbolKeyCount > 0);
+          },
+        ),
+        propertyParameters,
+      );
     });
   });
 });
