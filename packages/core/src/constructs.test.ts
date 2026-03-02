@@ -21,8 +21,11 @@ import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   getDocPage,
   type InferValue,
+  type Parser,
+  type ParserContext,
   type ParserResult,
   parseSync,
+  type Suggestion,
 } from "@optique/core/parser";
 import {
   argument,
@@ -173,6 +176,41 @@ describe("or", () => {
         f.type === "section"
       ) as (DocFragment & { type: "section" })[];
       assert.ok(sections.length > 0);
+    });
+
+    it("should use unavailable inner state when selected parser failed", () => {
+      const parser1 = option("-a", "--apple");
+      const parser2 = option("-b", "--banana");
+      const orParser = or(parser1, parser2);
+
+      const fragments = orParser.getDocFragments(
+        {
+          kind: "available",
+          state: [1, {
+            success: false,
+            consumed: 1,
+            error: message`failed.`,
+          }],
+        } as unknown as Parameters<typeof orParser.getDocFragments>[0],
+      );
+
+      const sections = fragments.fragments.filter((f) =>
+        f.type === "section"
+      ) as (DocFragment & { type: "section" })[];
+      const entries = sections.flatMap((s) => s.entries);
+
+      assert.ok(
+        entries.some(
+          (e: DocEntry) =>
+            e.term.type === "option" && e.term.names.includes("--banana"),
+        ),
+      );
+      assert.ok(
+        !entries.some(
+          (e: DocEntry) =>
+            e.term.type === "option" && e.term.names.includes("--apple"),
+        ),
+      );
     });
 
     it("should work with different parser types", () => {
@@ -589,6 +627,31 @@ describe("longestMatch()", () => {
     assert.ok(groupB);
   });
 
+  it("should show all docs when selected state is a failure", () => {
+    const parser = longestMatch(
+      object("Alpha", { alpha: option("--alpha") }),
+      object("Beta", { beta: option("--beta") }),
+    );
+
+    const fragments = parser.getDocFragments(
+      {
+        kind: "available",
+        state: [0, {
+          success: false,
+          consumed: 0,
+          error: message`failed.`,
+        }],
+      } as unknown as Parameters<typeof parser.getDocFragments>[0],
+    );
+
+    const sections = fragments.fragments.filter((f) =>
+      f.type === "section"
+    ) as (DocFragment & { type: "section" })[];
+
+    assert.ok(sections.some((s) => s.title === "Alpha"));
+    assert.ok(sections.some((s) => s.title === "Beta"));
+  });
+
   it("should handle priority correctly", () => {
     const lowPriorityParser = object({
       type: constant("low"),
@@ -742,6 +805,27 @@ describe("longestMatch() error customization", () => {
       assert.ok(!errorMessage.includes("deploy"));
     }
   });
+
+  it("should use custom unexpectedInput function", () => {
+    const parser = longestMatch(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          unexpectedInput: (token) => message`Unknown action: ${text(token)}.`,
+        },
+      },
+    );
+
+    const result = parseSync(parser, ["deploi"]);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Unknown action: deploi.",
+      );
+    }
+  });
 });
 
 describe("object", () => {
@@ -860,6 +944,188 @@ describe("object", () => {
       assert.equal(result.value.watch, true);
       assert.equal(result.value.verbose, false);
     }
+  });
+
+  it("should suggest only exclusive option values after option token", () => {
+    const parser = object({
+      mode: or(
+        option("--mode", choice(["dev", "prod"])),
+        option("--profile", choice(["staging", "release"])),
+      ),
+      target: argument(choice(["dist", "docs"])),
+    });
+
+    const suggestions = [...parser.suggest(
+      {
+        buffer: ["--mode"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      },
+      "d",
+    )];
+
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    assert.ok(texts.includes("dev"));
+    assert.ok(!texts.includes("dist"));
+  });
+
+  it("should fall back to initial state in suggest when field state is missing", () => {
+    const parser = object({
+      mode: option("--mode", choice(["dev", "prod"])),
+    });
+
+    const suggestions = [...parser.suggest(
+      {
+        buffer: ["--mode"],
+        state: {} as unknown as typeof parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      },
+      "d",
+    )];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "dev" }]);
+  });
+
+  it("should suggest only option values in async mode after option token", async () => {
+    const modeParser: Parser<"async", string, string> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      $mode: "async",
+      priority: 0,
+      usage: [{
+        type: "option",
+        names: ["--mode"],
+        metavar: "MODE",
+      }],
+      initialState: "mode-initial",
+      parse(context) {
+        return Promise.resolve({
+          success: true,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true, value: "dev" });
+      },
+      suggest(_context: ParserContext<string>, prefix: string) {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            if ("dev".startsWith(prefix)) {
+              yield { kind: "literal", text: "dev" };
+            }
+            if ("prod".startsWith(prefix)) {
+              yield { kind: "literal", text: "prod" };
+            }
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({
+      mode: modeParser,
+      target: argument(choice(["dist", "docs"])),
+    });
+
+    const suggestions = [] as Suggestion[];
+    for await (
+      const suggestion of parser.suggest(
+        {
+          buffer: ["--mode"],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "d",
+      )
+    ) {
+      suggestions.push(suggestion);
+    }
+
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+
+    assert.ok(texts.includes("dev"));
+    assert.ok(!texts.includes("dist"));
+  });
+
+  it("should fall back to field initial states in async suggest", async () => {
+    let seenModeState: unknown;
+    let seenOtherState: unknown;
+
+    const makeAsyncParser = (
+      initialState: string,
+      suggestion: string,
+      onSuggest: (state: unknown) => void,
+    ): Parser<"async", string, string> => ({
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState,
+      parse(context) {
+        return Promise.resolve({
+          success: true,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true, value: suggestion });
+      },
+      suggest(context) {
+        onSuggest(context.state);
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield { kind: "literal", text: suggestion };
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const parser = object({
+      mode: makeAsyncParser("mode-initial", "dev", (state) => {
+        seenModeState = state;
+      }),
+      other: makeAsyncParser("other-initial", "x", (state) => {
+        seenOtherState = state;
+      }),
+    });
+
+    const suggestions = [] as Suggestion[];
+    for await (
+      const suggestion of parser.suggest(
+        {
+          buffer: [],
+          state: {} as unknown as typeof parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      )
+    ) {
+      suggestions.push(suggestion);
+    }
+
+    assert.equal(seenModeState, "mode-initial");
+    assert.equal(seenOtherState, "other-initial");
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "dev"),
+    );
+    assert.ok(suggestions.some((s) => s.kind === "literal" && s.text === "x"));
   });
 
   describe("getDocFragments", () => {
