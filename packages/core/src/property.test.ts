@@ -629,6 +629,44 @@ describe("property-based tests", () => {
     );
   });
 
+  it("successful inputs should fail after duplicate option mutation", () => {
+    const parser = object({
+      mode: option("--mode", choice(["dev", "prod"] as const)),
+      target: option("--target", choice(["node", "browser"] as const)),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom<"dev" | "prod">("dev", "prod"),
+        fc.constantFrom<"node" | "browser">("node", "browser"),
+        fc.boolean(),
+        fc.boolean(),
+        (
+          mode: "dev" | "prod",
+          target: "node" | "browser",
+          reverseBaseOrder: boolean,
+          duplicateTarget: boolean,
+        ) => {
+          const baseArgs = reverseBaseOrder
+            ? ["--target", target, "--mode", mode]
+            : ["--mode", mode, "--target", target];
+          const baseResult = parseSync(parser, baseArgs);
+          assert.ok(baseResult.success);
+
+          const duplicate = duplicateTarget
+            ? ["--target", target]
+            : ["--mode", mode];
+          const mutatedAtFront = parseSync(parser, [...duplicate, ...baseArgs]);
+          const mutatedAtBack = parseSync(parser, [...baseArgs, ...duplicate]);
+
+          assert.ok(!mutatedAtFront.success);
+          assert.ok(!mutatedAtBack.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("parseSync should fail for unconsumed input loops", () => {
     const parser = constant("ok");
 
