@@ -21,6 +21,7 @@ import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   getDocPage,
   type InferValue,
+  parseAsync,
   type Parser,
   type ParserContext,
   type ParserResult,
@@ -35,13 +36,32 @@ import {
   option,
 } from "@optique/core/primitives";
 import { formatUsage } from "@optique/core/usage";
-import { choice, integer, string } from "@optique/core/valueparser";
+import {
+  choice,
+  integer,
+  string,
+  type ValueParser,
+  type ValueParserResult,
+} from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
+}
+
+function asyncStringValue(): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "ASYNC_STRING",
+    parse(input: string): Promise<ValueParserResult<string>> {
+      return Promise.resolve({ success: true, value: input });
+    },
+    format(value: string): string {
+      return value;
+    },
+  };
 }
 
 describe("or", () => {
@@ -347,6 +367,168 @@ describe("or() - duplicate option handling", () => {
     // Should succeed - first matching branch wins
     assert.ok(result.success);
   });
+
+  it("should switch async branch when earlier input is shared", async () => {
+    const parser = or(
+      object({
+        shared: option("--shared", asyncStringValue()),
+        alpha: option("--alpha", asyncStringValue()),
+      }),
+      object({
+        shared: option("--shared", asyncStringValue()),
+        beta: option("--beta", asyncStringValue()),
+      }),
+    );
+
+    const result = await parseAsync(parser, ["--shared", "s", "--beta", "b"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { shared: "s", beta: "b" });
+    }
+  });
+
+  it("should reject async branch switch for non-shared input", async () => {
+    const parser = or(
+      object({ alpha: option("--alpha", asyncStringValue()) }),
+      object({ beta: option("--beta", asyncStringValue()) }),
+    );
+
+    const result = await parseAsync(parser, ["--alpha", "a", "--beta", "b"]);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.ok(
+        formatMessage(result.error).includes("cannot be used together"),
+      );
+    }
+  });
+
+  it("should return replayed async failure after shared-branch switch", async () => {
+    const parserA: Parser<"async", string, string> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      $mode: "async",
+      priority: 10,
+      usage: [{ type: "option", names: ["--shared"], metavar: "VALUE" }],
+      initialState: "a-initial",
+      parse(context) {
+        if (context.buffer[0] === "--shared") {
+          return Promise.resolve({
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "a-consumed",
+            },
+            consumed: ["--shared"],
+          });
+        }
+        return Promise.resolve({
+          success: false,
+          consumed: 0,
+          error: message`a failed.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true, value: "a" });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parserB: Parser<"async", string, string> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      $mode: "async",
+      priority: 9,
+      usage: [
+        { type: "option", names: ["--shared"], metavar: "VALUE" },
+        { type: "option", names: ["--b"], metavar: "VALUE" },
+      ],
+      initialState: "b-initial",
+      parse(context) {
+        if (
+          context.buffer[0] === "--shared" && context.state === "b-initial"
+        ) {
+          return Promise.resolve({
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "b-checked",
+            },
+            consumed: ["--shared"],
+          });
+        }
+        if (context.buffer[0] === "--b" && context.state === "b-initial") {
+          return Promise.resolve({
+            success: true,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(1),
+              state: "b-first-pass",
+            },
+            consumed: ["--b"],
+          });
+        }
+        if (context.buffer[0] === "--b" && context.state === "b-checked") {
+          return Promise.resolve({
+            success: false,
+            consumed: 1,
+            error: message`replayed failed.`,
+          });
+        }
+        return Promise.resolve({
+          success: false,
+          consumed: 0,
+          error: message`b failed.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true, value: "b" });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = or(parserA, parserB);
+    const secondPassContext = {
+      buffer: ["--b"],
+      state: [0, {
+        success: true,
+        next: {
+          buffer: [] as readonly string[],
+          state: "a-consumed",
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        consumed: ["--shared"] as readonly string[],
+      }] as unknown as typeof parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+
+    const result = await parser.parse(secondPassContext);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "replayed failed.");
+    }
+  });
 });
 
 describe("or() error customization", () => {
@@ -415,6 +597,28 @@ describe("or() error customization", () => {
       const errorMessage = formatMessage(result.error);
       assert.ok(errorMessage.includes("Unexpected option or subcommand"));
       assert.ok(!errorMessage.includes("Did you mean"));
+    }
+  });
+
+  it("should use custom unexpectedInput function", () => {
+    const parser = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          unexpectedInput: (token) =>
+            message`Unknown command token: ${text(token)}.`,
+        },
+      },
+    );
+
+    const result = parseSync(parser, ["deploi"]);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        "Unknown command token: deploi.",
+      );
     }
   });
 });
@@ -551,6 +755,98 @@ describe("longestMatch()", () => {
     // Neither parser can handle this input
     const result = parseSync(parser, ["-t", "value"]);
     assert.ok(!result.success);
+  });
+
+  it("should keep the deepest sync failure", () => {
+    const parserA: Parser<"sync", string, null> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return {
+          success: false,
+          consumed: 1,
+          error: message`short failure.`,
+        };
+      },
+      complete() {
+        return { success: true, value: "a" };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parserB: Parser<"sync", string, null> = {
+      ...parserA,
+      parse() {
+        return {
+          success: false,
+          consumed: 2,
+          error: message`deep failure.`,
+        };
+      },
+    };
+
+    const parser = longestMatch(parserA, parserB);
+    const result = parseSync(parser, ["x", "y"]);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "deep failure.");
+    }
+  });
+
+  it("should keep the deepest async failure", async () => {
+    const parserA: Parser<"async", string, null> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false,
+          consumed: 1,
+          error: message`short async failure.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true, value: "a" });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parserB: Parser<"async", string, null> = {
+      ...parserA,
+      parse() {
+        return Promise.resolve({
+          success: false,
+          consumed: 2,
+          error: message`deep async failure.`,
+        });
+      },
+    };
+
+    const parser = longestMatch(parserA, parserB);
+    const result = await parseAsync(parser, ["x", "y"]);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "deep async failure.");
+    }
   });
 
   it("should handle empty parser list", () => {
@@ -4821,6 +5117,56 @@ describe("conditional", () => {
 
       const result = parseSync(parser, ["--type", "invalid"]);
       assert.ok(!result.success);
+    });
+
+    it("should use static noMatch error override", () => {
+      const parser = conditional(
+        option("--type", choice(["a"])),
+        {
+          a: object({}),
+        },
+        object({}),
+        {
+          errors: {
+            noMatch: message`No conditional match.`,
+          },
+        },
+      );
+
+      const result = parseSync(parser, ["--unknown"]);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(formatMessage(result.error), "No conditional match.");
+      }
+    });
+
+    it("should use functional noMatch error override", () => {
+      const parser = conditional(
+        option("--type", choice(["a"])),
+        {
+          a: object({}),
+        },
+        object({}),
+        {
+          errors: {
+            noMatch: ({ hasOptions, hasCommands, hasArguments }) =>
+              message`No match context: ${
+                text(
+                  `${hasOptions}:${hasCommands}:${hasArguments}`,
+                )
+              }.`,
+          },
+        },
+      );
+
+      const result = parseSync(parser, ["--unknown"]);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "No match context: true:false:false.",
+        );
+      }
     });
   });
 
