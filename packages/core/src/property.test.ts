@@ -862,6 +862,62 @@ describe("property-based tests", () => {
     );
   });
 
+  it("suggestions should be complete and parse-reachable", () => {
+    const parser = object({
+      mode: optional(option("--mode", choice(["dev", "prod"] as const))),
+      target: optional(
+        option("--target", choice(["node", "browser"] as const)),
+      ),
+    });
+    const domainTokens = [
+      "--mode",
+      "--target",
+      "dev",
+      "prod",
+      "node",
+      "browser",
+      "--mode=dev",
+      "--mode=prod",
+      "--target=node",
+      "--target=browser",
+    ] as const;
+    const prefixArbitrary = fc.oneof(
+      fc.string({ minLength: 0, maxLength: 6 }),
+      fc.constantFrom(...domainTokens).chain((token: string) =>
+        fc
+          .integer({ min: 0, max: token.length })
+          .map((length: number) => token.slice(0, length))
+      ),
+    );
+
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom(...domainTokens), {
+          minLength: 0,
+          maxLength: 4,
+        }),
+        prefixArbitrary,
+        (before: readonly string[], prefix: string) => {
+          const suggestions = [
+            ...new Set(
+              literalSuggestionTexts(
+                suggestSync(parser, toSuggestionArgs(before, prefix)),
+              ),
+            ),
+          ];
+
+          for (const suggestion of suggestions) {
+            const alignsWithDomain = domainTokens.some((token: string) =>
+              token.startsWith(suggestion)
+            );
+            assert.ok(alignsWithDomain);
+          }
+        },
+      ),
+      complexPropertyParameters,
+    );
+  });
+
   it("successful inputs should fail after duplicate option mutation", () => {
     const parser = object({
       mode: option("--mode", choice(["dev", "prod"] as const)),
