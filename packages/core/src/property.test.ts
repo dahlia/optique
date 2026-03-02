@@ -12,7 +12,9 @@ import {
   constant,
   flag,
   option,
+  passThrough,
 } from "@optique/core/primitives";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import { choice, integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
@@ -44,6 +46,19 @@ const argumentTokenArbitrary = fc
 const shortOptionCharacterArbitrary = fc.constantFrom(
   ..."abcdefghijklmnopqrstuvwxyz",
 );
+
+const nonOptionTokenArbitrary = fc
+  .string({ minLength: 0, maxLength: 16 })
+  .map((raw: string) => `value${raw}`);
+
+const optionLikeTokenArbitrary = fc.oneof(
+  identifierArbitrary.map((name: string) => `--${name}`),
+  shortOptionCharacterArbitrary.map((name: string) => `-${name}`),
+);
+
+const equalsOptionTokenArbitrary = fc
+  .tuple(identifierArbitrary, fc.string({ minLength: 0, maxLength: 16 }))
+  .map(([name, value]: readonly [string, string]) => `--${name}=${value}`);
 
 function longOptionName(name: string): `--${string}` {
   return `--${name}` as `--${string}`;
@@ -286,6 +301,196 @@ describe("property-based tests", () => {
           const result = parseSync(parser, [...first, ...second]);
 
           assert.ok(!result.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("passThrough equalsOnly should preserve equals-style tokens", () => {
+    const parser = passThrough();
+
+    fc.assert(
+      fc.property(
+        fc.array(equalsOptionTokenArbitrary, { minLength: 1, maxLength: 8 }),
+        (tokens: readonly string[]) => {
+          const result = parseSync(parser, tokens);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.deepEqual(result.value, tokens);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("passThrough nextToken should capture value only when non-option", () => {
+    const parser = passThrough({ format: "nextToken" });
+
+    fc.assert(
+      fc.property(
+        optionLikeTokenArbitrary,
+        nonOptionTokenArbitrary,
+        optionLikeTokenArbitrary,
+        fc.boolean(),
+        (
+          optionToken: string,
+          valueToken: string,
+          nextOptionToken: string,
+          hasValue: boolean,
+        ) => {
+          const secondToken = hasValue ? valueToken : nextOptionToken;
+          const context = {
+            buffer: [optionToken, secondToken] as readonly string[],
+            state: parser.initialState,
+            optionsTerminated: false,
+            usage: parser.usage,
+          };
+          const result = parser.parse(context);
+
+          assert.ok(result.success);
+          if (result.success) {
+            if (hasValue) {
+              assert.deepEqual(result.consumed, [optionToken, secondToken]);
+              assert.deepEqual(result.next.state, [optionToken, secondToken]);
+              assert.deepEqual(result.next.buffer, []);
+            } else {
+              assert.deepEqual(result.consumed, [optionToken]);
+              assert.deepEqual(result.next.state, [optionToken]);
+              assert.deepEqual(result.next.buffer, [secondToken]);
+            }
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("passThrough should honor optionsTerminated by format", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom<"equalsOnly" | "nextToken" | "greedy">(
+          "equalsOnly",
+          "nextToken",
+          "greedy",
+        ),
+        equalsOptionTokenArbitrary,
+        (format: "equalsOnly" | "nextToken" | "greedy", token: string) => {
+          const parser = passThrough({ format });
+          const context = {
+            buffer: [token] as readonly string[],
+            state: parser.initialState,
+            optionsTerminated: true,
+            usage: parser.usage,
+          };
+          const result = parser.parse(context);
+
+          assert.equal(result.success, format === "greedy");
+          if (result.success) {
+            assert.deepEqual(result.next.state, [token]);
+            assert.deepEqual(result.next.buffer, []);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("optional should return undefined only when input is absent", () => {
+    const parser = optional(option("--port", integer({ min: 1, max: 65535 })));
+
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.constant<undefined>(undefined),
+          fc.integer({ min: 1, max: 65535 }),
+        ),
+        (port: number | undefined) => {
+          const args = port == null ? [] : ["--port", `${port}`];
+          const result = parseSync(parser, args);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.equal(result.value, port);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("withDefault should evaluate lazy default only when missing", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 65535 }),
+        fc.integer({ min: 1, max: 65535 }),
+        fc.boolean(),
+        (provided: number, fallback: number, present: boolean) => {
+          let calls = 0;
+          const parser = withDefault(
+            option("--port", integer({ min: 1, max: 65535 })),
+            () => {
+              calls++;
+              return fallback;
+            },
+          );
+
+          const args = present ? ["--port", `${provided}`] : [];
+          const result = parseSync(parser, args);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.equal(result.value, present ? provided : fallback);
+          }
+          assert.equal(calls, present ? 0 : 1);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("multiple should enforce bounds while preserving order", () => {
+    fc.assert(
+      fc.property(
+        fc.array(argumentTokenArbitrary, { minLength: 0, maxLength: 6 }),
+        fc.integer({ min: 0, max: 4 }),
+        fc.integer({ min: 0, max: 4 }),
+        (values: readonly string[], min: number, max: number) => {
+          fc.pre(min <= max);
+          const parser = object({
+            values: multiple(argument(string()), { min, max }),
+          });
+          const result = parseSync(parser, values);
+
+          const shouldSucceed = values.length >= min && values.length <= max;
+          assert.equal(result.success, shouldSucceed);
+          if (result.success) {
+            assert.deepEqual(result.value.values, values);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("multiple option parser should preserve occurrence order", () => {
+    const parser = object({
+      tags: multiple(option("--tag", string()), { min: 0, max: 6 }),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.array(nonOptionTokenArbitrary, { minLength: 0, maxLength: 6 }),
+        (tags: readonly string[]) => {
+          const args = tags.flatMap((tag: string) => ["--tag", tag]);
+          const result = parseSync(parser, args);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.deepEqual(result.value.tags, tags);
+          }
         },
       ),
       propertyParameters,
