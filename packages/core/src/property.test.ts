@@ -1070,6 +1070,103 @@ describe("property-based tests", () => {
     );
   });
 
+  it("inserting -- before positional tail should preserve semantics", () => {
+    const parser = object({
+      verbose: optional(option("--verbose")),
+      tail: multiple(argument(string()), { min: 0, max: 4 }),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.array(nonOptionTokenArbitrary, { minLength: 0, maxLength: 4 }),
+        (verbose: boolean, tail: readonly string[]) => {
+          const withoutTerminator = parseSync(parser, [
+            ...(verbose ? ["--verbose"] : []),
+            ...tail,
+          ]);
+          const withTerminator = parseSync(parser, [
+            ...(verbose ? ["--verbose"] : []),
+            "--",
+            ...tail,
+          ]);
+
+          assert.deepEqual(withTerminator, withoutTerminator);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("merge of disjoint objects should match flat object parser", () => {
+    const merged = merge(
+      object({
+        count: optional(option("--count", integer({ min: -1000, max: 1000 }))),
+      }),
+      object({
+        name: optional(option("--name", string())),
+      }),
+    );
+    const flat = object({
+      count: optional(option("--count", integer({ min: -1000, max: 1000 }))),
+      name: optional(option("--name", string())),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.constant<undefined>(undefined),
+          fc.integer({ min: -1000, max: 1000 }),
+        ),
+        fc.oneof(fc.constant<undefined>(undefined), nonOptionTokenArbitrary),
+        (count: number | undefined, name: string | undefined) => {
+          const blocks = [
+            ...(count == null ? [] : [["--count", `${count}`]]),
+            ...(name == null ? [] : [["--name", name]]),
+          ];
+
+          for (const args of permuteArgBlocks(blocks)) {
+            const mergedResult = parseSync(merged, args);
+            const flatResult = parseSync(flat, args);
+
+            assert.deepEqual(mergedResult, flatResult);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("trailing -- should be a no-op without positional parsers", () => {
+    const parser = object({
+      verbose: optional(option("--verbose")),
+      mode: optional(option("--mode", choice(["dev", "prod"] as const))),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.oneof(
+          fc.constant<undefined>(undefined),
+          fc.constantFrom("dev", "prod"),
+        ),
+        (verbose: boolean, mode: "dev" | "prod" | undefined) => {
+          const blocks = [
+            ...(verbose ? ([["--verbose"]] as const) : []),
+            ...(mode == null ? [] : ([["--mode", mode]] as const)),
+          ];
+
+          for (const args of permuteArgBlocks(blocks)) {
+            const base = parseSync(parser, args);
+            const transformed = parseSync(parser, [...args, "--"]);
+            assert.deepEqual(transformed, base);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("withDefault over optional should apply default on absence", () => {
     const parser = object({
       count: withDefault(
