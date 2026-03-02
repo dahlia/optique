@@ -12,6 +12,7 @@ import {
   parseSync,
   suggest,
   suggestAsync,
+  type Suggestion,
   suggestSync,
 } from "@optique/core/parser";
 import {
@@ -113,6 +114,18 @@ function permuteArgBlocks(
 
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function literalSuggestionTexts(
+  suggestions: readonly Suggestion[],
+): readonly string[] {
+  return suggestions
+    .filter((
+      suggestion,
+    ): suggestion is Extract<Suggestion, { kind: "literal" }> =>
+      suggestion.kind === "literal"
+    )
+    .map((suggestion) => suggestion.text);
 }
 
 describe("property-based tests", () => {
@@ -975,6 +988,81 @@ describe("property-based tests", () => {
               assert.equal(syncResult.value.preset, preset);
             }
             assert.deepEqual(asyncResult, syncResult);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("command suggestions should only suggest parseable completions", () => {
+    const parser = or(
+      command("build", constant("build")),
+      command("test", constant("test")),
+      command("lint", constant("lint")),
+    );
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom("", "b", "bu", "t", "te", "l", "li", "x"),
+        (prefix: string) => {
+          const suggestions = suggestSync(parser, [prefix]);
+          const texts = literalSuggestionTexts(suggestions);
+
+          assert.equal(new Set(texts).size, texts.length);
+          for (const text of texts) {
+            assert.ok(text.startsWith(prefix));
+            const result = parseSync(parser, [text]);
+            assert.ok(result.success);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("choice value suggestions should be parseable completions", () => {
+    const parser = object({
+      mode: option("--mode", choice(["dev", "prod"] as const)),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom("", "d", "de", "p", "pr", "x"),
+        (prefix: string) => {
+          const suggestions = suggestSync(parser, ["--mode", prefix]);
+          const texts = literalSuggestionTexts(suggestions);
+
+          assert.equal(new Set(texts).size, texts.length);
+          for (const text of texts) {
+            assert.ok(text.startsWith(prefix));
+            const result = parseSync(parser, ["--mode", text]);
+            assert.ok(result.success);
+            if (result.success) {
+              assert.equal(result.value.mode, text);
+            }
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("root option suggestions should always parse when applied", () => {
+    const parser = option("--verbose");
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom("", "-", "--", "--v", "--ve", "--verb", "--x"),
+        (prefix: string) => {
+          const suggestions = suggestSync(parser, [prefix]);
+          const texts = literalSuggestionTexts(suggestions);
+
+          assert.equal(new Set(texts).size, texts.length);
+          for (const text of texts) {
+            assert.ok(text.startsWith(prefix));
+            const result = parseSync(parser, [text]);
+            assert.ok(result.success);
           }
         },
       ),
