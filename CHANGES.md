@@ -173,6 +173,28 @@ environment variable integration via source contexts.  [[#86], [#135]]
 [#86]: https://github.com/dahlia/optique/issues/86
 [#135]: https://github.com/dahlia/optique/pull/135
 
+### @optique/inquirer
+
+The *@optique/inquirer* package was introduced in this release, providing
+interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
+
+ -  Added `prompt()` for wrapping any parser with an interactive prompt that
+    fires when no CLI value is provided.  Supports ten prompt types:
+    `input`, `password`, `number`, `confirm`, `select`, `rawlist`, `expand`,
+    `checkbox`, `editor`, and a custom `prompter` escape hatch.
+
+ -  Added `Choice` and `ExpandChoice` interfaces for selection-type prompts
+    (`select`, `rawlist`, `expand`, `checkbox`).
+
+ -  Re-exports `Separator` from `@inquirer/prompts` for use in choice lists.
+
+ -  `prompt()` always returns an async parser (`$mode: "async"`) and integrates
+    cleanly with `bindEnv()` and `bindConfig()` — the prompt is skipped
+    whenever the CLI, environment variable, or config file supplies a value.
+
+[#87]: https://github.com/dahlia/optique/issues/87
+[#137]: https://github.com/dahlia/optique/pull/137
+
 ### @optique/run
 
  -  Added `stdout`, `stderr`, and `onExit` options to `run()`, `runSync()`,

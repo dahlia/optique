@@ -4,6 +4,7 @@ packages:
 - docs
 
 catalog:
+  "@inquirer/prompts": ^8.3.0
   "@logtape/file": ^1.2.2
   "@logtape/logtape": ^1.2.2
   "@standard-schema/spec": ^1.1.0

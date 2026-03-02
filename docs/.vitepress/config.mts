@@ -74,6 +74,7 @@ const INTEGRATIONS = {
     { text: "Temporal", link: "/integrations/temporal" },
     { text: "Valibot", link: "/integrations/valibot" },
     { text: "Zod", link: "/integrations/zod" },
+    { text: "Interactive prompts", link: "/integrations/inquirer" },
   ],
 };
 
@@ -90,6 +91,10 @@ const REFERENCES = {
     { text: "@optique/temporal", link: "https://jsr.io/@optique/temporal/doc" },
     { text: "@optique/valibot", link: "https://jsr.io/@optique/valibot/doc" },
     { text: "@optique/zod", link: "https://jsr.io/@optique/zod/doc" },
+    {
+      text: "@optique/inquirer",
+      link: "https://jsr.io/@optique/inquirer/doc",
+    },
   ],
 };
 

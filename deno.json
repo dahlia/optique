@@ -4,6 +4,7 @@
     "examples/*"
   ],
   "imports": {
+    "@inquirer/prompts": "npm:@inquirer/prompts@^8.3.0",
     "@logtape/logtape": "jsr:@logtape/logtape@^1.2.2",
     "@standard-schema/spec": "npm:@standard-schema/spec@^1.1.0",
     "@std/fs": "jsr:@std/fs@^1.0.19",
