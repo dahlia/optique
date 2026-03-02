@@ -27,6 +27,7 @@ import {
   type ParserResult,
   parseSync,
   type Suggestion,
+  suggestSync,
 } from "@optique/core/parser";
 import {
   argument,
@@ -6115,5 +6116,565 @@ describe("hidden option in group/object/merge", () => {
 
     const usage = formatUsage("app", parser.usage);
     assert.equal(usage.trimEnd(), "app");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Branch-coverage regressions
+// ---------------------------------------------------------------------------
+describe("branch coverage regressions", () => {
+  it("or() noMatch as function", () => {
+    const parser = or(
+      command("deploy", argument(string())),
+      command("build", argument(string())),
+      {
+        errors: {
+          noMatch: ({ hasCommands }) =>
+            hasCommands
+              ? message`Pick a command.`
+              : message`No command available.`,
+        },
+      },
+    );
+    // empty input triggers noMatch via complete()
+    const result = parseSync(parser, []);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Pick a command.");
+    }
+  });
+
+  it("longestMatch() noMatch as function", () => {
+    const parser = longestMatch(
+      command("a", constant("A")),
+      command("b", constant("B")),
+      {
+        errors: {
+          noMatch: ({ hasCommands }) =>
+            hasCommands ? message`Choose a or b.` : message`Nothing.`,
+        },
+      },
+    );
+    const result = parseSync(parser, []);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Choose a or b.");
+    }
+  });
+
+  it("or() unexpectedInput as static Message", () => {
+    const parser = or(
+      command("deploy", constant("d")),
+      command("build", constant("b")),
+      {
+        errors: {
+          unexpectedInput: message`Unknown subcommand.`,
+        },
+      },
+    );
+    const result = parseSync(parser, ["oops"]);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Unknown subcommand.");
+    }
+  });
+
+  it("longestMatch() unexpectedInput as static Message", () => {
+    const parser = longestMatch(
+      command("x", constant("X")),
+      command("y", constant("Y")),
+      {
+        errors: {
+          unexpectedInput: message`Bad input.`,
+        },
+      },
+    );
+    const result = parseSync(parser, ["zzz"]);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Bad input.");
+    }
+  });
+
+  it("generateNoMatchError: commands + options (no args)", () => {
+    // or(command, object-with-options) → hasCommands + hasOptions
+    const parser = or(
+      command("run", constant("run")),
+      object({ verbose: flag("--verbose") }),
+    );
+    const result = parseSync(parser, []);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        "No matching option or command found.",
+      );
+    }
+  });
+
+  it("generateNoMatchError: args + commands (no options)", () => {
+    const parser = or(
+      command("run", constant("run")),
+      tuple([argument(string())]),
+    );
+    const result = parseAsync(parser, []);
+    assert.ok(result instanceof Promise);
+    return result.then((r) => {
+      assert.equal(r.success, false);
+      if (!r.success) {
+        assert.equal(
+          formatMessage(r.error),
+          "No matching command or argument found.",
+        );
+      }
+    });
+  });
+
+  it("generateNoMatchError: all three (options + commands + args)", () => {
+    const parser = or(
+      command("run", constant("run")),
+      object({ verbose: flag("--verbose") }),
+      tuple([argument(string())]),
+    );
+    const result = parseAsync(parser, []);
+    assert.ok(result instanceof Promise);
+    return result.then((r) => {
+      assert.equal(r.success, false);
+      if (!r.success) {
+        assert.equal(
+          formatMessage(r.error),
+          "No matching option, command, or argument found.",
+        );
+      }
+    });
+  });
+
+  it("generateNoMatchError: args + options (no commands)", () => {
+    const parser = or(
+      object({ verbose: flag("--verbose") }),
+      tuple([argument(string())]),
+    );
+    const result = parseAsync(parser, []);
+    assert.ok(result instanceof Promise);
+    return result.then((r) => {
+      assert.equal(r.success, false);
+      if (!r.success) {
+        assert.equal(
+          formatMessage(r.error),
+          "No matching option or argument found.",
+        );
+      }
+    });
+  });
+
+  it("DuplicateOptionError with description-less Symbol", () => {
+    const sym = Symbol();
+    assert.throws(
+      () =>
+        object({
+          [sym]: flag("--dup"),
+          other: flag("--dup"),
+        }),
+      (err: unknown) =>
+        err instanceof DuplicateOptionError &&
+        err.message.includes("--dup"),
+    );
+  });
+
+  it("object() suggest with hidden: true suppresses suggestions", () => {
+    const parser = object(
+      {
+        verbose: flag("--verbose"),
+        name: option("--name", string()),
+      },
+      { hidden: true },
+    );
+    // Use parseSync to make a context, then invoke suggest manually
+    const suggestions: Suggestion[] = [];
+    for (
+      const s of parser.suggest(
+        {
+          buffer: ["--"],
+          optionsTerminated: false,
+          state: parser.initialState,
+          usage: parser.usage,
+        },
+        "--",
+      ) as Iterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.equal(suggestions.length, 0);
+  });
+
+  it("createExclusiveComplete failed result branch", () => {
+    // When a selected parser's parse succeeds but complete() fails,
+    // the [i, result] state where !result.success triggers line 482.
+    // We create an or() where the only matching parser fails on complete:
+    const parser = or(
+      object({ port: option("--port", integer({ min: 1 })) }),
+      command("other", constant("o")),
+    );
+    const result = parseSync(parser, ["--port", "abc"]);
+    assert.equal(result.success, false);
+  });
+});
+
+// ---------- branch coverage regressions ----------
+
+describe("branch coverage: error customization functions", () => {
+  it("or() noMatch as function receives NoMatchContext", () => {
+    const parser = or(
+      command("foo", constant("f")),
+      command("bar", constant("b")),
+      {
+        errors: {
+          // Use text() so the output isn't quoted by the message formatter
+          noMatch: (ctx) => [
+            text(ctx.hasCommands ? "custom-noMatch-hasCommands" : "no-cmds"),
+          ],
+        },
+      },
+    );
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(formatted.includes("custom-noMatch-hasCommands"));
+    }
+  });
+
+  it("or() unexpectedInput as function receives token", () => {
+    const parser = or(
+      command("foo", constant("f")),
+      command("bar", constant("b")),
+      {
+        errors: {
+          unexpectedInput: (token) => [text(`unexpected-token:${token}`)],
+        },
+      },
+    );
+    const result = parseSync(parser, ["baz"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(formatted.includes("unexpected-token:baz"));
+    }
+  });
+
+  it("object() endOfInput as function receives NoMatchContext", () => {
+    const parser = object(
+      { name: option("--name", string()) },
+      {
+        errors: {
+          endOfInput: (ctx) => [
+            text(ctx.hasOptions ? "custom-eoi-hasOptions" : "custom-eoi-none"),
+          ],
+        },
+      },
+    );
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(formatted.includes("custom-eoi-hasOptions"));
+    }
+  });
+
+  it("conditional() branchError function on sync complete", () => {
+    const parser = conditional(
+      option("--mode", choice(["a", "b"])),
+      {
+        a: object({ x: option("--x", integer()) }),
+        b: object({ y: option("--y", string()) }),
+      },
+      constant(null),
+      {
+        errors: {
+          branchError: (disc: string | undefined, _err: Message) => [
+            text(`branch-error-for:${disc ?? "?"}`),
+          ],
+        },
+      },
+    );
+    // parse with mode=a but provide invalid integer for --x
+    const result = parseSync(parser, ["--mode", "a", "--x", "notnum"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(formatted.includes("branch-error-for:a"));
+    }
+  });
+
+  it("longestMatch() noMatch as function", () => {
+    const parser = longestMatch(
+      command("alpha", constant("a")),
+      command("beta", constant("b")),
+      {
+        errors: {
+          noMatch: (ctx) => [
+            text(ctx.hasCommands ? "lm-noMatch-cmds" : "lm-noMatch-none"),
+          ],
+        },
+      },
+    );
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(formatted.includes("lm-noMatch-cmds"));
+    }
+  });
+});
+
+describe("branch coverage: hidden visibility suppresses suggest", () => {
+  it("merge() with hidden: true yields no suggestions", () => {
+    const parser = merge(
+      object({ a: option("--alpha", string()) }),
+      object({ b: option("--beta", string()) }),
+      { hidden: true },
+    );
+    const suggestions: Suggestion[] = [];
+    for (
+      const s of parser.suggest(
+        {
+          buffer: ["--"],
+          optionsTerminated: false,
+          state: parser.initialState,
+          usage: parser.usage,
+        },
+        "--",
+      ) as Iterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.equal(suggestions.length, 0);
+  });
+
+  it("group() with hidden: true yields no suggestions", () => {
+    const parser = group(
+      "grp",
+      object({ v: flag("--verbose") }),
+      { hidden: true },
+    );
+    const suggestions: Suggestion[] = [];
+    for (
+      const s of parser.suggest(
+        {
+          buffer: ["--"],
+          optionsTerminated: false,
+          state: parser.initialState,
+          usage: parser.usage,
+        },
+        "--",
+      ) as Iterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.equal(suggestions.length, 0);
+  });
+});
+
+describe("branch coverage: conditional() complete/suggest edges", () => {
+  it("complete with default branch when no discriminator provided", () => {
+    const parser = conditional(
+      option("--format", choice(["json", "csv"])),
+      {
+        json: object({ pretty: flag("--pretty") }),
+        csv: object({ sep: option("--sep", string()) }),
+      },
+      object({ raw: flag("--raw") }),
+    );
+    // Provide only default-branch option
+    const result = parseSync(parser, ["--raw"]);
+    assert.ok(result.success);
+    if (result.success) {
+      // Should be [undefined, { raw: true }]
+      assert.equal(result.value[0], undefined);
+    }
+  });
+
+  it("complete with no branch and no default fails", () => {
+    const parser = conditional(
+      option("--format", choice(["json", "csv"])),
+      {
+        json: object({ pretty: flag("--pretty") }),
+        csv: object({ sep: option("--sep", string()) }),
+      },
+    );
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+  });
+
+  it("suggest delegates to selected branch after parse", () => {
+    const parser = conditional(
+      option("--format", choice(["json", "csv"])),
+      {
+        json: object({ pretty: flag("--pretty") }),
+        csv: object({ sep: option("--sep", string()) }),
+      },
+    );
+    // Parse with discriminator to select a branch
+    const suggestions = suggestSync(parser, ["--format", "json", "--"]);
+    // Should suggest --pretty from the json branch
+    const texts = suggestions.map((s) => s.kind === "literal" ? s.text : "");
+    assert.ok(texts.some((t) => t === "--pretty"));
+  });
+
+  it("suggest with default branch options before discriminator", () => {
+    const parser = conditional(
+      option("--format", choice(["json", "csv"])),
+      {
+        json: object({ pretty: flag("--pretty") }),
+        csv: object({ sep: option("--sep", string()) }),
+      },
+      object({ raw: flag("--raw") }),
+    );
+    // Without discriminator, should suggest discriminator + default opts
+    const suggestions = suggestSync(parser, ["--"]);
+    const texts = suggestions.map((s) => s.kind === "literal" ? s.text : "");
+    assert.ok(texts.some((t) => t === "--format"));
+    assert.ok(texts.some((t) => t === "--raw"));
+  });
+
+  it("getDocFragments includes default branch entries", () => {
+    const parser = conditional(
+      option("--format", choice(["json", "csv"])),
+      {
+        json: object({ pretty: flag("--pretty") }),
+        csv: object({ sep: option("--sep", string()) }),
+      },
+      object({ raw: flag("--raw") }),
+    );
+    const docPage = getDocPage(parser);
+    assert.ok(docPage !== undefined);
+    if (docPage) {
+      // Should have "Default options" section
+      const defaultSection = docPage.sections.find(
+        (s) => s.title === "Default options",
+      );
+      assert.ok(defaultSection !== undefined);
+      if (defaultSection) {
+        // Should contain at least one entry (--raw)
+        assert.ok(defaultSection.entries.length > 0);
+      }
+    }
+  });
+
+  it("complete uses discriminator state fallback on failure", () => {
+    // When discriminator completion fails, should use selectedBranch.key
+    const parser = conditional(
+      option("--mode", choice(["a", "b"])),
+      {
+        a: constant("alpha"),
+        b: constant("beta"),
+      },
+    );
+    const result = parseSync(parser, ["--mode", "a"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "a");
+      assert.equal(result.value[1], "alpha");
+    }
+  });
+});
+
+describe("branch coverage: generateNoMatchError variants", () => {
+  it("args + commands but no options", () => {
+    // Create a parser with arguments and commands but no options
+    // or() with command + argument triggers hasArguments && hasCommands && !hasOptions
+    const parser = or(
+      command("sub", constant("s")),
+      argument(string()),
+    );
+    const result = parseSync(parser, []);
+    assert.ok(!result.success);
+    if (!result.success) {
+      const formatted = formatMessage(result.error);
+      assert.ok(
+        formatted.includes("command") || formatted.includes("argument"),
+      );
+    }
+  });
+});
+
+describe("branch coverage: DuplicateOptionError with symbols", () => {
+  it("formats symbol sources with description", () => {
+    const sym = Symbol("myField");
+    const err = new DuplicateOptionError("--opt", ["fieldA", sym]);
+    assert.ok(err.message.includes("myField"));
+    assert.ok(err.message.includes("fieldA"));
+  });
+
+  it("formats symbol without description via toString", () => {
+    const sym = Symbol();
+    const err = new DuplicateOptionError("--opt", ["fieldB", sym]);
+    assert.ok(err.message.includes("Symbol()"));
+    assert.ok(err.message.includes("fieldB"));
+  });
+});
+
+describe("branch coverage: doc fragment section flattening", () => {
+  it("object() getDocFragments with label promotes entries", () => {
+    const parser = object(
+      "Options",
+      {
+        name: option("--name", string(), {
+          description: message`The name`,
+        }),
+        verbose: flag("--verbose", {
+          description: message`Verbose mode`,
+        }),
+      },
+    );
+    const frags = parser.getDocFragments({ kind: "unavailable" }, undefined);
+    // Should have at least one section with the "Options" title
+    const sections = frags.fragments.filter((f) => f.type === "section");
+    assert.ok(sections.length > 0);
+  });
+
+  it("merge() getDocFragments flattens unlabeled sections", () => {
+    const parser = merge(
+      object({
+        a: option("--alpha", string(), { description: message`Alpha` }),
+      }),
+      object({
+        b: option("--beta", string(), { description: message`Beta` }),
+      }),
+    );
+    const frags = parser.getDocFragments({ kind: "unavailable" }, undefined);
+    // Unlabeled object parsers have their entries promoted into the anonymous
+    // section at the end. Check all entries across all sections.
+    const allEntries = frags.fragments.flatMap((f) =>
+      f.type === "section" ? f.entries : []
+    );
+    assert.ok(allEntries.length >= 2);
+  });
+
+  it("tuple() getDocFragments with available state", () => {
+    const inner1 = option("--x", string(), { description: message`X opt` });
+    const inner2 = flag("--y", { description: message`Y flag` });
+    const parser = tuple("Section", [inner1, inner2]);
+    // Use the parser's own initialState to avoid type mismatch
+    const frags = parser.getDocFragments(
+      { kind: "available", state: parser.initialState },
+      undefined,
+    );
+    const sections = frags.fragments.filter((f) => f.type === "section");
+    assert.ok(sections.length > 0);
+  });
+
+  it("concat() getDocFragments flattens unlabeled sections", () => {
+    const t1 = tuple([
+      option("--a", string(), { description: message`A` }),
+    ]);
+    const t2 = tuple([
+      option("--b", string(), { description: message`B` }),
+    ]);
+    const parser = concat(t1, t2);
+    const frags = parser.getDocFragments({ kind: "unavailable" }, undefined);
+    // Should have entries promoted from untitled child sections
+    const allFrags = frags.fragments;
+    assert.ok(allFrags.length > 0);
   });
 });

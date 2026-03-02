@@ -198,4 +198,223 @@ describe("parser.ts coverage branches", () => {
     assert.ok(doc);
     assert.ok(Array.isArray(doc.usage));
   });
+
+  it("parseAsync: parse() returns failure", async () => {
+    const failing: Parser<"async", never, null> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly null[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`async parse failed`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: null as never,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = await parse(failing, ["arg"]);
+    assert.equal(result.success, false);
+  });
+
+  it("parseAsync: complete() returns failure", async () => {
+    const failOnComplete: Parser<"async", never, string> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly string[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: "init",
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: [], state: "done" },
+          consumed: context.buffer.slice(0, 1),
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`async complete failed`,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = await parse(failOnComplete, ["tok"]);
+    assert.equal(result.success, false);
+  });
+
+  it("parseAsync: infinite loop detection", async () => {
+    const stalling: Parser<"async", never, number> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly number[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: 0,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, state: (context.state as number) + 1 },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: null as never,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = await parse(stalling, ["stuck"]);
+    assert.equal(result.success, false);
+  });
+
+  it("suggestSync: parse failure fallback", () => {
+    const failingWithSuggestions: Parser<"sync", never, null> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly null[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`nope`,
+        };
+      },
+      complete() {
+        return { success: true as const, value: null as never };
+      },
+      *suggest(_context, _prefix): Generator<Suggestion> {
+        yield { kind: "literal", text: "--fallback" };
+      },
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = suggestSync(failingWithSuggestions, ["tok", "pre"]);
+    assert.ok(
+      result.some((s) => s.kind === "literal" && s.text === "--fallback"),
+    );
+  });
+
+  it("suggestSync: infinite loop guard returns []", () => {
+    const stalling: Parser<"sync", never, number> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly number[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: 0,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, state: (context.state as number) + 1 },
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: true as const, value: null as never };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = suggestSync(stalling, ["stuck", "pre"]);
+    assert.deepEqual(result, []);
+  });
+
+  it("suggestAsync: parse failure fallback", async () => {
+    const failingAsync: Parser<"async", never, null> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly null[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`nope`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: null as never,
+        });
+      },
+      async *suggest(_context, _prefix): AsyncGenerator<Suggestion> {
+        yield { kind: "literal", text: "--async-fallback" };
+      },
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = await suggestAsync(failingAsync, ["tok", "pre"]);
+    assert.ok(
+      result.some((s) => s.kind === "literal" && s.text === "--async-fallback"),
+    );
+  });
+
+  it("suggestAsync: infinite loop guard returns []", async () => {
+    const stalling: Parser<"async", never, number> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly number[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: 0,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, state: (context.state as number) + 1 },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: null as never,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [], brief: undefined };
+      },
+    };
+    const result = await suggestAsync(stalling, ["stuck", "pre"]);
+    assert.deepEqual(result, []);
+  });
+
+  it("getDocPageAsync with sync parser (fast path)", async () => {
+    const syncParser = constant("test");
+    const doc = await getDocPageAsync(syncParser, []);
+    assert.ok(doc);
+    assert.ok(Array.isArray(doc.usage));
+  });
 });
