@@ -41,8 +41,33 @@ const argumentTokenArbitrary = fc
   .string({ minLength: 0, maxLength: 16 })
   .map((raw: string) => `arg${raw}`);
 
+const shortOptionCharacterArbitrary = fc.constantFrom(
+  ..."abcdefghijklmnopqrstuvwxyz",
+);
+
 function longOptionName(name: string): `--${string}` {
   return `--${name}` as `--${string}`;
+}
+
+function shortOptionName(name: string): `-${string}` {
+  return `-${name}` as `-${string}`;
+}
+
+function permuteTokens<T>(tokens: readonly T[]): readonly (readonly T[])[] {
+  if (tokens.length <= 1) {
+    return [Array.from(tokens)];
+  }
+
+  const permutations: T[][] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const head = tokens[i];
+    const tail = [...tokens.slice(0, i), ...tokens.slice(i + 1)];
+    for (const suffix of permuteTokens(tail)) {
+      permutations.push([head, ...suffix]);
+    }
+  }
+
+  return permutations;
 }
 
 function escapeRegExp(input: string): string {
@@ -214,6 +239,59 @@ describe("property-based tests", () => {
     );
   });
 
+  it("argument parser should treat option-like tokens after --", () => {
+    const parser = argument(string());
+
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        fc.boolean(),
+        (name: string, longForm: boolean) => {
+          const token = longForm ? `--${name}` : `-${name}`;
+          const withoutTerminator = parseSync(parser, [token]);
+          const withTerminator = parseSync(parser, ["--", token]);
+
+          assert.ok(!withoutTerminator.success);
+          assert.ok(withTerminator.success);
+          if (withTerminator.success) {
+            assert.equal(withTerminator.value, token);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("option parser should reject duplicate occurrences", () => {
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        fc.integer({ min: -1_000_000, max: 1_000_000 }),
+        fc.integer({ min: -1_000_000, max: 1_000_000 }),
+        fc.boolean(),
+        (
+          name: string,
+          firstValue: number,
+          secondValue: number,
+          separatedFirst: boolean,
+        ) => {
+          const optionName = longOptionName(name);
+          const parser = option(optionName, integer());
+          const first = separatedFirst
+            ? [optionName, `${firstValue}`]
+            : [`${optionName}=${firstValue}`];
+          const second = separatedFirst
+            ? [`${optionName}=${secondValue}`]
+            : [optionName, `${secondValue}`];
+          const result = parseSync(parser, [...first, ...second]);
+
+          assert.ok(!result.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("command parser should dispatch only for matching command", () => {
     fc.assert(
       fc.property(
@@ -271,6 +349,103 @@ describe("property-based tests", () => {
           assert.ok(reversed.success);
           if (forward.success && reversed.success) {
             assert.deepEqual(reversed.value, forward.value);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("short option bundles should match separated tokens", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(shortOptionCharacterArbitrary, {
+          minLength: 3,
+          maxLength: 3,
+        }),
+        fc.boolean(),
+        fc.boolean(),
+        fc.boolean(),
+        fc.boolean(),
+        (
+          names: readonly string[],
+          firstPresent: boolean,
+          secondPresent: boolean,
+          thirdPresent: boolean,
+          reverseOrder: boolean,
+        ) => {
+          const [firstName, secondName, thirdName] = names;
+          const firstOption = shortOptionName(firstName);
+          const secondOption = shortOptionName(secondName);
+          const thirdOption = shortOptionName(thirdName);
+
+          const parser = object({
+            first: option(firstOption),
+            second: option(secondOption),
+            third: option(thirdOption),
+          });
+
+          const selected = [
+            ...(firstPresent ? [firstName] : []),
+            ...(secondPresent ? [secondName] : []),
+            ...(thirdPresent ? [thirdName] : []),
+          ];
+          const ordered = reverseOrder ? [...selected].reverse() : selected;
+          const separatedArgs = ordered.map(shortOptionName);
+          const bundledArgs = ordered.length < 1
+            ? []
+            : [`-${ordered.join("")}`];
+
+          const separated = parseSync(parser, separatedArgs);
+          const bundled = parseSync(parser, bundledArgs);
+
+          assert.ok(separated.success);
+          assert.ok(bundled.success);
+          if (separated.success && bundled.success) {
+            const expected = {
+              first: firstPresent,
+              second: secondPresent,
+              third: thirdPresent,
+            };
+            assert.deepEqual(separated.value, expected);
+            assert.deepEqual(bundled.value, expected);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("mixed object parser should be stable across token permutations", () => {
+    const parser = object({
+      target: argument(string()),
+      verbose: option("--verbose"),
+      dryRun: option("--dry-run"),
+    });
+
+    fc.assert(
+      fc.property(
+        argumentTokenArbitrary,
+        fc.boolean(),
+        fc.boolean(),
+        (target: string, verbose: boolean, dryRun: boolean) => {
+          const tokens = [
+            target,
+            ...(verbose ? ["--verbose"] : []),
+            ...(dryRun ? ["--dry-run"] : []),
+          ];
+
+          for (const permutation of permuteTokens(tokens)) {
+            const result = parseSync(parser, permutation);
+
+            assert.ok(result.success);
+            if (result.success) {
+              assert.deepEqual(result.value, {
+                target,
+                verbose,
+                dryRun,
+              });
+            }
           }
         },
       ),
@@ -385,6 +560,78 @@ describe("property-based tests", () => {
     );
   });
 
+  it("or parser should switch branches after shared prefix", () => {
+    const parser = or(
+      object({
+        shared: option("--shared"),
+        payload: command("left", argument(string())),
+      }),
+      object({
+        shared: option("--shared"),
+        payload: command("right", argument(string())),
+      }),
+    );
+
+    fc.assert(
+      fc.property(
+        argumentTokenArbitrary,
+        fc.boolean(),
+        (value: string, chooseLeft: boolean) => {
+          const commandName = chooseLeft ? "left" : "right";
+          const result = parseSync(parser, ["--shared", commandName, value]);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.equal(result.value.shared, true);
+            assert.equal(result.value.payload, value);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("or parser should enforce branch exclusivity", () => {
+    const parser = or(
+      object({
+        shared: option("--shared"),
+        left: flag("--left"),
+      }),
+      object({
+        shared: option("--shared"),
+        right: flag("--right"),
+      }),
+    );
+
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.boolean(),
+        fc.boolean(),
+        (left: boolean, right: boolean, shared: boolean) => {
+          const args = [
+            ...(shared ? ["--shared"] : []),
+            ...(left ? ["--left"] : []),
+            ...(right ? ["--right"] : []),
+          ];
+          const shouldSucceed = left !== right;
+
+          for (const permutation of permuteTokens(args)) {
+            const result = parseSync(parser, permutation);
+
+            assert.equal(result.success, shouldSucceed);
+            if (result.success) {
+              assert.equal(result.value.shared, shared);
+              assert.equal("left" in result.value, left);
+              assert.equal("right" in result.value, right);
+            }
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("longestMatch should prefer parser consuming more tokens", () => {
     const parser = longestMatch(
       tuple([argument(string())]),
@@ -404,6 +651,32 @@ describe("property-based tests", () => {
           }
         },
       ),
+      propertyParameters,
+    );
+  });
+
+  it("longestMatch should prefer the first parser on ties", () => {
+    const leftFirst = longestMatch(
+      tuple([argument(string())]),
+      argument(string()),
+    );
+    const rightFirst = longestMatch(
+      argument(string()),
+      tuple([argument(string())]),
+    );
+
+    fc.assert(
+      fc.property(argumentTokenArbitrary, (token: string) => {
+        const leftResult = parseSync(leftFirst, [token]);
+        const rightResult = parseSync(rightFirst, [token]);
+
+        assert.ok(leftResult.success);
+        assert.ok(rightResult.success);
+        if (leftResult.success && rightResult.success) {
+          assert.deepEqual(leftResult.value, [token]);
+          assert.equal(rightResult.value, token);
+        }
+      }),
       propertyParameters,
     );
   });
