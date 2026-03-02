@@ -1302,6 +1302,74 @@ describe("property-based tests", () => {
     );
   });
 
+  it("or parser should deterministically pick first ambiguous branch", () => {
+    const leftBranch = object({
+      branch: constant("left"),
+      value: argument(string()),
+    });
+    const rightBranch = object({
+      branch: constant("right"),
+      value: argument(string()),
+    });
+    const leftFirst = or(leftBranch, rightBranch);
+    const rightFirst = or(rightBranch, leftBranch);
+
+    fc.assert(
+      fc.property(argumentTokenArbitrary, (token: string) => {
+        const leftResult = parseSync(leftFirst, [token]);
+        const rightResult = parseSync(rightFirst, [token]);
+
+        assert.ok(leftResult.success);
+        assert.ok(rightResult.success);
+        if (leftResult.success && rightResult.success) {
+          assert.equal(leftResult.value.branch, "left");
+          assert.equal(leftResult.value.value, token);
+          assert.equal(rightResult.value.branch, "right");
+          assert.equal(rightResult.value.value, token);
+        }
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("or parser should handle shared and branch tokens in any order", () => {
+    const parser = or(
+      object({
+        shared: option("--shared"),
+        left: flag("--left"),
+        value: argument(string()),
+      }),
+      object({
+        shared: option("--shared"),
+        right: flag("--right"),
+        value: argument(string()),
+      }),
+    );
+
+    fc.assert(
+      fc.property(
+        argumentTokenArbitrary,
+        fc.boolean(),
+        (value: string, left: boolean) => {
+          const args = ["--shared", left ? "--left" : "--right", value];
+
+          for (const permutation of permuteTokens(args)) {
+            const result = parseSync(parser, permutation);
+
+            assert.ok(result.success);
+            if (result.success) {
+              assert.equal(result.value.shared, true);
+              assert.equal(result.value.value, value);
+              assert.equal("left" in result.value, left);
+              assert.equal("right" in result.value, !left);
+            }
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("longestMatch should prefer parser consuming more tokens", () => {
     const parser = longestMatch(
       tuple([argument(string())]),
@@ -1318,6 +1386,63 @@ describe("property-based tests", () => {
           assert.ok(result.success);
           if (result.success) {
             assert.deepEqual(result.value, [first, second]);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("longestMatch should ignore parser order for unique winners", () => {
+    const first = tuple([
+      argument(string()),
+      argument(string()),
+      argument(string()),
+    ]);
+    const second = tuple([argument(string()), argument(string())]);
+    const third = tuple([argument(string())]);
+
+    const parserA = longestMatch(first, second, third);
+    const parserB = longestMatch(second, third, first);
+
+    fc.assert(
+      fc.property(
+        argumentTokenArbitrary,
+        argumentTokenArbitrary,
+        argumentTokenArbitrary,
+        (a: string, b: string, c: string) => {
+          const args = [a, b, c];
+          const resultA = parseSync(parserA, args);
+          const resultB = parseSync(parserB, args);
+
+          assert.ok(resultA.success);
+          assert.ok(resultB.success);
+          if (resultA.success && resultB.success) {
+            assert.deepEqual(resultA.value, args);
+            assert.deepEqual(resultB.value, args);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("longestMatch should choose branch by available token count", () => {
+    const parser = longestMatch(
+      tuple([argument(string())]),
+      tuple([argument(string()), argument(string())]),
+      tuple([argument(string()), argument(string()), argument(string())]),
+    );
+
+    fc.assert(
+      fc.property(
+        fc.array(argumentTokenArbitrary, { minLength: 1, maxLength: 3 }),
+        (args: readonly string[]) => {
+          const result = parseSync(parser, args);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.deepEqual(result.value, args);
           }
         },
       ),
