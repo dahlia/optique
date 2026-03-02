@@ -8137,7 +8137,16 @@ describe("branch coverage regressions", () => {
       ]);
     }
 
-    const wellKnown = parser.parse("80");
+    // Use a separate parser with no min constraint so well-known port
+    // check is reached before belowMinimum:
+    const wkParser = port({
+      type: "bigint",
+      disallowWellKnown: true,
+      errors: {
+        wellKnownNotAllowed: message`well-known bigint port denied`,
+      },
+    });
+    const wellKnown = wkParser.parse("80");
     assert.ok(!wellKnown.success);
     if (!wellKnown.success) {
       assert.deepStrictEqual(wellKnown.error, [
