@@ -34,6 +34,7 @@ import {
   constant,
   flag,
   option,
+  passThrough,
 } from "@optique/core/primitives";
 import { formatUsage } from "@optique/core/usage";
 import {
@@ -6078,6 +6079,36 @@ describe("hidden option in group/object/merge", () => {
           min: 1,
         }),
         mode: or(option("--alpha"), option("--beta")),
+      },
+      { hidden: "usage" },
+    );
+
+    const usage = formatUsage("app", parser.usage);
+    assert.equal(usage.trimEnd(), "app");
+  });
+
+  it("should hide command and passthrough docs with object hidden doc", () => {
+    const parser = object(
+      {
+        run: command("run", option("--force")),
+        rest: passThrough({ description: message`Other arguments` }),
+      },
+      { hidden: "doc" },
+    );
+
+    const fragments = parser.getDocFragments({ kind: "unavailable" });
+    const entries = fragments.fragments.flatMap((fragment) =>
+      fragment.type === "section" ? fragment.entries : [fragment]
+    );
+
+    assert.equal(entries.length, 0);
+  });
+
+  it("should hide command and passthrough usage with object hidden usage", () => {
+    const parser = object(
+      {
+        run: command("run", option("--force")),
+        rest: passThrough(),
       },
       { hidden: "usage" },
     );
