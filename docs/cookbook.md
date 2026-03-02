@@ -1307,7 +1307,7 @@ import { runAsync } from "@optique/run";
 
 const configSchema = z.object({
   host: z.string().optional(),
-  port: z.number().optional(),
+  port: z.number().int().min(1).max(65535).optional(),
 });
 
 const envContext = createEnvContext({ prefix: "MYAPP_" });
@@ -1340,9 +1340,104 @@ const result = await runAsync(parser, {
 });
 ~~~~
 
+### Combining with interactive prompts
+
+Use `prompt()` from *@optique/inquirer* as the outermost wrapper when you want
+an interactive fallback *after* checking CLI arguments, environment variables,
+and config files.
+
+A practical approach is to preload config annotations once and expose them via
+a static context. This keeps the fallback order predictable while still using
+`bindEnv()` and `bindConfig()` together:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { object } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
+import { prompt } from "@optique/inquirer";
+import { runAsync } from "@optique/run";
+
+function getConfigPathFromArgs(args: readonly string[]): string | undefined {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === "-c" || arg === "--config") {
+      return args[index + 1];
+    }
+    if (arg.startsWith("--config=")) {
+      return arg.slice("--config=".length);
+    }
+  }
+  return undefined;
+}
+
+const configSchema = z.object({
+  host: z.string().optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+});
+
+const envContext = createEnvContext({ prefix: "MYAPP_" });
+const configContext = createConfigContext({ schema: configSchema });
+const args = ["--config", "./config.json"] as const;
+
+const configAnnotations = await configContext.getAnnotations(
+  { config: getConfigPathFromArgs(args) },
+  { getConfigPath: (parsed: { readonly config?: string }) => parsed.config },
+);
+
+const staticConfigContext = {
+  id: configContext.id,
+  mode: "static" as const,
+  getAnnotations() {
+    return configAnnotations;
+  },
+};
+
+const parser = object({
+  config: optional(option("-c", "--config", string())),
+  host: prompt(
+    bindEnv(
+      bindConfig(option("--host", string()), {
+        context: configContext,
+        key: "host",
+      }),
+      { context: envContext, key: "HOST", parser: string() },
+    ),
+    { type: "input", message: "Host:", default: "localhost" },
+  ),
+  port: prompt(
+    bindEnv(
+      bindConfig(option("--port", integer()), {
+        context: configContext,
+        key: "port",
+      }),
+      {
+        context: envContext,
+        key: "PORT",
+        parser: integer({ min: 1, max: 65535 }),
+      },
+    ),
+    { type: "number", message: "Port:", default: 3000, min: 1, max: 65535 },
+  ),
+});
+
+const result = await runAsync(parser, {
+  args,
+  contexts: [envContext, staticConfigContext],
+});
+~~~~
+
+This preserves the priority chain:
+
+CLI argument > environment variable > config file > interactive prompt
+
 For more details, see the
-[environment variable guide](./integrations/env.md) and
-[config file integration guide](./integrations/config.md).
+[environment variable guide](./integrations/env.md),
+[config file integration guide](./integrations/config.md), and
+[interactive prompt guide](./integrations/inquirer.md).
 
 
 Design principles
