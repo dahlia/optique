@@ -24,14 +24,74 @@ import {
   option,
   passThrough,
 } from "@optique/core/primitives";
-import { choice, integer, string } from "@optique/core/valueparser";
-import { type InferValue, parse, parseSync } from "@optique/core/parser";
+import {
+  choice,
+  integer,
+  string,
+  type ValueParser,
+  type ValueParserResult,
+} from "@optique/core/valueparser";
+import {
+  type InferValue,
+  parse,
+  parseSync,
+  type Suggestion,
+} from "@optique/core/parser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
+}
+
+function fileSuggestingParser(): ValueParser<"sync", string> {
+  return {
+    $mode: "sync",
+    metavar: "FILE",
+    parse(input: string): ValueParserResult<string> {
+      return { success: true, value: input };
+    },
+    format(value: string): string {
+      return value;
+    },
+    suggest(_prefix: string): Iterable<Suggestion> {
+      return [{ kind: "file", type: "any", pattern: "*.txt" }];
+    },
+  };
+}
+
+function asyncFileSuggestingParser(): ValueParser<"async", string> {
+  return {
+    $mode: "async",
+    metavar: "FILE",
+    parse(input: string): Promise<ValueParserResult<string>> {
+      return Promise.resolve({ success: true, value: input });
+    },
+    format(value: string): string {
+      return value;
+    },
+    suggest(_prefix: string): AsyncIterable<Suggestion> {
+      return {
+        async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+          yield { kind: "file", type: "any", pattern: "*.log" };
+        },
+      };
+    },
+  };
+}
+
+function noSuggestParser(): ValueParser<"sync", string> {
+  return {
+    $mode: "sync",
+    metavar: "TEXT",
+    parse(input: string): ValueParserResult<string> {
+      return { success: true, value: input };
+    },
+    format(value: string): string {
+      return value;
+    },
+  };
 }
 
 describe("constant", () => {
@@ -575,6 +635,92 @@ describe("option", () => {
         }
       }
     });
+
+    it("should suggest only short options for '-' prefix", () => {
+      const parser = option("-v", "--verbose", string());
+      const suggestions = Array.from(parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "-"));
+
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "-v" }]);
+    });
+
+    it("should suggest value candidates on empty buffer with undefined state", () => {
+      const parser = option("--env", choice(["dev", "prod"]));
+      const suggestions = Array.from(parser.suggest({
+        buffer: [],
+        state: undefined,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "p"));
+
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "prod" }]);
+    });
+
+    it("should fall back file suggestions to literal in --opt=value format", () => {
+      const parser = option("--file", fileSuggestingParser());
+      const suggestions = Array.from(parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "--file=a"));
+
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "--file=*.txt",
+        description: undefined,
+      }]);
+    });
+
+    it("should return no suggestions when value parser has no suggest", () => {
+      const parser = option("--name", noSuggestParser());
+      const suggestions = Array.from(parser.suggest({
+        buffer: ["--name"],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, ""));
+
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should suggest async values and short-only '-' behavior", async () => {
+      const parser = option("-l", "--log", asyncFileSuggestingParser());
+
+      const optionSuggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: parser.initialState,
+          usage: parser.usage,
+          optionsTerminated: false,
+        }, "-")
+      ) {
+        optionSuggestions.push(suggestion);
+      }
+      assert.deepEqual(optionSuggestions, [{ kind: "literal", text: "-l" }]);
+
+      const valueSuggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: undefined,
+          usage: parser.usage,
+          optionsTerminated: false,
+        }, "--log=x")
+      ) {
+        valueSuggestions.push(suggestion);
+      }
+      assert.deepEqual(valueSuggestions, [{
+        kind: "literal",
+        text: "--log=*.log",
+        description: undefined,
+      }]);
+    });
   });
 
   it("should fail on unmatched option", () => {
@@ -897,6 +1043,24 @@ describe("option() error customization", () => {
     }
   });
 
+  it("should use custom missing error function", () => {
+    const parser = option("--config", string(), {
+      errors: {
+        missing: (names) =>
+          message`Required option is ${text(names.join(", "))}.`,
+      },
+    });
+
+    const result = parser.complete(undefined);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Required option is --config.",
+      );
+    }
+  });
+
   it("should use custom optionsTerminated error", () => {
     const parser = option("--verbose", {
       errors: {
@@ -942,6 +1106,53 @@ describe("option() error customization", () => {
       assert.strictEqual(
         formatMessage(result.error),
         "The option --verbose was already specified.",
+      );
+    }
+  });
+
+  it("should use custom duplicate error static message for joined format", () => {
+    const parser = option("-seed", integer(), {
+      errors: {
+        duplicate: message`Seed can only be specified once.`,
+      },
+    });
+
+    const context = {
+      buffer: ["-seed=99"] as readonly string[],
+      state: { success: true as const, value: 42 },
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+
+    const result = parser.parse(context);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Seed can only be specified once.",
+      );
+    }
+  });
+
+  it("should use custom unexpectedValue error function", () => {
+    const parser = option("-verbose", {
+      errors: {
+        unexpectedValue: (value) =>
+          message`Unexpected inline value: ${text(value)}.`,
+      },
+    });
+
+    const result = parser.parse({
+      buffer: ["-verbose=true"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(
+        formatMessage(result.error),
+        "Unexpected inline value: true.",
       );
     }
   });
