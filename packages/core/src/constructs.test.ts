@@ -5457,4 +5457,20 @@ describe("hidden option in group/object/merge", () => {
     );
     assert.equal(entries.length, 0);
   });
+
+  it("should apply hidden usage recursively to optional/multiple/exclusive", () => {
+    const parser = object(
+      {
+        maybe: optional(option("--maybe", string({ metavar: "VALUE" }))),
+        tags: multiple(option("--tag", string({ metavar: "TAG" })), {
+          min: 1,
+        }),
+        mode: or(option("--alpha"), option("--beta")),
+      },
+      { hidden: "usage" },
+    );
+
+    const usage = formatUsage("app", parser.usage);
+    assert.equal(usage.trimEnd(), "app");
+  });
 });
