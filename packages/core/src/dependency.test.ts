@@ -3195,6 +3195,176 @@ describe("coverage-guided dependency parser tests", () => {
     }
   });
 
+  test("sync derived parsers should reject async parser mode in parse paths", async () => {
+    const modeParser = dependency(choice(["sync", "async"] as const));
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    let multiFactoryCalls = 0;
+    const multiDerived = deriveFrom<
+      readonly [typeof modeParser, typeof envParser],
+      "ok",
+      "sync" | "async"
+    >({
+      metavar: "VALUE",
+      dependencies: [modeParser, envParser] as const,
+      factory: (
+        _mode: "sync" | "async",
+        _env: "dev" | "prod",
+      ) => {
+        multiFactoryCalls++;
+        if (multiFactoryCalls === 1) {
+          return choice(["ok"] as const);
+        }
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValues: () => ["sync", "dev"] as const,
+    });
+
+    const multiResult = await multiDerived[parseWithDependency](
+      "ok",
+      ["async", "dev"] as const,
+    );
+    assert.ok(!multiResult.success);
+    if (!multiResult.success) {
+      assert.deepEqual(
+        multiResult.error,
+        message`Factory returned an async parser where a sync parser is required.`,
+      );
+    }
+
+    let singleFactoryCalls = 0;
+    const singleDerived = modeParser.derive<"ok", "sync" | "async">({
+      metavar: "VALUE",
+      factory: (_mode: "sync" | "async") => {
+        singleFactoryCalls++;
+        if (singleFactoryCalls === 1) {
+          return choice(["ok"] as const);
+        }
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValue: () => "sync" as const,
+    });
+
+    const singleResult = await singleDerived.parse("ok");
+    assert.ok(!singleResult.success);
+    if (!singleResult.success) {
+      assert.deepEqual(
+        singleResult.error,
+        message`Factory returned an async parser where a sync parser is required.`,
+      );
+    }
+  });
+
+  test("suggestWithDependency should return empty when both factories fail", async () => {
+    const envParser = dependency(choice(["dev", "prod"] as const));
+    const regionParser = dependency(choice(["local", "remote"] as const));
+
+    let deriveFromCalls = 0;
+    const multiSync = deriveFrom({
+      metavar: "VALUE",
+      dependencies: [envParser, regionParser] as const,
+      factory: (_env: "dev" | "prod", _region: "local" | "remote") => {
+        deriveFromCalls++;
+        if (deriveFromCalls > 1) {
+          throw new Error("deriveFrom failed");
+        }
+        return choice(["value"] as const);
+      },
+      defaultValues: () => ["dev", "local"] as const,
+    });
+    const multiSyncSuggest = multiSync[suggestWithDependency];
+    assert.ok(multiSyncSuggest != null);
+    assert.deepEqual(
+      [
+        ...(multiSyncSuggest("v", ["prod", "remote"] as const) as Iterable<
+          Suggestion
+        >),
+      ],
+      [],
+    );
+
+    let deriveFromAsyncCalls = 0;
+    const multiAsyncFactory = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [envParser, regionParser] as const,
+      factory: (_env: "dev" | "prod", _region: "local" | "remote") => {
+        deriveFromAsyncCalls++;
+        throw new Error(`deriveFromAsync failed ${deriveFromAsyncCalls}`);
+      },
+      defaultValues: () => ["dev", "local"] as const,
+    });
+    const multiAsyncSuggest = multiAsyncFactory[suggestWithDependency];
+    assert.ok(multiAsyncSuggest != null);
+    assert.deepEqual(
+      await collectSuggestions(
+        multiAsyncSuggest("v", ["prod", "remote"] as const),
+      ),
+      [],
+    );
+
+    const asyncEnvParser = dependency(asyncChoice(["dev", "prod"] as const));
+    const asyncRegionParser = dependency(
+      asyncChoice(["local", "remote"] as const),
+    );
+    let deriveFromSyncCalls = 0;
+    const multiAsyncFromSync = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [asyncEnvParser, asyncRegionParser] as const,
+      factory: (_env: "dev" | "prod", _region: "local" | "remote") => {
+        deriveFromSyncCalls++;
+        throw new Error(`deriveFromSync failed ${deriveFromSyncCalls}`);
+      },
+      defaultValues: () => ["dev", "local"] as const,
+    });
+    const multiAsyncFromSyncSuggest = multiAsyncFromSync[suggestWithDependency];
+    assert.ok(multiAsyncFromSyncSuggest != null);
+    assert.deepEqual(
+      await collectSuggestions(
+        multiAsyncFromSyncSuggest("v", ["prod", "remote"] as const),
+      ),
+      [],
+    );
+
+    const modeParser = dependency(choice(["ok", "boom"] as const));
+    let singleAsyncFactoryCalls = 0;
+    const singleAsyncFactory = modeParser.deriveAsync({
+      metavar: "VALUE",
+      factory: (_mode: "ok" | "boom") => {
+        singleAsyncFactoryCalls++;
+        if (singleAsyncFactoryCalls > 1) {
+          throw new Error(`single async failed ${singleAsyncFactoryCalls}`);
+        }
+        return asyncChoice(["value"] as const);
+      },
+      defaultValue: () => "ok" as const,
+    });
+    const singleAsyncFactorySuggest = singleAsyncFactory[suggestWithDependency];
+    assert.ok(singleAsyncFactorySuggest != null);
+    assert.deepEqual(
+      await collectSuggestions(singleAsyncFactorySuggest("v", "boom")),
+      [],
+    );
+
+    const asyncModeParser = dependency(asyncChoice(["ok", "boom"] as const));
+    let singleAsyncSourceCalls = 0;
+    const singleAsyncSource = asyncModeParser.derive({
+      metavar: "VALUE",
+      factory: (_mode: "ok" | "boom") => {
+        singleAsyncSourceCalls++;
+        if (singleAsyncSourceCalls > 1) {
+          throw new Error("single async source failed");
+        }
+        return choice(["value"] as const);
+      },
+      defaultValue: () => "ok" as const,
+    });
+    const singleAsyncSourceSuggest = singleAsyncSource[suggestWithDependency];
+    assert.ok(singleAsyncSourceSuggest != null);
+    assert.deepEqual(
+      await collectSuggestions(singleAsyncSourceSuggest("v", "boom")),
+      [],
+    );
+  });
+
   test("suggestWithDependency should fall back to defaults for deriveFromAsync", async () => {
     const modeParser = dependency(choice(["ok", "boom"] as const));
     const derived = deriveFromAsync({
