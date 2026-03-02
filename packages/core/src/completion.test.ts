@@ -444,6 +444,35 @@ describe("completion module", () => {
       // Bash doesn't use descriptions
       deepStrictEqual(encoded, ["--verbose", "\n", "--quiet"]);
     });
+
+    it("should encode file suggestions with marker", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "directory",
+          includeHidden: true,
+        },
+      ];
+
+      const encoded = Array.from(bash.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:directory:::1"]);
+    });
+
+    it("should encode file suggestion extensions in bash", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: ["json", "yaml"],
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(bash.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0"]);
+    });
   });
 
   describe("zsh shell completion", () => {
@@ -565,6 +594,38 @@ describe("completion module", () => {
       deepStrictEqual(encoded[0].startsWith("--verbose\0"), true);
       deepStrictEqual(encoded[0].endsWith("\0"), true);
       deepStrictEqual(encoded[0].includes("Enable verbose mode"), true);
+    });
+
+    it("should encode file suggestions with null-terminated format", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: ["json", "yaml"],
+          includeHidden: false,
+          description: message`Configuration file`,
+        },
+      ];
+
+      const encoded = Array.from(zsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, [
+        "__FILE__:file:json,yaml::0\0Configuration file\0",
+      ]);
+    });
+
+    it("should encode file suggestions without metadata in zsh", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "directory",
+          includeHidden: true,
+        },
+      ];
+
+      const encoded = Array.from(zsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:directory:::1\0\0"]);
     });
   });
 
@@ -693,6 +754,20 @@ describe("completion module", () => {
         encoded[0],
         "__FILE__:file:json,yaml::0\t[file]\tConfiguration file",
       );
+    });
+
+    it("should encode file suggestion defaults in pwsh", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "directory",
+          includeHidden: true,
+        },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:directory:::1\t[file]\t"]);
     });
 
     it("should format descriptions without colors", () => {
@@ -851,6 +926,20 @@ describe("completion module", () => {
         encoded[0],
         "__FILE__:file:json,yaml::0\tConfiguration file",
       );
+    });
+
+    it("should encode file suggestion defaults in fish", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "directory",
+          includeHidden: true,
+        },
+      ];
+
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:directory:::1\t"]);
     });
 
     it("should format descriptions without colors", () => {
@@ -1020,6 +1109,20 @@ describe("completion module", () => {
         encoded[0],
         "__FILE__:file:json,yaml::0\tConfiguration file",
       );
+    });
+
+    it("should encode file suggestion defaults in nu", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "directory",
+          includeHidden: true,
+        },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:directory:::1\t"]);
     });
 
     it("should format descriptions without colors", () => {
