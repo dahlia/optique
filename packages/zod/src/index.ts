@@ -33,6 +33,27 @@ export interface ZodParserOptions {
   };
 }
 
+interface ZodCheckInternal {
+  readonly kind?: string;
+  readonly format?: string;
+  readonly version?: string;
+  readonly isInt?: boolean;
+}
+
+interface ZodDefinitionInternal {
+  readonly typeName?: string;
+  readonly type?: string;
+  readonly checks?: readonly ZodCheckInternal[];
+  readonly innerType?: z.Schema<unknown>;
+}
+
+interface ZodSchemaInternal {
+  readonly _def?: ZodDefinitionInternal;
+  readonly constructor?: {
+    readonly prettifyError?: (error: z.ZodError) => string;
+  };
+}
+
 /**
  * Infers an appropriate metavar string from a Zod schema.
  *
@@ -54,8 +75,7 @@ export interface ZodParserOptions {
  * @since 0.7.0
  */
 function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
-  // deno-lint-ignore no-explicit-any
-  const def = (schema as any)._def;
+  const def = (schema as ZodSchemaInternal)._def;
 
   if (!def) {
     return "VALUE";
@@ -145,12 +165,20 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
     typeName === "ZodOptional" || typeName === "optional" ||
     typeName === "ZodNullable" || typeName === "nullable"
   ) {
-    return inferMetavar(def.innerType);
+    const innerType = def.innerType;
+    if (innerType != null) {
+      return inferMetavar(innerType);
+    }
+    return "VALUE";
   }
 
   // 8. Handle default wrapper by unwrapping
   if (typeName === "ZodDefault" || typeName === "default") {
-    return inferMetavar(def.innerType);
+    const innerType = def.innerType;
+    if (innerType != null) {
+      return inferMetavar(innerType);
+    }
+    return "VALUE";
   }
 
   // 9. Fallback for unknown types
@@ -253,8 +281,7 @@ export function zod<T>(
       }
 
       // 2. Zod v4 prettifyError (if available)
-      // deno-lint-ignore no-explicit-any
-      const zodModule = schema as any;
+      const zodModule = schema as ZodSchemaInternal;
       if (typeof zodModule.constructor?.prettifyError === "function") {
         try {
           const pretty = zodModule.constructor.prettifyError(result.error);

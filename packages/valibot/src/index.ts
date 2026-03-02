@@ -41,6 +41,16 @@ export interface ValibotParserOptions {
   };
 }
 
+interface ValibotPipelineActionInternal {
+  readonly type?: string;
+}
+
+interface ValibotSchemaInternal {
+  readonly type?: string;
+  readonly pipe?: readonly ValibotPipelineActionInternal[];
+  readonly wrapped?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+}
+
 /**
  * Infers an appropriate metavar string from a Valibot schema.
  *
@@ -64,8 +74,8 @@ export interface ValibotParserOptions {
 function inferMetavar(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
 ): NonEmptyString {
-  // deno-lint-ignore no-explicit-any
-  const schemaType = (schema as any).type;
+  const internalSchema = schema as ValibotSchemaInternal;
+  const schemaType = internalSchema.type;
 
   if (!schemaType) {
     return "VALUE";
@@ -74,12 +84,10 @@ function inferMetavar(
   // 1. Check for string types with specific validations
   if (schemaType === "string") {
     // Check if there are pipeline actions that indicate specific string types
-    // deno-lint-ignore no-explicit-any
-    const pipeline = (schema as any).pipe;
+    const pipeline = internalSchema.pipe;
     if (Array.isArray(pipeline)) {
       for (const action of pipeline) {
-        // deno-lint-ignore no-explicit-any
-        const actionType = (action as any).type;
+        const actionType = action.type;
         // If there's a transform, return VALUE as the output type may differ
         if (actionType === "transform") return "VALUE";
         if (actionType === "email") return "EMAIL";
@@ -104,12 +112,10 @@ function inferMetavar(
   // 2. Check for number types
   if (schemaType === "number") {
     // Check if there's an integer validation in the pipeline
-    // deno-lint-ignore no-explicit-any
-    const pipeline = (schema as any).pipe;
+    const pipeline = internalSchema.pipe;
     if (Array.isArray(pipeline)) {
       for (const action of pipeline) {
-        // deno-lint-ignore no-explicit-any
-        const actionType = (action as any).type;
+        const actionType = action.type;
         // If there's a transform, return VALUE as the output type may differ
         if (actionType === "transform") return "VALUE";
         if (actionType === "integer") return "INTEGER";
@@ -148,8 +154,7 @@ function inferMetavar(
     schemaType === "optional" || schemaType === "nullable" ||
     schemaType === "nullish"
   ) {
-    // deno-lint-ignore no-explicit-any
-    const wrapped = (schema as any).wrapped;
+    const wrapped = internalSchema.wrapped;
     if (wrapped) {
       return inferMetavar(wrapped);
     }

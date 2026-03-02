@@ -357,8 +357,10 @@ describe("valibot()", () => {
           errors: {
             valibotError: (issues, input) => {
               const issue = issues[0];
-              // deno-lint-ignore no-explicit-any
-              const issueType = (issue as any)?.type ?? (issue as any)?.kind;
+              const issueLike = issue as
+                | { readonly type?: string; readonly kind?: string }
+                | undefined;
+              const issueType = issueLike?.type ?? issueLike?.kind;
               if (issueType === "min_value") {
                 return message`Value must be at least 1.`;
               }
