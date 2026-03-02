@@ -5,6 +5,7 @@
 /examples/*/node_modules/
 /node_modules/
 /packages/*/dist/
+/packages/*/coverage/
 /packages/*/node_modules/
 /PLAN.md
 /coverage/
