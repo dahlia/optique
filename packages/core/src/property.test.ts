@@ -14,7 +14,12 @@ import {
   option,
   passThrough,
 } from "@optique/core/primitives";
-import { multiple, optional, withDefault } from "@optique/core/modifiers";
+import {
+  multiple,
+  nonEmpty,
+  optional,
+  withDefault,
+} from "@optique/core/modifiers";
 import { choice, integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
@@ -58,6 +63,13 @@ const optionLikeTokenArbitrary = fc.oneof(
 
 const equalsOptionTokenArbitrary = fc
   .tuple(identifierArbitrary, fc.string({ minLength: 0, maxLength: 16 }))
+  .map(([name, value]: readonly [string, string]) => `--${name}=${value}`);
+
+const unknownEqualsOptionTokenArbitrary = fc
+  .tuple(
+    identifierArbitrary.filter((name: string) => name !== "debug"),
+    fc.string({ minLength: 0, maxLength: 16 }),
+  )
   .map(([name, value]: readonly [string, string]) => `--${name}=${value}`);
 
 function longOptionName(name: string): `--${string}` {
@@ -491,6 +503,161 @@ describe("property-based tests", () => {
           if (result.success) {
             assert.deepEqual(result.value.tags, tags);
           }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("withDefault over optional should apply default on absence", () => {
+    const parser = object({
+      count: withDefault(
+        optional(option("--count", integer({ min: -1000, max: 1000 }))),
+        42,
+      ),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.constant<undefined>(undefined),
+          fc.integer({ min: -1000, max: 1000 }),
+        ),
+        (count: number | undefined) => {
+          const args = count == null ? [] : ["--count", `${count}`];
+          const result = parseSync(parser, args);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.equal(result.value.count, count ?? 42);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("nonEmpty should reject zero-consumption default branch", () => {
+    const parser = nonEmpty(
+      withDefault(option("--port", integer({ min: 1, max: 65535 })), 3000),
+    );
+
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.constant<undefined>(undefined),
+          fc.integer({ min: 1, max: 65535 }),
+        ),
+        (port: number | undefined) => {
+          const args = port == null ? [] : ["--port", `${port}`];
+          const result = parseSync(parser, args);
+
+          assert.equal(result.success, port != null);
+          if (result.success) {
+            assert.equal(result.value, port);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("passThrough nextToken should preserve option-only streams", () => {
+    const parser = passThrough({ format: "nextToken" });
+
+    fc.assert(
+      fc.property(
+        fc.array(optionLikeTokenArbitrary, { minLength: 1, maxLength: 8 }),
+        (tokens: readonly string[]) => {
+          const result = parseSync(parser, tokens);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.deepEqual(result.value, tokens);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("passThrough greedy should consume any non-empty stream", () => {
+    const parser = passThrough({ format: "greedy" });
+
+    fc.assert(
+      fc.property(
+        fc.array(fc.string({ minLength: 0, maxLength: 16 }), {
+          minLength: 1,
+          maxLength: 8,
+        }),
+        (tokens: readonly string[]) => {
+          const result = parseSync(parser, tokens);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.deepEqual(result.value, tokens);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("optional option should fail on unmatched option input", () => {
+    const parser = optional(option("--known", integer()));
+
+    fc.assert(
+      fc.property(
+        identifierArbitrary.filter((name: string) => name !== "known"),
+        (name: string) => {
+          const result = parseSync(parser, [`--${name}`]);
+
+          assert.ok(!result.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("object should keep known options out of passThrough", async () => {
+    const parser = object({
+      debug: option("--debug"),
+      extra: passThrough(),
+    });
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(unknownEqualsOptionTokenArbitrary, {
+          minLength: 0,
+          maxLength: 6,
+        }),
+        fc.boolean(),
+        fc.nat(),
+        async (
+          passthroughTokens: readonly string[],
+          includeDebug: boolean,
+          insertionSeed: number,
+        ) => {
+          const insertionIndex = passthroughTokens.length < 1
+            ? 0
+            : insertionSeed % (passthroughTokens.length + 1);
+          const args = includeDebug
+            ? [
+              ...passthroughTokens.slice(0, insertionIndex),
+              "--debug",
+              ...passthroughTokens.slice(insertionIndex),
+            ]
+            : [...passthroughTokens];
+
+          const syncResult = parseSync(parser, args);
+          const asyncResult = await parseAsync(parser, args);
+
+          assert.ok(syncResult.success);
+          if (syncResult.success) {
+            assert.equal(syncResult.value.debug, includeDebug);
+            assert.deepEqual(syncResult.value.extra, passthroughTokens);
+          }
+          assert.deepEqual(asyncResult, syncResult);
         },
       ),
       propertyParameters,
