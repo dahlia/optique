@@ -41,6 +41,7 @@ import {
   suggest,
   suggestAsync,
 } from "./parser.ts";
+import { dispatchByMode } from "./mode-dispatch.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
   formatUsage,
@@ -1138,10 +1139,11 @@ function handleCompletion<M extends Mode, THelp, TError>(
       }
     }
 
-    if (parser.$mode === "async") {
-      return Promise.resolve(callOnError(1)) as ModeValue<M, THelp | TError>;
-    }
-    return callOnError(1) as ModeValue<M, THelp | TError>;
+    return dispatchByMode(
+      parser.$mode,
+      () => callOnError(1),
+      () => Promise.resolve(callOnError(1)),
+    );
   }
 
   const shell = availableShells[shellName];
@@ -1158,10 +1160,11 @@ function handleCompletion<M extends Mode, THelp, TError>(
         { colors, quotes: !colors },
       ),
     );
-    if (parser.$mode === "async") {
-      return Promise.resolve(callOnError(1)) as ModeValue<M, THelp | TError>;
-    }
-    return callOnError(1) as ModeValue<M, THelp | TError>;
+    return dispatchByMode(
+      parser.$mode,
+      () => callOnError(1),
+      () => Promise.resolve(callOnError(1)),
+    );
   }
 
   if (args.length === 0) {
@@ -1175,18 +1178,25 @@ function handleCompletion<M extends Mode, THelp, TError>(
     ]);
     stdout(script);
 
-    if (parser.$mode === "async") {
-      return Promise.resolve(callOnCompletion(0)) as ModeValue<
-        M,
-        THelp | TError
-      >;
-    }
-    return callOnCompletion(0) as ModeValue<M, THelp | TError>;
+    return dispatchByMode(
+      parser.$mode,
+      () => callOnCompletion(0),
+      () => Promise.resolve(callOnCompletion(0)),
+    );
   }
 
   // Provide completion suggestions
-  if (parser.$mode === "async") {
-    return (async () => {
+  return dispatchByMode(
+    parser.$mode,
+    () => {
+      const syncParser = parser as Parser<"sync", unknown, unknown>;
+      const suggestions = suggest(syncParser, args as [string, ...string[]]);
+      for (const chunk of shell.encodeSuggestions(suggestions)) {
+        stdout(chunk);
+      }
+      return callOnCompletion(0);
+    },
+    async () => {
       const suggestions = await suggestAsync(
         parser as Parser<"async", unknown, unknown>,
         args as [string, ...string[]],
@@ -1195,16 +1205,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
         stdout(chunk);
       }
       return callOnCompletion(0);
-    })() as ModeValue<M, THelp | TError>;
-  }
-
-  // Sync path
-  const syncParser = parser as Parser<"sync", unknown, unknown>;
-  const suggestions = suggest(syncParser, args as [string, ...string[]]);
-  for (const chunk of shell.encodeSuggestions(suggestions)) {
-    stdout(chunk);
-  }
-  return callOnCompletion(0) as ModeValue<M, THelp | TError>;
+    },
+  );
 }
 
 /**
@@ -1377,6 +1379,20 @@ export function runParser<
     options.completion?.option,
   );
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
+  const onCompletionResult = (code: number): InferValue<TParser> => {
+    try {
+      return onCompletion(code) as InferValue<TParser>;
+    } catch {
+      return (onCompletion as (() => THelp))() as InferValue<TParser>;
+    }
+  };
+  const onErrorResult = (code: number): InferValue<TParser> => {
+    try {
+      return onError(code) as InferValue<TParser>;
+    } catch {
+      return (onError as (() => TError))() as InferValue<TParser>;
+    }
+  };
 
   // Resolved name arrays for matching
   const helpOptionNames: readonly string[] = helpOptionConfig?.names ??
@@ -1436,15 +1452,19 @@ export function runParser<
       completionCommandNames.includes(args[0]) &&
       !hasHelpOption // Let parser handle "completion --help"
     ) {
-      return handleCompletion(
+      return handleCompletion<
+        InferMode<TParser>,
+        InferValue<TParser>,
+        InferValue<TParser>
+      >(
         args.slice(1),
         programName,
         parser,
         completionParsers.completionCommand,
         stdout,
         stderr,
-        onCompletion,
-        onError,
+        onCompletionResult,
+        onErrorResult,
         availableShells,
         colors,
         maxWidth,
@@ -1467,15 +1487,19 @@ export function runParser<
         if (equalsMatch) {
           const shell = arg.slice(equalsMatch.length + 1);
           const completionArgs = args.slice(i + 1);
-          return handleCompletion(
+          return handleCompletion<
+            InferMode<TParser>,
+            InferValue<TParser>,
+            InferValue<TParser>
+          >(
             [shell, ...completionArgs],
             programName,
             parser,
             completionParsers.completionCommand,
             stdout,
             stderr,
-            onCompletion,
-            onError,
+            onCompletionResult,
+            onErrorResult,
             availableShells,
             colors,
             maxWidth,
@@ -1491,15 +1515,19 @@ export function runParser<
         if (exactMatch) {
           const shell = i + 1 < args.length ? args[i + 1] : "";
           const completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
-          return handleCompletion(
+          return handleCompletion<
+            InferMode<TParser>,
+            InferValue<TParser>,
+            InferValue<TParser>
+          >(
             [shell, ...completionArgs],
             programName,
             parser,
             completionParsers.completionCommand,
             stdout,
             stderr,
-            onCompletion,
-            onError,
+            onCompletionResult,
+            onErrorResult,
             availableShells,
             colors,
             maxWidth,
@@ -1831,10 +1859,7 @@ export function runParser<
                   ? docOrPromise.then(displayHelp)
                   : displayHelp(docOrPromise);
               };
-              return stepResult.then(asyncValidate) as ModeValue<
-                InferMode<TParser>,
-                InferValue<TParser>
-              >;
+              return stepResult.then(asyncValidate);
             }
             validationResult = processStep(stepResult);
           }
@@ -1984,24 +2009,26 @@ export function runParser<
     }
   };
 
-  // Check parser mode and use appropriate parsing function.
-  // Type assertions are needed because TypeScript cannot verify that
-  // ModeValue<InferMode<TParser>, T> resolves to Promise<T> when $mode is "async"
-  // or to T when $mode is "sync". The runtime behavior is correct.
-  if (parser.$mode === "async") {
-    return parseAsync(augmentedParser, args).then(
-      handleResult,
-    ) as unknown as ModeValue<InferMode<TParser>, InferValue<TParser>>;
-  } else {
-    const result = parseSync(
-      augmentedParser as Parser<"sync", unknown, unknown>,
-      args,
-    );
-    return handleResult(result) as ModeValue<
-      InferMode<TParser>,
-      InferValue<TParser>
-    >;
-  }
+  const parserMode = parser.$mode as InferMode<TParser>;
+  return dispatchByMode(
+    parserMode,
+    () => {
+      const result = parseSync(
+        augmentedParser as Parser<"sync", unknown, unknown>,
+        args,
+      );
+      const handled = handleResult(result);
+      if (handled instanceof Promise) {
+        throw new RunParserError("Synchronous parser returned async result.");
+      }
+      return handled;
+    },
+    async () => {
+      const result = await parseAsync(augmentedParser, args);
+      const handled = handleResult(result);
+      return handled instanceof Promise ? await handled : handled;
+    },
+  ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
 }
 
 /**

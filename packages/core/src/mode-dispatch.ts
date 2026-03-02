@@ -38,6 +38,30 @@ export function dispatchByMode<M extends Mode, T>(
 }
 
 /**
+ * Maps a mode-wrapped value while preserving its execution mode.
+ *
+ * @param mode The execution mode.
+ * @param value The mode-wrapped value to transform.
+ * @param mapFn Mapping function applied to the unwrapped value.
+ * @returns The mapped value with correct mode wrapping.
+ * @internal
+ * @since 1.0.0
+ */
+export function mapModeValue<M extends Mode, T, U>(
+  mode: M,
+  value: ModeValue<M, T>,
+  mapFn: (value: T) => U,
+): ModeValue<M, U> {
+  if (mode === "async") {
+    return Promise.resolve(value as T | Promise<T>).then(mapFn) as ModeValue<
+      M,
+      U
+    >;
+  }
+  return mapFn(value as T) as ModeValue<M, U>;
+}
+
+/**
  * Dispatches iterable to sync or async implementation based on mode.
  *
  * @param mode The execution mode.

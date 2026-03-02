@@ -4,6 +4,7 @@ import type { DependencyRegistryLike } from "./registry-types.ts";
 import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import { annotationKey, type ParseOptions } from "./annotations.ts";
+import { dispatchByMode } from "./mode-dispatch.ts";
 
 export type { ParseOptions };
 
@@ -522,14 +523,11 @@ export function parse<M extends Mode, T>(
   args: readonly string[],
   options?: ParseOptions,
 ): ModeValue<M, Result<T>> {
-  if (parser.$mode === "async") {
-    return parseAsync(parser, args, options) as ModeValue<M, Result<T>>;
-  }
-  return parseSync(
-    parser as Parser<"sync", T, unknown>,
-    args,
-    options,
-  ) as ModeValue<M, Result<T>>;
+  return dispatchByMode(
+    parser.$mode,
+    () => parseSync(parser as Parser<"sync", T, unknown>, args, options),
+    () => parseAsync(parser, args, options),
+  );
 }
 
 /**
@@ -728,17 +726,11 @@ export function suggest<M extends Mode, T>(
   args: readonly [string, ...readonly string[]],
   options?: ParseOptions,
 ): ModeValue<M, readonly Suggestion[]> {
-  if (parser.$mode === "async") {
-    return suggestAsync(parser, args, options) as ModeValue<
-      M,
-      readonly Suggestion[]
-    >;
-  }
-  return suggestSync(
-    parser as Parser<"sync", T, unknown>,
-    args,
-    options,
-  ) as ModeValue<M, readonly Suggestion[]>;
+  return dispatchByMode(
+    parser.$mode,
+    () => suggestSync(parser as Parser<"sync", T, unknown>, args, options),
+    () => suggestAsync(parser, args, options),
+  );
 }
 
 /**

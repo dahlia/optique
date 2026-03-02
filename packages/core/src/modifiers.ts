@@ -10,7 +10,11 @@ import {
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
-import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import {
+  dispatchByMode,
+  dispatchIterableByMode,
+  mapModeValue,
+} from "./mode-dispatch.ts";
 import type {
   DocState,
   Mode,
@@ -535,16 +539,7 @@ export function withDefault<
               };
             }
           };
-          if (innerResult instanceof Promise) {
-            return innerResult.then(handleInnerResult) as ModeValue<
-              M,
-              ValueParserResult<TValue | TDefault>
-            >;
-          }
-          return handleInnerResult(innerResult) as ModeValue<
-            M,
-            ValueParserResult<TValue | TDefault>
-          >;
+          return mapModeValue(parser.$mode, innerResult, handleInnerResult);
         }
         // Inner parser does NOT transform the dependency value. If there's a
         // wrapped dependency source, we should register with the default value.
@@ -640,16 +635,7 @@ export function withDefault<
               };
             }
           };
-          if (innerResult instanceof Promise) {
-            return innerResult.then(handleInnerResult) as ModeValue<
-              M,
-              ValueParserResult<TValue | TDefault>
-            >;
-          }
-          return handleInnerResult(innerResult) as ModeValue<
-            M,
-            ValueParserResult<TValue | TDefault>
-          >;
+          return mapModeValue(parser.$mode, innerResult, handleInnerResult);
         }
         // Inner parser does NOT transform the dependency value (e.g., optional()).
         // Register the dependency with default value.
@@ -776,25 +762,14 @@ export function map<M extends Mode, T, U, TState>(
   transform: (value: T) => U,
 ): Parser<M, U, TState> {
   const complete = (state: TState): ModeValue<M, ValueParserResult<U>> => {
-    const res = parser.complete(state);
-
-    if (res instanceof Promise) {
-      return res.then((r) => {
-        if (r.success) {
-          return { success: true, value: transform(r.value) };
-        }
-        return r;
-      }) as ModeValue<M, ValueParserResult<U>>;
-    }
-
-    if (res.success) {
-      return { success: true, value: transform(res.value) } as ModeValue<
-        M,
-        ValueParserResult<U>
-      >;
-    }
-
-    return res as ModeValue<M, ValueParserResult<U>>;
+    return mapModeValue(
+      parser.$mode,
+      parser.complete(state),
+      (result) =>
+        result.success
+          ? { success: true, value: transform(result.value) }
+          : result,
+    );
   };
 
   // Propagate wrappedDependencySourceMarker from inner parser, and mark
