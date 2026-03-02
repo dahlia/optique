@@ -3005,6 +3005,293 @@ describe("suggestWithDependency double factory failure", () => {
   });
 });
 
+describe("coverage-guided dependency parser tests", () => {
+  async function collectSuggestions(
+    suggestions: Iterable<Suggestion> | AsyncIterable<Suggestion>,
+  ): Promise<readonly Suggestion[]> {
+    const result: Suggestion[] = [];
+    for await (const suggestion of suggestions) {
+      result.push(suggestion);
+    }
+    return result;
+  }
+
+  test("deriveFrom variants should handle empty dependency lists", async () => {
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => choice(["alpha", "beta"] as const),
+      defaultValues: () => [] as const,
+    });
+    assert.equal(derived.$mode, "sync");
+    assert.equal(typeof derived[dependencyId], "symbol");
+
+    const parsedSync = derived.parse("alpha");
+    assert.ok(parsedSync.success);
+    assert.equal(derived.format("beta"), "beta");
+
+    const syncSuggestions = [...(derived.suggest?.("a") ?? [])]
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+    assert.ok(syncSuggestions.includes("alpha"));
+
+    const derivedSync = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => choice(["alpha", "beta"] as const),
+      defaultValues: () => [] as const,
+    });
+    assert.equal(derivedSync.$mode, "sync");
+    assert.equal(typeof derivedSync[dependencyId], "symbol");
+    const parsedFromSync = derivedSync.parse("beta");
+    assert.ok(parsedFromSync.success);
+
+    const derivedAsync = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => asyncChoice(["alpha", "beta"] as const),
+      defaultValues: () => [] as const,
+    });
+    assert.equal(derivedAsync.$mode, "async");
+    assert.equal(typeof derivedAsync[dependencyId], "symbol");
+
+    const parsedAsync = await derivedAsync.parse("beta");
+    assert.ok(parsedAsync.success);
+    const parsedWithDependency = await derivedAsync[parseWithDependency](
+      "alpha",
+      [] as const,
+    );
+    assert.ok(parsedWithDependency.success);
+    assert.equal(derivedAsync.format("alpha"), "alpha");
+
+    const asyncSuggestions: Suggestion[] = [];
+    for await (const suggestion of derivedAsync.suggest!("b")) {
+      asyncSuggestions.push(suggestion);
+    }
+    const asyncTexts = asyncSuggestions
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+    assert.ok(asyncTexts.includes("beta"));
+  });
+
+  test("deriveFrom sync parser should reject async parser mode at parse time", async () => {
+    let callCount = 0;
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      dependencies: [] as const,
+      factory: () => {
+        callCount++;
+        if (callCount === 1) {
+          return choice(["ok"] as const);
+        }
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValues: () => [] as const,
+    });
+
+    const result = await derived.parse("ok");
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(
+        result.error,
+        message`Factory returned an async parser where a sync parser is required.`,
+      );
+    }
+  });
+
+  test("non-Error throws should be stringified in parseWithDependency", async () => {
+    const syncDependency = dependency(choice(["ok", "boom"] as const));
+    const syncDerived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [syncDependency] as const,
+      factory: (value: "ok" | "boom") => {
+        if (value === "boom") {
+          throw "boom-sync";
+        }
+        return choice(["value"] as const);
+      },
+      defaultValues: () => ["ok"] as const,
+    });
+    const syncResult = await syncDerived[parseWithDependency](
+      "value",
+      [
+        "boom",
+      ] as const,
+    );
+    assert.ok(!syncResult.success);
+    if (!syncResult.success) {
+      assert.deepEqual(
+        syncResult.error,
+        message`Factory error: ${"boom-sync"}`,
+      );
+    }
+
+    const asyncDependency = dependency(asyncChoice(["ok", "boom"] as const));
+    const asyncFromSyncFactory = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [asyncDependency] as const,
+      factory: (value: "ok" | "boom") => {
+        if (value === "boom") {
+          throw "boom-async-from-sync";
+        }
+        return choice(["value"] as const);
+      },
+      defaultValues: () => ["ok"] as const,
+    });
+    const asyncFromSyncResult = await asyncFromSyncFactory[parseWithDependency](
+      "value",
+      ["boom"] as const,
+    );
+    assert.ok(!asyncFromSyncResult.success);
+    if (!asyncFromSyncResult.success) {
+      assert.deepEqual(
+        asyncFromSyncResult.error,
+        message`Factory error: ${"boom-async-from-sync"}`,
+      );
+    }
+
+    const modeParser = dependency(choice(["ok", "boom"] as const));
+    const asyncFromAsyncFactory = modeParser.deriveAsync({
+      metavar: "VALUE",
+      factory: (value: "ok" | "boom") => {
+        if (value === "boom") {
+          throw "boom-async-from-async";
+        }
+        return asyncChoice(["value"] as const);
+      },
+      defaultValue: () => "ok" as const,
+    });
+    const asyncFromAsyncResult = await asyncFromAsyncFactory[
+      parseWithDependency
+    ]("value", "boom");
+    assert.ok(!asyncFromAsyncResult.success);
+    if (!asyncFromAsyncResult.success) {
+      assert.deepEqual(
+        asyncFromAsyncResult.error,
+        message`Factory error: ${"boom-async-from-async"}`,
+      );
+    }
+
+    const asyncModeParser = dependency(asyncChoice(["ok", "boom"] as const));
+    const asyncSingleFromSyncFactory = asyncModeParser.derive({
+      metavar: "VALUE",
+      factory: (value: "ok" | "boom") => {
+        if (value === "boom") {
+          throw "boom-single-async-from-sync";
+        }
+        return choice(["value"] as const);
+      },
+      defaultValue: () => "ok" as const,
+    });
+    const asyncSingleFromSyncResult = await asyncSingleFromSyncFactory[
+      parseWithDependency
+    ]("value", "boom");
+    assert.ok(!asyncSingleFromSyncResult.success);
+    if (!asyncSingleFromSyncResult.success) {
+      assert.deepEqual(
+        asyncSingleFromSyncResult.error,
+        message`Factory error: ${"boom-single-async-from-sync"}`,
+      );
+    }
+  });
+
+  test("suggestWithDependency should fall back to defaults for deriveFromAsync", async () => {
+    const modeParser = dependency(choice(["ok", "boom"] as const));
+    const derived = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [modeParser] as const,
+      factory: (value: "ok" | "boom") => {
+        if (value === "boom") {
+          throw new Error("dependency failure");
+        }
+        return asyncChoice(["ok-default", "ok-extra"] as const);
+      },
+      defaultValues: () => ["ok"] as const,
+    });
+
+    const suggestWithDep = derived[suggestWithDependency];
+    assert.ok(suggestWithDep != null);
+    const suggestions = await collectSuggestions(
+      suggestWithDep("ok", ["boom"] as const),
+    );
+
+    const texts = suggestions
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+    assert.ok(texts.includes("ok-default"));
+    assert.ok(texts.includes("ok-extra"));
+  });
+
+  test("async-from-sync deriveFrom should expose suggest paths", async () => {
+    const modeParser = dependency(asyncChoice(["ok", "boom"] as const));
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [modeParser] as const,
+      factory: (value: "ok" | "boom") => {
+        if (value === "boom") {
+          throw new Error("dependency failure");
+        }
+        return choice(["ok-default", "ok-extra"] as const);
+      },
+      defaultValues: () => ["ok"] as const,
+    });
+
+    const suggestions: Suggestion[] = [];
+    for await (const suggestion of derived.suggest!("ok")) {
+      suggestions.push(suggestion);
+    }
+    const directTexts = suggestions
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+    assert.ok(directTexts.includes("ok-default"));
+
+    const suggestWithDep = derived[suggestWithDependency];
+    assert.ok(suggestWithDep != null);
+    const fromDependency = await collectSuggestions(
+      suggestWithDep("ok", ["boom"] as const),
+    );
+    const dependencyTexts = fromDependency
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+    assert.ok(dependencyTexts.includes("ok-default"));
+  });
+
+  test("async-source derive should support format and suggest fallback", async () => {
+    const modeParser = dependency(asyncChoice(["ok", "boom"] as const));
+    const derived = modeParser.derive({
+      metavar: "VALUE",
+      factory: (value: "ok" | "boom") => {
+        if (value === "boom") {
+          throw new Error("dependency failure");
+        }
+        return choice(["ok-default", "ok-extra"] as const);
+      },
+      defaultValue: () => "ok" as const,
+    });
+
+    assert.equal(derived.format("ok-default"), "ok-default");
+
+    const suggestions: Suggestion[] = [];
+    for await (const suggestion of derived.suggest!("ok")) {
+      suggestions.push(suggestion);
+    }
+    const directTexts = suggestions
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+    assert.ok(directTexts.includes("ok-default"));
+
+    const suggestWithDep = derived[suggestWithDependency];
+    assert.ok(suggestWithDep != null);
+    const fromDependency = await collectSuggestions(
+      suggestWithDep("ok", "boom"),
+    );
+    const dependencyTexts = fromDependency
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+    assert.ok(dependencyTexts.includes("ok-default"));
+  });
+});
+
 describe("property-based tests", () => {
   const propertyParameters = { numRuns: 120 } as const;
 
