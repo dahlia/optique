@@ -5,6 +5,7 @@ import {
   or,
   tuple,
 } from "@optique/core/constructs";
+import { dependency, deriveFrom } from "@optique/core/dependency";
 import {
   parse,
   parseAsync,
@@ -102,6 +103,12 @@ function permuteTokens<T>(tokens: readonly T[]): readonly (readonly T[])[] {
   }
 
   return permutations;
+}
+
+function permuteArgBlocks(
+  blocks: readonly (readonly string[])[],
+): readonly (readonly string[])[] {
+  return permuteTokens(blocks).map((order) => order.flatMap((block) => block));
 }
 
 function escapeRegExp(input: string): string {
@@ -800,6 +807,174 @@ describe("property-based tests", () => {
           assert.ok(result.success);
           if (result.success) {
             assert.deepEqual(result.value.tags, tags);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("derived option should honor source value across option order", () => {
+    const modeSource = dependency(choice(["dev", "prod"] as const));
+    const levelValue = modeSource.derive({
+      metavar: "LEVEL",
+      factory: (mode) =>
+        choice(
+          mode === "dev"
+            ? (["debug", "trace"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = object({
+      mode: withDefault(
+        optional(option("--mode", modeSource)),
+        "prod" as const,
+      ),
+      level: option("--level", levelValue),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.constantFrom<"dev" | "prod">("dev", "prod"),
+        fc.boolean(),
+        fc.boolean(),
+        (
+          includeMode: boolean,
+          mode: "dev" | "prod",
+          pickFirst: boolean,
+          levelFirst: boolean,
+        ) => {
+          const effectiveMode = includeMode ? mode : "prod";
+          const level = effectiveMode === "dev"
+            ? (pickFirst ? "debug" : "trace")
+            : (pickFirst ? "warn" : "error");
+
+          const modeTokens = includeMode ? ["--mode", mode] : [];
+          const levelTokens = ["--level", level] as const;
+          const args = levelFirst
+            ? [...levelTokens, ...modeTokens]
+            : [...modeTokens, ...levelTokens];
+          const result = parseSync(parser, args);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.equal(result.value.mode, effectiveMode);
+            assert.equal(result.value.level, level);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("derived option should reject values invalid for resolved source", () => {
+    const modeSource = dependency(choice(["dev", "prod"] as const));
+    const levelValue = modeSource.derive({
+      metavar: "LEVEL",
+      factory: (mode) =>
+        choice(
+          mode === "dev"
+            ? (["debug", "trace"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = object({
+      mode: option("--mode", modeSource),
+      level: option("--level", levelValue),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom<"dev" | "prod">("dev", "prod"),
+        fc.boolean(),
+        (mode: "dev" | "prod", levelFirst: boolean) => {
+          const invalidLevel = mode === "dev" ? "warn" : "debug";
+          const modeTokens = ["--mode", mode] as const;
+          const levelTokens = ["--level", invalidLevel] as const;
+          const args = levelFirst
+            ? [...levelTokens, ...modeTokens]
+            : [...modeTokens, ...levelTokens];
+          const result = parseSync(parser, args);
+
+          assert.ok(!result.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("deriveFrom should resolve multi-source dependencies consistently", async () => {
+    const modeSource = dependency(choice(["dev", "prod"] as const));
+    const targetSource = dependency(choice(["node", "browser"] as const));
+    const presetValue = deriveFrom({
+      metavar: "PRESET",
+      dependencies: [modeSource, targetSource] as const,
+      factory: (mode, target) =>
+        choice(
+          mode === "dev" && target === "node"
+            ? (["inspect", "watch"] as const)
+            : mode === "dev" && target === "browser"
+            ? (["hmr", "source-map"] as const)
+            : mode === "prod" && target === "node"
+            ? (["cluster", "pm2"] as const)
+            : (["minify", "sri"] as const),
+        ),
+      defaultValues: () => ["dev", "node"] as const,
+    });
+    const parser = object({
+      mode: withDefault(optional(option("--mode", modeSource)), "dev" as const),
+      target: withDefault(
+        optional(option("--target", targetSource)),
+        "node" as const,
+      ),
+      preset: option("--preset", presetValue),
+    });
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom<"dev" | "prod">("dev", "prod"),
+        fc.constantFrom<"node" | "browser">("node", "browser"),
+        fc.boolean(),
+        fc.boolean(),
+        fc.boolean(),
+        async (
+          mode: "dev" | "prod",
+          target: "node" | "browser",
+          includeMode: boolean,
+          includeTarget: boolean,
+          pickFirst: boolean,
+        ) => {
+          const resolvedMode = includeMode ? mode : "dev";
+          const resolvedTarget = includeTarget ? target : "node";
+          const choices = resolvedMode === "dev" && resolvedTarget === "node"
+            ? (["inspect", "watch"] as const)
+            : resolvedMode === "dev" && resolvedTarget === "browser"
+            ? (["hmr", "source-map"] as const)
+            : resolvedMode === "prod" && resolvedTarget === "node"
+            ? (["cluster", "pm2"] as const)
+            : (["minify", "sri"] as const);
+          const preset = pickFirst ? choices[0] : choices[1];
+
+          const blocks = [
+            ...(includeMode ? ([["--mode", mode]] as const) : []),
+            ...(includeTarget ? ([["--target", target]] as const) : []),
+            ["--preset", preset] as const,
+          ];
+
+          for (const permutation of permuteArgBlocks(blocks)) {
+            const syncResult = parseSync(parser, permutation);
+            const asyncResult = await parseAsync(parser, permutation);
+
+            assert.ok(syncResult.success);
+            if (syncResult.success) {
+              assert.equal(syncResult.value.mode, resolvedMode);
+              assert.equal(syncResult.value.target, resolvedTarget);
+              assert.equal(syncResult.value.preset, preset);
+            }
+            assert.deepEqual(asyncResult, syncResult);
           }
         },
       ),
