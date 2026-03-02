@@ -55,7 +55,7 @@ describe("prompt()", () => {
 
       const result = await parseAsync(parser, ["--verbose"]);
       assert.ok(result.success);
-      assert.equal(result.value, true);
+      assert.ok(result.value);
     });
 
     it("uses CLI value when provided (number)", async () => {
@@ -94,7 +94,7 @@ describe("prompt()", () => {
 
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
-      assert.equal(result.value, false);
+      assert.ok(!result.value);
     });
 
     it("runs prompt when CLI value is absent (number)", async () => {
@@ -212,7 +212,7 @@ describe("prompt()", () => {
 
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
-      assert.equal(result.value, true);
+      assert.ok(result.value);
     });
 
     it("supports prompt-only number values (fail + number)", async () => {
