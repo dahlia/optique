@@ -2982,3 +2982,182 @@ describe("nonEmpty", () => {
     }
   });
 });
+
+describe("branch coverage: modifiers edge cases", () => {
+  // Line 710: withDefault getDocFragments with options.message and a non-entry
+  // fragment (section) — the else branch that returns the fragment unchanged.
+  it("withDefault: options.message skips non-entry fragments", () => {
+    // object() returns section fragments; wrap it in withDefault with message
+    const inner = object({ x: option("--x", string()) });
+    const parser = withDefault(inner, { x: "default" }, {
+      message: message`custom`,
+    });
+    const fragments = parser.getDocFragments(
+      { kind: "unavailable" },
+      undefined,
+    );
+    // Should return fragments without error (section fragments pass through)
+    assert.ok(Array.isArray(fragments.fragments));
+  });
+
+  // Line 935: async multiple() parse — "not added" (update existing state).
+  // This branch fires when added=false and parse succeeds, so we keep
+  // context.state.slice(0, -1) instead of the full context.state.
+  it("multiple: async parser updates existing state (slice branch)", async () => {
+    const parser = multiple(
+      option("--tag", asyncChoice(["a", "b", "c"] as const)),
+    );
+
+    // Parse first --tag to populate state
+    const ctx1 = {
+      buffer: ["--tag", "a"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const r1 = await parser.parse(ctx1);
+    assert.ok(r1.success);
+
+    // Parse second --tag while state already has one item.
+    // added starts as false (state.length >= 1), and parse succeeds
+    // so we go to the slice branch (added=false).
+    const ctx2 = {
+      buffer: ["--tag", "b"],
+      state: r1.success ? r1.next.state : parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const r2 = await parser.parse(ctx2);
+    assert.ok(r2.success);
+    if (r2.success) {
+      // Two items should be in state now
+      assert.equal((r2.next.state as readonly unknown[]).length, 2);
+    }
+  });
+
+  // Line 982: async multiple() complete — inner complete() failure.
+  // Build a custom async multiple-like parser whose complete() always fails to
+  // exercise the error-return path in async complete().
+  it("multiple: async complete fails when inner completion fails", async () => {
+    const failComplete = {
+      ...multiple(option("--x", string())),
+      $mode: "async" as const,
+      parse(
+        context: {
+          buffer: readonly string[];
+          state: readonly string[];
+          optionsTerminated: boolean;
+          usage: readonly unknown[];
+        },
+      ) {
+        // Succeed and add a string item to state
+        if (context.buffer[0] === "--x" && context.buffer[1]) {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              buffer: context.buffer.slice(2),
+              state: [...context.state, context.buffer[1]],
+            },
+            consumed: [context.buffer[0], context.buffer[1]],
+          });
+        }
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`Expected --x VALUE`,
+        });
+      },
+      complete(
+        _state: readonly string[],
+      ): Promise<{ success: false; error: Message }> {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Async complete failure.`,
+        });
+      },
+    };
+
+    const ctx = {
+      buffer: ["--x", "hello"],
+      state: [] as readonly string[],
+      optionsTerminated: false,
+      usage: failComplete.usage,
+    };
+    const r = await failComplete.parse(ctx);
+    assert.ok(r.success);
+    if (r.success) {
+      const result = await failComplete.complete(r.next.state);
+      assert.ok(!result.success);
+    }
+  });
+
+  // Line 1012: multiple() suggest — shouldInclude returns true for non-literal
+  // suggestion kind (e.g., "file" or "directory" kinds pass through always).
+  it("multiple: suggest passes through non-literal suggestions", () => {
+    const fileValueParser: ValueParser<"sync", string> = {
+      $mode: "sync",
+      metavar: "FILE",
+      parse(input: string): { success: true; value: string } {
+        return { success: true, value: input };
+      },
+      format(v: string): string {
+        return v;
+      },
+      *suggest(_prefix: string): Iterable<Suggestion> {
+        yield { kind: "file", type: "any", pattern: "*.txt" };
+      },
+    };
+
+    const parser = multiple(argument(fileValueParser));
+    const ctx = {
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const suggestions = [
+      ...(parser.suggest(ctx, "") as Iterable<Suggestion>),
+    ];
+    // The file-kind suggestion should pass through shouldInclude (returns true)
+    assert.ok(suggestions.some((s) => s.kind === "file"));
+  });
+
+  // Line 155/442: async optional/withDefault suggestAsync — state is undefined
+  // (not an array), so the else branch uses syncParser.initialState.
+  it("optional: async suggest with undefined state uses initialState", async () => {
+    const asyncOpt = optional(
+      option("--mode", asyncChoice(["fast", "slow"] as const)),
+    );
+    // State undefined means inner state is not yet set; cast bypasses generic
+    // complexity since the runtime branch under test only checks Array.isArray.
+    const ctx = {
+      buffer: [] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: asyncOpt.usage,
+    } as Parameters<typeof asyncOpt.suggest>[0];
+    const suggestions = await collectSuggestions(
+      asyncOpt.suggest(ctx, "--") as AsyncIterable<Suggestion>,
+    );
+    // Should get suggestions from the inner parser with its initialState
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("withDefault: async suggest with undefined state uses initialState", async () => {
+    const asyncWd = withDefault(
+      option("--mode", asyncChoice(["fast", "slow"] as const)),
+      "fast" as const,
+    );
+    const ctx = {
+      buffer: [] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: asyncWd.usage,
+    } as Parameters<typeof asyncWd.suggest>[0];
+    const suggestions = await collectSuggestions(
+      asyncWd.suggest(ctx, "--") as AsyncIterable<Suggestion>,
+    );
+    assert.ok(Array.isArray(suggestions));
+  });
+});

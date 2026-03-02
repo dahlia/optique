@@ -417,4 +417,244 @@ describe("parser.ts coverage branches", () => {
     assert.ok(doc);
     assert.ok(Array.isArray(doc.usage));
   });
+
+  // Branch coverage: null initialState with annotations (typeof === "object"
+  // but === null), covering the else-branch of the null guard in parseAsync,
+  // suggestSync, suggestAsync, getDocPageSyncImpl, getDocPageAsyncImpl.
+  it("parseAsync: null initialState with annotations", async () => {
+    const annotation = Symbol("parseAsync-null-init");
+    let capturedState: unknown;
+
+    const nullInitParser: Parser<"async", "ok", null> = {
+      $valueType: [] as readonly "ok"[],
+      $stateType: [] as readonly null[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse(context) {
+        capturedState = context.state;
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`stop`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: "ok" as const,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    await parse(nullInitParser, ["arg"], {
+      annotations: { [annotation]: "null-init-async" },
+    });
+    // The annotation key should be merged on top of {} (not null)
+    assert.ok(
+      capturedState !== null && typeof capturedState === "object",
+      "state should be an object (not null) after annotation injection",
+    );
+  });
+
+  it("suggestSync: null initialState with annotations", () => {
+    const annotation = Symbol("suggestSync-null-init");
+    let capturedState: unknown;
+
+    const nullInitParser: Parser<"sync", never, null> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly null[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`stop`,
+        };
+      },
+      complete() {
+        return { success: true as const, value: null as never };
+      },
+      suggest(context): readonly Suggestion[] {
+        capturedState = context.state;
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    suggestSync(nullInitParser, [""], {
+      annotations: { [annotation]: "null-init-sync" },
+    });
+    assert.ok(
+      capturedState !== null && typeof capturedState === "object",
+      "state should be an object (not null) after annotation injection",
+    );
+  });
+
+  it("suggestAsync: null initialState with annotations", async () => {
+    const annotation = Symbol("suggestAsync-null-init");
+    let capturedState: unknown;
+
+    const nullInitParser: Parser<"async", never, null> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly null[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`stop`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: null as never,
+        });
+      },
+      suggest(context) {
+        capturedState = context.state;
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    await suggestAsync(nullInitParser, [""], {
+      annotations: { [annotation]: "null-init-async-suggest" },
+    });
+    assert.ok(
+      capturedState !== null && typeof capturedState === "object",
+      "state should be an object (not null) after annotation injection",
+    );
+  });
+
+  it("getDocPageSync: null initialState with annotations", () => {
+    const annotation = Symbol("getDocPageSync-null-init");
+    let capturedState: unknown;
+
+    const nullInitParser: Parser<"sync", never, null> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly null[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`stop`,
+        };
+      },
+      complete() {
+        return { success: true as const, value: null as never };
+      },
+      *suggest(): Generator<Suggestion> {},
+      getDocFragments(stateArg) {
+        capturedState = stateArg.kind === "available"
+          ? stateArg.state
+          : undefined;
+        return { fragments: [] };
+      },
+    };
+
+    getDocPageSync(nullInitParser, [], {
+      annotations: { [annotation]: "null-init-doc-sync" },
+    });
+    assert.ok(
+      capturedState !== null && typeof capturedState === "object",
+      "state should be an object (not null) after annotation injection",
+    );
+  });
+
+  it("getDocPageAsync: null initialState with annotations", async () => {
+    const annotation = Symbol("getDocPageAsync-null-init");
+    let capturedState: unknown;
+
+    const nullInitParser: Parser<"async", never, null> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly null[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`stop`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: null as never,
+        });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments(stateArg) {
+        capturedState = stateArg.kind === "available"
+          ? stateArg.state
+          : undefined;
+        return { fragments: [] };
+      },
+    };
+
+    await getDocPageAsync(nullInitParser, [], {
+      annotations: { [annotation]: "null-init-doc-async" },
+    });
+    assert.ok(
+      capturedState !== null && typeof capturedState === "object",
+      "state should be an object (not null) after annotation injection",
+    );
+  });
+
+  // Branch coverage: findCommandInExclusive recursive path (line 759).
+  // Requires nested or(or(cmd, cmd), cmd) where the inner command name is
+  // passed as the first argument so the recursive exclusive branch is taken.
+  it("getDocPage: nested or() resolves inner command via recursive exclusive", () => {
+    const parser = or(
+      or(command("alpha", constant("a")), command("beta", constant("b"))),
+      command("gamma", constant("c")),
+    );
+
+    // "alpha" is inside the inner or() — triggers the recursive exclusive path
+    const doc = getDocPage(parser, ["alpha"]);
+    assert.ok(doc);
+    assert.ok(Array.isArray(doc.usage));
+    // After resolving "alpha", the usage should no longer show the outer
+    // exclusive — it should have been replaced with the inner command's terms
+    const hasAlphaCommand = doc.usage.some(
+      (term) => term.type === "command" && term.name === "alpha",
+    );
+    assert.ok(
+      hasAlphaCommand,
+      "usage should contain the resolved alpha command",
+    );
+  });
 });
