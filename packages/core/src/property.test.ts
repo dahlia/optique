@@ -692,6 +692,54 @@ describe("property-based tests", () => {
     );
   });
 
+  it("runtime corpus should have stable parse and suggest outcomes", () => {
+    const parser = object({
+      mode: withDefault(
+        optional(option("--mode", choice(["dev", "prod"] as const))),
+        "dev" as const,
+      ),
+      verbose: optional(option("--verbose")),
+      target: optional(argument(choice(["app", "docs"] as const))),
+    });
+
+    const cases = [
+      ["app"],
+      ["--mode", "prod", "docs"],
+      ["--verbose", "--mode", "dev", "app"],
+      ["--mode", "qa", "app"],
+      ["--unknown", "app"],
+      ["--mode", "prod", "--verbose", "docs"],
+    ] as const;
+
+    const expected = [
+      {
+        success: true,
+        value: { mode: "dev", verbose: undefined, target: "app" },
+      },
+      {
+        success: true,
+        value: { mode: "prod", verbose: undefined, target: "docs" },
+      },
+      { success: true, value: { mode: "dev", verbose: true, target: "app" } },
+      { success: false, value: undefined },
+      { success: false, value: undefined },
+      { success: true, value: { mode: "prod", verbose: true, target: "docs" } },
+    ] as const;
+
+    for (const [index, args] of cases.entries()) {
+      const result = parseSync(parser, args);
+      const snapshot = result.success
+        ? { success: true as const, value: result.value }
+        : { success: false as const, value: undefined };
+      assert.deepEqual(snapshot, expected[index]);
+    }
+
+    const suggestions = literalSuggestionTexts(
+      suggestSync(parser, ["--mode", "p"]),
+    );
+    assert.deepEqual(suggestions, ["prod"]);
+  });
+
   it("parseSync should fail for unconsumed input loops", () => {
     const parser = constant("ok");
 
