@@ -5,7 +5,14 @@ import {
   or,
   tuple,
 } from "@optique/core/constructs";
-import { parseAsync, parseSync } from "@optique/core/parser";
+import {
+  parse,
+  parseAsync,
+  parseSync,
+  suggest,
+  suggestAsync,
+  suggestSync,
+} from "@optique/core/parser";
 import {
   argument,
   command,
@@ -211,6 +218,101 @@ describe("property-based tests", () => {
     );
   });
 
+  it("parse() should agree with parseSync for sync parsers", () => {
+    const parser = object({
+      port: withDefault(
+        option("--port", integer({ min: 1, max: 65535 })),
+        3000,
+      ),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.constant<undefined>(undefined),
+          fc.integer({ min: 1, max: 65535 }),
+        ),
+        (port: number | undefined) => {
+          const args = port == null ? [] : ["--port", `${port}`];
+          const direct = parseSync(parser, args);
+          const generic = parse(parser, args);
+
+          assert.deepEqual(generic, direct);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("suggest() should agree with suggestSync for sync parsers", () => {
+    const parser = object({
+      mode: option("--mode", choice(["dev", "prod"] as const)),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom("", "-", "--", "--m", "--mode=", "d", "x"),
+        fc.boolean(),
+        fc.constantFrom<"dev" | "prod">("dev", "prod"),
+        (prefix: string, alreadySet: boolean, mode: "dev" | "prod") => {
+          const args = alreadySet ? ["--mode", mode, prefix] : [prefix];
+          const direct = suggestSync(parser, args as [string, ...string[]]);
+          const generic = suggest(parser, args as [string, ...string[]]);
+
+          assert.deepEqual(generic, direct);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("suggestAsync should agree with suggestSync for sync parsers", async () => {
+    const parser = object({
+      mode: option("--mode", choice(["dev", "prod"] as const)),
+    });
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom("", "-", "--", "--m", "--mode=", "d", "x"),
+        fc.boolean(),
+        fc.constantFrom<"dev" | "prod">("dev", "prod"),
+        async (prefix: string, alreadySet: boolean, mode: "dev" | "prod") => {
+          const args = alreadySet ? ["--mode", mode, prefix] : [prefix];
+          const syncSuggestions = suggestSync(
+            parser,
+            args as [string, ...string[]],
+          );
+          const asyncSuggestions = await suggestAsync(
+            parser,
+            args as [string, ...string[]],
+          );
+
+          assert.deepEqual(asyncSuggestions, syncSuggestions);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("parseSync should fail for unconsumed input loops", () => {
+    const parser = constant("ok");
+
+    fc.assert(
+      fc.property(
+        fc.array(fc.string({ minLength: 0, maxLength: 16 }), {
+          minLength: 1,
+          maxLength: 8,
+        }),
+        (args: readonly string[]) => {
+          const result = parseSync(parser, args);
+
+          assert.ok(!result.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("option parser should agree on separated and joined forms", () => {
     fc.assert(
       fc.property(
@@ -243,6 +345,110 @@ describe("property-based tests", () => {
           assert.equal(result.success, present);
           if (result.success) {
             assert.equal(result.value, true);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("flag parser should reject duplicate bundled short flags", () => {
+    fc.assert(
+      fc.property(shortOptionCharacterArbitrary, (name: string) => {
+        const parser = flag(shortOptionName(name));
+        const result = parseSync(parser, [`-${name}${name}`]);
+
+        assert.ok(!result.success);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("object of flags should require every flag", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(shortOptionCharacterArbitrary, {
+          minLength: 3,
+          maxLength: 3,
+        }),
+        fc.boolean(),
+        fc.boolean(),
+        fc.boolean(),
+        (
+          names: readonly string[],
+          firstPresent: boolean,
+          secondPresent: boolean,
+          thirdPresent: boolean,
+        ) => {
+          const [firstName, secondName, thirdName] = names;
+          const firstFlag = shortOptionName(firstName);
+          const secondFlag = shortOptionName(secondName);
+          const thirdFlag = shortOptionName(thirdName);
+
+          const parser = object({
+            first: flag(firstFlag),
+            second: flag(secondFlag),
+            third: flag(thirdFlag),
+          });
+
+          const selected = [
+            ...(firstPresent ? [firstName] : []),
+            ...(secondPresent ? [secondName] : []),
+            ...(thirdPresent ? [thirdName] : []),
+          ];
+          const result = parseSync(parser, selected.map(shortOptionName));
+
+          const shouldSucceed = firstPresent && secondPresent && thirdPresent;
+          assert.equal(result.success, shouldSucceed);
+          if (result.success) {
+            assert.deepEqual(result.value, {
+              first: true,
+              second: true,
+              third: true,
+            });
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("flag parser should match bundled and separated forms", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(shortOptionCharacterArbitrary, {
+          minLength: 3,
+          maxLength: 3,
+        }),
+        fc.boolean(),
+        (names: readonly string[], reverseOrder: boolean) => {
+          const [firstName, secondName, thirdName] = names;
+          const firstFlag = shortOptionName(firstName);
+          const secondFlag = shortOptionName(secondName);
+          const thirdFlag = shortOptionName(thirdName);
+
+          const parser = object({
+            first: flag(firstFlag),
+            second: flag(secondFlag),
+            third: flag(thirdFlag),
+          });
+
+          const ordered = reverseOrder
+            ? [thirdName, secondName, firstName]
+            : [firstName, secondName, thirdName];
+          const separated = parseSync(parser, ordered.map(shortOptionName));
+          const bundled = parseSync(parser, [`-${ordered.join("")}`]);
+
+          assert.ok(separated.success);
+          assert.ok(bundled.success);
+          if (separated.success && bundled.success) {
+            const expected = {
+              first: true,
+              second: true,
+              third: true,
+            };
+            assert.deepEqual(separated.value, expected);
+            assert.deepEqual(bundled.value, expected);
           }
         },
       ),
@@ -313,6 +519,25 @@ describe("property-based tests", () => {
           const result = parseSync(parser, [...first, ...second]);
 
           assert.ok(!result.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("option joined form should preserve full value suffix", () => {
+    const parser = option("--data", string());
+
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 0, maxLength: 24 }),
+        (value: string) => {
+          const result = parseSync(parser, [`--data=${value}`]);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.equal(result.value, value);
+          }
         },
       ),
       propertyParameters,
