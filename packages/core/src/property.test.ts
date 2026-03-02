@@ -667,6 +667,31 @@ describe("property-based tests", () => {
     );
   });
 
+  it("failure should remain failure after wrong command extension", () => {
+    const parser = command(
+      "build",
+      object({
+        mode: option("--mode", choice(["dev", "prod"] as const)),
+        target: argument(string()),
+      }),
+    );
+
+    fc.assert(
+      fc.property(
+        identifierArbitrary.filter((name: string) => name !== "build"),
+        fc.array(adversarialTokenArbitrary, { minLength: 0, maxLength: 6 }),
+        (wrongCommand: string, suffix: readonly string[]) => {
+          const baseResult = parseSync(parser, [wrongCommand]);
+          const extendedResult = parseSync(parser, [wrongCommand, ...suffix]);
+
+          assert.ok(!baseResult.success);
+          assert.ok(!extendedResult.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("parseSync should fail for unconsumed input loops", () => {
     const parser = constant("ok");
 
