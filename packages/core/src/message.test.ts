@@ -6,6 +6,7 @@ import {
   link,
   type Message,
   message,
+  type MessageTerm,
   metavar,
   optionName,
   optionNames,
@@ -17,6 +18,7 @@ import {
 } from "./message.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as fc from "fast-check";
 
 describe("message template function", () => {
   it("should create message with text only", () => {
@@ -1269,5 +1271,138 @@ describe("formatMessage with url term", () => {
     const formattedUrl = formatMessage(msgWithUrl, { quotes: true });
     const formattedLink = formatMessage(msgWithLink, { quotes: true });
     assert.equal(formattedUrl, formattedLink);
+  });
+});
+
+describe("property-based tests", () => {
+  const propertyParameters = { numRuns: 150 } as const;
+  const safeStringArbitrary = fc
+    .string({ minLength: 0, maxLength: 20 })
+    .filter((value: string) => !value.includes("\x1b"));
+  const safeSingleLineStringArbitrary = safeStringArbitrary.filter(
+    (value: string) => !value.includes("\n"),
+  );
+  const nonEmptySingleLineStringArbitrary = safeSingleLineStringArbitrary
+    .filter((value: string) => value.length > 0);
+  const optionNameArbitrary = safeSingleLineStringArbitrary
+    .filter((value: string) => value.length > 0)
+    .map((value: string) => `--${value}`);
+  const stripAnsi = (value: string): string => {
+    let output = "";
+    for (let i = 0; i < value.length; i++) {
+      if (value.charCodeAt(i) === 0x1b && value[i + 1] === "[") {
+        i += 2;
+        while (i < value.length) {
+          const code = value.charCodeAt(i);
+          if (code >= 0x40 && code <= 0x7e) {
+            break;
+          }
+          i++;
+        }
+        continue;
+      }
+      output += value[i];
+    }
+    return output;
+  };
+
+  it("formatMessage colors should preserve plain-text semantics", () => {
+    const messageTermArbitrary: fc.Arbitrary<MessageTerm> = fc.oneof(
+      safeStringArbitrary.map((textValue: string) => ({
+        type: "text" as const,
+        text: textValue,
+      })),
+      optionNameArbitrary.map((name: string) => ({
+        type: "optionName" as const,
+        optionName: name,
+      })),
+      fc.uniqueArray(optionNameArbitrary, { minLength: 1, maxLength: 3 }).map(
+        (names: readonly string[]) => ({
+          type: "optionNames" as const,
+          optionNames: names,
+        }),
+      ),
+      fc.constantFrom<"ARG" | "FILE" | "PATH" | "VALUE">(
+        "ARG",
+        "FILE",
+        "PATH",
+        "VALUE",
+      ).map((name: "ARG" | "FILE" | "PATH" | "VALUE") => ({
+        type: "metavar" as const,
+        metavar: name,
+      })),
+      safeSingleLineStringArbitrary.map((singleValue: string) => ({
+        type: "value" as const,
+        value: singleValue,
+      })),
+      fc.array(safeSingleLineStringArbitrary, { minLength: 0, maxLength: 4 })
+        .map((manyValues: readonly string[]) => ({
+          type: "values" as const,
+          values: manyValues,
+        })),
+      safeSingleLineStringArbitrary.map((name: string) => ({
+        type: "envVar" as const,
+        envVar: name,
+      })),
+      safeSingleLineStringArbitrary.map((cmd: string) => ({
+        type: "commandLine" as const,
+        commandLine: cmd,
+      })),
+      fc.constant({ type: "lineBreak" as const }),
+    );
+
+    fc.assert(
+      fc.property(
+        fc.array(messageTermArbitrary, { minLength: 0, maxLength: 20 }),
+        fc.boolean(),
+        (msg: readonly MessageTerm[], quotes: boolean) => {
+          const plain = formatMessage(msg, { colors: false, quotes });
+          const colored = formatMessage(msg, { colors: true, quotes });
+          assert.equal(stripAnsi(colored), plain);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("valueSet should preserve value order in value terms", () => {
+    fc.assert(
+      fc.property(
+        fc.array(nonEmptySingleLineStringArbitrary, {
+          minLength: 0,
+          maxLength: 8,
+        }),
+        fc.option(fc.constantFrom("en", "ko", "fr"), { nil: undefined }),
+        fc.constantFrom<"conjunction" | "disjunction" | "unit">(
+          "conjunction",
+          "disjunction",
+          "unit",
+        ),
+        fc.constantFrom<"long" | "short" | "narrow">(
+          "long",
+          "short",
+          "narrow",
+        ),
+        (
+          valuesInput: readonly string[],
+          locale: string | undefined,
+          type: "conjunction" | "disjunction" | "unit",
+          style: "long" | "short" | "narrow",
+        ) => {
+          const msg = valueSet(valuesInput, { locale, type, style });
+          const extractedValues = msg
+            .filter((term) => term.type === "value")
+            .map((term) => term.value);
+
+          assert.deepEqual(extractedValues, valuesInput);
+          if (valuesInput.length === 0) {
+            assert.deepEqual(msg, []);
+          } else {
+            assert.ok(msg.length > 0);
+          }
+        },
+      ),
+      propertyParameters,
+    );
   });
 });
