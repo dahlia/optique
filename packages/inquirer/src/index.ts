@@ -722,7 +722,7 @@ export function prompt<M extends Mode, TValue, TState>(
       // value from their own sources (env var, config file) when no CLI input
       // was provided, avoiding unnecessary interactive prompts.  The cache
       // deduplicates the two calls so the prompt (or inner complete) runs once.
-      if (state === (promptBindInitialState as unknown as TState)) {
+      if (state instanceof PromptBindInitialStateClass) {
         if (promptCache !== null) {
           // Second call (real complete phase): consume the cache.
           const cached = promptCache;
