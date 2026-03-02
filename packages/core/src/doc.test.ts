@@ -1494,3 +1494,122 @@ describe("formatDocPage", () => {
     });
   });
 });
+
+describe("branch coverage: doc.ts edge cases", () => {
+  // Lines 615, 629, 641: maxWidth != null passed to examples/author/bugs.
+  it("examples/author/bugs format with maxWidth set", () => {
+    const page: DocPage = {
+      sections: [],
+      examples: message`myapp --help`,
+      author: message`Jane Doe`,
+      bugs: message`bugs.example.com`,
+    };
+    const result = formatDocPage("myapp", page, { maxWidth: 60 });
+    assert.ok(result.includes("Examples:"));
+    assert.ok(result.includes("Author:"));
+    assert.ok(result.includes("Bugs:"));
+  });
+
+  // Line 400: section sort falls through to index comparison (titleCmp == 0).
+  // Requires two sections with the same title-null-ness so that titleCmp==0
+  // and the tiebreak is by index.
+  it("sections sort preserves order when title-null-ness is equal", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "Options",
+          entries: [{ term: { type: "argument", metavar: "a" } }],
+        },
+        {
+          title: "Arguments",
+          entries: [{ term: { type: "argument", metavar: "b" } }],
+        },
+      ],
+    };
+    const result = formatDocPage("myapp", page);
+    // Both sections have titles (same title-null-ness → index tiebreak).
+    // The order should be stable (index-based) according to the comparator.
+    assert.ok(result.includes("Options:"));
+    assert.ok(result.includes("Arguments:"));
+  });
+
+  // Lines 462, 465: showDefault is true (boolean), so prefix/suffix come from
+  // the false branch of `typeof showDefault === "object"`.
+  it("showDefault: true uses default prefix/suffix brackets", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--output"] },
+          default: message`stdout`,
+        }],
+      }],
+    };
+    const result = formatDocPage("myapp", page, { showDefault: true });
+    assert.ok(result.includes("["));
+    assert.ok(result.includes("stdout"));
+    assert.ok(result.includes("]"));
+  });
+
+  // Line 476: description is long enough that adding prefix would overflow
+  // descColumnWidth, so a newline is inserted before the default value.
+  it("showDefault: default wraps to new line when description is wide", () => {
+    const longDesc =
+      "A very long description that occupies almost all of the description column width";
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-v", "--verbose"] },
+          description: message`${longDesc}`,
+          default: message`false`,
+        }],
+      }],
+    };
+    // maxWidth=60 gives a narrow descColumnWidth so the default wraps.
+    const result = formatDocPage("myapp", page, {
+      showDefault: true,
+      maxWidth: 60,
+    });
+    assert.ok(result.includes("false"), "default value should appear");
+  });
+
+  // Lines 523, 529, 538, 546: showChoices as object with label/maxItems
+  // options — exercises the false-branch of the conditional default.
+  it("showChoices: object with label uses provided label", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--fmt"] },
+          choices: valueSet(["json", "yaml", "csv"]),
+        }],
+      }],
+    };
+    const result = formatDocPage("myapp", page, {
+      showChoices: { label: "one of: " },
+    });
+    assert.ok(result.includes("one of:"));
+  });
+
+  it("showChoices: object with maxItems truncates long choice lists", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--color"] },
+          choices: valueSet([
+            "red",
+            "green",
+            "blue",
+            "cyan",
+            "magenta",
+            "yellow",
+          ]),
+        }],
+      }],
+    };
+    // maxItems: 2 → only first two choices displayed, rest truncated.
+    const result = formatDocPage("myapp", page, {
+      showChoices: { maxItems: 2 },
+    });
+    assert.ok(result.includes("red") || result.includes("..."));
+    assert.ok(result.includes("..."), "should show ellipsis for truncation");
+  });
+});

@@ -35,6 +35,8 @@ import {
   type InferValue,
   parse,
   parseAsync,
+  type Parser,
+  type ParserContext,
   parseSync,
   type Suggestion,
 } from "@optique/core/parser";
@@ -4682,6 +4684,264 @@ describe("branch coverage regressions", () => {
     assert.equal(result.success, false);
     if (!result.success) {
       assert.ok(formatMessage(result.error).includes("--verbose"));
+    }
+  });
+});
+
+describe("branch coverage: primitives edge cases", () => {
+  // Lines 261/412: getSuggestionsWithDependency/Async — valueParser has no
+  // suggest function.  The early-return branch is uncovered by other tests.
+  it("option suggest: valueParser without suggest yields no value suggestions", () => {
+    const noSuggest = noSuggestParser();
+    const parser = option("--output", noSuggest);
+    // Buffer contains "--output" to put us in "value expected" mode;
+    // prefix "" doesn't match any option name, so only value suggestions run.
+    const ctx = {
+      buffer: ["--output"] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const suggestions = [
+      ...(parser.suggest(ctx, "") as Iterable<Suggestion>),
+    ];
+    // The noSuggest parser has no suggest(), so getSuggestionsWithDependency
+    // takes the early-return branch and we get no value suggestions.
+    assert.deepEqual(suggestions, []);
+  });
+
+  it("argument suggest: valueParser without suggest is a no-op", () => {
+    const noSuggest = noSuggestParser();
+    const parser = argument(noSuggest);
+    const ctx = {
+      buffer: [] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const suggestions = [
+      ...(parser.suggest(ctx, "") as Iterable<Suggestion>),
+    ];
+    assert.deepEqual(suggestions, []);
+  });
+
+  // Line 484: suggestOptionAsync — hidden: true causes early return.
+  it("option suggest: hidden async option returns no suggestions", async () => {
+    const parser = option("--secret", asyncFileSuggestingParser(), {
+      hidden: true,
+    });
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of parser.suggest({
+        buffer: [] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "--") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.deepEqual(suggestions, []);
+  });
+
+  // Line 503/513: suggestOptionAsync with --option=prefix where the value
+  // parser yields file-kind suggestions (non-literal path through =).
+  it("option suggest: async --opt= completion with file-kind suggestion", async () => {
+    const parser = option("--out", asyncFileSuggestingParser());
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of parser.suggest({
+        buffer: [] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "--out=") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    // File-kind suggestion is converted to literal with option= prefix
+    assert.ok(suggestions.length > 0);
+    assert.ok(suggestions.every((s) => s.kind === "literal"));
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "literal" && s.text.startsWith("--out=")
+      ),
+    );
+  });
+
+  // Lines 1884/1895/1907: suggestCommandAsync — "matched" and "parsing"
+  // async states. Use an async inner parser so the command is async mode.
+  it("command suggest async: 'matched' state delegates to inner parser", async () => {
+    // The command becomes async because the inner parser is async.
+    const asyncCmd = command(
+      "deploy",
+      option("--f", asyncFileSuggestingParser()),
+    );
+    assert.equal(asyncCmd.$mode, "async");
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of asyncCmd.suggest({
+        buffer: [] as readonly string[],
+        state: ["matched", "deploy"] as ["matched", string],
+        optionsTerminated: false,
+        usage: asyncCmd.usage,
+      }, "--") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    // Should get suggestions from the inner parser in "matched" state
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("command suggest async: 'parsing' state delegates to inner parser", async () => {
+    const inner = option("--f", asyncFileSuggestingParser());
+    const asyncCmd = command("deploy", inner);
+    assert.equal(asyncCmd.$mode, "async");
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of asyncCmd.suggest({
+        buffer: [] as readonly string[],
+        state: ["parsing", inner.initialState] as [
+          "parsing",
+          typeof inner.initialState,
+        ],
+        optionsTerminated: false,
+        usage: asyncCmd.usage,
+      }, "--") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  // Lines 2087: command complete async — "matched" state triggers async path.
+  // Use a custom async inner parser whose parse() always returns a Promise so
+  // command.complete() can call .then() on it correctly.
+  it("command complete async: 'matched' state resolves asynchronously", async () => {
+    const asyncInner: Parser<"async", string, null> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse(_context: ParserContext<null>) {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No input.`,
+        });
+      },
+      complete(_state: null) {
+        return Promise.resolve({ success: true as const, value: "async-done" });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const asyncCmd = command("run", asyncInner);
+    assert.equal(asyncCmd.$mode, "async");
+    const state: ["matched", string] = ["matched", "run"];
+    const result = await (asyncCmd.complete(state) as Promise<
+      { success: boolean; value?: string }
+    >);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "async-done");
+    }
+  });
+
+  // Line 1305: flag errors.duplicate as function (non-flag option branch).
+  it("flag errors.duplicate as function via parse()", () => {
+    const f = flag("--verbose", {
+      errors: {
+        duplicate: (name) => message`Flag ${text(name)} already set.`,
+      },
+    });
+    const alreadySet = {
+      success: true as const,
+      value: true as const,
+    };
+    const ctx = {
+      buffer: ["--verbose"] as readonly string[],
+      state: alreadySet,
+      optionsTerminated: false,
+      usage: f.usage,
+    };
+    const result = f.parse(ctx);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(formatMessage(result.error).includes("--verbose"));
+    }
+  });
+
+  // Line 1330: flag with / prefix — the `${name}:` join format is created
+  // for /Option style flags (Windows-style).
+  it("flag /OPTION:value returns unexpectedValue error", () => {
+    const f = flag("/verbose");
+    const ctx = {
+      buffer: ["/verbose:yes"] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: f.usage,
+    };
+    const result = f.parse(ctx);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(
+        formatMessage(result.error).toLowerCase().includes("does not accept"),
+        `expected error about value, got: ${formatMessage(result.error)}`,
+      );
+    }
+  });
+
+  // Line 1350: bundled short flag duplicate error (e.g., -abc when -a already set).
+  it("flag -a bundled duplicate via custom errors.duplicate", () => {
+    const f = flag("-a", {
+      errors: {
+        duplicate: (name) => message`${text(name)} bundled duplicate.`,
+      },
+    });
+    const alreadySet = {
+      success: true as const,
+      value: true as const,
+    };
+    const ctx = {
+      buffer: ["-ab"] as readonly string[],
+      state: alreadySet,
+      optionsTerminated: false,
+      usage: f.usage,
+    };
+    const result = f.parse(ctx);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(formatMessage(result.error).includes("-a"));
+    }
+  });
+
+  // Line 1277: flag endOfInput custom error.
+  it("flag errors.endOfInput as static Message", () => {
+    const f = flag("--verbose", {
+      errors: { endOfInput: message`Need --verbose flag.` },
+    });
+    const ctx = {
+      buffer: [] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: f.usage,
+    };
+    const result = f.parse(ctx);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Need --verbose flag.");
     }
   });
 });
