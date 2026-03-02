@@ -1520,6 +1520,62 @@ describe("property-based tests", () => {
     );
   });
 
+  it("tightening multiple bounds should not add successes", () => {
+    fc.assert(
+      fc.property(
+        fc.array(argumentTokenArbitrary, { minLength: 0, maxLength: 8 }),
+        fc.integer({ min: 0, max: 4 }),
+        fc.integer({ min: 0, max: 8 }),
+        fc.integer({ min: 0, max: 8 }),
+        fc.integer({ min: 0, max: 8 }),
+        (
+          values: readonly string[],
+          looseMin: number,
+          looseMax: number,
+          candidateMin: number,
+          candidateMax: number,
+        ) => {
+          fc.pre(looseMin <= looseMax);
+          const tightMin = Math.min(
+            looseMax,
+            Math.max(looseMin, candidateMin),
+          );
+          const tightMax = Math.max(
+            tightMin,
+            Math.min(looseMax, candidateMax),
+          );
+
+          const looseParser = object({
+            values: multiple(argument(string()), {
+              min: looseMin,
+              max: looseMax,
+            }),
+          });
+          const tightParser = object({
+            values: multiple(argument(string()), {
+              min: tightMin,
+              max: tightMax,
+            }),
+          });
+
+          const looseResult = parseSync(looseParser, values);
+          const tightResult = parseSync(tightParser, values);
+
+          if (tightResult.success) {
+            assert.ok(looseResult.success);
+            if (looseResult.success) {
+              assert.deepEqual(
+                looseResult.value.values,
+                tightResult.value.values,
+              );
+            }
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("multiple option parser should preserve occurrence order", () => {
     const parser = object({
       tags: multiple(option("--tag", string()), { min: 0, max: 6 }),
