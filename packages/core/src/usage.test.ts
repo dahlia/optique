@@ -4,6 +4,11 @@ import {
   extractOptionNames,
   formatUsage,
   formatUsageTerm,
+  type HiddenVisibility,
+  isDocHidden,
+  isSuggestionHidden,
+  isUsageHidden,
+  mergeHidden,
   normalizeUsage,
   type OptionName,
   type Usage,
@@ -13,6 +18,7 @@ import {
 } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as fc from "fast-check";
 
 describe("formatUsage", () => {
   describe("argument terms", () => {
@@ -2592,5 +2598,219 @@ describe("formatUsage hidden visibility", () => {
     }];
     const result = formatUsage("app", usage, { expandCommands: true });
     assert.equal(result, "app visible\napp doc-hidden");
+  });
+});
+
+describe("property-based tests", () => {
+  const propertyParameters = { numRuns: 120 } as const;
+  const hiddenVisibilityArbitrary = fc.constantFrom<
+    HiddenVisibility | undefined
+  >(
+    undefined,
+    true,
+    "usage",
+    "doc",
+  );
+  const safeStringArbitrary = fc
+    .string({ minLength: 0, maxLength: 16 })
+    .filter((value: string) => !value.includes("\x1b"));
+  const identifierArbitrary = safeStringArbitrary
+    .filter((value: string) => value.length > 0)
+    .map((value: string) => {
+      const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return normalized.length > 0 ? normalized : "x";
+    });
+  const optionNameArbitrary = fc
+    .tuple(
+      fc.constantFrom("--", "-", "/", "+"),
+      identifierArbitrary,
+    )
+    .map(([prefix, name]: readonly [string, string]) =>
+      `${prefix}${name}` as OptionName
+    );
+  const metavarArbitrary = fc.constantFrom<"ARG" | "FILE" | "PATH" | "VALUE">(
+    "ARG",
+    "FILE",
+    "PATH",
+    "VALUE",
+  );
+
+  function usageTermArbitrary(depth: number): fc.Arbitrary<UsageTerm> {
+    const leaf: fc.Arbitrary<UsageTerm> = fc.oneof(
+      fc.record({
+        type: fc.constant<"argument">("argument"),
+        metavar: metavarArbitrary,
+        hidden: hiddenVisibilityArbitrary,
+      }),
+      fc.record({
+        type: fc.constant<"option">("option"),
+        names: fc.uniqueArray(optionNameArbitrary, {
+          minLength: 1,
+          maxLength: 3,
+        }),
+        metavar: fc.option(metavarArbitrary, { nil: undefined }),
+        hidden: hiddenVisibilityArbitrary,
+      }),
+      fc.record({
+        type: fc.constant<"command">("command"),
+        name: identifierArbitrary,
+        hidden: hiddenVisibilityArbitrary,
+      }),
+      fc.record({
+        type: fc.constant<"literal">("literal"),
+        value: safeStringArbitrary,
+      }),
+      fc.record({
+        type: fc.constant<"passthrough">("passthrough"),
+        hidden: hiddenVisibilityArbitrary,
+      }),
+    );
+
+    if (depth <= 0) {
+      return leaf;
+    }
+
+    return fc.oneof(
+      leaf,
+      usageArbitrary(depth - 1).map((terms: Usage) => ({
+        type: "optional" as const,
+        terms,
+      })),
+      fc.record({
+        terms: usageArbitrary(depth - 1),
+        min: fc.integer({ min: 0, max: 2 }),
+      }).map((
+        { terms, min }: { readonly terms: Usage; readonly min: number },
+      ) => ({
+        type: "multiple" as const,
+        terms,
+        min,
+      })),
+      fc.array(usageArbitrary(depth - 1), { minLength: 1, maxLength: 3 }).map(
+        (terms: readonly Usage[]) => ({
+          type: "exclusive" as const,
+          terms,
+        }),
+      ),
+    );
+  }
+
+  function usageArbitrary(depth: number): fc.Arbitrary<Usage> {
+    return fc.array(usageTermArbitrary(depth), {
+      minLength: 0,
+      maxLength: 5,
+    });
+  }
+
+  const stripAnsi = (text: string): string => {
+    let output = "";
+    for (let i = 0; i < text.length; i++) {
+      if (text.charCodeAt(i) === 0x1b && text[i + 1] === "[") {
+        i += 2;
+        while (i < text.length) {
+          const code = text.charCodeAt(i);
+          if (code >= 0x40 && code <= 0x7e) {
+            break;
+          }
+          i++;
+        }
+        continue;
+      }
+      output += text[i];
+    }
+    return output;
+  };
+
+  it("mergeHidden should behave like union of visibility rules", () => {
+    fc.assert(
+      fc.property(
+        hiddenVisibilityArbitrary,
+        hiddenVisibilityArbitrary,
+        hiddenVisibilityArbitrary,
+        (
+          a: HiddenVisibility | undefined,
+          b: HiddenVisibility | undefined,
+          c: HiddenVisibility | undefined,
+        ) => {
+          const mergedAB = mergeHidden(a, b);
+
+          assert.equal(mergeHidden(a, b), mergeHidden(b, a));
+          assert.equal(mergeHidden(a, a), a);
+          assert.equal(
+            mergeHidden(mergeHidden(a, b), c),
+            mergeHidden(a, mergeHidden(b, c)),
+          );
+
+          assert.equal(
+            isUsageHidden(mergedAB),
+            isUsageHidden(a) || isUsageHidden(b),
+          );
+          assert.equal(
+            isDocHidden(mergedAB),
+            isDocHidden(a) || isDocHidden(b),
+          );
+          assert.equal(
+            isSuggestionHidden(mergedAB),
+            isSuggestionHidden(a) ||
+              isSuggestionHidden(b) ||
+              (a != null && b != null && a !== b),
+          );
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("normalizeUsage should preserve extracted names", () => {
+    fc.assert(
+      fc.property(usageArbitrary(2), (usage: Usage) => {
+        const normalized = normalizeUsage(usage);
+
+        assert.deepEqual(
+          extractOptionNames(normalized),
+          extractOptionNames(usage),
+        );
+        assert.deepEqual(
+          extractCommandNames(normalized),
+          extractCommandNames(usage),
+        );
+        assert.deepEqual(
+          extractArgumentMetavars(normalized),
+          extractArgumentMetavars(usage),
+        );
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("formatUsage colors should preserve plain-text content", () => {
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        usageArbitrary(2),
+        fc.boolean(),
+        fc.boolean(),
+        (
+          programName: string,
+          usage: Usage,
+          expandCommands: boolean,
+          onlyShortestOptions: boolean,
+        ) => {
+          const plain = formatUsage(programName, usage, {
+            colors: false,
+            expandCommands,
+            onlyShortestOptions,
+          });
+          const colored = formatUsage(programName, usage, {
+            colors: true,
+            expandCommands,
+            onlyShortestOptions,
+          });
+
+          assert.equal(stripAnsi(colored), plain);
+        },
+      ),
+      propertyParameters,
+    );
   });
 });
