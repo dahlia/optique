@@ -510,8 +510,7 @@ export function dependency<M extends Mode, T>(
   parser: ValueParser<M, T>,
 ): DependencySource<M, T> {
   const id = Symbol();
-  // deno-lint-ignore no-explicit-any
-  const result: any = {
+  const result: DependencySource<M, T> = {
     ...parser,
     [dependencySourceMarker]: true,
     [dependencyId]: id,
@@ -541,7 +540,7 @@ export function dependency<M extends Mode, T>(
       return createDerivedValueParser(id, parser, options);
     },
   };
-  return result as DependencySource<M, T>;
+  return result;
 }
 
 /**

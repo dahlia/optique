@@ -284,16 +284,11 @@ export function bindEnv<
         };
       };
 
-      const result = parser.parse(innerContext);
-
-      if (result instanceof Promise) {
-        return result.then(processResult) as ModeValue<
-          M,
-          ParserResult<TState>
-        >;
-      }
-
-      return processResult(result) as ModeValue<M, ParserResult<TState>>;
+      return mapModeValue(
+        parser.$mode,
+        parser.parse(innerContext),
+        processResult,
+      );
     },
 
     complete: (state) => {
@@ -307,10 +302,7 @@ export function bindEnv<
         parser.$mode,
         parser,
         isEnvBindState(state) ? state.cliState : undefined,
-      ) as ModeValue<
-        M,
-        ValueParserResult<TValue>
-      >;
+      );
     },
 
     suggest: parser.suggest,
@@ -321,14 +313,52 @@ export function bindEnv<
   };
 }
 
+function wrapForMode<T>(mode: "sync", value: T | Promise<T>): T;
+function wrapForMode<T>(mode: "async", value: T | Promise<T>): Promise<T>;
 function wrapForMode<M extends Mode, T>(
   mode: M,
-  value: T,
-): ModeValue<M, T> {
+  value: T | Promise<T>,
+): ModeValue<M, T>;
+function wrapForMode<T>(
+  mode: Mode,
+  value: T | Promise<T>,
+): T | Promise<T> {
   if (mode === "async") {
-    return Promise.resolve(value) as ModeValue<M, T>;
+    return Promise.resolve(value);
   }
-  return value as ModeValue<M, T>;
+  if (value instanceof Promise) {
+    throw new TypeError("Synchronous mode cannot wrap Promise value.");
+  }
+  return value;
+}
+
+function mapModeValue<T, U>(
+  mode: "sync",
+  value: T,
+  mapFn: (value: T) => U,
+): U;
+function mapModeValue<T, U>(
+  mode: "async",
+  value: Promise<T>,
+  mapFn: (value: T) => U,
+): Promise<U>;
+function mapModeValue<M extends Mode, T, U>(
+  mode: M,
+  value: ModeValue<M, T>,
+  mapFn: (value: T) => U,
+): ModeValue<M, U>;
+function mapModeValue<T, U>(
+  mode: Mode,
+  value: T | Promise<T>,
+  mapFn: (value: T) => U,
+): U | Promise<U> {
+  if (mode === "async") {
+    return Promise.resolve(value).then(mapFn);
+  }
+  if (value instanceof Promise) {
+    throw new TypeError("Synchronous mode cannot map Promise value.");
+  }
+  return mapFn(value);
 }
 
 function getEnvOrDefault<M extends Mode, TValue>(
@@ -352,10 +382,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
   const rawValue = sourceData?.source(fullKey);
   if (rawValue !== undefined) {
     const parsed = options.parser.parse(rawValue);
-    if (parsed instanceof Promise) {
-      return parsed as ModeValue<M, Result<TValue>>;
-    }
-    return wrapForMode(mode, parsed as Result<TValue>);
+    return wrapForMode(mode, parsed);
   }
 
   if (options.default !== undefined) {
@@ -373,11 +400,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // layer has a value.
   if (innerParser != null) {
     const completeState = innerState ?? innerParser.initialState;
-    const result = innerParser.complete(completeState);
-    if (result instanceof Promise) {
-      return result as ModeValue<M, Result<TValue>>;
-    }
-    return wrapForMode(mode, result as Result<TValue>);
+    return wrapForMode(mode, innerParser.complete(completeState));
   }
 
   return wrapForMode(mode, {

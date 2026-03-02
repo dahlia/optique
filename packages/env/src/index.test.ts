@@ -507,8 +507,9 @@ describe("bindEnv()", () => {
     // to getEnvOrDefault, which takes the default path.  In async mode
     // the return value must be a Promise.
     const completeResult = parser.complete(
-      // deno-lint-ignore no-explicit-any
-      { hasCliValue: false } as any,
+      { hasCliValue: false } as unknown as Parameters<
+        typeof parser.complete
+      >[0],
     );
     assert.ok(
       completeResult instanceof Promise,
@@ -550,8 +551,9 @@ describe("bindEnv()", () => {
     });
 
     const completeResult = parser.complete(
-      // deno-lint-ignore no-explicit-any
-      { hasCliValue: false } as any,
+      { hasCliValue: false } as unknown as Parameters<
+        typeof parser.complete
+      >[0],
     );
     assert.ok(
       completeResult instanceof Promise,
@@ -594,8 +596,9 @@ describe("bindEnv()", () => {
     context.getAnnotations();
 
     const completeResult = parser.complete(
-      // deno-lint-ignore no-explicit-any
-      { hasCliValue: false } as any,
+      { hasCliValue: false } as unknown as Parameters<
+        typeof parser.complete
+      >[0],
     );
     assert.ok(
       completeResult instanceof Promise,

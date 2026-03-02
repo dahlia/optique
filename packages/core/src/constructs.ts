@@ -3131,9 +3131,9 @@ export function object<
           const resolvedState = resolveDeferredParseStates(preCompletedState);
 
           // Phase 3: Complete remaining fields
-          const result: { [K in keyof T]: T[K]["$valueType"][number] } =
-            // deno-lint-ignore no-explicit-any
-            {} as any;
+          const result = {} as {
+            [K in keyof T]: T[K]["$valueType"][number];
+          };
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldResolvedState =
@@ -3235,9 +3235,9 @@ export function object<
           );
 
           // Phase 3: Complete remaining fields
-          const result: { [K in keyof T]: T[K]["$valueType"][number] } =
-            // deno-lint-ignore no-explicit-any
-            {} as any;
+          const result = {} as {
+            [K in keyof T]: T[K]["$valueType"][number];
+          };
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldResolvedState =
@@ -3783,9 +3783,7 @@ export function tuple<
           const resolvedArray = resolvedState as unknown[];
 
           // Phase 3: Complete remaining elements
-          const result: { [K in keyof T]: T[K]["$valueType"][number] } =
-            // deno-lint-ignore no-explicit-any
-            [] as any;
+          const result: unknown[] = [];
 
           for (let i = 0; i < syncParsers.length; i++) {
             const elementResolvedState = resolvedArray[i];
@@ -3809,8 +3807,7 @@ export function tuple<
               // This is a pre-completed withDefault element. Extract the value directly.
               const depResult = elementResolvedState.result;
               if (depResult.success) {
-                // deno-lint-ignore no-explicit-any
-                (result as any)[i] = depResult.value;
+                result[i] = depResult.value;
               } else {
                 return { success: false as const, error: depResult.error };
               }
@@ -3819,14 +3816,16 @@ export function tuple<
 
             const valueResult = elementParser.complete(elementResolvedState);
             if (valueResult.success) {
-              // deno-lint-ignore no-explicit-any
-              (result as any)[i] = valueResult.value;
+              result[i] = valueResult.value;
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
 
-          return { success: true as const, value: result };
+          return {
+            success: true as const,
+            value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+          };
         },
         async () => {
           const stateArray = state as unknown[];
@@ -3874,9 +3873,7 @@ export function tuple<
           const resolvedArray = resolvedState as unknown[];
 
           // Phase 3: Complete remaining elements
-          const result: { [K in keyof T]: T[K]["$valueType"][number] } =
-            // deno-lint-ignore no-explicit-any
-            [] as any;
+          const result: unknown[] = [];
 
           for (let i = 0; i < parsers.length; i++) {
             const elementResolvedState = resolvedArray[i];
@@ -3900,8 +3897,7 @@ export function tuple<
               // This is a pre-completed withDefault element. Extract the value directly.
               const depResult = elementResolvedState.result;
               if (depResult.success) {
-                // deno-lint-ignore no-explicit-any
-                (result as any)[i] = depResult.value;
+                result[i] = depResult.value;
               } else {
                 return { success: false as const, error: depResult.error };
               }
@@ -3912,14 +3908,16 @@ export function tuple<
               elementResolvedState,
             );
             if (valueResult.success) {
-              // deno-lint-ignore no-explicit-any
-              (result as any)[i] = valueResult.value;
+              result[i] = valueResult.value;
             } else {
               return { success: false as const, error: valueResult.error };
             }
           }
 
-          return { success: true as const, value: result };
+          return {
+            success: true as const,
+            value: result as { [K in keyof T]: T[K]["$valueType"][number] },
+          };
         },
       );
     },
@@ -5571,12 +5569,13 @@ export function merge(
             : { kind: "available", state: state.state };
         }
 
-        // Cast parserState to any because the generic type constraints on p.getDocFragments
-        // are strictly typed to the parser's expected state, but here we are dealing with 'unknown'
-        // due to the way merge() handles disparate parser types.
-        // The runtime logic ensures we are passing the correct state slice or unavailable.
-        // deno-lint-ignore no-explicit-any
-        const docFragments = p.getDocFragments(parserState as any, undefined);
+        // Cast parserState because the generic type constraints on p.getDocFragments
+        // are strictly typed to the parser's expected state, but here we are dealing with
+        // a state value extracted from a heterogeneous merged state object.
+        const docFragments = p.getDocFragments(
+          parserState as DocState<Record<string | symbol, unknown>>,
+          undefined,
+        );
         brief ??= docFragments.brief;
         description ??= docFragments.description;
         footer ??= docFragments.footer;
