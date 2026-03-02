@@ -1536,6 +1536,53 @@ describe("property-based tests", () => {
     );
   });
 
+  it("withDefault should not hide consumed option failures", () => {
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.boolean(),
+        fc.integer({ min: -1_000_000, max: 1_000_000 }),
+        fc.string({ minLength: 0, maxLength: 16 }),
+        (
+          present: boolean,
+          separated: boolean,
+          validValue: number,
+          invalidSuffix: string,
+        ) => {
+          const parser = withDefault(option("--count", integer()), 0);
+          const invalidValue = `x${invalidSuffix}`;
+          const args = !present
+            ? []
+            : separated
+            ? ["--count", invalidValue]
+            : [`--count=${invalidValue}`];
+
+          const result = parseSync(parser, args);
+
+          if (!present) {
+            assert.ok(result.success);
+            if (result.success) {
+              assert.equal(result.value, 0);
+            }
+            return;
+          }
+
+          assert.ok(!result.success);
+
+          const validArgs = separated
+            ? ["--count", `${validValue}`]
+            : [`--count=${validValue}`];
+          const validResult = parseSync(parser, validArgs);
+          assert.ok(validResult.success);
+          if (validResult.success) {
+            assert.equal(validResult.value, validValue);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("multiple should enforce bounds while preserving order", () => {
     fc.assert(
       fc.property(
