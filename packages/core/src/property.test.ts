@@ -1,11 +1,49 @@
+import {
+  longestMatch,
+  merge,
+  object,
+  or,
+  tuple,
+} from "@optique/core/constructs";
 import { parseAsync, parseSync } from "@optique/core/parser";
-import { option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
 
 const propertyParameters = { numRuns: 200 } as const;
+
+function toIdentifier(raw: string): string {
+  const normalized = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "");
+  const withLeadingLetter = /^[a-z]/.test(normalized)
+    ? normalized
+    : `x${normalized}`;
+  const trimmed = withLeadingLetter.slice(0, 12);
+  return trimmed.length > 0 ? trimmed : "x";
+}
+
+const identifierArbitrary = fc
+  .string({ minLength: 0, maxLength: 16 })
+  .map(toIdentifier);
+
+const argumentTokenArbitrary = fc
+  .string({ minLength: 0, maxLength: 16 })
+  .map((raw: string) => `arg${raw}`);
+
+function longOptionName(name: string): `--${string}` {
+  return `--${name}` as `--${string}`;
+}
 
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -21,7 +59,7 @@ describe("property-based tests", () => {
           min: Number.MIN_SAFE_INTEGER,
           max: Number.MAX_SAFE_INTEGER,
         }),
-        (value) => {
+        (value: number) => {
           const parsed = parser.parse(parser.format(value));
 
           assert.ok(parsed.success);
@@ -42,7 +80,7 @@ describe("property-based tests", () => {
           maxLength: 16,
         }),
         fc.nat(),
-        (choices, index) => {
+        (choices: readonly string[], index: number) => {
           const parser = choice(choices);
           const expected = choices[index % choices.length];
           const parsed = parser.parse(parser.format(expected));
@@ -65,7 +103,7 @@ describe("property-based tests", () => {
           maxLength: 16,
         }),
         fc.nat(),
-        (choices, index) => {
+        (choices: readonly number[], index: number) => {
           const parser = choice(choices);
           const expected = choices[index % choices.length];
           const parsed = parser.parse(parser.format(expected));
@@ -85,7 +123,7 @@ describe("property-based tests", () => {
       fc.property(
         fc.string({ minLength: 1, maxLength: 24 }),
         fc.constantFrom("g", "y", "gy", "gi", "iy", "giy"),
-        (literal, flags) => {
+        (literal: string, flags: string) => {
           const pattern = new RegExp(escapeRegExp(literal), flags);
           const parser = string({ pattern });
 
@@ -109,12 +147,261 @@ describe("property-based tests", () => {
           fc.constant<undefined>(undefined),
           fc.integer({ min: 1, max: 65535 }),
         ),
-        async (port) => {
+        async (port: number | undefined) => {
           const args = port == null ? [] : ["--port", `${port}`];
           const syncResult = parseSync(parser, args);
           const asyncResult = await parseAsync(parser, args);
 
           assert.deepEqual(asyncResult, syncResult);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("option parser should agree on separated and joined forms", () => {
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        fc.integer({ min: -1_000_000, max: 1_000_000 }),
+        (name: string, value: number) => {
+          const optionName: `--${string}` = longOptionName(name);
+          const parser = option(optionName, integer());
+          const separated = parseSync(parser, [optionName, `${value}`]);
+          const joined = parseSync(parser, [`${optionName}=${value}`]);
+
+          assert.deepEqual(joined, separated);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("flag parser should succeed iff the flag appears", () => {
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        fc.boolean(),
+        (name: string, present: boolean) => {
+          const optionName: `--${string}` = longOptionName(name);
+          const parser = flag(optionName);
+          const args = present ? [optionName] : [];
+          const result = parseSync(parser, args);
+
+          assert.equal(result.success, present);
+          if (result.success) {
+            assert.equal(result.value, true);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("argument parser should round-trip positional tokens", () => {
+    const parser = argument(string());
+
+    fc.assert(
+      fc.property(argumentTokenArbitrary, (token: string) => {
+        const result = parseSync(parser, [token]);
+
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.value, token);
+        }
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("command parser should dispatch only for matching command", () => {
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        identifierArbitrary,
+        argumentTokenArbitrary,
+        (expectedName: string, actualName: string, value: string) => {
+          const parser = command(expectedName, argument(string()));
+          const result = parseSync(parser, [actualName, value]);
+
+          if (expectedName === actualName) {
+            assert.ok(result.success);
+            if (result.success) {
+              assert.equal(result.value, value);
+            }
+          } else {
+            assert.ok(!result.success);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("object parser should be stable under option order", () => {
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        identifierArbitrary,
+        fc.boolean(),
+        fc.boolean(),
+        (
+          leftName: string,
+          rightName: string,
+          leftPresent: boolean,
+          rightPresent: boolean,
+        ) => {
+          fc.pre(leftName !== rightName);
+
+          const leftOption: `--${string}` = longOptionName(leftName);
+          const rightOption: `--${string}` = longOptionName(rightName);
+          const parser = object({
+            left: option(leftOption),
+            right: option(rightOption),
+          });
+
+          const args = [
+            ...(leftPresent ? [leftOption] : []),
+            ...(rightPresent ? [rightOption] : []),
+          ];
+          const forward = parseSync(parser, args);
+          const reversed = parseSync(parser, [...args].reverse());
+
+          assert.ok(forward.success);
+          assert.ok(reversed.success);
+          if (forward.success && reversed.success) {
+            assert.deepEqual(reversed.value, forward.value);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("tuple parser should preserve positional argument order", () => {
+    const parser = tuple([argument(string()), argument(string())]);
+
+    fc.assert(
+      fc.property(
+        argumentTokenArbitrary,
+        argumentTokenArbitrary,
+        (first: string, second: string) => {
+          const result = parseSync(parser, [first, second]);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.deepEqual(result.value, [first, second]);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("merge parser should be commutative for disjoint flags", () => {
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        identifierArbitrary,
+        fc.boolean(),
+        fc.boolean(),
+        (
+          leftName: string,
+          rightName: string,
+          leftPresent: boolean,
+          rightPresent: boolean,
+        ) => {
+          fc.pre(leftName !== rightName);
+
+          const leftOption: `--${string}` = longOptionName(leftName);
+          const rightOption: `--${string}` = longOptionName(rightName);
+
+          const leftParser = object({ left: option(leftOption) });
+          const rightParser = object({ right: option(rightOption) });
+          const mergedLeftRight = merge(leftParser, rightParser);
+          const mergedRightLeft = merge(rightParser, leftParser);
+
+          const args = [
+            ...(leftPresent ? [leftOption] : []),
+            ...(rightPresent ? [rightOption] : []),
+          ];
+          const leftRightResult = parseSync(mergedLeftRight, args);
+          const rightLeftResult = parseSync(mergedRightLeft, args);
+
+          assert.ok(leftRightResult.success);
+          assert.ok(rightLeftResult.success);
+          if (leftRightResult.success && rightLeftResult.success) {
+            assert.deepEqual(rightLeftResult.value, leftRightResult.value);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("or parser should pick branch by command token", () => {
+    fc.assert(
+      fc.property(
+        identifierArbitrary,
+        identifierArbitrary,
+        argumentTokenArbitrary,
+        fc.boolean(),
+        (
+          leftName: string,
+          rightName: string,
+          value: string,
+          chooseLeft: boolean,
+        ) => {
+          fc.pre(leftName !== rightName);
+
+          const parser = or(
+            command(
+              leftName,
+              object({
+                type: constant(leftName),
+                value: argument(string()),
+              }),
+            ),
+            command(
+              rightName,
+              object({
+                type: constant(rightName),
+                value: argument(string()),
+              }),
+            ),
+          );
+
+          const commandName = chooseLeft ? leftName : rightName;
+          const result = parseSync(parser, [commandName, value]);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.equal(result.value.type, commandName);
+            assert.equal(result.value.value, value);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("longestMatch should prefer parser consuming more tokens", () => {
+    const parser = longestMatch(
+      tuple([argument(string())]),
+      tuple([argument(string()), argument(string())]),
+    );
+
+    fc.assert(
+      fc.property(
+        argumentTokenArbitrary,
+        argumentTokenArbitrary,
+        (first: string, second: string) => {
+          const result = parseSync(parser, [first, second]);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.deepEqual(result.value, [first, second]);
+          }
         },
       ),
       propertyParameters,
