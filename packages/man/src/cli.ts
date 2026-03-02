@@ -283,10 +283,8 @@ async function importModule(
   }
 
   const isTypeScript = /\.[mc]?ts$/.test(filePath);
-  // deno-lint-ignore no-explicit-any
-  const isDeno = typeof (globalThis as any).Deno !== "undefined";
-  // deno-lint-ignore no-explicit-any
-  const isBun = typeof (globalThis as any).Bun !== "undefined";
+  const isDeno = "Deno" in globalThis;
+  const isBun = "Bun" in globalThis;
 
   // Node.js + TypeScript
   if (!isDeno && !isBun && isTypeScript && !nodeSupportsNativeTypeScript()) {

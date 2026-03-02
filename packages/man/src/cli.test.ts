@@ -44,8 +44,7 @@ function runCli(args: readonly string[]): Promise<RunResult> {
     // Determine which runtime to use
     let child: ChildProcess;
 
-    // deno-lint-ignore no-explicit-any
-    if (typeof (globalThis as any).Deno !== "undefined") {
+    if ("Deno" in globalThis) {
       // Deno: use TypeScript source directly
       child = spawn("deno", [
         "run",
@@ -56,8 +55,7 @@ function runCli(args: readonly string[]): Promise<RunResult> {
         cliPathTs,
         ...args,
       ], { cwd: __dirname });
-      // deno-lint-ignore no-explicit-any
-    } else if (typeof (globalThis as any).Bun !== "undefined") {
+    } else if ("Bun" in globalThis) {
       // Bun: use built JS file (fixtures are still TS, Bun handles them)
       child = spawn("bun", [cliPathJs, ...args], { cwd: __dirname });
     } else {
