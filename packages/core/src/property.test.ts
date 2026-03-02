@@ -495,6 +495,79 @@ describe("property-based tests", () => {
     );
   });
 
+  it("tuple should treat option-like tokens as arguments after --", () => {
+    const parser = tuple([argument(string()), argument(string())]);
+
+    fc.assert(
+      fc.property(
+        optionLikeTokenArbitrary,
+        optionLikeTokenArbitrary,
+        (first: string, second: string) => {
+          const withTerminator = parseSync(parser, ["--", first, second]);
+          const withoutTerminator = parseSync(parser, [first, second]);
+
+          assert.ok(withTerminator.success);
+          if (withTerminator.success) {
+            assert.deepEqual(withTerminator.value, [first, second]);
+          }
+          assert.ok(!withoutTerminator.success);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("merge should propagate options terminator to argument parsers", () => {
+    const parser = merge(
+      object({
+        verbose: optional(option("--verbose")),
+      }),
+      object({
+        target: argument(string()),
+      }),
+    );
+
+    fc.assert(
+      fc.property(optionLikeTokenArbitrary, (token: string) => {
+        const withTerminator = parseSync(parser, ["--", token]);
+        const withoutTerminator = parseSync(parser, [token]);
+
+        assert.ok(withTerminator.success);
+        if (withTerminator.success) {
+          assert.equal(withTerminator.value.verbose, undefined);
+          assert.equal(withTerminator.value.target, token);
+        }
+        assert.ok(!withoutTerminator.success);
+      }),
+      propertyParameters,
+    );
+  });
+
+  it("options after -- should stay positional in mixed objects", () => {
+    const parser = object({
+      source: argument(string()),
+      rest: multiple(argument(string()), { min: 0, max: 3 }),
+    });
+
+    fc.assert(
+      fc.property(
+        optionLikeTokenArbitrary,
+        fc.array(optionLikeTokenArbitrary, { minLength: 0, maxLength: 3 }),
+        (head: string, tail: readonly string[]) => {
+          const args = ["--", head, ...tail];
+          const result = parseSync(parser, args);
+
+          assert.ok(result.success);
+          if (result.success) {
+            assert.equal(result.value.source, head);
+            assert.deepEqual(result.value.rest, tail);
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("option parser should reject duplicate occurrences", () => {
     fc.assert(
       fc.property(
