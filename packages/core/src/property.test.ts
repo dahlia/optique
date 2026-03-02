@@ -1303,6 +1303,46 @@ describe("property-based tests", () => {
     );
   });
 
+  it("inserting -- before non-option suffix should preserve parse", () => {
+    const parser = object({
+      mode: withDefault(
+        optional(option("--mode", choice(["dev", "prod"] as const))),
+        "dev" as const,
+      ),
+      source: argument(string()),
+      rest: multiple(argument(string()), { min: 0, max: 3 }),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.constantFrom<"dev" | "prod">("dev", "prod"),
+        fc.array(nonOptionTokenArbitrary, { minLength: 1, maxLength: 4 }),
+        fc.integer({ min: 0, max: 4 }),
+        (
+          includeMode: boolean,
+          mode: "dev" | "prod",
+          positional: readonly string[],
+          split: number,
+        ) => {
+          fc.pre(split <= positional.length);
+
+          const modeTokens = includeMode ? (["--mode", mode] as const) : [];
+          const before = positional.slice(0, split);
+          const after = positional.slice(split);
+          const baseArgs = [...modeTokens, ...positional];
+          const withTerminatorArgs = [...modeTokens, ...before, "--", ...after];
+
+          const baseResult = parseSync(parser, baseArgs);
+          const withTerminatorResult = parseSync(parser, withTerminatorArgs);
+
+          assert.deepEqual(withTerminatorResult, baseResult);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
   it("option parser should reject duplicate occurrences", () => {
     fc.assert(
       fc.property(
