@@ -3,11 +3,20 @@ import assert from "node:assert/strict";
 import {
   createErrorWithSuggestions,
   createSuggestionMessage,
+  deduplicateSuggestions,
   findSimilar,
   levenshteinDistance,
 } from "./suggestion.ts";
 import { formatMessage, message, optionName } from "./message.ts";
 import type { Usage } from "./usage.ts";
+import type { Suggestion } from "./parser.ts";
+import * as fc from "fast-check";
+
+const propertyParameters = { numRuns: 200 } as const;
+
+const safeStringArbitrary = fc
+  .string({ minLength: 0, maxLength: 24 })
+  .filter((value: string) => !value.includes("\x1b"));
 
 describe("levenshteinDistance()", () => {
   it("should return 0 for identical strings", () => {
@@ -618,5 +627,141 @@ describe("createErrorWithSuggestions()", () => {
     const formatted = formatMessage(error);
     assert.ok(formatted.includes("Did you mean"));
     assert.ok(formatted.includes("--verbose"));
+  });
+});
+
+describe("property-based tests", () => {
+  it("levenshteinDistance should satisfy symmetry and bounds", () => {
+    fc.assert(
+      fc.property(
+        safeStringArbitrary,
+        safeStringArbitrary,
+        (a: string, b: string) => {
+          const distanceAB = levenshteinDistance(a, b);
+          const distanceBA = levenshteinDistance(b, a);
+
+          assert.equal(distanceAB, distanceBA);
+          assert.ok(distanceAB >= Math.abs(a.length - b.length));
+          assert.ok(distanceAB <= Math.max(a.length, b.length));
+          assert.equal(levenshteinDistance(a, a), 0);
+          assert.equal(levenshteinDistance(b, b), 0);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("findSimilar should be monotonic under relaxed thresholds", () => {
+    fc.assert(
+      fc.property(
+        safeStringArbitrary.filter((s: string) => s.length > 0),
+        fc.uniqueArray(
+          safeStringArbitrary.filter((s: string) => s.length > 0),
+          { minLength: 1, maxLength: 20 },
+        ),
+        fc.integer({ min: 0, max: 4 }),
+        fc.integer({ min: 0, max: 4 }),
+        fc.integer({ min: 0, max: 10 }),
+        fc.integer({ min: 0, max: 10 }),
+        (
+          input: string,
+          candidates: readonly string[],
+          strictDistance: number,
+          distanceSlack: number,
+          strictRatioTenths: number,
+          ratioSlackTenths: number,
+        ) => {
+          const relaxedDistance = strictDistance + distanceSlack;
+          const strictRatio = strictRatioTenths / 10;
+          const relaxedRatio = strictRatio + ratioSlackTenths / 10;
+
+          const strict = findSimilar(input, candidates, {
+            maxDistance: strictDistance,
+            maxDistanceRatio: strictRatio,
+            maxSuggestions: candidates.length,
+            caseSensitive: false,
+          });
+          const relaxed = findSimilar(input, candidates, {
+            maxDistance: relaxedDistance,
+            maxDistanceRatio: relaxedRatio,
+            maxSuggestions: candidates.length,
+            caseSensitive: false,
+          });
+
+          const relaxedSet = new Set(relaxed);
+          for (const suggestion of strict) {
+            assert.ok(relaxedSet.has(suggestion));
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("deduplicateSuggestions should be idempotent and stable", () => {
+    const literalSuggestionArbitrary = safeStringArbitrary.map(
+      (text: string): Suggestion => ({ kind: "literal", text }),
+    );
+    const fileSuggestionArbitrary = fc.record({
+      kind: fc.constant<"file">("file"),
+      pattern: fc.option(safeStringArbitrary, { nil: undefined }),
+      type: fc.constantFrom<"file" | "directory" | "any">(
+        "file",
+        "directory",
+        "any",
+      ),
+      extensions: fc.option(
+        fc.uniqueArray(
+          safeStringArbitrary.map((ext: string) => `.${ext}`),
+          { minLength: 1, maxLength: 3 },
+        ),
+        { nil: undefined },
+      ),
+    }) as fc.Arbitrary<Suggestion>;
+
+    const suggestionsArbitrary = fc.array(
+      fc.oneof(literalSuggestionArbitrary, fileSuggestionArbitrary),
+      { minLength: 0, maxLength: 40 },
+    );
+
+    const keyOf = (suggestion: Suggestion): string => {
+      if (suggestion.kind === "literal") {
+        return suggestion.text;
+      }
+      return `__FILE__:${suggestion.type}:${
+        suggestion.extensions?.join(",") ?? ""
+      }:${suggestion.pattern ?? ""}`;
+    };
+
+    fc.assert(
+      fc.property(
+        suggestionsArbitrary,
+        (suggestions: readonly Suggestion[]) => {
+          const deduplicated = deduplicateSuggestions(suggestions);
+          const deduplicatedTwice = deduplicateSuggestions(deduplicated);
+
+          assert.deepEqual(deduplicatedTwice, deduplicated);
+
+          const seen = new Set<string>();
+          for (const suggestion of deduplicated) {
+            const key = keyOf(suggestion);
+            assert.ok(!seen.has(key));
+            seen.add(key);
+          }
+
+          let previousIndex = -1;
+          for (const suggestion of deduplicated) {
+            const key = keyOf(suggestion);
+            const firstIndex = suggestions.findIndex((candidate: Suggestion) =>
+              keyOf(candidate) === key
+            );
+            assert.ok(firstIndex >= 0);
+            assert.ok(firstIndex > previousIndex);
+            previousIndex = firstIndex;
+          }
+        },
+      ),
+      propertyParameters,
+    );
   });
 });
