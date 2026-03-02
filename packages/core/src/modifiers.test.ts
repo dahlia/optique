@@ -1,5 +1,10 @@
 import { longestMatch, object } from "@optique/core/constructs";
 import {
+  dependency,
+  dependencyId,
+  isDependencySourceState,
+} from "@optique/core/dependency";
+import {
   envVar,
   formatMessage,
   type Message,
@@ -14,15 +19,59 @@ import {
   withDefault,
   WithDefaultError,
 } from "@optique/core/modifiers";
-import { parse } from "@optique/core/parser";
+import { parse, type Suggestion } from "@optique/core/parser";
 import { argument, constant, option } from "@optique/core/primitives";
-import { choice, integer, string } from "@optique/core/valueparser";
+import {
+  choice,
+  integer,
+  string,
+  type ValueParser,
+  type ValueParserResult,
+} from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 function assertErrorIncludes(error: Message, text: string): void {
   const formatted = formatMessage(error);
   assert.ok(formatted.includes(text));
+}
+
+function asyncChoice<T extends string>(
+  choices: readonly T[],
+): ValueParser<"async", T> {
+  return {
+    $mode: "async",
+    metavar: "CHOICE",
+    parse(input: string): Promise<ValueParserResult<T>> {
+      if (choices.includes(input as T)) {
+        return Promise.resolve({ success: true, value: input as T });
+      }
+      return Promise.resolve({
+        success: false,
+        error: message`Must be one of: ${choices.join(", ")}`,
+      });
+    },
+    format(value: T): string {
+      return value;
+    },
+    async *suggest(prefix: string): AsyncIterable<Suggestion> {
+      for (const choice of choices) {
+        if (choice.startsWith(prefix)) {
+          yield { kind: "literal", text: choice };
+        }
+      }
+    },
+  };
+}
+
+async function collectSuggestions(
+  suggestions: Iterable<Suggestion> | AsyncIterable<Suggestion>,
+): Promise<readonly Suggestion[]> {
+  const collected: Suggestion[] = [];
+  for await (const suggestion of suggestions) {
+    collected.push(suggestion);
+  }
+  return collected;
 }
 
 describe("optional", () => {
@@ -495,6 +544,48 @@ describe("optional", () => {
       assert.deepEqual(parseResult.next.buffer, ["positional"]);
       // State should be undefined so complete() returns undefined
       assert.equal(parseResult.next.state, undefined);
+    }
+  });
+
+  it("should provide async suggestions for async wrapped parser", async () => {
+    const optionalParser = optional(
+      option("--format", asyncChoice(["json", "yaml"] as const)),
+    );
+
+    const suggestions = await collectSuggestions(
+      optionalParser.suggest(
+        {
+          buffer: ["--format"] as const,
+          state: optionalParser.initialState,
+          optionsTerminated: false,
+          usage: optionalParser.usage,
+        },
+        "j",
+      ),
+    );
+
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "json"),
+    );
+  });
+
+  it("should delegate completion to wrapped dependency default source", () => {
+    const modeSource = dependency(choice(["dev", "prod"] as const));
+    const defaultedSource = withDefault(
+      option("--mode", modeSource),
+      "dev" as const,
+    );
+    const optionalParser = optional(defaultedSource);
+
+    const completeResult = optionalParser.complete(undefined);
+
+    assert.ok(isDependencySourceState(completeResult));
+    if (isDependencySourceState(completeResult)) {
+      assert.ok(completeResult.result.success);
+      if (completeResult.result.success) {
+        assert.equal(completeResult.result.value, "dev");
+      }
+      assert.equal(completeResult[dependencyId], modeSource[dependencyId]);
     }
   });
 });
@@ -1190,6 +1281,72 @@ describe("withDefault", () => {
       const _format: "auto" | "text" = resultWithValue.value.format;
       void _format; // Prevent unused variable warning
     }
+  });
+
+  it("should suggest from wrapped parser with existing sync state", () => {
+    const defaultParser = withDefault(
+      option("--format", choice(["json", "yaml"] as const)),
+      "json" as const,
+    );
+
+    const parsed = defaultParser.parse({
+      buffer: ["--format", "json"] as const,
+      state: defaultParser.initialState,
+      optionsTerminated: false,
+      usage: defaultParser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) {
+      return;
+    }
+
+    const suggestions = [...defaultParser.suggest(
+      {
+        buffer: ["--format"] as const,
+        state: parsed.next.state,
+        optionsTerminated: false,
+        usage: defaultParser.usage,
+      },
+      "y",
+    )];
+
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "yaml"),
+    );
+  });
+
+  it("should suggest from wrapped parser with existing async state", async () => {
+    const defaultParser = withDefault(
+      option("--format", asyncChoice(["json", "yaml"] as const)),
+      "json" as const,
+    );
+
+    const parsed = await defaultParser.parse({
+      buffer: ["--format", "json"] as const,
+      state: defaultParser.initialState,
+      optionsTerminated: false,
+      usage: defaultParser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) {
+      return;
+    }
+
+    const suggestions = await collectSuggestions(
+      defaultParser.suggest(
+        {
+          buffer: ["--format"] as const,
+          state: parsed.next.state,
+          optionsTerminated: false,
+          usage: defaultParser.usage,
+        },
+        "y",
+      ),
+    );
+
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "yaml"),
+    );
   });
 });
 
@@ -2775,6 +2932,53 @@ describe("nonEmpty", () => {
     assert.ok(!emptyResult.success);
     if (!emptyResult.success) {
       assertErrorIncludes(emptyResult.error, "at least one token");
+    }
+  });
+
+  it("should parse successfully with async wrapped parser", async () => {
+    const parser = nonEmpty(
+      withDefault(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+        "json" as const,
+      ),
+    );
+
+    const parseResult = await parser.parse({
+      buffer: ["--format", "json"] as const,
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (!parseResult.success) {
+      return;
+    }
+
+    const completeResult = await parser.complete(parseResult.next.state);
+    assert.ok(completeResult.success);
+    if (completeResult.success) {
+      assert.equal(completeResult.value, "json");
+    }
+  });
+
+  it("should fail in async mode when inner parser consumes no input", async () => {
+    const parser = nonEmpty(
+      withDefault(
+        option("--format", asyncChoice(["json", "yaml"] as const)),
+        "json" as const,
+      ),
+    );
+
+    const parseResult = await parser.parse({
+      buffer: [] as const,
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(!parseResult.success);
+    if (!parseResult.success) {
+      assertErrorIncludes(parseResult.error, "at least one token");
     }
   });
 });
