@@ -5,6 +5,7 @@ import { parseAsync } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
 import { prompt } from "@optique/inquirer";
 
 describe("prompt()", () => {
@@ -409,6 +410,99 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
       assert.ok(promptCalled, "Prompt should have been called");
+      assert.equal(result.value, "prompted-value");
+    });
+  });
+
+  describe("composition with non-CLI sources", () => {
+    it("skips prompt when bindEnv() supplies a value", async () => {
+      // Regression: prompt(bindEnv(...)) must not prompt the user when the
+      // environment variable is set; the env value should be used instead.
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-value" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = prompt(
+        bindEnv(option("--name", string()), {
+          context,
+          key: "NAME",
+          parser: string(),
+        }),
+        {
+          type: "input",
+          message: "Enter name:",
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        },
+      );
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value, "env-value");
+    });
+
+    it("skips prompt in object() when bindEnv() supplies a value", async () => {
+      // Regression: same as above but in object(), where complete() is
+      // called twice (completability check + real complete phase).
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-name" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = object({
+        name: prompt(
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: string(),
+          }),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () =>
+              Promise.reject(new Error("Prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "env-name");
+    });
+
+    it("prompts when bindEnv() has no value and env var is absent", async () => {
+      // prompt(bindEnv(...)) must fall back to the interactive prompt when
+      // the CLI option is absent and the environment variable is not set.
+      const context = createEnvContext({
+        source: () => undefined,
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = prompt(
+        bindEnv(option("--name", string()), {
+          context,
+          key: "NAME",
+          parser: string(),
+        }),
+        {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => Promise.resolve("prompted-value"),
+        },
+      );
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
       assert.equal(result.value, "prompted-value");
     });
   });

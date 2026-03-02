@@ -633,8 +633,26 @@ export function prompt<M extends Mode, TValue, TState>(
           ? (context.state.cliState as TState)
           : parser.initialState)
         : context.state;
-      const innerContext = innerState !== context.state
-        ? { ...context, state: innerState }
+      // Propagate annotations into the inner context state so that source-
+      // binding wrappers (bindEnv, bindConfig) can carry them through into
+      // their output state.  This is necessary when parse() is called with
+      // an annotation-injected initial state (via parseAsync options) and
+      // innerState would otherwise be undefined/null, losing the annotations.
+      const innerStateWithAnnotations: TState = (
+          annotations != null &&
+          (innerState == null ||
+            (typeof innerState === "object" &&
+              !(annotationKey in (innerState as object))))
+        )
+        ? ({
+          ...(innerState != null && typeof innerState === "object"
+            ? innerState
+            : {}),
+          [annotationKey]: annotations,
+        } as unknown as TState)
+        : innerState;
+      const innerContext = innerStateWithAnnotations !== context.state
+        ? { ...context, state: innerStateWithAnnotations }
         : context;
 
       const processResult = (
@@ -694,9 +712,16 @@ export function prompt<M extends Mode, TValue, TState>(
         return Promise.resolve(r as ValueParserResult<TValue>);
       }
 
-      // When state is the sentinel initialState, object() is calling us for
-      // the completability check AND again for the real complete phase.
-      // Cache the promise so the prompter runs only once.
+      // When state is the sentinel initialState, object() calls complete()
+      // twice: once for the completability check and once for the real
+      // complete phase.  Cache the result so that if the prompt is needed,
+      // it runs only once.
+      //
+      // In the sentinel path, try the inner parser's complete() first.  This
+      // lets source-binding wrappers like bindEnv / bindConfig satisfy the
+      // value from their own sources (env var, config file) when no CLI input
+      // was provided, avoiding unnecessary interactive prompts.  The cache
+      // deduplicates the two calls so the prompt (or inner complete) runs once.
       if (state === (promptBindInitialState as unknown as TState)) {
         if (promptCache !== null) {
           // Second call (real complete phase): consume the cache.
@@ -704,13 +729,44 @@ export function prompt<M extends Mode, TValue, TState>(
           promptCache = null;
           return cached;
         }
-        // First call (completability check): run the prompter and cache it.
-        promptCache = executePrompt();
+        // First call: try inner parser, fall back to prompt if it fails.
+        const innerState = parser.initialState;
+        const r = parser.complete(innerState);
+        const fallback = (
+          res: ValueParserResult<TValue>,
+        ): Promise<ValueParserResult<TValue>> =>
+          res.success ? Promise.resolve(res) : executePrompt();
+        promptCache = r instanceof Promise
+          ? (r as Promise<ValueParserResult<TValue>>).then(fallback)
+          : fallback(r as ValueParserResult<TValue>);
         return promptCache;
       }
 
-      // Normal case: parse() built a PromptBindState with hasCliValue: false
-      // (e.g., buffer was non-empty but inner parser found nothing to consume).
+      // Normal case: parse() built a PromptBindState with hasCliValue: false.
+      // Only delegate to the inner parser's complete() when the cliState
+      // carries annotations — i.e., when it came from a source-binding
+      // wrapper like bindEnv or bindConfig that injected [annotationKey].
+      // Pure combinators (optional, multiple, withDefault) do not inject
+      // annotations, so their cliState will not carry the key; for those,
+      // we skip straight to the interactive prompt.
+      const cliState = isPromptBindState(state) ? state.cliState : undefined;
+      const cliStateHasAnnotations = cliState != null &&
+        typeof cliState === "object" &&
+        annotationKey in (cliState as object);
+
+      if (cliStateHasAnnotations) {
+        const innerState = cliState as TState;
+        const r = parser.complete(innerState);
+        const fallback = (
+          res: ValueParserResult<TValue>,
+        ): Promise<ValueParserResult<TValue>> =>
+          res.success ? Promise.resolve(res) : executePrompt();
+        if (r instanceof Promise) {
+          return (r as Promise<ValueParserResult<TValue>>).then(fallback);
+        }
+        return fallback(r as ValueParserResult<TValue>);
+      }
+
       return executePrompt();
     },
 
