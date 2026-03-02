@@ -256,6 +256,12 @@ function literalSuggestionTexts(
     .map((suggestion) => suggestion.text);
 }
 
+function literalSuggestionSet(
+  suggestions: readonly Suggestion[],
+): ReadonlySet<string> {
+  return new Set(literalSuggestionTexts(suggestions));
+}
+
 function toSuggestionArgs(
   before: readonly string[],
   prefix: string,
@@ -553,6 +559,73 @@ describe("property-based tests", () => {
         },
       ),
       complexPropertyParameters,
+    );
+  });
+
+  it("command suggestions should shrink with longer prefixes", () => {
+    const parser = or(
+      command("build", constant("build")),
+      command("bundle", constant("bundle")),
+      command("test", constant("test")),
+      command("lint", constant("lint")),
+    );
+
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 0, maxLength: 4 }),
+        fc.string({ minLength: 1, maxLength: 3 }),
+        (basePrefix: string, suffix: string) => {
+          const extendedPrefix = `${basePrefix}${suffix}`;
+          const baseSuggestions = literalSuggestionSet(suggestSync(parser, [
+            basePrefix,
+          ]));
+          const extendedSuggestions = literalSuggestionSet(suggestSync(parser, [
+            extendedPrefix,
+          ]));
+
+          for (const suggestion of extendedSuggestions) {
+            assert.ok(baseSuggestions.has(suggestion));
+            assert.ok(suggestion.startsWith(extendedPrefix));
+          }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  it("value suggestions should shrink with longer prefixes", () => {
+    const parser = object({
+      mode: option("--mode", choice(["dev", "prod", "preview"] as const)),
+      target: option("--target", choice(["node", "browser"] as const)),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom("--mode", "--target"),
+        fc.string({ minLength: 0, maxLength: 4 }),
+        fc.string({ minLength: 1, maxLength: 3 }),
+        (
+          optionName: "--mode" | "--target",
+          basePrefix: string,
+          suffix: string,
+        ) => {
+          const extendedPrefix = `${basePrefix}${suffix}`;
+          const baseSuggestions = literalSuggestionSet(suggestSync(parser, [
+            optionName,
+            basePrefix,
+          ]));
+          const extendedSuggestions = literalSuggestionSet(suggestSync(parser, [
+            optionName,
+            extendedPrefix,
+          ]));
+
+          for (const suggestion of extendedSuggestions) {
+            assert.ok(baseSuggestions.has(suggestion));
+            assert.ok(suggestion.startsWith(extendedPrefix));
+          }
+        },
+      ),
+      propertyParameters,
     );
   });
 
