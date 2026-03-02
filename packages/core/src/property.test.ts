@@ -256,6 +256,15 @@ function literalSuggestionTexts(
     .map((suggestion) => suggestion.text);
 }
 
+function toSuggestionArgs(
+  before: readonly string[],
+  prefix: string,
+): [string, ...readonly string[]] {
+  return before.length > 0
+    ? [before[0]!, ...before.slice(1), prefix]
+    : [prefix];
+}
+
 describe("property-based tests", () => {
   it("integer parser should round-trip safe integers", () => {
     const parser = integer({});
@@ -473,15 +482,74 @@ describe("property-based tests", () => {
           prefix: string,
         ) => {
           const parser = compileRandomParserAst(ast);
-          const argv: [string, ...readonly string[]] = before.length > 0
-            ? [before[0]!, ...before.slice(1), prefix]
-            : [prefix];
+          const argv = toSuggestionArgs(before, prefix);
           const syncSuggestions = suggestSync(parser, argv);
           const genericSuggestions = suggest(parser, argv);
           const asyncSuggestions = await suggestAsync(parser, argv);
 
           assert.deepEqual(genericSuggestions, syncSuggestions);
           assert.deepEqual(asyncSuggestions, syncSuggestions);
+        },
+      ),
+      complexPropertyParameters,
+    );
+  });
+
+  it("parsers should be reentrant across parse and suggest calls", async () => {
+    const pattern = new RegExp("^[a-z0-9-]+$", "gy");
+    const parser = object({
+      mode: optional(option("--mode", choice(["dev", "prod"] as const))),
+      tag: optional(option("--tag", string({ pattern }))),
+      target: optional(argument(string())),
+      passthrough: passThrough({ format: "nextToken" }),
+    });
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(adversarialTokenArbitrary, { minLength: 0, maxLength: 8 }),
+        adversarialTokenArbitrary,
+        async (args: readonly string[], prefix: string) => {
+          const first = parseSync(parser, args);
+          const second = parseSync(parser, args);
+          const argv = toSuggestionArgs(args, prefix);
+          const firstSuggestions = suggestSync(parser, argv);
+          const third = parseSync(parser, args);
+          const secondSuggestions = suggestSync(parser, argv);
+          const asyncResult = await parseAsync(parser, args);
+          const asyncSuggestions = await suggestAsync(parser, argv);
+
+          assert.deepEqual(second, first);
+          assert.deepEqual(third, first);
+          assert.deepEqual(secondSuggestions, firstSuggestions);
+          assert.deepEqual(asyncResult, first);
+          assert.deepEqual(asyncSuggestions, firstSuggestions);
+          assert.equal(pattern.lastIndex, 0);
+        },
+      ),
+      complexPropertyParameters,
+    );
+  });
+
+  it("random parser ASTs should not leak state between calls", async () => {
+    await fc.assert(
+      fc.property(
+        randomParserAst,
+        fc.array(adversarialTokenArbitrary, { minLength: 0, maxLength: 8 }),
+        adversarialTokenArbitrary,
+        (
+          ast: RandomParserAst,
+          args: readonly string[],
+          prefix: string,
+        ) => {
+          const parser = compileRandomParserAst(ast);
+          const first = parseSync(parser, args);
+          const argv = toSuggestionArgs(args, prefix);
+          const firstSuggestions = suggestSync(parser, argv);
+          const second = parseSync(parser, args);
+          const secondSuggestions = suggestSync(parser, argv);
+
+          assert.deepEqual(second, first);
+          assert.deepEqual(secondSuggestions, firstSuggestions);
         },
       ),
       complexPropertyParameters,
