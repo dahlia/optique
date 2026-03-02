@@ -9,6 +9,7 @@ import { dependency, deriveFrom } from "@optique/core/dependency";
 import {
   parse,
   parseAsync,
+  type Parser,
   parseSync,
   suggest,
   suggestAsync,
@@ -35,6 +36,34 @@ import * as fc from "fast-check";
 import { describe, it } from "node:test";
 
 const propertyParameters = { numRuns: 200 } as const;
+const complexPropertyParameters = { numRuns: 120 } as const;
+
+type RandomParserAst =
+  | { readonly kind: "flag"; readonly name: string }
+  | { readonly kind: "optionInt"; readonly name: string }
+  | { readonly kind: "argument" }
+  | { readonly kind: "optional"; readonly child: RandomParserAst }
+  | {
+    readonly kind: "multiple";
+    readonly child: RandomParserAst;
+    readonly min: 0 | 1;
+    readonly max: 1 | 2 | 3;
+  }
+  | {
+    readonly kind: "object";
+    readonly left: RandomParserAst;
+    readonly right: RandomParserAst;
+  }
+  | {
+    readonly kind: "tuple";
+    readonly left: RandomParserAst;
+    readonly right: RandomParserAst;
+  }
+  | {
+    readonly kind: "or";
+    readonly left: RandomParserAst;
+    readonly right: RandomParserAst;
+  };
 
 function toIdentifier(raw: string): string {
   const normalized = raw
@@ -105,6 +134,80 @@ const adversarialTokenArbitrary = fc.oneof(
     "\u0000",
   ),
 );
+
+function randomParserAstArbitrary(
+  depth: number,
+): fc.Arbitrary<RandomParserAst> {
+  const leaf = fc.oneof(
+    identifierArbitrary.map((name: string) =>
+      ({ kind: "flag", name }) as const
+    ),
+    identifierArbitrary.map((name: string) =>
+      ({ kind: "optionInt", name }) as const
+    ),
+    fc.constant({ kind: "argument" } as const),
+  );
+
+  if (depth <= 0) {
+    return leaf;
+  }
+
+  const child = randomParserAstArbitrary(depth - 1);
+  return fc.oneof(
+    leaf,
+    fc.record({ kind: fc.constant("optional"), child }),
+    fc
+      .record({
+        kind: fc.constant("multiple"),
+        child,
+        min: fc.constantFrom<0 | 1>(0, 1),
+        max: fc.constantFrom<1 | 2 | 3>(1, 2, 3),
+      })
+      .filter((bounds: { readonly min: 0 | 1; readonly max: 1 | 2 | 3 }) =>
+        bounds.min <= bounds.max
+      ),
+    fc.record({ kind: fc.constant("object"), left: child, right: child }),
+    fc.record({ kind: fc.constant("tuple"), left: child, right: child }),
+    fc.record({ kind: fc.constant("or"), left: child, right: child }),
+  );
+}
+
+const randomParserAst = randomParserAstArbitrary(3);
+
+function compileRandomParserAst(
+  ast: RandomParserAst,
+): Parser<"sync", unknown, unknown> {
+  switch (ast.kind) {
+    case "flag":
+      return flag(longOptionName(ast.name));
+    case "optionInt":
+      return option(longOptionName(ast.name), integer({ min: -9, max: 9 }));
+    case "argument":
+      return argument(string());
+    case "optional":
+      return optional(compileRandomParserAst(ast.child));
+    case "multiple":
+      return multiple(compileRandomParserAst(ast.child), {
+        min: ast.min,
+        max: ast.max,
+      });
+    case "object":
+      return object({
+        left: compileRandomParserAst(ast.left),
+        right: compileRandomParserAst(ast.right),
+      });
+    case "tuple":
+      return tuple([
+        compileRandomParserAst(ast.left),
+        compileRandomParserAst(ast.right),
+      ]);
+    case "or":
+      return or(
+        compileRandomParserAst(ast.left),
+        compileRandomParserAst(ast.right),
+      );
+  }
+}
 
 function longOptionName(name: string): `--${string}` {
   return `--${name}` as `--${string}`;
@@ -336,6 +439,52 @@ describe("property-based tests", () => {
         },
       ),
       propertyParameters,
+    );
+  });
+
+  it("random parser ASTs should preserve parse parity", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        randomParserAst,
+        fc.array(adversarialTokenArbitrary, { minLength: 0, maxLength: 10 }),
+        async (ast: RandomParserAst, args: readonly string[]) => {
+          const parser = compileRandomParserAst(ast);
+          const syncResult = parseSync(parser, args);
+          const genericResult = parse(parser, args);
+          const asyncResult = await parseAsync(parser, args);
+
+          assert.deepEqual(genericResult, syncResult);
+          assert.deepEqual(asyncResult, syncResult);
+        },
+      ),
+      complexPropertyParameters,
+    );
+  });
+
+  it("random parser ASTs should preserve suggest parity", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        randomParserAst,
+        fc.array(adversarialTokenArbitrary, { minLength: 0, maxLength: 8 }),
+        adversarialTokenArbitrary,
+        async (
+          ast: RandomParserAst,
+          before: readonly string[],
+          prefix: string,
+        ) => {
+          const parser = compileRandomParserAst(ast);
+          const argv: [string, ...readonly string[]] = before.length > 0
+            ? [before[0]!, ...before.slice(1), prefix]
+            : [prefix];
+          const syncSuggestions = suggestSync(parser, argv);
+          const genericSuggestions = suggest(parser, argv);
+          const asyncSuggestions = await suggestAsync(parser, argv);
+
+          assert.deepEqual(genericSuggestions, syncSuggestions);
+          assert.deepEqual(asyncSuggestions, syncSuggestions);
+        },
+      ),
+      complexPropertyParameters,
     );
   });
 
