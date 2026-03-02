@@ -149,18 +149,19 @@ Optique is a monorepo which contains multiple packages.  The main package is
 *@optique/core*, which provides the shared types and parser combinators.
 The following is a list of the available packages:
 
-| Package                                  | JSR                          | npm                          | Description                                 |
-| ---------------------------------------- | ---------------------------- | ---------------------------- | ------------------------------------------- |
-| [@optique/core](/packages/core/)         | [JSR][jsr:@optique/core]     | [npm][npm:@optique/core]     | Shared types and parser combinators         |
-| [@optique/run](/packages/run/)           | [JSR][jsr:@optique/run]      | [npm][npm:@optique/run]      | Runner for Node.js/Deno/Bun                 |
-| [@optique/config](/packages/config/)     | [JSR][jsr:@optique/config]   | [npm][npm:@optique/config]   | Config file support with [Standard Schema]  |
-| [@optique/env](/packages/env/)           | [JSR][jsr:@optique/env]      | [npm][npm:@optique/env]      | Environment variable integration            |
-| [@optique/git](/packages/git/)           | [JSR][jsr:@optique/git]      | [npm][npm:@optique/git]      | Git reference parsers (branches, tags, etc) |
-| [@optique/logtape](/packages/logtape/)   | [JSR][jsr:@optique/logtape]  | [npm][npm:@optique/logtape]  | [LogTape] logging integration               |
-| [@optique/man](/packages/man/)           | [JSR][jsr:@optique/man]      | [npm][npm:@optique/man]      | Man page generation from parsers            |
-| [@optique/temporal](/packages/temporal/) | [JSR][jsr:@optique/temporal] | [npm][npm:@optique/temporal] | [Temporal] value parsers (date and time)    |
-| [@optique/valibot](/packages/valibot/)   | [JSR][jsr:@optique/valibot]  | [npm][npm:@optique/valibot]  | [Valibot] schema integration for validation |
-| [@optique/zod](/packages/zod/)           | [JSR][jsr:@optique/zod]      | [npm][npm:@optique/zod]      | [Zod] schema integration for validation     |
+| Package                                  | JSR                          | npm                          | Description                                  |
+| ---------------------------------------- | ---------------------------- | ---------------------------- | -------------------------------------------- |
+| [@optique/core](/packages/core/)         | [JSR][jsr:@optique/core]     | [npm][npm:@optique/core]     | Shared types and parser combinators          |
+| [@optique/run](/packages/run/)           | [JSR][jsr:@optique/run]      | [npm][npm:@optique/run]      | Runner for Node.js/Deno/Bun                  |
+| [@optique/config](/packages/config/)     | [JSR][jsr:@optique/config]   | [npm][npm:@optique/config]   | Config file support with [Standard Schema]   |
+| [@optique/env](/packages/env/)           | [JSR][jsr:@optique/env]      | [npm][npm:@optique/env]      | Environment variable integration             |
+| [@optique/git](/packages/git/)           | [JSR][jsr:@optique/git]      | [npm][npm:@optique/git]      | Git reference parsers (branches, tags, etc)  |
+| [@optique/logtape](/packages/logtape/)   | [JSR][jsr:@optique/logtape]  | [npm][npm:@optique/logtape]  | [LogTape] logging integration                |
+| [@optique/man](/packages/man/)           | [JSR][jsr:@optique/man]      | [npm][npm:@optique/man]      | Man page generation from parsers             |
+| [@optique/temporal](/packages/temporal/) | [JSR][jsr:@optique/temporal] | [npm][npm:@optique/temporal] | [Temporal] value parsers (date and time)     |
+| [@optique/valibot](/packages/valibot/)   | [JSR][jsr:@optique/valibot]  | [npm][npm:@optique/valibot]  | [Valibot] schema integration for validation  |
+| [@optique/zod](/packages/zod/)           | [JSR][jsr:@optique/zod]      | [npm][npm:@optique/zod]      | [Zod] schema integration for validation      |
+| [@optique/inquirer](/packages/inquirer/) | [JSR][jsr:@optique/inquirer] | [npm][npm:@optique/inquirer] | Interactive prompt support via [Inquirer.js] |
 
 [jsr:@optique/core]: https://jsr.io/@optique/core
 [npm:@optique/core]: https://www.npmjs.com/package/@optique/core
@@ -186,3 +187,6 @@ The following is a list of the available packages:
 [Valibot]: https://valibot.dev/
 [jsr:@optique/zod]: https://jsr.io/@optique/zod
 [npm:@optique/zod]: https://www.npmjs.com/package/@optique/zod
+[jsr:@optique/inquirer]: https://jsr.io/@optique/inquirer
+[npm:@optique/inquirer]: https://www.npmjs.com/package/@optique/inquirer
+[Inquirer.js]: https://github.com/SBoudrias/Inquirer.js

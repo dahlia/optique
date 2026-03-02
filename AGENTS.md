@@ -134,6 +134,8 @@ Architecture
  -  *@optique/git* (*packages/git/*): Git reference parsers. Provides async
     value parsers for validating Git references (branches, tags, commits,
     remotes) using isomorphic-git.
+ -  *@optique/inquirer* (*packages/inquirer/*): Interactive prompt integration.
+    Provides `prompt()` for interactive fallback when CLI values are absent.
 
 ### Dual publishing
 

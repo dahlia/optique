@@ -60,6 +60,9 @@ importers:
       '@optique/git':
         specifier: 'workspace:'
         version: link:../packages/git
+      '@optique/inquirer':
+        specifier: 'workspace:'
+        version: link:../packages/inquirer
       '@optique/logtape':
         specifier: 'workspace:'
         version: link:../packages/logtape
