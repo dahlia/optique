@@ -65,6 +65,26 @@ type RandomParserAst =
     readonly right: RandomParserAst;
   };
 
+type OracleOptionSpec =
+  | {
+    readonly key: string;
+    readonly name: `--${string}`;
+    readonly kind: "flag";
+    readonly required: boolean;
+  }
+  | {
+    readonly key: string;
+    readonly name: `--${string}`;
+    readonly kind: "value";
+    readonly required: boolean;
+    readonly choices: readonly string[];
+  };
+
+interface OracleCliSpec {
+  readonly command: string;
+  readonly options: readonly OracleOptionSpec[];
+}
+
 function toIdentifier(raw: string): string {
   const normalized = raw
     .toLowerCase()
@@ -174,39 +194,232 @@ function randomParserAstArbitrary(
 
 const randomParserAst = randomParserAstArbitrary(3);
 
+const oracleChoicePool = [
+  "dev",
+  "prod",
+  "test",
+  "stage",
+] as const;
+
+const oracleChoiceSetArbitrary = fc.uniqueArray(
+  fc.constantFrom(...oracleChoicePool),
+  {
+    minLength: 1,
+    maxLength: oracleChoicePool.length,
+  },
+);
+
+const oracleCliSpecArbitrary: fc.Arbitrary<OracleCliSpec> = fc
+  .uniqueArray(identifierArbitrary, {
+    minLength: 1,
+    maxLength: 4,
+  })
+  .chain((names: readonly string[]) =>
+    fc.record({
+      command: identifierArbitrary,
+      kinds: fc.array(fc.constantFrom<"flag" | "value">("flag", "value"), {
+        minLength: names.length,
+        maxLength: names.length,
+      }),
+      required: fc.array(fc.boolean(), {
+        minLength: names.length,
+        maxLength: names.length,
+      }),
+      choiceSets: fc.array(oracleChoiceSetArbitrary, {
+        minLength: names.length,
+        maxLength: names.length,
+      }),
+    }).map(({
+      command,
+      kinds,
+      required,
+      choiceSets,
+    }: {
+      readonly command: string;
+      readonly kinds: readonly ("flag" | "value")[];
+      readonly required: readonly boolean[];
+      readonly choiceSets: readonly (readonly string[])[];
+    }) => ({
+      command,
+      options: names.map((name: string, index: number): OracleOptionSpec => {
+        const key = `opt${index}`;
+        const optionName = longOptionName(name);
+        if (kinds[index] === "flag") {
+          return {
+            key,
+            name: optionName,
+            kind: "flag",
+            required: required[index] ?? false,
+          };
+        }
+
+        return {
+          key,
+          name: optionName,
+          kind: "value",
+          required: required[index] ?? false,
+          choices: choiceSets[index] ?? ["dev"],
+        };
+      }),
+    }))
+  );
+
 function compileRandomParserAst(
   ast: RandomParserAst,
 ): Parser<"sync", unknown, unknown> {
+  return compileRandomParserAstWithPath(ast, "r");
+}
+
+function compileRandomParserAstWithPath(
+  ast: RandomParserAst,
+  path: string,
+): Parser<"sync", unknown, unknown> {
   switch (ast.kind) {
     case "flag":
-      return flag(longOptionName(ast.name));
+      return flag(longOptionName(`${ast.name}-${path}`));
     case "optionInt":
-      return option(longOptionName(ast.name), integer({ min: -9, max: 9 }));
+      return option(
+        longOptionName(`${ast.name}-${path}`),
+        integer({ min: -9, max: 9 }),
+      );
     case "argument":
       return argument(string());
     case "optional":
-      return optional(compileRandomParserAst(ast.child));
+      return optional(compileRandomParserAstWithPath(ast.child, `${path}o`));
     case "multiple":
-      return multiple(compileRandomParserAst(ast.child), {
+      return multiple(compileRandomParserAstWithPath(ast.child, `${path}m`), {
         min: ast.min,
         max: ast.max,
       });
     case "object":
       return object({
-        left: compileRandomParserAst(ast.left),
-        right: compileRandomParserAst(ast.right),
+        left: compileRandomParserAstWithPath(ast.left, `${path}l`),
+        right: compileRandomParserAstWithPath(ast.right, `${path}r`),
       });
     case "tuple":
       return tuple([
-        compileRandomParserAst(ast.left),
-        compileRandomParserAst(ast.right),
+        compileRandomParserAstWithPath(ast.left, `${path}l`),
+        compileRandomParserAstWithPath(ast.right, `${path}r`),
       ]);
     case "or":
       return or(
-        compileRandomParserAst(ast.left),
-        compileRandomParserAst(ast.right),
+        compileRandomParserAstWithPath(ast.left, `${path}l`),
+        compileRandomParserAstWithPath(ast.right, `${path}r`),
       );
   }
+}
+
+function compileOracleCliSpec(
+  spec: OracleCliSpec,
+): Parser<"sync", Record<string, unknown>, unknown> {
+  const fields: Record<string, Parser<"sync", unknown, unknown>> = {};
+  for (const optionSpec of spec.options) {
+    if (optionSpec.kind === "flag") {
+      const base = flag(optionSpec.name);
+      fields[optionSpec.key] = optionSpec.required ? base : optional(base);
+    } else {
+      const base = option(optionSpec.name, choice(optionSpec.choices));
+      fields[optionSpec.key] = optionSpec.required ? base : optional(base);
+    }
+  }
+  return command(spec.command, object(fields));
+}
+
+function parseOracleCliSpec(
+  spec: OracleCliSpec,
+  args: readonly string[],
+):
+  | {
+    readonly success: true;
+    readonly value: Readonly<Record<string, unknown>>;
+  }
+  | { readonly success: false } {
+  if (args.length < 1 || args[0] !== spec.command) {
+    return { success: false };
+  }
+
+  const values: Record<string, unknown> = {};
+  const seen = new Set<string>();
+  for (const optionSpec of spec.options) {
+    if (!optionSpec.required) {
+      values[optionSpec.key] = undefined;
+    }
+  }
+
+  let optionsTerminated = false;
+  let index = 1;
+  while (index < args.length) {
+    const token = args[index]!;
+    if (!optionsTerminated && token === "--") {
+      optionsTerminated = true;
+      index++;
+      continue;
+    }
+
+    if (optionsTerminated) {
+      return { success: false };
+    }
+
+    let matched = false;
+    for (const optionSpec of spec.options) {
+      if (token === optionSpec.name) {
+        if (seen.has(optionSpec.key)) {
+          return { success: false };
+        }
+        seen.add(optionSpec.key);
+
+        if (optionSpec.kind === "flag") {
+          values[optionSpec.key] = true;
+          index++;
+          matched = true;
+          break;
+        }
+
+        const value = args[index + 1];
+        if (value == null || !optionSpec.choices.includes(value)) {
+          return { success: false };
+        }
+        values[optionSpec.key] = value;
+        index += 2;
+        matched = true;
+        break;
+      }
+
+      if (
+        optionSpec.kind === "value" &&
+        token.startsWith(`${optionSpec.name}=`)
+      ) {
+        if (seen.has(optionSpec.key)) {
+          return { success: false };
+        }
+        const value = token.slice(optionSpec.name.length + 1);
+        if (!optionSpec.choices.includes(value)) {
+          return { success: false };
+        }
+        seen.add(optionSpec.key);
+        values[optionSpec.key] = value;
+        index++;
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      return { success: false };
+    }
+  }
+
+  for (const optionSpec of spec.options) {
+    if (optionSpec.required && !seen.has(optionSpec.key)) {
+      return { success: false };
+    }
+
+    if (optionSpec.required && optionSpec.kind === "flag") {
+      values[optionSpec.key] = true;
+    }
+  }
+
+  return { success: true, value: values };
 }
 
 function longOptionName(name: string): `--${string}` {
@@ -495,6 +708,26 @@ describe("property-based tests", () => {
 
           assert.deepEqual(genericSuggestions, syncSuggestions);
           assert.deepEqual(asyncSuggestions, syncSuggestions);
+        },
+      ),
+      complexPropertyParameters,
+    );
+  });
+
+  it("model oracle should match command option parsing", () => {
+    fc.assert(
+      fc.property(
+        oracleCliSpecArbitrary,
+        fc.array(adversarialTokenArbitrary, { minLength: 0, maxLength: 10 }),
+        (spec: OracleCliSpec, args: readonly string[]) => {
+          const parser = compileOracleCliSpec(spec);
+          const actual = parseSync(parser, args);
+          const expected = parseOracleCliSpec(spec, args);
+
+          assert.equal(actual.success, expected.success);
+          if (actual.success && expected.success) {
+            assert.deepEqual(actual.value, expected.value);
+          }
         },
       ),
       complexPropertyParameters,
