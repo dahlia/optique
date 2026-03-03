@@ -6839,4 +6839,185 @@ describe("branch coverage: facade.ts edge cases", () => {
       /Sync boom\./,
     );
   });
+
+  it("classifyParseResult accepts array-like commands payload", () => {
+    const parser: Parser<
+      "sync",
+      {
+        readonly help: true;
+        readonly version: false;
+        readonly completion: false;
+        readonly commands: { readonly 0: "sub"; readonly length: 1 };
+        readonly result: Record<PropertyKey, never>;
+      },
+      undefined
+    > = {
+      $mode: "sync",
+      $valueType: [] as never,
+      $stateType: [] as never,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [], state: undefined },
+          consumed: [...context.buffer],
+        };
+      },
+      complete() {
+        return {
+          success: true as const,
+          value: {
+            help: true as const,
+            version: false as const,
+            completion: false as const,
+            commands: { 0: "sub" as const, length: 1 as const },
+            result: {},
+          },
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    let helpShown = false;
+    const result = runParser(parser, "test", ["--help"], {
+      help: {
+        option: true,
+        onShow: () => {
+          helpShown = true;
+          return "shown";
+        },
+      },
+      stderr: () => {},
+      stdout: () => {},
+    });
+    assert.equal(result, "shown");
+    assert.ok(helpShown);
+  });
+
+  it("runParser throws guard error when classified completion reaches switch", () => {
+    const parser: Parser<
+      "sync",
+      {
+        readonly help: false;
+        readonly version: false;
+        readonly completion: true;
+        readonly completionData: {
+          readonly shell: "bash";
+          readonly args: readonly ["x"];
+        };
+        readonly result: Record<PropertyKey, never>;
+      },
+      undefined
+    > = {
+      $mode: "sync",
+      $valueType: [] as never,
+      $stateType: [] as never,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [], state: undefined },
+          consumed: [...context.buffer],
+        };
+      },
+      complete() {
+        return {
+          success: true as const,
+          value: {
+            help: false as const,
+            version: false as const,
+            completion: true as const,
+            completionData: { shell: "bash" as const, args: ["x"] as const },
+            result: {},
+          },
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    assert.throws(
+      () => runParser(parser, "test", ["placeholder"], {}),
+      /Completion should be handled by early return/,
+    );
+  });
+
+  it("needsEarlyExit does not trigger for non-matching completion option args", () => {
+    const parser = object({ name: argument(string()) });
+    const result = runParser(parser, "test", ["Alice"], {
+      completion: { option: true, onShow: () => "shown" },
+      stdout: () => {},
+      stderr: () => {},
+    });
+    assert.deepEqual(result, { name: "Alice" });
+  });
+
+  it("runWith uses async fast-path without contexts and with static contexts", async () => {
+    const asyncParser: Parser<"async", string, { value: string | null }> = {
+      $mode: "async",
+      $valueType: [] as unknown as readonly string[],
+      $stateType: [] as unknown as readonly { value: string | null }[],
+      priority: 0,
+      usage: [],
+      initialState: { value: null },
+      parse(context) {
+        const [head, ...rest] = context.buffer;
+        if (head == null) {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing argument.`,
+            consumed: 0,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: rest, state: { value: head } },
+          consumed: [head],
+        });
+      },
+      complete(state) {
+        if (state.value == null) {
+          return Promise.resolve({
+            success: false as const,
+            error: message`No input provided.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          value: state.value,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const withoutContexts = await runWith(asyncParser, "test", [], {
+      args: ["first"],
+    });
+    assert.equal(withoutContexts, "first");
+
+    const staticContext: SourceContext = {
+      id: Symbol.for("@test/facade-static-fastpath"),
+      getAnnotations() {
+        return { [Symbol.for("@test/facade-static-fastpath")]: {} };
+      },
+    };
+    const withStaticContext = await runWith(asyncParser, "test", [
+      staticContext,
+    ], {
+      args: ["second"],
+    });
+    assert.equal(withStaticContext, "second");
+  });
 });
