@@ -609,6 +609,52 @@ describe("bindEnv()", () => {
     assert.equal(value.value, 8080);
   });
 
+  it("returns a Promise from parse() in async mode", async () => {
+    const asyncInt: ValueParser<"async", number> = {
+      $mode: "async",
+      metavar: "INT",
+      parse(input: string): Promise<ValueParserResult<number>> {
+        const n = parseInt(input, 10);
+        if (isNaN(n)) {
+          return Promise.resolve({
+            success: false,
+            error: message`Invalid integer: ${input}`,
+          });
+        }
+        return Promise.resolve({ success: true, value: n });
+      },
+      format(v: number): string {
+        return v.toString();
+      },
+    };
+
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", asyncInt), {
+      context,
+      key: "PORT",
+      parser: asyncInt,
+    });
+
+    const parseResult = parser.parse({
+      buffer: ["--port", "9000"] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(
+      parseResult instanceof Promise,
+      "Expected parse() to return a Promise in async mode",
+    );
+    const resolved = await parseResult;
+    assert.ok(resolved.success);
+    if (resolved.success) {
+      assert.equal(resolved.consumed.length, 2);
+    }
+  });
+
   it("supports multiple env contexts with different prefixes and sources", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/136
     // When two EnvContext instances are passed to runWith(), each parser

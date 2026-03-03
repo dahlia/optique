@@ -369,6 +369,25 @@ describe("logOutput()", () => {
       path: "/tmp/optique.log",
     });
   });
+
+  it("should render file default path in help output", () => {
+    const parser = object({
+      output: withDefault(logOutput(), {
+        type: "file",
+        path: "/var/log/optique.log",
+      }),
+    });
+    let helpOutput = "";
+    const result = runParser(parser, "myapp", ["--help"], {
+      help: { option: true, onShow: () => "shown" },
+      showDefault: true,
+      stdout: (text) => {
+        helpOutput += text;
+      },
+    });
+    assert.equal(result, "shown");
+    assert.ok(helpOutput.includes("/var/log/optique.log"));
+  });
 });
 
 describe("loggingOptions()", () => {

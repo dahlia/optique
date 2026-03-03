@@ -6,7 +6,13 @@ import {
   generateManPageSync,
 } from "./generator.ts";
 import { object } from "@optique/core/constructs";
-import { argument, command, flag, option } from "@optique/core/primitives";
+import {
+  argument,
+  command,
+  fail,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { defineProgram } from "@optique/core/program";
@@ -467,6 +473,26 @@ describe("Program-based API", () => {
     assert.ok(typeof result === "string");
     assert.ok(result.includes(".TH MYAPP 1"));
     assert.ok(result.includes('"myapp 1.0.0"'));
+  });
+
+  it("falls back to empty doc page for Program in generateManPageSync()", () => {
+    const prog = defineProgram({
+      parser: fail<unknown>(),
+      metadata: { name: "myapp" },
+    });
+
+    const result = generateManPageSync(prog, { section: 1 });
+    assert.ok(result.includes(".TH MYAPP 1"));
+  });
+
+  it("falls back to empty doc page for Program in generateManPageAsync()", async () => {
+    const prog = defineProgram({
+      parser: fail<unknown>(),
+      metadata: { name: "myapp" },
+    });
+
+    const result = await generateManPageAsync(prog, { section: 1 });
+    assert.ok(result.includes(".TH MYAPP 1"));
   });
 
   it("includes examples from metadata", () => {

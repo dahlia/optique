@@ -6218,6 +6218,91 @@ describe("branch coverage: primitives edge cases", () => {
       );
     }
 
+    const staticDuplicateOption = option("--count", integer(), {
+      errors: { duplicate: message`count appears more than once` },
+    });
+    const staticDuplicateOptionResult = staticDuplicateOption.parse({
+      buffer: ["--count", "3"] as readonly string[],
+      state: { success: true, value: 1 },
+      optionsTerminated: false,
+      usage: staticDuplicateOption.usage,
+    });
+    assert.ok(!staticDuplicateOptionResult.success);
+    if (!staticDuplicateOptionResult.success) {
+      assert.equal(
+        formatMessage(staticDuplicateOptionResult.error),
+        "count appears more than once",
+      );
+    }
+
+    const staticDuplicateBundledOption = option("-a", "--all", {
+      errors: { duplicate: message`all was already set` },
+    });
+    const staticDuplicateBundledOptionResult = staticDuplicateBundledOption
+      .parse({
+        buffer: ["-abc"] as readonly string[],
+        state: { success: true, value: true },
+        optionsTerminated: false,
+        usage: staticDuplicateBundledOption.usage,
+      });
+    assert.ok(!staticDuplicateBundledOptionResult.success);
+    if (!staticDuplicateBundledOptionResult.success) {
+      assert.equal(
+        formatMessage(staticDuplicateBundledOptionResult.error),
+        "all was already set",
+      );
+    }
+
+    const staticDuplicateFlag = flag("--force", {
+      errors: { duplicate: message`force can only be specified once` },
+    });
+    const staticDuplicateFlagResult = staticDuplicateFlag.parse({
+      buffer: ["--force"] as readonly string[],
+      state: { success: true, value: true as const },
+      optionsTerminated: false,
+      usage: staticDuplicateFlag.usage,
+    });
+    assert.ok(!staticDuplicateFlagResult.success);
+    if (!staticDuplicateFlagResult.success) {
+      assert.equal(
+        formatMessage(staticDuplicateFlagResult.error),
+        "force can only be specified once",
+      );
+    }
+
+    const staticInvalidArgument = argument(string({ metavar: "NAME" }), {
+      errors: { invalidValue: message`static invalid argument` },
+    });
+    const staticInvalidArgumentResult = staticInvalidArgument.complete({
+      success: false,
+      error: message`inner-arg-error`,
+    });
+    assert.ok(!staticInvalidArgumentResult.success);
+    if (!staticInvalidArgumentResult.success) {
+      assert.equal(
+        formatMessage(staticInvalidArgumentResult.error),
+        "static invalid argument",
+      );
+    }
+
+    const staticInvalidOption = option("--port", integer(), {
+      errors: {
+        missing: message`missing static`,
+        invalidValue: message`static invalid option`,
+      },
+    });
+    const staticInvalidOptionResult = staticInvalidOption.complete({
+      success: false,
+      error: message`inner-opt-error`,
+    });
+    assert.ok(!staticInvalidOptionResult.success);
+    if (!staticInvalidOptionResult.success) {
+      assert.equal(
+        formatMessage(staticInvalidOptionResult.error),
+        "static invalid option",
+      );
+    }
+
     const cmd = command("deploy", argument(string({ metavar: "TARGET" })), {
       errors: { invalidState: message`custom invalid state` },
     });
