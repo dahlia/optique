@@ -6821,6 +6821,51 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(!result.success);
   });
 
+  it("or() complete handles selected failure state directly", () => {
+    const parser = or(option("--value", string()), flag("--flag"));
+    const completed = parser.complete([
+      0,
+      {
+        success: false,
+        consumed: 1,
+        error: message`forced selected failure.`,
+      },
+    ]);
+    assert.ok(!completed.success);
+    if (!completed.success) {
+      assert.equal(formatMessage(completed.error), "forced selected failure.");
+    }
+  });
+
+  it("or() async suggest uses sync selected parser branch", async () => {
+    const asyncParser = option("--async", asyncStringValue());
+    const syncParser = option("--sync", string());
+    const parser = or(syncParser, asyncParser);
+    const suggestions: Suggestion[] = [];
+    const iter = parser.suggest(
+      {
+        buffer: [],
+        state: [0, {
+          success: true,
+          next: {
+            buffer: [],
+            state: syncParser.initialState,
+            optionsTerminated: false,
+            usage: parser.usage,
+          },
+          consumed: [],
+        }],
+        optionsTerminated: false,
+        usage: parser.usage,
+      } as ParserContext<typeof parser.initialState>,
+      "--",
+    );
+    for await (const s of iter as AsyncIterable<Suggestion>) {
+      suggestions.push(s);
+    }
+    assert.ok(suggestions.length > 0);
+  });
+
   // ----- object() parseSync: allCanComplete false path (line 2925) -----
   it("object() parseSync fails when a required field cannot complete", () => {
     const p = object({
@@ -7226,6 +7271,68 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const m = merge(p1, p2, { hidden: true });
     const suggs = await suggestAsync(m, ["--"]);
     assert.deepEqual(suggs, []);
+  });
+
+  it("merge() complete handles missing sentinel and missing object keys", () => {
+    const undefStateParser = withDefault(
+      object({ x: optional(option("--x", string())) }),
+      { x: undefined as string | undefined },
+    );
+    const objectParser = object({
+      y: optional(option("--y", string())),
+    });
+    const merged = merge(undefStateParser, objectParser);
+    const completed = merged.complete({});
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.equal(completed.value.x, undefined);
+      assert.equal(completed.value.y, undefined);
+    }
+  });
+
+  it("merge() suggest handles missing parser state keys", () => {
+    const undefStateParser = withDefault(
+      object({ x: optional(option("--x", string())) }),
+      { x: undefined as string | undefined },
+    );
+    const objectParser = object({
+      y: optional(option("--y", string())),
+    });
+    const merged = merge(undefStateParser, objectParser);
+    const suggestions: Suggestion[] = [];
+    for (
+      const s of merged.suggest(
+        {
+          buffer: [],
+          // Intentionally omit __parser_0 and y to trigger fallback branches.
+          state: {},
+          optionsTerminated: false,
+          usage: merged.usage,
+        } as ParserContext<typeof merged.initialState>,
+        "--",
+      ) as Iterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("tuple() complete and inspect cover fallback branches", () => {
+    const parser = tuple("Tuple label", [option("--name", string())]);
+    const docs = parser.getDocFragments(
+      {
+        kind: "available",
+        state: [] as unknown as typeof parser.initialState,
+      },
+      undefined,
+    );
+    assert.ok(docs.fragments.length > 0);
+    const inspected = (
+      parser as unknown as {
+        [key: symbol]: () => string;
+      }
+    )[Symbol.for("Deno.customInspect")]();
+    assert.ok(inspected.includes("tuple"));
   });
 
   it("merge() suggest uses undefined-state fallback for undefined initialState parser", () => {
