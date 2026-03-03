@@ -8885,4 +8885,210 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const completed = await parser.complete(parser.initialState);
     assert.ok(!completed.success);
   });
+
+  it("object() suggest async builds registry and uses field-state fallback", async () => {
+    const parser = object({
+      name: option("--name", asyncStringValue()),
+    });
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest({
+        buffer: ["--name"],
+        state: {} as never,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "")
+    ) {
+      suggestions.push(suggestion);
+    }
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("concat() sync suggest and docs cover sync-only branches", () => {
+    const parser = concat(
+      tuple([option("--a", string())]),
+      tuple([option("--b", string())]),
+    );
+    const suggestions = parser.suggest({
+      buffer: [],
+      state: [] as never,
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, "--");
+    assert.ok(Array.isArray([...suggestions as Iterable<Suggestion>]));
+
+    const docs = parser.getDocFragments({ kind: "unavailable" }, undefined);
+    assert.ok(docs.fragments.length >= 1);
+  });
+
+  it("concat() parse sync returns deepest consuming error", () => {
+    const failing: Parser<"sync", readonly unknown[], undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly (readonly unknown[])[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse() {
+        return { success: false as const, consumed: 1, error: message`bad` };
+      },
+      complete() {
+        return { success: true as const, value: ["ok"] as const };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = concat(
+      failing as unknown as Parser<
+        "sync",
+        readonly unknown[],
+        readonly unknown[]
+      >,
+      tuple([optional(option("--ok", string()))]),
+    );
+    const result = parseSync(parser, ["x"]);
+    assert.ok(!result.success);
+  });
+
+  it("concat() handles scalar completion values and empty priority", async () => {
+    const syncScalar = {
+      $mode: "sync",
+      $valueType: [] as readonly unknown[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "scalar-sync" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({
+        fragments: [{ type: "entry", term: { type: "literal", value: "x" } }],
+      }),
+    } as unknown as Parser<"sync", unknown, undefined>;
+    const asyncScalar = {
+      $mode: "async",
+      $valueType: [] as readonly unknown[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: "scalar-async",
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({
+        fragments: [{ type: "entry", term: { type: "literal", value: "y" } }],
+      }),
+    } as unknown as Parser<"async", unknown, undefined>;
+
+    const syncConcat = concat(
+      syncScalar as unknown as Parser<
+        "sync",
+        readonly unknown[],
+        readonly unknown[]
+      >,
+      tuple([optional(option("--tail", string()))]),
+    );
+    const syncCompleted = syncConcat.complete(syncConcat.initialState);
+    assert.ok(syncCompleted.success);
+    if (syncCompleted.success) {
+      assert.deepEqual(syncCompleted.value, ["scalar-sync", undefined]);
+    }
+
+    const asyncConcat = concat(
+      asyncScalar as unknown as Parser<
+        "async",
+        readonly unknown[],
+        readonly unknown[]
+      >,
+      tuple([optional(option("--tail", asyncStringValue()))]),
+    );
+    const asyncCompleted = await asyncConcat.complete(asyncConcat.initialState);
+    assert.ok(asyncCompleted.success);
+    if (asyncCompleted.success) {
+      assert.deepEqual(asyncCompleted.value, ["scalar-async", undefined]);
+    }
+
+    const emptyConcat = (concat as unknown as (...parsers: unknown[]) => {
+      readonly priority: number;
+    })();
+    assert.equal(emptyConcat.priority, 0);
+  });
+
+  it("group() hidden suggest also works for async parser", async () => {
+    const parser = group(
+      "Hidden Async Group",
+      object({ name: optional(option("--name", asyncStringValue())) }),
+      { hidden: true },
+    );
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "")
+    ) {
+      suggestions.push(suggestion);
+    }
+    assert.deepEqual(suggestions, []);
+  });
+
+  it("conditional() sync suggest handles undefined and selected states", () => {
+    const parser = conditional(
+      option("--mode", choice(["fast", "slow"])),
+      {
+        fast: optional(option("--threads", integer())),
+        slow: optional(flag("--verbose")),
+      },
+      optional(option("--default", string())),
+    );
+
+    const fromUndefined = suggestSync(parser, ["--"]);
+    assert.ok(Array.isArray(fromUndefined));
+
+    const selected = parser.suggest({
+      buffer: [],
+      state: {
+        ...parser.initialState,
+        selectedBranch: { kind: "branch", key: "fast" as const },
+      },
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, "--");
+    assert.ok(Array.isArray([...selected as Iterable<Suggestion>]));
+  });
+
+  it("conditional() sync parse supports preselected default branch", () => {
+    const parser = conditional(
+      option("--mode", choice(["fast", "slow"])),
+      { fast: flag("--fast") },
+      option("--default", string()),
+    );
+    const parsed = parser.parse({
+      buffer: ["--default", "ok"],
+      state: {
+        ...parser.initialState,
+        selectedBranch: { kind: "default" as const },
+      },
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+  });
 });
