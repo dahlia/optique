@@ -199,6 +199,28 @@ describe("valibot()", () => {
         const parser = valibot(v.pipe(v.string(), v.cuid2()));
         assert.equal(parser.metavar, "CUID2");
       });
+
+      it("should infer additional string refinements from internal pipeline", () => {
+        const make = (actionType: string) =>
+          valibot({
+            type: "string",
+            pipe: [{ type: actionType }],
+          } as unknown as v.BaseSchema<
+            unknown,
+            unknown,
+            v.BaseIssue<unknown>
+          >);
+
+        assert.equal(make("iso_date").metavar, "DATE");
+        assert.equal(make("iso_date_time").metavar, "DATETIME");
+        assert.equal(make("iso_time").metavar, "TIME");
+        assert.equal(make("iso_timestamp").metavar, "TIMESTAMP");
+        assert.equal(make("ipv4").metavar, "IPV4");
+        assert.equal(make("ipv6").metavar, "IPV6");
+        assert.equal(make("ip").metavar, "IP");
+        assert.equal(make("emoji").metavar, "EMOJI");
+        assert.equal(make("base64").metavar, "BASE64");
+      });
     });
 
     describe("picklist and union types", () => {
@@ -257,6 +279,29 @@ describe("valibot()", () => {
         const parser = valibot(
           v.pipe(v.string(), v.transform((s) => s.toUpperCase())),
         );
+        assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should fallback to VALUE when internal schema type is missing", () => {
+        const parser = valibot({
+          pipe: [{ type: "email" }],
+        } as unknown as v.BaseSchema<
+          unknown,
+          unknown,
+          v.BaseIssue<unknown>
+        >);
+        assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should infer VALUE for number pipeline with transform", () => {
+        const parser = valibot({
+          type: "number",
+          pipe: [{ type: "transform" }],
+        } as unknown as v.BaseSchema<
+          unknown,
+          unknown,
+          v.BaseIssue<unknown>
+        >);
         assert.equal(parser.metavar, "VALUE");
       });
 
