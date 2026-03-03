@@ -634,6 +634,122 @@ describe("parser.ts coverage branches", () => {
     );
   });
 
+  it("annotation injection replaces primitive initial states with objects", async () => {
+    const annotation = Symbol("primitive-init-annotation");
+    let syncSuggestState: unknown;
+    let asyncSuggestState: unknown;
+    let docSyncState: unknown;
+    let docAsyncState: unknown;
+
+    const syncParser: Parser<"sync", never, number> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly number[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: 123,
+      parse() {
+        return { success: false as const, consumed: 0, error: message`stop` };
+      },
+      complete() {
+        return { success: true as const, value: null as never };
+      },
+      suggest(context) {
+        syncSuggestState = context.state;
+        return [] as readonly Suggestion[];
+      },
+      getDocFragments(stateArg) {
+        docSyncState = stateArg.kind === "available"
+          ? stateArg.state
+          : undefined;
+        return { fragments: [] };
+      },
+    };
+
+    const asyncParser: Parser<"async", never, number> = {
+      $valueType: [] as readonly never[],
+      $stateType: [] as readonly number[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: 456,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`stop`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: null as never,
+        });
+      },
+      suggest(context) {
+        asyncSuggestState = context.state;
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {},
+        };
+      },
+      getDocFragments(stateArg) {
+        docAsyncState = stateArg.kind === "available"
+          ? stateArg.state
+          : undefined;
+        return { fragments: [] };
+      },
+    };
+
+    suggestSync(syncParser, [""], { annotations: { [annotation]: "sync" } });
+    await suggestAsync(asyncParser, [""], {
+      annotations: { [annotation]: "async" },
+    });
+    getDocPageSync(syncParser, [], {
+      annotations: { [annotation]: "doc-sync" },
+    });
+    await getDocPageAsync(asyncParser, [], {
+      annotations: { [annotation]: "doc-async" },
+    });
+
+    assert.ok(
+      syncSuggestState !== null && typeof syncSuggestState === "object",
+      "sync suggest state should become an object",
+    );
+    assert.ok(
+      asyncSuggestState !== null && typeof asyncSuggestState === "object",
+      "async suggest state should become an object",
+    );
+    assert.ok(
+      docSyncState !== null && typeof docSyncState === "object",
+      "sync doc state should become an object",
+    );
+    assert.ok(
+      docAsyncState !== null && typeof docAsyncState === "object",
+      "async doc state should become an object",
+    );
+  });
+
+  it("getDocPage handles non-exclusive usage terms", () => {
+    const doc = getDocPage(command("plain", constant("ok")), ["unknown"]);
+    assert.ok(doc);
+    assert.ok(Array.isArray(doc.sections));
+  });
+
+  it("getDocPage expands nested exclusive branch with trailing terms", () => {
+    const parser = or(
+      or(command("inner", constant("i")), command("other", constant("o"))),
+      command("outer", constant("x")),
+    );
+    const doc = getDocPage(parser, ["inner"]);
+    assert.ok(doc);
+    assert.ok(doc.usage);
+    assert.ok(
+      doc.usage.some((term) =>
+        term.type === "command" && term.name === "inner"
+      ),
+    );
+  });
+
   // Branch coverage: findCommandInExclusive recursive path (line 759).
   // Requires nested or(or(cmd, cmd), cmd) where the inner command name is
   // passed as the first argument so the recursive exclusive branch is taken.

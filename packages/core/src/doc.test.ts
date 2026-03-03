@@ -4,7 +4,7 @@ import {
   type DocSection,
   formatDocPage,
 } from "@optique/core/doc";
-import { message, valueSet } from "@optique/core/message";
+import { type Message, message, valueSet } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -1611,5 +1611,58 @@ describe("branch coverage: doc.ts edge cases", () => {
     });
     assert.ok(result.includes("red") || result.includes("..."));
     assert.ok(result.includes("..."), "should show ellipsis for truncation");
+  });
+
+  it("section sort falls back to index when comparator ties", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [{ term: { type: "argument", metavar: "FIRST" } }],
+        },
+        {
+          entries: [{ term: { type: "argument", metavar: "SECOND" } }],
+        },
+      ],
+    };
+    const result = formatDocPage("myapp", page, {
+      sectionOrder: () => 0,
+    });
+    const firstIndex = result.indexOf("FIRST");
+    const secondIndex = result.indexOf("SECOND");
+    assert.ok(firstIndex !== -1);
+    assert.ok(secondIndex !== -1);
+    assert.ok(firstIndex < secondIndex);
+  });
+
+  it("showDefault object uses fallback prefix and suffix", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--name"] },
+          default: message`guest`,
+        }],
+      }],
+    };
+    const result = formatDocPage("myapp", page, {
+      showDefault: {},
+    });
+    assert.ok(result.includes("[guest]"));
+  });
+
+  it("showChoices handles non-array choices value safely", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--mode"] },
+          // Runtime guard path: choices is non-null but not an array.
+          choices: "dev,prod" as unknown as Message,
+        }],
+      }],
+    };
+    const result = formatDocPage("myapp", page, {
+      showChoices: { maxItems: 1 },
+    });
+    assert.ok(result.includes("--mode"));
+    assert.ok(result.includes("choices:"));
   });
 });

@@ -3460,6 +3460,77 @@ describe("coverage-guided dependency parser tests", () => {
       .map((suggestion) => suggestion.text);
     assert.ok(dependencyTexts.includes("ok-default"));
   });
+
+  test("factory Error throws should be normalized in dependency parse paths", async () => {
+    const modeParser = dependency(choice(["ok", "boom"] as const));
+    const regionParser = dependency(choice(["us", "eu"] as const));
+
+    const syncDerived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [modeParser, regionParser] as const,
+      factory: (mode: "ok" | "boom", _region: "us" | "eu") => {
+        if (mode === "boom") {
+          throw new Error("sync-factory-error");
+        }
+        return choice(["value"] as const);
+      },
+      defaultValues: () => ["ok", "us"] as const,
+    });
+    const syncResult = await syncDerived[parseWithDependency](
+      "value",
+      ["boom", "us"] as const,
+    );
+    assert.ok(!syncResult.success);
+    if (!syncResult.success) {
+      assert.deepEqual(
+        syncResult.error,
+        message`Factory error: ${"sync-factory-error"}`,
+      );
+    }
+
+    const asyncDep = dependency(asyncChoice(["ok", "boom"] as const));
+    const asyncSingle = asyncDep.derive({
+      metavar: "VALUE",
+      factory: (mode: "ok" | "boom") => {
+        if (mode === "boom") {
+          throw new Error("single-async-source-error");
+        }
+        return choice(["value"] as const);
+      },
+      defaultValue: () => "ok" as const,
+    });
+    const asyncSingleResult = await asyncSingle[parseWithDependency](
+      "value",
+      "boom",
+    );
+    assert.ok(!asyncSingleResult.success);
+    if (!asyncSingleResult.success) {
+      assert.deepEqual(
+        asyncSingleResult.error,
+        message`Factory error: ${"single-async-source-error"}`,
+      );
+    }
+  });
+
+  test("deriveFromSync async mode should use defaults for format and suggest", async () => {
+    const modeParser = dependency(asyncChoice(["dev", "prod"] as const));
+    const regionParser = dependency(asyncChoice(["ap", "eu"] as const));
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [modeParser, regionParser] as const,
+      factory: (mode: "dev" | "prod", region: "ap" | "eu") =>
+        choice([`${mode}-${region}`] as const),
+      defaultValues: () => ["dev", "ap"] as const,
+    });
+
+    assert.equal(derived.format("dev-ap"), "dev-ap");
+
+    const suggestions = await collectSuggestions(derived.suggest!("dev"));
+    const texts = suggestions
+      .filter((suggestion) => suggestion.kind === "literal")
+      .map((suggestion) => suggestion.text);
+    assert.ok(texts.includes("dev-ap"));
+  });
 });
 
 describe("property-based tests", () => {

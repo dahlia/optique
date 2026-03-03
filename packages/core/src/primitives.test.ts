@@ -5925,6 +5925,81 @@ describe("branch coverage: primitives edge cases", () => {
       assert.equal(formatMessage(plainFailure.error), "bad plain-fail");
     }
 
+    const deferredFailure = argWithCustomInvalid.complete(
+      createDeferredParseState(
+        "oops",
+        deriveFromSync({
+          metavar: "NAME",
+          dependencies: [dep] as const,
+          defaultValues: () => ["default"] as const,
+          factory: () => string({ metavar: "NAME" }),
+        }),
+        { success: false, error: message`deferred-fail` },
+      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
+    );
+    assert.ok(!deferredFailure.success);
+    if (!deferredFailure.success) {
+      assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
+    }
+
+    const optionWithCustomErrors = option("--port", integer(), {
+      errors: {
+        missing: (names) => message`missing ${text(names.join(","))}`,
+        invalidValue: (error) => message`invalid ${error}`,
+      },
+    });
+    const missingOption = optionWithCustomErrors.complete(undefined);
+    assert.ok(!missingOption.success);
+    if (!missingOption.success) {
+      assert.equal(formatMessage(missingOption.error), "missing --port");
+    }
+
+    const deferredOptionFailure = optionWithCustomErrors.complete(
+      createDeferredParseState(
+        "bad",
+        deriveFromSync({
+          metavar: "INT",
+          dependencies: [dep] as const,
+          defaultValues: () => ["default"] as const,
+          factory: () => integer(),
+        }),
+        { success: false, error: message`not-int` },
+      ) as unknown as Parameters<typeof optionWithCustomErrors.complete>[0],
+    );
+    assert.ok(!deferredOptionFailure.success);
+    if (!deferredOptionFailure.success) {
+      assert.equal(
+        formatMessage(deferredOptionFailure.error),
+        "invalid not-int",
+      );
+    }
+
+    const dependencyOptionFailure = optionWithCustomErrors.complete(
+      createDependencySourceState(
+        { success: false, error: message`dep-not-int` },
+        dep[dependencyId],
+      ) as unknown as Parameters<typeof optionWithCustomErrors.complete>[0],
+    );
+    assert.ok(!dependencyOptionFailure.success);
+    if (!dependencyOptionFailure.success) {
+      assert.equal(
+        formatMessage(dependencyOptionFailure.error),
+        "invalid dep-not-int",
+      );
+    }
+
+    const plainOptionFailure = optionWithCustomErrors.complete({
+      success: false,
+      error: message`plain-not-int`,
+    });
+    assert.ok(!plainOptionFailure.success);
+    if (!plainOptionFailure.success) {
+      assert.equal(
+        formatMessage(plainOptionFailure.error),
+        "invalid plain-not-int",
+      );
+    }
+
     const cmd = command("deploy", argument(string({ metavar: "TARGET" })), {
       errors: { invalidState: message`custom invalid state` },
     });

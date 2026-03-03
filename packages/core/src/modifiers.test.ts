@@ -3623,4 +3623,124 @@ describe("branch coverage: modifiers edge cases", () => {
     const result = await parser.complete(["ok", "bad"]);
     assert.ok(!result.success);
   });
+
+  it("withDefault: transformed complete(undefined) catches callback errors", async () => {
+    const depId = Symbol("wd-catch-undefined");
+    const transformedAsyncParser = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [transformsDependencyValueMarker]: true as const,
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No match.`,
+        }),
+      complete: () =>
+        Promise.resolve(
+          createDependencySourceState(
+            { success: true as const, value: "inner" },
+            depId,
+          ),
+        ),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, undefined>;
+
+    const parser = withDefault(
+      transformedAsyncParser,
+      () => {
+        throw new Error("default callback exploded");
+      },
+    );
+    const result = await parser.complete(undefined);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(
+        formatMessage(result.error).includes("default callback exploded"),
+      );
+    }
+  });
+
+  it("withDefault: transformed pending complete catches callback errors", async () => {
+    const depId = Symbol("wd-catch-pending");
+    const transformedAsyncParser = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [transformsDependencyValueMarker]: true as const,
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No match.`,
+        }),
+      complete: () =>
+        Promise.resolve({
+          success: true as const,
+          value: "inner",
+        }),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, undefined>;
+
+    const parser = withDefault(
+      transformedAsyncParser,
+      () => {
+        throw new Error("pending default callback exploded");
+      },
+    );
+    const pending = createPendingDependencySourceState(depId);
+    const result = await parser.complete([pending] as unknown as [undefined]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(
+        formatMessage(result.error).includes(
+          "pending default callback exploded",
+        ),
+      );
+    }
+  });
+
+  it("withDefault: wrapped dependency path catches callback errors", () => {
+    const pending = createPendingDependencySourceState(Symbol("wrapped-catch"));
+    const wrappedParser = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [wrappedDependencySourceMarker]: pending,
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No match.`,
+      }),
+      complete: () => ({ success: true as const, value: "inner" }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+
+    const parser = withDefault(
+      wrappedParser,
+      () => {
+        throw new Error("wrapped callback exploded");
+      },
+    );
+    const result = parser.complete(undefined);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(
+        formatMessage(result.error).includes("wrapped callback exploded"),
+      );
+    }
+  });
 });
