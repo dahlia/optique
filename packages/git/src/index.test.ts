@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import process from "node:process";
 import { describe, it } from "node:test";
 import * as isomorphicGit from "isomorphic-git";
 import type { Suggestion } from "@optique/core/parser";
@@ -182,6 +183,20 @@ describe("git parsers", () => {
       assert.equal(parser.format("main"), "main");
       assert.equal(parser.format("feature/my-branch"), "feature/my-branch");
     });
+
+    it("should resolve repository dir from process.cwd() when dir is omitted", async () => {
+      const testRepoDir = await createTestRepo();
+      const originalCwd = process.cwd();
+      try {
+        process.chdir(testRepoDir);
+        const parser = gitBranch();
+        const result = await parser.parse("main");
+        assert.ok(result.success);
+      } finally {
+        process.chdir(originalCwd);
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
   });
 
   describe("gitTag()", () => {
@@ -333,6 +348,77 @@ describe("git parsers", () => {
   });
 
   describe("gitRemoteBranch()", () => {
+    it("should parse existing remote branch names", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+        const head = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "HEAD",
+        });
+        await fs.mkdir(join(testRepoDir, ".git", "refs", "remotes", "origin"), {
+          recursive: true,
+        });
+        await fs.writeFile(
+          join(testRepoDir, ".git", "refs", "remotes", "origin", "main"),
+          `${head}\n`,
+        );
+
+        const parser = gitRemoteBranch("origin", { dir: testRepoDir });
+        const result = await parser.parse("main");
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.value, "main");
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should suggest existing remote branch names", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+        const head = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "HEAD",
+        });
+        await fs.mkdir(join(testRepoDir, ".git", "refs", "remotes", "origin"), {
+          recursive: true,
+        });
+        await fs.writeFile(
+          join(testRepoDir, ".git", "refs", "remotes", "origin", "main"),
+          `${head}\n`,
+        );
+
+        const parser = gitRemoteBranch("origin", { dir: testRepoDir });
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!("ma")) {
+          suggestions.push(s);
+        }
+        const literals = suggestions.filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+        );
+        assert.ok(literals.some((s) => s.text === "main"));
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should fail for non-existent remotes", async () => {
       const testRepoDir = await createTestRepo();
       try {
@@ -362,6 +448,25 @@ describe("git parsers", () => {
   });
 
   describe("gitCommit()", () => {
+    it("should parse existing abbreviated commit SHAs", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const head = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "HEAD",
+        });
+        const parser = gitCommit({ dir: testRepoDir });
+        const result = await parser.parse(head.slice(0, 7));
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.value, head);
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should fail for invalid commit SHAs", async () => {
       const testRepoDir = await createTestRepo();
       try {
@@ -438,6 +543,25 @@ describe("git parsers", () => {
   });
 
   describe("gitRef()", () => {
+    it("should parse abbreviated commit SHAs as refs", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const head = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "HEAD",
+        });
+        const parser = gitRef({ dir: testRepoDir });
+        const result = await parser.parse(head.slice(0, 7));
+        assert.ok(result.success);
+        if (result.success) {
+          assert.equal(result.value, head);
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should parse existing branches and return OID", async () => {
       const testRepoDir = await createTestRepo();
       try {
@@ -847,6 +971,30 @@ describe("git parsers", () => {
         suggestions.push(s);
       }
       assert.deepEqual(suggestions, []);
+    });
+
+    it("should return empty branch suggestions for missing directory", async () => {
+      const parser = gitBranch({ dir: missingDir });
+      const suggestions: Suggestion[] = [];
+      for await (const s of parser.suggest!("m")) {
+        suggestions.push(s);
+      }
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should return empty tag suggestions for missing directory", async () => {
+      const parser = gitTag({ dir: missingDir });
+      const suggestions: Suggestion[] = [];
+      for await (const s of parser.suggest!("v")) {
+        suggestions.push(s);
+      }
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should fail to parse remote in non-existent directory", async () => {
+      const parser = gitRemote({ dir: missingDir });
+      const result = await parser.parse("origin");
+      assert.ok(!result.success, "Should fail for non-existent directory");
     });
   });
 
