@@ -1318,5 +1318,102 @@ describe("git parsers", () => {
         await cleanupTestRepo(testRepoDir);
       }
     });
+
+    it("should execute parse catch fallback when notFound callback throws", async () => {
+      const testRepoDir = await createTestRepoWithBranchesAndTags();
+      try {
+        const throwingNotFound = () => {
+          throw new Error("forced notFound callback failure");
+        };
+
+        const branchResult = await gitBranch({
+          dir: testRepoDir,
+          errors: { notFound: throwingNotFound },
+        }).parse("missing-branch");
+        assert.ok(!branchResult.success);
+
+        const remoteBranchResult = await gitRemoteBranch("origin", {
+          dir: testRepoDir,
+          errors: { notFound: throwingNotFound },
+        }).parse("missing-remote-branch");
+        assert.ok(!remoteBranchResult.success);
+
+        const tagResult = await gitTag({
+          dir: testRepoDir,
+          errors: { notFound: throwingNotFound },
+        }).parse("missing-tag");
+        assert.ok(!tagResult.success);
+
+        const remoteResult = await gitRemote({
+          dir: testRepoDir,
+          errors: { notFound: throwingNotFound },
+        }).parse("missing-remote");
+        assert.ok(!remoteResult.success);
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should execute parse catch custom listFailed path when callback throws", async () => {
+      const testRepoDir = await createTestRepoWithBranchesAndTags();
+      try {
+        const parser = gitBranch({
+          dir: testRepoDir,
+          errors: {
+            notFound: () => {
+              throw new Error("forced branch notFound throw");
+            },
+            listFailed: (dir) => message`custom list failed: ${dir}`,
+          },
+        });
+        const result = await parser.parse("missing-branch");
+        assert.ok(!result.success);
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should execute suggest catch branches with non-string prefix values", async () => {
+      const testRepoDir = await createTestRepoWithBranchesAndTags();
+      try {
+        const badPrefix = Symbol("bad-prefix") as unknown as string;
+
+        const branchSuggestions: Suggestion[] = [];
+        for await (
+          const s of gitBranch({ dir: testRepoDir }).suggest!(badPrefix)
+        ) {
+          branchSuggestions.push(s);
+        }
+        assert.deepEqual(branchSuggestions, []);
+
+        const remoteBranchSuggestions: Suggestion[] = [];
+        for await (
+          const s of gitRemoteBranch("origin", { dir: testRepoDir }).suggest!(
+            badPrefix,
+          )
+        ) {
+          remoteBranchSuggestions.push(s);
+        }
+        assert.deepEqual(remoteBranchSuggestions, []);
+
+        const tagSuggestions: Suggestion[] = [];
+        for await (
+          const s of gitTag({ dir: testRepoDir }).suggest!(badPrefix)
+        ) {
+          tagSuggestions.push(s);
+        }
+        assert.deepEqual(tagSuggestions, []);
+
+        const remoteSuggestions: Suggestion[] = [];
+        for await (
+          const s of gitRemote({ dir: testRepoDir }).suggest!(badPrefix)
+        ) {
+          remoteSuggestions.push(s);
+        }
+        assert.deepEqual(remoteSuggestions, []);
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
   });
 });
