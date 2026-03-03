@@ -454,6 +454,38 @@ describe("timeZone", () => {
     const customParser = timeZone({ metavar: "TZ" });
     assert.equal(customParser.metavar, "TZ");
   });
+
+  it("should fall back to UTC/GMT suggestions when Intl API throws", () => {
+    const original = Intl.supportedValuesOf;
+    Intl.supportedValuesOf = ((_: "timeZone") => {
+      throw new Error("not supported");
+    }) as typeof Intl.supportedValuesOf;
+    try {
+      const parser = timeZone();
+      const suggestions = Array.from(parser.suggest!("g"));
+      assert.ok(
+        suggestions.some((s) => s.kind === "literal" && s.text === "GMT"),
+      );
+    } finally {
+      Intl.supportedValuesOf = original;
+    }
+  });
+
+  it("should include UTC and GMT when missing from Intl results", () => {
+    const original = Intl.supportedValuesOf;
+    Intl.supportedValuesOf =
+      (() => ["Asia/Seoul"]) as typeof Intl.supportedValuesOf;
+    try {
+      const parser = timeZone();
+      const suggestions = Array.from(parser.suggest!(""));
+      const literals = suggestions.filter((s) => s.kind === "literal");
+      assert.ok(literals.some((s) => s.text === "UTC"));
+      assert.ok(literals.some((s) => s.text === "GMT"));
+      assert.ok(literals.some((s) => s.text === "Asia/Seoul"));
+    } finally {
+      Intl.supportedValuesOf = original;
+    }
+  });
 });
 
 describe("error customization", () => {
@@ -535,6 +567,20 @@ describe("error customization", () => {
         { type: "text", text: "Invalid zoned datetime format." },
       ]);
     });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = zonedDateTime({
+        errors: {
+          invalidFormat: (input) => message`${input} is not a zoned datetime.`,
+        },
+      });
+      const result = parser.parse("bad-zdt");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "bad-zdt" },
+        { type: "text", text: " is not a zoned datetime." },
+      ]);
+    });
   });
 
   describe("plainDate parser", () => {
@@ -549,6 +595,20 @@ describe("error customization", () => {
       assert.ok(!result.success);
       assert.deepEqual(result.error, [
         { type: "text", text: "Date must be in YYYY-MM-DD format." },
+      ]);
+    });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = plainDate({
+        errors: {
+          invalidFormat: (input) => message`${input} is not a plain date.`,
+        },
+      });
+      const result = parser.parse("bad-date");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "bad-date" },
+        { type: "text", text: " is not a plain date." },
       ]);
     });
   });
@@ -567,6 +627,20 @@ describe("error customization", () => {
         { type: "text", text: "Time must be in HH:MM:SS format." },
       ]);
     });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = plainTime({
+        errors: {
+          invalidFormat: (input) => message`${input} is not a plain time.`,
+        },
+      });
+      const result = parser.parse("bad-time");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "bad-time" },
+        { type: "text", text: " is not a plain time." },
+      ]);
+    });
   });
 
   describe("plainDateTime parser", () => {
@@ -581,6 +655,20 @@ describe("error customization", () => {
       assert.ok(!result.success);
       assert.deepEqual(result.error, [
         { type: "text", text: "DateTime must be in ISO format." },
+      ]);
+    });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = plainDateTime({
+        errors: {
+          invalidFormat: (input) => message`${input} is not a datetime.`,
+        },
+      });
+      const result = parser.parse("bad-datetime");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "bad-datetime" },
+        { type: "text", text: " is not a datetime." },
       ]);
     });
   });
@@ -599,6 +687,20 @@ describe("error customization", () => {
         { type: "text", text: "Year-month must be in YYYY-MM format." },
       ]);
     });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = plainYearMonth({
+        errors: {
+          invalidFormat: (input) => message`${input} is not a year-month.`,
+        },
+      });
+      const result = parser.parse("bad-ym");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "bad-ym" },
+        { type: "text", text: " is not a year-month." },
+      ]);
+    });
   });
 
   describe("plainMonthDay parser", () => {
@@ -613,6 +715,20 @@ describe("error customization", () => {
       assert.ok(!result.success);
       assert.deepEqual(result.error, [
         { type: "text", text: "Month-day must be in --MM-DD format." },
+      ]);
+    });
+
+    it("should use function-based invalidFormat error message", () => {
+      const parser = plainMonthDay({
+        errors: {
+          invalidFormat: (input) => message`${input} is not a month-day.`,
+        },
+      });
+      const result = parser.parse("bad-md");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "value", value: "bad-md" },
+        { type: "text", text: " is not a month-day." },
       ]);
     });
   });
