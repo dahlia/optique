@@ -607,6 +607,29 @@ describe("path", () => {
       }
     });
 
+    it("should use function-based notAFile error message", () => {
+      const tempDir = createTempDir();
+      try {
+        const parser = path({
+          mustExist: true,
+          type: "file",
+          errors: {
+            notAFile: (input) =>
+              message`Expected file path, got directory: ${input}`,
+          },
+        });
+
+        const result = parser.parse(tempDir);
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected file path, got directory: " },
+          { type: "value", value: tempDir },
+        ]);
+      } finally {
+        cleanupDir(tempDir);
+      }
+    });
+
     it("should use custom parentNotFound error message", () => {
       const parser = path({
         allowCreate: true,
@@ -690,6 +713,24 @@ describe("path", () => {
         { type: "text", text: "Parent directory " },
         { type: "value", value: "/nonexistent/parent" },
         { type: "text", text: " must exist first." },
+      ]);
+    });
+
+    it("should use parentNotFound with mustNotExist+allowCreate", () => {
+      const parser = path({
+        mustNotExist: true,
+        allowCreate: true,
+        errors: {
+          parentNotFound: (parentDir) =>
+            message`Cannot create file under missing parent: ${parentDir}`,
+        },
+      });
+
+      const result = parser.parse("/nonexistent/parent/newfile.txt");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        { type: "text", text: "Cannot create file under missing parent: " },
+        { type: "value", value: "/nonexistent/parent" },
       ]);
     });
 
@@ -809,6 +850,32 @@ describe("path", () => {
           );
         }
       });
+    });
+
+    it("should set type-specific suggestion descriptions", () => {
+      const fileSuggestion =
+        Array.from(path({ type: "file" }).suggest!("x"))[0];
+      const directorySuggestion = Array.from(
+        path({ type: "directory" }).suggest!("x"),
+      )[0];
+      const eitherSuggestion =
+        Array.from(path({ type: "either" }).suggest!("x"))[0];
+
+      assert.ok(fileSuggestion.kind === "file");
+      assert.ok(directorySuggestion.kind === "file");
+      assert.ok(eitherSuggestion.kind === "file");
+      assert.deepEqual(fileSuggestion.description, [{
+        type: "text",
+        text: "File",
+      }]);
+      assert.deepEqual(directorySuggestion.description, [{
+        type: "text",
+        text: "Directory",
+      }]);
+      assert.deepEqual(eitherSuggestion.description, [{
+        type: "text",
+        text: "File or directory",
+      }]);
     });
 
     it("should handle empty prefix gracefully", () => {
