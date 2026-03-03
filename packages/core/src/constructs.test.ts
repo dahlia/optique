@@ -9091,4 +9091,174 @@ describe("branch coverage: constructs.ts edge cases", () => {
     });
     assert.ok(parsed.success);
   });
+
+  it("conditional() usage supports single branch with argument discriminator", () => {
+    const parser = conditional(
+      argument(choice(["fast"])),
+      {
+        fast: option("--threads", integer()),
+      },
+    );
+
+    const usageText = formatUsage("app", parser.usage);
+    assert.ok(usageText.length > 0);
+  });
+
+  it("conditional() async complete handles dependency source completion state", async () => {
+    const dep = Symbol("conditional-dep");
+    const discriminator = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 1,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve(
+          createDependencySourceState(
+            { success: true as const, value: "fast" },
+            dep,
+          ),
+        ) as unknown as Promise<{
+          readonly success: true;
+          readonly value: string;
+        }>;
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, unknown>;
+
+    const fastBranch = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 1,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "FAST" });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, unknown>;
+
+    const parser = conditional(discriminator, { fast: fastBranch });
+
+    const completed = await parser.complete({
+      ...parser.initialState,
+      selectedBranch: { kind: "branch", key: "fast" as const },
+    });
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.deepEqual(completed.value, ["fast", "FAST"]);
+    }
+  });
+
+  it("conditional() async complete falls back to selected key on discriminator failure", async () => {
+    const discriminator = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 1,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`discriminator failed`,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, unknown>;
+
+    const fastBranch = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly unknown[],
+      priority: 1,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<unknown>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "FAST" });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, unknown>;
+
+    const parser = conditional(discriminator, { fast: fastBranch });
+
+    const completed = await parser.complete({
+      ...parser.initialState,
+      selectedBranch: { kind: "branch", key: "fast" as const },
+    });
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.deepEqual(completed.value, ["fast", "FAST"]);
+    }
+  });
+
+  it("conditional() suggest handles undefined state and selected async default", async () => {
+    const syncParser = conditional(
+      option("--mode", choice(["fast", "slow"])),
+      { fast: flag("--fast"), slow: flag("--slow") },
+      option("--default", string()),
+    );
+    const syncSuggestions = syncParser.suggest({
+      buffer: [],
+      state: undefined as never,
+      optionsTerminated: false,
+      usage: syncParser.usage,
+    }, "--");
+    assert.ok(Array.isArray([...syncSuggestions as Iterable<Suggestion>]));
+
+    const asyncParser = conditional(
+      option("--mode", asyncStringValue()),
+      { fast: optional(option("--fast", asyncStringValue())) },
+      optional(option("--default", asyncStringValue())),
+    );
+    const asyncSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of asyncParser.suggest({
+        buffer: [],
+        state: {
+          ...asyncParser.initialState,
+          selectedBranch: { kind: "default" as const },
+        },
+        optionsTerminated: false,
+        usage: asyncParser.usage,
+      }, "--")
+    ) {
+      asyncSuggestions.push(suggestion);
+    }
+    assert.ok(Array.isArray(asyncSuggestions));
+  });
 });
