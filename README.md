@@ -8,6 +8,7 @@ Optique: Type-safe combinatorial CLI parser for TypeScript
 [![JSR][JSR badge]][JSR]
 [![npm][npm badge]][npm]
 [![GitHub Actions][GitHub Actions badge]][GitHub Actions]
+[![Codecov][Codecov badge]][Codecov]
 
 Type-safe combinatorial CLI parser for TypeScript inspired by Haskell's
 [optparse-applicative] and TypeScript's [Zod]. Build composable parsers for
@@ -26,6 +27,8 @@ built-in shell completion support for Bash, zsh, fish, PowerShell, and Nushell.
 [npm]: https://www.npmjs.com/package/@optique/core
 [GitHub Actions badge]: https://github.com/dahlia/optique/actions/workflows/main.yaml/badge.svg
 [GitHub Actions]: https://github.com/dahlia/optique/actions/workflows/main.yaml
+[Codecov badge]: https://codecov.io/gh/dahlia/optique/graph/badge.svg?token=Dw50j2DTjG
+[Codecov]: https://codecov.io/gh/dahlia/optique
 [optparse-applicative]: https://github.com/pcapriotti/optparse-applicative
 [Zod]: https://zod.dev/
 
