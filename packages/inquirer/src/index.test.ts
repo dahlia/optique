@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { annotationKey } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
-import { parseAsync } from "@optique/core/parser";
+import type { DocFragments } from "@optique/core/doc";
+import { message } from "@optique/core/message";
+import {
+  parseAsync,
+  type Parser,
+  type ParserContext,
+  type Suggestion,
+} from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
@@ -565,6 +573,221 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
       assert.deepEqual(result.value, ["typescript", "deno"]);
+    });
+  });
+
+  describe("internal branch coverage", () => {
+    it("covers async parse/suggest/complete branches with wrapped states", async () => {
+      let docDefault: unknown;
+      const inner: Parser<"async", string, { readonly token?: string }> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly { token?: string }[],
+        priority: 5,
+        usage: [],
+        initialState: {},
+        parse(
+          context: ParserContext<{ readonly token?: string }>,
+        ): Promise<{
+          success: true;
+          next: ParserContext<{ readonly token?: string }>;
+          consumed: readonly string[];
+        }> {
+          const consumed = context.buffer.length >= 2
+            ? context.buffer.slice(0, 2)
+            : [];
+          return Promise.resolve({
+            success: true,
+            next: { ...context, state: { token: "ok", [annotationKey]: {} } },
+            consumed,
+          });
+        },
+        complete(
+          _state: { readonly token?: string },
+        ): Promise<{ success: true; value: string }> {
+          return Promise.resolve({ success: true, value: "from-cli-state" });
+        },
+        suggest(): AsyncIterable<Suggestion> {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield { kind: "literal", text: "inner-suggestion" };
+            },
+          };
+        },
+        getDocFragments(_state, defaultValue): DocFragments {
+          docDefault = defaultValue;
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value",
+        prompter: () => Promise.resolve("prompted"),
+      });
+
+      const first = await parser.parse({
+        buffer: [],
+        state: { [annotationKey]: {} } as unknown as {
+          readonly token?: string;
+        },
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(first.success);
+
+      if (!first.success) return;
+
+      const suggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest(
+          {
+            buffer: [],
+            state: first.next.state,
+            optionsTerminated: false,
+            usage: parser.usage,
+          },
+          "i",
+        )
+      ) {
+        suggestions.push(suggestion);
+      }
+      assert.equal(suggestions.length, 1);
+      assert.equal(suggestions[0].kind, "literal");
+
+      const withCli = await parser.parse({
+        buffer: ["--name", "cli-value"],
+        state: first.next.state,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(withCli.success);
+      if (!withCli.success) return;
+
+      const completed = await parser.complete(withCli.next.state);
+      assert.ok(completed.success);
+      if (completed.success) {
+        assert.equal(completed.value, "from-cli-state");
+      }
+
+      parser.getDocFragments(
+        { kind: "available", state: first.next.state },
+        "UPPER",
+      );
+      assert.equal(docDefault, "UPPER");
+    });
+
+    it("deduplicates sentinel complete() calls and uses prompt fallback", async () => {
+      let promptCalls = 0;
+      const inner: Parser<"async", string, undefined> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 5,
+        usage: [],
+        initialState: undefined,
+        parse(_context: ParserContext<undefined>) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`inner parse failure`,
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: false as const,
+            error: message`inner complete failure`,
+          });
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value",
+        prompter: () => {
+          promptCalls++;
+          return Promise.resolve("from-prompt");
+        },
+      });
+
+      const first = await parser.complete(parser.initialState);
+      const second = await parser.complete(parser.initialState);
+
+      assert.ok(first.success);
+      assert.ok(second.success);
+      assert.equal(promptCalls, 1);
+    });
+
+    it("falls back to prompt when annotation-carrying cliState complete fails", async () => {
+      const inner: Parser<
+        "async",
+        string,
+        { readonly [annotationKey]?: unknown }
+      > = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly { [annotationKey]?: unknown }[],
+        priority: 5,
+        usage: [],
+        initialState: {},
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              state: { [annotationKey]: { source: "test" } },
+            },
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: false as const,
+            error: message`no value from source`,
+          });
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value",
+        prompter: () => Promise.resolve("prompt-fallback"),
+      });
+
+      const parsed = await parser.parse({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      if (!parsed.success) return;
+
+      const completed = await parser.complete(parsed.next.state);
+      assert.ok(completed.success);
+      if (completed.success) {
+        assert.equal(completed.value, "prompt-fallback");
+      }
     });
   });
 });
