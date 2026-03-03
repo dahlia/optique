@@ -8351,6 +8351,204 @@ describe("branch coverage regressions", () => {
     const above = constrained.parse("192.0.2.0/30");
     assert.ok(!above.success);
   });
+
+  it("covers integer/float/url/locale/uuid uncovered branches", () => {
+    const bigintInteger = integer({
+      type: "bigint",
+      min: 10n,
+      max: 20n,
+      errors: {
+        invalidInteger: (input) => message`bad bigint integer: ${input}`,
+        belowMinimum: (value, min) =>
+          message`${text(value.toString())} < ${text(min.toString())}`,
+        aboveMaximum: (value, max) =>
+          message`${text(value.toString())} > ${text(max.toString())}`,
+      },
+    });
+    assert.ok(!bigintInteger.parse("abc").success);
+    assert.ok(!bigintInteger.parse("9").success);
+    assert.ok(!bigintInteger.parse("21").success);
+    assert.equal(bigintInteger.format(12n), "12");
+
+    const numberInteger = integer({
+      min: 10,
+      max: 20,
+      errors: {
+        invalidInteger: (input) => message`bad integer: ${input}`,
+        belowMinimum: message`below min`,
+        aboveMaximum: message`above max`,
+      },
+    });
+    assert.ok(!numberInteger.parse("abc").success);
+    assert.ok(!numberInteger.parse("9").success);
+    assert.ok(!numberInteger.parse("21").success);
+    assert.equal(numberInteger.format(12), "12");
+
+    const floatParser = float({
+      min: 1,
+      max: 2,
+      errors: {
+        invalidNumber: (input) => message`bad float: ${input}`,
+        belowMinimum: (value, min) =>
+          message`${text(value.toString())} < ${text(min.toString())}`,
+        aboveMaximum: (value, max) =>
+          message`${text(value.toString())} > ${text(max.toString())}`,
+      },
+    });
+    assert.ok(!floatParser.parse("abc").success);
+    assert.ok(!floatParser.parse("0.5").success);
+    assert.ok(!floatParser.parse("2.5").success);
+    assert.equal(floatParser.format(1.5), "1.5");
+
+    const urlParser = url({
+      allowedProtocols: ["https:"],
+      errors: {
+        invalidUrl: (input) => message`bad url: ${input}`,
+        disallowedProtocol: message`protocol blocked`,
+      },
+    });
+    assert.ok(!urlParser.parse("not-a-url").success);
+    assert.ok(!urlParser.parse("http://example.com").success);
+    assert.equal(
+      urlParser.format(new URL("https://example.com/path")),
+      "https://example.com/path",
+    );
+
+    const localeParser = locale({
+      errors: {
+        invalidLocale: message`bad locale`,
+      },
+    });
+    assert.ok(!localeParser.parse("xyz-INVALID-123").success);
+    assert.equal(localeParser.format(new Intl.Locale("en-US")), "en-US");
+
+    const uuidParser = uuid({
+      allowedVersions: [4],
+      errors: {
+        invalidUuid: (input) => message`bad uuid: ${input}`,
+        disallowedVersion: message`version blocked`,
+      },
+    });
+    assert.ok(!uuidParser.parse("not-a-uuid").success);
+    assert.ok(
+      !uuidParser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success,
+    );
+    assert.equal(
+      uuidParser.format("550e8400-e29b-41d4-a716-446655440000"),
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
+  });
+
+  it("covers port and ipv4 uncovered custom function branches", () => {
+    const bigintPort = port({
+      type: "bigint",
+      min: 2000n,
+      max: 9000n,
+      disallowWellKnown: true,
+      errors: {
+        invalidPort: (input) => message`bad bigint port: ${input}`,
+        belowMinimum: (value, min) =>
+          message`${text(value.toString())} < ${text(min.toString())}`,
+        aboveMaximum: (value, max) =>
+          message`${text(value.toString())} > ${text(max.toString())}`,
+        wellKnownNotAllowed: (value) =>
+          message`well-known denied: ${text(value.toString())}`,
+      },
+    });
+    assert.ok(!bigintPort.parse("abc").success);
+    assert.ok(!bigintPort.parse("1024").success);
+    assert.ok(!bigintPort.parse("10000").success);
+    assert.equal(bigintPort.format(8080n), "8080");
+
+    const bigintWellKnownOnly = port({
+      type: "bigint",
+      disallowWellKnown: true,
+      errors: {
+        wellKnownNotAllowed: (value) =>
+          message`wk denied: ${text(value.toString())}`,
+      },
+    });
+    assert.ok(!bigintWellKnownOnly.parse("80").success);
+
+    const numberPort = port({
+      min: 2000,
+      max: 9000,
+      disallowWellKnown: true,
+      errors: {
+        invalidPort: message`bad number port`,
+        belowMinimum: (value, min) =>
+          message`${text(value.toString())} < ${text(min.toString())}`,
+        aboveMaximum: (value, max) =>
+          message`${text(value.toString())} > ${text(max.toString())}`,
+        wellKnownNotAllowed: (value) =>
+          message`wk denied: ${text(value.toString())}`,
+      },
+    });
+    assert.ok(!numberPort.parse("abc").success);
+    assert.ok(!numberPort.parse("1024").success);
+    assert.ok(!numberPort.parse("10000").success);
+    assert.equal(numberPort.format(8080), "8080");
+
+    const numberWellKnownOnly = port({
+      disallowWellKnown: true,
+      errors: {
+        wellKnownNotAllowed: (value) =>
+          message`wk denied: ${text(value.toString())}`,
+      },
+    });
+    assert.ok(!numberWellKnownOnly.parse("80").success);
+
+    const invalidIpv4 = ipv4({
+      errors: {
+        invalidIpv4: (input) => message`bad ipv4: ${input}`,
+      },
+    });
+    assert.ok(!invalidIpv4.parse("1..2.3").success);
+    assert.ok(!invalidIpv4.parse("1. 2.3.4").success);
+    assert.ok(!invalidIpv4.parse("01.2.3.4").success);
+    assert.ok(!invalidIpv4.parse("300.2.3.4").success);
+
+    assert.ok(
+      !ipv4({
+        allowPrivate: false,
+        errors: {
+          privateNotAllowed: (ip) => message`private denied: ${ip}`,
+        },
+      }).parse("192.168.1.1").success,
+    );
+    assert.ok(
+      !ipv4({
+        allowLinkLocal: false,
+        errors: {
+          linkLocalNotAllowed: (ip) => message`link-local denied: ${ip}`,
+        },
+      }).parse("169.254.1.1").success,
+    );
+    assert.ok(
+      !ipv4({
+        allowMulticast: false,
+        errors: {
+          multicastNotAllowed: (ip) => message`multicast denied: ${ip}`,
+        },
+      }).parse("224.0.0.1").success,
+    );
+    assert.ok(
+      !ipv4({
+        allowBroadcast: false,
+        errors: {
+          broadcastNotAllowed: (ip) => message`broadcast denied: ${ip}`,
+        },
+      }).parse("255.255.255.255").success,
+    );
+    assert.ok(
+      !ipv4({
+        allowZero: false,
+        errors: {
+          zeroNotAllowed: (ip) => message`zero denied: ${ip}`,
+        },
+      }).parse("0.0.0.0").success,
+    );
+  });
 });
 
 // cSpell: ignore résumé phonebk toolongcode hanidec jpan hebr arabext
