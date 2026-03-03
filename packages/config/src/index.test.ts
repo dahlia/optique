@@ -2,8 +2,10 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
 import { getDocPage, parse } from "@optique/core/parser";
+import type { Parser } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
 import { fail, flag, option } from "@optique/core/primitives";
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { bindEnv, createEnvContext } from "@optique/env";
@@ -667,6 +669,89 @@ describe("bindConfig parity with bindEnv", () => {
 });
 
 describe("createConfigContext error paths", () => {
+  test("supports async Standard Schema validation result", async () => {
+    const asyncSchema = {
+      "~standard": {
+        validate(_input: unknown) {
+          return Promise.resolve({ value: { host: "async-host", port: 443 } });
+        },
+      },
+    } as unknown as z.ZodType<{ host: string; port: number }>;
+    const context = createConfigContext({ schema: asyncSchema });
+
+    const annotations = await context.getAnnotations(
+      { configPath: "/app/config.json" },
+      {
+        load: () => ({
+          config: { host: "async-host", port: 443 },
+          meta: { configDir: "/app", configPath: "/app/config.json" },
+        }),
+      },
+    );
+
+    const contextAnnotation = annotations[context.id] as
+      | { readonly data: unknown; readonly meta: unknown }
+      | undefined;
+    assert.ok(contextAnnotation != null);
+    assert.deepEqual(contextAnnotation.data, {
+      host: "async-host",
+      port: 443,
+    });
+  });
+
+  test("supports annotation payload with data only (without meta)", async () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+
+    const annotations = await context.getAnnotations(
+      { configPath: "/app/config.json" },
+      {
+        load: () => ({
+          config: { host: "meta-less" },
+          meta: undefined,
+        }),
+      },
+    );
+
+    const value = annotations[context.id] as
+      | { readonly data: unknown; readonly meta?: unknown }
+      | undefined;
+    assert.ok(value != null);
+    assert.deepEqual(value.data, { host: "meta-less" });
+    assert.ok(!("meta" in value));
+  });
+
+  test("schema validation fallback message handles missing issue message", async () => {
+    const schemaWithoutMessage = {
+      "~standard": {
+        validate(_input: unknown) {
+          return {
+            issues: [{ path: ["host"] }],
+            value: undefined,
+          };
+        },
+      },
+    } as unknown as z.ZodType<{ host: string }>;
+    const context = createConfigContext({ schema: schemaWithoutMessage });
+
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations(
+          { configPath: "/app/config.json" },
+          {
+            load: () => ({
+              config: { host: "x" },
+              meta: { configDir: "/app", configPath: "/app/config.json" },
+            }),
+          },
+        ),
+      (error: Error) => {
+        assert.ok(error.message.includes("Unknown error"));
+        return true;
+      },
+    );
+  });
+
   test("getAnnotations throws TypeError when neither getConfigPath nor load is provided", async () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
@@ -908,6 +993,126 @@ describe("createConfigContext error paths", () => {
       (error: Error) => {
         assert.ok(error.message.includes("Config validation failed"));
         return true;
+      },
+    );
+  });
+
+  test("bindConfig async mode returns Promise from parse and complete", async () => {
+    const schema = z.object({ port: z.number() });
+    const context = createConfigContext({ schema });
+    const asyncInt: ValueParser<"async", number> = {
+      $mode: "async" as const,
+      metavar: "INT",
+      parse(input: string): Promise<ValueParserResult<number>> {
+        const n = parseInt(input, 10);
+        if (isNaN(n)) {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Invalid integer: ${input}`,
+          });
+        }
+        return Promise.resolve({ success: true as const, value: n });
+      },
+      format(v: number) {
+        return `${v}`;
+      },
+    };
+    const parser = bindConfig(option("-p", "--port", asyncInt), {
+      context,
+      key: "port",
+      default: 3000,
+    });
+
+    const parseResult = parser.parse({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult instanceof Promise);
+    const parsed = await parseResult;
+    assert.ok(parsed.success);
+
+    const completeResult = parser.complete(
+      { hasCliValue: false } as unknown as Parameters<
+        typeof parser.complete
+      >[0],
+    );
+    assert.ok(completeResult instanceof Promise);
+    const completed = await completeResult;
+    assert.ok(completed.success);
+    assert.equal(completed.value, 3000);
+  });
+
+  test("bindConfig unwraps wrapped state across parse calls", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--host", string()), {
+      context,
+      key: "host",
+      default: "fallback",
+    });
+
+    const parseContext = {
+      buffer: [] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const first = parser.parse(parseContext);
+    assert.ok(first.success);
+
+    const second = parser.parse({
+      ...parseContext,
+      buffer: ["--host", "alice"],
+      state: first.next.state,
+    });
+    assert.ok(second.success);
+    assert.deepEqual(second.consumed, ["--host", "alice"]);
+  });
+
+  test("throws when sync mode parser.parse returns Promise", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const brokenParser = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [],
+            state: undefined,
+            optionsTerminated: false,
+            usage: [],
+          },
+          consumed: [],
+        }),
+      complete: () => ({ success: true as const, value: "ok" }),
+      suggest: () => [],
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+    const parser = bindConfig(brokenParser, {
+      context,
+      key: "host",
+      default: "fallback",
+    });
+
+    assert.throws(
+      () =>
+        parser.parse({
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        }),
+      {
+        name: "TypeError",
+        message: "Synchronous mode cannot map Promise value.",
       },
     );
   });
