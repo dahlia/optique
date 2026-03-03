@@ -179,6 +179,60 @@ describe("run", () => {
       assert.equal(exitCode, 1);
       assert.ok(stderrOutput.includes("Missing shell name for completion"));
     });
+
+    it("should handle help command mode", () => {
+      const parser = option("--verbose");
+      let helpOutput = "";
+      let exitCode: number | undefined;
+
+      assert.throws(
+        () => {
+          run(parser, {
+            args: ["help"],
+            programName: "test",
+            help: "command",
+            stdout: (text) => {
+              helpOutput += `${text}\n`;
+            },
+            onExit: (code) => {
+              exitCode = code;
+              throw new Error("EXIT");
+            },
+          });
+        },
+        /EXIT/,
+      );
+
+      assert.ok(helpOutput.includes("test"));
+      assert.equal(exitCode, 0);
+    });
+
+    it("should support help object configuration", () => {
+      const parser = option("--verbose");
+      let helpOutput = "";
+      let exitCode: number | undefined;
+
+      assert.throws(
+        () => {
+          run(parser, {
+            args: ["--help"],
+            programName: "test",
+            help: { option: true },
+            stdout: (text) => {
+              helpOutput += `${text}\n`;
+            },
+            onExit: (code) => {
+              exitCode = code;
+              throw new Error("EXIT");
+            },
+          });
+        },
+        /EXIT/,
+      );
+
+      assert.ok(helpOutput.includes("--verbose"));
+      assert.equal(exitCode, 0);
+    });
   });
 
   describe("version functionality", () => {
@@ -1390,6 +1444,38 @@ describe("runSync with contexts", () => {
     // Contexts should not be called for early exits
     assert.equal(annotationsCallCount, 0);
   });
+
+  it("should support Program input with contexts", () => {
+    const contextKey = Symbol.for("@test/runsync-program-context");
+    const context: SourceContext = {
+      id: contextKey,
+      getAnnotations() {
+        return { [contextKey]: { value: true } };
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+    const prog: Program<"sync", { name: string }> = {
+      parser,
+      metadata: {
+        name: "my-sync-program",
+        version: "1.0.0",
+      },
+    };
+
+    const result = runSync(
+      prog,
+      {
+        args: [],
+        contexts: [context],
+        envName: "dev",
+      } as RunOptions & { readonly envName: string },
+    );
+
+    assert.deepEqual(result, { name: "default" });
+  });
 });
 
 describe("runAsync with contexts", () => {
@@ -1440,5 +1526,30 @@ describe("runAsync with contexts", () => {
     });
 
     assert.ok(disposed);
+  });
+
+  it("should pass extra context options through runImpl", async () => {
+    const key = Symbol.for("@test/runasync-extra-options");
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        return { [key]: { value: true } };
+      },
+    };
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    const result = await runAsync(
+      parser,
+      {
+        args: [],
+        programName: "test",
+        contexts: [context],
+        profile: "local",
+      } as RunOptions & { readonly profile: string },
+    );
+
+    assert.deepEqual(result, { name: "default" });
   });
 });
