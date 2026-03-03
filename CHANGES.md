@@ -104,6 +104,12 @@ To be released.
     evaluates a fresh regular expression per parse, so repeated calls are
     deterministic and no longer mutate the caller's `pattern.lastIndex`.
 
+ -  Fixed option-value completion in `option()` so value-position suggestions
+    no longer leak option-name candidates when the value prefix starts with
+    `-` (for example, after `--mode --`).  This restores monotonic
+    prefix-filtering behavior for value suggestions and aligns with parse
+    context (option name consumed ⇒ value expected).
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115

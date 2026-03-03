@@ -673,6 +673,18 @@ describe("option", () => {
       assert.deepEqual(suggestions, [{ kind: "literal", text: "prod" }]);
     });
 
+    it("should not suggest option names while completing a value", () => {
+      const parser = option("--mode", choice(["dev", "prod", "preview"]));
+      const suggestions = Array.from(parser.suggest({
+        buffer: ["--mode"],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "--"));
+
+      assert.deepEqual(suggestions, []);
+    });
+
     it("should fall back file suggestions to literal in --opt=value format", () => {
       const parser = option("--file", fileSuggestingParser());
       const suggestions = Array.from(parser.suggest({
@@ -733,6 +745,44 @@ describe("option", () => {
         text: "--log=*.log",
         description: undefined,
       }]);
+    });
+
+    it("should not suggest async option names while completing a value", async () => {
+      const asyncModeParser: ValueParser<"async", string> = {
+        $mode: "async",
+        metavar: "MODE",
+        parse(input: string): Promise<ValueParserResult<string>> {
+          return Promise.resolve({ success: true, value: input });
+        },
+        format(value: string): string {
+          return value;
+        },
+        suggest(prefix: string): AsyncIterable<Suggestion> {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              for (const candidate of ["dev", "prod"] as const) {
+                if (candidate.startsWith(prefix)) {
+                  yield { kind: "literal", text: candidate };
+                }
+              }
+            },
+          };
+        },
+      };
+      const parser = option("--mode", asyncModeParser);
+      const suggestions: Suggestion[] = [];
+      for await (
+        const suggestion of parser.suggest({
+          buffer: ["--mode"],
+          state: parser.initialState,
+          usage: parser.usage,
+          optionsTerminated: false,
+        }, "--")
+      ) {
+        suggestions.push(suggestion);
+      }
+
+      assert.deepEqual(suggestions, []);
     });
   });
 

@@ -357,10 +357,16 @@ function* suggestOptionSync<T>(
       }
     }
   } else {
+    const expectingValue = context.buffer.length > 0 &&
+      (optionNames as readonly string[]).includes(
+        context.buffer[context.buffer.length - 1],
+      );
+
     // If the prefix looks like an option prefix, suggest matching option names
     if (
-      prefix.startsWith("--") || prefix.startsWith("-") ||
-      prefix.startsWith("/")
+      !expectingValue &&
+      (prefix.startsWith("--") || prefix.startsWith("-") ||
+        prefix.startsWith("/"))
     ) {
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
@@ -518,10 +524,16 @@ async function* suggestOptionAsync<T>(
       }
     }
   } else {
+    const expectingValue = context.buffer.length > 0 &&
+      (optionNames as readonly string[]).includes(
+        context.buffer[context.buffer.length - 1],
+      );
+
     // If the prefix looks like an option prefix, suggest matching option names
     if (
-      prefix.startsWith("--") || prefix.startsWith("-") ||
-      prefix.startsWith("/")
+      !expectingValue &&
+      (prefix.startsWith("--") || prefix.startsWith("-") ||
+        prefix.startsWith("/"))
     ) {
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
