@@ -110,6 +110,11 @@ To be released.
     prefix-filtering behavior for value suggestions and aligns with parse
     context (option name consumed ⇒ value expected).
 
+ -  Fixed async `runParser()` help handling for `command --help` validation.
+    In the async validation path, `displayHelp` was referenced before
+    initialization, which could throw `ReferenceError` instead of showing help.
+    `displayHelp` is now defined before async validation is invoked.
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115

@@ -1794,6 +1794,67 @@ export function runParser<
           return onError(1);
         };
 
+        // Helper function to display help and return
+        const displayHelp = (doc: DocPage | undefined): InferValue<TParser> => {
+          if (doc != null) {
+            // Augment the doc page with provided options
+            // But if showing help for a specific meta-command or subcommand,
+            // don't override its description with run-level docs
+            const isMetaCommandHelp = (requestedCommand != null &&
+              completionCommandNames.includes(requestedCommand)) ||
+              (requestedCommand != null &&
+                helpCommandNames.includes(requestedCommand)) ||
+              (requestedCommand != null &&
+                versionCommandNames.includes(requestedCommand));
+            const isSubcommandHelp = classified.commands.length > 0;
+            // Check if this is top-level help (empty commands array means top-level)
+            const isTopLevel = !isSubcommandHelp;
+            // For root-level help, run-level docs (brief/description/footer)
+            // take priority over parser-level docs, with parser-level as
+            // fallback.
+            // For subcommand/meta-command help, run-level brief and
+            // description must NOT bleed into the subcommand's help page —
+            // only the subcommand's own brief (shown at the top, before
+            // Usage) and description (shown after Usage) are displayed.
+            // run-level footer still applies as a fallback for subcommands
+            // so that operators can add global footer notes across all help
+            // pages.
+            const shouldOverride = !isMetaCommandHelp && !isSubcommandHelp;
+            const augmentedDoc = {
+              ...doc,
+              brief: shouldOverride ? (brief ?? doc.brief) : doc.brief,
+              description: shouldOverride
+                ? (description ?? doc.description)
+                : doc.description,
+              // Only show examples, author, and bugs for top-level help
+              examples: isTopLevel && !isMetaCommandHelp
+                ? (examples ?? doc.examples)
+                : undefined,
+              author: isTopLevel && !isMetaCommandHelp
+                ? (author ?? doc.author)
+                : undefined,
+              bugs: isTopLevel && !isMetaCommandHelp
+                ? (bugs ?? doc.bugs)
+                : undefined,
+              footer: shouldOverride
+                ? (footer ?? doc.footer)
+                : (doc.footer ?? footer),
+            };
+            stdout(formatDocPage(programName, augmentedDoc, {
+              colors,
+              maxWidth,
+              showDefault,
+              showChoices,
+              sectionOrder,
+            }));
+          }
+          try {
+            return onHelp(0);
+          } catch {
+            return (onHelp as (() => THelp))();
+          }
+        };
+
         // Validate that the commands before --help are actually valid
         // by attempting to parse them step by step against the parser
         if (classified.commands.length > 0) {
@@ -1867,67 +1928,6 @@ export function runParser<
             return reportInvalidHelpCommand(validationResult);
           }
         }
-
-        // Helper function to display help and return
-        const displayHelp = (doc: DocPage | undefined): InferValue<TParser> => {
-          if (doc != null) {
-            // Augment the doc page with provided options
-            // But if showing help for a specific meta-command or subcommand,
-            // don't override its description with run-level docs
-            const isMetaCommandHelp = (requestedCommand != null &&
-              completionCommandNames.includes(requestedCommand)) ||
-              (requestedCommand != null &&
-                helpCommandNames.includes(requestedCommand)) ||
-              (requestedCommand != null &&
-                versionCommandNames.includes(requestedCommand));
-            const isSubcommandHelp = classified.commands.length > 0;
-            // Check if this is top-level help (empty commands array means top-level)
-            const isTopLevel = !isSubcommandHelp;
-            // For root-level help, run-level docs (brief/description/footer)
-            // take priority over parser-level docs, with parser-level as
-            // fallback.
-            // For subcommand/meta-command help, run-level brief and
-            // description must NOT bleed into the subcommand's help page —
-            // only the subcommand's own brief (shown at the top, before
-            // Usage) and description (shown after Usage) are displayed.
-            // run-level footer still applies as a fallback for subcommands
-            // so that operators can add global footer notes across all help
-            // pages.
-            const shouldOverride = !isMetaCommandHelp && !isSubcommandHelp;
-            const augmentedDoc = {
-              ...doc,
-              brief: shouldOverride ? (brief ?? doc.brief) : doc.brief,
-              description: shouldOverride
-                ? (description ?? doc.description)
-                : doc.description,
-              // Only show examples, author, and bugs for top-level help
-              examples: isTopLevel && !isMetaCommandHelp
-                ? (examples ?? doc.examples)
-                : undefined,
-              author: isTopLevel && !isMetaCommandHelp
-                ? (author ?? doc.author)
-                : undefined,
-              bugs: isTopLevel && !isMetaCommandHelp
-                ? (bugs ?? doc.bugs)
-                : undefined,
-              footer: shouldOverride
-                ? (footer ?? doc.footer)
-                : (doc.footer ?? footer),
-            };
-            stdout(formatDocPage(programName, augmentedDoc, {
-              colors,
-              maxWidth,
-              showDefault,
-              showChoices,
-              sectionOrder,
-            }));
-          }
-          try {
-            return onHelp(0);
-          } catch {
-            return (onHelp as (() => THelp))();
-          }
-        };
 
         // Get doc page - may return Promise for async parsers
         const docOrPromise = getDocPage(

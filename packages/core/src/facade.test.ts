@@ -6976,6 +6976,58 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
+  it("classifyParseResult normalizes missing completionData fields", () => {
+    const parser: Parser<
+      "sync",
+      {
+        readonly help: false;
+        readonly version: false;
+        readonly completion: true;
+        readonly completionData: {
+          readonly shell: undefined;
+          readonly args: undefined;
+        };
+        readonly result: Record<PropertyKey, never>;
+      },
+      undefined
+    > = {
+      $mode: "sync",
+      $valueType: [] as never,
+      $stateType: [] as never,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [], state: undefined },
+          consumed: [...context.buffer],
+        };
+      },
+      complete() {
+        return {
+          success: true as const,
+          value: {
+            help: false as const,
+            version: false as const,
+            completion: true as const,
+            completionData: { shell: undefined, args: undefined },
+            result: {},
+          },
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    assert.throws(
+      () => runParser(parser, "test", ["placeholder"], {}),
+      /Completion should be handled by early return/,
+    );
+  });
+
   it("needsEarlyExit does not trigger for non-matching completion option args", () => {
     const parser = object({ name: argument(string()) });
     const result = runParser(parser, "test", ["Alice"], {
@@ -7153,6 +7205,95 @@ describe("branch coverage: facade.ts edge cases", () => {
     });
 
     assert.equal(result, "handled");
+    assert.ok(stderrOutput.includes("Usage:"));
+    assert.ok(stderrOutput.includes("Error:"));
+  });
+
+  it("uses async help-command validation path before showing help", async () => {
+    const asyncParser: Parser<"async", string, undefined> = {
+      $mode: "async",
+      $valueType: [] as never,
+      $stateType: [] as never,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head == null || head !== "ok") {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Unknown command.`,
+            consumed: 0,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: tail, state: undefined },
+          consumed: [head],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "done" });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    let shown = false;
+    const result = await runParser(asyncParser, "myapp", ["ok", "--help"], {
+      help: {
+        option: true,
+        onShow: () => {
+          shown = true;
+          return "help-shown";
+        },
+      },
+      stdout: () => {},
+      stderr: () => {},
+      onError: () => "error",
+    });
+
+    assert.equal(result, "help-shown");
+    assert.ok(shown);
+  });
+
+  it("reports invalid async help command path before showing help", async () => {
+    const asyncParser: Parser<"async", string, undefined> = {
+      $mode: "async",
+      $valueType: [] as never,
+      $stateType: [] as never,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Unknown command.`,
+          consumed: 0,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "done" });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    let stderrOutput = "";
+    const result = await runParser(asyncParser, "myapp", ["bad", "--help"], {
+      help: { option: true },
+      stderr: (text) => {
+        stderrOutput += text;
+      },
+      stdout: () => {},
+      onError: () => "invalid-help",
+    });
+
+    assert.equal(result, "invalid-help");
     assert.ok(stderrOutput.includes("Usage:"));
     assert.ok(stderrOutput.includes("Error:"));
   });
