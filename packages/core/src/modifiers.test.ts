@@ -1,8 +1,12 @@
 import { longestMatch, object } from "@optique/core/constructs";
 import {
+  createDependencySourceState,
+  createPendingDependencySourceState,
   dependency,
   dependencyId,
   isDependencySourceState,
+  transformsDependencyValueMarker,
+  wrappedDependencySourceMarker,
 } from "@optique/core/dependency";
 import {
   envVar,
@@ -3159,5 +3163,162 @@ describe("branch coverage: modifiers edge cases", () => {
       asyncWd.suggest(ctx, "--") as AsyncIterable<Suggestion>,
     );
     assert.ok(Array.isArray(suggestions));
+  });
+
+  it("withDefault: transformed async parser keeps dependency state", async () => {
+    const depId = Symbol("dep");
+    const transformedAsyncParser = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [transformsDependencyValueMarker]: true as const,
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No match.`,
+        }),
+      complete: () =>
+        Promise.resolve(
+          createDependencySourceState(
+            { success: true as const, value: "inner" },
+            depId,
+          ),
+        ),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = withDefault(
+      transformedAsyncParser as unknown as ReturnType<typeof option>,
+      "fallback",
+    );
+
+    const result = await parser.complete(undefined);
+    assert.ok(isDependencySourceState(result));
+    if (isDependencySourceState(result) && result.result.success) {
+      assert.equal(result.result.value, "fallback");
+    }
+  });
+
+  it("withDefault: transformed async parser without dependency returns default", async () => {
+    const transformedAsyncParser = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [transformsDependencyValueMarker]: true as const,
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No match.`,
+        }),
+      complete: () =>
+        Promise.resolve({ success: true as const, value: "inner" }),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = withDefault(
+      transformedAsyncParser as unknown as ReturnType<typeof option>,
+      () => "fallback",
+    );
+
+    const result = await parser.complete(undefined);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "fallback");
+    }
+  });
+
+  it("withDefault: wrapped dependency source uses default dependency value", () => {
+    const pending = createPendingDependencySourceState(Symbol("wrapped-dep"));
+    const wrappedParser = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [wrappedDependencySourceMarker]: pending,
+      parse: () => ({
+        success: false as const,
+        consumed: 0,
+        error: message`No match.`,
+      }),
+      complete: () => ({ success: true as const, value: "inner" }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = withDefault(
+      wrappedParser as unknown as ReturnType<typeof option>,
+      "fallback",
+    );
+
+    const result = parser.complete(undefined);
+    assert.ok(isDependencySourceState(result));
+    if (isDependencySourceState(result) && result.result.success) {
+      assert.equal(result.result.value, "fallback");
+    }
+  });
+
+  it("withDefault: pending dependency state in async transform uses default", async () => {
+    const depId = Symbol("pending-dep");
+    const transformedAsyncParser = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [transformsDependencyValueMarker]: true as const,
+      parse: () =>
+        Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`No match.`,
+        }),
+      complete: () =>
+        Promise.resolve(
+          createDependencySourceState(
+            { success: true as const, value: "inner" },
+            depId,
+          ),
+        ),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = withDefault(
+      transformedAsyncParser as unknown as ReturnType<typeof option>,
+      "fallback",
+    );
+    const pending = createPendingDependencySourceState(depId);
+
+    const result = await parser.complete([pending] as unknown as [undefined]);
+    assert.ok(isDependencySourceState(result));
+    if (isDependencySourceState(result) && result.result.success) {
+      assert.equal(result.result.value, "fallback");
+    }
+  });
+
+  it("withDefault: pending dependency in sync parser preserves dependency id", () => {
+    const depId = Symbol("pending-sync");
+    const baseParser = option("--name", string());
+    const parser = withDefault(baseParser, "fallback");
+    const pending = createPendingDependencySourceState(depId);
+
+    const result = parser.complete([pending] as unknown as [undefined]);
+    assert.ok(isDependencySourceState(result));
+    if (isDependencySourceState(result)) {
+      assert.equal(result[dependencyId], depId);
+      assert.ok(result.result.success);
+      if (result.result.success) {
+        assert.equal(result.result.value, "fallback");
+      }
+    }
   });
 });
