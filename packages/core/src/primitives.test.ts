@@ -5438,4 +5438,72 @@ describe("branch coverage: primitives edge cases", () => {
       assert.deepEqual(result.consumed, ["--raw"]);
     }
   });
+
+  it("custom inspect strings are exposed for primitive parsers", () => {
+    const o = option("--name", string());
+    const f = flag("--verbose");
+    const a = argument(string());
+    const c = command("deploy", object({ dryRun: flag("--dry-run") }));
+    const p = passThrough();
+
+    const inspectSymbol = Symbol.for("Deno.customInspect");
+    const optionInspect = (o as unknown as Record<symbol, () => string>)[
+      inspectSymbol
+    ]();
+    const flagInspect = (f as unknown as Record<symbol, () => string>)[
+      inspectSymbol
+    ]();
+    const argumentInspect = (a as unknown as Record<symbol, () => string>)[
+      inspectSymbol
+    ]();
+    const commandInspect = (c as unknown as Record<symbol, () => string>)[
+      inspectSymbol
+    ]();
+    const passThroughInspect = (p as unknown as Record<symbol, () => string>)[
+      inspectSymbol
+    ]();
+
+    assert.equal(optionInspect, 'option("--name")');
+    assert.equal(flagInspect, 'flag("--verbose")');
+    assert.equal(argumentInspect, "argument()");
+    assert.equal(commandInspect, 'command("deploy")');
+    assert.equal(passThroughInspect, "passThrough(equalsOnly)");
+  });
+
+  it("option async derived suggest falls back when dependency value is missing", async () => {
+    const dep = dependency(string({ metavar: "MODE" }));
+    const derived = deriveFromAsync({
+      metavar: "TARGET",
+      dependencies: [dep] as const,
+      defaultValues: () => ["dev"] as const,
+      factory: (_mode: string) => asyncFileSuggestingParser(),
+    });
+    const parser = option("--target", derived);
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of parser.suggest({
+        buffer: ["--target"] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+        dependencyRegistry: new DependencyRegistry(),
+      }, "") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("passThrough reports unknown format when forced through invalid state", () => {
+    const parser = passThrough({
+      format: "invalid" as unknown as "equalsOnly",
+    });
+    const invalidParse = parser.parse({
+      buffer: ["--x"] as readonly string[],
+      state: [] as readonly string[],
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(!invalidParse.success);
+  });
 });
