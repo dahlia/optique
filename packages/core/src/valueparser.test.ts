@@ -8635,6 +8635,76 @@ describe("branch coverage regressions", () => {
     const badMappedRange = ipv6Parser.parse("::ffff:192.0.2.999");
     assert.ok(!badMappedRange.success);
   });
+
+  it("covers rethrow branches for non-standard constructor errors", () => {
+    const originalBigInt = globalThis.BigInt;
+    const originalLocale = Intl.Locale;
+
+    try {
+      (globalThis as unknown as { BigInt: typeof BigInt }).BigInt = ((
+        _input: string,
+      ) => {
+        throw new TypeError("bigint boom");
+      }) as unknown as typeof BigInt;
+
+      Object.defineProperty(Intl, "Locale", {
+        value: class FakeLocale {
+          constructor(_input: string) {
+            throw new TypeError("locale boom");
+          }
+        },
+        configurable: true,
+      });
+
+      const bigintParser = integer({ type: "bigint" });
+      assert.throws(
+        () => bigintParser.parse("123"),
+        TypeError,
+        "bigint boom",
+      );
+
+      const bigintPortParser = port({ type: "bigint" });
+      assert.throws(
+        () => bigintPortParser.parse("8080"),
+        TypeError,
+        "bigint boom",
+      );
+
+      const localeParser = locale();
+      assert.throws(
+        () => localeParser.parse("en-US"),
+        TypeError,
+        "locale boom",
+      );
+    } finally {
+      (globalThis as unknown as { BigInt: typeof BigInt }).BigInt =
+        originalBigInt;
+      Object.defineProperty(Intl, "Locale", {
+        value: originalLocale,
+        configurable: true,
+      });
+    }
+  });
+
+  it("covers number-choice custom invalidChoice callback for numeric choices", () => {
+    const parser = choice([10, 20], {
+      errors: {
+        invalidChoice: (input, choices) =>
+          message`bad ${input}; valid count ${text(String(choices.length))}`,
+      },
+    });
+
+    const result = parser.parse("abc");
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, [
+        { type: "text", text: "bad " },
+        { type: "value", value: "abc" },
+        { type: "text", text: "; valid count " },
+        { type: "text", text: "2" },
+      ]);
+    }
+  });
 });
 
 // cSpell: ignore résumé phonebk toolongcode hanidec jpan hebr arabext
