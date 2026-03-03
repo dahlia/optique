@@ -7146,6 +7146,108 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(result.success);
   });
 
+  it("object() sync complete handles explicit pending state (Phase 1 Case 1)", () => {
+    const dep = createPendingDependencySourceState(Symbol("obj-sync-case1"));
+    const source = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: (context: ParserContext<unknown>) => ({
+        success: true as const,
+        next: context,
+        consumed: [],
+      }),
+      complete: () =>
+        createDependencySourceState(
+          { success: true as const, value: "sync-case1" },
+          dep[dependencyId],
+        ),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, unknown>;
+    const p = object({ v: source });
+
+    const completed = p.complete({ v: [dep] } as never);
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.equal(completed.value.v, "sync-case1");
+    }
+  });
+
+  it("object() sync complete handles undefined with pending initialState (Phase 1 Case 2)", () => {
+    const dep = createPendingDependencySourceState(Symbol("obj-sync-case2"));
+    const source = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: dep,
+      parse: (context: ParserContext<unknown>) => ({
+        success: true as const,
+        next: context,
+        consumed: [],
+      }),
+      complete: () =>
+        createDependencySourceState(
+          { success: true as const, value: "sync-case2" },
+          dep[dependencyId],
+        ),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, unknown>;
+    const p = object({ v: source });
+
+    const completed = p.complete({ v: undefined } as never);
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.equal(completed.value.v, "sync-case2");
+    }
+  });
+
+  it("object() async complete handles explicit pending and pending initialState", async () => {
+    const dep = createPendingDependencySourceState(Symbol("obj-async-cases"));
+    const source = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: dep,
+      parse: (context: ParserContext<unknown>) =>
+        Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve(
+          createDependencySourceState(
+            { success: true as const, value: "async-case" },
+            dep[dependencyId],
+          ),
+        ),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, unknown>;
+    const p = object({ v: source });
+
+    const fromExplicit = await p.complete({ v: [dep] } as never);
+    assert.ok(fromExplicit.success);
+    if (fromExplicit.success) {
+      assert.equal(fromExplicit.value.v, "async-case");
+    }
+
+    const fromInitial = await p.complete({ v: undefined } as never);
+    assert.ok(fromInitial.success);
+    if (fromInitial.success) {
+      assert.equal(fromInitial.value.v, "async-case");
+    }
+  });
+
   it("object() complete extracts pre-completed dependency failure (sync)", () => {
     const dep = createPendingDependencySourceState(Symbol("obj-sync-dep"));
     const failingWrapped = {
