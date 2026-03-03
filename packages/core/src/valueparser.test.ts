@@ -8603,6 +8603,38 @@ describe("branch coverage regressions", () => {
     assert.ok(ipv6Parser.parse("2001:0:0:1:0:0:0:1").success);
     assert.equal(ipv6Parser.format("::1"), "IPV6");
   });
+
+  it("covers ip/cidr format and ipv6 normalization edge branches", () => {
+    const ipParser = ip({
+      errors: {
+        invalidIP: (input) => message`invalid ip literal: ${input}`,
+      },
+    });
+    const ipFailure = ipParser.parse("not-an-ip");
+    assert.ok(!ipFailure.success);
+    assert.equal(ipParser.format("203.0.113.10"), "IP");
+
+    const cidrParser = cidr();
+    const cidrResult = cidrParser.parse("192.0.2.0/24");
+    assert.ok(cidrResult.success);
+    assert.equal(
+      cidrParser.format({ address: "192.0.2.0", prefix: 24, version: 4 }),
+      "CIDR",
+    );
+
+    const ipv6Parser = ipv6();
+    const noCompression = ipv6Parser.parse("2001:db8:1:2:3:4:5:6");
+    assert.ok(noCompression.success);
+    if (noCompression.success) {
+      assert.equal(noCompression.value, "2001:db8:1:2:3:4:5:6");
+    }
+
+    const badMappedLength = ipv6Parser.parse("::ffff:192.0.2");
+    assert.ok(!badMappedLength.success);
+
+    const badMappedRange = ipv6Parser.parse("::ffff:192.0.2.999");
+    assert.ok(!badMappedRange.success);
+  });
 });
 
 // cSpell: ignore résumé phonebk toolongcode hanidec jpan hebr arabext
