@@ -186,6 +186,27 @@ describe("path", () => {
       }
     });
 
+    it("should use default notADirectory branch when no custom error exists", () => {
+      const testDir = createTempDir();
+      try {
+        const testFile = join(testDir, "plain-file.txt");
+        writeFileSync(testFile, "content");
+
+        const parser = path({ mustExist: true, type: "directory" });
+        const result = parser.parse(testFile);
+
+        assert.equal(result.success, false);
+        if (!result.success) {
+          const rendered = formatMessage(result.error);
+          assert.match(rendered, /Expected a directory/);
+          assert.match(rendered, /is not a directory/);
+          assert.match(rendered, /plain-file\.txt/);
+        }
+      } finally {
+        cleanupDir(testDir);
+      }
+    });
+
     it("should accept either file or directory when type is either", () => {
       const testDir = createTempDir();
       try {

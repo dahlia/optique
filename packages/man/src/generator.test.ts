@@ -10,6 +10,7 @@ import { argument, command, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { defineProgram } from "@optique/core/program";
+import type { Parser } from "@optique/core/parser";
 
 describe("generateManPage()", () => {
   it("generates man page from simple option parser", () => {
@@ -236,6 +237,40 @@ describe("generateManPageSync()", () => {
     assert.ok(typeof result === "string");
     assert.ok(result.includes(".TH MYAPP 1"));
   });
+
+  it("falls back to empty doc page when getDocPageSync returns undefined", () => {
+    const parser: Parser<"sync", string, null> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`stop.`,
+        };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = generateManPageSync(parser, {
+      name: "fallback",
+      section: 1,
+    });
+    assert.ok(result.includes(".TH FALLBACK 1"));
+    assert.ok(result.includes(".SH NAME"));
+  });
 });
 
 describe("generateManPageAsync()", () => {
@@ -251,6 +286,79 @@ describe("generateManPageAsync()", () => {
 
     assert.ok(typeof result === "string");
     assert.ok(result.includes(".TH MYAPP 1"));
+  });
+
+  it("falls back to empty doc page when getDocPageAsync returns undefined", async () => {
+    const parser: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`stop.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator]() {},
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = await generateManPageAsync(parser, {
+      name: "fallback-async",
+      section: 1,
+    });
+    assert.ok(result.includes(".TH FALLBACK-ASYNC 1"));
+    assert.ok(result.includes(".SH NAME"));
+  });
+});
+
+describe("generateManPage() mode dispatch", () => {
+  it("uses async branch when parser mode is async", async () => {
+    const parser: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`stop.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator]() {},
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = await generateManPage(parser, {
+      name: "dispatch",
+      section: 1,
+    });
+    assert.ok(result.includes(".TH DISPATCH 1"));
   });
 });
 
