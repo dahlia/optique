@@ -10,6 +10,7 @@ import {
   optionName,
   optionNames,
   text,
+  url,
   value,
   values,
 } from "@optique/core/message";
@@ -180,6 +181,14 @@ describe("formatMessageAsRoff()", () => {
     assert.equal(formatMessageAsRoff(msg), "\\fBmyapp \\-\\-help\\fR");
   });
 
+  it("formats url in italic with escaped hyphens", () => {
+    const msg = [url("https://optique.dev/cli-guide")];
+    assert.equal(
+      formatMessageAsRoff(msg),
+      "\\fIhttps://optique.dev/cli\\-guide\\fR",
+    );
+  });
+
   it("formats complex message with multiple terms", () => {
     const msg = message`Use ${optionName("--config")} ${
       metavar("FILE")
@@ -241,6 +250,16 @@ describe("formatMessageAsRoff()", () => {
     assert.equal(
       formatMessageAsRoff(msg),
       'Run \\fBmyapp\\fR with \\fB\\-\\-port\\fR \\fINUM\\fR. Default is "8080". See \\fBPORT\\fR.',
+    );
+  });
+
+  it("throws TypeError for unknown message term type", () => {
+    const invalid = [{ type: "unknown" }] as unknown as Parameters<
+      typeof formatMessageAsRoff
+    >[0];
+    assert.throws(
+      () => formatMessageAsRoff(invalid),
+      /Unknown message term type: unknown/,
     );
   });
 });

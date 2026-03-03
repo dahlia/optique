@@ -117,6 +117,14 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "[...]");
   });
 
+  it("throws for unknown usage term type", () => {
+    const invalid = { type: "unknown" } as unknown as UsageTerm;
+    assert.throws(
+      () => formatUsageTermAsRoff(invalid),
+      /Unknown usage term type: unknown/,
+    );
+  });
+
   it("skips hidden terms", () => {
     const term: UsageTerm = {
       type: "argument",
@@ -473,6 +481,30 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("General error."));
   });
 
+  it("generates FILES section", () => {
+    const page: DocPage = {
+      sections: [],
+    };
+
+    const filesSection: DocSection = {
+      entries: [
+        {
+          term: { type: "argument", metavar: "/etc/myapp.conf" },
+          description: message`Primary configuration file.`,
+        },
+      ],
+    };
+
+    const options: ManPageOptions = {
+      ...minimalOptions,
+      files: filesSection,
+    };
+
+    const result = formatDocPageAsMan(page, options);
+    assert.ok(result.includes(".SH FILES"));
+    assert.ok(result.includes("Primary configuration file."));
+  });
+
   it("includes footer content", () => {
     const page: DocPage = {
       sections: [],
@@ -528,6 +560,51 @@ describe("formatDocPageAsMan()", () => {
 
     assert.ok(result.includes("Port to listen on."));
     assert.ok(result.includes("8080"));
+  });
+
+  it("renders default when description is omitted", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--mode"], metavar: "MODE" },
+          default: message`safe`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes(".SH OPTIONS"));
+    assert.ok(result.includes("\\fB\\-\\-mode\\fR \\fIMODE\\fR"));
+    assert.ok(result.includes("[safe]"));
+  });
+
+  it("supports usage formatter fallback for doc entry terms", () => {
+    const section: DocSection = {
+      title: "Examples",
+      entries: [
+        {
+          term: {
+            type: "optional",
+            terms: [{ type: "argument", metavar: "X" }],
+          },
+          description: message`Optional value.`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes(".SH EXAMPLES"));
+    assert.ok(result.includes("[\\fIX\\fR]"));
+    assert.ok(result.includes("Optional value."));
   });
 
   it("uses different section numbers", () => {

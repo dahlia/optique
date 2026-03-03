@@ -188,6 +188,92 @@ describe("parser.ts coverage branches", () => {
     assert.equal(getAnnotations(asyncDocState)?.[annotation], "async-doc");
   });
 
+  it("injects annotations when initialState is a primitive", async () => {
+    const annotation = Symbol("primitive-init");
+    let syncSuggestState: unknown;
+    let asyncSuggestState: unknown;
+    let syncDocState: unknown;
+    let asyncDocState: unknown;
+
+    const syncParser: Parser<"sync", "ok", number> = {
+      $valueType: [] as readonly "ok"[],
+      $stateType: [] as readonly number[],
+      $mode: "sync",
+      priority: 0,
+      usage: [],
+      initialState: 1,
+      parse(context) {
+        return {
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        };
+      },
+      complete() {
+        return { success: true as const, value: "ok" };
+      },
+      suggest(context) {
+        syncSuggestState = context.state;
+        return [];
+      },
+      getDocFragments(state) {
+        syncDocState = state.kind === "available" ? state.state : undefined;
+        return { fragments: [] };
+      },
+    };
+
+    const asyncParser: Parser<"async", "ok", number> = {
+      $valueType: [] as readonly "ok"[],
+      $stateType: [] as readonly number[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: 2,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: [] },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      suggest(context) {
+        asyncSuggestState = context.state;
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {},
+        };
+      },
+      getDocFragments(state) {
+        asyncDocState = state.kind === "available" ? state.state : undefined;
+        return { fragments: [] };
+      },
+    };
+
+    suggestSync(syncParser, [""], { annotations: { [annotation]: "sync" } });
+    await suggestAsync(asyncParser, [""], {
+      annotations: { [annotation]: "async" },
+    });
+    getDocPageSync(syncParser, [], {
+      annotations: { [annotation]: "doc-sync" },
+    });
+    await getDocPageAsync(asyncParser, [], {
+      annotations: { [annotation]: "doc-async" },
+    });
+    await getDocPageAsync(syncParser, [], {
+      annotations: { [annotation]: "doc-sync-async-wrapper" },
+    });
+
+    assert.equal(getAnnotations(syncSuggestState)?.[annotation], "sync");
+    assert.equal(getAnnotations(asyncSuggestState)?.[annotation], "async");
+    assert.equal(
+      getAnnotations(syncDocState)?.[annotation],
+      "doc-sync-async-wrapper",
+    );
+    assert.equal(getAnnotations(asyncDocState)?.[annotation], "doc-async");
+  });
+
   it("handles unresolved nested exclusive terms and extra args in getDocPage", () => {
     const parser = or(
       or(command("alpha", constant("a")), command("beta", constant("b"))),
