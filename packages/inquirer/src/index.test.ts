@@ -1003,6 +1003,220 @@ describe("prompt()", () => {
       assert.ok(names.includes("checkbox"));
     });
 
+    it("covers prompt config spreads when optional fields are absent", async () => {
+      const calls: Array<{ name: string; config: Record<string, unknown> }> =
+        [];
+      await withPromptFunctionsOverride(
+        {
+          confirm: (config: Record<string, unknown>) => {
+            calls.push({ name: "confirm", config });
+            return true;
+          },
+          number: (config: Record<string, unknown>) => {
+            calls.push({ name: "number", config });
+            return 1;
+          },
+          input: (config: Record<string, unknown>) => {
+            calls.push({ name: "input", config });
+            return "v";
+          },
+          password: (config: Record<string, unknown>) => {
+            calls.push({ name: "password", config });
+            return "v";
+          },
+          editor: (config: Record<string, unknown>) => {
+            calls.push({ name: "editor", config });
+            return "v";
+          },
+          select: (config: Record<string, unknown>) => {
+            calls.push({ name: "select", config });
+            return "x";
+          },
+          rawlist: (config: Record<string, unknown>) => {
+            calls.push({ name: "rawlist", config });
+            return "x";
+          },
+          expand: (config: Record<string, unknown>) => {
+            calls.push({ name: "expand", config });
+            return "x";
+          },
+          checkbox: (config: Record<string, unknown>) => {
+            calls.push({ name: "checkbox", config });
+            return ["x"];
+          },
+        },
+        async () => {
+          await parseAsync(
+            prompt(fail<boolean>(), {
+              type: "confirm",
+              message: "confirm?",
+            }),
+            [],
+          );
+          await parseAsync(
+            prompt(fail<string>(), {
+              type: "input",
+              message: "input?",
+            }),
+            [],
+          );
+          await parseAsync(
+            prompt(fail<string>(), {
+              type: "password",
+              message: "password?",
+            }),
+            [],
+          );
+          await parseAsync(
+            prompt(fail<string>(), {
+              type: "editor",
+              message: "editor?",
+            }),
+            [],
+          );
+          await parseAsync(
+            prompt(fail<string>(), {
+              type: "rawlist",
+              message: "rawlist?",
+              choices: ["x"],
+            }),
+            [],
+          );
+          await parseAsync(
+            prompt(fail<string>(), {
+              type: "expand",
+              message: "expand?",
+              choices: [{ value: "x", key: "x" }],
+            }),
+            [],
+          );
+          await parseAsync(
+            prompt(fail<string>(), {
+              type: "select",
+              message: "select?",
+              choices: [{ value: "x" }],
+            }),
+            [],
+          );
+        },
+      );
+
+      const byName = new Map(calls.map((c) => [c.name, c.config]));
+      assert.ok(!("default" in (byName.get("confirm") ?? {})));
+      assert.ok(!("default" in (byName.get("input") ?? {})));
+      assert.ok(!("validate" in (byName.get("input") ?? {})));
+      assert.ok(!("mask" in (byName.get("password") ?? {})));
+      assert.ok(!("validate" in (byName.get("password") ?? {})));
+      assert.ok(!("default" in (byName.get("editor") ?? {})));
+      assert.ok(!("validate" in (byName.get("editor") ?? {})));
+      assert.ok(!("default" in (byName.get("rawlist") ?? {})));
+      assert.ok(!("default" in (byName.get("expand") ?? {})));
+      assert.ok(
+        !("name" in (((byName.get("select")?.choices as unknown[])?.[0] ??
+          {}) as object)),
+      );
+    });
+
+    it("covers suggest() state unwrapping branches", async () => {
+      const seen: unknown[] = [];
+      const inner: Parser<"async", string, { readonly tag: string }> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly { tag: string }[],
+        priority: 1,
+        usage: [],
+        initialState: { tag: "INIT" },
+        parse(context) {
+          const [head, ...tail] = context.buffer;
+          if (head == null) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`missing`,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            next: { ...context, state: { tag: head }, buffer: tail },
+            consumed: [head],
+          });
+        },
+        complete(state) {
+          return Promise.resolve({ success: true as const, value: state.tag });
+        },
+        suggest(context) {
+          seen.push(context.state);
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield { kind: "literal", text: "ok" };
+            },
+          };
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const wrapped = prompt(inner, {
+        type: "input",
+        message: "input?",
+        prompter: () => Promise.resolve("prompted"),
+      });
+
+      const parsedNoCli = await wrapped.parse({
+        buffer: [],
+        state: wrapped.initialState,
+        optionsTerminated: false,
+        usage: wrapped.usage,
+      });
+      assert.ok(parsedNoCli.success);
+      if (!parsedNoCli.success) return;
+      for await (
+        const _ of wrapped.suggest({
+          buffer: [],
+          state: parsedNoCli.next.state,
+          optionsTerminated: false,
+          usage: wrapped.usage,
+        }, "")
+      ) {
+        // consume suggestions
+      }
+
+      const parsedCli = await wrapped.parse({
+        buffer: ["CLI"],
+        state: wrapped.initialState,
+        optionsTerminated: false,
+        usage: wrapped.usage,
+      });
+      assert.ok(parsedCli.success);
+      if (!parsedCli.success) return;
+      for await (
+        const _ of wrapped.suggest({
+          buffer: [],
+          state: parsedCli.next.state,
+          optionsTerminated: false,
+          usage: wrapped.usage,
+        }, "")
+      ) {
+        // consume suggestions
+      }
+
+      for await (
+        const _ of wrapped.suggest({
+          buffer: [],
+          state: { tag: "RAW" } as unknown as never,
+          optionsTerminated: false,
+          usage: wrapped.usage,
+        }, "")
+      ) {
+        // consume suggestions
+      }
+
+      assert.ok(seen.some((s) => (s as { tag?: string }).tag === "INIT"));
+      assert.ok(seen.some((s) => (s as { tag?: string }).tag === "CLI"));
+      assert.ok(seen.some((s) => (s as { tag?: string }).tag === "RAW"));
+    });
+
     it("covers remaining annotation/suggest/default/number-undefined branches", async () => {
       await withPromptFunctionsOverride(
         {

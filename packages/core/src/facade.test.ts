@@ -7325,6 +7325,114 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(versionResult, "version-alias");
   });
 
+  it("builds multi-name help/version commands with visible primary names", () => {
+    const parser = object({ name: argument(string()) });
+
+    const helpResult = runParser(parser, "myapp", ["assist"], {
+      help: {
+        command: { names: ["help", "assist"], hidden: false },
+        onShow: () => "help-shown",
+      },
+      stdout: () => {},
+      stderr: () => {},
+    });
+    assert.equal(helpResult, "help-shown");
+
+    const versionResult = runParser(parser, "myapp", ["ver"], {
+      version: {
+        value: "1.2.3",
+        command: { names: ["version", "ver"], hidden: false },
+        onShow: () => "version-shown",
+      },
+      stdout: () => {},
+      stderr: () => {},
+    });
+    assert.equal(versionResult, "version-shown");
+  });
+
+  it("shows meta-command help without top-level examples/author/bugs", () => {
+    const parser = object({ name: argument(string()) });
+    let out = "";
+
+    const result = runParser(parser, "myapp", ["help", "completion"], {
+      help: { command: true, option: true, onShow: () => "shown" },
+      completion: { command: true },
+      examples: message`myapp --help`,
+      author: message`Author Name`,
+      bugs: message`https://example.invalid/bugs`,
+      stdout: (text) => {
+        out += text;
+      },
+      stderr: () => {},
+    });
+
+    assert.equal(result, "shown");
+    assert.ok(out.includes("completion"));
+  });
+
+  it("completion callback fallback works for early option-mode script generation", () => {
+    const parser = object({ verbose: option("--verbose") });
+    let script = "";
+    const result = runParser(parser, "myapp", ["--completion", "bash"], {
+      completion: {
+        option: true,
+        onShow: function () {
+          if (arguments.length > 0) {
+            throw new Error("arg-call rejected");
+          }
+          return "fallback-ok";
+        },
+      },
+      stdout: (text) => {
+        script += text;
+      },
+      stderr: () => {},
+    });
+
+    assert.equal(result, "fallback-ok");
+    assert.ok(script.length > 0);
+  });
+
+  it("aboveError=help with async parser uses promise doc path and usage fallback", async () => {
+    const asyncParser: Parser<"async", string, undefined> = {
+      $mode: "async",
+      $valueType: [] as unknown as readonly string[],
+      $stateType: [] as unknown as readonly undefined[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`bad input`,
+          consumed: 0,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    let stderrOutput = "";
+    const result = await runParser(asyncParser, "myapp", ["x"], {
+      aboveError: "help",
+      maxWidth: 40,
+      onError: () => "handled",
+      stderr: (text) => {
+        stderrOutput += text;
+      },
+      stdout: () => {},
+    });
+
+    assert.equal(result, "handled");
+    assert.ok(stderrOutput.includes("Usage:"));
+    assert.ok(stderrOutput.includes("Error: bad input"));
+  });
+
   it("does not treat help/version options after -- as meta options", () => {
     const parser = object({ name: argument(string()) });
     let stderrOutput = "";
