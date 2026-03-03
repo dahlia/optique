@@ -1248,4 +1248,75 @@ describe("git parsers", () => {
       }
     });
   });
+
+  describe("error branch coverage", () => {
+    it("should fail when process.cwd() is unavailable and dir is omitted", async () => {
+      const parser = gitBranch();
+      const processLike = process as unknown as {
+        cwd: (() => string) | undefined;
+      };
+      const originalCwd = processLike.cwd;
+      try {
+        processLike.cwd = undefined;
+        await assert.rejects(
+          async () => await parser.parse("main"),
+          /requires a `dir` option/,
+        );
+      } finally {
+        processLike.cwd = originalCwd;
+      }
+    });
+
+    it("should report ambiguous short SHA for commit and ref parsers", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const author = { name: "Test User", email: "test@example.com" };
+        const seen = new Map<string, string>();
+        let ambiguousPrefix: string | undefined;
+
+        for (let i = 0; i < 1200; i++) {
+          await fs.writeFile(join(testRepoDir, "test.txt"), `content-${i}`);
+          await isomorphicGit.add({
+            fs,
+            dir: testRepoDir,
+            filepath: "test.txt",
+          });
+          await isomorphicGit.commit({
+            fs,
+            dir: testRepoDir,
+            message: `commit ${i}`,
+            author,
+          });
+          const oid = await isomorphicGit.resolveRef({
+            fs,
+            dir: testRepoDir,
+            ref: "HEAD",
+          });
+          const prefix = oid.slice(0, 4);
+          const prev = seen.get(prefix);
+          if (prev != null && prev !== oid) {
+            ambiguousPrefix = prefix;
+            break;
+          }
+          seen.set(prefix, oid);
+        }
+
+        assert.ok(
+          ambiguousPrefix != null,
+          "Failed to find an ambiguous 4-char commit prefix.",
+        );
+        const prefix = ambiguousPrefix!;
+
+        const commitResult = await gitCommit({ dir: testRepoDir }).parse(
+          prefix,
+        );
+        assert.ok(!commitResult.success);
+
+        const refResult = await gitRef({ dir: testRepoDir }).parse(prefix);
+        assert.ok(!refResult.success);
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+  });
 });
