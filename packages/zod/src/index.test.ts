@@ -207,6 +207,21 @@ describe("zod()", () => {
         const parser = zod(z.string().ulid());
         assert.equal(parser.metavar, "ULID");
       });
+
+      it("should infer IPV4/IPV6/IP/JWT/EMOJI/BASE64 from internal checks", () => {
+        const make = (check: Record<string, unknown>) =>
+          zod({
+            _def: { type: "string", checks: [check] },
+            safeParse: (input: unknown) => ({ success: true, data: input }),
+          } as unknown as z.Schema<unknown>);
+
+        assert.equal(make({ kind: "ip", version: "v4" }).metavar, "IPV4");
+        assert.equal(make({ kind: "ip", version: "v6" }).metavar, "IPV6");
+        assert.equal(make({ kind: "ip" }).metavar, "IP");
+        assert.equal(make({ kind: "jwt" }).metavar, "JWT");
+        assert.equal(make({ kind: "emoji" }).metavar, "EMOJI");
+        assert.equal(make({ kind: "base64" }).metavar, "BASE64");
+      });
     });
 
     describe("enum and union types", () => {
@@ -265,6 +280,27 @@ describe("zod()", () => {
       it("should fallback to VALUE for array schemas", () => {
         const parser = zod(z.array(z.string()));
         assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should fallback to VALUE when schema definition is missing", () => {
+        const parser = zod({
+          safeParse: (input: unknown) => ({ success: true, data: input }),
+        } as unknown as z.Schema<unknown>);
+        assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should fallback to VALUE for optional/default without innerType", () => {
+        const optionalLike = zod({
+          _def: { type: "optional" },
+          safeParse: (input: unknown) => ({ success: true, data: input }),
+        } as unknown as z.Schema<unknown>);
+        const defaultLike = zod({
+          _def: { type: "default" },
+          safeParse: (input: unknown) => ({ success: true, data: input }),
+        } as unknown as z.Schema<unknown>);
+
+        assert.equal(optionalLike.metavar, "VALUE");
+        assert.equal(defaultLike.metavar, "VALUE");
       });
     });
 
@@ -390,6 +426,45 @@ describe("zod()", () => {
 
       assert.ok(!result.success);
       assert.ok(result.error.length > 0);
+    });
+
+    it("uses prettifyError when available", () => {
+      const schema = z.string().email();
+      const ctor = schema.constructor as {
+        prettifyError?: (e: unknown) => string;
+      };
+      const original = ctor.prettifyError;
+      ctor.prettifyError = () => "Pretty zod error";
+      try {
+        const parser = zod(schema);
+        const result = parser.parse("not-an-email");
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, [{
+          type: "value",
+          value: "Pretty zod error",
+        }]);
+      } finally {
+        ctor.prettifyError = original;
+      }
+    });
+
+    it("falls back when prettifyError throws", () => {
+      const schema = z.string().email();
+      const ctor = schema.constructor as {
+        prettifyError?: (e: unknown) => string;
+      };
+      const original = ctor.prettifyError;
+      ctor.prettifyError = () => {
+        throw new Error("boom");
+      };
+      try {
+        const parser = zod(schema);
+        const result = parser.parse("not-an-email");
+        assert.ok(!result.success);
+        assert.ok(result.error.length > 0);
+      } finally {
+        ctor.prettifyError = original;
+      }
     });
   });
 

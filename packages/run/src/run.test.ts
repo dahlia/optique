@@ -10,6 +10,7 @@ import type { DocSection } from "@optique/core/doc";
 import type { RunOptions } from "@optique/run/run";
 import { run, runAsync, runSync } from "@optique/run/run";
 import assert from "node:assert/strict";
+import process from "node:process";
 import { describe, it } from "node:test";
 
 describe("run", () => {
@@ -68,6 +69,20 @@ describe("run", () => {
   });
 
   describe("options handling", () => {
+    it("should use process defaults when options are omitted", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+      const originalArgv = process.argv;
+      process.argv = ["node", "/tmp/my-cli.ts", "DefaultName"];
+      try {
+        const result = run(parser);
+        assert.deepEqual(result, { name: "DefaultName" });
+      } finally {
+        process.argv = originalArgv;
+      }
+    });
+
     it("should use provided options instead of defaults", () => {
       const parser = object({
         name: argument(string()),
