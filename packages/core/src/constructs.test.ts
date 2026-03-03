@@ -6584,6 +6584,170 @@ describe("branch coverage: conditional() complete/suggest edges", () => {
       assert.equal(result.value[1], "alpha");
     }
   });
+
+  it("complete on initial state uses default branch and can fail", () => {
+    const ok = conditional(
+      option("--mode", choice(["a", "b"])),
+      { a: flag("--a"), b: flag("--b") },
+      object({ raw: optional(flag("--raw")) }),
+    );
+    const okCompleted = ok.complete(ok.initialState);
+    assert.ok(okCompleted.success);
+    if (okCompleted.success) {
+      assert.equal(okCompleted.value[0], undefined);
+    }
+
+    const failingDefault = conditional(
+      option("--mode", choice(["a", "b"])),
+      { a: flag("--a"), b: flag("--b") },
+      object({ required: option("--required", string()) }),
+    );
+    const failed = failingDefault.complete(failingDefault.initialState);
+    assert.ok(!failed.success);
+  });
+
+  it("complete on initial state fails when no default branch exists", () => {
+    const parser = conditional(
+      option("--mode", choice(["a", "b"])),
+      { a: flag("--a"), b: flag("--b") },
+    );
+    const completed = parser.complete(parser.initialState);
+    assert.ok(!completed.success);
+  });
+
+  it("sync complete falls back to selected branch key when discriminator completion fails", () => {
+    const badDiscriminator: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 10,
+      usage: [{ type: "option", names: ["--mode"], metavar: "MODE" }],
+      initialState: "init",
+      parse: () => ({
+        success: true,
+        consumed: ["--mode", "fast"],
+        next: {
+          buffer: [],
+          state: "parsed",
+          optionsTerminated: false,
+          usage: [],
+        },
+      }),
+      complete: () => ({ success: false, error: message`disc failed` }),
+      suggest: function* () {
+        yield { kind: "literal", text: "--mode" } as const;
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = conditional(
+      badDiscriminator,
+      {
+        fast: object({
+          threads: withDefault(option("--threads", integer()), 1),
+        }),
+      },
+    );
+    const completed = parser.complete({
+      discriminatorState: "parsed",
+      discriminatorValue: "fast",
+      selectedBranch: { kind: "branch", key: "fast" },
+      branchState: {},
+    });
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.equal(completed.value[0], "fast");
+    }
+  });
+
+  it("sync suggest delegates to selected default and selected branch", () => {
+    const parser = conditional(
+      option("--mode", choice(["fast", "slow"])),
+      {
+        fast: object({ threads: option("--threads", integer()) }),
+        slow: object({ verbose: flag("--verbose") }),
+      },
+      object({ raw: flag("--raw") }),
+    );
+
+    const defaultSuggestions = [
+      ...parser.suggest(
+        {
+          buffer: ["--"],
+          state: {
+            ...parser.initialState,
+            selectedBranch: { kind: "default" as const },
+            branchState: undefined,
+          },
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--",
+      ) as Iterable<Suggestion>,
+    ];
+    assert.ok(
+      defaultSuggestions.some((s) =>
+        s.kind === "literal" && s.text === "--raw"
+      ),
+    );
+
+    const branchSuggestions = [
+      ...parser.suggest(
+        {
+          buffer: ["--"],
+          state: {
+            ...parser.initialState,
+            selectedBranch: { kind: "branch" as const, key: "slow" },
+            branchState: undefined,
+          },
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--",
+      ) as Iterable<Suggestion>,
+    ];
+    assert.ok(
+      branchSuggestions.some((s) =>
+        s.kind === "literal" && s.text === "--verbose"
+      ),
+    );
+  });
+
+  it("conditional usage appends literal through optional/multiple/exclusive", () => {
+    const discriminator: Parser<"sync", string, undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 1,
+      usage: [{
+        type: "optional",
+        terms: [{
+          type: "multiple",
+          min: 0,
+          terms: [{
+            type: "exclusive",
+            terms: [[{ type: "option", names: ["--mode"], metavar: "MODE" }]],
+          }],
+        }],
+      }],
+      initialState: undefined,
+      parse: () => ({
+        success: false,
+        consumed: 0,
+        error: message`disc parse not used.`,
+      }),
+      complete: () => ({ success: true, value: "fast" }),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = conditional(
+      discriminator,
+      { fast: object({ threads: option("--threads", integer()) }) },
+      object({ raw: flag("--raw") }),
+    );
+    const serialized = JSON.stringify(parser.usage);
+    assert.ok(serialized.includes('"literal"'));
+    assert.ok(serialized.includes('"fast"'));
+  });
 });
 
 describe("branch coverage: generateNoMatchError variants", () => {
