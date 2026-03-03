@@ -2653,6 +2653,27 @@ describe("formatUsage hidden visibility", () => {
     const result = formatUsage("app", usage, { expandCommands: true });
     assert.equal(result, "app visible\napp doc-hidden");
   });
+
+  it("should skip hidden command branches when expanding exclusive usage", () => {
+    const usage: Usage = [
+      { type: "option", names: ["--global"] },
+      {
+        type: "exclusive",
+        terms: [
+          [
+            { type: "command", name: "visible" },
+            { type: "argument", metavar: "ARG" },
+          ],
+          [
+            { type: "command", name: "secret", hidden: true },
+            { type: "argument", metavar: "ARG" },
+          ],
+        ],
+      },
+    ];
+    const result = formatUsage("cli", usage, { expandCommands: true });
+    assert.equal(result, "cli --global (visible ARG)");
+  });
 });
 
 describe("property-based tests", () => {

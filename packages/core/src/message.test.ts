@@ -134,6 +134,14 @@ describe("message template function", () => {
       ] as const,
     );
   });
+
+  it("should throw TypeError for unsupported interpolation value types", () => {
+    const invalid = 42 as unknown as MessageTerm;
+    assert.throws(
+      () => message`Invalid: ${invalid}`,
+      /Invalid value type in message: number\./,
+    );
+  });
 });
 
 describe("message term constructors", () => {
@@ -280,6 +288,14 @@ describe("message term constructors", () => {
 });
 
 describe("formatMessage", () => {
+  it("should throw TypeError for unknown MessageTerm type", () => {
+    const invalid = [{ type: "unknown" } as unknown as MessageTerm];
+    assert.throws(
+      () => formatMessage(invalid),
+      /Invalid MessageTerm type: unknown\./,
+    );
+  });
+
   it("should format simple text message", () => {
     const msg: Message = [{ type: "text", text: "Simple message" }];
     const formatted = formatMessage(msg);
