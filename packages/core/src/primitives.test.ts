@@ -5725,4 +5725,223 @@ describe("branch coverage: primitives edge cases", () => {
     });
     assert.ok(!invalidStateResult.success);
   });
+
+  it("covers async suggestion and custom error edge branches", async () => {
+    const dep = dependency(string({ metavar: "MODE" }));
+    const asyncDerivedWithoutDefaults = deriveFromAsync({
+      metavar: "TARGET",
+      dependencies: [dep] as const,
+      defaultValues: () => [] as unknown as readonly [string],
+      factory: (_mode: string) => ({
+        $mode: "async" as const,
+        metavar: "TARGET",
+        parse(input: string): Promise<ValueParserResult<string>> {
+          return Promise.resolve({ success: true, value: input });
+        },
+        format(value: string): string {
+          return value;
+        },
+        suggest(prefix: string): AsyncIterable<Suggestion> {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield { kind: "literal", text: `fallback-${prefix}` };
+            },
+          };
+        },
+      }),
+    });
+    const asyncFallbackOption = option("--target", asyncDerivedWithoutDefaults);
+    const asyncFallbackSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of asyncFallbackOption.suggest({
+        buffer: ["--target"] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: asyncFallbackOption.usage,
+        dependencyRegistry: new DependencyRegistry(),
+      }, "")
+    ) {
+      asyncFallbackSuggestions.push(suggestion);
+    }
+    assert.deepEqual(asyncFallbackSuggestions, [{
+      kind: "literal",
+      text: "fallback-",
+    }]);
+
+    const asyncLiteralSuggestingOption = option(
+      "--name",
+      deriveFromAsync({
+        metavar: "NAME",
+        dependencies: [dep] as const,
+        defaultValues: () => ["dev"] as const,
+        factory: (_mode: string) => ({
+          $mode: "async" as const,
+          metavar: "NAME",
+          parse(input: string): Promise<ValueParserResult<string>> {
+            return Promise.resolve({ success: true, value: input });
+          },
+          format(value: string): string {
+            return value;
+          },
+          suggest(prefix: string): AsyncIterable<Suggestion> {
+            return {
+              async *[Symbol.asyncIterator](): AsyncIterableIterator<
+                Suggestion
+              > {
+                yield { kind: "literal", text: `${prefix}-x` };
+              },
+            };
+          },
+        }),
+      }),
+    );
+    const asyncJoinedLiteralSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of asyncLiteralSuggestingOption.suggest({
+        buffer: [] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: asyncLiteralSuggestingOption.usage,
+      }, "--name=ab")
+    ) {
+      asyncJoinedLiteralSuggestions.push(suggestion);
+    }
+    assert.deepEqual(asyncJoinedLiteralSuggestions, [{
+      kind: "literal",
+      text: "--name=ab-x",
+      description: undefined,
+    }]);
+
+    const hiddenAsyncArgument = argument(asyncFileSuggestingParser(), {
+      hidden: true,
+    });
+    const hiddenAsyncArgumentSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of hiddenAsyncArgument.suggest({
+        buffer: [] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: hiddenAsyncArgument.usage,
+      }, "")
+    ) {
+      hiddenAsyncArgumentSuggestions.push(suggestion);
+    }
+    assert.deepEqual(hiddenAsyncArgumentSuggestions, []);
+
+    const endOfInputCustom = option("--mode", string({ metavar: "MODE" }), {
+      errors: { endOfInput: message`custom end` },
+    }).parse({
+      buffer: [] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: [],
+    });
+    assert.ok(!endOfInputCustom.success);
+    if (!endOfInputCustom.success) {
+      assert.equal(formatMessage(endOfInputCustom.error), "custom end");
+    }
+
+    const boolComplete = option("--enabled").complete(undefined);
+    assert.deepEqual(boolComplete, { success: true, value: false });
+
+    const tokenOption = option("--token", string({ metavar: "TOKEN" }), {
+      errors: { missing: (names) => message`missing ${text(names.join(","))}` },
+    });
+    const missingViaPending = tokenOption.complete(
+      createPendingDependencySourceState(
+        Symbol("token"),
+      ) as unknown as Parameters<typeof tokenOption.complete>[0],
+    );
+    assert.ok(!missingViaPending.success);
+    if (!missingViaPending.success) {
+      assert.equal(formatMessage(missingViaPending.error), "missing --token");
+    }
+
+    const duplicateOptionCustom = option("-a", "--all", {
+      errors: { duplicate: (name) => message`dup ${text(name)}` },
+    });
+    const duplicateOptionCustomResult = duplicateOptionCustom.parse({
+      buffer: ["-abc"] as readonly string[],
+      state: { success: true, value: true },
+      optionsTerminated: false,
+      usage: duplicateOptionCustom.usage,
+    });
+    assert.ok(!duplicateOptionCustomResult.success);
+    if (!duplicateOptionCustomResult.success) {
+      assert.equal(formatMessage(duplicateOptionCustomResult.error), "dup -a");
+    }
+
+    const duplicateFlagCustom = flag("--force", {
+      errors: { duplicate: (name) => message`dup ${text(name)}` },
+    });
+    const duplicateFlagCustomResult = duplicateFlagCustom.parse({
+      buffer: ["--force"] as readonly string[],
+      state: { success: true, value: true as const },
+      optionsTerminated: false,
+      usage: duplicateFlagCustom.usage,
+    });
+    assert.ok(!duplicateFlagCustomResult.success);
+    if (!duplicateFlagCustomResult.success) {
+      assert.equal(
+        formatMessage(duplicateFlagCustomResult.error),
+        "dup --force",
+      );
+    }
+
+    const argWithCustomInvalid = argument(string({ metavar: "NAME" }), {
+      errors: { invalidValue: (error) => message`bad ${error}` },
+    });
+    const deferredSuccess = argWithCustomInvalid.complete(
+      createDeferredParseState(
+        "ok",
+        deriveFromSync({
+          metavar: "NAME",
+          dependencies: [dep] as const,
+          defaultValues: () => ["default"] as const,
+          factory: (_mode: string) => string({ metavar: "NAME" }),
+        }),
+        { success: true, value: "ok" },
+      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
+    );
+    assert.ok(deferredSuccess.success);
+
+    const dependencyFailure = argWithCustomInvalid.complete(
+      createDependencySourceState(
+        { success: false, error: message`dep-fail` },
+        dep[dependencyId],
+      ) as unknown as Parameters<typeof argWithCustomInvalid.complete>[0],
+    );
+    assert.ok(!dependencyFailure.success);
+    if (!dependencyFailure.success) {
+      assert.equal(formatMessage(dependencyFailure.error), "bad dep-fail");
+    }
+
+    const plainFailure = argWithCustomInvalid.complete({
+      success: false,
+      error: message`plain-fail`,
+    });
+    assert.ok(!plainFailure.success);
+    if (!plainFailure.success) {
+      assert.equal(formatMessage(plainFailure.error), "bad plain-fail");
+    }
+
+    const cmd = command("deploy", argument(string({ metavar: "TARGET" })), {
+      errors: { invalidState: message`custom invalid state` },
+    });
+    const invalidStateResult = (cmd.parse as (
+      context: ParserContext<unknown>,
+    ) => ReturnType<typeof cmd.parse>)({
+      buffer: [] as readonly string[],
+      state: ["broken"],
+      optionsTerminated: false,
+      usage: cmd.usage,
+    });
+    assert.ok(!invalidStateResult.success);
+    if (!invalidStateResult.success) {
+      assert.equal(
+        formatMessage(invalidStateResult.error),
+        "custom invalid state",
+      );
+    }
+  });
 });
