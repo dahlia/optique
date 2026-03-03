@@ -650,4 +650,201 @@ describe("bindEnv()", () => {
     // Must read from context2's source, not context1's.
     assert.equal(result, "db.example.com");
   });
+
+  it("unwraps wrapped state across parse() calls", () => {
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--name", string()), {
+      context,
+      key: "NAME",
+      parser: string(),
+      default: "fallback",
+    });
+    const parseContext = {
+      buffer: [] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    const first = parser.parse(parseContext);
+    assert.ok(first.success);
+
+    const second = parser.parse({
+      ...parseContext,
+      buffer: ["--name", "alice"],
+      state: first.next.state,
+    });
+    assert.ok(second.success);
+    assert.deepEqual(second.consumed, ["--name", "alice"]);
+  });
+
+  it("passes default through getDocFragments when upper default is absent", () => {
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+
+    const docState = parser.initialState as unknown as Parameters<
+      typeof parser.getDocFragments
+    >[0];
+    const fragments = parser.getDocFragments(docState);
+    assert.ok(Array.isArray(fragments.fragments));
+  });
+
+  it("uses upper default over bindEnv default in getDocFragments", () => {
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+
+    const docState = parser.initialState as unknown as Parameters<
+      typeof parser.getDocFragments
+    >[0];
+    const fragments = parser.getDocFragments(docState, 7000);
+    assert.ok(Array.isArray(fragments.fragments));
+  });
+
+  it("throws when sync mode parser.parse returns a Promise", () => {
+    const brokenSyncParser = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [],
+            state: undefined,
+            optionsTerminated: false,
+            usage: [],
+          },
+          consumed: [],
+        }),
+      complete: () => ({ success: true as const, value: "ok" }),
+      suggest: () => [],
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(brokenSyncParser, {
+      context,
+      key: "NAME",
+      parser: string(),
+    });
+    assert.throws(
+      () =>
+        parser.parse({
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        }),
+      {
+        name: "TypeError",
+        message: "Synchronous mode cannot map Promise value.",
+      },
+    );
+  });
+
+  it("throws when sync mode complete path receives a Promise", () => {
+    const brokenSyncParser = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: (ctx: { readonly buffer: readonly string[] }) => ({
+        success: true as const,
+        next: {
+          buffer: ctx.buffer,
+          state: undefined,
+          optionsTerminated: false,
+          usage: [],
+        },
+        consumed: [],
+      }),
+      complete: () => Promise.resolve({ success: true as const, value: "ok" }),
+      suggest: () => [],
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = bindEnv(brokenSyncParser, {
+      context,
+      key: "NAME",
+      parser: string(),
+    });
+
+    assert.throws(() => parse(parser, []), {
+      name: "TypeError",
+      message: "Synchronous mode cannot wrap Promise value.",
+    });
+  });
+});
+
+describe("createEnvContext defaults", () => {
+  it("uses Deno.env.get by default when available", () => {
+    const originalDeno = Object.getOwnPropertyDescriptor(globalThis, "Deno");
+    Object.defineProperty(globalThis, "Deno", {
+      configurable: true,
+      value: { env: { get: (key: string) => (key === "APP_KEY" ? "v" : "") } },
+    });
+    try {
+      const context = createEnvContext({ prefix: "APP_" });
+      assert.equal(context.source("APP_KEY"), "v");
+    } finally {
+      if (originalDeno != null) {
+        Object.defineProperty(globalThis, "Deno", originalDeno);
+      }
+    }
+  });
+
+  it("falls back to process.env when Deno.env.get is unavailable", () => {
+    const originalDeno = Object.getOwnPropertyDescriptor(globalThis, "Deno");
+    const originalProcess = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "process",
+    );
+    Object.defineProperty(globalThis, "Deno", {
+      configurable: true,
+      value: { env: {} },
+    });
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      value: { env: { APP_FROM_PROCESS: "process-value" } },
+    });
+    try {
+      const context = createEnvContext({ prefix: "APP_" });
+      assert.equal(context.source("APP_FROM_PROCESS"), "process-value");
+    } finally {
+      if (originalDeno != null) {
+        Object.defineProperty(globalThis, "Deno", originalDeno);
+      }
+      if (originalProcess != null) {
+        Object.defineProperty(globalThis, "process", originalProcess);
+      }
+    }
+  });
 });
