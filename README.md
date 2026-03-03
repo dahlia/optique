@@ -13,7 +13,9 @@ Optique: Type-safe combinatorial CLI parser for TypeScript
 Type-safe combinatorial CLI parser for TypeScript inspired by Haskell's
 [optparse-applicative] and TypeScript's [Zod]. Build composable parsers for
 command-line interfaces with full type safety, automatic type inference, and
-built-in shell completion support for Bash, zsh, fish, PowerShell, and Nushell.
+built-in shell completion support for Bash, zsh, fish, PowerShell, and Nushell,
+plus config file integration and man page generation from the same parser
+definitions.
 
 > [!NOTE]
 > Optique is a parsing library that focuses on extracting and validating
@@ -33,6 +35,21 @@ built-in shell completion support for Bash, zsh, fish, PowerShell, and Nushell.
 [Zod]: https://zod.dev/
 
 
+Why Optique
+-----------
+
+ -  *Composable by default*: Build small parser pieces and combine them into
+    larger CLIs without losing readability or types.
+ -  *Types that model real CLI rules*: Optional flags, mutually exclusive
+    branches, and dependent options are reflected directly in inferred types.
+ -  *One parser, many outputs*: Derive help text, shell completions, and
+    (with *@optique/man*) man pages from the same parser definition.
+ -  *Practical integrations*: Extend parsers with config files, environment
+    variables, schema validators, interactive prompts, and git-aware parsing.
+ -  *Cross-runtime consistency*: Use the same parser model in Deno, Node.js,
+    and Bun.
+
+
 Features
 --------
 
@@ -49,6 +66,8 @@ Features
     (via *@optique/config*), supporting Zod, Valibot, ArkType, and more
  -  *Environment variable support*: Bind options to environment variables
     with type-safe parsing and fallback behavior (via *@optique/env*)
+ -  *Interactive prompts*: Prompt users for missing values via Inquirer.js
+    with parser-integrated fallback flows (via *@optique/inquirer*)
  -  *Inter-option dependencies*: Options whose valid values depend on other
     options, with dynamic validation and context-aware shell completion
  -  *Async parser support*: Type-safe sync/async mode distinction for parsers
@@ -133,6 +152,8 @@ Docs
 Optique provides comprehensive documentation to help you get started quickly:
 <https://optique.dev/>.
 
+New to Optique? Start with the [tutorial] and then explore the [cookbook].
+
  -  [Why Optique?] — What makes Optique different from other CLI libraries
  -  [Tutorial] — Step-by-step guide from simple options to nested subcommands
  -  [Cookbook] — Practical recipes for common CLI patterns including shell
@@ -140,6 +161,8 @@ Optique provides comprehensive documentation to help you get started quickly:
 
 API reference documentation for each package is available on JSR (see below).
 
+[tutorial]: https://optique.dev/tutorial
+[cookbook]: https://optique.dev/cookbook
 [Why Optique?]: https://optique.dev/why
 [Tutorial]: https://optique.dev/tutorial
 [Cookbook]: https://optique.dev/cookbook
