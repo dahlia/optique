@@ -2540,6 +2540,60 @@ describe("extractCommandNames hidden filtering", () => {
   });
 });
 
+describe("additional branch coverage", () => {
+  it("extract* helpers should ignore non-array usage inputs", () => {
+    const invalidUsage = null as unknown as Usage;
+    assert.deepEqual(extractOptionNames(invalidUsage), new Set());
+    assert.deepEqual(extractCommandNames(invalidUsage), new Set());
+    assert.deepEqual(extractArgumentMetavars(invalidUsage), new Set());
+  });
+
+  it("formatUsage should skip hidden optional command in expanded usage", () => {
+    const usage: Usage = [
+      { type: "command", name: "root" },
+      {
+        type: "exclusive",
+        terms: [
+          [
+            {
+              type: "optional",
+              terms: [{ type: "command", name: "secret", hidden: true }],
+            },
+          ],
+          [
+            {
+              type: "optional",
+              terms: [{ type: "command", name: "open" }],
+            },
+          ],
+        ],
+      },
+    ];
+
+    const result = formatUsage("cli", usage, { expandCommands: true });
+    assert.ok(result.includes("open"));
+    assert.ok(!result.includes("secret"));
+  });
+
+  it("formatUsage should skip hidden passthrough terms", () => {
+    const usage: Usage = [
+      { type: "passthrough", hidden: true },
+      { type: "argument", metavar: "FILE" },
+    ];
+    const result = formatUsage("cli", usage);
+    assert.equal(result, "cli FILE");
+  });
+
+  it("formatUsageTerm should return empty string for hidden terms", () => {
+    const result = formatUsageTerm({
+      type: "command",
+      name: "secret",
+      hidden: true,
+    });
+    assert.equal(result, "");
+  });
+});
+
 describe("extractArgumentMetavars hidden filtering", () => {
   it("should skip hidden arguments", () => {
     const usage: Usage = [

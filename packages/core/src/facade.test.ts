@@ -7114,4 +7114,21 @@ describe("branch coverage: facade.ts edge cases", () => {
     });
     assert.equal(result, "help-fallback");
   });
+
+  it("aboveError=help falls back to usage when doc lookup returns undefined", () => {
+    const parser = command("deploy", object({ env: argument(string()) }));
+    let stderrOutput = "";
+
+    const result = runParser(parser, "mycli", ["unknown"], {
+      aboveError: "help",
+      onError: () => "handled",
+      stderr: (text) => {
+        stderrOutput += text;
+      },
+    });
+
+    assert.equal(result, "handled");
+    assert.ok(stderrOutput.includes("Usage:"));
+    assert.ok(stderrOutput.includes("Error:"));
+  });
 });

@@ -967,6 +967,19 @@ describe("runSync", () => {
     assert.deepEqual(result, { names: ["alice", "bob"] });
   });
 
+  it("should use default run options when omitted", () => {
+    const parser = multiple(argument(string()));
+    const originalArgv = process.argv;
+    process.argv = ["node", "/tmp/default-cli.ts", "A", "B", "C"];
+    try {
+      const result = runSync(parser);
+      assert.ok(!(result instanceof Promise));
+      assert.deepEqual(result, ["A", "B", "C"]);
+    } finally {
+      process.argv = originalArgv;
+    }
+  });
+
   describe("Program support", () => {
     it("should accept Program object instead of parser", () => {
       const parser = object({
