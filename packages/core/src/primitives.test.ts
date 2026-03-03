@@ -32,6 +32,16 @@ import {
   type ValueParserResult,
 } from "@optique/core/valueparser";
 import {
+  createDeferredParseState,
+  createDependencySourceState,
+  createPendingDependencySourceState,
+  dependency,
+  dependencyId,
+  DependencyRegistry,
+  deriveFromAsync,
+  deriveFromSync,
+} from "@optique/core/dependency";
+import {
   type InferValue,
   parse,
   parseAsync,
@@ -4942,6 +4952,490 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assert.equal(formatMessage(result.error), "Need --verbose flag.");
+    }
+  });
+
+  it("option suggest sync: handles suggest disappearing between checks", () => {
+    const suggestFn = function* (): IterableIterator<Suggestion> {
+      yield { kind: "literal", text: "value" };
+    };
+    let suggestAccess = 0;
+    const parserWithFlakySuggest: ValueParser<"sync", string> = {
+      $mode: "sync",
+      metavar: "TEXT",
+      parse(input: string): ValueParserResult<string> {
+        return { success: true, value: input };
+      },
+      format(value: string): string {
+        return value;
+      },
+      get suggest() {
+        suggestAccess += 1;
+        return suggestAccess === 1 ? suggestFn : undefined;
+      },
+    };
+    const parser = option("--name", parserWithFlakySuggest);
+    const suggestions = [
+      ...(parser.suggest({
+        buffer: ["--name"] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>),
+    ];
+    assert.deepEqual(suggestions, []);
+  });
+
+  it("option suggest async: handles suggest disappearing between checks", async () => {
+    const suggestFn = (_prefix: string): AsyncIterable<Suggestion> => ({
+      async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+        yield { kind: "literal", text: "async-value" };
+      },
+    });
+    let suggestAccess = 0;
+    const parserWithFlakySuggest: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "TEXT",
+      parse(input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({ success: true, value: input });
+      },
+      format(value: string): string {
+        return value;
+      },
+      get suggest() {
+        suggestAccess += 1;
+        return suggestAccess === 1 ? suggestFn : undefined;
+      },
+    };
+    const parser = option("--name", parserWithFlakySuggest);
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of parser.suggest({
+        buffer: ["--name"] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.deepEqual(suggestions, []);
+  });
+
+  it("option suggest sync: --opt= with file suggestion uses literal fallback", () => {
+    const parser = option("--out", fileSuggestingParser());
+    const suggestions = [
+      ...(parser.suggest({
+        buffer: [] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "--out=") as Iterable<Suggestion>),
+    ];
+    assert.ok(suggestions.some((s) => s.kind === "literal"));
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "literal" && s.text.startsWith("--out=")
+      ),
+    );
+  });
+
+  it("option suggest async: derived parser uses defaults and dependency values", async () => {
+    const modeDep = dependency(string({ metavar: "MODE" }));
+    const envDep = dependency(string({ metavar: "ENV" }));
+    const asyncDerived = deriveFromAsync({
+      metavar: "TARGET",
+      dependencies: [modeDep, envDep] as const,
+      defaultValues: () => ["dev", "local"] as const,
+      factory: (_mode: string, _env: string) => ({
+        $mode: "async" as const,
+        metavar: "TARGET",
+        parse(input: string): Promise<ValueParserResult<string>> {
+          return Promise.resolve({ success: true, value: input });
+        },
+        format(value: string): string {
+          return value;
+        },
+        suggest(prefix: string): AsyncIterable<Suggestion> {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield { kind: "literal", text: `${prefix}target` };
+            },
+          };
+        },
+      }),
+    });
+    const parser = option("--target", asyncDerived);
+    const registry = new DependencyRegistry();
+    registry.set(modeDep[dependencyId], "prod");
+    const ctx = {
+      buffer: ["--target"] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parser.usage,
+      dependencyRegistry: registry,
+    };
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of parser.suggest(ctx, "") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.ok(suggestions.length > 0);
+  });
+
+  it("option suggest async: single dependency uses scalar dependency value", async () => {
+    const modeDep = dependency(string({ metavar: "MODE" }));
+    const asyncDerived = deriveFromAsync({
+      metavar: "OUTPUT",
+      dependencies: [modeDep] as const,
+      defaultValues: () => ["dev"] as const,
+      factory: (mode: string) => ({
+        $mode: "async" as const,
+        metavar: "OUTPUT",
+        parse(input: string): Promise<ValueParserResult<string>> {
+          return Promise.resolve({ success: true, value: input });
+        },
+        format(value: string): string {
+          return value;
+        },
+        suggest(_prefix: string): AsyncIterable<Suggestion> {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield { kind: "literal", text: `from-${mode}` };
+            },
+          };
+        },
+      }),
+    });
+    const parser = option("--output", asyncDerived);
+    const ctx = {
+      buffer: ["--output"] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parser.usage,
+      dependencyRegistry: (() => {
+        const r = new DependencyRegistry();
+        r.set(modeDep[dependencyId], "prod");
+        return r;
+      })(),
+    };
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of parser.suggest(ctx, "") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "literal" && s.text.startsWith("from-")
+      ),
+    );
+  });
+
+  it("option parse/complete: covers remaining error and state branches", async () => {
+    const boolOption = option("-a", "--all", { hidden: false });
+    assert.equal(boolOption.usage[0]?.type, "optional");
+    if (boolOption.usage[0]?.type === "optional") {
+      const optionTerm = boolOption.usage[0].terms[0];
+      if (optionTerm?.type === "option") {
+        assert.equal(optionTerm.hidden, false);
+      }
+    }
+
+    const emptyParse = option("--name", string({ metavar: "TEXT" })).parse({
+      buffer: [] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: boolOption.usage,
+    });
+    assert.ok(!emptyParse.success);
+
+    const withDuplicateSeparated = option(
+      "--name",
+      string({ metavar: "TEXT" }),
+      {
+        errors: { duplicate: (token) => message`dup ${text(token)}` },
+      },
+    );
+    const dupSeparated = withDuplicateSeparated.parse({
+      buffer: ["--name", "x"] as readonly string[],
+      state: { success: true, value: "already" },
+      optionsTerminated: false,
+      usage: withDuplicateSeparated.usage,
+    });
+    assert.ok(!dupSeparated.success);
+
+    const withDuplicateJoined = option("--name", string({ metavar: "TEXT" }), {
+      errors: { duplicate: (token) => message`dup ${text(token)}` },
+    });
+    const dupJoined = withDuplicateJoined.parse({
+      buffer: ["--name=value"] as readonly string[],
+      state: { success: true, value: "already" },
+      optionsTerminated: false,
+      usage: withDuplicateJoined.usage,
+    });
+    assert.ok(!dupJoined.success);
+
+    const bundledDuplicate = boolOption.parse({
+      buffer: ["-abc"] as readonly string[],
+      state: { success: true, value: true },
+      optionsTerminated: false,
+      usage: boolOption.usage,
+    });
+    assert.ok(!bundledDuplicate.success);
+
+    const asyncJoined = option("--name", asyncFileSuggestingParser()).parse({
+      buffer: ["--name=value"] as readonly string[],
+      state: undefined,
+      optionsTerminated: false,
+      usage: boolOption.usage,
+    });
+    const asyncJoinedResolved = await asyncJoined;
+    assert.ok(asyncJoinedResolved.success);
+
+    const withMissingFn = option("--value", string({ metavar: "VALUE" }), {
+      errors: { missing: (names) => message`missing ${text(names.join("/"))}` },
+    });
+    const missing = withMissingFn.complete(undefined);
+    assert.ok(!missing.success);
+
+    const depId = Symbol("dep");
+    const withPending = option("--mode", string({ metavar: "MODE" }), {
+      errors: { missing: message`mode required` },
+    });
+    const pending = createPendingDependencySourceState(depId);
+    const completeWithPending = withPending.complete as (
+      state: unknown,
+    ) => ReturnType<typeof withPending.complete>;
+    const pendingResult = await completeWithPending(pending);
+    assert.ok(!pendingResult.success);
+
+    const dep = dependency(string({ metavar: "MODE" }));
+    const derived = deriveFromSync({
+      metavar: "TARGET",
+      dependencies: [dep] as const,
+      defaultValues: () => ["dev"] as const,
+      factory: (_mode: string) => string({ metavar: "TARGET" }),
+    });
+    const withDeferred = option("--target", derived, {
+      errors: { invalidValue: (err) => message`invalid ${err}` },
+    });
+    const deferredState = createDeferredParseState(
+      "bad",
+      derived,
+      { success: false, error: message`bad value` },
+    );
+    const completeWithDeferred = withDeferred.complete as (
+      state: unknown,
+    ) => ReturnType<typeof withDeferred.complete>;
+    const deferredResult = await completeWithDeferred(deferredState);
+    assert.ok(!deferredResult.success);
+
+    const depFailState = createDependencySourceState(
+      { success: false, error: message`source failed` },
+      depId,
+    );
+    const depFail = await completeWithPending(depFailState);
+    assert.ok(!depFail.success);
+
+    const plainFailure = await withDeferred.complete({
+      success: false,
+      error: message`plain failed`,
+    });
+    assert.ok(!plainFailure.success);
+  });
+
+  it("flag duplicate bundled: static duplicate error branch", () => {
+    const f = flag("-a", {
+      errors: { duplicate: message`already set` },
+    });
+    const result = f.parse({
+      buffer: ["-ab"] as readonly string[],
+      state: { success: true, value: true },
+      optionsTerminated: false,
+      usage: f.usage,
+    });
+    assert.ok(!result.success);
+  });
+
+  it("argument complete/suggest: covers dependency and async branches", async () => {
+    const dep = dependency(string({ metavar: "MODE" }));
+    const derived = deriveFromSync({
+      metavar: "PATH",
+      dependencies: [dep] as const,
+      defaultValues: () => ["dev"] as const,
+      factory: (_mode: string) => string({ metavar: "PATH" }),
+    });
+    const arg = argument(derived, {
+      errors: { invalidValue: (err) => message`invalid ${err}` },
+    });
+    const deferredState = createDeferredParseState(
+      "bad",
+      derived,
+      { success: false, error: message`bad arg` },
+    );
+    const completeArg = arg.complete as (
+      state: unknown,
+    ) => ReturnType<typeof arg.complete>;
+    const deferredResult = await completeArg(deferredState);
+    assert.ok(!deferredResult.success);
+
+    const depSuccessState = createDependencySourceState(
+      { success: true, value: "ok" },
+      dep[dependencyId],
+    );
+    const depSuccess = await completeArg(depSuccessState);
+    assert.ok(depSuccess.success);
+
+    const depFailState = createDependencySourceState(
+      { success: false, error: message`dep fail` },
+      dep[dependencyId],
+    );
+    const depFail = await completeArg(depFailState);
+    assert.ok(!depFail.success);
+
+    const plainFail = await arg.complete({
+      success: false,
+      error: message`plain fail`,
+    });
+    assert.ok(!plainFail.success);
+
+    const asyncArg = argument(asyncFileSuggestingParser());
+    const suggestions: Suggestion[] = [];
+    for await (
+      const s of asyncArg.suggest({
+        buffer: [] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: asyncArg.usage,
+      }, "") as AsyncIterable<Suggestion>
+    ) {
+      suggestions.push(s);
+    }
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("command parse/complete/suggest: invalid states and async branches", async () => {
+    const asyncCmdWithDescription = command(
+      "deploy",
+      option("--file", asyncFileSuggestingParser()),
+      { description: message`Deploy command`, hidden: true },
+    );
+    const hiddenSuggestions: Suggestion[] = [];
+    for await (
+      const s of asyncCmdWithDescription.suggest({
+        buffer: [] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: asyncCmdWithDescription.usage,
+      }, "de") as AsyncIterable<Suggestion>
+    ) {
+      hiddenSuggestions.push(s);
+    }
+    assert.deepEqual(hiddenSuggestions, []);
+
+    const visibleAsyncCmd = command(
+      "deploy",
+      option("--file", asyncFileSuggestingParser()),
+      { description: message`Deploy command` },
+    );
+    const visibleSuggestions: Suggestion[] = [];
+    for await (
+      const s of visibleAsyncCmd.suggest({
+        buffer: [] as readonly string[],
+        state: undefined,
+        optionsTerminated: false,
+        usage: visibleAsyncCmd.usage,
+      }, "de") as AsyncIterable<Suggestion>
+    ) {
+      visibleSuggestions.push(s);
+    }
+    assert.ok(
+      visibleSuggestions.some((s) =>
+        s.kind === "literal" && s.text === "deploy"
+      ),
+    );
+
+    const syncInner = argument(string({ metavar: "NAME" }));
+    const syncCmd = command("run", syncInner);
+    const syncDelegated = syncCmd.parse({
+      buffer: ["x"] as readonly string[],
+      state: ["parsing", syncInner.initialState] as [
+        "parsing",
+        typeof syncInner.initialState,
+      ],
+      optionsTerminated: false,
+      usage: syncCmd.usage,
+    });
+    assert.ok(syncDelegated.success);
+
+    const parseCommandInternal = syncCmd.parse as (
+      context: ParserContext<unknown>,
+    ) => ReturnType<typeof syncCmd.parse>;
+    const invalidParseState = parseCommandInternal({
+      buffer: [] as readonly string[],
+      state: ["invalid"],
+      optionsTerminated: false,
+      usage: syncCmd.usage,
+    });
+    assert.ok(!invalidParseState.success);
+
+    const asyncInner: Parser<"async", string, null> = {
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse(_context: ParserContext<null>) {
+        return Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [] as readonly string[],
+            optionsTerminated: false,
+            usage: [],
+            state: null,
+          },
+          consumed: [] as readonly string[],
+        });
+      },
+      complete(_state: null) {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      suggest() {
+        return {
+          async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+            yield* [];
+          },
+        };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const asyncCmd = command("run", asyncInner);
+    const completed = await asyncCmd.complete(["matched", "run"]);
+    assert.ok(completed.success);
+
+    const completeCommandInternal = syncCmd.complete as (
+      state: unknown,
+    ) => ReturnType<typeof syncCmd.complete>;
+    const invalidComplete = completeCommandInternal(["invalid"]);
+    assert.ok(!invalidComplete.success);
+  });
+
+  it("passThrough nextToken: captures option without following value", () => {
+    const p = passThrough({ format: "nextToken" });
+    const result = p.parse({
+      buffer: ["--raw"] as readonly string[],
+      state: [] as readonly string[],
+      optionsTerminated: false,
+      usage: p.usage,
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.consumed, ["--raw"]);
     }
   });
 });
