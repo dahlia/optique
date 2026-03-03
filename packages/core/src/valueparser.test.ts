@@ -8549,6 +8549,60 @@ describe("branch coverage regressions", () => {
       }).parse("0.0.0.0").success,
     );
   });
+
+  it("covers hostname/email/ipv6/socket/mac/domain uncovered branches", () => {
+    const host = hostname({
+      allowLocalhost: false,
+      allowUnderscore: false,
+      errors: {
+        localhostNotAllowed: (input) => message`localhost blocked: ${input}`,
+        underscoreNotAllowed: (input) => message`underscore blocked: ${input}`,
+        invalidHostname: (input) => message`invalid host: ${input}`,
+      },
+    });
+    assert.ok(!host.parse("localhost").success);
+    assert.ok(!host.parse("a_b.example.com").success);
+    assert.ok(!host.parse("").success);
+    assert.ok(!host.parse("example..com").success);
+    assert.ok(!host.parse("exa$mple.com").success);
+
+    const emailParser = email({
+      allowMultiple: true,
+      errors: {
+        invalidEmail: (input) => message`invalid email: ${input}`,
+      },
+    });
+    assert.ok(!emailParser.parse("user@-example.com").success);
+    assert.ok(!emailParser.parse("user@example-.com").success);
+    assert.ok(!emailParser.parse("good@example.com,bad@-example.com").success);
+
+    const socket = socketAddress({
+      errors: {
+        invalidFormat: (input) => message`bad socket: ${input}`,
+      },
+    });
+    assert.ok(!socket.parse("localhost:99999").success);
+    assert.ok(!socket.parse("localhost:not-port").success);
+
+    const mac = macAddress({ separator: "none" });
+    const macResult = mac.parse("aabbccddeeff");
+    assert.ok(macResult.success);
+    assert.equal(mac.format("aa:bb:cc:dd:ee:ff"), "MAC");
+
+    const dom = domain();
+    assert.equal(dom.format("example.com"), "DOMAIN");
+
+    const ipv6Parser = ipv6({
+      errors: {
+        invalidIpv6: (input) => message`invalid ipv6: ${input}`,
+      },
+    });
+    assert.ok(!ipv6Parser.parse("::ffff:300.1.2.3").success);
+    assert.ok(!ipv6Parser.parse("1:2:3:4:5:6:7:8:9").success);
+    assert.ok(!ipv6Parser.parse("2001::db8::1").success);
+    assert.ok(ipv6Parser.parse("2001:0:0:1:0:0:0:1").success);
+    assert.equal(ipv6Parser.format("::1"), "IPV6");
+  });
 });
 
 // cSpell: ignore résumé phonebk toolongcode hanidec jpan hebr arabext
