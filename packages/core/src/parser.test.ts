@@ -12,7 +12,14 @@ import {
   text,
 } from "@optique/core/message";
 import { multiple, optional, withDefault } from "@optique/core/modifiers";
-import { getDocPage, parse } from "@optique/core/parser";
+import {
+  getDocPage,
+  getDocPageAsync,
+  parse,
+  type Parser,
+  suggestAsync,
+  suggestSync,
+} from "@optique/core/parser";
 import {
   argument,
   command,
@@ -2027,6 +2034,80 @@ describe("Annotations system", () => {
     assert.ok(annotations !== undefined);
     assert.equal(annotations[testKey], testData);
   });
+
+  it("should support annotations in suggestSync() with non-object state", () => {
+    const testKey = Symbol.for("@test/suggest-sync");
+    const parser = constant("ok");
+    const result = suggestSync(parser, [""], {
+      annotations: { [testKey]: "sync" },
+    });
+    assert.deepEqual(result, []);
+  });
+
+  it("should support annotations in suggestAsync() with non-object state", async () => {
+    const testKey = Symbol.for("@test/suggest-async");
+    const parser = constant("ok");
+    const result = await suggestAsync(parser, [""], {
+      annotations: { [testKey]: "async" },
+    });
+    assert.deepEqual(result, []);
+  });
+
+  it("should support annotations in getDocPage() with non-object state", () => {
+    const testKey = Symbol.for("@test/doc-sync");
+    const parser = constant("ok");
+    const doc = getDocPage(parser, [], {
+      annotations: { [testKey]: "doc-sync" },
+    });
+    assert.ok(doc !== undefined);
+  });
+
+  it("should support annotations in getDocPageAsync() with non-object state", async () => {
+    const testKey = Symbol.for("@test/doc-async");
+    const parser: Parser<"async", string, number> = {
+      $valueType: [] as const,
+      $stateType: [] as const,
+      $mode: "async",
+      priority: 0,
+      usage: [],
+      initialState: 0,
+      parse(context) {
+        if (context.buffer.length === 0) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`no input`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [context.buffer[0]],
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.state + 1,
+          },
+        });
+      },
+      complete(state) {
+        return Promise.resolve({
+          success: true as const,
+          value: String(state),
+        });
+      },
+      async *suggest() {
+        // no-op
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const doc = await getDocPageAsync(parser, [], {
+      annotations: { [testKey]: "doc-async" },
+    });
+    assert.ok(doc !== undefined);
+  });
 });
 
 describe("getDocPage regression: meta commands with withDefault(or(...))", () => {
@@ -2097,5 +2178,43 @@ describe("getDocPage regression: meta commands with withDefault(or(...))", () =>
         commandNames.join(", ")
       }]`,
     );
+  });
+
+  it("should resolve nested exclusive terms and preserve trailing terms", () => {
+    const globalOption = object({
+      global: option("--global"),
+    });
+    const parser = or(
+      merge(
+        or(
+          command("foo", object({})),
+          command("bar", object({})),
+        ),
+        globalOption,
+      ),
+      merge(
+        command("baz", object({})),
+        globalOption,
+      ),
+    );
+
+    const doc = getDocPage(parser, ["foo"]);
+    assert.ok(doc !== undefined);
+    if (doc == null) return;
+    assert.ok(doc.usage !== undefined);
+    if (doc.usage == null) return;
+
+    assert.ok(doc.usage.length >= 2);
+    assert.equal(doc.usage[0]?.type, "command");
+    if (doc.usage[0]?.type === "command") {
+      assert.equal(doc.usage[0].name, "foo");
+    }
+    assert.equal(doc.usage[1]?.type, "optional");
+    if (doc.usage[1]?.type === "optional") {
+      assert.equal(doc.usage[1].terms[0]?.type, "option");
+      if (doc.usage[1].terms[0]?.type === "option") {
+        assert.ok(doc.usage[1].terms[0].names.includes("--global"));
+      }
+    }
   });
 });

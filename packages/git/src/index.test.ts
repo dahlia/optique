@@ -1444,5 +1444,79 @@ describe("git parsers", () => {
         await cleanupTestRepo(baseDir);
       }
     });
+
+    it("should hit listFailed not-a-repository branch for existing non-git directory", async () => {
+      const nonGitDir = await fs.mkdtemp(
+        join(tmpdir(), "optique-git-nonrepo-"),
+      );
+      try {
+        const result = await gitBranch({ dir: nonGitDir }).parse("main");
+        assert.ok(!result.success);
+      } finally {
+        await cleanupTestRepo(nonGitDir);
+      }
+    });
+
+    it("should hit remoteBranch suggest catch when prefix type is invalid", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+        const head = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "HEAD",
+        });
+        await fs.mkdir(join(testRepoDir, ".git", "refs", "remotes", "origin"), {
+          recursive: true,
+        });
+        await fs.writeFile(
+          join(testRepoDir, ".git", "refs", "remotes", "origin", "main"),
+          `${head}\n`,
+        );
+
+        const badPrefix = Symbol("bad-prefix") as unknown as string;
+        const suggestions: Suggestion[] = [];
+        for await (
+          const s of gitRemoteBranch("origin", { dir: testRepoDir }).suggest!(
+            badPrefix,
+          )
+        ) {
+          suggestions.push(s);
+        }
+        assert.deepEqual(suggestions, []);
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should hit remote suggest catch when prefix type is invalid", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+
+        const badPrefix = Symbol("bad-prefix") as unknown as string;
+        const suggestions: Suggestion[] = [];
+        for await (
+          const s of gitRemote({ dir: testRepoDir }).suggest!(badPrefix)
+        ) {
+          suggestions.push(s);
+        }
+        assert.deepEqual(suggestions, []);
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
   });
 });
