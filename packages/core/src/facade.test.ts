@@ -6696,4 +6696,147 @@ describe("branch coverage: facade.ts edge cases", () => {
       `expected Error: in output, got: ${stderrOutput}`,
     );
   });
+
+  it("runWith uses default empty args when options.args is omitted", async () => {
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+    const result = await runWith(parser, "test", [], {});
+    assert.deepEqual(result, { name: "default" });
+  });
+
+  it("runWith takes async early-exit branch for completion command", async () => {
+    const asyncParser: Parser<"async", string, { value: string | null }> = {
+      $mode: "async",
+      $valueType: [] as unknown as readonly string[],
+      $stateType: [] as unknown as readonly { value: string | null }[],
+      priority: 0,
+      usage: [],
+      initialState: { value: null },
+      parse(context) {
+        const [head, ...rest] = context.buffer;
+        if (head == null) {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing argument.`,
+            consumed: 0,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: rest, state: { value: head } },
+          consumed: [head],
+        });
+      },
+      complete(state) {
+        if (state.value == null) {
+          return Promise.resolve({
+            success: false as const,
+            error: message`No input provided.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          value: state.value,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    let completionShown = false;
+    await runWith(asyncParser, "test", [/* no context */], {
+      args: ["completion", "bash"],
+      completion: {
+        command: true,
+        onShow: () => {
+          completionShown = true;
+          return "completion-shown";
+        },
+      },
+      stdout: () => {},
+    });
+    assert.ok(completionShown);
+  });
+
+  it("runWith handles first-pass throw in two-phase flow", async () => {
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@test/dyn-throw-in-first-pass"),
+      getAnnotations(parsed?: unknown) {
+        if (!parsed) return {};
+        return { [Symbol.for("@test/dyn-throw-in-first-pass")]: {} };
+      },
+    };
+    const throwingParser: Parser<"async", string, { value: string | null }> = {
+      $mode: "async",
+      $valueType: [] as unknown as readonly string[],
+      $stateType: [] as unknown as readonly { value: string | null }[],
+      priority: 0,
+      usage: [],
+      initialState: { value: null },
+      parse() {
+        throw new Error("Boom.");
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Should not complete.`,
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    await assert.rejects(
+      () => runWith(throwingParser, "test", [dynamicContext], { args: ["x"] }),
+      /Boom\./,
+    );
+  });
+
+  it("runWithSync uses default empty args when options.args is omitted", () => {
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+    const result = runWithSync(parser, "test", [], {});
+    assert.deepEqual(result, { name: "default" });
+  });
+
+  it("runWithSync handles first-pass throw in two-phase flow", () => {
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@test/sync-dyn-throw-in-first-pass"),
+      getAnnotations(parsed?: unknown) {
+        if (!parsed) return {};
+        return { [Symbol.for("@test/sync-dyn-throw-in-first-pass")]: {} };
+      },
+    };
+    const throwingParser: Parser<"sync", string, { value: string | null }> = {
+      $mode: "sync",
+      $valueType: [] as unknown as readonly string[],
+      $stateType: [] as unknown as readonly { value: string | null }[],
+      priority: 0,
+      usage: [],
+      initialState: { value: null },
+      parse() {
+        throw new Error("Sync boom.");
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Should not complete.`,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    assert.throws(
+      () =>
+        runWithSync(throwingParser, "test", [dynamicContext], { args: ["x"] }),
+      /Sync boom\./,
+    );
+  });
 });
