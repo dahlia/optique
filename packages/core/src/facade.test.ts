@@ -7020,4 +7020,98 @@ describe("branch coverage: facade.ts edge cases", () => {
     });
     assert.equal(withStaticContext, "second");
   });
+
+  it("completion callbacks fall back to zero-arg overload when arg-call throws", () => {
+    const parser = object({ verbose: option("--verbose") });
+
+    const completionResult = runParser(
+      parser,
+      "myapp",
+      ["completion", "bash"],
+      {
+        completion: {
+          command: true,
+          onShow: function () {
+            if (arguments.length > 0) {
+              throw new Error("arg-call rejected");
+            }
+            return "completion-fallback";
+          },
+        },
+        stdout: () => {},
+        stderr: () => {},
+      },
+    );
+    assert.equal(completionResult, "completion-fallback");
+
+    const errorResult = runParser(parser, "myapp", ["completion"], {
+      completion: { command: true },
+      onError: function () {
+        if (arguments.length > 0) {
+          throw new Error("arg-call rejected");
+        }
+        return "error-fallback";
+      },
+      stderr: () => {},
+      stdout: () => {},
+    });
+    assert.equal(errorResult, "error-fallback");
+  });
+
+  it("completion unsupported shell follows async dispatch path", async () => {
+    const asyncParser: Parser<"async", Record<string, never>, undefined> = {
+      $mode: "async",
+      $valueType: [] as never,
+      $stateType: [] as never,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, buffer: [], state: undefined },
+          consumed: [...context.buffer],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: {},
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = await runParser(asyncParser, "myapp", [
+      "completion",
+      "powershell",
+    ], {
+      completion: { command: true },
+      onError: (code) => `async-error-${code}`,
+      stderr: () => {},
+      stdout: () => {},
+    });
+    assert.equal(result, "async-error-1");
+  });
+
+  it("help callback falls back to zero-arg overload when arg-call throws", () => {
+    const parser = object({ name: argument(string()) });
+    const result = runParser(parser, "myapp", ["--help"], {
+      help: {
+        option: true,
+        onShow: function () {
+          if (arguments.length > 0) {
+            throw new Error("arg-call rejected");
+          }
+          return "help-fallback";
+        },
+      },
+      stderr: () => {},
+      stdout: () => {},
+    });
+    assert.equal(result, "help-fallback");
+  });
 });
