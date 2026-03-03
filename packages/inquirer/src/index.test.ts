@@ -1052,8 +1052,8 @@ describe("prompt()", () => {
                   yield {
                     kind: "literal",
                     text: String(
-                      (context.state as { cliState?: unknown }).cliState ??
-                        "none",
+                      (context.state as { cliState?: unknown } | undefined)
+                        ?.cliState ?? "none",
                     ),
                   };
                 },
@@ -1097,11 +1097,7 @@ describe("prompt()", () => {
             const s of wrapped.suggest(
               {
                 buffer: [],
-                state: {
-                  [Symbol.for("@optique/inquirer/prompt-bind-state")]: true,
-                  hasCliValue: false,
-                  cliState: "cli-state-value",
-                },
+                state: parsed.next.state,
                 optionsTerminated: false,
                 usage: wrapped.usage,
               } as ParserContext<unknown>,
@@ -1117,6 +1113,20 @@ describe("prompt()", () => {
             state: wrapped.initialState,
           });
           assert.ok(doc.footer != null);
+
+          // Re-parse with the real wrapped state to exercise the PromptBindState
+          // unwrapping + annotation merge path.
+          const reparsed = await wrapped.parse({
+            buffer: [],
+            state: parsed.next.state,
+            optionsTerminated: false,
+            usage: wrapped.usage,
+          });
+          assert.ok(reparsed.success);
+
+          // Complete with a non-prompt state to exercise the normal fallback path.
+          const completed = await wrapped.complete({} as unknown as never);
+          assert.ok(completed.success);
 
           const selectWithSeparator = prompt(fail<string>(), {
             type: "select",
