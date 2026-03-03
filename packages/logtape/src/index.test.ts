@@ -4,10 +4,13 @@ import { parse } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { withDefault } from "@optique/core/modifiers";
+import { message } from "@optique/core/message";
 import type { LogLevel } from "@logtape/logtape";
 
 import {
   createConsoleSink,
+  createLoggingConfig,
+  createSink,
   debug,
   LOG_LEVELS,
   loggingOptions,
@@ -243,6 +246,41 @@ describe("logOutput()", () => {
       path: "./logs/app.log",
     });
   });
+
+  it("should reject empty output path", () => {
+    const parser = object({
+      output: logOutput(),
+    });
+    const result = parse(parser, ["--log-output="]);
+    assert.ok(!result.success);
+  });
+
+  it("should use custom empty path error", () => {
+    const parser = object({
+      output: logOutput({
+        errors: {
+          emptyPath: message`Output path is required.`,
+        },
+      }),
+    });
+    const result = parse(parser, ["--log-output=   "]);
+    assert.ok(!result.success);
+  });
+
+  it("should support custom option names", () => {
+    const parser = object({
+      output: logOutput({
+        long: "--output",
+        short: "-o",
+      }),
+    });
+    const result = parse(parser, ["-o", "/tmp/optique.log"]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value.output, {
+      type: "file",
+      path: "/tmp/optique.log",
+    });
+  });
 });
 
 describe("loggingOptions()", () => {
@@ -288,6 +326,24 @@ describe("loggingOptions()", () => {
       const result = parse(parser, ["-l", "warning"]);
       assert.ok(result.success);
       assert.equal(result.value.logging.logLevel, "warning");
+    });
+
+    it("should respect custom option names and default", () => {
+      const parser = object({
+        logging: loggingOptions({
+          level: "option",
+          long: "--level",
+          short: "-L",
+          default: "error",
+        }),
+      });
+      let result = parse(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.logging.logLevel, "error");
+
+      result = parse(parser, ["-L", "trace"]);
+      assert.ok(result.success);
+      assert.equal(result.value.logging.logLevel, "trace");
     });
   });
 
@@ -345,6 +401,38 @@ describe("loggingOptions()", () => {
       assert.ok(result.success);
       assert.deepEqual(result.value.logging.logOutput, { type: "console" });
     });
+
+    it("should respect custom output long option", () => {
+      const parser = object({
+        logging: loggingOptions({
+          level: "debug",
+          output: { long: "--output-file" },
+        }),
+      });
+      const result = parse(parser, ["--output-file=/tmp/custom.log"]);
+      assert.ok(result.success);
+      assert.deepEqual(result.value.logging.logOutput, {
+        type: "file",
+        path: "/tmp/custom.log",
+      });
+    });
+
+    it("should force console output when output option is disabled", () => {
+      const parser = object({
+        logging: loggingOptions({
+          level: "verbosity",
+          output: { enabled: false },
+        }),
+      });
+      const result = parse(parser, ["-v", "--log-output=/tmp/ignored.log"]);
+      assert.ok(!result.success);
+
+      const noOutputResult = parse(parser, ["-v"]);
+      assert.ok(noOutputResult.success);
+      assert.deepEqual(noOutputResult.value.logging.logOutput, {
+        type: "console",
+      });
+    });
   });
 });
 
@@ -367,6 +455,134 @@ describe("createConsoleSink()", () => {
         level === "error" || level === "fatal" ? "stderr" : "stdout",
     });
     assert.equal(typeof sink, "function");
+  });
+
+  it("should write to stderr by default", () => {
+    const sink = createConsoleSink();
+    const originalError = console.error;
+    const lines: string[] = [];
+    console.error = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["optique", "logtape"],
+        level: "warning",
+        message: ["hello ", "world"],
+        rawMessage: "hello world",
+        properties: {},
+        timestamp: 1,
+      });
+    } finally {
+      console.error = originalError;
+    }
+    assert.equal(lines.length, 1);
+    assert.match(
+      lines[0],
+      /^1970-01-01T00:00:00\.001Z \[WARNING\] optique\.logtape: hello world$/,
+    );
+  });
+
+  it("should route by stream resolver", () => {
+    const sink = createConsoleSink({
+      streamResolver: (level) => level === "error" ? "stderr" : "stdout",
+    });
+    const originalError = console.error;
+    const originalLog = console.log;
+    const stderrLines: string[] = [];
+    const stdoutLines: string[] = [];
+    console.error = (line?: unknown) => {
+      stderrLines.push(String(line));
+    };
+    console.log = (line?: unknown) => {
+      stdoutLines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["app"],
+        level: "error",
+        message: ["broken ", 500],
+        rawMessage: "broken 500",
+        properties: {},
+        timestamp: 0,
+      });
+      sink({
+        category: ["app"],
+        level: "info",
+        message: ["ok"],
+        rawMessage: "ok",
+        properties: {},
+        timestamp: 0,
+      });
+    } finally {
+      console.error = originalError;
+      console.log = originalLog;
+    }
+    assert.equal(stderrLines.length, 1);
+    assert.equal(stdoutLines.length, 1);
+    assert.match(stderrLines[0], /\[ERROR\s*\] app: broken 500$/);
+    assert.match(stdoutLines[0], /\[INFO\s*\] app: ok$/);
+  });
+});
+
+describe("createSink()", () => {
+  it("should create console sink for console output", async () => {
+    const sink = await createSink({ type: "console" }, { stream: "stdout" });
+    assert.equal(typeof sink, "function");
+  });
+
+  it("should throw helpful error when file sink package is missing", async () => {
+    await assert.rejects(
+      () => createSink({ type: "file", path: "/tmp/optique.log" }),
+      (error) => {
+        assert.ok(error instanceof Error);
+        assert.match(
+          error.message,
+          /File sink requires @logtape\/file package\./,
+        );
+        return true;
+      },
+    );
+  });
+});
+
+describe("createLoggingConfig()", () => {
+  it("should create baseline config", async () => {
+    const config = await createLoggingConfig({
+      logLevel: "info",
+      logOutput: { type: "console" },
+    });
+    assert.ok(typeof config.sinks.default === "function");
+    assert.equal(config.loggers[0].lowestLevel, "info");
+    assert.deepEqual(config.loggers[0].category, []);
+    assert.deepEqual(config.loggers[0].sinks, ["default"]);
+  });
+
+  it("should merge additional sinks, loggers, and flags", async () => {
+    const otherSink = () => {};
+    const config = await createLoggingConfig(
+      {
+        logLevel: "debug",
+        logOutput: { type: "console" },
+      },
+      {},
+      {
+        sinks: { other: otherSink },
+        loggers: [{
+          category: ["extra"],
+          lowestLevel: "warning",
+          sinks: ["other"],
+        }],
+        filters: {},
+        reset: true,
+      },
+    );
+    assert.ok(typeof config.sinks.default === "function");
+    assert.equal(config.sinks.other, otherSink);
+    assert.equal(config.loggers.length, 2);
+    assert.equal(config.loggers[1].lowestLevel, "warning");
+    assert.equal(config.reset, true);
+    assert.deepEqual(config.filters, {});
   });
 });
 
