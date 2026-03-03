@@ -1984,6 +1984,174 @@ describe("argument", () => {
   });
 });
 
+describe("primitives additional branch coverage", () => {
+  it("option parse covers async separated value path", async () => {
+    const asyncInt: ValueParser<"async", number> = {
+      $mode: "async",
+      metavar: "INT",
+      parse(input) {
+        return Promise.resolve({ success: true, value: Number(input) });
+      },
+      format(value) {
+        return String(value);
+      },
+    };
+    const parser = option("--count", asyncInt);
+    const result = parser.parse({
+      buffer: ["--count", "42"],
+      state: undefined,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(result instanceof Promise);
+    const resolved = await result;
+    assert.ok(resolved.success);
+    if (resolved.success) {
+      assert.deepEqual(resolved.consumed, ["--count", "42"]);
+      assert.deepEqual(resolved.next.buffer, []);
+    }
+  });
+
+  it("option duplicate error function handles direct and joined forms", () => {
+    const parser = option("--count", integer(), {
+      errors: {
+        duplicate: (name) => message`duplicate: ${text(name)}`,
+      },
+    });
+
+    const direct = parser.parse({
+      buffer: ["--count", "1"],
+      state: { success: true, value: 1 },
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(!direct.success);
+    if (!direct.success) {
+      assert.equal(formatMessage(direct.error), "duplicate: --count");
+    }
+
+    const joined = parser.parse({
+      buffer: ["--count=1"],
+      state: { success: true, value: 1 },
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(!joined.success);
+    if (!joined.success) {
+      assert.equal(formatMessage(joined.error), "duplicate: --count=");
+    }
+  });
+
+  it("option complete covers deferred success and custom invalid branches", () => {
+    const dep = dependency(string({ metavar: "MODE" }));
+    const parser = option("--port", integer(), {
+      errors: {
+        invalidValue: (error) => message`invalid ${error}`,
+      },
+    });
+
+    const deferredSuccess = parser.complete(
+      createDeferredParseState(
+        "42",
+        deriveFromSync({
+          metavar: "INT",
+          dependencies: [dep] as const,
+          defaultValues: () => ["10"] as const,
+          factory: () => integer(),
+        }),
+        { success: true, value: 42 },
+      ) as unknown as Parameters<typeof parser.complete>[0],
+    );
+    assert.ok(deferredSuccess.success);
+    if (deferredSuccess.success) {
+      assert.equal(deferredSuccess.value, 42);
+    }
+
+    const deferredFailure = parser.complete(
+      createDeferredParseState(
+        "x",
+        deriveFromSync({
+          metavar: "INT",
+          dependencies: [dep] as const,
+          defaultValues: () => ["10"] as const,
+          factory: () => integer(),
+        }),
+        { success: false, error: message`bad-int` },
+      ) as unknown as Parameters<typeof parser.complete>[0],
+    );
+    assert.ok(!deferredFailure.success);
+    if (!deferredFailure.success) {
+      assert.equal(formatMessage(deferredFailure.error), "invalid bad-int");
+    }
+
+    const dependencyFailure = parser.complete(
+      createDependencySourceState(
+        { success: false, error: message`dep-fail` },
+        dep[dependencyId],
+      ) as unknown as Parameters<typeof parser.complete>[0],
+    );
+    assert.ok(!dependencyFailure.success);
+    if (!dependencyFailure.success) {
+      assert.equal(formatMessage(dependencyFailure.error), "invalid dep-fail");
+    }
+
+    const plainFailure = parser.complete({
+      success: false,
+      error: message`plain-fail`,
+    });
+    assert.ok(!plainFailure.success);
+    if (!plainFailure.success) {
+      assert.equal(formatMessage(plainFailure.error), "invalid plain-fail");
+    }
+  });
+
+  it("argument complete covers custom invalid branches", () => {
+    const dep = dependency(string({ metavar: "MODE" }));
+    const parser = argument(integer(), {
+      errors: {
+        invalidValue: (error) => message`bad ${error}`,
+      },
+    });
+
+    const deferredFailure = parser.complete(
+      createDeferredParseState(
+        "oops",
+        deriveFromSync({
+          metavar: "INT",
+          dependencies: [dep] as const,
+          defaultValues: () => ["10"] as const,
+          factory: () => integer(),
+        }),
+        { success: false, error: message`deferred-fail` },
+      ) as unknown as Parameters<typeof parser.complete>[0],
+    );
+    assert.ok(!deferredFailure.success);
+    if (!deferredFailure.success) {
+      assert.equal(formatMessage(deferredFailure.error), "bad deferred-fail");
+    }
+
+    const dependencyFailure = parser.complete(
+      createDependencySourceState(
+        { success: false, error: message`dep-fail` },
+        dep[dependencyId],
+      ) as unknown as Parameters<typeof parser.complete>[0],
+    );
+    assert.ok(!dependencyFailure.success);
+    if (!dependencyFailure.success) {
+      assert.equal(formatMessage(dependencyFailure.error), "bad dep-fail");
+    }
+
+    const plainFailure = parser.complete({
+      success: false,
+      error: message`plain-fail`,
+    });
+    assert.ok(!plainFailure.success);
+    if (!plainFailure.success) {
+      assert.equal(formatMessage(plainFailure.error), "bad plain-fail");
+    }
+  });
+});
+
 describe("argument() error customization", () => {
   it("should use custom endOfInput error", () => {
     const parser = argument(string(), {
