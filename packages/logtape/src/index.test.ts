@@ -88,6 +88,40 @@ describe("logLevel()", () => {
       assert.equal(suggestions.length, LOG_LEVELS.length);
     });
   });
+
+  describe("custom errors", () => {
+    it("should support static invalidLevel message", () => {
+      const parser = logLevel({
+        errors: {
+          invalidLevel: message`Bad level.`,
+        },
+      });
+      const result = parser.parse("nope");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const text = result.error
+          .map((part) => "text" in part ? part.text : "")
+          .join("");
+        assert.ok(text.includes("Bad level."));
+      }
+    });
+
+    it("should support function invalidLevel message", () => {
+      const parser = logLevel({
+        errors: {
+          invalidLevel: (input) => message`Unknown level: ${input}`,
+        },
+      });
+      const result = parser.parse("LOUD");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const text = result.error
+          .map((part) => "text" in part ? part.text : "")
+          .join("");
+        assert.ok(text.includes("Unknown level:"));
+      }
+    });
+  });
 });
 
 describe("verbosity()", () => {
@@ -153,6 +187,15 @@ describe("verbosity()", () => {
     const result = parse(parser, ["--verbose", "--verbose"]);
     assert.ok(result.success);
     assert.equal(result.value.level, "debug");
+  });
+
+  it("should fall back to warning index for unknown base level at runtime", () => {
+    const parser = object({
+      level: verbosity({ baseLevel: "invalid" as unknown as LogLevel }),
+    });
+    const result = parse(parser, ["-v"]);
+    assert.ok(result.success);
+    assert.equal(result.value.level, "info");
   });
 });
 
