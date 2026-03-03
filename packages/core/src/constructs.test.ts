@@ -7390,4 +7390,306 @@ describe("branch coverage: constructs.ts edge cases", () => {
       assert.equal(result.value[1], true);
     }
   });
+
+  it("tuple() suggest uses initialState when context.state is non-array", async () => {
+    const syncTuple = tuple([option("--sync-only", string())]);
+    const syncSuggestions = syncTuple.suggest(
+      {
+        buffer: [],
+        state: {} as never,
+        optionsTerminated: false,
+        usage: syncTuple.usage,
+      },
+      "",
+    );
+    assert.ok(Array.isArray([...syncSuggestions]));
+
+    const asyncValueParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VAL",
+      parse: (v) => Promise.resolve({ success: true, value: v }),
+      format: (v) => v,
+    };
+    const asyncTuple = tuple([
+      option("--async-first", asyncValueParser),
+      option("--sync-second", string()),
+    ]);
+    const asyncSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of asyncTuple.suggest(
+        {
+          buffer: [],
+          state: {} as never,
+          optionsTerminated: false,
+          usage: asyncTuple.usage,
+        },
+        "",
+      )
+    ) {
+      asyncSuggestions.push(suggestion);
+    }
+    assert.ok(Array.isArray(asyncSuggestions));
+  });
+
+  it("concat() suggest handles non-array state in async mode", async () => {
+    const asyncValueParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VAL",
+      parse: (v) => Promise.resolve({ success: true, value: v }),
+      format: (v) => v,
+    };
+    const parser = concat(
+      tuple([option("--a", asyncValueParser)]),
+      tuple([option("--b", string())]),
+    );
+
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest(
+        {
+          buffer: [],
+          state: {} as never,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      )
+    ) {
+      suggestions.push(suggestion);
+    }
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("conditional() parse handles undefined and preselected states", async () => {
+    const syncConditional = conditional(
+      option("--mode", choice(["fast", "slow"])),
+      {
+        fast: optional(option("--threads", integer())),
+        slow: optional(flag("--verbose")),
+      },
+    );
+
+    const syncFromUndefined = syncConditional.parse({
+      buffer: ["--mode", "fast", "--threads", "8"],
+      state: undefined as never,
+      optionsTerminated: false,
+      usage: syncConditional.usage,
+    });
+    assert.ok(syncFromUndefined.success);
+
+    const syncFromSelected = syncConditional.parse({
+      buffer: ["--threads", "10"],
+      state: {
+        discriminatorState: syncConditional.initialState.discriminatorState,
+        discriminatorValue: "fast",
+        selectedBranch: { kind: "branch", key: "fast" },
+        branchState: syncConditional.initialState.branchState,
+      },
+      optionsTerminated: false,
+      usage: syncConditional.usage,
+    });
+    assert.ok(syncFromSelected.success);
+
+    const asyncValueParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VAL",
+      parse: (v) => Promise.resolve({ success: true, value: v }),
+      format: (v) => v,
+    };
+    const asyncDefault = optional(option("--default", string()));
+    const asyncConditional = conditional(
+      option("--mode", asyncValueParser),
+      { fast: optional(option("--threads", integer())) },
+      asyncDefault,
+    );
+
+    const asyncFromUndefined = await asyncConditional.parse({
+      buffer: ["--default", "x"],
+      state: undefined as never,
+      optionsTerminated: false,
+      usage: asyncConditional.usage,
+    });
+    assert.ok(asyncFromUndefined.success);
+
+    const asyncFromSelectedDefault = await asyncConditional.parse({
+      buffer: ["--default", "y"],
+      state: {
+        discriminatorState: asyncConditional.initialState.discriminatorState,
+        discriminatorValue: undefined,
+        selectedBranch: { kind: "default" },
+        branchState: asyncDefault.initialState,
+      },
+      optionsTerminated: false,
+      usage: asyncConditional.usage,
+    });
+    assert.ok(asyncFromSelectedDefault.success);
+  });
+
+  it("conditional() complete handles selected branches directly", async () => {
+    const syncConditional = conditional(
+      option("--mode", choice(["fast", "slow"])),
+      {
+        fast: optional(option("--threads", integer())),
+        slow: optional(flag("--verbose")),
+      },
+    );
+
+    const syncParsed = syncConditional.parse({
+      buffer: ["--mode", "fast", "--threads", "2"],
+      state: syncConditional.initialState,
+      optionsTerminated: false,
+      usage: syncConditional.usage,
+    });
+    assert.ok(syncParsed.success);
+    if (syncParsed.success) {
+      const syncCompleted = syncConditional.complete(syncParsed.next.state);
+      assert.ok(syncCompleted.success);
+      if (syncCompleted.success) {
+        assert.equal(syncCompleted.value[0], "fast");
+      }
+    }
+
+    const asyncValueParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VAL",
+      parse: (v) => Promise.resolve({ success: true, value: v }),
+      format: (v) => v,
+    };
+    const asyncConditional = conditional(
+      option("--mode", asyncValueParser),
+      { fast: optional(option("--threads", integer())) },
+      optional(option("--default", string())),
+    );
+
+    const asyncParsed = await asyncConditional.parse({
+      buffer: ["--mode", "fast", "--threads", "3"],
+      state: asyncConditional.initialState,
+      optionsTerminated: false,
+      usage: asyncConditional.usage,
+    });
+    assert.ok(asyncParsed.success);
+    if (asyncParsed.success) {
+      const asyncCompleted = await asyncConditional.complete(
+        asyncParsed.next.state,
+      );
+      assert.ok(asyncCompleted.success);
+      if (asyncCompleted.success) {
+        assert.equal(asyncCompleted.value[0], "fast");
+      }
+    }
+  });
+
+  it("conditional() suggest handles undefined and selected branch states", async () => {
+    const asyncValueParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VAL",
+      parse: (v) => Promise.resolve({ success: true, value: v }),
+      format: (v) => v,
+    };
+    const parser = conditional(
+      option("--mode", asyncValueParser),
+      { fast: optional(option("--threads", integer())) },
+      optional(option("--default", string())),
+    );
+
+    const withUndefinedState: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest(
+        {
+          buffer: [],
+          state: undefined as never,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      )
+    ) {
+      withUndefinedState.push(suggestion);
+    }
+    assert.ok(Array.isArray(withUndefinedState));
+
+    const withSelectedBranch: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest(
+        {
+          buffer: [],
+          state: {
+            discriminatorState: parser.initialState.discriminatorState,
+            discriminatorValue: "fast",
+            selectedBranch: { kind: "branch", key: "fast" },
+            branchState: parser.initialState.branchState,
+          },
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      )
+    ) {
+      withSelectedBranch.push(suggestion);
+    }
+    assert.ok(Array.isArray(withSelectedBranch));
+  });
+
+  it("merge() parses undefined-initialState parsers with stored state keys", () => {
+    const undefinedStateParser: Parser<
+      "sync",
+      { readonly dynamic: string },
+      { readonly dynamicState?: string } | undefined
+    > = {
+      $mode: "sync",
+      $valueType: [] as readonly { readonly dynamic: string }[],
+      $stateType:
+        [] as readonly ({ readonly dynamicState?: string } | undefined)[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true,
+          next: {
+            ...context,
+            state: context.state ?? { dynamicState: "restored" },
+          },
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return {
+          success: true,
+          value: { dynamic: state?.dynamicState ?? "none" },
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const stableParser = object({
+      stable: optional(option("--stable", string())),
+    });
+    const parser = merge(undefinedStateParser, stableParser);
+    const parserKey = Object.keys(parser.initialState).find((key) =>
+      key.startsWith("__parser_")
+    );
+    assert.ok(parserKey != null);
+
+    const parsed = parser.parse({
+      buffer: [],
+      state: {
+        [parserKey]: { dynamicState: "from-context" },
+      },
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+
+    const completed = parser.complete(parsed.success ? parsed.next.state : {});
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.equal(completed.value.dynamic, "from-context");
+    }
+  });
 });
