@@ -1,6 +1,6 @@
 {
   "name": "@optique/git",
-  "version": "0.10.7",
+  "version": "0.10.8",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts"
