@@ -7232,6 +7232,32 @@ describe("branch coverage: constructs.ts edge cases", () => {
   });
 
   // ----- tuple() async complete Phase 1 Cases (lines 3754-3896) -----
+  it("tuple() sync complete Case 1: PendingDependencySourceState", () => {
+    const p = tuple([
+      option("--a", string()),
+      withDefault(option("--b", string()), "dflt"),
+    ]);
+    const result = parseSync(p, ["--a", "x"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "x");
+      assert.equal(result.value[1], "dflt");
+    }
+  });
+
+  it("tuple() sync complete Case 2: undefined state, initialState is Pending", () => {
+    const p = tuple([
+      option("--a", string()),
+      withDefault(optional(option("--b", string())), "fallback"),
+    ]);
+    const result = parseSync(p, ["--a", "hello"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value[0], "hello");
+      assert.equal(result.value[1], undefined);
+    }
+  });
+
   it("tuple() async complete Case 1: PendingDependencySourceState", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
@@ -7333,6 +7359,141 @@ describe("branch coverage: constructs.ts edge cases", () => {
     const p = tuple([failingWrapped]);
     const completed = await p.complete(p.initialState);
     assert.ok(!completed.success);
+  });
+
+  it("tuple() complete pre-completed dependency success (sync + async)", async () => {
+    const syncDep = createPendingDependencySourceState(Symbol("tuple-sync-ok"));
+    const syncWrapped = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [wrappedDependencySourceMarker]: syncDep,
+      parse: () => ({
+        success: true as const,
+        next: {
+          buffer: [],
+          state: undefined,
+          optionsTerminated: false,
+          usage: [],
+        },
+        consumed: [],
+      }),
+      complete: () =>
+        createDependencySourceState(
+          { success: true as const, value: "sync-default" },
+          syncDep[dependencyId],
+        ),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+
+    const asyncDep = createPendingDependencySourceState(
+      Symbol("tuple-async-ok"),
+    );
+    const asyncWrapped = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [wrappedDependencySourceMarker]: asyncDep,
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [],
+            state: undefined,
+            optionsTerminated: false,
+            usage: [],
+          },
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve(
+          createDependencySourceState(
+            { success: true as const, value: "async-default" },
+            asyncDep[dependencyId],
+          ),
+        ),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, undefined>;
+
+    const syncTuple = tuple([syncWrapped]);
+    const syncCompleted = syncTuple.complete(syncTuple.initialState);
+    assert.ok(syncCompleted.success);
+    if (syncCompleted.success) {
+      assert.deepEqual(syncCompleted.value, ["sync-default"]);
+    }
+
+    const asyncTuple = tuple([asyncWrapped]);
+    const asyncCompleted = await asyncTuple.complete(asyncTuple.initialState);
+    assert.ok(asyncCompleted.success);
+    if (asyncCompleted.success) {
+      assert.deepEqual(asyncCompleted.value, ["async-default"]);
+    }
+  });
+
+  it("tuple() getDocFragments merges untitled section entries", () => {
+    const parserWithUntitledSection = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse: (_context: ParserContext<undefined>) => ({
+        success: false as const,
+        consumed: 0,
+        error: message`no parse`,
+      }),
+      complete: (_state: undefined) => ({
+        success: true as const,
+        value: true,
+      }),
+      suggest: function* () {},
+      getDocFragments: () => ({
+        fragments: [{
+          type: "section" as const,
+          title: null,
+          entries: [{
+            type: "entry" as const,
+            term: {
+              type: "option" as const,
+              names: ["--from-custom"],
+              preferredName: "--from-custom",
+            },
+          }],
+        }],
+      }),
+    } as unknown as Parser<"sync", boolean, undefined>;
+
+    const p = tuple("Doc Tuple", [parserWithUntitledSection]);
+    const fragments = p.getDocFragments({
+      kind: "available",
+      state: p.initialState,
+    });
+
+    const mainSection = fragments.fragments.find((f) =>
+      f.type === "section" && f.title === "Doc Tuple"
+    );
+    assert.ok(mainSection);
+    if (mainSection?.type === "section") {
+      assert.equal(mainSection.entries.length, 1);
+      assert.equal(mainSection.entries[0].term.type, "option");
+    }
+  });
+
+  it("tuple() custom inspect includes label and parser count", () => {
+    const p = tuple("Inspect Tuple", [option("--flag")]);
+    const inspect = (p as unknown as Record<symbol, () => string>)[
+      Symbol.for("Deno.customInspect")
+    ]();
+    assert.equal(inspect, 'tuple("Inspect Tuple", [1 parser])');
   });
 
   // ----- tuple() getDocFragments: fragment.title == null promotes entries (line 3951) -----
