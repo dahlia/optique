@@ -11,6 +11,12 @@ import {
 } from "@optique/core/constructs";
 import type { DocEntry, DocFragment, DocSection } from "@optique/core/doc";
 import {
+  createDependencySourceState,
+  createPendingDependencySourceState,
+  dependencyId,
+  wrappedDependencySourceMarker,
+} from "@optique/core/dependency";
+import {
   formatMessage,
   type Message,
   message,
@@ -6898,6 +6904,77 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(result.success);
   });
 
+  it("object() complete extracts pre-completed dependency failure (sync)", () => {
+    const dep = createPendingDependencySourceState(Symbol("obj-sync-dep"));
+    const failingWrapped = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [wrappedDependencySourceMarker]: dep,
+      parse: () => ({
+        success: true as const,
+        next: {
+          buffer: [],
+          state: undefined,
+          optionsTerminated: false,
+          usage: [],
+        },
+        consumed: [],
+      }),
+      complete: () =>
+        createDependencySourceState(
+          { success: false as const, error: message`object sync fail` },
+          dep[dependencyId],
+        ),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+
+    const p = object({ bad: failingWrapped });
+    const completed = p.complete(p.initialState);
+    assert.ok(!completed.success);
+  });
+
+  it("object() complete extracts pre-completed dependency failure (async)", async () => {
+    const dep = createPendingDependencySourceState(Symbol("obj-async-dep"));
+    const failingWrapped = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [wrappedDependencySourceMarker]: dep,
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [],
+            state: undefined,
+            optionsTerminated: false,
+            usage: [],
+          },
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve(
+          createDependencySourceState(
+            { success: false as const, error: message`object async fail` },
+            dep[dependencyId],
+          ),
+        ),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, undefined>;
+
+    const p = object({ bad: failingWrapped });
+    const completed = await p.complete(p.initialState);
+    assert.ok(!completed.success);
+  });
+
   // ----- suggestTupleSync: stateArray not an array (line 3366) -----
   it("suggestTupleSync uses initialState when stateArray is not an array", () => {
     const p = tuple([option("--x", string()), flag("--y")]);
@@ -6980,6 +7057,75 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(result.success);
   });
 
+  it("tuple() complete pre-completed dependency failure (sync)", () => {
+    const dep = createPendingDependencySourceState(Symbol("tuple-sync-dep"));
+    const failingWrapped = {
+      $mode: "sync" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [wrappedDependencySourceMarker]: dep,
+      parse: () => ({
+        success: true as const,
+        next: {
+          buffer: [],
+          state: undefined,
+          optionsTerminated: false,
+          usage: [],
+        },
+        consumed: [],
+      }),
+      complete: () =>
+        createDependencySourceState(
+          { success: false as const, error: message`tuple sync fail` },
+          dep[dependencyId],
+        ),
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, undefined>;
+    const p = tuple([failingWrapped]);
+    const completed = p.complete(p.initialState);
+    assert.ok(!completed.success);
+  });
+
+  it("tuple() complete pre-completed dependency failure (async)", async () => {
+    const dep = createPendingDependencySourceState(Symbol("tuple-async-dep"));
+    const failingWrapped = {
+      $mode: "async" as const,
+      $valueType: undefined,
+      $stateType: undefined,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      [wrappedDependencySourceMarker]: dep,
+      parse: () =>
+        Promise.resolve({
+          success: true as const,
+          next: {
+            buffer: [],
+            state: undefined,
+            optionsTerminated: false,
+            usage: [],
+          },
+          consumed: [],
+        }),
+      complete: () =>
+        Promise.resolve(
+          createDependencySourceState(
+            { success: false as const, error: message`tuple async fail` },
+            dep[dependencyId],
+          ),
+        ),
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, undefined>;
+    const p = tuple([failingWrapped]);
+    const completed = await p.complete(p.initialState);
+    assert.ok(!completed.success);
+  });
+
   // ----- tuple() getDocFragments: fragment.title == null promotes entries (line 3951) -----
   it("tuple() getDocFragments promotes null-title section entries", () => {
     // A child parser with no label produces a null-title section; its entries
@@ -7027,6 +7173,26 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  it("merge() parseSync returns consuming failure from child parser", () => {
+    const p1 = object({ x: option("--x", string()) });
+    const p2 = object({ y: optional(option("--y", string())) });
+    const m = merge(p1, p2);
+    const result = parseSync(m, ["--x"]);
+    assert.ok(!result.success);
+  });
+
+  it("merge() parseAsync keeps zero-consumed success context", async () => {
+    const p1 = object({ a: optional(option("--a", asyncStringValue())) });
+    const p2 = object({ b: optional(option("--b", string())) });
+    const m = merge(p1, p2);
+    const result = await parseAsync(m, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.a, undefined);
+      assert.equal(result.value.b, undefined);
+    }
+  });
+
   // ----- merge() suggest: key-not-in-state (lines 5479/5483) -----
   it("merge() suggest with missing field in state uses parser.initialState", () => {
     const p1 = object({ x: option("--x", string()) });
@@ -7052,6 +7218,25 @@ describe("branch coverage: constructs.ts edge cases", () => {
     // p2 is sync → else branch (line 5510/5517 area)
     const suggs = await suggestAsync(m, ["--"]);
     assert.ok(Array.isArray(suggs));
+  });
+
+  it("merge() suggest with hidden true returns empty in async mode", async () => {
+    const p1 = object({ a: option("--a", asyncStringValue()) });
+    const p2 = object({ b: option("--b", string()) });
+    const m = merge(p1, p2, { hidden: true });
+    const suggs = await suggestAsync(m, ["--"]);
+    assert.deepEqual(suggs, []);
+  });
+
+  it("merge() suggest uses undefined-state fallback for undefined initialState parser", () => {
+    const undefStateParser = withDefault(
+      object({ x: optional(option("--x", string())) }),
+      { x: undefined as string | undefined },
+    );
+    const regular = object({ y: optional(option("--y", string())) });
+    const m = merge(undefStateParser, regular);
+    const suggs = suggestSync(m, ["--"]);
+    assert.ok(Array.isArray([...suggs]));
   });
 
   // ----- merge() getDocFragments: null-title sections promoted (line 5594) -----
