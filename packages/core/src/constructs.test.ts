@@ -14,6 +14,7 @@ import {
   createDependencySourceState,
   createPendingDependencySourceState,
   dependencyId,
+  isPendingDependencySourceState,
   wrappedDependencySourceMarker,
 } from "@optique/core/dependency";
 import {
@@ -7039,6 +7040,22 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(!result.success);
   });
 
+  it("object() parseSync uses parser initialState when context.state is non-object", () => {
+    const p = object({
+      name: optional(option("--name", string())),
+    });
+    const parsed = p.parse({
+      buffer: [],
+      state: 0 as unknown as typeof p.initialState,
+      optionsTerminated: false,
+      usage: p.usage,
+    });
+    assert.ok(parsed.success);
+    if (parsed.success) {
+      assert.deepEqual(parsed.consumed, []);
+    }
+  });
+
   // ----- object() parseAsync: error.consumed update (line 2971) -----
   it("object() parseAsync updates best error when consumed improves", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
@@ -7069,6 +7086,22 @@ describe("branch coverage: constructs.ts edge cases", () => {
     });
     const result = await parseAsync(p, []);
     assert.ok(!result.success);
+  });
+
+  it("object() parseAsync uses parser initialState when context.state is non-object", async () => {
+    const p = object({
+      name: optional(option("--name", asyncStringValue())),
+    });
+    const parsed = await p.parse({
+      buffer: [],
+      state: 0 as unknown as typeof p.initialState,
+      optionsTerminated: false,
+      usage: p.usage,
+    });
+    assert.ok(parsed.success);
+    if (parsed.success) {
+      assert.deepEqual(parsed.consumed, []);
+    }
   });
 
   // ----- object() complete async: Phase 1 Cases 1/2/3 (lines 3083-3257) -----
@@ -7258,6 +7291,57 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
   });
 
+  it("tuple() sync complete handles explicit pending states for Case 1/2", () => {
+    const dep1 = createPendingDependencySourceState(Symbol("tuple-case1-sync"));
+    const dep2 = createPendingDependencySourceState(Symbol("tuple-case2-sync"));
+    const pendingAware = (
+      dep: ReturnType<typeof createPendingDependencySourceState>,
+    ) =>
+      ({
+        $mode: "sync" as const,
+        $valueType: undefined,
+        $stateType: undefined,
+        priority: 0,
+        usage: [],
+        initialState: dep,
+        parse: () => ({
+          success: true as const,
+          next: {
+            buffer: [],
+            state: undefined,
+            optionsTerminated: false,
+            usage: [],
+          },
+          consumed: [],
+        }),
+        complete: (state: unknown) => {
+          if (
+            Array.isArray(state) &&
+            state.length === 1 &&
+            isPendingDependencySourceState(state[0])
+          ) {
+            return createDependencySourceState(
+              { success: true as const, value: dep[dependencyId].description },
+              dep[dependencyId],
+            );
+          }
+          return { success: true as const, value: "fallback" };
+        },
+        suggest: function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+      }) as unknown as Parser<"sync", string, unknown>;
+
+    const p = tuple([pendingAware(dep1), pendingAware(dep2)]);
+    const completed = p.complete([[dep1], undefined]);
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.deepEqual(completed.value, [
+        "tuple-case1-sync",
+        "tuple-case2-sync",
+      ]);
+    }
+  });
+
   it("tuple() async complete Case 1: PendingDependencySourceState", async () => {
     const asyncValueParser: ValueParser<"async", string> = {
       $mode: "async",
@@ -7290,6 +7374,67 @@ describe("branch coverage: constructs.ts edge cases", () => {
     ]);
     const result = await parseAsync(p, ["--a", "hello"]);
     assert.ok(result.success);
+  });
+
+  it("tuple() async complete handles explicit pending states for Case 1/2", async () => {
+    const dep1 = createPendingDependencySourceState(
+      Symbol("tuple-case1-async"),
+    );
+    const dep2 = createPendingDependencySourceState(
+      Symbol("tuple-case2-async"),
+    );
+    const pendingAware = (
+      dep: ReturnType<typeof createPendingDependencySourceState>,
+    ) =>
+      ({
+        $mode: "async" as const,
+        $valueType: undefined,
+        $stateType: undefined,
+        priority: 0,
+        usage: [],
+        initialState: dep,
+        parse: () =>
+          Promise.resolve({
+            success: true as const,
+            next: {
+              buffer: [],
+              state: undefined,
+              optionsTerminated: false,
+              usage: [],
+            },
+            consumed: [],
+          }),
+        complete: (state: unknown) => {
+          if (
+            Array.isArray(state) &&
+            state.length === 1 &&
+            isPendingDependencySourceState(state[0])
+          ) {
+            return Promise.resolve(
+              createDependencySourceState(
+                {
+                  success: true as const,
+                  value: dep[dependencyId].description,
+                },
+                dep[dependencyId],
+              ),
+            );
+          }
+          return Promise.resolve({ success: true as const, value: "fallback" });
+        },
+        suggest: async function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+      }) as unknown as Parser<"async", string, unknown>;
+
+    const p = tuple([pendingAware(dep1), pendingAware(dep2)]);
+    const completed = await p.complete([[dep1], undefined]);
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.deepEqual(completed.value, [
+        "tuple-case1-async",
+        "tuple-case2-async",
+      ]);
+    }
   });
 
   it("tuple() complete pre-completed dependency failure (sync)", () => {
