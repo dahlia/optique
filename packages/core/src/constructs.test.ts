@@ -8664,4 +8664,225 @@ describe("branch coverage: constructs.ts edge cases", () => {
       assert.deepEqual(completed.value, ["fast", "S"]);
     }
   });
+
+  it("object() suggest returns empty when hidden is true in sync and async", async () => {
+    const syncObject = object(
+      { name: optional(option("--name", string())) },
+      { hidden: true },
+    );
+    assert.deepEqual([...syncObject.suggest({
+      buffer: [],
+      state: syncObject.initialState,
+      optionsTerminated: false,
+      usage: syncObject.usage,
+    }, "")], []);
+
+    const asyncObject = object(
+      { name: optional(option("--name", asyncStringValue())) },
+      { hidden: true },
+    );
+    const asyncSuggestions: Suggestion[] = [];
+    for await (
+      const suggestion of asyncObject.suggest({
+        buffer: [],
+        state: asyncObject.initialState,
+        optionsTerminated: false,
+        usage: asyncObject.usage,
+      }, "")
+    ) {
+      asyncSuggestions.push(suggestion);
+    }
+    assert.deepEqual(asyncSuggestions, []);
+  });
+
+  it("tuple() custom inspect covers unlabeled multi-parser format", () => {
+    const parser = tuple([option("--first", string()), flag("--second")]);
+    const inspect = (parser as unknown as Record<symbol, () => string>)[
+      Symbol.for("Deno.customInspect")
+    ]();
+    assert.equal(inspect, "tuple([2 parsers])");
+  });
+
+  it("merge() uses parser initialState fallback for non-object state", async () => {
+    const parser = merge(
+      object({ a: optional(option("--a", asyncStringValue())) }),
+      object({ b: optional(option("--b", string())) }),
+    );
+
+    const parsed = await parser.parse({
+      buffer: [],
+      state: 0 as unknown as typeof parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+
+    const completed = await parser.complete(
+      0 as unknown as typeof parser.initialState,
+    );
+    assert.ok(completed.success);
+
+    const suggestions: Suggestion[] = [];
+    for await (
+      const suggestion of parser.suggest({
+        buffer: [],
+        state: 0 as unknown as typeof parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "--")
+    ) {
+      suggestions.push(suggestion);
+    }
+    assert.ok(Array.isArray(suggestions));
+  });
+
+  it("concat() marks zero-consumed failures as matched in sync and async", async () => {
+    const failSync: Parser<"sync", readonly string[], undefined> = {
+      $mode: "sync",
+      $valueType: [] as readonly (readonly string[])[],
+      $stateType: [] as readonly undefined[],
+      priority: 5,
+      usage: [],
+      initialState: undefined,
+      parse() {
+        return { success: false as const, consumed: 0, error: message`fail` };
+      },
+      complete() {
+        return { success: true as const, value: ["sync-fail"] as const };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const zeroSync: Parser<"sync", readonly string[], undefined> = {
+      ...failSync,
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: ["sync-zero"] as const };
+      },
+    };
+    const syncParser = concat(failSync, zeroSync);
+    const syncResult = parseSync(syncParser, []);
+    assert.ok(syncResult.success);
+    if (syncResult.success) {
+      assert.deepEqual(syncResult.value, ["sync-fail", "sync-zero"]);
+    }
+
+    const failAsync: Parser<"async", readonly string[], undefined> = {
+      $mode: "async",
+      $valueType: [] as readonly (readonly string[])[],
+      $stateType: [] as readonly undefined[],
+      priority: 5,
+      usage: [],
+      initialState: undefined,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`fail`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: ["async-fail"] as const,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const zeroAsync: Parser<"async", readonly string[], undefined> = {
+      ...failAsync,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: true as const,
+          value: ["async-zero"] as const,
+        });
+      },
+    };
+    const asyncParser = concat(failAsync, zeroAsync);
+    const asyncResult = await parseAsync(asyncParser, []);
+    assert.ok(asyncResult.success);
+    if (asyncResult.success) {
+      assert.deepEqual(asyncResult.value, ["async-fail", "async-zero"]);
+    }
+  });
+
+  it("group() suggest returns empty when hidden is true", () => {
+    const parser = group(
+      "Hidden Group",
+      object({ name: optional(option("--name", string())) }),
+      { hidden: true },
+    );
+    const suggestions = parser.suggest({
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, "");
+    assert.deepEqual([...suggestions as Iterable<Suggestion>], []);
+  });
+
+  it("conditional() selected branch parse failure is propagated", () => {
+    const parser = conditional(
+      option("--mode", choice(["fast", "slow"])),
+      {
+        fast: option("--threads", integer()),
+        slow: flag("--verbose"),
+      },
+    );
+    const failed = parser.parse({
+      buffer: ["--threads"],
+      state: {
+        ...parser.initialState,
+        selectedBranch: { kind: "branch", key: "fast" as const },
+      },
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(!failed.success);
+  });
+
+  it("conditional() async complete returns default branch failure", async () => {
+    const discriminator = option("--mode", asyncStringValue());
+    const failingDefault: Parser<"async", string, undefined> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 1,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`default failed`,
+        });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    };
+
+    const parser = conditional(
+      discriminator,
+      { fast: constant("F") },
+      failingDefault,
+    );
+    const completed = await parser.complete(parser.initialState);
+    assert.ok(!completed.success);
+  });
 });
