@@ -4173,6 +4173,31 @@ describe("runWith", () => {
       assert.ok(completionShown);
       assert.equal(annotationsCallCount, 0);
     });
+
+    it("should continue to context phase when completion option is configured but absent", async () => {
+      let annotationsCallCount = 0;
+      const trackingContext: SourceContext = {
+        id: Symbol.for("@test/tracking-present-but-absent-completion"),
+        getAnnotations() {
+          annotationsCallCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: argument(string()),
+      });
+
+      const result = await runWith(parser, "test", [trackingContext], {
+        args: ["alice"],
+        completion: {
+          option: true,
+        },
+      });
+
+      assert.deepEqual(result, { name: "alice" });
+      assert.equal(annotationsCallCount, 2);
+    });
   });
 
   describe("error handling", () => {
@@ -7130,5 +7155,102 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(result, "handled");
     assert.ok(stderrOutput.includes("Usage:"));
     assert.ok(stderrOutput.includes("Error:"));
+  });
+
+  it("supports hidden aliases for help/version commands", () => {
+    const parser = object({ name: argument(string()) });
+    let stdoutOutput = "";
+
+    const helpResult = runParser(parser, "myapp", ["assist"], {
+      help: {
+        command: { names: ["help", "assist"], hidden: "usage" },
+        onShow: () => "help-alias",
+      },
+      stdout: (text) => {
+        stdoutOutput += text;
+      },
+    });
+    assert.equal(helpResult, "help-alias");
+    assert.ok(stdoutOutput.includes("Usage:"));
+
+    const versionResult = runParser(parser, "myapp", ["ver"], {
+      version: {
+        value: "1.2.3",
+        command: { names: ["version", "ver"], hidden: "doc" },
+        onShow: () => "version-alias",
+      },
+      stdout: () => {},
+    });
+    assert.equal(versionResult, "version-alias");
+  });
+
+  it("does not treat help/version options after -- as meta options", () => {
+    const parser = object({ name: argument(string()) });
+    let stderrOutput = "";
+    const result = runParser(parser, "myapp", ["--", "--help"], {
+      help: { option: true },
+      version: { value: "1.0.0", option: true },
+      onError: () => "terminated",
+      stderr: (text) => {
+        stderrOutput += text;
+      },
+    });
+
+    assert.deepEqual(result, { name: "--help" });
+    assert.ok(!stderrOutput.includes("Error:"));
+  });
+
+  it("reports invalid command path before --help when parser consumes nothing", () => {
+    const parser = object({
+      maybe: optional(option("--ok")),
+    });
+    let stderrOutput = "";
+    const result = runParser(parser, "myapp", ["unknown", "--help"], {
+      help: { option: true },
+      onError: () => "invalid-help-path",
+      stderr: (text) => {
+        stderrOutput += text;
+      },
+    });
+
+    assert.equal(result, "invalid-help-path");
+    assert.ok(stderrOutput.includes("Usage:"));
+    assert.ok(stderrOutput.includes("Unexpected option or subcommand"));
+  });
+
+  it("throws when sync parser help handler returns a Promise", () => {
+    const parser = object({ name: argument(string()) });
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["--help"], {
+          help: {
+            option: true,
+            onShow: () => Promise.resolve("async-help") as unknown as string,
+          },
+        }),
+      RunParserError,
+      "Synchronous parser returned async result.",
+    );
+  });
+
+  it("uses option-mode completion script path and callback fallback", () => {
+    const parser = object({ verbose: option("--verbose") });
+    let script = "";
+    const result = runParser(parser, "myapp", ["--completion", "bash"], {
+      completion: {
+        option: true,
+        onShow: function () {
+          if (arguments.length > 0) throw new Error("arg-call rejected");
+          return "option-completion-fallback";
+        },
+      },
+      stdout: (text) => {
+        script += text;
+      },
+      stderr: () => {},
+    });
+
+    assert.equal(result, "option-completion-fallback");
+    assert.ok(script.length > 0);
   });
 });
