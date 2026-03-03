@@ -10,7 +10,7 @@ import { describe, it } from "node:test";
 import * as isomorphicGit from "isomorphic-git";
 import type { Suggestion } from "@optique/core/parser";
 import type { NonEmptyString } from "@optique/core/nonempty";
-import { message, valueSet } from "@optique/core/message";
+import { formatMessage, message, valueSet } from "@optique/core/message";
 import {
   createGitParsers,
   gitBranch,
@@ -74,6 +74,46 @@ async function createTestRepoWithBranchesAndTags(): Promise<string> {
     object: "HEAD",
   });
   return testRepoDir;
+}
+
+function createTestRepoWithAmbiguousPrefix(): Promise<{
+  readonly dir: string;
+  readonly prefix: string;
+}> {
+  return createTestRepoWithAmbiguousPrefixLength(2);
+}
+
+async function createTestRepoWithAmbiguousPrefixLength(
+  prefixLength: number,
+): Promise<{
+  readonly dir: string;
+  readonly prefix: string;
+}> {
+  const dir = await fs.mkdtemp(join(tmpdir(), "optique-git-ambiguous-test-"));
+  await fs.writeFile(join(dir, "test.txt"), "seed");
+  await isomorphicGit.init({ fs, dir, defaultBranch: "main" });
+  const author = { name: "Test User", email: "test@example.com" };
+
+  const seen = new Set<string>();
+  for (let i = 0; i < 5000; i++) {
+    await fs.writeFile(join(dir, "test.txt"), `${i}-${Math.random()}`);
+    await isomorphicGit.add({ fs, dir, filepath: "test.txt" });
+    const oid = await isomorphicGit.commit({
+      fs,
+      dir,
+      message: `Commit ${i}`,
+      author,
+    });
+    const prefix = oid.slice(0, prefixLength);
+    if (seen.has(prefix)) {
+      return { dir, prefix };
+    }
+    seen.add(prefix);
+  }
+
+  throw new Error(
+    `Failed to create ambiguous commit prefix of length ${prefixLength}.`,
+  );
 }
 
 async function cleanupTestRepo(dir: string): Promise<void> {
@@ -540,6 +580,20 @@ describe("git parsers", () => {
         await cleanupTestRepo(testRepoDir);
       }
     });
+
+    it("should report ambiguous abbreviated commit SHAs", async () => {
+      const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
+      try {
+        const parser = gitCommit({ dir });
+        const result = await parser.parse(prefix);
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.match(formatMessage(result.error), /ambiguous/i);
+        }
+      } finally {
+        await cleanupTestRepo(dir);
+      }
+    });
   });
 
   describe("gitRef()", () => {
@@ -609,6 +663,20 @@ describe("git parsers", () => {
     it("should format ref values correctly", () => {
       const parser = gitRef({ dir: "/tmp/dummy" });
       assert.equal(parser.format("abc123def456"), "abc123def456");
+    });
+
+    it("should report ambiguous abbreviated refs", async () => {
+      const { dir, prefix } = await createTestRepoWithAmbiguousPrefix();
+      try {
+        const parser = gitRef({ dir });
+        const result = await parser.parse(prefix);
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.match(formatMessage(result.error), /ambiguous/i);
+        }
+      } finally {
+        await cleanupTestRepo(dir);
+      }
     });
   });
 

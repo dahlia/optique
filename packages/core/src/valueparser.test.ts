@@ -8705,6 +8705,102 @@ describe("branch coverage regressions", () => {
       ]);
     }
   });
+
+  it("covers static custom invalidChoice for numeric choice parser", () => {
+    const parser = choice([1, 2, 3], {
+      errors: {
+        invalidChoice: message`pick one of the numeric choices`,
+      },
+    });
+
+    const result = parser.parse("999");
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.error, [
+        { type: "text", text: "pick one of the numeric choices" },
+      ]);
+    }
+  });
+
+  it("covers bigint integer static custom error branches", () => {
+    const parser = integer({
+      type: "bigint",
+      min: 10n,
+      max: 20n,
+      errors: {
+        invalidInteger: message`bigint parse failed`,
+        belowMinimum: message`bigint is too small`,
+        aboveMaximum: message`bigint is too large`,
+      },
+    });
+
+    const invalid = parser.parse("not-a-bigint");
+    assert.ok(!invalid.success);
+    const tooSmall = parser.parse("9");
+    assert.ok(!tooSmall.success);
+    const tooLarge = parser.parse("21");
+    assert.ok(!tooLarge.success);
+  });
+
+  it("covers float parser function custom min/max errors", () => {
+    const parser = float({
+      min: 10,
+      max: 20,
+      errors: {
+        belowMinimum: (value, min) =>
+          message`num ${text(String(value))} < ${text(String(min))}`,
+        aboveMaximum: (value, max) =>
+          message`num ${text(String(value))} > ${text(String(max))}`,
+      },
+    });
+
+    assert.ok(!parser.parse("9").success);
+    assert.ok(!parser.parse("21").success);
+  });
+
+  it("covers port number static and function error branches", () => {
+    const staticParser = port({
+      min: 2000,
+      max: 3000,
+      disallowWellKnown: true,
+      errors: {
+        belowMinimum: message`port too small`,
+        aboveMaximum: message`port too large`,
+        wellKnownNotAllowed: message`well-known port denied`,
+      },
+    });
+    assert.ok(!staticParser.parse("1024").success);
+    assert.ok(!staticParser.parse("4000").success);
+    assert.ok(!staticParser.parse("80").success);
+
+    const functionParser = port({
+      min: 2000,
+      max: 3000,
+      disallowWellKnown: true,
+      errors: {
+        belowMinimum: (value, min) =>
+          message`port ${text(String(value))} < ${text(String(min))}`,
+        aboveMaximum: (value, max) =>
+          message`port ${text(String(value))} > ${text(String(max))}`,
+        wellKnownNotAllowed: (value) =>
+          message`port ${text(String(value))} is reserved`,
+      },
+    });
+    assert.ok(!functionParser.parse("1024").success);
+    assert.ok(!functionParser.parse("4000").success);
+    assert.ok(!functionParser.parse("80").success);
+  });
+
+  it("covers ip invalidIP function branch when both sub-parsers are generic", () => {
+    const parser = ip({
+      errors: {
+        invalidIP: (input) => message`invalid ip via callback: ${input}`,
+      },
+    });
+
+    const result = parser.parse("not-an-ip-literal");
+    assert.ok(!result.success);
+  });
 });
 
 // cSpell: ignore résumé phonebk toolongcode hanidec jpan hebr arabext

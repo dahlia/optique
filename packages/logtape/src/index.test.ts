@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parse } from "@optique/core/parser";
+import { parse, suggestSync } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
+import { runParser } from "@optique/core/facade";
 import { option } from "@optique/core/primitives";
 import { withDefault } from "@optique/core/modifiers";
 import { message } from "@optique/core/message";
@@ -308,6 +309,50 @@ describe("logOutput()", () => {
     });
     const result = parse(parser, ["--log-output=   "]);
     assert.ok(!result.success);
+  });
+
+  it("should use function-based empty path error", () => {
+    const parser = object({
+      output: logOutput({
+        errors: {
+          emptyPath: (input) => message`Output path cannot be blank: ${input}`,
+        },
+      }),
+    });
+    const result = parse(parser, ["--log-output=   "]);
+    assert.ok(!result.success);
+  });
+
+  it("should suggest console and file outputs for value position", () => {
+    const parser = object({
+      output: logOutput(),
+    });
+    const suggestions = suggestSync(parser, ["--log-output", ""]);
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "-"),
+    );
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "file" && s.type === "file" && s.pattern === ""
+      ),
+    );
+  });
+
+  it("should format default console output in help text", () => {
+    const parser = object({
+      output: withDefault(logOutput(), { type: "console" }),
+    });
+
+    let helpOutput = "";
+    const result = runParser(parser, "myapp", ["--help"], {
+      help: { option: true, onShow: () => "shown" },
+      showDefault: true,
+      stdout: (text) => {
+        helpOutput += text;
+      },
+    });
+    assert.equal(result, "shown");
+    assert.ok(helpOutput.includes('["-"]'));
   });
 
   it("should support custom option names", () => {

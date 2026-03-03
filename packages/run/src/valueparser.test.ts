@@ -734,6 +734,47 @@ describe("path", () => {
       ]);
     });
 
+    it("should use static parentNotFound with mustNotExist+allowCreate", () => {
+      const parser = path({
+        mustNotExist: true,
+        allowCreate: true,
+        errors: {
+          parentNotFound:
+            message`Static parent error for mustNotExist+allowCreate.`,
+        },
+      });
+
+      const result = parser.parse("/nonexistent/parent/newfile.txt");
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [
+        {
+          type: "text",
+          text: "Static parent error for mustNotExist+allowCreate.",
+        },
+      ]);
+    });
+
+    it("should use default notADirectory error when no custom message is set", () => {
+      const tempDir = createTempDir();
+      try {
+        const testFile = join(tempDir, "file.txt");
+        writeFileSync(testFile, "content");
+
+        const parser = path({
+          mustExist: true,
+          type: "directory",
+        });
+        const result = parser.parse(testFile);
+        assert.ok(!result.success);
+        assert.match(
+          formatMessage(result.error),
+          /Expected a directory, but .* is not a directory/,
+        );
+      } finally {
+        cleanupDir(tempDir);
+      }
+    });
+
     it("should fall back to default error when custom error is not provided", () => {
       const tempDir = createTempDir();
       try {

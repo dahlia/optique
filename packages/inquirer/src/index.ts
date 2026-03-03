@@ -29,6 +29,43 @@ import type { ValueParserResult } from "@optique/core/valueparser";
 // Re-export Separator for use in choice lists.
 export { Separator };
 
+interface PromptFunctions {
+  readonly confirm: typeof confirm;
+  readonly number: typeof number;
+  readonly input: typeof input;
+  readonly password: typeof password;
+  readonly editor: typeof editor;
+  readonly select: typeof select;
+  readonly rawlist: typeof rawlist;
+  readonly expand: typeof expand;
+  readonly checkbox: typeof checkbox;
+}
+
+const promptFunctionsOverrideSymbol = Symbol.for(
+  "@optique/inquirer/prompt-functions",
+);
+
+const defaultPromptFunctions: PromptFunctions = {
+  confirm,
+  number,
+  input,
+  password,
+  editor,
+  select,
+  rawlist,
+  expand,
+  checkbox,
+};
+
+function getPromptFunctions(): PromptFunctions {
+  const override = (
+    globalThis as unknown as {
+      readonly [promptFunctionsOverrideSymbol]?: PromptFunctions;
+    }
+  )[promptFunctionsOverrideSymbol];
+  return override ?? defaultPromptFunctions;
+}
+
 // ---- Choice types ----
 
 /**
@@ -501,6 +538,8 @@ export function prompt<M extends Mode, TValue, TState>(
   let promptCache: Promise<ValueParserResult<TValue>> | null = null;
 
   async function executePrompt(): Promise<ValueParserResult<TValue>> {
+    const prompts = getPromptFunctions();
+
     // Prompter override (for testing)
     if ("prompter" in cfg && cfg.prompter != null) {
       const value = await cfg.prompter();
@@ -514,14 +553,14 @@ export function prompt<M extends Mode, TValue, TState>(
       case "confirm":
         return {
           success: true,
-          value: await confirm({
+          value: await prompts.confirm({
             message: cfg.message,
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
           }) as TValue,
         };
 
       case "number": {
-        const numResult = await number({
+        const numResult = await prompts.number({
           message: cfg.message,
           ...(cfg.default !== undefined ? { default: cfg.default } : {}),
           ...(cfg.min !== undefined ? { min: cfg.min } : {}),
@@ -537,7 +576,7 @@ export function prompt<M extends Mode, TValue, TState>(
       case "input":
         return {
           success: true,
-          value: await input({
+          value: await prompts.input({
             message: cfg.message,
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
             ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
@@ -547,7 +586,7 @@ export function prompt<M extends Mode, TValue, TState>(
       case "password":
         return {
           success: true,
-          value: await password({
+          value: await prompts.password({
             message: cfg.message,
             ...(cfg.mask !== undefined ? { mask: cfg.mask } : {}),
             ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
@@ -557,7 +596,7 @@ export function prompt<M extends Mode, TValue, TState>(
       case "editor":
         return {
           success: true,
-          value: await editor({
+          value: await prompts.editor({
             message: cfg.message,
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
             ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
@@ -567,7 +606,7 @@ export function prompt<M extends Mode, TValue, TState>(
       case "select":
         return {
           success: true,
-          value: await select({
+          value: await prompts.select({
             message: cfg.message,
             choices: normalizeChoices(cfg.choices),
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
@@ -577,7 +616,7 @@ export function prompt<M extends Mode, TValue, TState>(
       case "rawlist":
         return {
           success: true,
-          value: await rawlist({
+          value: await prompts.rawlist({
             message: cfg.message,
             choices: normalizeChoices(cfg.choices),
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
@@ -587,7 +626,7 @@ export function prompt<M extends Mode, TValue, TState>(
       case "expand":
         return {
           success: true,
-          value: await (expand as (config: {
+          value: await (prompts.expand as (config: {
             message: string;
             choices: readonly { value: string; name?: string; key: string }[];
             default?: string;
@@ -601,7 +640,7 @@ export function prompt<M extends Mode, TValue, TState>(
       case "checkbox":
         return {
           success: true,
-          value: await checkbox({
+          value: await prompts.checkbox({
             message: cfg.message,
             choices: normalizeChoices(cfg.choices),
           }) as TValue,

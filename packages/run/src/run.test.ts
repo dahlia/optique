@@ -98,6 +98,48 @@ describe("run", () => {
       assert.deepEqual(result, { name: "test-value" });
     });
 
+    it("should execute default stdout/stderr/onExit handlers", () => {
+      const parser = option("--verbose");
+      const originalArgv = process.argv;
+      const originalExit = process.exit;
+      const originalStdoutWrite = process.stdout.write;
+      const originalStderrWrite = process.stderr.write;
+      const writes: string[] = [];
+
+      process.argv = ["node", "/tmp/default-handlers.ts", "--help"];
+      process.stdout.write = ((chunk: string | Uint8Array) => {
+        writes.push(String(chunk));
+        return true;
+      }) as typeof process.stdout.write;
+      process.stderr.write = ((chunk: string | Uint8Array) => {
+        writes.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write;
+      process.exit = ((code?: number) => {
+        throw new Error(`EXIT:${code ?? 0}`);
+      }) as typeof process.exit;
+
+      try {
+        assert.throws(
+          () => {
+            run(parser, {
+              help: "option",
+            });
+          },
+          /EXIT:0/,
+        );
+      } finally {
+        process.argv = originalArgv;
+        process.exit = originalExit;
+        process.stdout.write = originalStdoutWrite;
+        process.stderr.write = originalStderrWrite;
+      }
+
+      assert.ok(
+        writes.some((line) => line.includes("Usage: default-handlers.ts")),
+      );
+    });
+
     it("should use default help setting", () => {
       const parser = object({
         name: argument(string()),
@@ -139,6 +181,44 @@ describe("run", () => {
       );
 
       assert.equal(exitCode, 1);
+      assert.ok(stderrOutput.includes("Error:"));
+    });
+
+    it("should use default stderr writer on parse errors", () => {
+      const parser = object({
+        name: argument(string()),
+      });
+      const originalArgv = process.argv;
+      const originalStderrWrite = process.stderr.write;
+      process.argv = ["node", "/tmp/default-stderr.ts"];
+
+      let stderrOutput = "";
+      let exitCode: number | undefined;
+      process.stderr.write = ((chunk: string | Uint8Array) => {
+        stderrOutput += String(chunk);
+        return true;
+      }) as typeof process.stderr.write;
+
+      try {
+        assert.throws(
+          () => {
+            run(parser, {
+              args: [],
+              onExit: (code) => {
+                exitCode = code;
+                throw new Error("EXIT");
+              },
+            });
+          },
+          /EXIT/,
+        );
+      } finally {
+        process.stderr.write = originalStderrWrite;
+        process.argv = originalArgv;
+      }
+
+      assert.equal(exitCode, 1);
+      assert.ok(stderrOutput.includes("Usage: default-stderr.ts"));
       assert.ok(stderrOutput.includes("Error:"));
     });
 

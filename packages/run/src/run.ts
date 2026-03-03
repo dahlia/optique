@@ -585,33 +585,33 @@ function buildCoreOptions(
   args: readonly string[];
   coreOptions: CoreRunOptions<never, never>;
 } {
-  const {
-    programName = path.basename(process.argv[1] || "cli"),
-    args = process.argv.slice(2),
-    stdout = (line) => {
-      process.stdout.write(`${line}\n`);
-    },
-    stderr = (line) => {
-      process.stderr.write(`${line}\n`);
-    },
-    onExit = (exitCode) => process.exit(exitCode) as never,
-    colors = process.stdout.isTTY,
-    maxWidth = process.stdout.columns,
-    showDefault,
-    showChoices,
-    sectionOrder,
-    help,
-    version,
-    completion,
-    aboveError = "usage",
-    errorExitCode = 1,
-    brief = programMetadata?.brief,
-    description = programMetadata?.description,
-    examples = programMetadata?.examples,
-    author = programMetadata?.author,
-    bugs = programMetadata?.bugs,
-    footer = programMetadata?.footer,
-  } = options;
+  const programName = options.programName ??
+    path.basename(process.argv[1] ?? "cli");
+  const args = options.args ?? process.argv.slice(2);
+  const stdout = options.stdout ?? ((line: string) => {
+    process.stdout.write(`${line}\n`);
+  });
+  const stderr = options.stderr ?? ((line: string) => {
+    process.stderr.write(`${line}\n`);
+  });
+  const onExit = options.onExit ??
+    ((exitCode: number) => process.exit(exitCode) as never);
+  const colors = options.colors ?? process.stdout.isTTY;
+  const maxWidth = options.maxWidth ?? process.stdout.columns;
+  const showDefault = options.showDefault;
+  const showChoices = options.showChoices;
+  const sectionOrder = options.sectionOrder;
+  const help = options.help;
+  const version = options.version;
+  const completion = options.completion;
+  const aboveError = options.aboveError ?? "usage";
+  const errorExitCode = options.errorExitCode ?? 1;
+  const brief = options.brief ?? programMetadata?.brief;
+  const description = options.description ?? programMetadata?.description;
+  const examples = options.examples ?? programMetadata?.examples;
+  const author = options.author ?? programMetadata?.author;
+  const bugs = options.bugs ?? programMetadata?.bugs;
+  const footer = options.footer ?? programMetadata?.footer;
 
   const onShow = () => onExit(0);
 

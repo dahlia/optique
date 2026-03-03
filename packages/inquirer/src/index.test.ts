@@ -14,7 +14,37 @@ import { fail, flag, option } from "@optique/core/primitives";
 import { multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, createEnvContext } from "@optique/env";
-import { prompt } from "@optique/inquirer";
+import { prompt, Separator } from "@optique/inquirer";
+
+const promptFunctionsOverrideSymbol = Symbol.for(
+  "@optique/inquirer/prompt-functions",
+);
+
+let promptFunctionsOverrideQueue = Promise.resolve();
+
+async function withPromptFunctionsOverride<T>(
+  override: Record<string, unknown>,
+  callback: () => Promise<T>,
+): Promise<T> {
+  const previousQueue = promptFunctionsOverrideQueue;
+  let release: (() => void) | undefined;
+  promptFunctionsOverrideQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previousQueue;
+
+  const globalWithOverride = globalThis as unknown as {
+    [promptFunctionsOverrideSymbol]?: Record<string, unknown>;
+  };
+  const oldOverride = globalWithOverride[promptFunctionsOverrideSymbol];
+  globalWithOverride[promptFunctionsOverrideSymbol] = override;
+  try {
+    return await callback();
+  } finally {
+    globalWithOverride[promptFunctionsOverrideSymbol] = oldOverride;
+    release?.();
+  }
+}
 
 describe("prompt()", () => {
   describe("mode", () => {
@@ -576,7 +606,7 @@ describe("prompt()", () => {
     });
   });
 
-  describe("internal branch coverage", () => {
+  describe("internal branch coverage", { concurrency: false }, () => {
     it("covers async parse/suggest/complete branches with wrapped states", async () => {
       let docDefault: unknown;
       const inner: Parser<"async", string, { readonly token?: string }> = {
@@ -788,6 +818,319 @@ describe("prompt()", () => {
       if (completed.success) {
         assert.equal(completed.value, "prompt-fallback");
       }
+    });
+
+    it("executes built-in prompt branches via prompt-function override", async () => {
+      const calls: Array<{ name: string; config: Record<string, unknown> }> =
+        [];
+      await withPromptFunctionsOverride(
+        {
+          confirm: (config: Record<string, unknown>) => {
+            calls.push({ name: "confirm", config });
+            return true;
+          },
+          number: (config: Record<string, unknown>) => {
+            calls.push({ name: "number", config });
+            return 42;
+          },
+          input: (config: Record<string, unknown>) => {
+            calls.push({ name: "input", config });
+            return "hello";
+          },
+          password: (config: Record<string, unknown>) => {
+            calls.push({ name: "password", config });
+            return "secret";
+          },
+          editor: (config: Record<string, unknown>) => {
+            calls.push({ name: "editor", config });
+            return "edited";
+          },
+          select: (config: Record<string, unknown>) => {
+            calls.push({ name: "select", config });
+            return "green";
+          },
+          rawlist: (config: Record<string, unknown>) => {
+            calls.push({ name: "rawlist", config });
+            return "prod";
+          },
+          expand: (config: Record<string, unknown>) => {
+            calls.push({ name: "expand", config });
+            return "info";
+          },
+          checkbox: (config: Record<string, unknown>) => {
+            calls.push({ name: "checkbox", config });
+            return ["a", "c"];
+          },
+        },
+        async () => {
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<boolean>(), {
+                type: "confirm",
+                message: "confirm?",
+                default: true,
+              }),
+              [],
+            )).success,
+          );
+
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<number>(), {
+                type: "number",
+                message: "number?",
+                default: 3,
+                min: 1,
+                max: 10,
+                step: 1,
+              }),
+              [],
+            )).success,
+          );
+
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<string>(), {
+                type: "input",
+                message: "input?",
+                default: "x",
+                validate: (value) => value.length > 0,
+              }),
+              [],
+            )).success,
+          );
+
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<string>(), {
+                type: "password",
+                message: "password?",
+                mask: true,
+                validate: (value) => value.length > 0,
+              }),
+              [],
+            )).success,
+          );
+
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<string>(), {
+                type: "editor",
+                message: "editor?",
+                default: "draft",
+                validate: (value) => value.length > 0,
+              }),
+              [],
+            )).success,
+          );
+
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<string>(), {
+                type: "select",
+                message: "select?",
+                default: "green",
+                choices: [
+                  "red",
+                  {
+                    value: "green",
+                    name: "Green",
+                    description: "desc",
+                    short: "g",
+                  },
+                  { value: "blue", name: "Blue", disabled: "skip" },
+                ],
+              }),
+              [],
+            )).success,
+          );
+
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<string>(), {
+                type: "rawlist",
+                message: "rawlist?",
+                default: "prod",
+                choices: [
+                  "dev",
+                  { value: "prod", name: "Production" },
+                ],
+              }),
+              [],
+            )).success,
+          );
+
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<string>(), {
+                type: "expand",
+                message: "expand?",
+                default: "info",
+                choices: [
+                  { value: "debug", key: "d" },
+                  { value: "info", key: "i", name: "Info" },
+                ],
+              }),
+              [],
+            )).success,
+          );
+
+          assert.ok(
+            (await parseAsync(
+              prompt(fail<readonly string[]>(), {
+                type: "checkbox",
+                message: "checkbox?",
+                choices: [
+                  "a",
+                  { value: "c", name: "C", disabled: false },
+                ],
+              }),
+              [],
+            )).success,
+          );
+        },
+      );
+
+      const names = calls.map((c) => c.name);
+      assert.ok(names.includes("confirm"));
+      assert.ok(names.includes("number"));
+      assert.ok(names.includes("input"));
+      assert.ok(names.includes("password"));
+      assert.ok(names.includes("editor"));
+      assert.ok(names.includes("select"));
+      assert.ok(names.includes("rawlist"));
+      assert.ok(names.includes("expand"));
+      assert.ok(names.includes("checkbox"));
+    });
+
+    it("covers remaining annotation/suggest/default/number-undefined branches", async () => {
+      await withPromptFunctionsOverride(
+        {
+          confirm: () => true,
+          number: () => undefined,
+          input: () => "value",
+          password: () => "value",
+          editor: () => "value",
+          select: () => "value",
+          rawlist: () => "value",
+          expand: () => "value",
+          checkbox: () => ["value"],
+        },
+        async () => {
+          const numberFallback = prompt(fail<number>(), {
+            type: "number",
+            message: "number?",
+          });
+          const numberFallbackResult = await parseAsync(numberFallback, []);
+          assert.ok(!numberFallbackResult.success);
+
+          const inner: Parser<"async", string, unknown> = {
+            $mode: "async",
+            $valueType: [] as readonly string[],
+            $stateType: [] as readonly unknown[],
+            priority: 1,
+            usage: [],
+            initialState: undefined,
+            parse() {
+              return Promise.resolve({
+                success: false as const,
+                consumed: 0,
+                error: message`missing`,
+              });
+            },
+            complete() {
+              return Promise.resolve({
+                success: false as const,
+                error: message`missing`,
+              });
+            },
+            suggest(context) {
+              return {
+                async *[Symbol.asyncIterator](): AsyncIterableIterator<
+                  Suggestion
+                > {
+                  yield {
+                    kind: "literal",
+                    text: String(
+                      (context.state as { cliState?: unknown }).cliState ??
+                        "none",
+                    ),
+                  };
+                },
+              };
+            },
+            getDocFragments(_state, defaultValue) {
+              return {
+                fragments: [],
+                footer: defaultValue === "cfg-default"
+                  ? message`default-propagated`
+                  : undefined,
+              };
+            },
+          };
+
+          const wrapped = prompt(inner, {
+            type: "input",
+            message: "input?",
+            default: "cfg-default",
+          });
+
+          const annotations = { [Symbol.for("@test/anno")]: "present" };
+          const parsed = await wrapped.parse({
+            buffer: [],
+            state: { [annotationKey]: annotations },
+            optionsTerminated: false,
+            usage: wrapped.usage,
+          });
+          assert.ok(parsed.success);
+          if (!parsed.success) return;
+
+          const parsedState = parsed.next.state as {
+            readonly [annotationKey]?: unknown;
+            readonly hasCliValue?: boolean;
+          };
+          assert.equal(parsedState.hasCliValue, false);
+          assert.ok(parsedState[annotationKey] != null);
+
+          const suggestions: Suggestion[] = [];
+          for await (
+            const s of wrapped.suggest(
+              {
+                buffer: [],
+                state: {
+                  [Symbol.for("@optique/inquirer/prompt-bind-state")]: true,
+                  hasCliValue: false,
+                  cliState: "cli-state-value",
+                },
+                optionsTerminated: false,
+                usage: wrapped.usage,
+              } as ParserContext<unknown>,
+              "",
+            )
+          ) {
+            suggestions.push(s);
+          }
+          assert.ok(suggestions.length >= 1);
+
+          const doc = wrapped.getDocFragments({
+            kind: "available",
+            state: wrapped.initialState,
+          });
+          assert.ok(doc.footer != null);
+
+          const selectWithSeparator = prompt(fail<string>(), {
+            type: "select",
+            message: "select?",
+            choices: [
+              "a",
+              new Separator("---"),
+              { value: "b", name: "B", description: "desc", short: "bb" },
+            ],
+          });
+          const selectResult = await parseAsync(selectWithSeparator, []);
+          assert.ok(selectResult.success);
+        },
+      );
     });
   });
 });

@@ -35,20 +35,18 @@ export {
  * Write methods are implemented as stubs that return rejected promises,
  * enforcing the read-only contract and preventing accidental writes.
  */
+const readOnlyFsMethod = () =>
+  Promise.reject(new Error("gitFs is read-only for write operations."));
+
 const gitFs = {
   readFile: fs.readFile,
-  writeFile: () =>
-    Promise.reject(new Error("gitFs is read-only: writeFile is disabled.")),
-  mkdir: () =>
-    Promise.reject(new Error("gitFs is read-only: mkdir is disabled.")),
-  rmdir: () =>
-    Promise.reject(new Error("gitFs is read-only: rmdir is disabled.")),
-  unlink: () =>
-    Promise.reject(new Error("gitFs is read-only: unlink is disabled.")),
+  writeFile: readOnlyFsMethod,
+  mkdir: readOnlyFsMethod,
+  rmdir: readOnlyFsMethod,
+  unlink: readOnlyFsMethod,
   readdir: fs.readdir,
   readlink: fs.readlink,
-  symlink: () =>
-    Promise.reject(new Error("gitFs is read-only: symlink is disabled.")),
+  symlink: readOnlyFsMethod,
   stat: fs.stat,
   lstat: fs.lstat,
 };
@@ -566,7 +564,10 @@ export function gitCommit(
         const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
         return { success: true, value: oid };
       } catch (e) {
-        if (hasErrorCode(e, "AmbiguousShortOidError")) {
+        if (
+          hasErrorCode(e, "AmbiguousShortOidError") ||
+          hasErrorCode(e, "AmbiguousError")
+        ) {
           return {
             success: false,
             error: message`Commit SHA ${
@@ -643,7 +644,10 @@ export function gitRef(
         const oid = await git.expandOid({ fs: gitFs, dir, oid: input });
         return { success: true, value: oid };
       } catch (e) {
-        if (hasErrorCode(e, "AmbiguousShortOidError")) {
+        if (
+          hasErrorCode(e, "AmbiguousShortOidError") ||
+          hasErrorCode(e, "AmbiguousError")
+        ) {
           return {
             success: false,
             error: message`Reference ${
