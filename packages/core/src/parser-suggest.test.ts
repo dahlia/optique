@@ -12,9 +12,10 @@ import {
   optional,
   or,
   type ParserContext,
+  type Suggestion,
   withDefault,
 } from "./index.ts";
-import { choice, integer, string } from "./valueparser.ts";
+import { choice, integer, string, type ValueParser } from "./valueparser.ts";
 import { message } from "./message.ts";
 
 describe("Parser suggest() methods", () => {
@@ -233,6 +234,54 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "test"));
+      deepStrictEqual(result, []);
+    });
+
+    it("should not suggest after argument is already consumed", () => {
+      const parser = argument(choice(["start", "stop", "restart", "status"]));
+      const context: ParserContext<{ success: true; value: "start" }> = {
+        buffer: [],
+        state: { success: true, value: "start" },
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = Array.from(parser.suggest(context, "st"));
+      deepStrictEqual(result, []);
+    });
+
+    it("should not suggest after async argument is already consumed", async () => {
+      const asyncParser: ValueParser<"async", string> = {
+        $mode: "async",
+        metavar: "CHOICE",
+        parse(input: string) {
+          return Promise.resolve({ success: true as const, value: input });
+        },
+        format(value: string) {
+          return value;
+        },
+        async *suggest(prefix: string) {
+          for (const c of ["start", "stop", "restart", "status"]) {
+            if (c.startsWith(prefix)) {
+              yield { kind: "literal" as const, text: c };
+            }
+          }
+        },
+      };
+      const parser = argument(asyncParser);
+      const context: ParserContext<{ success: true; value: "start" }> = {
+        buffer: [],
+        state: { success: true, value: "start" },
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result: Suggestion[] = [];
+      for await (
+        const s of parser.suggest(context, "st") as AsyncIterable<Suggestion>
+      ) {
+        result.push(s);
+      }
       deepStrictEqual(result, []);
     });
   });
@@ -589,6 +638,22 @@ describe("Parser suggest() methods", () => {
 
       const result = Array.from(parser.suggest(context, "--f"));
       deepStrictEqual(result, [{ kind: "literal", text: "--file" }]);
+    });
+
+    it("should still suggest remaining values after one argument is consumed", () => {
+      const innerParser = argument(choice(["v1", "v2", "v3"]));
+      const parser = multiple(innerParser);
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: [],
+        state: [{ success: true, value: "v1" }],
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = Array.from(parser.suggest(context, "v"));
+      const texts = result.map((s) => s.kind === "literal" ? s.text : "")
+        .sort();
+      deepStrictEqual(texts, ["v2", "v3"]);
     });
   });
 });

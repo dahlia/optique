@@ -235,6 +235,25 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#112]: https://github.com/dahlia/optique/issues/112
 
 
+Version 0.10.7
+--------------
+
+Released on March 4, 2026.
+
+### @optique/core
+
+ -  Fixed `argument()` parser returning repeated suggestions after a value
+    had already been consumed.  The `suggest()` method now returns an empty
+    iterable when `context.state` is non-null (i.e., an argument has been
+    parsed).  Additionally, `multiple()` now passes `parser.initialState`
+    instead of the last consumed inner state when requesting suggestions from
+    its inner parser, so that `multiple(argument(...))` continues to suggest
+    remaining choices after the first value has been consumed.
+    [[#133] by Ben van Enckevort]
+
+[#133]: https://github.com/dahlia/optique/pull/133
+
+
 Version 0.10.6
 --------------
 
