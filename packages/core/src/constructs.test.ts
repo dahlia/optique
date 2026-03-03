@@ -1309,7 +1309,7 @@ describe("object", () => {
         metavar: "MODE",
       }],
       initialState: "mode-initial",
-      parse(context) {
+      parse(context: ParserContext<string>) {
         return Promise.resolve({
           success: true,
           next: { ...context, buffer: [] },
@@ -1379,7 +1379,7 @@ describe("object", () => {
       priority: 0,
       usage: [],
       initialState,
-      parse(context) {
+      parse(context: ParserContext<string>) {
         return Promise.resolve({
           success: true,
           next: { ...context, buffer: [] },
@@ -8452,6 +8452,216 @@ describe("branch coverage: constructs.ts edge cases", () => {
     assert.ok(completed.success);
     if (completed.success) {
       assert.equal(completed.value.dynamic, "from-context");
+    }
+  });
+
+  it("conditional() complete uses DependencySourceState discriminator value (sync)", () => {
+    const dep = Symbol("cond-disc-sync");
+    const discriminator = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      initialState: "seed",
+      parse(context: ParserContext<string>) {
+        return {
+          success: true,
+          next: { ...context, state: "seed" },
+          consumed: [],
+        };
+      },
+      complete() {
+        return createDependencySourceState(
+          { success: true as const, value: "fast" },
+          dep,
+        );
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, string>;
+    const slowBranch = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "S" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as Parser<"sync", string, undefined>;
+    const parser = conditional(discriminator, {
+      fast: slowBranch,
+      slow: slowBranch,
+    });
+
+    const completed = parser.complete({
+      ...parser.initialState,
+      discriminatorState: "seed",
+      discriminatorValue: "ignored",
+      selectedBranch: { kind: "branch", key: "slow" },
+      branchState: undefined,
+    });
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.deepEqual(completed.value, ["fast", "S"]);
+    }
+  });
+
+  it("conditional() complete falls back to selected key on discriminator dependency failure", () => {
+    const dep = Symbol("cond-disc-sync-fail");
+    const discriminator = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      initialState: "seed",
+      parse(context: ParserContext<string>) {
+        return {
+          success: true,
+          next: { ...context, state: "seed" },
+          consumed: [],
+        };
+      },
+      complete() {
+        return createDependencySourceState(
+          { success: false as const, error: message`disc fail` },
+          dep,
+        );
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"sync", string, string>;
+    const slowBranch = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete() {
+        return { success: true as const, value: "S" };
+      },
+      suggest: function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as Parser<"sync", string, undefined>;
+    const parser = conditional(discriminator, {
+      fast: slowBranch,
+      slow: slowBranch,
+    });
+
+    const completed = parser.complete({
+      ...parser.initialState,
+      discriminatorState: "seed",
+      discriminatorValue: "ignored",
+      selectedBranch: { kind: "branch", key: "slow" },
+      branchState: undefined,
+    });
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.deepEqual(completed.value, ["slow", "S"]);
+    }
+  });
+
+  it("conditional() async complete uses default branch when none selected", async () => {
+    const asyncDiscriminator = option("--mode", asyncStringValue());
+    const parser = conditional(
+      asyncDiscriminator,
+      { fast: constant("F") },
+      constant("D"),
+    );
+    const completed = await parser.complete(parser.initialState);
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.deepEqual(completed.value, [undefined, "D"]);
+    }
+  });
+
+  it("conditional() async complete requires discriminator without default", async () => {
+    const asyncDiscriminator = option("--mode", asyncStringValue());
+    const parser = conditional(asyncDiscriminator, { fast: constant("F") });
+    const completed = await parser.complete(parser.initialState);
+    assert.ok(!completed.success);
+    if (!completed.success) {
+      assert.equal(
+        formatMessage(completed.error),
+        "Missing required discriminator option.",
+      );
+    }
+  });
+
+  it("conditional() async complete uses DependencySourceState discriminator value", async () => {
+    const dep = Symbol("cond-disc-async");
+    const discriminator = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      initialState: "seed",
+      parse(context: ParserContext<string>) {
+        return Promise.resolve({
+          success: true as const,
+          next: { ...context, state: "seed" },
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve(
+          createDependencySourceState(
+            { success: true as const, value: "fast" },
+            dep,
+          ),
+        );
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as unknown as Parser<"async", string, string>;
+    const slowBranch = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context: ParserContext<undefined>) {
+        return Promise.resolve({
+          success: true as const,
+          next: context,
+          consumed: [],
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "S" });
+      },
+      suggest: async function* () {},
+      getDocFragments: () => ({ fragments: [] }),
+    } as Parser<"async", string, undefined>;
+    const parser = conditional(discriminator, {
+      fast: slowBranch,
+      slow: slowBranch,
+    });
+
+    const completed = await parser.complete({
+      ...parser.initialState,
+      discriminatorState: "seed",
+      discriminatorValue: "ignored",
+      selectedBranch: { kind: "branch", key: "slow" },
+      branchState: undefined,
+    });
+    assert.ok(completed.success);
+    if (completed.success) {
+      assert.deepEqual(completed.value, ["fast", "S"]);
     }
   });
 });
