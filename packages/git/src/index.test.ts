@@ -1415,5 +1415,34 @@ describe("git parsers", () => {
         await cleanupTestRepo(testRepoDir);
       }
     });
+
+    it("should hit suggest catch logging for invalid non-directory paths", async () => {
+      const baseDir = await fs.mkdtemp(join(tmpdir(), "optique-git-suggest-"));
+      const filePath = join(baseDir, "not-a-dir");
+      await fs.writeFile(filePath, "x");
+      try {
+        const remoteBranchSuggestions: Suggestion[] = [];
+        for await (
+          const s of gitRemoteBranch("origin", { dir: filePath }).suggest!("ma")
+        ) {
+          remoteBranchSuggestions.push(s);
+        }
+        assert.deepEqual(remoteBranchSuggestions, []);
+
+        const tagSuggestions: Suggestion[] = [];
+        for await (const s of gitTag({ dir: filePath }).suggest!("v")) {
+          tagSuggestions.push(s);
+        }
+        assert.deepEqual(tagSuggestions, []);
+
+        const remoteSuggestions: Suggestion[] = [];
+        for await (const s of gitRemote({ dir: filePath }).suggest!("or")) {
+          remoteSuggestions.push(s);
+        }
+        assert.deepEqual(remoteSuggestions, []);
+      } finally {
+        await cleanupTestRepo(baseDir);
+      }
+    });
   });
 });
