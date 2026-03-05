@@ -4,16 +4,16 @@ layout: home
 hero:
   name: Optique
   text: Type-safe combinatorial CLI parser for TypeScript
-  tagline: Express CLI constraints in code structure,<br>not validation logic
+  tagline: Express CLI constraints in code structure,<br>not validation logic.
   image:
     src: /optique.svg
     alt: Optique logo
   actions:
   - theme: brand
-    text: Install
+    text: Get started
     link: /install
   - theme: alt
-    text: Why
+    text: Why Optique?
     link: /why
   - theme: alt
     text: Tutorial
@@ -26,38 +26,55 @@ features:
 - icon: 🧩
   title: Composable by design
   details: >-
-    Build CLI interfaces from simple, reusable parser components.
-    Share option groups across commands while preserving type information,
-    making it easier to maintain consistent interfaces.
+    Build parsers from small functions and combine them with
+    <code>merge()</code> for option groups and <code>or()</code> for
+    alternatives. Parser components can be shared across commands while
+    preserving type information.
+  link: /why
+  linkText: Why parser combinators?
 - icon: ⚡
   title: Automatic type inference
   details: >-
-    TypeScript infers result types from your parser composition automatically.
-    No manual type annotations needed—get type safety with discriminated unions
-    and exhaustive checking out of the box.
-- icon: ✅
-  title: Rich value validation
-  details: >-
-    Built-in parsers for common types like paths, URLs, and integers with
-    constraint checking. Validate input at parse time with helpful error
-    messages rather than handling errors later.
+    TypeScript infers result types from parser composition, including
+    discriminated unions for subcommands and optional fields. Most code
+    requires no manual type annotations.
+  link: /tutorial
+  linkText: See it in the tutorial
 - icon: 🎯
-  title: Express complex constraints
+  title: Option group constraints
   details: >-
-    Handle mutually exclusive option groups and relationships naturally
-    through parser structure. Avoid scattered validation logic by embedding
-    constraints directly in your parser definition.
-- icon: 📈
-  title: Grows with your needs
+    <code>or()</code> lets you express mutually exclusive option groups at
+    the type level. The constraint is encoded in the parser structure, so
+    invalid combinations are rejected at parse time rather than in
+    application code.
+  link: /why#complex-option-constraints-made-simple
+  linkText: See the comparison
+- icon: 🐚
+  title: Shell completion
   details: >-
-    Start with simple scripts and extend to multi-command tools as needed.
-    The same composition patterns work for both basic flags and complex
-    nested subcommands.
-- icon: 🔧
-  title: Functional approach
+    Generates completion scripts for Bash, zsh, fish, PowerShell, and
+    Nushell from parser definitions. Completion suggestions for
+    <code>choice()</code> values, subcommands, and inter-option dependencies
+    stay current with the parser.
+  link: /concepts/completion
+  linkText: Shell completion docs
+- icon: 📄
+  title: Man page generation
   details: >-
-    Transform and adapt parsers using functional programming techniques.
-    Create variations with defaults, apply transformations, and build
-    reusable components that fit your specific needs.
+    <em>@optique/man</em> generates Unix man pages in standard
+    <code>man(7)</code> roff format from parser definitions. Options,
+    subcommands, and their descriptions are derived from the same structure
+    that drives parsing.
+  link: /concepts/man
+  linkText: Man page docs
+- icon: 📦
+  title: Integration packages
+  details: >-
+    Packages for config files (<em>@optique/config</em>), environment
+    variables (<em>@optique/env</em>), interactive prompts
+    (<em>@optique/inquirer</em>), Zod and Valibot schemas, Git references,
+    and Temporal dates.
+  link: /integrations/config
+  linkText: Browse integrations
 ---
 

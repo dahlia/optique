@@ -471,6 +471,35 @@ no separate type definitions, no risk of the types and implementation drifting
 apart. The parser is the type, and the type is the parser.
 
 
+Integration packages
+--------------------
+
+The core library handles argument parsing and type inference. Optional
+integration packages extend it for common use cases:
+
+ -  *[@optique/env](./integrations/env.md)*: Binds parser values to
+    environment variables with configurable priority
+    (CLI > environment > default).
+ -  *[@optique/config](./integrations/config.md)*: Loads default values from
+    configuration files, with schema validation via any Standard Schema-
+    compatible library (Zod, Valibot, ArkType).
+ -  *[@optique/inquirer](./integrations/inquirer.md)*: Falls back to an
+    interactive Inquirer.js prompt when a CLI argument is not provided.
+ -  *[@optique/zod](./integrations/zod.md)* and
+    *[@optique/valibot](./integrations/valibot.md)*: Use Zod or Valibot
+    schemas directly as value parsers.
+ -  *[@optique/git](./integrations/git.md)*: Async value parsers for Git
+    references (branches, tags, commits, remotes).
+ -  *[@optique/temporal](./integrations/temporal.md)*: Value parsers for
+    Temporal date and time types.
+ -  *[@optique/logtape](./integrations/logtape.md)*: Parsers for log level
+    options that configure LogTape sinks.
+
+Each package integrates with the same composition model as the core.  A
+`bindEnv()`-wrapped parser composes with `object()` and `merge()` the same
+way as any other parser.
+
+
 When Optique makes sense
 ------------------------
 
