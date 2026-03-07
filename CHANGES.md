@@ -51,6 +51,17 @@ To be released.
     the default smart sort to give full control over section ordering in
     help output.  [[#115]]
 
+ -  Added display-oriented command usage customization:
+
+     -  `UsageTerm` now supports an `ellipsis` term for concise usage
+        placeholders.
+     -  `command()` now accepts a `usageLine` option (`Usage` or callback)
+        to customize the command's own help-page usage tail.
+
+    This allows compact command help output such as
+    `Usage: myapp config ...` without changing parse behavior or
+    completion behavior.  [[#139]]
+
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
     discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
@@ -132,6 +143,7 @@ To be released.
 [#131]: https://github.com/dahlia/optique/issues/131
 [#134]: https://github.com/dahlia/optique/pull/134
 [#138]: https://github.com/dahlia/optique/issues/138
+[#139]: https://github.com/dahlia/optique/issues/139
 [#141]: https://github.com/dahlia/optique/issues/141
 
 ### @optique/config

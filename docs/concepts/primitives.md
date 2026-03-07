@@ -487,6 +487,50 @@ const addCommand = command("add", innerParser, {
 > enabling rich descriptions with semantic components for better help text
 > formatting.
 
+### Command usage lines
+
+For command help pages, you can override the usage tail with `usageLine`.
+This is useful for large nested command trees where you want a compact usage
+line like `myapp config ...`.
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { command } from "@optique/core/primitives";
+// ---cut-before---
+const configCommands = or(
+  command("get", object({})),
+  command("set", object({})),
+  command("list", object({})),
+);
+
+const config = command("config", configCommands, {
+  usageLine: [{ type: "ellipsis" }],
+});
+~~~~
+
+You can also use a callback to derive the usage line from the default tail:
+
+~~~~ typescript twoslash
+import type { Usage } from "@optique/core/usage";
+import { object, or } from "@optique/core/constructs";
+import { command } from "@optique/core/primitives";
+// ---cut-before---
+const configCommands = or(
+  command("get", object({})),
+  command("set", object({})),
+);
+
+const config = command("config", configCommands, {
+  usageLine: (defaultUsageLine: Usage) => {
+    // Keep this command concise in help output
+    return [{ type: "ellipsis" }];
+  },
+});
+~~~~
+
+The `ellipsis` term is display-only.  It does not change parsing behavior
+or shell completion.
+
 ### Nested subcommands
 
 You can nest commands multiple levels deep by using `command()` parsers as inner

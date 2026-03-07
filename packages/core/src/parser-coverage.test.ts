@@ -970,4 +970,62 @@ describe("parser.ts coverage branches", () => {
       "usage should contain the resolved alpha command",
     );
   });
+
+  it("getDocPage applies command usageLine with ellipsis for command-only help", () => {
+    const parser = command(
+      "config",
+      or(
+        command("get", constant("get")),
+        command("set", constant("set")),
+      ),
+      {
+        usageLine: [{ type: "ellipsis" }],
+      },
+    );
+
+    const commandDoc = getDocPage(parser, ["config"]);
+    assert.ok(commandDoc);
+    assert.ok(commandDoc.usage);
+    assert.equal(commandDoc.usage.length, 2);
+    assert.equal(commandDoc.usage[0].type, "command");
+    if (commandDoc.usage[0].type === "command") {
+      assert.equal(commandDoc.usage[0].name, "config");
+    }
+    assert.equal(commandDoc.usage[1].type, "ellipsis");
+
+    const subcommandDoc = getDocPage(parser, ["config", "get"]);
+    assert.ok(subcommandDoc);
+    assert.ok(subcommandDoc.usage);
+    const subcommandUsage = subcommandDoc.usage;
+    assert.ok(
+      subcommandUsage.some((term) =>
+        term.type === "command" && term.name === "get"
+      ),
+    );
+    assert.ok(
+      !subcommandUsage.some((term) => term.type === "ellipsis"),
+    );
+  });
+
+  it("getDocPage applies command usageLine callback", () => {
+    const parser = command(
+      "config",
+      or(
+        command("get", constant("get")),
+        command("set", constant("set")),
+      ),
+      {
+        usageLine: (_defaultUsageLine) => [{ type: "ellipsis" }],
+      },
+    );
+    const doc = getDocPage(parser, ["config"]);
+    assert.ok(doc);
+    assert.ok(doc.usage);
+    assert.equal(doc.usage.length, 2);
+    assert.equal(doc.usage[0].type, "command");
+    if (doc.usage[0].type === "command") {
+      assert.equal(doc.usage[0].name, "config");
+    }
+    assert.equal(doc.usage[1].type, "ellipsis");
+  });
 });

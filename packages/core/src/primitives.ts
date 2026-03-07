@@ -80,7 +80,12 @@ import {
   DEFAULT_FIND_SIMILAR_OPTIONS,
   findSimilar,
 } from "./suggestion.ts";
-import type { HiddenVisibility, OptionName, UsageTerm } from "./usage.ts";
+import type {
+  HiddenVisibility,
+  OptionName,
+  Usage,
+  UsageTerm,
+} from "./usage.ts";
 import {
   extractOptionNames,
   isDocHidden,
@@ -1804,6 +1809,20 @@ export interface CommandOptions {
   readonly footer?: Message;
 
   /**
+   * Usage line override for this command's own help page.
+   *
+   * This option customizes the usage tail shown when rendering help for this
+   * command itself (e.g., `myapp config --help`). It does not change parsing
+   * behavior or shell completion.
+   *
+   * - `Usage`: Replaces the default usage tail.
+   * - `(defaultUsageLine) => Usage`: Computes the usage tail from the default.
+   *
+   * @since 1.0.0
+   */
+  readonly usageLine?: Usage | ((defaultUsageLine: Usage) => Usage);
+
+  /**
    * Controls command visibility:
    *
    * - `true`: hide from usage, docs, and suggestions
@@ -1971,6 +1990,7 @@ export function command<M extends Mode, T, TState>(
       {
         type: "command",
         name,
+        ...(options.usageLine != null && { usageLine: options.usageLine }),
         ...(options.hidden != null && { hidden: options.hidden }),
       },
       ...parser.usage,

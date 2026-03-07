@@ -133,6 +133,12 @@ export type UsageTerm =
      */
     readonly name: string;
     /**
+     * Optional usage line override for this command's own help page.
+     * This affects help/documentation rendering only.
+     * @since 1.0.0
+     */
+    readonly usageLine?: Usage | ((defaultUsageLine: Usage) => Usage);
+    /**
      * Visibility controls for this term.
      * @since 0.9.0
      */
@@ -218,6 +224,18 @@ export type UsageTerm =
      * @since 0.9.0
      */
     readonly hidden?: HiddenVisibility;
+  }
+  /**
+   * An ellipsis term, which represents a summary placeholder in usage output.
+   * Unlike {@link passthrough}, this term has no parsing semantics and is used
+   * only for display.
+   * @since 1.0.0
+   */
+  | {
+    /**
+     * The type of the term, which is always `"ellipsis"` for this term.
+     */
+    readonly type: "ellipsis";
   };
 
 /**
@@ -775,6 +793,12 @@ function* formatUsageTermInternal(
   } else if (term.type === "passthrough") {
     // Pass-through options are displayed with a special format
     const text = "[...]";
+    yield {
+      text: options?.colors ? `\x1b[2m${text}\x1b[0m` : text, // Dim
+      width: text.length,
+    };
+  } else if (term.type === "ellipsis") {
+    const text = "...";
     yield {
       text: options?.colors ? `\x1b[2m${text}\x1b[0m` : text, // Dim
       width: text.length,

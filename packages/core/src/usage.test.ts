@@ -1578,6 +1578,12 @@ describe("formatUsageTerm", () => {
       const result = formatUsageTerm(term);
       assert.equal(result, "init");
     });
+
+    it("should format ellipsis usage term", () => {
+      const term: UsageTerm = { type: "ellipsis" };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "...");
+    });
   });
 
   describe("error handling", () => {

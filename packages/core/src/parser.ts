@@ -1018,16 +1018,44 @@ function buildDocPage(
   }
   const sections: DocSection[] = buildingSections;
   const usage = [...normalizeUsage(parser.usage)];
+  const maybeApplyCommandUsageLine = (
+    term: UsageTerm | undefined,
+    arg: string,
+    isLastArg: boolean,
+    usageIndex: number,
+  ): void => {
+    if (
+      term?.type !== "command" ||
+      term.name !== arg ||
+      !isLastArg ||
+      term.usageLine == null
+    ) {
+      return;
+    }
+    const defaultUsageLine = usage.slice(usageIndex + 1);
+    const customUsageLine = typeof term.usageLine === "function"
+      ? term.usageLine(defaultUsageLine)
+      : term.usageLine;
+    const normalizedCustomUsageLine = normalizeUsage(customUsageLine);
+    usage.splice(
+      usageIndex + 1,
+      usage.length - (usageIndex + 1),
+      ...normalizedCustomUsageLine,
+    );
+  };
   let i = 0;
-  for (const arg of args) {
+  for (let argIndex = 0; argIndex < args.length; argIndex++) {
+    const arg = args[argIndex];
     if (i >= usage.length) break;
-    const term = usage[i];
+    let term = usage[i];
     if (term.type === "exclusive") {
       const found = findCommandInExclusive(term, arg);
       if (found) {
         usage.splice(i, 1, ...found);
+        term = usage[i];
       }
     }
+    maybeApplyCommandUsageLine(term, arg, argIndex === args.length - 1, i);
     i++;
   }
   return {

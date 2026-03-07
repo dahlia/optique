@@ -50,6 +50,7 @@ import {
   parseSync,
   type Suggestion,
 } from "@optique/core/parser";
+import type { Usage } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -4711,6 +4712,33 @@ describe("hidden option", () => {
   });
 
   describe("command()", () => {
+    it("should attach usageLine override to command usage term", () => {
+      const parser = command(
+        "config",
+        object({ value: option("--value", string()) }),
+        { usageLine: [{ type: "ellipsis" }] },
+      );
+      const term = parser.usage[0];
+      assert.equal(term.type, "command");
+      if (term.type === "command") {
+        assert.deepEqual(term.usageLine, [{ type: "ellipsis" }]);
+      }
+    });
+
+    it("should attach usageLine callback to command usage term", () => {
+      const usageLine = (defaultUsageLine: Usage) => defaultUsageLine;
+      const parser = command(
+        "config",
+        object({ value: option("--value", string()) }),
+        { usageLine },
+      );
+      const term = parser.usage[0];
+      assert.equal(term.type, "command");
+      if (term.type === "command") {
+        assert.equal(term.usageLine, usageLine);
+      }
+    });
+
     it("should still parse hidden commands", () => {
       const parser = command(
         "secret",

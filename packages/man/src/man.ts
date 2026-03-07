@@ -177,6 +177,9 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
     case "passthrough":
       return "[...]";
 
+    case "ellipsis":
+      return "...";
+
     default: {
       const _exhaustive: never = term;
       throw new TypeError(
