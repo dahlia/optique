@@ -2494,14 +2494,18 @@ describe("extractOptionNames", () => {
     assert.deepEqual(result, new Set(["--visible"]));
   });
 
-  it("should include options hidden only from usage or docs", () => {
+  it("should include options hidden only from usage/docs/help", () => {
     const usage: Usage = [
       { type: "option", names: ["--usage-only"], hidden: "usage" },
       { type: "option", names: ["--doc-only"], hidden: "doc" },
+      { type: "option", names: ["--help-only"], hidden: "help" },
       { type: "option", names: ["--fully-hidden"], hidden: true },
     ];
     const result = extractOptionNames(usage);
-    assert.deepEqual(result, new Set(["--usage-only", "--doc-only"]));
+    assert.deepEqual(
+      result,
+      new Set(["--usage-only", "--doc-only", "--help-only"]),
+    );
   });
 });
 
@@ -2529,14 +2533,18 @@ describe("extractCommandNames hidden filtering", () => {
     assert.deepEqual(result, new Set(["visible"]));
   });
 
-  it("should include commands hidden only from usage or docs", () => {
+  it("should include commands hidden only from usage/docs/help", () => {
     const usage: Usage = [
       { type: "command", name: "usage-only", hidden: "usage" },
       { type: "command", name: "doc-only", hidden: "doc" },
+      { type: "command", name: "help-only", hidden: "help" },
       { type: "command", name: "fully-hidden", hidden: true },
     ];
     const result = extractCommandNames(usage);
-    assert.deepEqual(result, new Set(["usage-only", "doc-only"]));
+    assert.deepEqual(
+      result,
+      new Set(["usage-only", "doc-only", "help-only"]),
+    );
   });
 });
 
@@ -2618,14 +2626,18 @@ describe("extractArgumentMetavars hidden filtering", () => {
     assert.deepEqual(result, new Set(["VISIBLE"]));
   });
 
-  it("should include arguments hidden only from usage or docs", () => {
+  it("should include arguments hidden only from usage/docs/help", () => {
     const usage: Usage = [
       { type: "argument", metavar: "USAGE_ONLY", hidden: "usage" },
       { type: "argument", metavar: "DOC_ONLY", hidden: "doc" },
+      { type: "argument", metavar: "HELP_ONLY", hidden: "help" },
       { type: "argument", metavar: "FULLY_HIDDEN", hidden: true },
     ];
     const result = extractArgumentMetavars(usage);
-    assert.deepEqual(result, new Set(["USAGE_ONLY", "DOC_ONLY"]));
+    assert.deepEqual(
+      result,
+      new Set(["USAGE_ONLY", "DOC_ONLY", "HELP_ONLY"]),
+    );
   });
 });
 
@@ -2634,6 +2646,7 @@ describe("formatUsage hidden visibility", () => {
     const usage: Usage = [
       { type: "option", names: ["--visible"] },
       { type: "option", names: ["--hidden-usage"], hidden: "usage" },
+      { type: "option", names: ["--hidden-help"], hidden: "help" },
       { type: "option", names: ["--hidden-all"], hidden: true },
       { type: "option", names: ["--hidden-doc"], hidden: "doc" },
     ];
@@ -2647,6 +2660,7 @@ describe("formatUsage hidden visibility", () => {
       terms: [
         [{ type: "command", name: "visible" }],
         [{ type: "command", name: "usage-hidden", hidden: "usage" }],
+        [{ type: "command", name: "help-hidden", hidden: "help" }],
         [{ type: "command", name: "doc-hidden", hidden: "doc" }],
       ],
     }];
@@ -2676,15 +2690,45 @@ describe("formatUsage hidden visibility", () => {
   });
 });
 
+describe("hidden visibility predicates", () => {
+  it('should treat "help" as hidden for usage/docs but not suggestions', () => {
+    assert.ok(isUsageHidden("help"));
+    assert.ok(isDocHidden("help"));
+    assert.ok(!isSuggestionHidden("help"));
+  });
+});
+
+describe("mergeHidden special cases", () => {
+  it('should merge "usage" and "doc" into "help"', () => {
+    assert.equal(mergeHidden("usage", "doc"), "help");
+    assert.equal(mergeHidden("doc", "usage"), "help");
+  });
+
+  it('should preserve "help" when combined with usage/doc', () => {
+    assert.equal(mergeHidden("help", "usage"), "help");
+    assert.equal(mergeHidden("help", "doc"), "help");
+    assert.equal(mergeHidden("usage", "help"), "help");
+    assert.equal(mergeHidden("doc", "help"), "help");
+  });
+
+  it('should not hide suggestions when merging into "help"', () => {
+    const merged = mergeHidden("usage", "doc");
+    assert.equal(merged, "help");
+    assert.ok(!isSuggestionHidden(merged));
+  });
+});
+
 describe("property-based tests", () => {
   const propertyParameters = { numRuns: 120 } as const;
   const hiddenVisibilityArbitrary = fc.constantFrom<
     HiddenVisibility | undefined
   >(
     undefined,
+    false,
     true,
     "usage",
     "doc",
+    "help",
   );
   const safeStringArbitrary = fc
     .string({ minLength: 0, maxLength: 16 })
@@ -2826,9 +2870,7 @@ describe("property-based tests", () => {
           );
           assert.equal(
             isSuggestionHidden(mergedAB),
-            isSuggestionHidden(a) ||
-              isSuggestionHidden(b) ||
-              (a != null && b != null && a !== b),
+            isSuggestionHidden(a) || isSuggestionHidden(b),
           );
         },
       ),

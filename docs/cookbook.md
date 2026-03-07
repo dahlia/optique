@@ -1860,6 +1860,8 @@ parsers functional while controlling visibility:
     “Did you mean?” suggestions
  -  `hidden: "usage"`: hide from usage only
  -  `hidden: "doc"`: hide from help entries only
+ -  `hidden: "help"`: hide from usage and help entries, but keep completions
+    and “Did you mean?” suggestions
 
 ### Deprecation pattern
 
@@ -1911,6 +1913,23 @@ const parser = object({
 
 Developers who know about these options can use them, but they won't
 appear in `--help` output or shell completions.
+
+### Undocumented but completion-discoverable flags
+
+Use `hidden: "help"` when you want to keep an option out of usage/help text
+without removing it from shell completion:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  profile: option("--profile", string()),
+  // Not shown in usage/help, but still suggested by completion
+  debugTransport: option("--debug-transport", string(), { hidden: "help" }),
+});
+~~~~
 
 ### Experimental features
 

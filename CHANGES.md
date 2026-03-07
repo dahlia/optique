@@ -61,13 +61,14 @@ To be released.
     earlier 0.10.6 fix that skipped injection entirely.  [[#131]]
 
  -  Extended `hidden` visibility controls from `boolean` to
-    `boolean | "usage" | "doc"` across primitive parsers:
+    `boolean | "usage" | "doc" | "help"` across primitive parsers:
     `option()`, `flag()`, `argument()`, `command()`, and `passThrough()`.
     `group()`, `object()`, and `merge()` now also support `hidden` with the
     same values, and wrapper/parser `hidden` values are combined as a union.
     `hidden: true` keeps the existing behavior (hidden from usage, docs,
-    and suggestions), while `"usage"` and `"doc"` allow partial hiding.
-    [[#113]]
+    and suggestions).  `"usage"` and `"doc"` allow partial hiding, and
+    `"help"` hides terms from usage and help listings while keeping them in
+    shell completions and suggestion candidates.  [[#113], [#141]]
 
  -  Redesigned meta command configuration (help, version, completion) in
     `RunOptions` to use independent `command`/`option` sub-configs instead
@@ -131,6 +132,7 @@ To be released.
 [#131]: https://github.com/dahlia/optique/issues/131
 [#134]: https://github.com/dahlia/optique/pull/134
 [#138]: https://github.com/dahlia/optique/issues/138
+[#141]: https://github.com/dahlia/optique/issues/141
 
 ### @optique/config
 

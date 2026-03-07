@@ -5935,6 +5935,118 @@ describe("runWithAsync", () => {
       });
     });
 
+    describe('command hidden: "help"', () => {
+      it("should hide help command from usage/doc but keep runtime trigger", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpShown = false;
+        const result = runParser(parser, "test", ["help"], {
+          help: {
+            command: { hidden: "help" },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(result, "help-shown");
+        assert.ok(helpShown);
+
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: {
+            command: { hidden: "help" },
+            option: true,
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        const usageLines = helpOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          !usageLines.includes(" test help"),
+          `help command should be absent from usage lines when hidden: "help", got:\n${usageLines}`,
+        );
+
+        const docLines = helpOutput
+          .split("\n")
+          .filter(
+            (l) =>
+              !l.startsWith("Usage:") &&
+              !l.startsWith("       ") &&
+              l.trim().length > 0,
+          );
+        const hasHelpInDocSection = docLines.some((l) => /^\s+help\b/.test(l));
+        assert.ok(
+          !hasHelpInDocSection,
+          `help command should not appear in doc section when hidden: "help", got lines:\n${
+            docLines.join("\n")
+          }`,
+        );
+      });
+
+      it("should hide version command from usage/doc but keep runtime trigger", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        const result = runParser(parser, "test", ["version"], {
+          version: {
+            command: { hidden: "help" },
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(result, "version-shown");
+        assert.ok(versionShown);
+
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: { option: true, onShow: () => "shown" },
+          version: { command: { hidden: "help" }, value: "1.0.0" },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        const usageLines = helpOutput
+          .split("\n")
+          .filter((l) => l.startsWith("Usage:") || l.startsWith("       "))
+          .join("\n");
+        assert.ok(
+          !usageLines.includes("version"),
+          `version command should be absent from usage lines when hidden: "help", got:\n${usageLines}`,
+        );
+
+        const docLines = helpOutput
+          .split("\n")
+          .filter(
+            (l) =>
+              !l.startsWith("Usage:") &&
+              !l.startsWith("       ") &&
+              l.trim().length > 0,
+          );
+        const hasVersionInDocSection = docLines.some((l) =>
+          /^\s+version\b/.test(l)
+        );
+        assert.ok(
+          !hasVersionInDocSection,
+          `version command should not appear in doc section when hidden: "help", got lines:\n${
+            docLines.join("\n")
+          }`,
+        );
+      });
+    });
+
     describe('command hidden: "doc"', () => {
       it("should show help command in usage line but hide from doc listing", () => {
         const parser = object({ name: argument(string()) });
@@ -6170,6 +6282,75 @@ describe("runWithAsync", () => {
           `--help should NOT appear in doc options when hidden: "doc", found:\n${
             docOptionLines.join("\n")
           }`,
+        );
+      });
+    });
+
+    describe('option hidden: "help"', () => {
+      it("should hide --help from usage/doc but keep lenient scanner trigger", () => {
+        const parser = object({ name: argument(string()) });
+
+        let helpShown = false;
+        const result = runParser(parser, "test", ["--help"], {
+          help: {
+            option: { hidden: "help" },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(result, "help-shown");
+        assert.ok(helpShown);
+
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: {
+            option: { hidden: "help" },
+            onShow: () => "shown",
+          },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        assert.ok(
+          !helpOutput.includes("--help"),
+          `--help should not appear in help output when hidden: "help", got:\n${helpOutput}`,
+        );
+      });
+
+      it("should hide --version from usage/doc but keep lenient scanner trigger", () => {
+        const parser = object({ name: argument(string()) });
+
+        let versionShown = false;
+        const result = runParser(parser, "test", ["--version"], {
+          version: {
+            option: { hidden: "help" },
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          stdout: () => {},
+        });
+        assert.equal(result, "version-shown");
+        assert.ok(versionShown);
+
+        let helpOutput = "";
+        runParser(parser, "test", ["--help"], {
+          help: { option: true, onShow: () => "shown" },
+          version: { option: { hidden: "help" }, value: "1.0.0" },
+          stdout: (text) => {
+            helpOutput += text + "\n";
+          },
+        });
+
+        assert.ok(
+          !helpOutput.includes("--version"),
+          `--version should not appear in help output when hidden: "help", got:\n${helpOutput}`,
         );
       });
     });

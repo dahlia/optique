@@ -21,21 +21,22 @@ export type OptionName =
  * - `true`: hidden from usage, documentation, and suggestions
  * - `"usage"`: hidden from usage only
  * - `"doc"`: hidden from documentation only
+ * - `"help"`: hidden from usage and documentation, but shown in suggestions
  */
-export type HiddenVisibility = boolean | "usage" | "doc";
+export type HiddenVisibility = boolean | "usage" | "doc" | "help";
 
 /**
  * Returns whether the term should be hidden from usage output.
  */
 export function isUsageHidden(hidden?: HiddenVisibility): boolean {
-  return hidden === true || hidden === "usage";
+  return hidden === true || hidden === "usage" || hidden === "help";
 }
 
 /**
  * Returns whether the term should be hidden from documentation output.
  */
 export function isDocHidden(hidden?: HiddenVisibility): boolean {
-  return hidden === true || hidden === "doc";
+  return hidden === true || hidden === "doc" || hidden === "help";
 }
 
 /**
@@ -55,7 +56,16 @@ export function mergeHidden(
   if (a == null) return b;
   if (b == null) return a;
   if (a === true || b === true) return true;
-  if (a !== b) return true;
+  if (a === false) return b;
+  if (b === false) return a;
+  if (a === b) return a;
+  if (a === "help" || b === "help") return "help";
+  if (
+    (a === "usage" || a === "doc") &&
+    (b === "usage" || b === "doc")
+  ) {
+    return "help";
+  }
   return a;
 }
 

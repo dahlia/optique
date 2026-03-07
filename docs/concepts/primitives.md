@@ -831,6 +831,8 @@ and `passThrough()`—support a `hidden` option:
     “Did you mean?” suggestions
  -  `"usage"`: hide from usage only
  -  `"doc"`: hide from help entries only
+ -  `"help"`: hide from usage and help entries, but keep shell completions
+    and “Did you mean?” suggestions
 
 Hidden parsers remain fully functional for parsing.
 
@@ -894,6 +896,12 @@ const parser4 = group("Global", object({
   verbose: flag("-v", "--verbose"),
   config: option("--config", string()),
 }), { hidden: "usage" });
+
+// Keep an option undocumented, but discoverable via completion
+const parser5 = object({
+  profile: option("--profile", string()),
+  debugTransport: option("--debug-transport", string(), { hidden: "help" }),
+});
 ~~~~
 
 Hidden parsers still parse input normally. Users who know about them can

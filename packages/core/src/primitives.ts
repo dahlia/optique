@@ -185,6 +185,7 @@ export interface OptionOptions {
    * - `true`: hide from usage, docs, and suggestions
    * - `"usage"`: hide from usage only
    * - `"doc"`: hide from docs only
+   * - `"help"`: hide from usage and docs, keep suggestions
    *
    * @since 0.9.0
    */
@@ -1163,6 +1164,7 @@ export interface FlagOptions {
    * - `true`: hide from usage, docs, and suggestions
    * - `"usage"`: hide from usage only
    * - `"doc"`: hide from docs only
+   * - `"help"`: hide from usage and docs, keep suggestions
    *
    * @since 0.9.0
    */
@@ -1507,6 +1509,7 @@ export interface ArgumentOptions {
    * - `true`: hide from usage, docs, and suggestions
    * - `"usage"`: hide from usage only
    * - `"doc"`: hide from docs only
+   * - `"help"`: hide from usage and docs, keep suggestions
    *
    * @since 0.9.0
    */
@@ -1806,6 +1809,7 @@ export interface CommandOptions {
    * - `true`: hide from usage, docs, and suggestions
    * - `"usage"`: hide from usage only
    * - `"doc"`: hide from docs only
+   * - `"help"`: hide from usage and docs, keep suggestions
    *
    * @since 0.9.0
    */
@@ -2238,6 +2242,7 @@ export interface PassThroughOptions {
    * - `true`: hide from usage, docs, and suggestions
    * - `"usage"`: hide from usage only
    * - `"doc"`: hide from docs only
+   * - `"help"`: hide from usage and docs, keep suggestions
    *
    * @since 0.9.0
    */

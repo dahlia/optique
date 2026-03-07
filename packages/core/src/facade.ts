@@ -217,6 +217,7 @@ export interface CommandSubConfig {
    * - `true`: Hidden from usage, documentation, and suggestions.
    * - `"usage"`: Hidden from usage lines only.
    * - `"doc"`: Hidden from documentation only.
+   * - `"help"`: Hidden from usage and documentation only.
    */
   readonly hidden?: HiddenVisibility;
 }
@@ -243,6 +244,7 @@ export interface OptionSubConfig {
    * - `true`: Hidden from usage, documentation, and suggestions.
    * - `"usage"`: Hidden from usage lines only.
    * - `"doc"`: Hidden from documentation only.
+   * - `"help"`: Hidden from usage and documentation only.
    */
   readonly hidden?: HiddenVisibility;
 }
