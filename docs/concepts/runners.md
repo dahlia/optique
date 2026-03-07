@@ -714,10 +714,36 @@ Other:
   [1mcompletion[0m [4m[2mSHELL[0m
 ~~~~
 
-The `group` option is only available on the `command` property.  When a
-meta-command is configured with only `option: true`, there is no command to
-group.  You can also group only some meta-commands while leaving others
-ungrouped.
+The `group` option is available on both `command` and `option` sub-configs.
+You can also group only some meta-commands while leaving others ungrouped.
+
+#### Section merging
+
+When a meta-command's `group` name matches an existing section in the user
+parser, the two sections are automatically merged into one.  For example, if
+the user parser creates a “Commands” section and the help command is also
+assigned `group: "Commands"`, they appear together:
+
+~~~~ typescript twoslash
+import { group } from "@optique/core/constructs";
+import { command, constant } from "@optique/core/primitives";
+import { or } from "@optique/core/constructs";
+import { run } from "@optique/run";
+
+const parser = group("Commands", or(
+  command("serve", constant("serve")),
+  command("build", constant("build")),
+));
+
+const config = run(parser, {
+  help: { command: { group: "Commands" }, option: true },
+  version: { value: "1.0.0", option: true },
+});
+~~~~
+
+This produces a single “Commands:” section containing both user and meta
+commands.  Similarly, multiple `group("X", …)` combinators in the user parser
+that share the same name are merged into a single “X:” section.
 
 ### Default value display
 

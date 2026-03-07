@@ -115,6 +115,14 @@ To be released.
     initialization, which could throw `ReferenceError` instead of showing help.
     `displayHelp` is now defined before async validation is invoked.
 
+ -  Fixed help output incorrectly interleaving meta items (`help`, `--help`,
+    `--version`) with user-defined commands when using `group: "…"` to
+    assign meta items to a named section that already exists in user-defined
+    parsers.  Same-named sections from different parsers are now merged into
+    a single section.  Additionally, when meta items are ungrouped and the
+    user's commands are in a titled section, the meta items now appear
+    *after* the user's section rather than before it.  [[#138]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -122,6 +130,7 @@ To be released.
 [#130]: https://github.com/dahlia/optique/issues/130
 [#131]: https://github.com/dahlia/optique/issues/131
 [#134]: https://github.com/dahlia/optique/pull/134
+[#138]: https://github.com/dahlia/optique/issues/138
 
 ### @optique/config
 

@@ -5158,6 +5158,184 @@ describe("runWithAsync", () => {
     });
   });
 
+  describe("section merging and ordering (issue #138)", () => {
+    it("should display user commands before ungrouped meta items", () => {
+      const cli = group(
+        "Commands",
+        or(
+          command("build", constant("build"), { brief: message`Build` }),
+          command("dev", constant("dev"), { brief: message`Dev` }),
+          command("test", constant("test"), { brief: message`Test` }),
+        ),
+      );
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          command: true,
+          option: true,
+          onShow: () => "help-shown",
+        },
+        version: {
+          option: true,
+          value: "1.0.0",
+          onShow: () => "version-shown",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      // Skip the usage line to examine section ordering only.
+      // The usage line and sections are separated by a blank line ("\n\n").
+      const firstDoubleNewline = helpOutput.indexOf("\n\n");
+      assert.ok(firstDoubleNewline !== -1, "Help output should have sections");
+      const sectionsArea = helpOutput.slice(firstDoubleNewline + 2);
+
+      // User commands (in the titled "Commands:" section) should appear
+      // BEFORE the ungrouped meta items (--help, --version options)
+      const buildIdx = sectionsArea.indexOf("build");
+      const helpOptIdx = sectionsArea.indexOf("--help");
+
+      assert.ok(buildIdx !== -1, "build should appear in sections");
+      assert.ok(helpOptIdx !== -1, "--help should appear in sections");
+      assert.ok(
+        buildIdx < helpOptIdx,
+        `build (at ${buildIdx}) should appear before --help (at ${helpOptIdx}) in sections`,
+      );
+    });
+
+    it("should merge meta options into user's section when group names match", () => {
+      const cli = object("Global Options", {
+        verbose: flag("--verbose", { description: message`Enable verbose` }),
+      });
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          option: { group: "Global Options" },
+          onShow: () => "help-shown",
+        },
+        version: {
+          option: { group: "Global Options" },
+          value: "1.0.0",
+          onShow: () => "version-shown",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      // "Global Options:" should appear exactly once (no duplicates)
+      const globalCount = helpOutput.split("Global Options:").length - 1;
+      assert.equal(
+        globalCount,
+        1,
+        `Global Options: should appear exactly once, got ${globalCount}`,
+      );
+      // All items should be under "Global Options:"
+      const globalIndex = helpOutput.indexOf("Global Options:");
+      assert.ok(
+        helpOutput.indexOf("--verbose", globalIndex) > globalIndex,
+        "--verbose should be under Global Options:",
+      );
+      assert.ok(
+        helpOutput.indexOf("--help", globalIndex) > globalIndex,
+        "--help should be under Global Options:",
+      );
+      assert.ok(
+        helpOutput.indexOf("--version", globalIndex) > globalIndex,
+        "--version should be under Global Options:",
+      );
+    });
+
+    it("should merge meta commands into user's section when group names match", () => {
+      const cli = group(
+        "Commands",
+        or(
+          command("build", constant("build"), { brief: message`Build` }),
+          command("test", constant("test"), { brief: message`Test` }),
+        ),
+      );
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          command: { group: "Commands" },
+          option: true,
+          onShow: () => "help-shown",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      // "Commands:" should appear exactly once (no duplicates)
+      const cmdCount = helpOutput.split("Commands:").length - 1;
+      assert.equal(
+        cmdCount,
+        1,
+        `Commands: should appear exactly once, got ${cmdCount}`,
+      );
+      // Both user commands and meta command should be under "Commands:"
+      const cmdIndex = helpOutput.indexOf("Commands:");
+      assert.ok(
+        helpOutput.indexOf("build", cmdIndex) > cmdIndex,
+        "build should be under Commands:",
+      );
+      assert.ok(
+        helpOutput.indexOf("test", cmdIndex) > cmdIndex,
+        "test should be under Commands:",
+      );
+      assert.ok(
+        helpOutput.indexOf("help", cmdIndex) > cmdIndex,
+        "help (meta) should be under Commands:",
+      );
+    });
+
+    it("should merge same-named sections from group() combinators", () => {
+      const cli = or(
+        group(
+          "Utilities",
+          command("format", constant("format"), { brief: message`Format` }),
+        ),
+        group(
+          "Utilities",
+          command("lint", constant("lint"), { brief: message`Lint` }),
+        ),
+      );
+
+      let helpOutput = "";
+      runParser(cli, "mycli", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "help-shown",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      // "Utilities:" should appear exactly once (not twice)
+      const utilCount = helpOutput.split("Utilities:").length - 1;
+      assert.equal(
+        utilCount,
+        1,
+        `Utilities: should appear exactly once, got ${utilCount}`,
+      );
+      // Both commands should be under "Utilities:"
+      const utilIndex = helpOutput.indexOf("Utilities:");
+      assert.ok(
+        helpOutput.indexOf("format", utilIndex) > utilIndex,
+        "format should be under Utilities:",
+      );
+      assert.ok(
+        helpOutput.indexOf("lint", utilIndex) > utilIndex,
+        "lint should be under Utilities:",
+      );
+    });
+  });
+
   describe("sectionOrder option", () => {
     it("should use custom sectionOrder comparator to control section ordering in help output", () => {
       const parser = or(

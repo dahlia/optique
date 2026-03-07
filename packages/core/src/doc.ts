@@ -309,9 +309,10 @@ function scoreSection(section: DocSection): number {
 /**
  * The default section comparator: command-only sections come first, then
  * mixed sections, then option/argument-only sections.  Untitled sections
- * receive a slight priority boost so the main (untitled) section appears
- * before titled sections of a similar classification.  Sections with the
- * same score preserve their original relative order (stable sort).
+ * receive a score bonus of -1 via {@link scoreSection} so that untitled
+ * command-only sections naturally sort before titled command-only sections.
+ * Sections with the same score preserve their original relative order
+ * (stable sort).
  */
 function defaultSectionOrder(a: DocSection, b: DocSection): number {
   return scoreSection(a) - scoreSection(b);
@@ -387,18 +388,22 @@ export function formatDocPage(
     output += "\n";
   }
   const comparator = options.sectionOrder ?? defaultSectionOrder;
-  // Stable sort with three-level tie-breaking:
+  // Stable sort with two-level tie-breaking:
   // 1. comparator result (primary)
-  // 2. untitled sections before titled sections (secondary)
-  // 3. original index (tertiary, preserves relative order)
+  // 2. original index (secondary, preserves relative order)
+  //
+  // Note: previously a secondary "untitled before titled" rule was applied
+  // here, but it caused ungrouped meta items (e.g. --help, --version) to
+  // appear before the user's titled command sections in the output.  The
+  // correct ordering is now enforced in buildDocPage, which places titled
+  // sections first and the untitled catch-all section last in the sections
+  // array.
   const sections = page.sections
     .map((s, i) => ({ section: s, index: i }))
     .toSorted((a, b) => {
       const cmp = comparator(a.section, b.section);
       if (cmp !== 0) return cmp;
-      const titleCmp = (a.section.title == null ? 0 : 1) -
-        (b.section.title == null ? 0 : 1);
-      return titleCmp !== 0 ? titleCmp : a.index - b.index;
+      return a.index - b.index;
     })
     .map(({ section }) => section);
   for (const section of sections) {

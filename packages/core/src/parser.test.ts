@@ -1,4 +1,5 @@
 import {
+  group,
   longestMatch,
   merge,
   object,
@@ -2216,5 +2217,79 @@ describe("getDocPage regression: meta commands with withDefault(or(...))", () =>
         assert.ok(doc.usage[1].terms[0].names.includes("--global"));
       }
     }
+  });
+});
+
+describe("getDocPage: section merging (issue #138)", () => {
+  // Regression tests for https://github.com/dahlia/optique/issues/138
+  // Same-named sections from different parsers should be merged into one.
+
+  it("should merge same-titled sections from group() combinators", () => {
+    const parser = or(
+      group("Tools", command("format", constant("format"))),
+      group("Tools", command("lint", constant("lint"))),
+    );
+
+    const doc = getDocPage(parser);
+    assert.ok(doc, "doc should not be undefined");
+
+    const toolsSections = doc.sections.filter((s) => s.title === "Tools");
+    assert.equal(
+      toolsSections.length,
+      1,
+      "Should have exactly one Tools section",
+    );
+    const entries = toolsSections[0].entries;
+    const names = entries
+      .filter((e) => e.term.type === "command")
+      .map((e) => (e.term.type === "command" ? e.term.name : ""));
+    assert.ok(names.includes("format"), "format should be in Tools section");
+    assert.ok(names.includes("lint"), "lint should be in Tools section");
+  });
+
+  it("should preserve fragment insertion order within merged sections", () => {
+    const parser = or(
+      group("Commands", command("aaa", constant("aaa"))),
+      group("Commands", command("zzz", constant("zzz"))),
+    );
+
+    const doc = getDocPage(parser);
+    assert.ok(doc);
+
+    const cmdSection = doc.sections.find((s) => s.title === "Commands");
+    assert.ok(cmdSection, "Commands section should exist");
+    const names = cmdSection.entries
+      .filter((e) => e.term.type === "command")
+      .map((e) => (e.term.type === "command" ? e.term.name : ""));
+
+    assert.ok(
+      names.indexOf("aaa") < names.indexOf("zzz"),
+      "aaa should appear before zzz (insertion order preserved)",
+    );
+  });
+
+  it("should place raw entry fragments after titled sections", () => {
+    // When user's commands are in a titled section and meta items produce
+    // raw entries, the raw entries should appear after the titled section.
+    const parser = longestMatch(
+      group("Commands", command("build", constant("build"))),
+      command("help", constant("help")),
+    );
+
+    const doc = getDocPage(parser);
+    assert.ok(doc);
+
+    const commandsSection = doc.sections.find((s) => s.title === "Commands");
+    const untitledSection = doc.sections.find((s) => s.title == null);
+    assert.ok(commandsSection, "Commands section should exist");
+    assert.ok(untitledSection, "Untitled section should exist");
+
+    // Titled section should have a lower index than untitled
+    const commandsIdx = doc.sections.indexOf(commandsSection);
+    const untitledIdx = doc.sections.indexOf(untitledSection);
+    assert.ok(
+      commandsIdx < untitledIdx,
+      `Commands section (idx=${commandsIdx}) should appear before untitled section (idx=${untitledIdx})`,
+    );
   });
 });

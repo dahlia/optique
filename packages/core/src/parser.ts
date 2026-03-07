@@ -979,19 +979,44 @@ function buildDocPage(
     { kind: "available", state: context.state },
     undefined,
   );
-  const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
-  const sections: DocSection[] = [];
+  // Build sections in the order that entries first appear in the fragment
+  // stream, merging same-titled sections together.  This ensures that the
+  // untitled (catch-all) section appears at its natural position in the
+  // output rather than always being appended at the end.
+  interface BuildingSection {
+    title?: string;
+    entries: DocEntry[];
+  }
+  const buildingSections: BuildingSection[] = [];
+  let untitledSection: BuildingSection | null = null;
+  const titledSectionMap = new Map<string, BuildingSection>();
+
   for (const fragment of fragments) {
-    if (fragment.type !== "section") continue;
-    if (fragment.title == null) {
-      entries.push(...fragment.entries);
-    } else {
-      sections.push(fragment);
+    if (fragment.type === "entry") {
+      if (untitledSection == null) {
+        untitledSection = { entries: [] };
+        buildingSections.push(untitledSection);
+      }
+      untitledSection.entries.push(fragment);
+    } else if (fragment.type === "section") {
+      if (fragment.title == null) {
+        if (untitledSection == null) {
+          untitledSection = { entries: [] };
+          buildingSections.push(untitledSection);
+        }
+        untitledSection.entries.push(...fragment.entries);
+      } else {
+        let section = titledSectionMap.get(fragment.title);
+        if (section == null) {
+          section = { title: fragment.title, entries: [] };
+          titledSectionMap.set(fragment.title, section);
+          buildingSections.push(section);
+        }
+        section.entries.push(...fragment.entries);
+      }
     }
   }
-  if (entries.length > 0) {
-    sections.push({ entries });
-  }
+  const sections: DocSection[] = buildingSections;
   const usage = [...normalizeUsage(parser.usage)];
   let i = 0;
   for (const arg of args) {
