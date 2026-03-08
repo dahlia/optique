@@ -1221,10 +1221,17 @@ export function multiple<M extends Mode, TValue, TState>(
       state: DocState<MultipleState>,
       defaultValue?: readonly TValue[],
     ) {
+      const latestState = state.kind === "available" && state.state.length > 0
+        ? state.state.at(-1)!
+        : undefined;
+      const latestInnerState = latestState != null &&
+          isInjectedAnnotationWrapper(latestState)
+        ? unwrapInjectedWrapper(latestState)
+        : latestState;
       const innerState: DocState<TState> = state.kind === "unavailable"
         ? { kind: "unavailable" }
-        : state.state.length > 0
-        ? { kind: "available", state: state.state.at(-1)! }
+        : latestInnerState !== undefined
+        ? { kind: "available", state: latestInnerState as TState }
         : { kind: "unavailable" };
       return syncParser.getDocFragments(
         innerState,

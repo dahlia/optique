@@ -3333,6 +3333,45 @@ describe("multiple", () => {
         }
       }
     });
+
+    it("should unwrap injected primitive state before delegating docs", () => {
+      let observedState: unknown;
+      const baseParser: Parser<"sync", string, string> = {
+        $mode: "sync",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        initialState: "",
+        parse(context) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Unexpected parse: ${context.buffer.join(", ")}`,
+          };
+        },
+        complete(state) {
+          return { success: true as const, value: state };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments(state) {
+          observedState = state.kind === "available" ? state.state : undefined;
+          return { fragments: [] };
+        },
+      };
+      const parser = multiple(baseParser);
+      const wrappedState = injectAnnotations("active", {
+        [Symbol.for("@test/multiple-doc-state-wrapper")]: true,
+      });
+
+      parser.getDocFragments(
+        { kind: "available", state: [wrappedState] },
+      );
+
+      assert.equal(observedState, "active");
+    });
   });
 });
 
