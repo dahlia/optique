@@ -39,6 +39,19 @@ To be released.
     at compile time with an actionable message that recommends nesting `or()`
     calls.  [[#142], [#143]]
 
+ -  Expanded `merge()`'s fully inferred overloads from 10 to 15 parser
+    arguments, so larger merged parser sets keep precise object inference
+    instead of degrading unexpectedly.  [[#144], [#145]]
+
+ -  Expanded `concat()` and `longestMatch()` fully inferred overloads from 5
+    to 15 parser arguments, so larger compositions keep precise tuple/union
+    inference.  [[#144], [#145]]
+
+ -  Added type-level arity guards for `merge()`, `concat()`, and
+    `longestMatch()` calls above 15 parser arguments.  Oversized calls now fail
+    at compile time with actionable messages that recommend nested
+    composition.  [[#144], [#145]]
+
  -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
     terms as double newlines in the output, instead of collapsing them to
     a single newline.  This makes paragraph breaks visually distinct from
@@ -156,6 +169,8 @@ To be released.
 [#141]: https://github.com/dahlia/optique/issues/141
 [#142]: https://github.com/dahlia/optique/issues/142
 [#143]: https://github.com/dahlia/optique/pull/143
+[#144]: https://github.com/dahlia/optique/issues/144
+[#145]: https://github.com/dahlia/optique/pull/145
 
 ### @optique/config
 

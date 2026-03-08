@@ -537,6 +537,12 @@ that produces object-like values, including `withDefault()`, `map()`, and other
 transformative parsers. This is essential for building maintainable applications
 where related options can be shared across different commands or modes.
 
+> [!IMPORTANT]
+> TypeScript overload inference for `merge()` supports up to 15 parser
+> arguments. Calls beyond 15 now fail at compile time with an actionable
+> message. For 16+ parsers, split into nested groups so each `merge()` call
+> stays at 15 or fewer arguments.
+
 ~~~~ typescript twoslash
 import { merge, object, or } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
@@ -913,6 +919,12 @@ parser, enabling modular tuple design through reusable tuple groups. This is
 the tuple equivalent of `merge()` for objects, providing compositional
 flexibility for sequential, positional argument structures.
 
+> [!IMPORTANT]
+> TypeScript overload inference for `concat()` supports up to 15 parser
+> arguments. Calls beyond 15 now fail at compile time with an actionable
+> message. For 16+ parsers, split into nested groups so each `concat()` call
+> stays at 15 or fewer arguments.
+
 ~~~~ typescript twoslash
 import { concat, tuple } from "@optique/core/constructs";
 import { parse } from "@optique/core/parser";
@@ -1056,6 +1068,12 @@ selecting the parser that consumes the most input tokens. Unlike `or()` which
 returns the first successful match, `longestMatch()` tries all parsers and
 selects the one with the longest match. This enables context-aware parsing
 where more specific patterns take precedence over general ones.
+
+> [!IMPORTANT]
+> TypeScript overload inference for `longestMatch()` supports up to 15 parser
+> arguments. Calls beyond 15 now fail at compile time with an actionable
+> message. For 16+ parsers, split into nested groups so each
+> `longestMatch()` call stays at 15 or fewer arguments.
 
 ~~~~ typescript twoslash
 import { longestMatch, object } from "@optique/core/constructs";

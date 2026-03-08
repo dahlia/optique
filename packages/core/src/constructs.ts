@@ -2425,256 +2425,145 @@ export interface LongestMatchErrorOptions {
   suggestions?: (suggestions: readonly string[]) => Message;
 }
 
+type LongestMatchParserArity =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15;
+type LongestMatchArityLimitError = {
+  readonly __optiqueLongestMatchArityLimit:
+    "longestMatch() requires between 1 and 15 parser arguments. Nest longestMatch() to combine more.";
+};
+type LongestMatchTailOptions = LongestMatchOptions & {
+  readonly $valueType?: never;
+};
+type TupleKeys<T extends readonly unknown[]> = Exclude<
+  keyof T,
+  keyof readonly unknown[]
+>;
+type LongestMatchTupleState<
+  TParsers extends readonly Parser<Mode, unknown, unknown>[],
+> = {
+  [K in TupleKeys<TParsers>]: TParsers[K] extends Parser<
+    Mode,
+    unknown,
+    infer TState
+  >
+    ? K extends `${infer TIndex extends number}`
+      ? [TIndex, ParserResult<TState>]
+    : never
+    : never;
+}[TupleKeys<TParsers>];
+type LongestMatchState<
+  TParsers extends readonly Parser<Mode, unknown, unknown>[],
+> = IsTuple<TParsers> extends true
+  ? undefined | LongestMatchTupleState<TParsers>
+  : undefined | [number, ParserResult<unknown>];
+type LongestMatchArityGuard<TParsers extends readonly unknown[]> =
+  IsTuple<TParsers> extends true
+    ? TParsers["length"] extends LongestMatchParserArity ? unknown
+    : LongestMatchArityLimitError
+    : unknown;
+
 /**
- * Creates a parser that combines two mutually exclusive parsers into one,
- * selecting the parser that consumes the most tokens.
- * The resulting parser will try both parsers and return the result
- * of the parser that consumed more input tokens.
- * @template MA The mode of the first parser.
- * @template MB The mode of the second parser.
- * @template TA The type of the value returned by the first parser.
- * @template TB The type of the value returned by the second parser.
- * @template TStateA The type of the state used by the first parser.
- * @template TStateB The type of the state used by the second parser.
- * @param a The first {@link Parser} to try.
- * @param b The second {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using both parsers
- *          and returns the result of the parser that consumed more tokens.
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens.
+ *
+ * The resulting parser tries every given parser and returns the
+ * successful result that consumed more input than the others.
+ *
+ * @param parsers Parsers to evaluate and compare by consumed input.
+ * @returns A parser that yields the best successful branch result.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.3.0
  */
 export function longestMatch<
-  MA extends Mode,
-  MB extends Mode,
-  TA,
-  TB,
-  TStateA,
-  TStateB,
+  const TParsers extends readonly Parser<"sync", unknown, unknown>[],
 >(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
+  ...parsers: TParsers & LongestMatchArityGuard<TParsers>
 ): Parser<
-  CombineModes<readonly [MA, MB]>,
-  TA | TB,
-  undefined | [0, ParserResult<TStateA>] | [1, ParserResult<TStateB>]
+  "sync",
+  InferValue<TParsers[number]>,
+  LongestMatchState<TParsers>
 >;
 
 /**
- * Creates a parser that combines three mutually exclusive parsers into one,
- * selecting the parser that consumes the most tokens.
- * The resulting parser will try all parsers and return the result
- * of the parser that consumed the most input tokens.
- * @template MA The mode of the first parser.
- * @template MB The mode of the second parser.
- * @template MC The mode of the third parser.
- * @template TA The type of the value returned by the first parser.
- * @template TB The type of the value returned by the second parser.
- * @template TC The type of the value returned by the third parser.
- * @template TStateA The type of the state used by the first parser.
- * @template TStateB The type of the state used by the second parser.
- * @template TStateC The type of the state used by the third parser.
- * @param a The first {@link Parser} to try.
- * @param b The second {@link Parser} to try.
- * @param c The third {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using all parsers
- *          and returns the result of the parser that consumed the most tokens.
- * @since 0.3.0
- */
-export function longestMatch<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  TA,
-  TB,
-  TC,
-  TStateA,
-  TStateB,
-  TStateC,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC]>,
-  TA | TB | TC,
-  | undefined
-  | [0, ParserResult<TStateA>]
-  | [1, ParserResult<TStateB>]
-  | [2, ParserResult<TStateC>]
->;
-
-/**
- * Creates a parser that combines four mutually exclusive parsers into one,
- * selecting the parser that consumes the most tokens.
- * The resulting parser will try all parsers and return the result
- * of the parser that consumed the most input tokens.
- * @template MA The mode of the first parser.
- * @template MB The mode of the second parser.
- * @template MC The mode of the third parser.
- * @template MD The mode of the fourth parser.
- * @template TA The type of the value returned by the first parser.
- * @template TB The type of the value returned by the second parser.
- * @template TC The type of the value returned by the third parser.
- * @template TD The type of the value returned by the fourth parser.
- * @template TStateA The type of the state used by the first parser.
- * @template TStateB The type of the state used by the second parser.
- * @template TStateC The type of the state used by the third parser.
- * @template TStateD The type of the state used by the fourth parser.
- * @param a The first {@link Parser} to try.
- * @param b The second {@link Parser} to try.
- * @param c The third {@link Parser} to try.
- * @param d The fourth {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using all parsers
- *          and returns the result of the parser that consumed the most tokens.
- * @since 0.3.0
- */
-export function longestMatch<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  MD extends Mode,
-  TA,
-  TB,
-  TC,
-  TD,
-  TStateA,
-  TStateB,
-  TStateC,
-  TStateD,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-  d: Parser<MD, TD, TStateD>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC, MD]>,
-  TA | TB | TC | TD,
-  | undefined
-  | [0, ParserResult<TStateA>]
-  | [1, ParserResult<TStateB>]
-  | [2, ParserResult<TStateC>]
-  | [3, ParserResult<TStateD>]
->;
-
-/**
- * Creates a parser that combines five mutually exclusive parsers into one,
- * selecting the parser that consumes the most tokens.
- * The resulting parser will try all parsers and return the result
- * of the parser that consumed the most input tokens.
- * @template MA The mode of the first parser.
- * @template MB The mode of the second parser.
- * @template MC The mode of the third parser.
- * @template MD The mode of the fourth parser.
- * @template ME The mode of the fifth parser.
- * @template TA The type of the value returned by the first parser.
- * @template TB The type of the value returned by the second parser.
- * @template TC The type of the value returned by the third parser.
- * @template TD The type of the value returned by the fourth parser.
- * @template TE The type of the value returned by the fifth parser.
- * @template TStateA The type of the state used by the first parser.
- * @template TStateB The type of the state used by the second parser.
- * @template TStateC The type of the state used by the third parser.
- * @template TStateD The type of the state used by the fourth parser.
- * @template TStateE The type of the state used by the fifth parser.
- * @param a The first {@link Parser} to try.
- * @param b The second {@link Parser} to try.
- * @param c The third {@link Parser} to try.
- * @param d The fourth {@link Parser} to try.
- * @param e The fifth {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using all parsers
- *          and returns the result of the parser that consumed the most tokens.
- * @since 0.3.0
- */
-export function longestMatch<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  MD extends Mode,
-  ME extends Mode,
-  TA,
-  TB,
-  TC,
-  TD,
-  TE,
-  TStateA,
-  TStateB,
-  TStateC,
-  TStateD,
-  TStateE,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-  d: Parser<MD, TD, TStateD>,
-  e: Parser<ME, TE, TStateE>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC, MD, ME]>,
-  TA | TB | TC | TD | TE,
-  | undefined
-  | [0, ParserResult<TStateA>]
-  | [1, ParserResult<TStateB>]
-  | [2, ParserResult<TStateC>]
-  | [3, ParserResult<TStateD>]
-  | [4, ParserResult<TStateE>]
->;
-
-/**
- * Creates a parser that combines two mutually exclusive parsers into one,
- * with custom error message options.
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens, with custom error options.
+ *
+ * The resulting parser tries every given parser and returns the
+ * successful result that consumed more input than the others.
+ *
+ * @param rest Parsers to compare, followed by error customization options.
+ * @returns A parser that yields the best successful branch result.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.5.0
  */
 export function longestMatch<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
+  const TParsers extends readonly Parser<"sync", unknown, unknown>[],
 >(
-  a: TA,
-  b: TB,
-  options: LongestMatchOptions,
+  ...rest:
+    & [...parsers: TParsers, options: LongestMatchTailOptions]
+    & LongestMatchArityGuard<TParsers>
 ): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
-  InferValue<TA> | InferValue<TB>,
-  undefined | [number, ParserResult<unknown>]
+  "sync",
+  InferValue<TParsers[number]>,
+  LongestMatchState<TParsers>
 >;
 
 /**
- * Creates a parser that combines three mutually exclusive parsers into one,
- * with custom error message options.
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens, with custom error options.
+ *
+ * @param rest Parsers to compare, followed by error customization options.
+ * @returns A parser that yields the best successful branch result.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.5.0
  */
 export function longestMatch<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
+  const TParsers extends readonly Parser<Mode, unknown, unknown>[],
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  options: LongestMatchOptions,
+  ...rest:
+    & [...parsers: TParsers, options: LongestMatchTailOptions]
+    & LongestMatchArityGuard<TParsers>
 ): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
-  InferValue<TA> | InferValue<TB> | InferValue<TC>,
-  undefined | [number, ParserResult<unknown>]
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  InferValue<TParsers[number]>,
+  LongestMatchState<TParsers>
 >;
 
-export function longestMatch(
-  ...parsers: Parser<Mode, unknown, unknown>[]
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
-
 /**
- * Creates a parser that tries all parsers and selects the one that consumes
- * the most input, with custom error message options.
- * @param parser1 The first parser to try.
- * @param rest Additional parsers and {@link LongestMatchOptions} for error customization.
- * @returns A parser that succeeds with the result from the parser that
- *          consumed the most input.
- * @since 0.5.0
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens.
+ *
+ * The resulting parser tries every given parser and returns the
+ * successful result that consumed more input than the others.
+ *
+ * @param parsers Parsers to evaluate and compare by consumed input.
+ * @returns A parser that yields the best successful branch result.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.3.0
  */
-export function longestMatch(
-  parser1: Parser<Mode, unknown, unknown>,
-  ...rest: [
-    ...parsers: Parser<Mode, unknown, unknown>[],
-    options: LongestMatchOptions,
-  ]
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
+export function longestMatch<
+  const TParsers extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  ...parsers: TParsers & LongestMatchArityGuard<TParsers>
+): Parser<
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  InferValue<TParsers[number]>,
+  LongestMatchState<TParsers>
+>;
 /**
  * @since 0.5.0
  */
@@ -4772,1071 +4661,123 @@ export interface MergeOptions {
   readonly hidden?: HiddenVisibility;
 }
 
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>,
+type MergeParserArity =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15;
+type MergeArityLimitError = {
+  readonly __optiqueMergeArityLimit:
+    "merge() requires between 1 and 15 parser arguments. Nest merge() to combine more.";
+};
+type MergeTailOptions = MergeOptions & { readonly $valueType?: never };
+type MergeArityGuard<TParsers extends readonly unknown[]> =
+  IsTuple<TParsers> extends true
+    ? TParsers["length"] extends MergeParserArity ? unknown
+    : MergeArityLimitError
+    : unknown;
+type MergeParsers = readonly Parser<Mode, unknown, unknown>[];
+type EnsureMergeParsers<TParsers extends MergeParsers> = {
+  readonly [K in keyof TParsers]: ExtractObjectTypes<TParsers[K]> extends never
+    ? never
+    : TParsers[K];
+};
+type IntersectMergeValues<TParsers extends MergeParsers> = TParsers extends
+  readonly [
+    infer THead extends Parser<Mode, unknown, unknown>,
+    ...infer TRest extends MergeParsers,
+  ] ? ExtractObjectTypes<THead> & IntersectMergeValues<TRest>
+  : unknown;
+type MergeValues<TParsers extends MergeParsers> = IsTuple<TParsers> extends true
+  ? IntersectMergeValues<TParsers>
+  : Record<string | symbol, unknown>;
+type MergeReturnType<TParsers extends MergeParsers> = Parser<
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  MergeValues<TParsers>,
   Record<string | symbol, unknown>
 >;
 
 /**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param options Optional configuration for the merge parser.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
+ * Merges multiple object-like parsers into one parser, with options.
+ *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
+ *
+ * @param rest Parsers to merge, followed by merge options.
+ * @returns A parser that merges parsed object fields from all parsers.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.7.0
  */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  options: MergeOptions,
-): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>,
-  Record<string | symbol, unknown>
->;
+export function merge<const TParsers extends MergeParsers>(
+  ...rest:
+    & [...parsers: EnsureMergeParsers<TParsers>, options: MergeTailOptions]
+    & MergeArityGuard<TParsers>
+): MergeReturnType<TParsers>;
 
 /**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
+ * Merges multiple object-like parsers into one labeled parser.
+ *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
+ *
+ * @param label Label used in documentation output.
+ * @param parsers Parsers to merge in declaration order.
+ * @returns A parser that merges parsed object fields from all parsers.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.4.0
  */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
->(
+export function merge<const TParsers extends MergeParsers>(
   label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>,
-  Record<string | symbol, unknown>
->;
+  ...parsers: EnsureMergeParsers<TParsers> & MergeArityGuard<TParsers>
+): MergeReturnType<TParsers>;
 
 /**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
+ * Merges multiple object-like parsers into one labeled parser, with options.
+ *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
+ *
+ * @param label Label used in documentation output.
+ * @param rest Parsers to merge, followed by merge options.
+ * @returns A parser that merges parsed object fields from all parsers.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.7.0
  */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
->(
+export function merge<const TParsers extends MergeParsers>(
   label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>,
-  Record<string | symbol, unknown>
->;
+  ...rest:
+    & [...parsers: EnsureMergeParsers<TParsers>, options: MergeTailOptions]
+    & MergeArityGuard<TParsers>
+): MergeReturnType<TParsers>;
 
 /**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
+ * Merges multiple object-like parsers into one parser.
+ *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
+ *
+ * @param parsers Parsers to merge in declaration order.
+ * @returns A parser that merges parsed object fields from all parsers.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.1.0
  */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
->(
-  label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the two parsers into a single object.
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
->(
-  label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
->(
-  label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @template TG The type of the seventh parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @param g The seventh {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
-  TG extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-  g: ExtractObjectTypes<TG> extends never ? never : TG,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-      ExtractMode<TG>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>
-  & ExtractObjectTypes<TG>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @template TG The type of the seventh parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @param g The seventh {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
-  TG extends Parser<Mode, unknown, unknown>,
->(
-  label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-  g: ExtractObjectTypes<TG> extends never ? never : TG,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-      ExtractMode<TG>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>
-  & ExtractObjectTypes<TG>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @template TG The type of the seventh parser.
- * @template TH The type of the eighth parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @param g The seventh {@link object} parser to merge.
- * @param h The eighth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
-  TG extends Parser<Mode, unknown, unknown>,
-  TH extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-  g: ExtractObjectTypes<TG> extends never ? never : TG,
-  h: ExtractObjectTypes<TH> extends never ? never : TH,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-      ExtractMode<TG>,
-      ExtractMode<TH>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>
-  & ExtractObjectTypes<TG>
-  & ExtractObjectTypes<TH>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @template TG The type of the seventh parser.
- * @template TH The type of the eighth parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @param g The seventh {@link object} parser to merge.
- * @param h The eighth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
-  TG extends Parser<Mode, unknown, unknown>,
-  TH extends Parser<Mode, unknown, unknown>,
->(
-  label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-  g: ExtractObjectTypes<TG> extends never ? never : TG,
-  h: ExtractObjectTypes<TH> extends never ? never : TH,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-      ExtractMode<TG>,
-      ExtractMode<TH>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>
-  & ExtractObjectTypes<TG>
-  & ExtractObjectTypes<TH>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @template TG The type of the seventh parser.
- * @template TH The type of the eighth parser.
- * @template TI The type of the ninth parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @param g The seventh {@link object} parser to merge.
- * @param h The eighth {@link object} parser to merge.
- * @param i The ninth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
-  TG extends Parser<Mode, unknown, unknown>,
-  TH extends Parser<Mode, unknown, unknown>,
-  TI extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-  g: ExtractObjectTypes<TG> extends never ? never : TG,
-  h: ExtractObjectTypes<TH> extends never ? never : TH,
-  i: ExtractObjectTypes<TI> extends never ? never : TI,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-      ExtractMode<TG>,
-      ExtractMode<TH>,
-      ExtractMode<TI>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>
-  & ExtractObjectTypes<TG>
-  & ExtractObjectTypes<TH>
-  & ExtractObjectTypes<TI>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @template TG The type of the seventh parser.
- * @template TH The type of the eighth parser.
- * @template TI The type of the ninth parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @param g The seventh {@link object} parser to merge.
- * @param h The eighth {@link object} parser to merge.
- * @param i The ninth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
-  TG extends Parser<Mode, unknown, unknown>,
-  TH extends Parser<Mode, unknown, unknown>,
-  TI extends Parser<Mode, unknown, unknown>,
->(
-  label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-  g: ExtractObjectTypes<TG> extends never ? never : TG,
-  h: ExtractObjectTypes<TH> extends never ? never : TH,
-  i: ExtractObjectTypes<TI> extends never ? never : TI,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-      ExtractMode<TG>,
-      ExtractMode<TH>,
-      ExtractMode<TI>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>
-  & ExtractObjectTypes<TG>
-  & ExtractObjectTypes<TH>
-  & ExtractObjectTypes<TI>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @template TG The type of the seventh parser.
- * @template TH The type of the eighth parser.
- * @template TI The type of the ninth parser.
- * @template TJ The type of the tenth parser.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @param g The seventh {@link object} parser to merge.
- * @param h The eighth {@link object} parser to merge.
- * @param i The ninth {@link object} parser to merge.
- * @param j The tenth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
-  TG extends Parser<Mode, unknown, unknown>,
-  TH extends Parser<Mode, unknown, unknown>,
-  TI extends Parser<Mode, unknown, unknown>,
-  TJ extends Parser<Mode, unknown, unknown>,
->(
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-  g: ExtractObjectTypes<TG> extends never ? never : TG,
-  h: ExtractObjectTypes<TH> extends never ? never : TH,
-  i: ExtractObjectTypes<TI> extends never ? never : TI,
-  j: ExtractObjectTypes<TJ> extends never ? never : TJ,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-      ExtractMode<TG>,
-      ExtractMode<TH>,
-      ExtractMode<TI>,
-      ExtractMode<TJ>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>
-  & ExtractObjectTypes<TG>
-  & ExtractObjectTypes<TH>
-  & ExtractObjectTypes<TI>
-  & ExtractObjectTypes<TJ>,
-  Record<string | symbol, unknown>
->;
-
-/**
- * Merges multiple {@link object} parsers into a single {@link object} parser
- * with a label for documentation and help text organization.
- * It is useful for combining multiple {@link object} parsers so that
- * the unified parser produces a single object containing all the values
- * from the individual parsers while separating the fields into multiple
- * groups.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
- * @template TD The type of the fourth parser.
- * @template TE The type of the fifth parser.
- * @template TF The type of the sixth parser.
- * @template TG The type of the seventh parser.
- * @template TH The type of the eighth parser.
- * @template TI The type of the ninth parser.
- * @template TJ The type of the tenth parser.
- * @param label A descriptive label for this merged group, used for
- *              documentation and help messages.
- * @param a The first {@link object} parser to merge.
- * @param b The second {@link object} parser to merge.
- * @param c The third {@link object} parser to merge.
- * @param d The fourth {@link object} parser to merge.
- * @param e The fifth {@link object} parser to merge.
- * @param f The sixth {@link object} parser to merge.
- * @param g The seventh {@link object} parser to merge.
- * @param h The eighth {@link object} parser to merge.
- * @param i The ninth {@link object} parser to merge.
- * @param j The tenth {@link object} parser to merge.
- * @return A new {@link object} parser that combines the values and states
- *         of the parsers into a single object.
- * @since 0.4.0
- */
-export function merge<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
-  TD extends Parser<Mode, unknown, unknown>,
-  TE extends Parser<Mode, unknown, unknown>,
-  TF extends Parser<Mode, unknown, unknown>,
-  TG extends Parser<Mode, unknown, unknown>,
-  TH extends Parser<Mode, unknown, unknown>,
-  TI extends Parser<Mode, unknown, unknown>,
-  TJ extends Parser<Mode, unknown, unknown>,
->(
-  label: string,
-  a: ExtractObjectTypes<TA> extends never ? never : TA,
-  b: ExtractObjectTypes<TB> extends never ? never : TB,
-  c: ExtractObjectTypes<TC> extends never ? never : TC,
-  d: ExtractObjectTypes<TD> extends never ? never : TD,
-  e: ExtractObjectTypes<TE> extends never ? never : TE,
-  f: ExtractObjectTypes<TF> extends never ? never : TF,
-  g: ExtractObjectTypes<TG> extends never ? never : TG,
-  h: ExtractObjectTypes<TH> extends never ? never : TH,
-  i: ExtractObjectTypes<TI> extends never ? never : TI,
-  j: ExtractObjectTypes<TJ> extends never ? never : TJ,
-): Parser<
-  CombineModes<
-    readonly [
-      ExtractMode<TA>,
-      ExtractMode<TB>,
-      ExtractMode<TC>,
-      ExtractMode<TD>,
-      ExtractMode<TE>,
-      ExtractMode<TF>,
-      ExtractMode<TG>,
-      ExtractMode<TH>,
-      ExtractMode<TI>,
-      ExtractMode<TJ>,
-    ]
-  >,
-  & ExtractObjectTypes<TA>
-  & ExtractObjectTypes<TB>
-  & ExtractObjectTypes<TC>
-  & ExtractObjectTypes<TD>
-  & ExtractObjectTypes<TE>
-  & ExtractObjectTypes<TF>
-  & ExtractObjectTypes<TG>
-  & ExtractObjectTypes<TH>
-  & ExtractObjectTypes<TI>
-  & ExtractObjectTypes<TJ>,
-  Record<string | symbol, unknown>
->;
+export function merge<const TParsers extends MergeParsers>(
+  ...parsers: EnsureMergeParsers<TParsers> & MergeArityGuard<TParsers>
+): MergeReturnType<TParsers>;
 
 export function merge(
-  ...args:
-    | [
-      string,
-      ...Parser<
-        Mode,
-        Record<string | symbol, unknown>,
-        Record<string | symbol, unknown>
-      >[],
-    ]
-    | Parser<
-      Mode,
-      Record<string | symbol, unknown>,
-      Record<string | symbol, unknown>
-    >[]
-    | [
-      ...Parser<
-        Mode,
-        Record<string | symbol, unknown>,
-        Record<string | symbol, unknown>
-      >[],
-      MergeOptions,
-    ]
+  ...args: readonly unknown[]
 ): Parser<
   Mode,
   Record<string | symbol, unknown>,
@@ -6385,16 +5326,62 @@ export function merge(
   };
 }
 
+type ConcatParserArity =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15;
+type ConcatArityLimitError = {
+  readonly __optiqueConcatArityLimit:
+    "concat() requires between 1 and 15 parser arguments. Nest concat() to combine more.";
+};
+type ConcatParsers = readonly Parser<Mode, readonly unknown[], unknown>[];
+type ConcatArityGuard<TParsers extends readonly unknown[]> =
+  IsTuple<TParsers> extends true
+    ? TParsers["length"] extends ConcatParserArity ? unknown
+    : ConcatArityLimitError
+    : unknown;
+type ConcatStates<TParsers extends ConcatParsers> = {
+  [K in keyof TParsers]: TParsers[K] extends Parser<
+    Mode,
+    readonly unknown[],
+    infer TState
+  > ? TState
+    : never;
+};
+type ConcatTupleValues<TParsers extends ConcatParsers> = TParsers extends
+  readonly [
+    Parser<Mode, infer THead extends readonly unknown[], unknown>,
+    ...infer TRest extends ConcatParsers,
+  ] ? [...THead, ...ConcatTupleValues<TRest>]
+  : [];
+type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
+  true ? ConcatTupleValues<TParsers>
+  : readonly unknown[];
+
 /**
- * Concatenates two {@link tuple} parsers into a single parser that produces
- * a flattened tuple containing the values from both parsers in order.
+ * Concatenates tuple parsers into one parser with a flattened tuple value.
  *
- * This is similar to {@link merge} for object parsers, but operates on tuple
- * parsers and preserves the sequential, positional nature of tuples by
- * flattening the results into a single tuple array.
+ * Unlike {@link merge}, which combines object fields, this combines tuple
+ * entries in order into one flattened tuple value.
  *
  * @example
  * ```typescript
+ * import { parse } from "@optique/core/parser";
+ * import { option } from "@optique/core/primitives";
+ * import { integer, string } from "@optique/core/valueparser";
+ *
  * const basicTuple = tuple([
  *   option("-v", "--verbose"),
  *   option("-p", "--port", integer()),
@@ -6406,164 +5393,26 @@ export function merge(
  * ]);
  *
  * const combined = concat(basicTuple, serverTuple);
- * // Type: Parser<[boolean, number, string, boolean], [BasicState, ServerState]>
+ * // Inferred type: Parser<..., [boolean, number, string, boolean], ...>
  *
- * const result = parse(combined, ["-v", "-p", "8080", "-h", "localhost", "-d"]);
+ * const result = parse(
+ *   combined,
+ *   ["-v", "-p", "8080", "-h", "localhost", "-d"],
+ * );
  * // result.value: [true, 8080, "localhost", true]
  * ```
  *
- * @template TA The value type of the first tuple parser.
- * @template TB The value type of the second tuple parser.
- * @template TStateA The state type of the first tuple parser.
- * @template TStateB The state type of the second tuple parser.
- * @param a The first {@link tuple} parser to concatenate.
- * @param b The second {@link tuple} parser to concatenate.
- * @return A new {@link tuple} parser that combines the values of both parsers
- *         into a single flattened tuple.
+ * @param parsers Tuple parsers to concatenate.
+ * @returns A parser with flattened tuple values from all parsers.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.2.0
  */
-export function concat<
-  MA extends Mode,
-  MB extends Mode,
-  TA extends readonly unknown[],
-  TB extends readonly unknown[],
-  TStateA,
-  TStateB,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-): Parser<CombineModes<readonly [MA, MB]>, [...TA, ...TB], [TStateA, TStateB]>;
-
-/**
- * Concatenates three {@link tuple} parsers into a single parser that produces
- * a flattened tuple containing the values from all parsers in order.
- *
- * @template TA The value type of the first tuple parser.
- * @template TB The value type of the second tuple parser.
- * @template TC The value type of the third tuple parser.
- * @template TStateA The state type of the first tuple parser.
- * @template TStateB The state type of the second tuple parser.
- * @template TStateC The state type of the third tuple parser.
- * @param a The first {@link tuple} parser to concatenate.
- * @param b The second {@link tuple} parser to concatenate.
- * @param c The third {@link tuple} parser to concatenate.
- * @return A new {@link tuple} parser that combines the values of all parsers
- *         into a single flattened tuple.
- * @since 0.2.0
- */
-export function concat<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  TA extends readonly unknown[],
-  TB extends readonly unknown[],
-  TC extends readonly unknown[],
-  TStateA,
-  TStateB,
-  TStateC,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
+export function concat<const TParsers extends ConcatParsers>(
+  ...parsers: TParsers & ConcatArityGuard<TParsers>
 ): Parser<
-  CombineModes<readonly [MA, MB, MC]>,
-  [...TA, ...TB, ...TC],
-  [TStateA, TStateB, TStateC]
->;
-
-/**
- * Concatenates four {@link tuple} parsers into a single parser that produces
- * a flattened tuple containing the values from all parsers in order.
- *
- * @template TA The value type of the first tuple parser.
- * @template TB The value type of the second tuple parser.
- * @template TC The value type of the third tuple parser.
- * @template TD The value type of the fourth tuple parser.
- * @template TStateA The state type of the first tuple parser.
- * @template TStateB The state type of the second tuple parser.
- * @template TStateC The state type of the third tuple parser.
- * @template TStateD The state type of the fourth tuple parser.
- * @param a The first {@link tuple} parser to concatenate.
- * @param b The second {@link tuple} parser to concatenate.
- * @param c The third {@link tuple} parser to concatenate.
- * @param d The fourth {@link tuple} parser to concatenate.
- * @return A new {@link tuple} parser that combines the values of all parsers
- *         into a single flattened tuple.
- * @since 0.2.0
- */
-export function concat<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  MD extends Mode,
-  TA extends readonly unknown[],
-  TB extends readonly unknown[],
-  TC extends readonly unknown[],
-  TD extends readonly unknown[],
-  TStateA,
-  TStateB,
-  TStateC,
-  TStateD,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-  d: Parser<MD, TD, TStateD>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC, MD]>,
-  [...TA, ...TB, ...TC, ...TD],
-  [TStateA, TStateB, TStateC, TStateD]
->;
-
-/**
- * Concatenates five {@link tuple} parsers into a single parser that produces
- * a flattened tuple containing the values from all parsers in order.
- *
- * @template TA The value type of the first tuple parser.
- * @template TB The value type of the second tuple parser.
- * @template TC The value type of the third tuple parser.
- * @template TD The value type of the fourth tuple parser.
- * @template TE The value type of the fifth tuple parser.
- * @template TStateA The state type of the first tuple parser.
- * @template TStateB The state type of the second tuple parser.
- * @template TStateC The state type of the third tuple parser.
- * @template TStateD The state type of the fourth tuple parser.
- * @template TStateE The state type of the fifth tuple parser.
- * @param a The first {@link tuple} parser to concatenate.
- * @param b The second {@link tuple} parser to concatenate.
- * @param c The third {@link tuple} parser to concatenate.
- * @param d The fourth {@link tuple} parser to concatenate.
- * @param e The fifth {@link tuple} parser to concatenate.
- * @return A new {@link tuple} parser that combines the values of all parsers
- *         into a single flattened tuple.
- * @since 0.2.0
- */
-export function concat<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  MD extends Mode,
-  ME extends Mode,
-  TA extends readonly unknown[],
-  TB extends readonly unknown[],
-  TC extends readonly unknown[],
-  TD extends readonly unknown[],
-  TE extends readonly unknown[],
-  TStateA,
-  TStateB,
-  TStateC,
-  TStateD,
-  TStateE,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-  d: Parser<MD, TD, TStateD>,
-  e: Parser<ME, TE, TStateE>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC, MD, ME]>,
-  [...TA, ...TB, ...TC, ...TD, ...TE],
-  [TStateA, TStateB, TStateC, TStateD, TStateE]
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  ConcatValues<TParsers>,
+  ConcatStates<TParsers>
 >;
 
 export function concat(
