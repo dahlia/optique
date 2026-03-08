@@ -48,7 +48,7 @@ To be released.
     inference.  [[#144], [#145]]
 
  -  Added type-level arity guards for `merge()`, `concat()`, and
-    `longestMatch()` calls above 15 parser arguments. Oversized calls now fail
+    `longestMatch()` calls above 15 parser arguments.  Oversized calls now fail
     at compile time with actionable messages that recommend nested
     composition.  [[#144], [#145]]
 
