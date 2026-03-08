@@ -1,4 +1,5 @@
 import { longestMatch, object } from "@optique/core/constructs";
+import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -1712,6 +1713,130 @@ describe("multiple", () => {
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value, ["en", "fr", "de"]);
+    }
+  });
+
+  it("should preserve annotations on each item state in complete()", () => {
+    const annotation = Symbol.for("@test/multiple-item-annotations");
+    const baseParser: Parser<"sync", string, { value: string }> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: { value: "" },
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: { value: head },
+          },
+        };
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        if (annotations?.[annotation] !== "ok") {
+          return {
+            success: false as const,
+            error: message`Missing annotations on item state.`,
+          };
+        }
+        return { success: true as const, value: state.value };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const parseResult = parser.parse({
+      buffer: ["alpha"],
+      state: injectAnnotations(parser.initialState, { [annotation]: "ok" }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = parser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.deepEqual(completeResult.value, ["alpha"]);
+      }
+    }
+  });
+
+  it("should preserve annotations on each async item state in complete()", async () => {
+    const annotation = Symbol.for("@test/multiple-item-annotations-async");
+    const baseParser: Parser<"async", string, { value: string }> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: { value: "" },
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: { value: head },
+          },
+        });
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        if (annotations?.[annotation] !== "ok") {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing annotations on async item state.`,
+          });
+        }
+        return Promise.resolve({ success: true as const, value: state.value });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const parseResult = await parser.parse({
+      buffer: ["alpha"],
+      state: injectAnnotations(parser.initialState, { [annotation]: "ok" }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = await parser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.deepEqual(completeResult.value, ["alpha"]);
+      }
     }
   });
 

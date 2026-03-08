@@ -876,9 +876,13 @@ export function multiple<M extends Mode, TValue, TState>(
     context: ParserContext<MultipleState>,
   ): ParseResult => {
     let added = context.state.length < 1;
+    const currentItemState = context.state.at(-1) ?? syncParser.initialState;
+    const itemAnnotationSource = context.state.length < 1
+      ? context.state
+      : currentItemState;
     let result = syncParser.parse({
       ...context,
-      state: context.state.at(-1) ?? syncParser.initialState,
+      state: currentItemState,
     });
     if (!result.success) {
       if (!added) {
@@ -892,13 +896,17 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
+    const nextItemState = inheritAnnotations(
+      itemAnnotationSource,
+      result.next.state,
+    );
     return {
       success: true,
       next: {
         ...result.next,
         state: inheritAnnotations(context.state, [
           ...(added ? context.state : context.state.slice(0, -1)),
-          result.next.state,
+          nextItemState,
         ]),
       },
       consumed: result.consumed,
@@ -910,9 +918,13 @@ export function multiple<M extends Mode, TValue, TState>(
     context: ParserContext<MultipleState>,
   ): Promise<ParseResult> => {
     let added = context.state.length < 1;
+    const currentItemState = context.state.at(-1) ?? parser.initialState;
+    const itemAnnotationSource = context.state.length < 1
+      ? context.state
+      : currentItemState;
     let resultOrPromise = parser.parse({
       ...context,
-      state: context.state.at(-1) ?? parser.initialState,
+      state: currentItemState,
     });
     let result = await resultOrPromise;
     if (!result.success) {
@@ -928,13 +940,17 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
+    const nextItemState = inheritAnnotations(
+      itemAnnotationSource,
+      result.next.state,
+    );
     return {
       success: true,
       next: {
         ...result.next,
         state: inheritAnnotations(context.state, [
           ...(added ? context.state : context.state.slice(0, -1)),
-          result.next.state,
+          nextItemState,
         ]),
       },
       consumed: result.consumed,
