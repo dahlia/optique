@@ -4711,6 +4711,9 @@ type MergeReturnType<TParsers extends MergeParsers> = Parser<
 /**
  * Merges multiple object-like parsers into one parser.
  *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
+ *
  * @param parsers Parsers to merge in declaration order.
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
@@ -4722,6 +4725,9 @@ export function merge<const TParsers extends MergeParsers>(
 
 /**
  * Merges multiple object-like parsers into one parser, with options.
+ *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
  *
  * @param rest Parsers to merge, followed by merge options.
  * @returns A parser that merges parsed object fields from all parsers.
@@ -4737,6 +4743,9 @@ export function merge<const TParsers extends MergeParsers>(
 /**
  * Merges multiple object-like parsers into one labeled parser.
  *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
+ *
  * @param label Label used in documentation output.
  * @param parsers Parsers to merge in declaration order.
  * @returns A parser that merges parsed object fields from all parsers.
@@ -4749,6 +4758,9 @@ export function merge<const TParsers extends MergeParsers>(
 ): MergeReturnType<TParsers>;
 /**
  * Merges multiple object-like parsers into one labeled parser, with options.
+ *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
  *
  * @param label Label used in documentation output.
  * @param rest Parsers to merge, followed by merge options.
