@@ -35,6 +35,8 @@ export const annotationWrapperKey: unique symbol = Symbol.for(
   "@optique/core/parser/annotationWrapper",
 );
 
+const injectedAnnotationWrappers = new WeakSet<object>();
+
 /**
  * Annotations that can be passed to parsers during execution.
  * Allows external packages to provide additional data that parsers can access
@@ -154,6 +156,7 @@ export function injectAnnotations<TState>(
         configurable: true,
       },
     });
+    injectedAnnotationWrappers.add(wrapper);
     return wrapper as TState;
   }
   if (Array.isArray(state)) {
@@ -167,4 +170,18 @@ export function injectAnnotations<TState>(
     ...(state as Record<PropertyKey, unknown>),
     [annotationKey]: annotations,
   } as TState;
+}
+
+/**
+ * Returns whether the given value is an internal primitive-state annotation
+ * wrapper that was injected by Optique.
+ *
+ * @param value Value to check.
+ * @returns `true` if the value is an injected internal wrapper.
+ * @internal
+ */
+export function isInjectedAnnotationWrapper(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    injectedAnnotationWrappers.has(value);
 }

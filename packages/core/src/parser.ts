@@ -8,6 +8,7 @@ import {
   annotationStateValueKey,
   annotationWrapperKey,
   injectAnnotations,
+  isInjectedAnnotationWrapper,
   type ParseOptions,
 } from "./annotations.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
@@ -421,7 +422,8 @@ export function parseSync<T>(
   options?: ParseOptions,
 ): Result<T> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
-  const shouldUnwrapAnnotatedValue = options?.annotations != null;
+  const shouldUnwrapAnnotatedValue = options?.annotations != null ||
+    isInjectedAnnotationWrapper(parser.initialState);
 
   let context: ParserContext<unknown> = {
     buffer: args,
@@ -486,7 +488,8 @@ export async function parseAsync<T>(
   options?: ParseOptions,
 ): Promise<Result<T>> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
-  const shouldUnwrapAnnotatedValue = options?.annotations != null;
+  const shouldUnwrapAnnotatedValue = options?.annotations != null ||
+    isInjectedAnnotationWrapper(parser.initialState);
 
   let context: ParserContext<unknown> = {
     buffer: args,
