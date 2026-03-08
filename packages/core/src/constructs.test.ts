@@ -315,7 +315,7 @@ describe("or", () => {
     void _tooMany;
   });
 
-  it("should not treat a parser as the options tail argument", () => {
+  it("should enforce arity limit even when last argument is a named parser variable", () => {
     const p16 = option("--a16");
 
     // @ts-expect-error - the 16th parser must not be interpreted as options.

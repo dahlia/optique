@@ -1943,53 +1943,78 @@ export function or<
 /**
  * Creates a parser that combines two mutually exclusive parsers into one,
  * with custom error message options.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
  * @param a The first {@link Parser} to try.
  * @param b The second {@link Parser} to try.
  * @param options Custom error message options.
- * @return A {@link Parser} that tries to parse using the provided parsers.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
  * @since 0.5.0
  */
 export function or<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
+  MA extends Mode,
+  MB extends Mode,
+  TA,
+  TB,
+  TStateA,
+  TStateB,
 >(
-  a: TA,
-  b: TB,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
   options: OrOptions,
 ): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
-  InferValue<TA> | InferValue<TB>,
-  undefined | [number, ParserResult<unknown>]
+  CombineModes<readonly [MA, MB]>,
+  TA | TB,
+  undefined | [0, ParserResult<TStateA>] | [1, ParserResult<TStateB>]
 >;
 
 /**
  * Creates a parser that combines three mutually exclusive parsers into one,
  * with custom error message options.
- * @template TA The type of the first parser.
- * @template TB The type of the second parser.
- * @template TC The type of the third parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
  * @param a The first {@link Parser} to try.
  * @param b The second {@link Parser} to try.
  * @param c The third {@link Parser} to try.
  * @param options Custom error message options.
- * @return A {@link Parser} that tries to parse using the provided parsers.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
  * @since 0.5.0
  */
 export function or<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  TA,
+  TB,
+  TC,
+  TStateA,
+  TStateB,
+  TStateC,
 >(
-  a: TA,
-  b: TB,
-  c: TC,
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
   options: OrOptions,
 ): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
-  InferValue<TA> | InferValue<TB> | InferValue<TC>,
-  undefined | [number, ParserResult<unknown>]
+  CombineModes<readonly [MA, MB, MC]>,
+  TA | TB | TC,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
 >;
 
 /**
