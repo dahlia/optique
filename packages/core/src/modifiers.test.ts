@@ -1,6 +1,9 @@
 import { longestMatch, object } from "@optique/core/constructs";
-import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
-import { annotationStateValueKey } from "@optique/core/annotations";
+import {
+  annotationStateValueKey,
+  getAnnotations,
+  injectAnnotations,
+} from "@optique/core/annotations";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
