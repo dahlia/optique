@@ -424,6 +424,7 @@ export function parseSync<T>(
   options?: ParseOptions,
 ): Result<T> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
+  const shouldUnwrapAnnotatedValue = options?.annotations != null;
 
   let context: ParserContext<unknown> = {
     buffer: args,
@@ -454,7 +455,12 @@ export function parseSync<T>(
   } while (context.buffer.length > 0);
   const endResult = parser.complete(context.state);
   return endResult.success
-    ? { success: true, value: unwrapAnnotatedValue(endResult.value) }
+    ? {
+      success: true,
+      value: shouldUnwrapAnnotatedValue
+        ? unwrapAnnotatedValue(endResult.value)
+        : endResult.value,
+    }
     : { success: false, error: endResult.error };
 }
 
@@ -483,6 +489,7 @@ export async function parseAsync<T>(
   options?: ParseOptions,
 ): Promise<Result<T>> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
+  const shouldUnwrapAnnotatedValue = options?.annotations != null;
 
   let context: ParserContext<unknown> = {
     buffer: args,
@@ -513,7 +520,12 @@ export async function parseAsync<T>(
   } while (context.buffer.length > 0);
   const endResult = await parser.complete(context.state);
   return endResult.success
-    ? { success: true, value: unwrapAnnotatedValue(endResult.value) }
+    ? {
+      success: true,
+      value: shouldUnwrapAnnotatedValue
+        ? unwrapAnnotatedValue(endResult.value)
+        : endResult.value,
+    }
     : { success: false, error: endResult.error };
 }
 

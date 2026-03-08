@@ -2141,6 +2141,26 @@ describe("Annotations system", () => {
     }
   });
 
+  it("should not unwrap wrapper-shaped objects without annotations", async () => {
+    const {
+      annotationKey,
+      annotationStateValueKey,
+      annotationWrapperKey,
+    } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationKey]: {},
+      [annotationStateValueKey]: "not-wrapper",
+      [annotationWrapperKey]: true,
+    };
+    const result = parse(constant(value), []);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
   it("should not unwrap object state rebuilt from primitive wrapper", () => {
     const parser: Parser<"sync", unknown, unknown> = {
       $mode: "sync",
