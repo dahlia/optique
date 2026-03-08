@@ -309,6 +309,31 @@ describe("or", () => {
     void _tooMany;
   });
 
+  it("should not treat a parser as the options tail argument", () => {
+    const p16 = option("--a16");
+
+    // @ts-expect-error - the 16th parser must not be interpreted as options.
+    const _tooMany = or(
+      option("--a1"),
+      option("--a2"),
+      option("--a3"),
+      option("--a4"),
+      option("--a5"),
+      option("--a6"),
+      option("--a7"),
+      option("--a8"),
+      option("--a9"),
+      option("--a10"),
+      option("--a11"),
+      option("--a12"),
+      option("--a13"),
+      option("--a14"),
+      option("--a15"),
+      p16,
+    );
+    void _tooMany;
+  });
+
   it("should report type-level arity error for zero parsers", () => {
     // @ts-expect-error - or() requires at least one parser argument.
     const _noParsers = or();
