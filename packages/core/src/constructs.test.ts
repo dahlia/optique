@@ -1020,6 +1020,46 @@ describe("longestMatch()", () => {
     }
   });
 
+  it("should preserve discriminated state inference for tuple parsers", () => {
+    const parserA = option("--a");
+    const parserB = multiple(option("--b"));
+    const parser = longestMatch(parserA, parserB);
+
+    type InferredState = (typeof parser)["$stateType"][number];
+    type ParserAState = (typeof parserA)["$stateType"][number];
+    type ParserBState = (typeof parserB)["$stateType"][number];
+    type ExpectedState =
+      | undefined
+      | [0, ParserResult<ParserAState>]
+      | [1, ParserResult<ParserBState>];
+    const _checkExpectedAssignableToInferred: InferredState = {} as ExpectedState;
+    const _checkInferredAssignableToExpected: ExpectedState = {} as InferredState;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+  });
+
+  it("should preserve discriminated state inference with options", () => {
+    const parserA = option("--a");
+    const parserB = multiple(option("--b"));
+    const parser = longestMatch(parserA, parserB, {
+      errors: {
+        noMatch: message`No matching option found.`,
+      },
+    });
+
+    type InferredState = (typeof parser)["$stateType"][number];
+    type ParserAState = (typeof parserA)["$stateType"][number];
+    type ParserBState = (typeof parserB)["$stateType"][number];
+    type ExpectedState =
+      | undefined
+      | [0, ParserResult<ParserAState>]
+      | [1, ParserResult<ParserBState>];
+    const _checkExpectedAssignableToInferred: InferredState = {} as ExpectedState;
+    const _checkInferredAssignableToExpected: ExpectedState = {} as InferredState;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+  });
+
   it("should select parser that consumes more tokens", () => {
     const shortParser = object({
       type: constant("short"),

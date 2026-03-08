@@ -2448,6 +2448,24 @@ type LongestMatchArityLimitError = {
 type LongestMatchTailOptions = LongestMatchOptions & {
   readonly $valueType?: never;
 };
+type TupleKeys<T extends readonly unknown[]> = Exclude<
+  keyof T,
+  keyof readonly unknown[]
+>;
+type LongestMatchTupleState<TParsers extends readonly Parser<Mode, unknown, unknown>[]> = {
+  [K in TupleKeys<TParsers>]: TParsers[K] extends Parser<
+    Mode,
+    unknown,
+    infer TState
+  > ? K extends `${infer TIndex extends number}`
+    ? [TIndex, ParserResult<TState>]
+    : never
+    : never;
+}[TupleKeys<TParsers>];
+type LongestMatchState<TParsers extends readonly Parser<Mode, unknown, unknown>[]> =
+  IsTuple<TParsers> extends true
+    ? undefined | LongestMatchTupleState<TParsers>
+    : undefined | [number, ParserResult<unknown>];
 type LongestMatchArityGuard<TParsers extends readonly unknown[]> =
   IsTuple<TParsers> extends true
     ? TParsers["length"] extends LongestMatchParserArity ? unknown
@@ -2468,7 +2486,7 @@ export function longestMatch<
 ): Parser<
   "sync",
   InferValue<TParsers[number]>,
-  undefined | [number, ParserResult<unknown>]
+  LongestMatchState<TParsers>
 >;
 
 /**
@@ -2485,7 +2503,7 @@ export function longestMatch<
 ): Parser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
-  undefined | [number, ParserResult<unknown>]
+  LongestMatchState<TParsers>
 >;
 
 /**
@@ -2504,7 +2522,7 @@ export function longestMatch<
 ): Parser<
   "sync",
   InferValue<TParsers[number]>,
-  undefined | [number, ParserResult<unknown>]
+  LongestMatchState<TParsers>
 >;
 
 /**
@@ -2523,7 +2541,7 @@ export function longestMatch<
 ): Parser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
-  undefined | [number, ParserResult<unknown>]
+  LongestMatchState<TParsers>
 >;
 /**
  * @since 0.5.0
