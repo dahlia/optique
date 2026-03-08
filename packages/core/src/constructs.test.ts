@@ -3040,6 +3040,61 @@ describe("merge", () => {
     void _tooMany;
   });
 
+  it("should report type-level arity error for labeled sixteen parsers", () => {
+    const parsers = [
+      object({ k1: constant("v1" as const) }),
+      object({ k2: constant("v2" as const) }),
+      object({ k3: constant("v3" as const) }),
+      object({ k4: constant("v4" as const) }),
+      object({ k5: constant("v5" as const) }),
+      object({ k6: constant("v6" as const) }),
+      object({ k7: constant("v7" as const) }),
+      object({ k8: constant("v8" as const) }),
+      object({ k9: constant("v9" as const) }),
+      object({ k10: constant("v10" as const) }),
+      object({ k11: constant("v11" as const) }),
+      object({ k12: constant("v12" as const) }),
+      object({ k13: constant("v13" as const) }),
+      object({ k14: constant("v14" as const) }),
+      object({ k15: constant("v15" as const) }),
+      object({ k16: constant("v16" as const) }),
+    ] as const;
+
+    // @ts-expect-error - merge() supports up to 15 parser arguments.
+    const _tooMany = merge("group", ...parsers);
+    void _tooMany;
+  });
+
+  it(
+    "should report type-level arity error for labeled sixteen parsers with options",
+    () => {
+      const parsers = [
+        object({ k1: constant("v1" as const) }),
+        object({ k2: constant("v2" as const) }),
+        object({ k3: constant("v3" as const) }),
+        object({ k4: constant("v4" as const) }),
+        object({ k5: constant("v5" as const) }),
+        object({ k6: constant("v6" as const) }),
+        object({ k7: constant("v7" as const) }),
+        object({ k8: constant("v8" as const) }),
+        object({ k9: constant("v9" as const) }),
+        object({ k10: constant("v10" as const) }),
+        object({ k11: constant("v11" as const) }),
+        object({ k12: constant("v12" as const) }),
+        object({ k13: constant("v13" as const) }),
+        object({ k14: constant("v14" as const) }),
+        object({ k15: constant("v15" as const) }),
+        object({ k16: constant("v16" as const) }),
+      ] as const;
+
+      // @ts-expect-error - merge() supports up to 15 parser arguments.
+      const _tooMany = merge("group", ...parsers, {
+        allowDuplicates: false,
+      });
+      void _tooMany;
+    },
+  );
+
   it("should enforce arity limit when last argument is a named parser variable", () => {
     const p16 = object({ k16: constant("v16" as const) });
     const parsers = [
