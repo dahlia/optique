@@ -2425,256 +2425,106 @@ export interface LongestMatchErrorOptions {
   suggestions?: (suggestions: readonly string[]) => Message;
 }
 
+type LongestMatchParserArity =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15;
+type LongestMatchArityLimitError = {
+  readonly __optiqueLongestMatchArityLimit:
+    "longestMatch() requires between 1 and 15 parser arguments. Nest longestMatch() to combine more.";
+};
+type LongestMatchTailOptions = LongestMatchOptions & {
+  readonly $valueType?: never;
+};
+type LongestMatchArityGuard<TParsers extends readonly unknown[]> =
+  IsTuple<TParsers> extends true
+    ? TParsers["length"] extends LongestMatchParserArity ? unknown
+    : LongestMatchArityLimitError
+    : unknown;
+
 /**
- * Creates a parser that combines two mutually exclusive parsers into one,
- * selecting the parser that consumes the most tokens.
- * The resulting parser will try both parsers and return the result
- * of the parser that consumed more input tokens.
- * @template MA The mode of the first parser.
- * @template MB The mode of the second parser.
- * @template TA The type of the value returned by the first parser.
- * @template TB The type of the value returned by the second parser.
- * @template TStateA The type of the state used by the first parser.
- * @template TStateB The type of the state used by the second parser.
- * @param a The first {@link Parser} to try.
- * @param b The second {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using both parsers
- *          and returns the result of the parser that consumed more tokens.
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens.
+ *
+ * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.3.0
  */
 export function longestMatch<
-  MA extends Mode,
-  MB extends Mode,
-  TA,
-  TB,
-  TStateA,
-  TStateB,
+  const TParsers extends readonly Parser<"sync", unknown, unknown>[],
 >(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
+  ...parsers: TParsers & LongestMatchArityGuard<TParsers>
 ): Parser<
-  CombineModes<readonly [MA, MB]>,
-  TA | TB,
-  undefined | [0, ParserResult<TStateA>] | [1, ParserResult<TStateB>]
->;
-
-/**
- * Creates a parser that combines three mutually exclusive parsers into one,
- * selecting the parser that consumes the most tokens.
- * The resulting parser will try all parsers and return the result
- * of the parser that consumed the most input tokens.
- * @template MA The mode of the first parser.
- * @template MB The mode of the second parser.
- * @template MC The mode of the third parser.
- * @template TA The type of the value returned by the first parser.
- * @template TB The type of the value returned by the second parser.
- * @template TC The type of the value returned by the third parser.
- * @template TStateA The type of the state used by the first parser.
- * @template TStateB The type of the state used by the second parser.
- * @template TStateC The type of the state used by the third parser.
- * @param a The first {@link Parser} to try.
- * @param b The second {@link Parser} to try.
- * @param c The third {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using all parsers
- *          and returns the result of the parser that consumed the most tokens.
- * @since 0.3.0
- */
-export function longestMatch<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  TA,
-  TB,
-  TC,
-  TStateA,
-  TStateB,
-  TStateC,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC]>,
-  TA | TB | TC,
-  | undefined
-  | [0, ParserResult<TStateA>]
-  | [1, ParserResult<TStateB>]
-  | [2, ParserResult<TStateC>]
->;
-
-/**
- * Creates a parser that combines four mutually exclusive parsers into one,
- * selecting the parser that consumes the most tokens.
- * The resulting parser will try all parsers and return the result
- * of the parser that consumed the most input tokens.
- * @template MA The mode of the first parser.
- * @template MB The mode of the second parser.
- * @template MC The mode of the third parser.
- * @template MD The mode of the fourth parser.
- * @template TA The type of the value returned by the first parser.
- * @template TB The type of the value returned by the second parser.
- * @template TC The type of the value returned by the third parser.
- * @template TD The type of the value returned by the fourth parser.
- * @template TStateA The type of the state used by the first parser.
- * @template TStateB The type of the state used by the second parser.
- * @template TStateC The type of the state used by the third parser.
- * @template TStateD The type of the state used by the fourth parser.
- * @param a The first {@link Parser} to try.
- * @param b The second {@link Parser} to try.
- * @param c The third {@link Parser} to try.
- * @param d The fourth {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using all parsers
- *          and returns the result of the parser that consumed the most tokens.
- * @since 0.3.0
- */
-export function longestMatch<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  MD extends Mode,
-  TA,
-  TB,
-  TC,
-  TD,
-  TStateA,
-  TStateB,
-  TStateC,
-  TStateD,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-  d: Parser<MD, TD, TStateD>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC, MD]>,
-  TA | TB | TC | TD,
-  | undefined
-  | [0, ParserResult<TStateA>]
-  | [1, ParserResult<TStateB>]
-  | [2, ParserResult<TStateC>]
-  | [3, ParserResult<TStateD>]
->;
-
-/**
- * Creates a parser that combines five mutually exclusive parsers into one,
- * selecting the parser that consumes the most tokens.
- * The resulting parser will try all parsers and return the result
- * of the parser that consumed the most input tokens.
- * @template MA The mode of the first parser.
- * @template MB The mode of the second parser.
- * @template MC The mode of the third parser.
- * @template MD The mode of the fourth parser.
- * @template ME The mode of the fifth parser.
- * @template TA The type of the value returned by the first parser.
- * @template TB The type of the value returned by the second parser.
- * @template TC The type of the value returned by the third parser.
- * @template TD The type of the value returned by the fourth parser.
- * @template TE The type of the value returned by the fifth parser.
- * @template TStateA The type of the state used by the first parser.
- * @template TStateB The type of the state used by the second parser.
- * @template TStateC The type of the state used by the third parser.
- * @template TStateD The type of the state used by the fourth parser.
- * @template TStateE The type of the state used by the fifth parser.
- * @param a The first {@link Parser} to try.
- * @param b The second {@link Parser} to try.
- * @param c The third {@link Parser} to try.
- * @param d The fourth {@link Parser} to try.
- * @param e The fifth {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using all parsers
- *          and returns the result of the parser that consumed the most tokens.
- * @since 0.3.0
- */
-export function longestMatch<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  MD extends Mode,
-  ME extends Mode,
-  TA,
-  TB,
-  TC,
-  TD,
-  TE,
-  TStateA,
-  TStateB,
-  TStateC,
-  TStateD,
-  TStateE,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-  d: Parser<MD, TD, TStateD>,
-  e: Parser<ME, TE, TStateE>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC, MD, ME]>,
-  TA | TB | TC | TD | TE,
-  | undefined
-  | [0, ParserResult<TStateA>]
-  | [1, ParserResult<TStateB>]
-  | [2, ParserResult<TStateC>]
-  | [3, ParserResult<TStateD>]
-  | [4, ParserResult<TStateE>]
->;
-
-/**
- * Creates a parser that combines two mutually exclusive parsers into one,
- * with custom error message options.
- * @since 0.5.0
- */
-export function longestMatch<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
->(
-  a: TA,
-  b: TB,
-  options: LongestMatchOptions,
-): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>]>,
-  InferValue<TA> | InferValue<TB>,
+  "sync",
+  InferValue<TParsers[number]>,
   undefined | [number, ParserResult<unknown>]
 >;
 
 /**
- * Creates a parser that combines three mutually exclusive parsers into one,
- * with custom error message options.
- * @since 0.5.0
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens.
+ *
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.3.0
  */
 export function longestMatch<
-  TA extends Parser<Mode, unknown, unknown>,
-  TB extends Parser<Mode, unknown, unknown>,
-  TC extends Parser<Mode, unknown, unknown>,
+  const TParsers extends readonly Parser<Mode, unknown, unknown>[],
 >(
-  a: TA,
-  b: TB,
-  c: TC,
-  options: LongestMatchOptions,
+  ...parsers: TParsers & LongestMatchArityGuard<TParsers>
 ): Parser<
-  CombineModes<readonly [ExtractMode<TA>, ExtractMode<TB>, ExtractMode<TC>]>,
-  InferValue<TA> | InferValue<TB> | InferValue<TC>,
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  InferValue<TParsers[number]>,
   undefined | [number, ParserResult<unknown>]
 >;
 
-export function longestMatch(
-  ...parsers: Parser<Mode, unknown, unknown>[]
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
-
 /**
- * Creates a parser that tries all parsers and selects the one that consumes
- * the most input, with custom error message options.
- * @param parser1 The first parser to try.
- * @param rest Additional parsers and {@link LongestMatchOptions} for error customization.
- * @returns A parser that succeeds with the result from the parser that
- *          consumed the most input.
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens, with custom error options.
+ *
+ * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.5.0
  */
-export function longestMatch(
-  parser1: Parser<Mode, unknown, unknown>,
-  ...rest: [
-    ...parsers: Parser<Mode, unknown, unknown>[],
-    options: LongestMatchOptions,
-  ]
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
+export function longestMatch<
+  const TParsers extends readonly Parser<"sync", unknown, unknown>[],
+>(
+  ...rest:
+    & [...parsers: TParsers, options: LongestMatchTailOptions]
+    & LongestMatchArityGuard<TParsers>
+): Parser<
+  "sync",
+  InferValue<TParsers[number]>,
+  undefined | [number, ParserResult<unknown>]
+>;
+
+/**
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens, with custom error options.
+ *
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.5.0
+ */
+export function longestMatch<
+  const TParsers extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  ...rest:
+    & [...parsers: TParsers, options: LongestMatchTailOptions]
+    & LongestMatchArityGuard<TParsers>
+): Parser<
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  InferValue<TParsers[number]>,
+  undefined | [number, ParserResult<unknown>]
+>;
 /**
  * @since 0.5.0
  */
@@ -5398,185 +5248,58 @@ export function merge(
   };
 }
 
-/**
- * Concatenates two {@link tuple} parsers into a single parser that produces
- * a flattened tuple containing the values from both parsers in order.
- *
- * This is similar to {@link merge} for object parsers, but operates on tuple
- * parsers and preserves the sequential, positional nature of tuples by
- * flattening the results into a single tuple array.
- *
- * @example
- * ```typescript
- * const basicTuple = tuple([
- *   option("-v", "--verbose"),
- *   option("-p", "--port", integer()),
- * ]);
- *
- * const serverTuple = tuple([
- *   option("-h", "--host", string()),
- *   option("-d", "--debug"),
- * ]);
- *
- * const combined = concat(basicTuple, serverTuple);
- * // Type: Parser<[boolean, number, string, boolean], [BasicState, ServerState]>
- *
- * const result = parse(combined, ["-v", "-p", "8080", "-h", "localhost", "-d"]);
- * // result.value: [true, 8080, "localhost", true]
- * ```
- *
- * @template TA The value type of the first tuple parser.
- * @template TB The value type of the second tuple parser.
- * @template TStateA The state type of the first tuple parser.
- * @template TStateB The state type of the second tuple parser.
- * @param a The first {@link tuple} parser to concatenate.
- * @param b The second {@link tuple} parser to concatenate.
- * @return A new {@link tuple} parser that combines the values of both parsers
- *         into a single flattened tuple.
- * @since 0.2.0
- */
-export function concat<
-  MA extends Mode,
-  MB extends Mode,
-  TA extends readonly unknown[],
-  TB extends readonly unknown[],
-  TStateA,
-  TStateB,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-): Parser<CombineModes<readonly [MA, MB]>, [...TA, ...TB], [TStateA, TStateB]>;
+type ConcatParserArity =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15;
+type ConcatArityLimitError = {
+  readonly __optiqueConcatArityLimit:
+    "concat() requires between 1 and 15 parser arguments. Nest concat() to combine more.";
+};
+type ConcatParsers = readonly Parser<Mode, readonly unknown[], unknown>[];
+type ConcatArityGuard<TParsers extends readonly unknown[]> =
+  IsTuple<TParsers> extends true
+    ? TParsers["length"] extends ConcatParserArity ? unknown
+    : ConcatArityLimitError
+    : unknown;
+type ConcatStates<TParsers extends ConcatParsers> = {
+  [K in keyof TParsers]: TParsers[K] extends Parser<
+    Mode,
+    readonly unknown[],
+    infer TState
+  > ? TState
+    : never;
+};
+type ConcatValues<TParsers extends ConcatParsers> = TParsers extends readonly [
+  Parser<Mode, infer THead extends readonly unknown[], unknown>,
+  ...infer TRest extends ConcatParsers,
+] ? [...THead, ...ConcatValues<TRest>]
+  : [];
 
 /**
- * Concatenates three {@link tuple} parsers into a single parser that produces
- * a flattened tuple containing the values from all parsers in order.
+ * Concatenates tuple parsers into one parser with a flattened tuple value.
  *
- * @template TA The value type of the first tuple parser.
- * @template TB The value type of the second tuple parser.
- * @template TC The value type of the third tuple parser.
- * @template TStateA The state type of the first tuple parser.
- * @template TStateB The state type of the second tuple parser.
- * @template TStateC The state type of the third tuple parser.
- * @param a The first {@link tuple} parser to concatenate.
- * @param b The second {@link tuple} parser to concatenate.
- * @param c The third {@link tuple} parser to concatenate.
- * @return A new {@link tuple} parser that combines the values of all parsers
- *         into a single flattened tuple.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.2.0
  */
-export function concat<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  TA extends readonly unknown[],
-  TB extends readonly unknown[],
-  TC extends readonly unknown[],
-  TStateA,
-  TStateB,
-  TStateC,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
+export function concat<const TParsers extends ConcatParsers>(
+  ...parsers: TParsers & ConcatArityGuard<TParsers>
 ): Parser<
-  CombineModes<readonly [MA, MB, MC]>,
-  [...TA, ...TB, ...TC],
-  [TStateA, TStateB, TStateC]
->;
-
-/**
- * Concatenates four {@link tuple} parsers into a single parser that produces
- * a flattened tuple containing the values from all parsers in order.
- *
- * @template TA The value type of the first tuple parser.
- * @template TB The value type of the second tuple parser.
- * @template TC The value type of the third tuple parser.
- * @template TD The value type of the fourth tuple parser.
- * @template TStateA The state type of the first tuple parser.
- * @template TStateB The state type of the second tuple parser.
- * @template TStateC The state type of the third tuple parser.
- * @template TStateD The state type of the fourth tuple parser.
- * @param a The first {@link tuple} parser to concatenate.
- * @param b The second {@link tuple} parser to concatenate.
- * @param c The third {@link tuple} parser to concatenate.
- * @param d The fourth {@link tuple} parser to concatenate.
- * @return A new {@link tuple} parser that combines the values of all parsers
- *         into a single flattened tuple.
- * @since 0.2.0
- */
-export function concat<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  MD extends Mode,
-  TA extends readonly unknown[],
-  TB extends readonly unknown[],
-  TC extends readonly unknown[],
-  TD extends readonly unknown[],
-  TStateA,
-  TStateB,
-  TStateC,
-  TStateD,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-  d: Parser<MD, TD, TStateD>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC, MD]>,
-  [...TA, ...TB, ...TC, ...TD],
-  [TStateA, TStateB, TStateC, TStateD]
->;
-
-/**
- * Concatenates five {@link tuple} parsers into a single parser that produces
- * a flattened tuple containing the values from all parsers in order.
- *
- * @template TA The value type of the first tuple parser.
- * @template TB The value type of the second tuple parser.
- * @template TC The value type of the third tuple parser.
- * @template TD The value type of the fourth tuple parser.
- * @template TE The value type of the fifth tuple parser.
- * @template TStateA The state type of the first tuple parser.
- * @template TStateB The state type of the second tuple parser.
- * @template TStateC The state type of the third tuple parser.
- * @template TStateD The state type of the fourth tuple parser.
- * @template TStateE The state type of the fifth tuple parser.
- * @param a The first {@link tuple} parser to concatenate.
- * @param b The second {@link tuple} parser to concatenate.
- * @param c The third {@link tuple} parser to concatenate.
- * @param d The fourth {@link tuple} parser to concatenate.
- * @param e The fifth {@link tuple} parser to concatenate.
- * @return A new {@link tuple} parser that combines the values of all parsers
- *         into a single flattened tuple.
- * @since 0.2.0
- */
-export function concat<
-  MA extends Mode,
-  MB extends Mode,
-  MC extends Mode,
-  MD extends Mode,
-  ME extends Mode,
-  TA extends readonly unknown[],
-  TB extends readonly unknown[],
-  TC extends readonly unknown[],
-  TD extends readonly unknown[],
-  TE extends readonly unknown[],
-  TStateA,
-  TStateB,
-  TStateC,
-  TStateD,
-  TStateE,
->(
-  a: Parser<MA, TA, TStateA>,
-  b: Parser<MB, TB, TStateB>,
-  c: Parser<MC, TC, TStateC>,
-  d: Parser<MD, TD, TStateD>,
-  e: Parser<ME, TE, TStateE>,
-): Parser<
-  CombineModes<readonly [MA, MB, MC, MD, ME]>,
-  [...TA, ...TB, ...TC, ...TD, ...TE],
-  [TStateA, TStateB, TStateC, TStateD, TStateE]
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  ConcatValues<TParsers>,
+  ConcatStates<TParsers>
 >;
 
 export function concat(
