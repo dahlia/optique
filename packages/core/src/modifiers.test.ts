@@ -19,6 +19,7 @@ import {
   type Message,
   message,
   text,
+  url,
 } from "@optique/core/message";
 import {
   map,
@@ -2576,6 +2577,72 @@ describe("multiple", () => {
     );
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
+    );
+  });
+
+  it("should not deduplicate distinct URL descriptions in suggest()", () => {
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Expected a value.`,
+        };
+      },
+      suggest() {
+        return [
+          {
+            kind: "literal" as const,
+            text: "docs",
+            description: message`See ${url("https://example.com/a")}.`,
+          },
+          {
+            kind: "literal" as const,
+            text: "docs",
+            description: message`See ${url("https://example.com/b")}.`,
+          },
+        ];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const suggestions = [
+      ...parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>,
+    ];
+
+    assert.equal(suggestions.length, 2);
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "literal" &&
+        s.description != null &&
+        formatMessage(s.description).includes("https://example.com/a")
+      ),
+    );
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "literal" &&
+        s.description != null &&
+        formatMessage(s.description).includes("https://example.com/b")
+      ),
     );
   });
 

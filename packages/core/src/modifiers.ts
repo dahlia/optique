@@ -1142,8 +1142,22 @@ export function multiple<M extends Mode, TValue, TState>(
         }
         return true;
       };
-      const suggestionKey = (suggestion: Suggestion): string =>
-        JSON.stringify(suggestion);
+      const suggestionKey = (suggestion: Suggestion): string => {
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description);
+        if (suggestion.kind === "literal") {
+          return JSON.stringify(["literal", suggestion.text, description]);
+        }
+        return JSON.stringify([
+          "file",
+          suggestion.type,
+          suggestion.pattern ?? "",
+          suggestion.includeHidden === true,
+          suggestion.extensions == null ? "" : suggestion.extensions.join("\0"),
+          description,
+        ]);
+      };
 
       return dispatchIterableByMode(
         parser.$mode,
