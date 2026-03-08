@@ -119,7 +119,7 @@ describe("inheritAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
-  it("should preserve array identity for frozen array targets", () => {
+  it("should not mutate frozen array targets", () => {
     const marker = Symbol.for("@test/inherit-frozen-array");
     const source = { [annotationKey]: { [marker]: "ok" } };
     const frozenTarget = Object.freeze(["a", "b"] as const);
