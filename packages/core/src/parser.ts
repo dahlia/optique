@@ -377,7 +377,15 @@ function unwrapAnnotatedValue<T>(value: T): T {
     return value;
   }
   const valueRecord = value as Record<symbol, unknown>;
+  const ownKeys = Reflect.ownKeys(valueRecord);
+  const isInternalWrapperShape = ownKeys.length === 3 &&
+    ownKeys.every((key) =>
+      key === annotationKey ||
+      key === annotationStateValueKey ||
+      key === annotationWrapperKey
+    );
   if (
+    isInternalWrapperShape &&
     Object.hasOwn(valueRecord, annotationWrapperKey) &&
     Object.hasOwn(valueRecord, annotationKey) &&
     Object.hasOwn(valueRecord, annotationStateValueKey) &&

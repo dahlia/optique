@@ -2188,6 +2188,54 @@ describe("Annotations system", () => {
     }
   });
 
+  it("should not unwrap wrapper state mutated in place", async () => {
+    const {
+      annotationWrapperKey,
+      annotationStateValueKey,
+    } = await import("./annotations.ts");
+    const parser: Parser<"sync", unknown, unknown> = {
+      $mode: "sync",
+      $stateType: [] as const,
+      $valueType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        const nextState = context.state as Record<PropertyKey, unknown>;
+        nextState.ok = true;
+        return {
+          success: true as const,
+          consumed: [context.buffer[0] ?? ""],
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: nextState,
+          },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parse(parser, ["a"], {
+      annotations: { [Symbol.for("@test/unwrap-mutation")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      const value = result.value as Record<PropertyKey, unknown>;
+      assert.equal(value.ok, true);
+      assert.equal(value[annotationWrapperKey], true);
+      assert.equal(value[annotationStateValueKey], undefined);
+    }
+  });
+
   it("should support annotations in suggestSync() with non-object state", () => {
     const testKey = Symbol.for("@test/suggest-sync");
     const parser = constant("ok");
