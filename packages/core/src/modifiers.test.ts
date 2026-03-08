@@ -2041,6 +2041,20 @@ describe("multiple", () => {
     }
   });
 
+  it("should not leak wrapped primitive item states in complete()", () => {
+    const annotation = Symbol.for("@test/multiple-primitive-complete");
+    const parser = multiple(constant("ok"));
+
+    const result = parse(parser, [], {
+      annotations: { [annotation]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ok"]);
+      assert.equal(typeof result.value[0], "string");
+    }
+  });
+
   it("should return empty array when no matches found in object context", () => {
     const parser = object({
       locales: multiple(option("-l", "--locale", string())),

@@ -875,13 +875,13 @@ export function multiple<M extends Mode, TValue, TState>(
   type MultipleState = readonly TState[];
   type ParseResult = ParserResult<MultipleState>;
 
-  const unwrapInjectedItemState = (state: TState): TState => {
+  const unwrapInjectedWrapper = <T>(state: T): T => {
     if (!isInjectedAnnotationWrapper(state)) {
       return state;
     }
     return (state as Record<PropertyKey, unknown>)[
       annotationStateValueKey
-    ] as TState;
+    ] as T;
   };
 
   // Sync parse implementation
@@ -891,7 +891,7 @@ export function multiple<M extends Mode, TValue, TState>(
     let added = context.state.length < 1;
     const currentItemStateWithAnnotations = context.state.at(-1) ??
       syncParser.initialState;
-    const currentItemState = unwrapInjectedItemState(
+    const currentItemState = unwrapInjectedWrapper(
       currentItemStateWithAnnotations,
     );
     let result = syncParser.parse({
@@ -937,7 +937,7 @@ export function multiple<M extends Mode, TValue, TState>(
     let added = context.state.length < 1;
     const currentItemStateWithAnnotations = context.state.at(-1) ??
       parser.initialState;
-    const currentItemState = unwrapInjectedItemState(
+    const currentItemState = unwrapInjectedWrapper(
       currentItemStateWithAnnotations,
     );
     let resultOrPromise = parser.parse({
@@ -999,9 +999,9 @@ export function multiple<M extends Mode, TValue, TState>(
           // Sync complete
           const result: TValue[] = [];
           for (const s of state) {
-            const valueResult = syncParser.complete(s);
+            const valueResult = syncParser.complete(s as TState);
             if (valueResult.success) {
-              result.push(valueResult.value);
+              result.push(unwrapInjectedWrapper(valueResult.value));
             } else {
               return { success: false as const, error: valueResult.error };
             }
@@ -1016,7 +1016,7 @@ export function multiple<M extends Mode, TValue, TState>(
           const values: TValue[] = [];
           for (const valueResult of results) {
             if (valueResult.success) {
-              values.push(valueResult.value);
+              values.push(unwrapInjectedWrapper(valueResult.value));
             } else {
               return { success: false as const, error: valueResult.error };
             }
@@ -1033,7 +1033,7 @@ export function multiple<M extends Mode, TValue, TState>(
         const completed = syncParser.complete(s as TState);
         if (completed.success) {
           // Convert value to string for comparison with suggestion text
-          const valueStr = String(completed.value);
+          const valueStr = String(unwrapInjectedWrapper(completed.value));
           selectedValues.add(valueStr);
         }
       }
