@@ -3638,6 +3638,22 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
 describe("runWith", () => {
   describe("basic functionality", () => {
+    it("should preserve primitive parser state with annotations", async () => {
+      const envKey = Symbol.for("@test/env-primitive-async");
+      const envContext: SourceContext = {
+        id: envKey,
+        getAnnotations() {
+          return { [envKey]: { HOST: "localhost" } };
+        },
+      };
+
+      const result = await runWith(constant("ok"), "test", [envContext], {
+        args: [],
+      });
+
+      assert.equal(result, "ok");
+    });
+
     it("should parse with no contexts", async () => {
       const parser = object({
         name: argument(string()),

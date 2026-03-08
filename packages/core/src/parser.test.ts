@@ -2058,6 +2058,19 @@ describe("Annotations system", () => {
     }
   });
 
+  it("should preserve non-object parser value in parseAsync()", async () => {
+    const testKey = Symbol.for("@test/non-object-async");
+    const { parseAsync } = await import("./parser.ts");
+    const result = await parseAsync(constant("ok"), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "ok");
+    }
+  });
+
   it("should preserve array state annotations across state transitions", async () => {
     const testKey = Symbol.for("@test/array-state");
     const { getAnnotations } = await import("./annotations.ts");
