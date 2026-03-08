@@ -1097,44 +1097,39 @@ export function multiple<M extends Mode, TValue, TState>(
         parser.$mode,
         function* () {
           const emitted = new Set<string>();
-          try {
-            for (
-              const s of syncParser.suggest({
-                ...context,
-                state: suggestInitialState as TState,
-              }, prefix)
-            ) {
+          const yieldUnique = function* (suggestions: Iterable<Suggestion>) {
+            for (const s of suggestions) {
               const key = suggestionKey(s);
               if (shouldInclude(s) && !emitted.has(key)) {
                 emitted.add(key);
                 yield s;
               }
             }
+          };
+          try {
+            yield* yieldUnique(
+              syncParser.suggest({
+                ...context,
+                state: suggestInitialState as TState,
+              }, prefix),
+            );
           } catch (error) {
             if (!hasSuggestFallbackState) throw error;
           }
           if (hasSuggestFallbackState) {
-            for (
-              const s of syncParser.suggest({
+            yield* yieldUnique(
+              syncParser.suggest({
                 ...context,
                 state: suggestFallbackState,
-              }, prefix)
-            ) {
-              const key = suggestionKey(s);
-              if (shouldInclude(s) && !emitted.has(key)) {
-                emitted.add(key);
-                yield s;
-              }
-            }
+              }, prefix),
+            );
           }
         },
         async function* () {
           const emitted = new Set<string>();
-          try {
-            const suggestions = parser.suggest({
-              ...context,
-              state: suggestInitialState,
-            }, prefix) as AsyncIterable<Suggestion>;
+          const yieldUnique = async function* (
+            suggestions: AsyncIterable<Suggestion>,
+          ) {
             for await (const s of suggestions) {
               const key = suggestionKey(s);
               if (shouldInclude(s) && !emitted.has(key)) {
@@ -1142,21 +1137,24 @@ export function multiple<M extends Mode, TValue, TState>(
                 yield s;
               }
             }
+          };
+          try {
+            yield* yieldUnique(
+              parser.suggest({
+                ...context,
+                state: suggestInitialState,
+              }, prefix) as AsyncIterable<Suggestion>,
+            );
           } catch (error) {
             if (!hasSuggestFallbackState) throw error;
           }
           if (hasSuggestFallbackState) {
-            const fallbackSuggestions = parser.suggest({
-              ...context,
-              state: suggestFallbackState,
-            }, prefix) as AsyncIterable<Suggestion>;
-            for await (const s of fallbackSuggestions) {
-              const key = suggestionKey(s);
-              if (shouldInclude(s) && !emitted.has(key)) {
-                emitted.add(key);
-                yield s;
-              }
-            }
+            yield* yieldUnique(
+              parser.suggest({
+                ...context,
+                state: suggestFallbackState,
+              }, prefix) as AsyncIterable<Suggestion>,
+            );
           }
         },
       );
