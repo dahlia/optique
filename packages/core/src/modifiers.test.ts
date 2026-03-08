@@ -2099,6 +2099,109 @@ describe("multiple", () => {
     }
   });
 
+  it("should retry complete with unwrapped state after failure", () => {
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        if (typeof state !== "string") {
+          return {
+            success: false as const,
+            error: message`Expected string state.`,
+          };
+        }
+        return { success: true as const, value: state.toUpperCase() };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["alpha"], {
+      annotations: { [Symbol.for("@test/fallback-complete-failure")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
+    }
+  });
+
+  it("should retry async complete with unwrapped state after failure", async () => {
+    const baseParser: Parser<"async", string, string> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        });
+      },
+      complete(state) {
+        if (typeof state !== "string") {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Expected string state.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          value: state.toUpperCase(),
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = await parse(parser, ["alpha"], {
+      annotations: {
+        [Symbol.for("@test/fallback-complete-failure-async")]: true,
+      },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
+    }
+  });
+
   it("should fallback to unwrapped primitive state in suggest()", () => {
     const baseParser: Parser<"sync", string, string> = {
       $mode: "sync",
