@@ -186,7 +186,7 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
  * - Array states are cloned and annotated without mutating the original.
  * - Plain object states are shallow-cloned with annotations attached.
  * - Built-in object states (Date/Map/Set/RegExp) are cloned by constructor.
- * - Other non-plain object states are returned unchanged.
+ * - Other non-plain object states are cloned via prototype/descriptors.
  *
  * @param state The parser state to annotate.
  * @param annotations The annotations to inject.
@@ -267,13 +267,18 @@ export function injectAnnotations<TState>(
     return cloned as TState;
   }
   const proto = Object.getPrototypeOf(state);
-  if (proto !== Object.prototype && proto !== null) {
-    return state;
+  if (proto === Object.prototype || proto === null) {
+    return {
+      ...(state as Record<PropertyKey, unknown>),
+      [annotationKey]: annotations,
+    } as TState;
   }
-  return {
-    ...(state as Record<PropertyKey, unknown>),
-    [annotationKey]: annotations,
-  } as TState;
+  const cloned = Object.create(
+    proto,
+    Object.getOwnPropertyDescriptors(state as Record<PropertyKey, unknown>),
+  ) as TState & { [annotationKey]?: Annotations };
+  cloned[annotationKey] = annotations;
+  return cloned;
 }
 
 /**

@@ -116,17 +116,21 @@ describe("injectAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
-  it("should not mutate non-plain object states", () => {
+  it("should clone non-plain object states without mutation", () => {
+    const marker = Symbol.for("@test/inject-nonplain");
     class CustomState {
       value = 1;
     }
     const source = new CustomState();
     const result = injectAnnotations(source, {
-      [Symbol.for("@test/inject-nonplain")]: "ok",
+      [marker]: "ok",
     });
 
-    assert.equal(result, source);
-    assert.equal(getAnnotations(result), undefined);
+    assert.notEqual(result, source);
+    assert.ok(result instanceof CustomState);
+    assert.equal(result.value, 1);
+    assert.equal(getAnnotations(source), undefined);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 });
 
