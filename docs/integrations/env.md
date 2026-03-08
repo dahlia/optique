@@ -429,11 +429,6 @@ Parameters
 Returns
 :   `ValueParser<"sync", boolean>`
 
-### `envKey`
-
-Symbol key (`Symbol.for("@optique/env")`) used to store environment source
-data in annotations.
-
 ### `EnvContext`
 
 Interface extending `SourceContext` with two additional properties:
