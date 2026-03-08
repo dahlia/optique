@@ -105,16 +105,24 @@ export function getAnnotations(state: unknown): Annotations | undefined {
  * @internal
  */
 export function inheritAnnotations<T>(source: unknown, target: T): T {
-  if (target == null || typeof target !== "object") {
-    return target;
-  }
   const annotations = getAnnotations(source);
   if (annotations === undefined) {
     return target;
   }
-  (target as T & { [annotationKey]?: Annotations })[annotationKey] =
-    annotations;
-  return target;
+  if (target == null || typeof target !== "object") {
+    return injectAnnotations(target, annotations);
+  }
+  if (Object.isExtensible(target)) {
+    (target as T & { [annotationKey]?: Annotations })[annotationKey] =
+      annotations;
+    return target;
+  }
+  const cloned = Object.create(
+    Object.getPrototypeOf(target),
+    Object.getOwnPropertyDescriptors(target),
+  ) as T & { [annotationKey]?: Annotations };
+  cloned[annotationKey] = annotations;
+  return cloned;
 }
 
 /**

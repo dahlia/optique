@@ -1,5 +1,6 @@
 import { longestMatch, object } from "@optique/core/constructs";
 import { getAnnotations, injectAnnotations } from "@optique/core/annotations";
+import { annotationStateValueKey } from "@optique/core/annotations";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -1964,6 +1965,76 @@ describe("multiple", () => {
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value, ["ok", "ok"]);
+    }
+  });
+
+  it("should preserve annotations for primitive item states", () => {
+    const annotation = Symbol.for("@test/multiple-primitive-item-annotations");
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        if (context.state !== "") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`State already used.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: head,
+          },
+        };
+      },
+      complete(state) {
+        if (getAnnotations(state)?.[annotation] !== "ok") {
+          return {
+            success: false as const,
+            error: message`Missing annotations on primitive item state.`,
+          };
+        }
+        if (typeof state === "object" && state !== null) {
+          const value = (state as Record<PropertyKey, unknown>)[
+            annotationStateValueKey
+          ];
+          if (typeof value === "string") {
+            return { success: true as const, value };
+          }
+        }
+        return { success: true as const, value: state };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["a", "b"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["a", "b"]);
     }
   });
 

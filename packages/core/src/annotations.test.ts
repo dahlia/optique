@@ -7,6 +7,7 @@ import {
   annotationStateValueKey,
   annotationWrapperKey,
   getAnnotations,
+  inheritAnnotations,
   injectAnnotations,
   isInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -91,5 +92,18 @@ describe("injectAnnotations", () => {
     assert.ok(Object.hasOwn(wrapper, annotationWrapperKey));
     assert.equal(wrapper[annotationWrapperKey], true);
     assert.equal(wrapper[annotationStateValueKey], undefined);
+  });
+});
+
+describe("inheritAnnotations", () => {
+  it("should not mutate frozen targets", () => {
+    const marker = Symbol.for("@test/inherit-frozen");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+    const frozenTarget = Object.freeze({ value: 1 });
+    const result = inheritAnnotations(source, frozenTarget);
+
+    assert.notEqual(result, frozenTarget);
+    assert.equal((result as { value: number }).value, 1);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 });
