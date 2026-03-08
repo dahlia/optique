@@ -1201,8 +1201,8 @@ const asyncResult = await runAsync(asyncParser, { args });
 
 The `run()`, `runSync()`, and `runAsync()` functions support source contexts
 for integrating external data sources like configuration files and environment
-variables.  Pass a `contexts` array to enable two-phase parsing with automatic
-annotation collection:
+variables.  Pass a `contexts` array to enable automatic annotation collection,
+with two-phase parsing only when needed:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
@@ -1242,8 +1242,9 @@ const result = await runAsync(parser, {
 
 When `contexts` is provided, the runner delegates to `runWith()` (or
 `runWithSync()` for sync parsers) from `@optique/core/facade`, which handles
-the two-phase parsing automatically.  Context-specific options like
-`getConfigPath` are passed through to the contexts.
+static and dynamic contexts automatically and performs two-phase parsing only
+when needed.  Context-specific options like `getConfigPath` are passed through
+to the contexts.
 
 For more details on config file integration, see the
 [config file integration guide](../integrations/config.md).

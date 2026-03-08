@@ -3710,6 +3710,52 @@ describe("runWith", () => {
       assert.equal(callCount, 1);
     });
 
+    it('should not force two-phase parsing for mode: "static" with empty annotations', async () => {
+      let callCount = 0;
+      const staticContext: SourceContext = {
+        id: Symbol.for("@test/static-empty-once"),
+        mode: "static",
+        getAnnotations() {
+          callCount++;
+          return {};
+        },
+      };
+
+      const parser = object({
+        host: withDefault(option("--host", string()), "default"),
+      });
+
+      const result = await runWith(parser, "test", [staticContext], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { host: "default" });
+      assert.equal(callCount, 1);
+    });
+
+    it('should not force two-phase parsing for async mode: "static" contexts', async () => {
+      let callCount = 0;
+      const staticContext: SourceContext = {
+        id: Symbol.for("@test/static-empty-async-once"),
+        mode: "static",
+        getAnnotations() {
+          callCount++;
+          return Promise.resolve({});
+        },
+      };
+
+      const parser = object({
+        host: withDefault(option("--host", string()), "default"),
+      });
+
+      const result = await runWith(parser, "test", [staticContext], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { host: "default" });
+      assert.equal(callCount, 1);
+    });
+
     it("should parse with multiple static contexts", async () => {
       const envKey = Symbol.for("@test/env");
       const configKey = Symbol.for("@test/config");
@@ -4517,6 +4563,29 @@ describe("runWithSync", () => {
         return {
           [Symbol.for("@test/static-once-sync")]: { value: true },
         };
+      },
+    };
+
+    const parser = object({
+      host: withDefault(option("--host", string()), "default"),
+    });
+
+    const result = runWithSync(parser, "test", [staticContext], {
+      args: [],
+    });
+
+    assert.deepEqual(result, { host: "default" });
+    assert.equal(callCount, 1);
+  });
+
+  it('should not force two-phase parsing in runWithSync for mode: "static" with empty annotations', () => {
+    let callCount = 0;
+    const staticContext: SourceContext = {
+      id: Symbol.for("@test/static-empty-once-sync"),
+      mode: "static",
+      getAnnotations() {
+        callCount++;
+        return {};
       },
     };
 

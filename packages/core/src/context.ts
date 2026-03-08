@@ -178,8 +178,9 @@ export interface SourceContext<TRequiredOptions = void> {
  * Checks whether a context is static (returns annotations without needing
  * parsed results).
  *
- * A context is considered static if `getAnnotations()` called without
- * arguments returns a non-empty annotations object synchronously.
+ * A context is considered static if it declares `mode: "static"` or if
+ * `getAnnotations()` called without arguments returns a non-empty
+ * annotations object synchronously.
  *
  * @param context The source context to check.
  * @returns `true` if the context is static, `false` otherwise.
