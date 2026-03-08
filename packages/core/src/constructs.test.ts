@@ -309,6 +309,12 @@ describe("or", () => {
     void _tooMany;
   });
 
+  it("should report type-level arity error for zero parsers", () => {
+    // @ts-expect-error - or() requires at least one parser argument.
+    const _noParsers = or();
+    void _noParsers;
+  });
+
   it("should accept spread parser arrays without tuple length information", () => {
     const dynamicParsers: Parser<"sync", unknown, unknown>[] = [
       command("first", constant("first" as const)),

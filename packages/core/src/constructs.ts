@@ -619,7 +619,7 @@ type OrParserArity =
   | 15;
 type OrArityLimitError = {
   readonly __optiqueOrArityLimit:
-    "or() supports up to 15 parser arguments. Nest or() to combine more.";
+    "or() requires between 1 and 15 parser arguments. Nest or() to combine more.";
 };
 type IsTuple<T extends readonly unknown[]> = number extends T["length"] ? false
   : true;
@@ -1724,8 +1724,8 @@ export function or<
 /**
  * Creates a parser that tries each parser in sequence until one succeeds,
  * with custom error message options.
- * @param parser1 The first parser to try.
- * @param rest Additional parsers and {@link OrOptions} for error customization.
+ * @param rest Parsers to try, followed by {@link OrOptions} for error
+ *             customization.
  * @returns A parser that succeeds if any of the input parsers succeed.
  * @since 0.5.0
  */
