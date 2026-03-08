@@ -883,6 +883,30 @@ export function multiple<M extends Mode, TValue, TState>(
       annotationStateValueKey
     ] as T;
   };
+  const completeSyncWithUnwrappedFallback = (
+    state: TState,
+  ): ReturnType<typeof syncParser.complete> => {
+    try {
+      return syncParser.complete(state);
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(state)) {
+        throw error;
+      }
+      return syncParser.complete(unwrapInjectedWrapper(state));
+    }
+  };
+  const completeAsyncWithUnwrappedFallback = async (
+    state: TState,
+  ): Promise<Awaited<ReturnType<typeof parser.complete>>> => {
+    try {
+      return await parser.complete(state);
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(state)) {
+        throw error;
+      }
+      return await parser.complete(unwrapInjectedWrapper(state));
+    }
+  };
 
   // Sync parse implementation
   const parseSync = (
@@ -999,7 +1023,7 @@ export function multiple<M extends Mode, TValue, TState>(
           // Sync complete
           const result: TValue[] = [];
           for (const s of state) {
-            const valueResult = syncParser.complete(s as TState);
+            const valueResult = completeSyncWithUnwrappedFallback(s as TState);
             if (valueResult.success) {
               result.push(unwrapInjectedWrapper(valueResult.value));
             } else {
@@ -1011,7 +1035,7 @@ export function multiple<M extends Mode, TValue, TState>(
         async () => {
           // Async complete - use Promise.all for parallel execution
           const results = await Promise.all(
-            state.map((s) => parser.complete(s)),
+            state.map((s) => completeAsyncWithUnwrappedFallback(s)),
           );
           const values: TValue[] = [];
           for (const valueResult of results) {
@@ -1030,7 +1054,7 @@ export function multiple<M extends Mode, TValue, TState>(
       // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
       const selectedValues = new Set<string>();
       for (const s of context.state) {
-        const completed = syncParser.complete(s as TState);
+        const completed = completeSyncWithUnwrappedFallback(s as TState);
         if (completed.success) {
           // Convert value to string for comparison with suggestion text
           const valueStr = String(unwrapInjectedWrapper(completed.value));

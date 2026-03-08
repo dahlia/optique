@@ -2055,6 +2055,108 @@ describe("multiple", () => {
     }
   });
 
+  it("should fallback to unwrapped primitive state in complete()", () => {
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state.toUpperCase() };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["alpha"], {
+      annotations: { [Symbol.for("@test/fallback-complete")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
+    }
+  });
+
+  it("should fallback to unwrapped primitive state in suggest()", () => {
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state.toUpperCase() };
+      },
+      suggest() {
+        return [{ kind: "literal" as const, text: "beta" }];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const parseResult = parser.parse({
+      buffer: ["alpha"],
+      state: injectAnnotations(parser.initialState, {
+        [Symbol.for("@test/fallback-suggest")]: true,
+      }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (!parseResult.success) {
+      return;
+    }
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: parseResult.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, "")];
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
+    );
+  });
+
   it("should return empty array when no matches found in object context", () => {
     const parser = object({
       locales: multiple(option("-l", "--locale", string())),
