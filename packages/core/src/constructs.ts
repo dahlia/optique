@@ -2012,6 +2012,12 @@ export function or<
   undefined | [number, ParserResult<unknown>]
 >;
 
+/**
+ * Creates a parser that tries each parser in sequence until one succeeds.
+ * @param parsers Parsers to try in order.
+ * @returns A parser that succeeds if any of the input parsers succeed.
+ * @since 0.5.0
+ */
 export function or<
   const TParsers extends readonly Parser<Mode, unknown, unknown>[],
 >(
