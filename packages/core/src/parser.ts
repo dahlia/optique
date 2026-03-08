@@ -362,6 +362,12 @@ export type Result<T> =
     error: Message;
   };
 
+const annotationWrapperKeys = new Set<PropertyKey>([
+  annotationKey,
+  annotationStateValueKey,
+  annotationWrapperKey,
+]);
+
 function injectAnnotationsIntoState<TState>(
   state: TState,
   options?: ParseOptions,
@@ -381,15 +387,10 @@ function unwrapAnnotatedValue<T>(value: T): T {
   if (valueRecord[annotationWrapperKey] !== true) {
     return value;
   }
-  const wrapperKeys = new Set<PropertyKey>([
-    annotationKey,
-    annotationStateValueKey,
-    annotationWrapperKey,
-  ]);
   const ownKeys = Reflect.ownKeys(valueRecord);
   if (
     ownKeys.length === 3 &&
-    ownKeys.every((key) => wrapperKeys.has(key)) &&
+    ownKeys.every((key) => annotationWrapperKeys.has(key)) &&
     isInjectedAnnotationWrapper(value)
   ) {
     return valueRecord[annotationStateValueKey] as T;
