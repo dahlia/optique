@@ -877,9 +877,6 @@ export function multiple<M extends Mode, TValue, TState>(
   ): ParseResult => {
     let added = context.state.length < 1;
     const currentItemState = context.state.at(-1) ?? syncParser.initialState;
-    const itemAnnotationSource = context.state.length < 1
-      ? context.state
-      : currentItemState;
     let result = syncParser.parse({
       ...context,
       state: currentItemState,
@@ -896,6 +893,7 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
+    const itemAnnotationSource = added ? context.state : currentItemState;
     const nextItemState = inheritAnnotations(
       itemAnnotationSource,
       result.next.state,
@@ -919,9 +917,6 @@ export function multiple<M extends Mode, TValue, TState>(
   ): Promise<ParseResult> => {
     let added = context.state.length < 1;
     const currentItemState = context.state.at(-1) ?? parser.initialState;
-    const itemAnnotationSource = context.state.length < 1
-      ? context.state
-      : currentItemState;
     let resultOrPromise = parser.parse({
       ...context,
       state: currentItemState,
@@ -940,6 +935,7 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
+    const itemAnnotationSource = added ? context.state : currentItemState;
     const nextItemState = inheritAnnotations(
       itemAnnotationSource,
       result.next.state,

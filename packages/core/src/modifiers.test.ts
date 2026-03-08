@@ -1840,6 +1840,133 @@ describe("multiple", () => {
     }
   });
 
+  it("should preserve annotations after fallback parse in sync branch", () => {
+    const annotation = Symbol.for("@test/multiple-fallback-annotations");
+    const baseParser: Parser<"sync", string, { readonly used: boolean }> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: { used: false },
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        if (context.state.used) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`State already used.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: { used: true },
+          },
+        };
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        if (annotations?.[annotation] !== "ok") {
+          return {
+            success: false as const,
+            error: message`Missing annotations on fallback item state.`,
+          };
+        }
+        return { success: true as const, value: state.used ? "ok" : "bad" };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["a", "b"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ok", "ok"]);
+    }
+  });
+
+  it("should preserve annotations after fallback parse in async branch", async () => {
+    const annotation = Symbol.for("@test/multiple-fallback-annotations-async");
+    const baseParser: Parser<"async", string, { readonly used: boolean }> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: { used: false },
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        if (context.state.used) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`State already used.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: { used: true },
+          },
+        });
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        if (annotations?.[annotation] !== "ok") {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing annotations on async fallback item state.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          value: state.used ? "ok" : "bad",
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = await parse(parser, ["a", "b"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ok", "ok"]);
+    }
+  });
+
   it("should return empty array when no matches found in object context", () => {
     const parser = object({
       locales: multiple(option("-l", "--locale", string())),
