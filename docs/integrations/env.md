@@ -321,12 +321,10 @@ Error handling
 ### Missing environment variable
 
 When the environment variable is not set and no `default` is provided,
-`bindEnv()` produces an error message that includes the full variable name
-(prefix + key):
-
-~~~~ text
-Missing required environment variable: MYAPP_API_KEY.
-~~~~
+`bindEnv()` falls through to the wrapped parser's `complete()` result.
+This means the final error message depends on the wrapped parser (or other
+wrappers such as `bindConfig()`), rather than always being an environment-
+specific error.
 
 If a `default` is provided, the default is used silently.
 
