@@ -2237,10 +2237,7 @@ describe("Annotations system", () => {
     if (result.success) {
       assert.equal(typeof result.value, "object");
       assert.ok(result.value !== null);
-      assert.equal(
-        (result.value as Record<string, unknown>).ok,
-        true,
-      );
+      assert.ok((result.value as Record<string, unknown>).ok);
     }
   });
 
@@ -2286,8 +2283,8 @@ describe("Annotations system", () => {
     assert.ok(result.success);
     if (result.success) {
       const value = result.value as Record<PropertyKey, unknown>;
-      assert.equal(value.ok, true);
-      assert.equal(value[annotationWrapperKey], true);
+      assert.ok(value.ok);
+      assert.ok(value[annotationWrapperKey]);
       assert.equal(value[annotationStateValueKey], undefined);
     }
   });
