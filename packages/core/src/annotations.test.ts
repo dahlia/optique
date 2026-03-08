@@ -96,6 +96,18 @@ describe("injectAnnotations", () => {
 });
 
 describe("inheritAnnotations", () => {
+  it("should not mutate extensible targets", () => {
+    const marker = Symbol.for("@test/inherit-extensible");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+    const target = { value: 1 };
+    const result = inheritAnnotations(source, target);
+
+    assert.notEqual(result, target);
+    assert.equal(target.value, 1);
+    assert.equal(getAnnotations(target), undefined);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
   it("should not mutate frozen targets", () => {
     const marker = Symbol.for("@test/inherit-frozen");
     const source = { [annotationKey]: { [marker]: "ok" } };

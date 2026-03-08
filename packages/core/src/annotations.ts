@@ -112,10 +112,8 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
   if (target == null || typeof target !== "object") {
     return injectAnnotations(target, annotations);
   }
-  if (Object.isExtensible(target)) {
-    (target as T & { [annotationKey]?: Annotations })[annotationKey] =
-      annotations;
-    return target;
+  if (isInjectedAnnotationWrapper(target)) {
+    return injectAnnotations(target, annotations);
   }
   if (Array.isArray(target)) {
     const cloned = [...target];
