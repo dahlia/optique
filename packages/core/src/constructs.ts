@@ -2500,28 +2500,6 @@ export function longestMatch<
 
 /**
  * Creates a parser that selects the successful branch that consumed
- * the most input tokens.
- *
- * The resulting parser tries every given parser and returns the
- * successful result that consumed more input than the others.
- *
- * @param parsers Parsers to evaluate and compare by consumed input.
- * @returns A parser that yields the best successful branch result.
- * Type inference is precise for tuple calls up to 15 parser arguments.
- * @since 0.3.0
- */
-export function longestMatch<
-  const TParsers extends readonly Parser<Mode, unknown, unknown>[],
->(
-  ...parsers: TParsers & LongestMatchArityGuard<TParsers>
-): Parser<
-  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
-  InferValue<TParsers[number]>,
-  LongestMatchState<TParsers>
->;
-
-/**
- * Creates a parser that selects the successful branch that consumed
  * the most input tokens, with custom error options.
  *
  * The resulting parser tries every given parser and returns the
@@ -2559,6 +2537,28 @@ export function longestMatch<
   ...rest:
     & [...parsers: TParsers, options: LongestMatchTailOptions]
     & LongestMatchArityGuard<TParsers>
+): Parser<
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  InferValue<TParsers[number]>,
+  LongestMatchState<TParsers>
+>;
+
+/**
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens.
+ *
+ * The resulting parser tries every given parser and returns the
+ * successful result that consumed more input than the others.
+ *
+ * @param parsers Parsers to evaluate and compare by consumed input.
+ * @returns A parser that yields the best successful branch result.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.3.0
+ */
+export function longestMatch<
+  const TParsers extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  ...parsers: TParsers & LongestMatchArityGuard<TParsers>
 ): Parser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
@@ -4709,21 +4709,6 @@ type MergeReturnType<TParsers extends MergeParsers> = Parser<
 >;
 
 /**
- * Merges multiple object-like parsers into one parser.
- *
- * This is useful for combining separate object parsers into one
- * unified parser while keeping fields grouped by parser boundaries.
- *
- * @param parsers Parsers to merge in declaration order.
- * @returns A parser that merges parsed object fields from all parsers.
- * Type inference is precise for tuple calls up to 15 parser arguments.
- * @since 0.4.0
- */
-export function merge<const TParsers extends MergeParsers>(
-  ...parsers: EnsureMergeParsers<TParsers> & MergeArityGuard<TParsers>
-): MergeReturnType<TParsers>;
-
-/**
  * Merges multiple object-like parsers into one parser, with options.
  *
  * This is useful for combining separate object parsers into one
@@ -4774,6 +4759,21 @@ export function merge<const TParsers extends MergeParsers>(
   ...rest:
     & [...parsers: EnsureMergeParsers<TParsers>, options: MergeTailOptions]
     & MergeArityGuard<TParsers>
+): MergeReturnType<TParsers>;
+
+/**
+ * Merges multiple object-like parsers into one parser.
+ *
+ * This is useful for combining separate object parsers into one
+ * unified parser while keeping fields grouped by parser boundaries.
+ *
+ * @param parsers Parsers to merge in declaration order.
+ * @returns A parser that merges parsed object fields from all parsers.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.4.0
+ */
+export function merge<const TParsers extends MergeParsers>(
+  ...parsers: EnsureMergeParsers<TParsers> & MergeArityGuard<TParsers>
 ): MergeReturnType<TParsers>;
 
 export function merge(

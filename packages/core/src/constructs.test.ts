@@ -965,12 +965,14 @@ describe("longestMatch()", () => {
       option("--a16"),
     ] as const;
 
-    // @ts-expect-error - longestMatch() supports up to 15 parser arguments.
-    const _tooMany = longestMatch(...parsers, {
+    const options = {
       errors: {
         noMatch: message`No matching option found.`,
       },
-    });
+    };
+
+    // @ts-expect-error - longestMatch() supports up to 15 parser arguments.
+    const _tooMany = longestMatch(...parsers, options);
     void _tooMany;
   });
 
