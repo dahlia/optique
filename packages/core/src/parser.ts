@@ -384,7 +384,10 @@ function unwrapAnnotatedValue<T>(value: T): T {
     return value;
   }
   const valueRecord = value as Record<symbol, unknown>;
-  if (annotationStateValueKey in valueRecord) {
+  if (
+    Object.hasOwn(valueRecord, annotationKey) &&
+    Object.hasOwn(valueRecord, annotationStateValueKey)
+  ) {
     return valueRecord[annotationStateValueKey] as T;
   }
   return value;

@@ -2058,6 +2058,20 @@ describe("Annotations system", () => {
     }
   });
 
+  it("should not unwrap regular objects that contain only internal value key", async () => {
+    const { annotationStateValueKey } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationStateValueKey]: "not-wrapper",
+    };
+    const result = parse(constant(value), []);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
   it("should support annotations in suggestSync() with non-object state", () => {
     const testKey = Symbol.for("@test/suggest-sync");
     const parser = constant("ok");
