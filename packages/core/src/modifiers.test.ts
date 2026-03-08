@@ -83,6 +83,17 @@ async function collectSuggestions(
   return collected;
 }
 
+function unwrapPrimitiveState(state: unknown): string {
+  if (typeof state === "object" && state !== null) {
+    const value =
+      (state as Record<PropertyKey, unknown>)[annotationStateValueKey];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return String(state);
+}
+
 describe("optional", () => {
   it("should create a parser with same priority as wrapped parser", () => {
     const baseParser = option("-v", "--verbose");
@@ -1904,6 +1915,110 @@ describe("multiple", () => {
     assert.ok(result.success);
     if (result.success) {
       assert.deepEqual(result.value, ["ok", "ok"]);
+    }
+  });
+
+  it("should pass annotations to inner parse state in sync branch", () => {
+    const annotation = Symbol.for("@test/multiple-parse-annotations-sync");
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        if (getAnnotations(context.state)?.[annotation] !== "ok") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Missing annotations on parse state.`,
+          };
+        }
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: unwrapPrimitiveState(state) };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["alpha"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["alpha"]);
+    }
+  });
+
+  it("should retry sync parse with unwrapped primitive state after throw", () => {
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        if (typeof context.state !== "string") {
+          throw new TypeError("Expected string state.");
+        }
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        if (typeof state !== "string") {
+          return {
+            success: false as const,
+            error: message`Expected string state.`,
+          };
+        }
+        return { success: true as const, value: state.toUpperCase() };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const result = parse(parser, ["alpha"], {
+      annotations: { [Symbol.for("@test/parse-fallback-sync")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
     }
   });
 

@@ -903,6 +903,32 @@ export function multiple<M extends Mode, TValue, TState>(
       return syncParser.complete(unwrapInjectedWrapper(state));
     }
   };
+  const parseSyncWithUnwrappedFallback = (
+    context: ParserContext<TState>,
+  ): ReturnType<typeof syncParser.parse> => {
+    try {
+      const result = syncParser.parse(context);
+      if (
+        result.success ||
+        result.consumed !== 0 ||
+        !isInjectedAnnotationWrapper(context.state)
+      ) {
+        return result;
+      }
+      return syncParser.parse({
+        ...context,
+        state: unwrapInjectedWrapper(context.state),
+      });
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(context.state)) {
+        throw error;
+      }
+      return syncParser.parse({
+        ...context,
+        state: unwrapInjectedWrapper(context.state),
+      });
+    }
+  };
   const completeAsyncWithUnwrappedFallback = async (
     state: TState,
   ): Promise<Awaited<ReturnType<typeof parser.complete>>> => {
@@ -926,19 +952,20 @@ export function multiple<M extends Mode, TValue, TState>(
   ): ParseResult => {
     let added = context.state.length < 1;
     const currentItemStateWithAnnotations = context.state.at(-1) ??
-      syncParser.initialState;
-    const currentItemState = unwrapInjectedWrapper(
-      currentItemStateWithAnnotations,
-    );
-    let result = syncParser.parse({
+      inheritAnnotations(context.state, syncParser.initialState);
+    let result = parseSyncWithUnwrappedFallback({
       ...context,
-      state: currentItemState,
+      state: currentItemStateWithAnnotations as TState,
     });
     if (!result.success) {
       if (!added) {
-        result = syncParser.parse({
+        const nextInitialState = inheritAnnotations(
+          context.state,
+          syncParser.initialState,
+        );
+        result = parseSyncWithUnwrappedFallback({
           ...context,
-          state: syncParser.initialState,
+          state: nextInitialState,
         });
         if (!result.success) return result;
         added = true;
