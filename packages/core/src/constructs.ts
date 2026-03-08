@@ -621,8 +621,12 @@ type OrArityLimitError = {
   readonly __optiqueOrArityLimit:
     "or() supports up to 15 parser arguments. Nest or() to combine more.";
 };
+type IsTuple<T extends readonly unknown[]> = number extends T["length"] ? false
+  : true;
 type OrArityGuard<TParsers extends readonly unknown[]> =
-  TParsers["length"] extends OrParserArity ? unknown : OrArityLimitError;
+  IsTuple<TParsers> extends true
+    ? TParsers["length"] extends OrParserArity ? unknown : OrArityLimitError
+    : unknown;
 
 /**
  * Creates a parser that combines two mutually exclusive parsers into one.
@@ -1739,7 +1743,11 @@ export function or<
   const TParsers extends readonly Parser<Mode, unknown, unknown>[],
 >(
   ...parsers: TParsers & OrArityGuard<TParsers>
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
+): Parser<
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  InferValue<TParsers[number]>,
+  undefined | [number, ParserResult<unknown>]
+>;
 /**
  * @since 0.5.0
  */

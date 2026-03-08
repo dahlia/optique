@@ -309,6 +309,20 @@ describe("or", () => {
     void _tooMany;
   });
 
+  it("should accept spread parser arrays without tuple length information", () => {
+    const dynamicParsers: Parser<"sync", unknown, unknown>[] = [
+      command("first", constant("first" as const)),
+      command("second", constant("second" as const)),
+    ];
+
+    const parser = or(...dynamicParsers);
+    const result = parseSync(parser, ["second"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "second");
+    }
+  });
+
   describe("getDocFragments", () => {
     it("should return fragments from all parsers when state is undefined", () => {
       const parser1 = option("-a", "--apple");
