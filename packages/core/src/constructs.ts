@@ -3440,10 +3440,13 @@ export function object<
   parserPairs.sort(([_, parserA], [__, parserB]) =>
     parserB.priority - parserA.priority
   );
-  const initialState: Record<string | symbol, unknown> = {};
-  for (const key of parserKeys) {
-    initialState[key as string | symbol] = parsers[key].initialState;
-  }
+  const createInitialState = (): Record<string | symbol, unknown> => {
+    const state: Record<string | symbol, unknown> = {};
+    for (const key of parserKeys) {
+      state[key as string | symbol] = parsers[key].initialState;
+    }
+    return state;
+  };
 
   // Check for duplicate option names at construction time unless explicitly allowed
   if (!options.allowDuplicates) {
@@ -3689,10 +3692,16 @@ export function object<
       parserPairs.flatMap(([_, p]) => p.usage),
       options.hidden,
     ),
-    initialState: initialState as {
+    get initialState(): {
       readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
         ? U3
         : never;
+    } {
+      return createInitialState() as {
+        readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
+          ? U3
+          : never;
+      };
     },
     parse(
       context: ParserContext<{ readonly [K in keyof T]: unknown }>,

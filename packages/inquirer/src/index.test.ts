@@ -750,13 +750,50 @@ describe("prompt()", () => {
         },
       });
 
-      const first = await parser.complete(parser.initialState);
-      const second = await parser.complete(parser.initialState);
+      const initialState = parser.initialState;
+      const first = await parser.complete(initialState);
+      const second = await parser.complete(initialState);
 
       assert.ok(first.success);
       assert.ok(second.success);
       assert.equal(promptCalls, 1);
     });
+
+    it(
+      "does not reuse sentinel prompt cache across parse invocations",
+      async () => {
+        const promptedValues = ["first", "second"];
+        let promptCalls = 0;
+
+        const parser = object({
+          prompted: prompt(option("--prompted", string()), {
+            type: "input",
+            message: "Enter prompted",
+            prompter: () => {
+              const value = promptedValues[promptCalls];
+              promptCalls++;
+              return Promise.resolve(value);
+            },
+          }),
+          required: option("--required", string()),
+        });
+
+        // First parse fails because --required is missing, but the prompt
+        // parser still runs during object()'s completability check.
+        const first = await parseAsync(parser, []);
+        assert.ok(!first.success);
+        assert.equal(promptCalls, 1);
+
+        // Second parse should ask again and use the new prompted value.
+        const second = await parseAsync(parser, ["--required", "ok"]);
+        assert.ok(second.success);
+        if (second.success) {
+          assert.equal(second.value.prompted, "second");
+          assert.equal(second.value.required, "ok");
+        }
+        assert.equal(promptCalls, 2);
+      },
+    );
 
     it("falls back to prompt when annotation-carrying cliState complete fails", async () => {
       const inner: Parser<

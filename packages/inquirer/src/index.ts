@@ -530,12 +530,18 @@ export function prompt<M extends Mode, TValue, TState>(
     readonly [promptBindStateKey] = true as const;
     readonly hasCliValue = false as const;
   };
-  const promptBindInitialState = new PromptBindInitialStateClass();
-
   // Cache for the prompt result during object()'s two-phase complete cycle:
   // 1. completability check (inside object.parse): sets this cache
   // 2. actual complete (inside object.complete): reads and clears this cache
-  let promptCache: Promise<ValueParserResult<TValue>> | null = null;
+  //
+  // The cache is scoped to a specific sentinel state instance so values from
+  // one completion cycle are never replayed for another parse invocation.
+  let promptCache:
+    | {
+      readonly state: InstanceType<typeof PromptBindInitialStateClass>;
+      readonly result: Promise<ValueParserResult<TValue>>;
+    }
+    | null = null;
 
   async function executePrompt(): Promise<ValueParserResult<TValue>> {
     const prompts = getPromptFunctions();
@@ -658,7 +664,9 @@ export function prompt<M extends Mode, TValue, TState>(
     usage: [{ type: "optional", terms: parser.usage }],
     // Use the sentinel as initialState so complete() can detect the
     // completability-check call and deduplicate prompt execution.
-    initialState: promptBindInitialState as unknown as TState,
+    get initialState(): TState {
+      return new PromptBindInitialStateClass() as unknown as TState;
+    },
 
     parse: (context): ModeValue<"async", ParserResult<TState>> => {
       const annotations = getAnnotations(context.state);
@@ -762,9 +770,9 @@ export function prompt<M extends Mode, TValue, TState>(
       // was provided, avoiding unnecessary interactive prompts.  The cache
       // deduplicates the two calls so the prompt (or inner complete) runs once.
       if (state instanceof PromptBindInitialStateClass) {
-        if (promptCache !== null) {
+        if (promptCache?.state === state) {
           // Second call (real complete phase): consume the cache.
-          const cached = promptCache;
+          const cached = promptCache.result;
           promptCache = null;
           return cached;
         }
@@ -775,10 +783,11 @@ export function prompt<M extends Mode, TValue, TState>(
           res: ValueParserResult<TValue>,
         ): Promise<ValueParserResult<TValue>> =>
           res.success ? Promise.resolve(res) : executePrompt();
-        promptCache = r instanceof Promise
+        const cachedResult = r instanceof Promise
           ? (r as Promise<ValueParserResult<TValue>>).then(fallback)
           : fallback(r as ValueParserResult<TValue>);
-        return promptCache;
+        promptCache = { state, result: cachedResult };
+        return cachedResult;
       }
 
       // Normal case: parse() built a PromptBindState with hasCliValue: false.
