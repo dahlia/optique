@@ -2441,7 +2441,10 @@ describe("multiple", () => {
       complete(state) {
         return { success: true as const, value: state.toUpperCase() };
       },
-      suggest() {
+      suggest(context) {
+        if (typeof context.state !== "string") {
+          throw new TypeError("Expected string state.");
+        }
         return [{ kind: "literal" as const, text: "beta" }];
       },
       getDocFragments() {
@@ -2571,6 +2574,64 @@ describe("multiple", () => {
     );
   });
 
+  it("should not fallback to unwrapped primitive state after async suggest succeeds", async () => {
+    const annotation = Symbol.for("@test/async-suggest-primitive-success");
+    const baseParser: Parser<"async", string, string> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Expected a value.`,
+        });
+      },
+      async *suggest(context) {
+        if (getAnnotations(context.state)?.[annotation] === "ok") {
+          yield { kind: "literal" as const, text: "wrapped-ok" };
+          return;
+        }
+        if (typeof context.state === "string") {
+          yield { kind: "literal" as const, text: "primitive-ok" };
+        }
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = await collectSuggestions(
+      parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [annotation]: "ok",
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as AsyncIterable<Suggestion>,
+    );
+
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "wrapped-ok"),
+    );
+    assert.ok(
+      !suggestions.some((s) =>
+        s.kind === "literal" && s.text === "primitive-ok"
+      ),
+    );
+  });
+
   it("should not deduplicate distinct URL descriptions in suggest()", () => {
     const parser = multiple({
       $mode: "sync" as const,
@@ -2637,7 +2698,8 @@ describe("multiple", () => {
     );
   });
 
-  it("should fallback to unwrapped primitive initial state in suggest()", () => {
+  it("should not fallback to unwrapped primitive initial state after suggest succeeds", () => {
+    const annotation = Symbol.for("@test/suggest-primitive-success");
     const parser = multiple({
       $mode: "sync" as const,
       $valueType: [] as const,
@@ -2659,10 +2721,13 @@ describe("multiple", () => {
         };
       },
       suggest(context) {
-        if (typeof context.state !== "string") {
-          return [];
+        if (getAnnotations(context.state)?.[annotation] === true) {
+          return [{ kind: "literal" as const, text: "wrapped-ok" }];
         }
-        return [{ kind: "literal" as const, text: "primitive-ok" }];
+        if (typeof context.state === "string") {
+          return [{ kind: "literal" as const, text: "primitive-ok" }];
+        }
+        return [];
       },
       getDocFragments() {
         return { fragments: [] };
@@ -2673,14 +2738,17 @@ describe("multiple", () => {
       ...parser.suggest({
         buffer: [],
         state: injectAnnotations(parser.initialState, {
-          [Symbol.for("@test/suggest-primitive-fallback")]: true,
+          [annotation]: true,
         }),
         optionsTerminated: false,
         usage: parser.usage,
       }, "") as Iterable<Suggestion>,
     ];
     assert.ok(
-      suggestions.some((s) =>
+      suggestions.some((s) => s.kind === "literal" && s.text === "wrapped-ok"),
+    );
+    assert.ok(
+      !suggestions.some((s) =>
         s.kind === "literal" && s.text === "primitive-ok"
       ),
     );

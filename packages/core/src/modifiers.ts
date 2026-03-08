@@ -1164,6 +1164,7 @@ export function multiple<M extends Mode, TValue, TState>(
               }
             }
           };
+          let shouldTryFallback = false;
           try {
             yield* yieldUnique(
               syncParser.suggest({
@@ -1173,8 +1174,9 @@ export function multiple<M extends Mode, TValue, TState>(
             );
           } catch (error) {
             if (!hasSuggestFallbackState) throw error;
+            shouldTryFallback = true;
           }
-          if (hasSuggestFallbackState) {
+          if (shouldTryFallback) {
             yield* yieldUnique(
               syncParser.suggest({
                 ...context,
@@ -1196,6 +1198,7 @@ export function multiple<M extends Mode, TValue, TState>(
               }
             }
           };
+          let shouldTryFallback = false;
           try {
             yield* yieldUnique(
               parser.suggest({
@@ -1205,8 +1208,9 @@ export function multiple<M extends Mode, TValue, TState>(
             );
           } catch (error) {
             if (!hasSuggestFallbackState) throw error;
+            shouldTryFallback = true;
           }
-          if (hasSuggestFallbackState) {
+          if (shouldTryFallback) {
             yield* yieldUnique(
               parser.suggest({
                 ...context,
