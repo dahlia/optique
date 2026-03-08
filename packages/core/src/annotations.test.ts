@@ -130,4 +130,28 @@ describe("inheritAnnotations", () => {
     assert.deepEqual([...result], ["a", "b"]);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
+
+  it("should preserve Date state shape", () => {
+    const marker = Symbol.for("@test/inherit-date");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+    const target = new Date("2026-03-08T00:00:00.000Z");
+    const result = inheritAnnotations(source, target);
+
+    assert.ok(result instanceof Date);
+    assert.notEqual(result, target);
+    assert.equal(result.toISOString(), "2026-03-08T00:00:00.000Z");
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should preserve Map state shape", () => {
+    const marker = Symbol.for("@test/inherit-map");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+    const target = new Map<string, number>([["a", 1]]);
+    const result = inheritAnnotations(source, target);
+
+    assert.ok(result instanceof Map);
+    assert.notEqual(result, target);
+    assert.equal(result.get("a"), 1);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
 });

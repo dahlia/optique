@@ -122,6 +122,44 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
     ] = annotations;
     return cloned as T;
   }
+  if (target instanceof Date) {
+    const cloned = new Date(target.getTime()) as Date & {
+      [annotationKey]?: Annotations;
+    };
+    cloned[annotationKey] = annotations;
+    return cloned as T;
+  }
+  if (target instanceof Map) {
+    const cloned = new Map(target) as Map<unknown, unknown> & {
+      [annotationKey]?: Annotations;
+    };
+    cloned[annotationKey] = annotations;
+    return cloned as T;
+  }
+  if (target instanceof Set) {
+    const cloned = new Set(target) as Set<unknown> & {
+      [annotationKey]?: Annotations;
+    };
+    cloned[annotationKey] = annotations;
+    return cloned as T;
+  }
+  if (target instanceof RegExp) {
+    const cloned = new RegExp(target) as RegExp & {
+      [annotationKey]?: Annotations;
+    };
+    cloned[annotationKey] = annotations;
+    return cloned as T;
+  }
+  if (
+    Object.getPrototypeOf(target) !== Object.prototype &&
+    Object.getPrototypeOf(target) !== null
+  ) {
+    if (Object.isExtensible(target)) {
+      (target as T & { [annotationKey]?: Annotations })[annotationKey] =
+        annotations;
+    }
+    return target;
+  }
   const cloned = Object.create(
     Object.getPrototypeOf(target),
     Object.getOwnPropertyDescriptors(target),
