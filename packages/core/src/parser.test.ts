@@ -2141,6 +2141,53 @@ describe("Annotations system", () => {
     }
   });
 
+  it("should not unwrap object state rebuilt from primitive wrapper", () => {
+    const parser: Parser<"sync", unknown, unknown> = {
+      $mode: "sync",
+      $stateType: [] as const,
+      $valueType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          consumed: [context.buffer[0] ?? ""],
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: {
+              ...(context.state as unknown as Record<PropertyKey, unknown>),
+              ok: true,
+            },
+          },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parse(parser, ["a"], {
+      annotations: { [Symbol.for("@test/unwrap-regression")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(typeof result.value, "object");
+      assert.ok(result.value !== null);
+      assert.equal(
+        (result.value as Record<string, unknown>).ok,
+        true,
+      );
+    }
+  });
+
   it("should support annotations in suggestSync() with non-object state", () => {
     const testKey = Symbol.for("@test/suggest-sync");
     const parser = constant("ok");

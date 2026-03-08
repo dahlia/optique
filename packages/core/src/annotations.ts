@@ -132,11 +132,29 @@ export function injectAnnotations<TState>(
   annotations: Annotations,
 ): TState {
   if (state == null || typeof state !== "object") {
-    return {
-      [annotationKey]: annotations,
-      [annotationStateValueKey]: state,
-      [annotationWrapperKey]: true,
-    } as TState;
+    const wrapper: Record<PropertyKey, unknown> = {};
+    Object.defineProperties(wrapper, {
+      [annotationKey]: {
+        value: annotations,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      },
+      // Internal wrapper markers should not be copied by object spread.
+      [annotationStateValueKey]: {
+        value: state,
+        enumerable: false,
+        writable: true,
+        configurable: true,
+      },
+      [annotationWrapperKey]: {
+        value: true,
+        enumerable: false,
+        writable: true,
+        configurable: true,
+      },
+    });
+    return wrapper as TState;
   }
   if (Array.isArray(state)) {
     const cloned = [...state];
