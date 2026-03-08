@@ -16,7 +16,7 @@ import {
   type PendingDependencySourceState,
   suggestWithDependency,
 } from "./dependency.ts";
-import { inheritAnnotations } from "./annotations.ts";
+import { getAnnotations, inheritAnnotations } from "./annotations.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
@@ -2459,6 +2459,9 @@ export function passThrough(
     },
 
     complete(state) {
+      if (getAnnotations(state) == null) {
+        return { success: true, value: state };
+      }
       return { success: true, value: [...state] };
     },
 
