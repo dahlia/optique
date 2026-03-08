@@ -2452,20 +2452,24 @@ type TupleKeys<T extends readonly unknown[]> = Exclude<
   keyof T,
   keyof readonly unknown[]
 >;
-type LongestMatchTupleState<TParsers extends readonly Parser<Mode, unknown, unknown>[]> = {
+type LongestMatchTupleState<
+  TParsers extends readonly Parser<Mode, unknown, unknown>[],
+> = {
   [K in TupleKeys<TParsers>]: TParsers[K] extends Parser<
     Mode,
     unknown,
     infer TState
-  > ? K extends `${infer TIndex extends number}`
-    ? [TIndex, ParserResult<TState>]
+  >
+    ? K extends `${infer TIndex extends number}`
+      ? [TIndex, ParserResult<TState>]
     : never
     : never;
 }[TupleKeys<TParsers>];
-type LongestMatchState<TParsers extends readonly Parser<Mode, unknown, unknown>[]> =
-  IsTuple<TParsers> extends true
-    ? undefined | LongestMatchTupleState<TParsers>
-    : undefined | [number, ParserResult<unknown>];
+type LongestMatchState<
+  TParsers extends readonly Parser<Mode, unknown, unknown>[],
+> = IsTuple<TParsers> extends true
+  ? undefined | LongestMatchTupleState<TParsers>
+  : undefined | [number, ParserResult<unknown>];
 type LongestMatchArityGuard<TParsers extends readonly unknown[]> =
   IsTuple<TParsers> extends true
     ? TParsers["length"] extends LongestMatchParserArity ? unknown

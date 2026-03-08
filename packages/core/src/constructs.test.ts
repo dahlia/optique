@@ -1032,8 +1032,10 @@ describe("longestMatch()", () => {
       | undefined
       | [0, ParserResult<ParserAState>]
       | [1, ParserResult<ParserBState>];
-    const _checkExpectedAssignableToInferred: InferredState = {} as ExpectedState;
-    const _checkInferredAssignableToExpected: ExpectedState = {} as InferredState;
+    const _checkExpectedAssignableToInferred: InferredState =
+      {} as ExpectedState;
+    const _checkInferredAssignableToExpected: ExpectedState =
+      {} as InferredState;
     void _checkExpectedAssignableToInferred;
     void _checkInferredAssignableToExpected;
   });
@@ -1054,8 +1056,10 @@ describe("longestMatch()", () => {
       | undefined
       | [0, ParserResult<ParserAState>]
       | [1, ParserResult<ParserBState>];
-    const _checkExpectedAssignableToInferred: InferredState = {} as ExpectedState;
-    const _checkInferredAssignableToExpected: ExpectedState = {} as InferredState;
+    const _checkExpectedAssignableToInferred: InferredState =
+      {} as ExpectedState;
+    const _checkInferredAssignableToExpected: ExpectedState =
+      {} as InferredState;
     void _checkExpectedAssignableToInferred;
     void _checkInferredAssignableToExpected;
   });
