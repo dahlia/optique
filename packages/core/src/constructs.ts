@@ -601,6 +601,29 @@ function getNoMatchError(
     : generateNoMatchError(noMatchContext);
 }
 
+type OrParserArity =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15;
+type OrArityLimitError = {
+  readonly __optiqueOrArityLimit:
+    "or() supports up to 15 parser arguments. Nest or() to combine more.";
+};
+type OrArityGuard<TParsers extends readonly unknown[]> =
+  TParsers["length"] extends OrParserArity ? unknown : OrArityLimitError;
+
 /**
  * Creates a parser that combines two mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
@@ -1694,10 +1717,6 @@ export function or<
   undefined | [number, ParserResult<unknown>]
 >;
 
-export function or(
-  ...parsers: Parser<Mode, unknown, unknown>[]
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
-
 /**
  * Creates a parser that tries each parser in sequence until one succeeds,
  * with custom error message options.
@@ -1706,9 +1725,20 @@ export function or(
  * @returns A parser that succeeds if any of the input parsers succeed.
  * @since 0.5.0
  */
-export function or(
-  parser1: Parser<Mode, unknown, unknown>,
-  ...rest: [...parsers: Parser<Mode, unknown, unknown>[], options: OrOptions]
+export function or<
+  const TParsers extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  ...rest: [...parsers: TParsers, options: OrOptions] & OrArityGuard<TParsers>
+): Parser<
+  CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
+  InferValue<TParsers[number]>,
+  undefined | [number, ParserResult<unknown>]
+>;
+
+export function or<
+  const TParsers extends readonly Parser<Mode, unknown, unknown>[],
+>(
+  ...parsers: TParsers & OrArityGuard<TParsers>
 ): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]>;
 /**
  * @since 0.5.0
