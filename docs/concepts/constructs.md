@@ -210,6 +210,40 @@ sets.
 > [`optional()`](./modifiers.md#optional-parser):
 > `optional(or(A, B))`.
 
+> [!IMPORTANT]
+> TypeScript overload inference for `or()` supports up to 15 parser
+> arguments.  When you need 16 or more branches, split them into nested
+> groups so each `or()` call stays at 15 or fewer arguments.
+>
+> ~~~~ typescript twoslash
+> import { or } from "@optique/core/constructs";
+> import { command, constant } from "@optique/core/primitives";
+> // ---cut-before---
+> const commandGroupA = or(
+>   command("a1", constant("a1")),
+>   command("a2", constant("a2")),
+>   command("a3", constant("a3")),
+>   command("a4", constant("a4")),
+>   command("a5", constant("a5")),
+>   command("a6", constant("a6")),
+>   command("a7", constant("a7")),
+>   command("a8", constant("a8")),
+> );
+>
+> const commandGroupB = or(
+>   command("b1", constant("b1")),
+>   command("b2", constant("b2")),
+>   command("b3", constant("b3")),
+>   command("b4", constant("b4")),
+>   command("b5", constant("b5")),
+>   command("b6", constant("b6")),
+>   command("b7", constant("b7")),
+>   command("b8", constant("b8")),
+> );
+>
+> const parser = or(commandGroupA, commandGroupB);
+> ~~~~
+
 ~~~~ typescript twoslash
 import { object, or } from "@optique/core/constructs";
 import type { InferValue } from "@optique/core/parser";
