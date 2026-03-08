@@ -1,5 +1,10 @@
 import { longestMatch, object } from "@optique/core/constructs";
 import {
+  annotationStateValueKey,
+  getAnnotations,
+  injectAnnotations,
+} from "@optique/core/annotations";
+import {
   createDependencySourceState,
   createPendingDependencySourceState,
   dependency,
@@ -14,6 +19,7 @@ import {
   type Message,
   message,
   text,
+  url,
 } from "@optique/core/message";
 import {
   map,
@@ -76,6 +82,17 @@ async function collectSuggestions(
     collected.push(suggestion);
   }
   return collected;
+}
+
+function unwrapPrimitiveState(state: unknown): string {
+  if (typeof state === "object" && state !== null) {
+    const value =
+      (state as Record<PropertyKey, unknown>)[annotationStateValueKey];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return String(state);
 }
 
 describe("optional", () => {
@@ -1715,6 +1732,1075 @@ describe("multiple", () => {
     }
   });
 
+  it("should preserve annotations on each item state in complete()", () => {
+    const annotation = Symbol.for("@test/multiple-item-annotations");
+    const baseParser: Parser<"sync", string, { value: string }> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: { value: "" },
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: { value: head },
+          },
+        };
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        if (annotations?.[annotation] !== "ok") {
+          return {
+            success: false as const,
+            error: message`Missing annotations on item state.`,
+          };
+        }
+        return { success: true as const, value: state.value };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const parseResult = parser.parse({
+      buffer: ["alpha"],
+      state: injectAnnotations(parser.initialState, { [annotation]: "ok" }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = parser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.deepEqual(completeResult.value, ["alpha"]);
+      }
+    }
+  });
+
+  it("should preserve annotations on each async item state in complete()", async () => {
+    const annotation = Symbol.for("@test/multiple-item-annotations-async");
+    const baseParser: Parser<"async", string, { value: string }> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: { value: "" },
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: { value: head },
+          },
+        });
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        if (annotations?.[annotation] !== "ok") {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing annotations on async item state.`,
+          });
+        }
+        return Promise.resolve({ success: true as const, value: state.value });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const parseResult = await parser.parse({
+      buffer: ["alpha"],
+      state: injectAnnotations(parser.initialState, { [annotation]: "ok" }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (parseResult.success) {
+      const completeResult = await parser.complete(parseResult.next.state);
+      assert.ok(completeResult.success);
+      if (completeResult.success) {
+        assert.deepEqual(completeResult.value, ["alpha"]);
+      }
+    }
+  });
+
+  it("should preserve annotations after fallback parse in sync branch", () => {
+    const annotation = Symbol.for("@test/multiple-fallback-annotations");
+    const baseParser: Parser<"sync", string, { readonly used: boolean }> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: { used: false },
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        if (context.state.used) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`State already used.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: { used: true },
+          },
+        };
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        if (annotations?.[annotation] !== "ok") {
+          return {
+            success: false as const,
+            error: message`Missing annotations on fallback item state.`,
+          };
+        }
+        return { success: true as const, value: state.used ? "ok" : "bad" };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["a", "b"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ok", "ok"]);
+    }
+  });
+
+  it("should pass annotations to inner parse state in sync branch", () => {
+    const annotation = Symbol.for("@test/multiple-parse-annotations-sync");
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        if (getAnnotations(context.state)?.[annotation] !== "ok") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Missing annotations on parse state.`,
+          };
+        }
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: unwrapPrimitiveState(state) };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["alpha"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["alpha"]);
+    }
+  });
+
+  it("should retry sync parse with unwrapped primitive state after throw", () => {
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        if (typeof context.state !== "string") {
+          throw new TypeError("Expected string state.");
+        }
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: unwrapPrimitiveState(state).toUpperCase(),
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const result = parse(parser, ["alpha"], {
+      annotations: { [Symbol.for("@test/parse-fallback-sync")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
+    }
+  });
+
+  it("should preserve annotations after fallback parse in async branch", async () => {
+    const annotation = Symbol.for("@test/multiple-fallback-annotations-async");
+    const baseParser: Parser<"async", string, { readonly used: boolean }> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: { used: false },
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        if (context.state.used) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`State already used.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: { used: true },
+          },
+        });
+      },
+      complete(state) {
+        const annotations = getAnnotations(state);
+        if (annotations?.[annotation] !== "ok") {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing annotations on async fallback item state.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          value: state.used ? "ok" : "bad",
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = await parse(parser, ["a", "b"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ok", "ok"]);
+    }
+  });
+
+  it("should pass annotations to inner parse state in async branch", async () => {
+    const annotation = Symbol.for("@test/multiple-parse-annotations-async");
+    const baseParser: Parser<"async", string, string> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        if (getAnnotations(context.state)?.[annotation] !== "ok") {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Missing annotations on async parse state.`,
+          });
+        }
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        });
+      },
+      complete(state) {
+        return Promise.resolve({
+          success: true as const,
+          value: unwrapPrimitiveState(state),
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = await parse(parser, ["alpha"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["alpha"]);
+    }
+  });
+
+  it("should retry async parse with unwrapped primitive state after throw", async () => {
+    const parser = multiple({
+      $mode: "async" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        if (typeof context.state !== "string") {
+          return Promise.reject(new TypeError("Expected string state."));
+        }
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        });
+      },
+      complete(state) {
+        return Promise.resolve({
+          success: true as const,
+          value: unwrapPrimitiveState(state).toUpperCase(),
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const result = await parse(parser, ["alpha"], {
+      annotations: { [Symbol.for("@test/parse-fallback-async")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
+    }
+  });
+
+  it("should preserve annotations for primitive item states", () => {
+    const annotation = Symbol.for("@test/multiple-primitive-item-annotations");
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        if (context.state !== "") {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`State already used.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: {
+            ...context,
+            buffer: tail,
+            state: head,
+          },
+        };
+      },
+      complete(state) {
+        if (getAnnotations(state)?.[annotation] !== "ok") {
+          return {
+            success: false as const,
+            error: message`Missing annotations on primitive item state.`,
+          };
+        }
+        if (typeof state === "object" && state !== null) {
+          const value = (state as Record<PropertyKey, unknown>)[
+            annotationStateValueKey
+          ];
+          if (typeof value === "string") {
+            return { success: true as const, value };
+          }
+        }
+        return { success: true as const, value: state };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["a", "b"], {
+      annotations: { [annotation]: "ok" },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["a", "b"]);
+    }
+  });
+
+  it("should not leak wrapped primitive item states in complete()", () => {
+    const annotation = Symbol.for("@test/multiple-primitive-complete");
+    const parser = multiple(constant("ok"));
+
+    const result = parse(parser, [], {
+      annotations: { [annotation]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ok"]);
+      assert.equal(typeof result.value[0], "string");
+    }
+  });
+
+  it("should fallback to unwrapped primitive state in complete()", () => {
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state.toUpperCase() };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["alpha"], {
+      annotations: { [Symbol.for("@test/fallback-complete")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["ALPHA"]);
+    }
+  });
+
+  it("should keep complete failure on annotated wrapper state", () => {
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        if (typeof state !== "string") {
+          return {
+            success: false as const,
+            error: message`Expected string state.`,
+          };
+        }
+        return { success: true as const, value: state.toUpperCase() };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = parse(parser, ["alpha"], {
+      annotations: { [Symbol.for("@test/fallback-complete-failure")]: true },
+    });
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(formatMessage(result.error).includes("Expected string state."));
+    }
+  });
+
+  it("should keep async complete failure on annotated wrapper state", async () => {
+    const baseParser: Parser<"async", string, string> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        });
+      },
+      complete(state) {
+        if (typeof state !== "string") {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Expected string state.`,
+          });
+        }
+        return Promise.resolve({
+          success: true as const,
+          value: state.toUpperCase(),
+        });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const result = await parse(parser, ["alpha"], {
+      annotations: {
+        [Symbol.for("@test/fallback-complete-failure-async")]: true,
+      },
+    });
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(formatMessage(result.error).includes("Expected string state."));
+    }
+  });
+
+  it("should fallback to unwrapped primitive state in suggest()", () => {
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse(context) {
+        const [head, ...tail] = context.buffer;
+        if (head === undefined) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected a value.`,
+          };
+        }
+        return {
+          success: true as const,
+          consumed: [head],
+          next: { ...context, buffer: tail, state: head },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state.toUpperCase() };
+      },
+      suggest(context) {
+        if (typeof context.state !== "string") {
+          throw new TypeError("Expected string state.");
+        }
+        return [{ kind: "literal" as const, text: "beta" }];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const parseResult = parser.parse({
+      buffer: ["alpha"],
+      state: injectAnnotations(parser.initialState, {
+        [Symbol.for("@test/fallback-suggest")]: true,
+      }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parseResult.success);
+    if (!parseResult.success) {
+      return;
+    }
+    const suggestions = [...parser.suggest({
+      buffer: [],
+      state: parseResult.next.state,
+      optionsTerminated: false,
+      usage: parser.usage,
+    }, "")];
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
+    );
+  });
+
+  it("should pass annotations to inner suggest state", () => {
+    const annotation = Symbol.for("@test/multiple-suggest-annotations");
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Expected a value.`,
+        };
+      },
+      suggest(context) {
+        if (getAnnotations(context.state)?.[annotation] !== "ok") {
+          return [];
+        }
+        return [{ kind: "literal" as const, text: "beta" }];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = [
+      ...parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [annotation]: "ok",
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>,
+    ];
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
+    );
+  });
+
+  it("should pass annotations to async inner suggest state", async () => {
+    const annotation = Symbol.for("@test/multiple-suggest-annotations-async");
+    const baseParser: Parser<"async", string, string> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Expected a value.`,
+        });
+      },
+      async *suggest(context) {
+        if (getAnnotations(context.state)?.[annotation] !== "ok") {
+          return;
+        }
+        yield { kind: "literal" as const, text: "beta" };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = await collectSuggestions(
+      parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [annotation]: "ok",
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as AsyncIterable<Suggestion>,
+    );
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
+    );
+  });
+
+  it("should not fallback to unwrapped primitive state after async suggest succeeds", async () => {
+    const annotation = Symbol.for("@test/async-suggest-primitive-success");
+    const baseParser: Parser<"async", string, string> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Expected a value.`,
+        });
+      },
+      async *suggest(context) {
+        if (getAnnotations(context.state)?.[annotation] === "ok") {
+          yield { kind: "literal" as const, text: "wrapped-ok" };
+          return;
+        }
+        if (typeof context.state === "string") {
+          yield { kind: "literal" as const, text: "primitive-ok" };
+        }
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = await collectSuggestions(
+      parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [annotation]: "ok",
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as AsyncIterable<Suggestion>,
+    );
+
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "wrapped-ok"),
+    );
+    assert.ok(
+      !suggestions.some((s) =>
+        s.kind === "literal" && s.text === "primitive-ok"
+      ),
+    );
+  });
+
+  it("should not deduplicate distinct URL descriptions in suggest()", () => {
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Expected a value.`,
+        };
+      },
+      suggest() {
+        return [
+          {
+            kind: "literal" as const,
+            text: "docs",
+            description: message`See ${url("https://example.com/a")}.`,
+          },
+          {
+            kind: "literal" as const,
+            text: "docs",
+            description: message`See ${url("https://example.com/b")}.`,
+          },
+        ];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const suggestions = [
+      ...parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>,
+    ];
+
+    assert.equal(suggestions.length, 2);
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "literal" &&
+        s.description != null &&
+        formatMessage(s.description).includes("https://example.com/a")
+      ),
+    );
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "literal" &&
+        s.description != null &&
+        formatMessage(s.description).includes("https://example.com/b")
+      ),
+    );
+  });
+
+  it("should not fallback to unwrapped primitive initial state after suggest succeeds", () => {
+    const annotation = Symbol.for("@test/suggest-primitive-success");
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Expected a value.`,
+        };
+      },
+      suggest(context) {
+        if (getAnnotations(context.state)?.[annotation] === true) {
+          return [{ kind: "literal" as const, text: "wrapped-ok" }];
+        }
+        if (typeof context.state === "string") {
+          return [{ kind: "literal" as const, text: "primitive-ok" }];
+        }
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const suggestions = [
+      ...parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [annotation]: true,
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>,
+    ];
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "wrapped-ok"),
+    );
+    assert.ok(
+      !suggestions.some((s) =>
+        s.kind === "literal" && s.text === "primitive-ok"
+      ),
+    );
+  });
+
+  it("should not leak annotations into non-plain suggest initial state", () => {
+    const marker = Symbol.for("@test/non-plain-suggest");
+    class CustomState {
+      value = 1;
+    }
+    const initialState = new CustomState();
+    const baseParser: Parser<"sync", string, CustomState> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Expected a value.`,
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multiple(baseParser);
+    const suggestions = [
+      ...parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, { [marker]: "ok" }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>,
+    ];
+
+    assert.deepEqual(suggestions, []);
+    assert.equal(getAnnotations(initialState), undefined);
+  });
+
   it("should return empty array when no matches found in object context", () => {
     const parser = object({
       locales: multiple(option("-l", "--locale", string())),
@@ -2314,6 +3400,45 @@ describe("multiple", () => {
           ]);
         }
       }
+    });
+
+    it("should unwrap injected primitive state before delegating docs", () => {
+      let observedState: unknown;
+      const baseParser: Parser<"sync", string, string> = {
+        $mode: "sync",
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        initialState: "",
+        parse(context) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Unexpected parse: ${context.buffer.join(", ")}`,
+          };
+        },
+        complete(state) {
+          return { success: true as const, value: state };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments(state) {
+          observedState = state.kind === "available" ? state.state : undefined;
+          return { fragments: [] };
+        },
+      };
+      const parser = multiple(baseParser);
+      const wrappedState = injectAnnotations("active", {
+        [Symbol.for("@test/multiple-doc-state-wrapper")]: true,
+      });
+
+      parser.getDocFragments(
+        { kind: "available", state: [wrappedState] },
+      );
+
+      assert.equal(observedState, "active");
     });
   });
 });

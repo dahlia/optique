@@ -3638,6 +3638,22 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
 describe("runWith", () => {
   describe("basic functionality", () => {
+    it("should preserve primitive parser state with annotations", async () => {
+      const envKey = Symbol.for("@test/env-primitive-async");
+      const envContext: SourceContext = {
+        id: envKey,
+        getAnnotations() {
+          return { [envKey]: { HOST: "localhost" } };
+        },
+      };
+
+      const result = await runWith(constant("ok"), "test", [envContext], {
+        args: [],
+      });
+
+      assert.equal(result, "ok");
+    });
+
     it("should parse with no contexts", async () => {
       const parser = object({
         name: argument(string()),
@@ -4439,6 +4455,39 @@ describe("runWith", () => {
 });
 
 describe("runWithSync", () => {
+  it("should preserve primitive parser state with annotations", () => {
+    const envKey = Symbol.for("@test/env-primitive");
+    const envContext: SourceContext = {
+      id: envKey,
+      getAnnotations() {
+        return { [envKey]: { HOST: "localhost" } };
+      },
+    };
+
+    const result = runWithSync(constant("ok"), "test", [envContext], {
+      args: [],
+    });
+
+    assert.equal(result, "ok");
+  });
+
+  it("should preserve array parser state shape with annotations", () => {
+    const envKey = Symbol.for("@test/env-array");
+    const envContext: SourceContext = {
+      id: envKey,
+      getAnnotations() {
+        return { [envKey]: { value: true } };
+      },
+    };
+
+    const parser = multiple(argument(string()));
+    const result = runWithSync(parser, "test", [envContext], {
+      args: ["alpha"],
+    });
+
+    assert.deepEqual(result, ["alpha"]);
+  });
+
   it("should parse with static contexts synchronously", () => {
     const envKey = Symbol.for("@test/env");
     const envContext: SourceContext = {

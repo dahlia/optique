@@ -41,6 +41,7 @@ import {
   deriveFromAsync,
   deriveFromSync,
 } from "@optique/core/dependency";
+import { annotationKey } from "@optique/core/annotations";
 import {
   type InferValue,
   parse,
@@ -3394,6 +3395,19 @@ describe("command() with brief option", () => {
 
 describe("passThrough", () => {
   describe("equalsOnly format (default)", () => {
+    it("should return plain array without annotation symbols", () => {
+      const parser = passThrough();
+      const result = parse(parser, ["--foo=bar"], {
+        annotations: { [Symbol.for("@test/pass-through")]: "ok" },
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.value, ["--foo=bar"]);
+        const symbols = Object.getOwnPropertySymbols(result.value);
+        assert.ok(!symbols.includes(annotationKey));
+      }
+    });
+
     it("should capture --opt=val format options", () => {
       const parser = passThrough();
       const context = {

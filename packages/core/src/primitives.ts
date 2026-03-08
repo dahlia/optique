@@ -16,6 +16,7 @@ import {
   type PendingDependencySourceState,
   suggestWithDependency,
 } from "./dependency.ts";
+import { annotationKey, getAnnotations } from "./annotations.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
@@ -2321,6 +2322,20 @@ export function passThrough(
   const format = options.format ?? "equalsOnly";
   const optionPattern = /^-[a-z0-9-]|^--[a-z0-9-]+/i;
   const equalsOptionPattern = /^--[a-z0-9-]+=/i;
+  const annotateFreshArray = (
+    source: unknown,
+    target: readonly string[],
+  ): readonly string[] => {
+    const annotations = getAnnotations(source);
+    if (annotations === undefined) {
+      return target;
+    }
+    const annotated = target as readonly string[] & {
+      [annotationKey]?: unknown;
+    };
+    annotated[annotationKey] = annotations;
+    return annotated as readonly string[];
+  };
 
   return {
     $valueType: [],
@@ -2352,7 +2367,10 @@ export function passThrough(
           next: {
             ...context,
             buffer: [],
-            state: [...context.state, ...captured],
+            state: annotateFreshArray(context.state, [
+              ...context.state,
+              ...captured,
+            ]),
           },
           consumed: captured,
         };
@@ -2383,7 +2401,7 @@ export function passThrough(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
-            state: [...context.state, token],
+            state: annotateFreshArray(context.state, [...context.state, token]),
           },
           consumed: [token],
         };
@@ -2406,7 +2424,10 @@ export function passThrough(
             next: {
               ...context,
               buffer: context.buffer.slice(1),
-              state: [...context.state, token],
+              state: annotateFreshArray(context.state, [
+                ...context.state,
+                token,
+              ]),
             },
             consumed: [token],
           };
@@ -2421,7 +2442,11 @@ export function passThrough(
             next: {
               ...context,
               buffer: context.buffer.slice(2),
-              state: [...context.state, token, nextToken],
+              state: annotateFreshArray(context.state, [
+                ...context.state,
+                token,
+                nextToken,
+              ]),
             },
             consumed: [token, nextToken],
           };
@@ -2433,7 +2458,7 @@ export function passThrough(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
-            state: [...context.state, token],
+            state: annotateFreshArray(context.state, [...context.state, token]),
           },
           consumed: [token],
         };
@@ -2448,7 +2473,11 @@ export function passThrough(
     },
 
     complete(state) {
-      return { success: true, value: state };
+      if (getAnnotations(state) == null) {
+        return { success: true, value: state };
+      }
+      const copied: readonly string[] = [...state];
+      return { success: true, value: copied };
     },
 
     suggest(_context, _prefix) {

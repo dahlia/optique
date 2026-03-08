@@ -11,6 +11,13 @@ import {
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import {
+  annotationKey,
+  getAnnotations,
+  inheritAnnotations,
+  isInjectedAnnotationWrapper,
+  unwrapInjectedAnnotationWrapper,
+} from "./annotations.ts";
+import {
   dispatchByMode,
   dispatchIterableByMode,
   mapModeValue,
@@ -870,20 +877,113 @@ export function multiple<M extends Mode, TValue, TState>(
   type MultipleState = readonly TState[];
   type ParseResult = ParserResult<MultipleState>;
 
+  const unwrapInjectedWrapper = unwrapInjectedAnnotationWrapper;
+  const annotateFreshArray = <T>(source: unknown, target: readonly T[]) => {
+    const annotations = getAnnotations(source);
+    if (annotations === undefined) {
+      return target;
+    }
+    const annotated = target as readonly T[] & { [annotationKey]?: unknown };
+    annotated[annotationKey] = annotations;
+    return annotated as readonly T[];
+  };
+  const completeSyncWithUnwrappedFallback = (
+    state: TState,
+  ): ReturnType<typeof syncParser.complete> => {
+    try {
+      return syncParser.complete(state);
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(state)) {
+        throw error;
+      }
+      return syncParser.complete(unwrapInjectedWrapper(state));
+    }
+  };
+  const parseSyncWithUnwrappedFallback = (
+    context: ParserContext<TState>,
+  ): ReturnType<typeof syncParser.parse> => {
+    try {
+      const result = syncParser.parse(context);
+      if (
+        result.success ||
+        result.consumed !== 0 ||
+        !isInjectedAnnotationWrapper(context.state)
+      ) {
+        return result;
+      }
+      return syncParser.parse({
+        ...context,
+        state: unwrapInjectedWrapper(context.state),
+      });
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(context.state)) {
+        throw error;
+      }
+      return syncParser.parse({
+        ...context,
+        state: unwrapInjectedWrapper(context.state),
+      });
+    }
+  };
+  const completeAsyncWithUnwrappedFallback = async (
+    state: TState,
+  ): Promise<Awaited<ReturnType<typeof parser.complete>>> => {
+    try {
+      return await parser.complete(state);
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(state)) {
+        throw error;
+      }
+      return await parser.complete(unwrapInjectedWrapper(state));
+    }
+  };
+  const parseAsyncWithUnwrappedFallback = async (
+    context: ParserContext<TState>,
+  ): Promise<Awaited<ReturnType<typeof parser.parse>>> => {
+    try {
+      const result = await parser.parse(context);
+      if (
+        result.success ||
+        result.consumed !== 0 ||
+        !isInjectedAnnotationWrapper(context.state)
+      ) {
+        return result;
+      }
+      return await parser.parse({
+        ...context,
+        state: unwrapInjectedWrapper(context.state),
+      });
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(context.state)) {
+        throw error;
+      }
+      return await parser.parse({
+        ...context,
+        state: unwrapInjectedWrapper(context.state),
+      });
+    }
+  };
+
   // Sync parse implementation
   const parseSync = (
     context: ParserContext<MultipleState>,
   ): ParseResult => {
     let added = context.state.length < 1;
-    let result = syncParser.parse({
+    const currentItemStateWithAnnotations = context.state.at(-1) ??
+      inheritAnnotations(context.state, syncParser.initialState);
+    let result = parseSyncWithUnwrappedFallback({
       ...context,
-      state: context.state.at(-1) ?? syncParser.initialState,
+      state: currentItemStateWithAnnotations as TState,
     });
     if (!result.success) {
       if (!added) {
-        result = syncParser.parse({
+        const nextInitialState = inheritAnnotations(
+          context.state,
+          syncParser.initialState,
+        );
+        result = parseSyncWithUnwrappedFallback({
           ...context,
-          state: syncParser.initialState,
+          state: nextInitialState,
         });
         if (!result.success) return result;
         added = true;
@@ -891,14 +991,21 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
+    const itemAnnotationSource = added
+      ? context.state
+      : currentItemStateWithAnnotations;
+    const nextItemState = inheritAnnotations(
+      itemAnnotationSource,
+      result.next.state,
+    );
     return {
       success: true,
       next: {
         ...result.next,
-        state: [
+        state: annotateFreshArray(context.state, [
           ...(added ? context.state : context.state.slice(0, -1)),
-          result.next.state,
-        ],
+          nextItemState,
+        ]),
       },
       consumed: result.consumed,
     };
@@ -909,32 +1016,43 @@ export function multiple<M extends Mode, TValue, TState>(
     context: ParserContext<MultipleState>,
   ): Promise<ParseResult> => {
     let added = context.state.length < 1;
-    let resultOrPromise = parser.parse({
+    const currentItemStateWithAnnotations = context.state.at(-1) ??
+      inheritAnnotations(context.state, parser.initialState);
+    let result = await parseAsyncWithUnwrappedFallback({
       ...context,
-      state: context.state.at(-1) ?? parser.initialState,
+      state: currentItemStateWithAnnotations as TState,
     });
-    let result = await resultOrPromise;
     if (!result.success) {
       if (!added) {
-        resultOrPromise = parser.parse({
+        const nextInitialState = inheritAnnotations(
+          context.state,
+          parser.initialState,
+        );
+        result = await parseAsyncWithUnwrappedFallback({
           ...context,
-          state: parser.initialState,
+          state: nextInitialState,
         });
-        result = await resultOrPromise;
         if (!result.success) return result;
         added = true;
       } else {
         return result;
       }
     }
+    const itemAnnotationSource = added
+      ? context.state
+      : currentItemStateWithAnnotations;
+    const nextItemState = inheritAnnotations(
+      itemAnnotationSource,
+      result.next.state,
+    );
     return {
       success: true,
       next: {
         ...result.next,
-        state: [
+        state: annotateFreshArray(context.state, [
           ...(added ? context.state : context.state.slice(0, -1)),
-          result.next.state,
-        ],
+          nextItemState,
+        ]),
       },
       consumed: result.consumed,
     };
@@ -961,9 +1079,9 @@ export function multiple<M extends Mode, TValue, TState>(
           // Sync complete
           const result: TValue[] = [];
           for (const s of state) {
-            const valueResult = syncParser.complete(s);
+            const valueResult = completeSyncWithUnwrappedFallback(s as TState);
             if (valueResult.success) {
-              result.push(valueResult.value);
+              result.push(unwrapInjectedWrapper(valueResult.value));
             } else {
               return { success: false as const, error: valueResult.error };
             }
@@ -973,12 +1091,12 @@ export function multiple<M extends Mode, TValue, TState>(
         async () => {
           // Async complete - use Promise.all for parallel execution
           const results = await Promise.all(
-            state.map((s) => parser.complete(s)),
+            state.map((s) => completeAsyncWithUnwrappedFallback(s)),
           );
           const values: TValue[] = [];
           for (const valueResult of results) {
             if (valueResult.success) {
-              values.push(valueResult.value);
+              values.push(unwrapInjectedWrapper(valueResult.value));
             } else {
               return { success: false as const, error: valueResult.error };
             }
@@ -991,11 +1109,20 @@ export function multiple<M extends Mode, TValue, TState>(
       // Extract already-selected values from completed states to exclude them
       // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
       const selectedValues = new Set<string>();
+      const suggestInitialState = inheritAnnotations(
+        context.state,
+        parser.initialState,
+      );
+      const suggestFallbackState = unwrapInjectedWrapper(
+        suggestInitialState,
+      ) as TState;
+      const hasSuggestFallbackState = suggestFallbackState !==
+        suggestInitialState;
       for (const s of context.state) {
-        const completed = syncParser.complete(s as TState);
+        const completed = completeSyncWithUnwrappedFallback(s as TState);
         if (completed.success) {
           // Convert value to string for comparison with suggestion text
-          const valueStr = String(completed.value);
+          const valueStr = String(unwrapInjectedWrapper(completed.value));
           selectedValues.add(valueStr);
         }
       }
@@ -1007,26 +1134,89 @@ export function multiple<M extends Mode, TValue, TState>(
         }
         return true;
       };
+      const suggestionKey = (suggestion: Suggestion): string => {
+        const description = suggestion.description == null
+          ? ""
+          : formatMessage(suggestion.description);
+        if (suggestion.kind === "literal") {
+          return JSON.stringify(["literal", suggestion.text, description]);
+        }
+        return JSON.stringify([
+          "file",
+          suggestion.type,
+          suggestion.pattern ?? "",
+          suggestion.includeHidden === true,
+          suggestion.extensions == null ? "" : suggestion.extensions.join("\0"),
+          description,
+        ]);
+      };
 
       return dispatchIterableByMode(
         parser.$mode,
         function* () {
-          for (
-            const s of syncParser.suggest({
-              ...context,
-              state: parser.initialState as TState,
-            }, prefix)
-          ) {
-            if (shouldInclude(s)) yield s;
+          const emitted = new Set<string>();
+          const yieldUnique = function* (suggestions: Iterable<Suggestion>) {
+            for (const s of suggestions) {
+              const key = suggestionKey(s);
+              if (shouldInclude(s) && !emitted.has(key)) {
+                emitted.add(key);
+                yield s;
+              }
+            }
+          };
+          let shouldTryFallback = false;
+          try {
+            yield* yieldUnique(
+              syncParser.suggest({
+                ...context,
+                state: suggestInitialState as TState,
+              }, prefix),
+            );
+          } catch (error) {
+            if (!hasSuggestFallbackState) throw error;
+            shouldTryFallback = true;
+          }
+          if (shouldTryFallback) {
+            yield* yieldUnique(
+              syncParser.suggest({
+                ...context,
+                state: suggestFallbackState,
+              }, prefix),
+            );
           }
         },
         async function* () {
-          const suggestions = parser.suggest({
-            ...context,
-            state: parser.initialState,
-          }, prefix) as AsyncIterable<Suggestion>;
-          for await (const s of suggestions) {
-            if (shouldInclude(s)) yield s;
+          const emitted = new Set<string>();
+          const yieldUnique = async function* (
+            suggestions: AsyncIterable<Suggestion>,
+          ) {
+            for await (const s of suggestions) {
+              const key = suggestionKey(s);
+              if (shouldInclude(s) && !emitted.has(key)) {
+                emitted.add(key);
+                yield s;
+              }
+            }
+          };
+          let shouldTryFallback = false;
+          try {
+            yield* yieldUnique(
+              parser.suggest({
+                ...context,
+                state: suggestInitialState,
+              }, prefix) as AsyncIterable<Suggestion>,
+            );
+          } catch (error) {
+            if (!hasSuggestFallbackState) throw error;
+            shouldTryFallback = true;
+          }
+          if (shouldTryFallback) {
+            yield* yieldUnique(
+              parser.suggest({
+                ...context,
+                state: suggestFallbackState,
+              }, prefix) as AsyncIterable<Suggestion>,
+            );
           }
         },
       );
@@ -1035,10 +1225,17 @@ export function multiple<M extends Mode, TValue, TState>(
       state: DocState<MultipleState>,
       defaultValue?: readonly TValue[],
     ) {
+      const latestState = state.kind === "available" && state.state.length > 0
+        ? state.state.at(-1)!
+        : undefined;
+      const latestInnerState = latestState != null &&
+          isInjectedAnnotationWrapper(latestState)
+        ? unwrapInjectedWrapper(latestState)
+        : latestState;
       const innerState: DocState<TState> = state.kind === "unavailable"
         ? { kind: "unavailable" }
-        : state.state.length > 0
-        ? { kind: "available", state: state.state.at(-1)! }
+        : latestInnerState !== undefined
+        ? { kind: "available", state: latestInnerState as TState }
         : { kind: "unavailable" };
       return syncParser.getDocFragments(
         innerState,

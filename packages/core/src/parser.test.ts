@@ -1991,12 +1991,14 @@ describe("Annotations system", () => {
     const { parseSync } = await import("./parser.ts");
     let capturedState: unknown;
 
-    const baseParser = constant("ok");
+    const baseParser = object({ value: constant("ok") });
     const wrappedParser = {
       ...baseParser,
       complete: (state: unknown) => {
         capturedState = state;
-        return baseParser.complete(state as "ok");
+        return baseParser.complete(
+          state as { readonly value: "ok" },
+        );
       },
     };
 
@@ -2005,6 +2007,9 @@ describe("Annotations system", () => {
     });
 
     assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { value: "ok" });
+    }
     const annotations = getAnnotations(capturedState);
     assert.ok(annotations !== undefined);
     assert.equal(annotations[testKey], testData);
@@ -2017,12 +2022,14 @@ describe("Annotations system", () => {
     const { parseAsync } = await import("./parser.ts");
     let capturedState: unknown;
 
-    const baseParser = constant("ok");
+    const baseParser = object({ value: constant("ok") });
     const wrappedParser = {
       ...baseParser,
       complete: (state: unknown) => {
         capturedState = state;
-        return baseParser.complete(state as "ok");
+        return baseParser.complete(
+          state as { readonly value: "ok" },
+        );
       },
     };
 
@@ -2031,9 +2038,255 @@ describe("Annotations system", () => {
     });
 
     assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { value: "ok" });
+    }
     const annotations = getAnnotations(capturedState);
     assert.ok(annotations !== undefined);
     assert.equal(annotations[testKey], testData);
+  });
+
+  it("should preserve non-object parser value when annotations are provided", () => {
+    const testKey = Symbol.for("@test/non-object");
+    const result = parse(constant("ok"), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "ok");
+    }
+  });
+
+  it("should preserve non-object parser value in parseAsync()", async () => {
+    const testKey = Symbol.for("@test/non-object-async");
+    const { parseAsync } = await import("./parser.ts");
+    const result = await parseAsync(constant("ok"), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "ok");
+    }
+  });
+
+  it("should preserve array state annotations across state transitions", async () => {
+    const testKey = Symbol.for("@test/array-state");
+    const { getAnnotations } = await import("./annotations.ts");
+    const baseParser = multiple(argument(string()));
+    let capturedState: unknown;
+    const parser = {
+      ...baseParser,
+      complete: (state: unknown) => {
+        capturedState = state;
+        return baseParser.complete(state as typeof baseParser.initialState);
+      },
+    };
+    const result = parse(parser, ["a"], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["a"]);
+    }
+    const annotations = getAnnotations(capturedState);
+    assert.ok(annotations !== undefined);
+    assert.equal(annotations[testKey], "value");
+  });
+
+  it("should not unwrap regular objects that contain only internal value key", async () => {
+    const { annotationStateValueKey } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationStateValueKey]: "not-wrapper",
+    };
+    const result = parse(constant(value), []);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
+  it("should not unwrap objects without wrapper marker", async () => {
+    const testKey = Symbol.for("@test/unwrap-guard");
+    const {
+      annotationKey,
+      annotationStateValueKey,
+    } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationKey]: { [testKey]: "value" },
+      [annotationStateValueKey]: "not-wrapper",
+    };
+    const result = parse(constant(value), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
+  it("should not unwrap objects when wrapper marker is not true", async () => {
+    const testKey = Symbol.for("@test/unwrap-marker");
+    const {
+      annotationKey,
+      annotationStateValueKey,
+      annotationWrapperKey,
+    } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationKey]: { [testKey]: "value" },
+      [annotationStateValueKey]: "not-wrapper",
+      [annotationWrapperKey]: false,
+    };
+    const result = parse(constant(value), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
+  it("should not unwrap user-defined wrapper shape with annotations", async () => {
+    const testKey = Symbol.for("@test/user-wrapper-shape");
+    const {
+      annotationKey,
+      annotationStateValueKey,
+      annotationWrapperKey,
+    } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationKey]: { [testKey]: "value" },
+      [annotationStateValueKey]: "not-injected",
+      [annotationWrapperKey]: true,
+    };
+    const result = parse(constant(value), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
+  it("should not unwrap wrapper-shaped objects without annotations", async () => {
+    const {
+      annotationKey,
+      annotationStateValueKey,
+      annotationWrapperKey,
+    } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationKey]: {},
+      [annotationStateValueKey]: "not-wrapper",
+      [annotationWrapperKey]: true,
+    };
+    const result = parse(constant(value), []);
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
+  it("should not unwrap object state rebuilt from primitive wrapper", () => {
+    const parser: Parser<"sync", unknown, unknown> = {
+      $mode: "sync",
+      $stateType: [] as const,
+      $valueType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true as const,
+          consumed: [context.buffer[0] ?? ""],
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: {
+              ...(context.state as unknown as Record<PropertyKey, unknown>),
+              ok: true,
+            },
+          },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parse(parser, ["a"], {
+      annotations: { [Symbol.for("@test/unwrap-regression")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(typeof result.value, "object");
+      assert.ok(result.value !== null);
+      assert.ok((result.value as Record<string, unknown>).ok);
+    }
+  });
+
+  it("should not unwrap wrapper state mutated in place", async () => {
+    const {
+      annotationWrapperKey,
+      annotationStateValueKey,
+    } = await import("./annotations.ts");
+    const parser: Parser<"sync", unknown, unknown> = {
+      $mode: "sync",
+      $stateType: [] as const,
+      $valueType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: undefined,
+      parse(context) {
+        const nextState = context.state as Record<PropertyKey, unknown>;
+        nextState.ok = true;
+        return {
+          success: true as const,
+          consumed: [context.buffer[0] ?? ""],
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: nextState,
+          },
+        };
+      },
+      complete(state) {
+        return { success: true as const, value: state };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parse(parser, ["a"], {
+      annotations: { [Symbol.for("@test/unwrap-mutation")]: true },
+    });
+    assert.ok(result.success);
+    if (result.success) {
+      const value = result.value as Record<PropertyKey, unknown>;
+      assert.ok(value.ok);
+      assert.ok(value[annotationWrapperKey]);
+      assert.equal(value[annotationStateValueKey], undefined);
+    }
   });
 
   it("should support annotations in suggestSync() with non-object state", () => {

@@ -93,6 +93,12 @@ To be released.
     (e.g., `fail()` used with `bindConfig()`), which was broken by the
     earlier 0.10.6 fix that skipped injection entirely.  [[#131]]
 
+ -  Fixed annotation injection for parsers with primitive initial states.
+    Annotations are now preserved without corrupting the parser result value
+    (e.g., `constant("ok")` remains `"ok"` instead of becoming an
+    annotation object).  This affects annotation-enabled parse/run paths,
+    including `runWith()` and `runWithSync()`.  [[#146]]
+
  -  Extended `hidden` visibility controls from `boolean` to
     `boolean | "usage" | "doc" | "help"` across primitive parsers:
     `option()`, `flag()`, `argument()`, `command()`, and `passThrough()`.
@@ -171,6 +177,7 @@ To be released.
 [#143]: https://github.com/dahlia/optique/pull/143
 [#144]: https://github.com/dahlia/optique/issues/144
 [#145]: https://github.com/dahlia/optique/pull/145
+[#146]: https://github.com/dahlia/optique/pull/146
 
 ### @optique/config
 
