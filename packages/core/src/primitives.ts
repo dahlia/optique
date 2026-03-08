@@ -16,7 +16,7 @@ import {
   type PendingDependencySourceState,
   suggestWithDependency,
 } from "./dependency.ts";
-import { getAnnotations, inheritAnnotations } from "./annotations.ts";
+import { annotationKey, getAnnotations } from "./annotations.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
@@ -2322,6 +2322,20 @@ export function passThrough(
   const format = options.format ?? "equalsOnly";
   const optionPattern = /^-[a-z0-9-]|^--[a-z0-9-]+/i;
   const equalsOptionPattern = /^--[a-z0-9-]+=/i;
+  const annotateFreshArray = (
+    source: unknown,
+    target: readonly string[],
+  ): readonly string[] => {
+    const annotations = getAnnotations(source);
+    if (annotations === undefined) {
+      return target;
+    }
+    const annotated = target as readonly string[] & {
+      [annotationKey]?: unknown;
+    };
+    annotated[annotationKey] = annotations;
+    return annotated as readonly string[];
+  };
 
   return {
     $valueType: [],
@@ -2353,7 +2367,7 @@ export function passThrough(
           next: {
             ...context,
             buffer: [],
-            state: inheritAnnotations(context.state, [
+            state: annotateFreshArray(context.state, [
               ...context.state,
               ...captured,
             ]),
@@ -2387,7 +2401,7 @@ export function passThrough(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
-            state: inheritAnnotations(context.state, [...context.state, token]),
+            state: annotateFreshArray(context.state, [...context.state, token]),
           },
           consumed: [token],
         };
@@ -2410,7 +2424,7 @@ export function passThrough(
             next: {
               ...context,
               buffer: context.buffer.slice(1),
-              state: inheritAnnotations(context.state, [
+              state: annotateFreshArray(context.state, [
                 ...context.state,
                 token,
               ]),
@@ -2428,7 +2442,7 @@ export function passThrough(
             next: {
               ...context,
               buffer: context.buffer.slice(2),
-              state: inheritAnnotations(context.state, [
+              state: annotateFreshArray(context.state, [
                 ...context.state,
                 token,
                 nextToken,
@@ -2444,7 +2458,7 @@ export function passThrough(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
-            state: inheritAnnotations(context.state, [...context.state, token]),
+            state: annotateFreshArray(context.state, [...context.state, token]),
           },
           consumed: [token],
         };

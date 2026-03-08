@@ -4,12 +4,10 @@ import type { DependencyRegistryLike } from "./registry-types.ts";
 import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import {
-  annotationStateValueKey,
-  annotationWrapperKey,
-  annotationWrapperKeys,
   injectAnnotations,
   isInjectedAnnotationWrapper,
   type ParseOptions,
+  unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
 
@@ -373,25 +371,6 @@ function injectAnnotationsIntoState<TState>(
   return injectAnnotations(state, annotations);
 }
 
-function unwrapAnnotatedValue<T>(value: T): T {
-  if (value == null || typeof value !== "object") {
-    return value;
-  }
-  const valueRecord = value as Record<symbol, unknown>;
-  if (valueRecord[annotationWrapperKey] !== true) {
-    return value;
-  }
-  const ownKeys = Reflect.ownKeys(valueRecord);
-  if (
-    ownKeys.length === 3 &&
-    ownKeys.every((key) => annotationWrapperKeys.has(key)) &&
-    isInjectedAnnotationWrapper(value)
-  ) {
-    return valueRecord[annotationStateValueKey] as T;
-  }
-  return value;
-}
-
 /**
  * Parses an array of command-line arguments using the provided combined parser.
  * This function processes the input arguments, applying the parser to each
@@ -455,7 +434,7 @@ export function parseSync<T>(
     ? {
       success: true,
       value: shouldUnwrapAnnotatedValue
-        ? unwrapAnnotatedValue(endResult.value)
+        ? unwrapInjectedAnnotationWrapper(endResult.value)
         : endResult.value,
     }
     : { success: false, error: endResult.error };
@@ -521,7 +500,7 @@ export async function parseAsync<T>(
     ? {
       success: true,
       value: shouldUnwrapAnnotatedValue
-        ? unwrapAnnotatedValue(endResult.value)
+        ? unwrapInjectedAnnotationWrapper(endResult.value)
         : endResult.value,
     }
     : { success: false, error: endResult.error };

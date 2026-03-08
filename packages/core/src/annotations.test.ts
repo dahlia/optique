@@ -93,6 +93,41 @@ describe("injectAnnotations", () => {
     assert.equal(wrapper[annotationWrapperKey], true);
     assert.equal(wrapper[annotationStateValueKey], undefined);
   });
+
+  it("should preserve Date state shape", () => {
+    const marker = Symbol.for("@test/inject-date");
+    const source = new Date("2026-03-08T00:00:00.000Z");
+    const result = injectAnnotations(source, { [marker]: "ok" });
+
+    assert.ok(result instanceof Date);
+    assert.notEqual(result, source);
+    assert.equal(result.toISOString(), "2026-03-08T00:00:00.000Z");
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should preserve Map state shape", () => {
+    const marker = Symbol.for("@test/inject-map");
+    const source = new Map<string, number>([["a", 1]]);
+    const result = injectAnnotations(source, { [marker]: "ok" });
+
+    assert.ok(result instanceof Map);
+    assert.notEqual(result, source);
+    assert.equal(result.get("a"), 1);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should not mutate non-plain object states", () => {
+    class CustomState {
+      value = 1;
+    }
+    const source = new CustomState();
+    const result = injectAnnotations(source, {
+      [Symbol.for("@test/inject-nonplain")]: "ok",
+    });
+
+    assert.equal(result, source);
+    assert.equal(getAnnotations(result), undefined);
+  });
 });
 
 describe("inheritAnnotations", () => {

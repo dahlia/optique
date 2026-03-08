@@ -184,7 +184,9 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
  *
  * - Primitive, null, and undefined states are wrapped with internal metadata.
  * - Array states are cloned and annotated without mutating the original.
- * - Object states are shallow-cloned with annotations attached.
+ * - Plain object states are shallow-cloned with annotations attached.
+ * - Built-in object states (Date/Map/Set/RegExp) are cloned by constructor.
+ * - Other non-plain object states are returned unchanged.
  *
  * @param state The parser state to annotate.
  * @param annotations The annotations to inject.
@@ -236,10 +238,69 @@ export function injectAnnotations<TState>(
     )[annotationKey] = annotations;
     return state;
   }
+  if (state instanceof Date) {
+    const cloned = new Date(state.getTime()) as Date & {
+      [annotationKey]?: Annotations;
+    };
+    cloned[annotationKey] = annotations;
+    return cloned as TState;
+  }
+  if (state instanceof Map) {
+    const cloned = new Map(state) as Map<unknown, unknown> & {
+      [annotationKey]?: Annotations;
+    };
+    cloned[annotationKey] = annotations;
+    return cloned as TState;
+  }
+  if (state instanceof Set) {
+    const cloned = new Set(state) as Set<unknown> & {
+      [annotationKey]?: Annotations;
+    };
+    cloned[annotationKey] = annotations;
+    return cloned as TState;
+  }
+  if (state instanceof RegExp) {
+    const cloned = new RegExp(state) as RegExp & {
+      [annotationKey]?: Annotations;
+    };
+    cloned[annotationKey] = annotations;
+    return cloned as TState;
+  }
+  const proto = Object.getPrototypeOf(state);
+  if (proto !== Object.prototype && proto !== null) {
+    return state;
+  }
   return {
     ...(state as Record<PropertyKey, unknown>),
     [annotationKey]: annotations,
   } as TState;
+}
+
+/**
+ * Unwraps a primitive-state annotation wrapper injected by Optique internals.
+ *
+ * @param value Value to potentially unwrap.
+ * @returns The unwrapped primitive value when the input is an injected wrapper;
+ *          otherwise the original value.
+ * @internal
+ */
+export function unwrapInjectedAnnotationWrapper<T>(value: T): T {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  const valueRecord = value as Record<PropertyKey, unknown>;
+  if (valueRecord[annotationWrapperKey] !== true) {
+    return value;
+  }
+  const ownKeys = Reflect.ownKeys(valueRecord);
+  if (
+    ownKeys.length === 3 &&
+    ownKeys.every((key) => annotationWrapperKeys.has(key)) &&
+    isInjectedAnnotationWrapper(value)
+  ) {
+    return valueRecord[annotationStateValueKey] as T;
+  }
+  return value;
 }
 
 /**

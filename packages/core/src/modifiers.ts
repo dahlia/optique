@@ -11,11 +11,11 @@ import {
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import {
-  annotationStateValueKey,
-  annotationWrapperKey,
-  annotationWrapperKeys,
+  annotationKey,
+  getAnnotations,
   inheritAnnotations,
   isInjectedAnnotationWrapper,
+  unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 import {
   dispatchByMode,
@@ -877,23 +877,15 @@ export function multiple<M extends Mode, TValue, TState>(
   type MultipleState = readonly TState[];
   type ParseResult = ParserResult<MultipleState>;
 
-  const unwrapInjectedWrapper = <T>(state: T): T => {
-    if (state == null || typeof state !== "object") {
-      return state;
+  const unwrapInjectedWrapper = unwrapInjectedAnnotationWrapper;
+  const annotateFreshArray = <T>(source: unknown, target: readonly T[]) => {
+    const annotations = getAnnotations(source);
+    if (annotations === undefined) {
+      return target;
     }
-    const stateRecord = state as Record<PropertyKey, unknown>;
-    if (stateRecord[annotationWrapperKey] !== true) {
-      return state;
-    }
-    const ownKeys = Reflect.ownKeys(stateRecord);
-    if (
-      ownKeys.length !== 3 ||
-      !ownKeys.every((key) => annotationWrapperKeys.has(key)) ||
-      !isInjectedAnnotationWrapper(state)
-    ) {
-      return state;
-    }
-    return stateRecord[annotationStateValueKey] as T;
+    const annotated = target as readonly T[] & { [annotationKey]?: unknown };
+    annotated[annotationKey] = annotations;
+    return annotated as readonly T[];
   };
   const completeSyncWithUnwrappedFallback = (
     state: TState,
@@ -965,7 +957,7 @@ export function multiple<M extends Mode, TValue, TState>(
       success: true,
       next: {
         ...result.next,
-        state: inheritAnnotations(context.state, [
+        state: annotateFreshArray(context.state, [
           ...(added ? context.state : context.state.slice(0, -1)),
           nextItemState,
         ]),
@@ -1013,7 +1005,7 @@ export function multiple<M extends Mode, TValue, TState>(
       success: true,
       next: {
         ...result.next,
-        state: inheritAnnotations(context.state, [
+        state: annotateFreshArray(context.state, [
           ...(added ? context.state : context.state.slice(0, -1)),
           nextItemState,
         ]),
