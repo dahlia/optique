@@ -2242,15 +2242,8 @@ async function collectPhase1Annotations(
 
   for (const context of contexts) {
     const result = context.getAnnotations(undefined, options);
-    if (result instanceof Promise) {
-      hasDynamic = true;
-      annotationsList.push(await result);
-    } else {
-      if (Object.getOwnPropertySymbols(result).length === 0) {
-        hasDynamic = true;
-      }
-      annotationsList.push(result);
-    }
+    hasDynamic ||= needsTwoPhaseContext(context, result);
+    annotationsList.push(result instanceof Promise ? await result : result);
   }
 
   return {
@@ -2306,9 +2299,7 @@ function collectPhase1AnnotationsSync(
           "Use runWith() or runWithAsync() for async contexts.",
       );
     }
-    if (Object.getOwnPropertySymbols(result).length === 0) {
-      hasDynamic = true;
-    }
+    hasDynamic ||= needsTwoPhaseContext(context, result);
     annotationsList.push(result);
   }
 
@@ -2316,6 +2307,28 @@ function collectPhase1AnnotationsSync(
     annotations: mergeAnnotations(annotationsList),
     hasDynamic,
   };
+}
+
+/**
+ * Determines whether a context requires a second parse pass.
+ *
+ * Explicit `mode` declarations take precedence over legacy heuristics so
+ * static contexts are not forced into two-phase parsing when they return
+ * empty annotations or a Promise.
+ */
+function needsTwoPhaseContext(
+  context: SourceContext<unknown>,
+  result: Promise<Annotations> | Annotations,
+): boolean {
+  if (context.mode !== undefined) {
+    return context.mode === "dynamic";
+  }
+
+  if (result instanceof Promise) {
+    return true;
+  }
+
+  return Object.getOwnPropertySymbols(result).length === 0;
 }
 
 /**
