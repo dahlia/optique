@@ -1991,12 +1991,14 @@ describe("Annotations system", () => {
     const { parseSync } = await import("./parser.ts");
     let capturedState: unknown;
 
-    const baseParser = constant("ok");
+    const baseParser = object({ value: constant("ok") });
     const wrappedParser = {
       ...baseParser,
       complete: (state: unknown) => {
         capturedState = state;
-        return baseParser.complete(state as "ok");
+        return baseParser.complete(
+          state as { readonly value: "ok" },
+        );
       },
     };
 
@@ -2005,6 +2007,9 @@ describe("Annotations system", () => {
     });
 
     assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { value: "ok" });
+    }
     const annotations = getAnnotations(capturedState);
     assert.ok(annotations !== undefined);
     assert.equal(annotations[testKey], testData);
@@ -2017,12 +2022,14 @@ describe("Annotations system", () => {
     const { parseAsync } = await import("./parser.ts");
     let capturedState: unknown;
 
-    const baseParser = constant("ok");
+    const baseParser = object({ value: constant("ok") });
     const wrappedParser = {
       ...baseParser,
       complete: (state: unknown) => {
         capturedState = state;
-        return baseParser.complete(state as "ok");
+        return baseParser.complete(
+          state as { readonly value: "ok" },
+        );
       },
     };
 
@@ -2031,9 +2038,24 @@ describe("Annotations system", () => {
     });
 
     assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { value: "ok" });
+    }
     const annotations = getAnnotations(capturedState);
     assert.ok(annotations !== undefined);
     assert.equal(annotations[testKey], testData);
+  });
+
+  it("should preserve non-object parser value when annotations are provided", () => {
+    const testKey = Symbol.for("@test/non-object");
+    const result = parse(constant("ok"), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "ok");
+    }
   });
 
   it("should support annotations in suggestSync() with non-object state", () => {

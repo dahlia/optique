@@ -50,7 +50,11 @@ import {
   type Usage,
 } from "./usage.ts";
 import { string, type ValueParserResult } from "./valueparser.ts";
-import { annotationKey, type Annotations } from "./annotations.ts";
+import {
+  annotationKey,
+  type Annotations,
+  annotationStateValueKey,
+} from "./annotations.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
@@ -2815,12 +2819,17 @@ function injectAnnotationsIntoParser<
   annotations: Annotations,
 ): Parser<M, TValue, TState> {
   // Create a new initial state with annotations
-  const newInitialState = {
-    ...(typeof parser.initialState === "object" && parser.initialState !== null
-      ? parser.initialState
-      : {}),
-    [annotationKey]: annotations,
-  } as TState;
+  const newInitialState = (
+    parser.initialState != null && typeof parser.initialState === "object"
+      ? {
+        ...(parser.initialState as Record<PropertyKey, unknown>),
+        [annotationKey]: annotations,
+      }
+      : {
+        [annotationKey]: annotations,
+        [annotationStateValueKey]: parser.initialState,
+      }
+  ) as TState;
 
   // Return a parser with the new initial state
   return {

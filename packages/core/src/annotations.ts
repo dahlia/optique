@@ -18,6 +18,15 @@ export const annotationKey: unique symbol = Symbol.for(
 );
 
 /**
+ * Internal key for preserving primitive parser state values when annotations
+ * are injected into non-object states.
+ * @internal
+ */
+export const annotationStateValueKey: unique symbol = Symbol.for(
+  "@optique/core/parser/annotationStateValue",
+);
+
+/**
  * Annotations that can be passed to parsers during execution.
  * Allows external packages to provide additional data that parsers can access
  * during complete() or parse() phases.

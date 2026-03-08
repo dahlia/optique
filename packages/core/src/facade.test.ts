@@ -4439,6 +4439,22 @@ describe("runWith", () => {
 });
 
 describe("runWithSync", () => {
+  it("should preserve primitive parser state with annotations", () => {
+    const envKey = Symbol.for("@test/env-primitive");
+    const envContext: SourceContext = {
+      id: envKey,
+      getAnnotations() {
+        return { [envKey]: { HOST: "localhost" } };
+      },
+    };
+
+    const result = runWithSync(constant("ok"), "test", [envContext], {
+      args: [],
+    });
+
+    assert.equal(result, "ok");
+  });
+
   it("should parse with static contexts synchronously", () => {
     const envKey = Symbol.for("@test/env");
     const envContext: SourceContext = {

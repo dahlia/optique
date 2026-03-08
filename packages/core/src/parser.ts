@@ -3,7 +3,11 @@ import { type Message, message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
-import { annotationKey, type ParseOptions } from "./annotations.ts";
+import {
+  annotationKey,
+  annotationStateValueKey,
+  type ParseOptions,
+} from "./annotations.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
 
 export type { ParseOptions };
@@ -355,6 +359,37 @@ export type Result<T> =
     error: Message;
   };
 
+function injectAnnotationsIntoState<TState>(
+  state: TState,
+  options?: ParseOptions,
+): TState {
+  const annotations = options?.annotations;
+  if (annotations == null) {
+    return state;
+  }
+  if (state == null || typeof state !== "object") {
+    return {
+      [annotationKey]: annotations,
+      [annotationStateValueKey]: state,
+    } as TState;
+  }
+  return {
+    ...(state as Record<PropertyKey, unknown>),
+    [annotationKey]: annotations,
+  } as TState;
+}
+
+function unwrapAnnotatedValue<T>(value: T): T {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  const valueRecord = value as Record<symbol, unknown>;
+  if (annotationStateValueKey in valueRecord) {
+    return valueRecord[annotationStateValueKey] as T;
+  }
+  return value;
+}
+
 /**
  * Parses an array of command-line arguments using the provided combined parser.
  * This function processes the input arguments, applying the parser to each
@@ -382,17 +417,7 @@ export function parseSync<T>(
   args: readonly string[],
   options?: ParseOptions,
 ): Result<T> {
-  let initialState = parser.initialState;
-
-  // Inject annotations into state if provided
-  if (options?.annotations) {
-    initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
-      [annotationKey]: options.annotations,
-    } as unknown;
-  }
+  const initialState = injectAnnotationsIntoState(parser.initialState, options);
 
   let context: ParserContext<unknown> = {
     buffer: args,
@@ -423,7 +448,7 @@ export function parseSync<T>(
   } while (context.buffer.length > 0);
   const endResult = parser.complete(context.state);
   return endResult.success
-    ? { success: true, value: endResult.value }
+    ? { success: true, value: unwrapAnnotatedValue(endResult.value) }
     : { success: false, error: endResult.error };
 }
 
@@ -451,17 +476,7 @@ export async function parseAsync<T>(
   args: readonly string[],
   options?: ParseOptions,
 ): Promise<Result<T>> {
-  let initialState = parser.initialState;
-
-  // Inject annotations into state if provided
-  if (options?.annotations) {
-    initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
-      [annotationKey]: options.annotations,
-    } as unknown;
-  }
+  const initialState = injectAnnotationsIntoState(parser.initialState, options);
 
   let context: ParserContext<unknown> = {
     buffer: args,
@@ -492,7 +507,7 @@ export async function parseAsync<T>(
   } while (context.buffer.length > 0);
   const endResult = await parser.complete(context.state);
   return endResult.success
-    ? { success: true, value: endResult.value }
+    ? { success: true, value: unwrapAnnotatedValue(endResult.value) }
     : { success: false, error: endResult.error };
 }
 
@@ -574,17 +589,7 @@ export function suggestSync<T>(
   const allButLast = args.slice(0, -1);
   const prefix = args[args.length - 1];
 
-  let initialState = parser.initialState;
-
-  // Inject annotations into state if provided
-  if (options?.annotations) {
-    initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
-      [annotationKey]: options.annotations,
-    } as unknown;
-  }
+  const initialState = injectAnnotationsIntoState(parser.initialState, options);
 
   let context: ParserContext<unknown> = {
     buffer: allButLast,
@@ -646,17 +651,7 @@ export async function suggestAsync<T>(
   const allButLast = args.slice(0, -1);
   const prefix = args[args.length - 1];
 
-  let initialState = parser.initialState;
-
-  // Inject annotations into state if provided
-  if (options?.annotations) {
-    initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
-      [annotationKey]: options.annotations,
-    } as unknown;
-  }
+  const initialState = injectAnnotationsIntoState(parser.initialState, options);
 
   let context: ParserContext<unknown> = {
     buffer: allButLast,
@@ -906,17 +901,7 @@ function getDocPageSyncImpl(
   args: readonly string[],
   options?: ParseOptions,
 ): DocPage | undefined {
-  let initialState = parser.initialState;
-
-  // Inject annotations into state if provided
-  if (options?.annotations) {
-    initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
-      [annotationKey]: options.annotations,
-    } as unknown;
-  }
+  const initialState = injectAnnotationsIntoState(parser.initialState, options);
 
   let context: ParserContext<unknown> = {
     buffer: args,
@@ -940,17 +925,7 @@ async function getDocPageAsyncImpl(
   args: readonly string[],
   options?: ParseOptions,
 ): Promise<DocPage | undefined> {
-  let initialState = parser.initialState;
-
-  // Inject annotations into state if provided
-  if (options?.annotations) {
-    initialState = {
-      ...(typeof initialState === "object" && initialState !== null
-        ? initialState
-        : {}),
-      [annotationKey]: options.annotations,
-    } as unknown;
-  }
+  const initialState = injectAnnotationsIntoState(parser.initialState, options);
 
   let context: ParserContext<unknown> = {
     buffer: args,
