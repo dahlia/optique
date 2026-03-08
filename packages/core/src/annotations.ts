@@ -35,6 +35,19 @@ export const annotationWrapperKey: unique symbol = Symbol.for(
   "@optique/core/parser/annotationWrapper",
 );
 
+/**
+ * Internal symbol keys that define Optique's primitive-state annotation
+ * wrapper shape.
+ * @internal
+ */
+export const annotationWrapperKeys: ReadonlySet<PropertyKey> = new Set<
+  PropertyKey
+>([
+  annotationKey,
+  annotationStateValueKey,
+  annotationWrapperKey,
+]);
+
 const injectedAnnotationWrappers = new WeakSet<object>();
 
 /**
@@ -154,10 +167,8 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
     Object.getPrototypeOf(target) !== Object.prototype &&
     Object.getPrototypeOf(target) !== null
   ) {
-    if (Object.isExtensible(target)) {
-      (target as T & { [annotationKey]?: Annotations })[annotationKey] =
-        annotations;
-    }
+    // Avoid mutating non-plain objects because they may be shared parser
+    // initialState values, which can leak annotations across runs.
     return target;
   }
   const cloned = Object.create(

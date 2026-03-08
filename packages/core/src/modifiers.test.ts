@@ -2358,6 +2358,102 @@ describe("multiple", () => {
     );
   });
 
+  it("should fallback to unwrapped primitive initial state in suggest()", () => {
+    const parser = multiple({
+      $mode: "sync" as const,
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Expected a value.`,
+        };
+      },
+      suggest(context) {
+        if (typeof context.state !== "string") {
+          return [];
+        }
+        return [{ kind: "literal" as const, text: "primitive-ok" }];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const suggestions = [
+      ...parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [Symbol.for("@test/suggest-primitive-fallback")]: true,
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>,
+    ];
+    assert.ok(
+      suggestions.some((s) =>
+        s.kind === "literal" && s.text === "primitive-ok"
+      ),
+    );
+  });
+
+  it("should not leak annotations into non-plain suggest initial state", () => {
+    const marker = Symbol.for("@test/non-plain-suggest");
+    class CustomState {
+      value = 1;
+    }
+    const initialState = new CustomState();
+    const baseParser: Parser<"sync", string, CustomState> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState,
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Expected a value.`,
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = multiple(baseParser);
+    const suggestions = [
+      ...parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, { [marker]: "ok" }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>,
+    ];
+
+    assert.deepEqual(suggestions, []);
+    assert.equal(getAnnotations(initialState), undefined);
+  });
+
   it("should return empty array when no matches found in object context", () => {
     const parser = object({
       locales: multiple(option("-l", "--locale", string())),

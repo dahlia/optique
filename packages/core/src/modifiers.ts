@@ -11,9 +11,9 @@ import {
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import {
-  annotationKey,
   annotationStateValueKey,
   annotationWrapperKey,
+  annotationWrapperKeys,
   inheritAnnotations,
   isInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -888,9 +888,7 @@ export function multiple<M extends Mode, TValue, TState>(
     const ownKeys = Reflect.ownKeys(stateRecord);
     if (
       ownKeys.length !== 3 ||
-      !ownKeys.includes(annotationKey) ||
-      !ownKeys.includes(annotationStateValueKey) ||
-      !ownKeys.includes(annotationWrapperKey) ||
+      !ownKeys.every((key) => annotationWrapperKeys.has(key)) ||
       !isInjectedAnnotationWrapper(state)
     ) {
       return state;
@@ -1079,6 +1077,11 @@ export function multiple<M extends Mode, TValue, TState>(
         context.state,
         parser.initialState,
       );
+      const suggestFallbackState = unwrapInjectedWrapper(
+        suggestInitialState,
+      ) as TState;
+      const hasSuggestFallbackState = suggestFallbackState !==
+        suggestInitialState;
       for (const s of context.state) {
         const completed = completeSyncWithUnwrappedFallback(s as TState);
         if (completed.success) {
@@ -1095,26 +1098,73 @@ export function multiple<M extends Mode, TValue, TState>(
         }
         return true;
       };
+      const suggestionKey = (suggestion: Suggestion): string =>
+        JSON.stringify(suggestion);
 
       return dispatchIterableByMode(
         parser.$mode,
         function* () {
-          for (
-            const s of syncParser.suggest({
-              ...context,
-              state: suggestInitialState as TState,
-            }, prefix)
-          ) {
-            if (shouldInclude(s)) yield s;
+          const emitted = new Set<string>();
+          try {
+            for (
+              const s of syncParser.suggest({
+                ...context,
+                state: suggestInitialState as TState,
+              }, prefix)
+            ) {
+              const key = suggestionKey(s);
+              if (shouldInclude(s) && !emitted.has(key)) {
+                emitted.add(key);
+                yield s;
+              }
+            }
+          } catch (error) {
+            if (!hasSuggestFallbackState) throw error;
+          }
+          if (hasSuggestFallbackState) {
+            for (
+              const s of syncParser.suggest({
+                ...context,
+                state: suggestFallbackState,
+              }, prefix)
+            ) {
+              const key = suggestionKey(s);
+              if (shouldInclude(s) && !emitted.has(key)) {
+                emitted.add(key);
+                yield s;
+              }
+            }
           }
         },
         async function* () {
-          const suggestions = parser.suggest({
-            ...context,
-            state: suggestInitialState,
-          }, prefix) as AsyncIterable<Suggestion>;
-          for await (const s of suggestions) {
-            if (shouldInclude(s)) yield s;
+          const emitted = new Set<string>();
+          try {
+            const suggestions = parser.suggest({
+              ...context,
+              state: suggestInitialState,
+            }, prefix) as AsyncIterable<Suggestion>;
+            for await (const s of suggestions) {
+              const key = suggestionKey(s);
+              if (shouldInclude(s) && !emitted.has(key)) {
+                emitted.add(key);
+                yield s;
+              }
+            }
+          } catch (error) {
+            if (!hasSuggestFallbackState) throw error;
+          }
+          if (hasSuggestFallbackState) {
+            const fallbackSuggestions = parser.suggest({
+              ...context,
+              state: suggestFallbackState,
+            }, prefix) as AsyncIterable<Suggestion>;
+            for await (const s of fallbackSuggestions) {
+              const key = suggestionKey(s);
+              if (shouldInclude(s) && !emitted.has(key)) {
+                emitted.add(key);
+                yield s;
+              }
+            }
           }
         },
       );

@@ -154,4 +154,19 @@ describe("inheritAnnotations", () => {
     assert.equal(result.get("a"), 1);
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
+
+  it("should not mutate extensible non-plain objects", () => {
+    const marker = Symbol.for("@test/inherit-nonplain");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+    class CustomState {
+      value = 1;
+    }
+    const target = new CustomState();
+
+    const result = inheritAnnotations(source, target);
+
+    assert.equal(result, target);
+    assert.equal(result.value, 1);
+    assert.equal(getAnnotations(target), undefined);
+  });
 });

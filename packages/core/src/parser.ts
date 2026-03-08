@@ -4,9 +4,9 @@ import type { DependencyRegistryLike } from "./registry-types.ts";
 import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import {
-  annotationKey,
   annotationStateValueKey,
   annotationWrapperKey,
+  annotationWrapperKeys,
   injectAnnotations,
   isInjectedAnnotationWrapper,
   type ParseOptions,
@@ -361,12 +361,6 @@ export type Result<T> =
      */
     error: Message;
   };
-
-const annotationWrapperKeys = new Set<PropertyKey>([
-  annotationKey,
-  annotationStateValueKey,
-  annotationWrapperKey,
-]);
 
 function injectAnnotationsIntoState<TState>(
   state: TState,
