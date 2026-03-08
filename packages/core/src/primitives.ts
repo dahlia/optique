@@ -2476,7 +2476,8 @@ export function passThrough(
       if (getAnnotations(state) == null) {
         return { success: true, value: state };
       }
-      return { success: true, value: [...state] };
+      const copied: readonly string[] = [...state];
+      return { success: true, value: copied };
     },
 
     suggest(_context, _prefix) {
