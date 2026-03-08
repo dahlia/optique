@@ -4680,7 +4680,7 @@ type MergeValues<TParsers extends MergeParsers> = TParsers extends readonly [
   infer THead extends Parser<Mode, unknown, unknown>,
   ...infer TRest extends MergeParsers,
 ] ? ExtractObjectTypes<THead> & MergeValues<TRest>
-  : Record<never, never>;
+  : Record<string | symbol, unknown>;
 type MergeReturnType<TParsers extends MergeParsers> = Parser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   MergeValues<TParsers>,

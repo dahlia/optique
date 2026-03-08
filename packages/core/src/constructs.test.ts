@@ -3079,10 +3079,17 @@ describe("merge", () => {
     ];
 
     const parser = merge(...dynamicParsers);
+    type Inferred = InferValue<typeof parser>;
+    type Expected = Record<string | symbol, unknown>;
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+
     const result = parseSync(parser, []);
     assert.ok(result.success);
     if (result.success) {
-      const value = result.value as Record<string, unknown>;
+      const value = result.value;
       assert.equal(value.first, "first");
       assert.equal(value.second, "second");
     }
