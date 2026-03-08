@@ -16,6 +16,7 @@ import {
   type PendingDependencySourceState,
   suggestWithDependency,
 } from "./dependency.ts";
+import { inheritAnnotations } from "./annotations.ts";
 import type { DocFragment } from "./doc.ts";
 import { dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
@@ -2352,7 +2353,10 @@ export function passThrough(
           next: {
             ...context,
             buffer: [],
-            state: [...context.state, ...captured],
+            state: inheritAnnotations(context.state, [
+              ...context.state,
+              ...captured,
+            ]),
           },
           consumed: captured,
         };
@@ -2383,7 +2387,7 @@ export function passThrough(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
-            state: [...context.state, token],
+            state: inheritAnnotations(context.state, [...context.state, token]),
           },
           consumed: [token],
         };
@@ -2406,7 +2410,10 @@ export function passThrough(
             next: {
               ...context,
               buffer: context.buffer.slice(1),
-              state: [...context.state, token],
+              state: inheritAnnotations(context.state, [
+                ...context.state,
+                token,
+              ]),
             },
             consumed: [token],
           };
@@ -2421,7 +2428,11 @@ export function passThrough(
             next: {
               ...context,
               buffer: context.buffer.slice(2),
-              state: [...context.state, token, nextToken],
+              state: inheritAnnotations(context.state, [
+                ...context.state,
+                token,
+                nextToken,
+              ]),
             },
             consumed: [token, nextToken],
           };
@@ -2433,7 +2444,7 @@ export function passThrough(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
-            state: [...context.state, token],
+            state: inheritAnnotations(context.state, [...context.state, token]),
           },
           consumed: [token],
         };

@@ -2058,9 +2058,18 @@ describe("Annotations system", () => {
     }
   });
 
-  it("should preserve array state shape when annotations are provided", () => {
+  it("should preserve array state annotations across state transitions", async () => {
     const testKey = Symbol.for("@test/array-state");
-    const parser = multiple(argument(string()));
+    const { getAnnotations } = await import("./annotations.ts");
+    const baseParser = multiple(argument(string()));
+    let capturedState: unknown;
+    const parser = {
+      ...baseParser,
+      complete: (state: unknown) => {
+        capturedState = state;
+        return baseParser.complete(state as typeof baseParser.initialState);
+      },
+    };
     const result = parse(parser, ["a"], {
       annotations: { [testKey]: "value" },
     });
@@ -2069,6 +2078,9 @@ describe("Annotations system", () => {
     if (result.success) {
       assert.deepEqual(result.value, ["a"]);
     }
+    const annotations = getAnnotations(capturedState);
+    assert.ok(annotations !== undefined);
+    assert.equal(annotations[testKey], "value");
   });
 
   it("should not unwrap regular objects that contain only internal value key", async () => {

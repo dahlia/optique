@@ -10,6 +10,7 @@ import {
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
+import { inheritAnnotations } from "./annotations.ts";
 import {
   dispatchByMode,
   dispatchIterableByMode,
@@ -895,10 +896,10 @@ export function multiple<M extends Mode, TValue, TState>(
       success: true,
       next: {
         ...result.next,
-        state: [
+        state: inheritAnnotations(context.state, [
           ...(added ? context.state : context.state.slice(0, -1)),
           result.next.state,
-        ],
+        ]),
       },
       consumed: result.consumed,
     };
@@ -931,10 +932,10 @@ export function multiple<M extends Mode, TValue, TState>(
       success: true,
       next: {
         ...result.next,
-        state: [
+        state: inheritAnnotations(context.state, [
           ...(added ? context.state : context.state.slice(0, -1)),
           result.next.state,
-        ],
+        ]),
       },
       consumed: result.consumed,
     };

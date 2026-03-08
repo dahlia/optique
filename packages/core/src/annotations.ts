@@ -80,3 +80,28 @@ export function getAnnotations(state: unknown): Annotations | undefined {
   }
   return undefined;
 }
+
+/**
+ * Propagates annotations from one parser state to another.
+ *
+ * This is mainly used by parsers that rebuild array states with spread syntax.
+ * Array spread copies elements but drops custom symbol properties, so we need
+ * to reattach annotations explicitly when present.
+ *
+ * @param source The original state that may carry annotations.
+ * @param target The new state to receive annotations.
+ * @returns The target state, with annotations copied when available.
+ * @internal
+ */
+export function inheritAnnotations<T>(source: unknown, target: T): T {
+  if (target == null || typeof target !== "object") {
+    return target;
+  }
+  const annotations = getAnnotations(source);
+  if (annotations === undefined) {
+    return target;
+  }
+  (target as T & { [annotationKey]?: Annotations })[annotationKey] =
+    annotations;
+  return target;
+}
