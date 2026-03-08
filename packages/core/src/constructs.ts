@@ -1257,6 +1257,52 @@ export function or<
  * Creates a parser that combines eleven mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
+ * @template MH The mode of the eighth parser.
+ * @template MI The mode of the ninth parser.
+ * @template MJ The mode of the tenth parser.
+ * @template MK The mode of the eleventh parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TH The type of the value returned by the eighth parser.
+ * @template TI The type of the value returned by the ninth parser.
+ * @template TJ The type of the value returned by the tenth parser.
+ * @template TK The type of the value returned by the eleventh parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @template TStateH The type of the state used by the eighth parser.
+ * @template TStateI The type of the state used by the ninth parser.
+ * @template TStateJ The type of the state used by the tenth parser.
+ * @template TStateK The type of the state used by the eleventh parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @param h The eighth {@link Parser} to try.
+ * @param i The ninth {@link Parser} to try.
+ * @param j The tenth {@link Parser} to try.
+ * @param k The eleventh {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
  * @since 1.0.0
  */
 export function or<
@@ -1326,6 +1372,56 @@ export function or<
  * Creates a parser that combines twelve mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
+ * @template MH The mode of the eighth parser.
+ * @template MI The mode of the ninth parser.
+ * @template MJ The mode of the tenth parser.
+ * @template MK The mode of the eleventh parser.
+ * @template ML The mode of the twelfth parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TH The type of the value returned by the eighth parser.
+ * @template TI The type of the value returned by the ninth parser.
+ * @template TJ The type of the value returned by the tenth parser.
+ * @template TK The type of the value returned by the eleventh parser.
+ * @template TL The type of the value returned by the twelfth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @template TStateH The type of the state used by the eighth parser.
+ * @template TStateI The type of the state used by the ninth parser.
+ * @template TStateJ The type of the state used by the tenth parser.
+ * @template TStateK The type of the state used by the eleventh parser.
+ * @template TStateL The type of the state used by the twelfth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @param h The eighth {@link Parser} to try.
+ * @param i The ninth {@link Parser} to try.
+ * @param j The tenth {@link Parser} to try.
+ * @param k The eleventh {@link Parser} to try.
+ * @param l The twelfth {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
  * @since 1.0.0
  */
 export function or<
@@ -1400,6 +1496,60 @@ export function or<
  * Creates a parser that combines thirteen mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
+ * @template MH The mode of the eighth parser.
+ * @template MI The mode of the ninth parser.
+ * @template MJ The mode of the tenth parser.
+ * @template MK The mode of the eleventh parser.
+ * @template ML The mode of the twelfth parser.
+ * @template MM The mode of the thirteenth parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TH The type of the value returned by the eighth parser.
+ * @template TI The type of the value returned by the ninth parser.
+ * @template TJ The type of the value returned by the tenth parser.
+ * @template TK The type of the value returned by the eleventh parser.
+ * @template TL The type of the value returned by the twelfth parser.
+ * @template TM The type of the value returned by the thirteenth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @template TStateH The type of the state used by the eighth parser.
+ * @template TStateI The type of the state used by the ninth parser.
+ * @template TStateJ The type of the state used by the tenth parser.
+ * @template TStateK The type of the state used by the eleventh parser.
+ * @template TStateL The type of the state used by the twelfth parser.
+ * @template TStateM The type of the state used by the thirteenth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @param h The eighth {@link Parser} to try.
+ * @param i The ninth {@link Parser} to try.
+ * @param j The tenth {@link Parser} to try.
+ * @param k The eleventh {@link Parser} to try.
+ * @param l The twelfth {@link Parser} to try.
+ * @param m The thirteenth {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
  * @since 1.0.0
  */
 export function or<
@@ -1481,6 +1631,64 @@ export function or<
  * Creates a parser that combines fourteen mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
+ * @template MH The mode of the eighth parser.
+ * @template MI The mode of the ninth parser.
+ * @template MJ The mode of the tenth parser.
+ * @template MK The mode of the eleventh parser.
+ * @template ML The mode of the twelfth parser.
+ * @template MM The mode of the thirteenth parser.
+ * @template MN The mode of the fourteenth parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TH The type of the value returned by the eighth parser.
+ * @template TI The type of the value returned by the ninth parser.
+ * @template TJ The type of the value returned by the tenth parser.
+ * @template TK The type of the value returned by the eleventh parser.
+ * @template TL The type of the value returned by the twelfth parser.
+ * @template TM The type of the value returned by the thirteenth parser.
+ * @template TN The type of the value returned by the fourteenth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @template TStateH The type of the state used by the eighth parser.
+ * @template TStateI The type of the state used by the ninth parser.
+ * @template TStateJ The type of the state used by the tenth parser.
+ * @template TStateK The type of the state used by the eleventh parser.
+ * @template TStateL The type of the state used by the twelfth parser.
+ * @template TStateM The type of the state used by the thirteenth parser.
+ * @template TStateN The type of the state used by the fourteenth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @param h The eighth {@link Parser} to try.
+ * @param i The ninth {@link Parser} to try.
+ * @param j The tenth {@link Parser} to try.
+ * @param k The eleventh {@link Parser} to try.
+ * @param l The twelfth {@link Parser} to try.
+ * @param m The thirteenth {@link Parser} to try.
+ * @param n The fourteenth {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
  * @since 1.0.0
  */
 export function or<
@@ -1567,6 +1775,68 @@ export function or<
  * Creates a parser that combines fifteen mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
+ * @template MA The mode of the first parser.
+ * @template MB The mode of the second parser.
+ * @template MC The mode of the third parser.
+ * @template MD The mode of the fourth parser.
+ * @template ME The mode of the fifth parser.
+ * @template MF The mode of the sixth parser.
+ * @template MG The mode of the seventh parser.
+ * @template MH The mode of the eighth parser.
+ * @template MI The mode of the ninth parser.
+ * @template MJ The mode of the tenth parser.
+ * @template MK The mode of the eleventh parser.
+ * @template ML The mode of the twelfth parser.
+ * @template MM The mode of the thirteenth parser.
+ * @template MN The mode of the fourteenth parser.
+ * @template MO The mode of the fifteenth parser.
+ * @template TA The type of the value returned by the first parser.
+ * @template TB The type of the value returned by the second parser.
+ * @template TC The type of the value returned by the third parser.
+ * @template TD The type of the value returned by the fourth parser.
+ * @template TE The type of the value returned by the fifth parser.
+ * @template TF The type of the value returned by the sixth parser.
+ * @template TG The type of the value returned by the seventh parser.
+ * @template TH The type of the value returned by the eighth parser.
+ * @template TI The type of the value returned by the ninth parser.
+ * @template TJ The type of the value returned by the tenth parser.
+ * @template TK The type of the value returned by the eleventh parser.
+ * @template TL The type of the value returned by the twelfth parser.
+ * @template TM The type of the value returned by the thirteenth parser.
+ * @template TN The type of the value returned by the fourteenth parser.
+ * @template TO The type of the value returned by the fifteenth parser.
+ * @template TStateA The type of the state used by the first parser.
+ * @template TStateB The type of the state used by the second parser.
+ * @template TStateC The type of the state used by the third parser.
+ * @template TStateD The type of the state used by the fourth parser.
+ * @template TStateE The type of the state used by the fifth parser.
+ * @template TStateF The type of the state used by the sixth parser.
+ * @template TStateG The type of the state used by the seventh parser.
+ * @template TStateH The type of the state used by the eighth parser.
+ * @template TStateI The type of the state used by the ninth parser.
+ * @template TStateJ The type of the state used by the tenth parser.
+ * @template TStateK The type of the state used by the eleventh parser.
+ * @template TStateL The type of the state used by the twelfth parser.
+ * @template TStateM The type of the state used by the thirteenth parser.
+ * @template TStateN The type of the state used by the fourteenth parser.
+ * @template TStateO The type of the state used by the fifteenth parser.
+ * @param a The first {@link Parser} to try.
+ * @param b The second {@link Parser} to try.
+ * @param c The third {@link Parser} to try.
+ * @param d The fourth {@link Parser} to try.
+ * @param e The fifth {@link Parser} to try.
+ * @param f The sixth {@link Parser} to try.
+ * @param g The seventh {@link Parser} to try.
+ * @param h The eighth {@link Parser} to try.
+ * @param i The ninth {@link Parser} to try.
+ * @param j The tenth {@link Parser} to try.
+ * @param k The eleventh {@link Parser} to try.
+ * @param l The twelfth {@link Parser} to try.
+ * @param m The thirteenth {@link Parser} to try.
+ * @param n The fourteenth {@link Parser} to try.
+ * @param o The fifteenth {@link Parser} to try.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
  * @since 1.0.0
  */
 export function or<
