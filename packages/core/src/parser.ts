@@ -5,6 +5,7 @@ import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import {
   annotationKey,
+  type Annotations,
   annotationStateValueKey,
   annotationWrapperKey,
   type ParseOptions,
@@ -377,8 +378,9 @@ function injectAnnotationsIntoState<TState>(
   }
   if (Array.isArray(state)) {
     const cloned = [...state];
-    (cloned as unknown as Record<PropertyKey, unknown>)[annotationKey] =
-      annotations;
+    (cloned as typeof cloned & { [annotationKey]?: Annotations })[
+      annotationKey
+    ] = annotations;
     return cloned as TState;
   }
   return {

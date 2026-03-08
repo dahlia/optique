@@ -2824,8 +2824,9 @@ function injectAnnotationsIntoParser<
     Array.isArray(parser.initialState)
       ? (() => {
         const cloned = [...parser.initialState];
-        (cloned as unknown as Record<PropertyKey, unknown>)[annotationKey] =
-          annotations;
+        (cloned as typeof cloned & { [annotationKey]?: Annotations })[
+          annotationKey
+        ] = annotations;
         return cloned;
       })()
       : parser.initialState != null && typeof parser.initialState === "object"
