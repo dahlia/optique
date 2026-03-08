@@ -5377,8 +5377,28 @@ type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
  *
  * @example
  * ```typescript
- * const parser = concat(tuple([string()]), tuple([number()]));
- * // parser value: [string, number]
+ * import { parse } from "@optique/core/parser";
+ * import { option } from "@optique/core/primitives";
+ * import { integer, string } from "@optique/core/valueparser";
+ *
+ * const basicTuple = tuple([
+ *   option("-v", "--verbose"),
+ *   option("-p", "--port", integer()),
+ * ]);
+ *
+ * const serverTuple = tuple([
+ *   option("-h", "--host", string()),
+ *   option("-d", "--debug"),
+ * ]);
+ *
+ * const combined = concat(basicTuple, serverTuple);
+ * // Inferred type: Parser<..., [boolean, number, string, boolean], ...>
+ *
+ * const result = parse(
+ *   combined,
+ *   ["-v", "-p", "8080", "-h", "localhost", "-d"],
+ * );
+ * // result.value: [true, 8080, "localhost", true]
  * ```
  *
  * @param parsers Tuple parsers to concatenate.
