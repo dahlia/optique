@@ -1998,13 +1998,10 @@ describe("multiple", () => {
         };
       },
       complete(state) {
-        if (typeof state !== "string") {
-          return {
-            success: false as const,
-            error: message`Expected string state.`,
-          };
-        }
-        return { success: true as const, value: state.toUpperCase() };
+        return {
+          success: true as const,
+          value: unwrapPrimitiveState(state).toUpperCase(),
+        };
       },
       suggest() {
         return [];
@@ -2167,15 +2164,9 @@ describe("multiple", () => {
         });
       },
       complete(state) {
-        if (typeof state !== "string") {
-          return Promise.resolve({
-            success: false as const,
-            error: message`Expected string state.`,
-          });
-        }
         return Promise.resolve({
           success: true as const,
-          value: state.toUpperCase(),
+          value: unwrapPrimitiveState(state).toUpperCase(),
         });
       },
       async *suggest() {},
@@ -2321,7 +2312,7 @@ describe("multiple", () => {
     }
   });
 
-  it("should retry complete with unwrapped state after failure", () => {
+  it("should keep complete failure on annotated wrapper state", () => {
     const baseParser: Parser<"sync", string, string> = {
       $mode: "sync",
       $valueType: [] as const,
@@ -2365,13 +2356,13 @@ describe("multiple", () => {
     const result = parse(parser, ["alpha"], {
       annotations: { [Symbol.for("@test/fallback-complete-failure")]: true },
     });
-    assert.ok(result.success);
-    if (result.success) {
-      assert.deepEqual(result.value, ["ALPHA"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(formatMessage(result.error).includes("Expected string state."));
     }
   });
 
-  it("should retry async complete with unwrapped state after failure", async () => {
+  it("should keep async complete failure on annotated wrapper state", async () => {
     const baseParser: Parser<"async", string, string> = {
       $mode: "async",
       $valueType: [] as const,
@@ -2418,9 +2409,9 @@ describe("multiple", () => {
         [Symbol.for("@test/fallback-complete-failure-async")]: true,
       },
     });
-    assert.ok(result.success);
-    if (result.success) {
-      assert.deepEqual(result.value, ["ALPHA"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.ok(formatMessage(result.error).includes("Expected string state."));
     }
   });
 

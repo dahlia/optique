@@ -891,11 +891,7 @@ export function multiple<M extends Mode, TValue, TState>(
     state: TState,
   ): ReturnType<typeof syncParser.complete> => {
     try {
-      const result = syncParser.complete(state);
-      if (result.success || !isInjectedAnnotationWrapper(state)) {
-        return result;
-      }
-      return syncParser.complete(unwrapInjectedWrapper(state));
+      return syncParser.complete(state);
     } catch (error) {
       if (!isInjectedAnnotationWrapper(state)) {
         throw error;
@@ -933,11 +929,7 @@ export function multiple<M extends Mode, TValue, TState>(
     state: TState,
   ): Promise<Awaited<ReturnType<typeof parser.complete>>> => {
     try {
-      const result = await parser.complete(state);
-      if (result.success || !isInjectedAnnotationWrapper(state)) {
-        return result;
-      }
-      return await parser.complete(unwrapInjectedWrapper(state));
+      return await parser.complete(state);
     } catch (error) {
       if (!isInjectedAnnotationWrapper(state)) {
         throw error;
