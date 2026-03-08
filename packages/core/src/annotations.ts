@@ -166,6 +166,14 @@ export function injectAnnotations<TState>(
     ] = annotations;
     return cloned as TState;
   }
+  if (isInjectedAnnotationWrapper(state)) {
+    (
+      state as TState & {
+        [annotationKey]?: Annotations;
+      }
+    )[annotationKey] = annotations;
+    return state;
+  }
   return {
     ...(state as Record<PropertyKey, unknown>),
     [annotationKey]: annotations,

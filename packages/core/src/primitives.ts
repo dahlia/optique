@@ -2459,7 +2459,7 @@ export function passThrough(
     },
 
     complete(state) {
-      return { success: true, value: state };
+      return { success: true, value: [...state] };
     },
 
     suggest(_context, _prefix) {

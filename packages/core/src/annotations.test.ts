@@ -4,7 +4,11 @@ import * as fc from "fast-check";
 import {
   annotationKey,
   type Annotations,
+  annotationStateValueKey,
+  annotationWrapperKey,
   getAnnotations,
+  injectAnnotations,
+  isInjectedAnnotationWrapper,
 } from "./annotations.ts";
 
 describe("getAnnotations", () => {
@@ -70,5 +74,22 @@ describe("getAnnotations", () => {
         propertyParameters,
       );
     });
+  });
+});
+
+describe("injectAnnotations", () => {
+  it("should preserve wrapper markers when reinjecting injected wrappers", () => {
+    const first = injectAnnotations(undefined, { [Symbol.for("@test/a")]: 1 });
+    assert.ok(isInjectedAnnotationWrapper(first));
+
+    const second = injectAnnotations(first, { [Symbol.for("@test/b")]: 2 });
+    assert.equal(second, first);
+    assert.ok(isInjectedAnnotationWrapper(second));
+
+    const wrapper = second as unknown as Record<PropertyKey, unknown>;
+    assert.ok(Object.hasOwn(wrapper, annotationStateValueKey));
+    assert.ok(Object.hasOwn(wrapper, annotationWrapperKey));
+    assert.equal(wrapper[annotationWrapperKey], true);
+    assert.equal(wrapper[annotationStateValueKey], undefined);
   });
 });
