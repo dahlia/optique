@@ -387,13 +387,9 @@ function unwrapAnnotatedValue<T>(value: T): T {
     annotationWrapperKey,
   ]);
   const ownKeys = Reflect.ownKeys(valueRecord);
-  const hasUnexpectedKeys = ownKeys.some((key) => !wrapperKeys.has(key));
-  const hasRequiredKeys = ownKeys.includes(annotationKey) &&
-    ownKeys.includes(annotationStateValueKey) &&
-    ownKeys.includes(annotationWrapperKey);
   if (
-    !hasUnexpectedKeys &&
-    hasRequiredKeys &&
+    ownKeys.length === 3 &&
+    ownKeys.every((key) => wrapperKeys.has(key)) &&
     isInjectedAnnotationWrapper(value)
   ) {
     return valueRecord[annotationStateValueKey] as T;
