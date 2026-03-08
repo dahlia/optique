@@ -232,7 +232,7 @@ export interface OrOptions {
 /**
  * Context information about what types of inputs are expected,
  * used for generating contextual error messages.
- * @since 0.9.0
+ * @since 1.0.0
  */
 export interface NoMatchContext {
   /**
@@ -1256,7 +1256,7 @@ export function or<
  * Creates a parser that combines eleven mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
- * @since 0.9.0
+ * @since 1.0.0
  */
 export function or<
   MA extends Mode,
@@ -1325,7 +1325,7 @@ export function or<
  * Creates a parser that combines twelve mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
- * @since 0.9.0
+ * @since 1.0.0
  */
 export function or<
   MA extends Mode,
@@ -1399,7 +1399,7 @@ export function or<
  * Creates a parser that combines thirteen mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
- * @since 0.9.0
+ * @since 1.0.0
  */
 export function or<
   MA extends Mode,
@@ -1480,7 +1480,7 @@ export function or<
  * Creates a parser that combines fourteen mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
- * @since 0.9.0
+ * @since 1.0.0
  */
 export function or<
   MA extends Mode,
