@@ -2480,6 +2480,8 @@ type LongestMatchArityGuard<TParsers extends readonly unknown[]> =
  * Creates a parser that selects the successful branch that consumed
  * the most input tokens.
  *
+ * @param parsers Parsers to evaluate and compare by consumed input.
+ * @returns A parser that yields the best successful branch result.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.3.0
  */
@@ -2497,6 +2499,8 @@ export function longestMatch<
  * Creates a parser that selects the successful branch that consumed
  * the most input tokens.
  *
+ * @param parsers Parsers to evaluate and compare by consumed input.
+ * @returns A parser that yields the best successful branch result.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.3.0
  */
@@ -2514,6 +2518,8 @@ export function longestMatch<
  * Creates a parser that selects the successful branch that consumed
  * the most input tokens, with custom error options.
  *
+ * @param rest Parsers to compare, followed by error customization options.
+ * @returns A parser that yields the best successful branch result.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.5.0
  */
@@ -2533,6 +2539,8 @@ export function longestMatch<
  * Creates a parser that selects the successful branch that consumed
  * the most input tokens, with custom error options.
  *
+ * @param rest Parsers to compare, followed by error customization options.
+ * @returns A parser that yields the best successful branch result.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.5.0
  */
@@ -4690,6 +4698,8 @@ type MergeReturnType<TParsers extends MergeParsers> = Parser<
 /**
  * Merges multiple object-like parsers into one parser.
  *
+ * @param parsers Parsers to merge in declaration order.
+ * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.4.0
  */
@@ -4700,6 +4710,8 @@ export function merge<const TParsers extends MergeParsers>(
 /**
  * Merges multiple object-like parsers into one parser, with options.
  *
+ * @param rest Parsers to merge, followed by merge options.
+ * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.7.0
  */
@@ -4712,6 +4724,9 @@ export function merge<const TParsers extends MergeParsers>(
 /**
  * Merges multiple object-like parsers into one labeled parser.
  *
+ * @param label Label used in documentation output.
+ * @param parsers Parsers to merge in declaration order.
+ * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.4.0
  */
@@ -5317,6 +5332,8 @@ type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
 /**
  * Concatenates tuple parsers into one parser with a flattened tuple value.
  *
+ * @param parsers Tuple parsers to concatenate.
+ * @returns A parser with flattened tuple values from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
  * @since 0.2.0
  */
