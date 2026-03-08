@@ -163,6 +163,51 @@ describe("or", () => {
     assert.ok(resultC.success);
   });
 
+  it("should preserve inferred unions with up to fifteen parsers", () => {
+    const parser = or(
+      command("c1", constant("v1" as const)),
+      command("c2", constant("v2" as const)),
+      command("c3", constant("v3" as const)),
+      command("c4", constant("v4" as const)),
+      command("c5", constant("v5" as const)),
+      command("c6", constant("v6" as const)),
+      command("c7", constant("v7" as const)),
+      command("c8", constant("v8" as const)),
+      command("c9", constant("v9" as const)),
+      command("c10", constant("v10" as const)),
+      command("c11", constant("v11" as const)),
+      command("c12", constant("v12" as const)),
+      command("c13", constant("v13" as const)),
+      command("c14", constant("v14" as const)),
+      command("c15", constant("v15" as const)),
+    );
+
+    type Inferred = InferValue<typeof parser>;
+    const _check: Inferred = {} as
+      | "v1"
+      | "v2"
+      | "v3"
+      | "v4"
+      | "v5"
+      | "v6"
+      | "v7"
+      | "v8"
+      | "v9"
+      | "v10"
+      | "v11"
+      | "v12"
+      | "v13"
+      | "v14"
+      | "v15";
+    void _check;
+
+    const result = parseSync(parser, ["c15"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "v15");
+    }
+  });
+
   describe("getDocFragments", () => {
     it("should return fragments from all parsers when state is undefined", () => {
       const parser1 = option("-a", "--apple");

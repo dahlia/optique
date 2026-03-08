@@ -1226,6 +1226,423 @@ export function or<
 >;
 
 /**
+ * Creates a parser that combines eleven mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @since 0.9.0
+ */
+export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
+  MH extends Mode,
+  MI extends Mode,
+  MJ extends Mode,
+  MK extends Mode,
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TH,
+  TI,
+  TJ,
+  TK,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+  TStateH,
+  TStateI,
+  TStateJ,
+  TStateK,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
+  h: Parser<MH, TH, TStateH>,
+  i: Parser<MI, TI, TStateI>,
+  j: Parser<MJ, TJ, TStateJ>,
+  k: Parser<MK, TK, TStateK>,
+): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK]>,
+  TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+  | [7, ParserResult<TStateH>]
+  | [8, ParserResult<TStateI>]
+  | [9, ParserResult<TStateJ>]
+  | [10, ParserResult<TStateK>]
+>;
+
+/**
+ * Creates a parser that combines twelve mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @since 0.9.0
+ */
+export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
+  MH extends Mode,
+  MI extends Mode,
+  MJ extends Mode,
+  MK extends Mode,
+  ML extends Mode,
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TH,
+  TI,
+  TJ,
+  TK,
+  TL,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+  TStateH,
+  TStateI,
+  TStateJ,
+  TStateK,
+  TStateL,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
+  h: Parser<MH, TH, TStateH>,
+  i: Parser<MI, TI, TStateI>,
+  j: Parser<MJ, TJ, TStateJ>,
+  k: Parser<MK, TK, TStateK>,
+  l: Parser<ML, TL, TStateL>,
+): Parser<
+  CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML]>,
+  TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK | TL,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+  | [7, ParserResult<TStateH>]
+  | [8, ParserResult<TStateI>]
+  | [9, ParserResult<TStateJ>]
+  | [10, ParserResult<TStateK>]
+  | [11, ParserResult<TStateL>]
+>;
+
+/**
+ * Creates a parser that combines thirteen mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @since 0.9.0
+ */
+export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
+  MH extends Mode,
+  MI extends Mode,
+  MJ extends Mode,
+  MK extends Mode,
+  ML extends Mode,
+  MM extends Mode,
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TH,
+  TI,
+  TJ,
+  TK,
+  TL,
+  TM,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+  TStateH,
+  TStateI,
+  TStateJ,
+  TStateK,
+  TStateL,
+  TStateM,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
+  h: Parser<MH, TH, TStateH>,
+  i: Parser<MI, TI, TStateI>,
+  j: Parser<MJ, TJ, TStateJ>,
+  k: Parser<MK, TK, TStateK>,
+  l: Parser<ML, TL, TStateL>,
+  m: Parser<MM, TM, TStateM>,
+): Parser<
+  CombineModes<
+    readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML, MM]
+  >,
+  TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK | TL | TM,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+  | [7, ParserResult<TStateH>]
+  | [8, ParserResult<TStateI>]
+  | [9, ParserResult<TStateJ>]
+  | [10, ParserResult<TStateK>]
+  | [11, ParserResult<TStateL>]
+  | [12, ParserResult<TStateM>]
+>;
+
+/**
+ * Creates a parser that combines fourteen mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @since 0.9.0
+ */
+export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
+  MH extends Mode,
+  MI extends Mode,
+  MJ extends Mode,
+  MK extends Mode,
+  ML extends Mode,
+  MM extends Mode,
+  MN extends Mode,
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TH,
+  TI,
+  TJ,
+  TK,
+  TL,
+  TM,
+  TN,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+  TStateH,
+  TStateI,
+  TStateJ,
+  TStateK,
+  TStateL,
+  TStateM,
+  TStateN,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
+  h: Parser<MH, TH, TStateH>,
+  i: Parser<MI, TI, TStateI>,
+  j: Parser<MJ, TJ, TStateJ>,
+  k: Parser<MK, TK, TStateK>,
+  l: Parser<ML, TL, TStateL>,
+  m: Parser<MM, TM, TStateM>,
+  n: Parser<MN, TN, TStateN>,
+): Parser<
+  CombineModes<
+    readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML, MM, MN]
+  >,
+  TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK | TL | TM | TN,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+  | [7, ParserResult<TStateH>]
+  | [8, ParserResult<TStateI>]
+  | [9, ParserResult<TStateJ>]
+  | [10, ParserResult<TStateK>]
+  | [11, ParserResult<TStateL>]
+  | [12, ParserResult<TStateM>]
+  | [13, ParserResult<TStateN>]
+>;
+
+/**
+ * Creates a parser that combines fifteen mutually exclusive parsers into one.
+ * The resulting parser will try each of the provided parsers in order,
+ * and return the result of the first successful parser.
+ * @since 0.9.0
+ */
+export function or<
+  MA extends Mode,
+  MB extends Mode,
+  MC extends Mode,
+  MD extends Mode,
+  ME extends Mode,
+  MF extends Mode,
+  MG extends Mode,
+  MH extends Mode,
+  MI extends Mode,
+  MJ extends Mode,
+  MK extends Mode,
+  ML extends Mode,
+  MM extends Mode,
+  MN extends Mode,
+  MO extends Mode,
+  TA,
+  TB,
+  TC,
+  TD,
+  TE,
+  TF,
+  TG,
+  TH,
+  TI,
+  TJ,
+  TK,
+  TL,
+  TM,
+  TN,
+  TO,
+  TStateA,
+  TStateB,
+  TStateC,
+  TStateD,
+  TStateE,
+  TStateF,
+  TStateG,
+  TStateH,
+  TStateI,
+  TStateJ,
+  TStateK,
+  TStateL,
+  TStateM,
+  TStateN,
+  TStateO,
+>(
+  a: Parser<MA, TA, TStateA>,
+  b: Parser<MB, TB, TStateB>,
+  c: Parser<MC, TC, TStateC>,
+  d: Parser<MD, TD, TStateD>,
+  e: Parser<ME, TE, TStateE>,
+  f: Parser<MF, TF, TStateF>,
+  g: Parser<MG, TG, TStateG>,
+  h: Parser<MH, TH, TStateH>,
+  i: Parser<MI, TI, TStateI>,
+  j: Parser<MJ, TJ, TStateJ>,
+  k: Parser<MK, TK, TStateK>,
+  l: Parser<ML, TL, TStateL>,
+  m: Parser<MM, TM, TStateM>,
+  n: Parser<MN, TN, TStateN>,
+  o: Parser<MO, TO, TStateO>,
+): Parser<
+  CombineModes<
+    readonly [
+      MA,
+      MB,
+      MC,
+      MD,
+      ME,
+      MF,
+      MG,
+      MH,
+      MI,
+      MJ,
+      MK,
+      ML,
+      MM,
+      MN,
+      MO,
+    ]
+  >,
+  TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK | TL | TM | TN | TO,
+  | undefined
+  | [0, ParserResult<TStateA>]
+  | [1, ParserResult<TStateB>]
+  | [2, ParserResult<TStateC>]
+  | [3, ParserResult<TStateD>]
+  | [4, ParserResult<TStateE>]
+  | [5, ParserResult<TStateF>]
+  | [6, ParserResult<TStateG>]
+  | [7, ParserResult<TStateH>]
+  | [8, ParserResult<TStateI>]
+  | [9, ParserResult<TStateJ>]
+  | [10, ParserResult<TStateK>]
+  | [11, ParserResult<TStateL>]
+  | [12, ParserResult<TStateM>]
+  | [13, ParserResult<TStateN>]
+  | [14, ParserResult<TStateO>]
+>;
+
+/**
  * Creates a parser that combines two mutually exclusive parsers into one,
  * with custom error message options.
  * @template TA The type of the first parser.

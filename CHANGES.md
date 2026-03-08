@@ -30,6 +30,10 @@ To be released.
     for `bindConfig(fail<T>(), { … })` when a value should come only from a
     config file and has no corresponding CLI flag.  [[#120]]
 
+ -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
+    arguments, so large alternative sets keep precise union inference without
+    collapsing to `unknown` at 11+ arguments.  [[#142]]
+
  -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
     terms as double newlines in the output, instead of collapsing them to
     a single newline.  This makes paragraph breaks visually distinct from
@@ -145,6 +149,7 @@ To be released.
 [#138]: https://github.com/dahlia/optique/issues/138
 [#139]: https://github.com/dahlia/optique/issues/139
 [#141]: https://github.com/dahlia/optique/issues/141
+[#142]: https://github.com/dahlia/optique/issues/142
 
 ### @optique/config
 
