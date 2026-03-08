@@ -40,7 +40,7 @@ export const annotationWrapperKey: unique symbol = Symbol.for(
  * wrapper shape.
  * @internal
  */
-export const annotationWrapperKeys: ReadonlySet<PropertyKey> = new Set<
+const annotationWrapperKeys: ReadonlySet<PropertyKey> = new Set<
   PropertyKey
 >([
   annotationKey,

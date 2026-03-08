@@ -13,6 +13,12 @@ import {
 } from "./annotations.ts";
 
 describe("getAnnotations", () => {
+  it("should not expose internal wrapper key set", async () => {
+    const annotationsModule = await import("./annotations.ts");
+
+    assert.ok(!Object.hasOwn(annotationsModule, "annotationWrapperKeys"));
+  });
+
   it("should return undefined for non-object states", () => {
     assert.equal(getAnnotations(undefined), undefined);
     assert.equal(getAnnotations(null), undefined);
