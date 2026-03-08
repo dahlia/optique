@@ -2260,6 +2260,104 @@ describe("multiple", () => {
     );
   });
 
+  it("should pass annotations to inner suggest state", () => {
+    const annotation = Symbol.for("@test/multiple-suggest-annotations");
+    const baseParser: Parser<"sync", string, string> = {
+      $mode: "sync",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        };
+      },
+      complete() {
+        return {
+          success: false as const,
+          error: message`Expected a value.`,
+        };
+      },
+      suggest(context) {
+        if (getAnnotations(context.state)?.[annotation] !== "ok") {
+          return [];
+        }
+        return [{ kind: "literal" as const, text: "beta" }];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = [
+      ...parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [annotation]: "ok",
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as Iterable<Suggestion>,
+    ];
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
+    );
+  });
+
+  it("should pass annotations to async inner suggest state", async () => {
+    const annotation = Symbol.for("@test/multiple-suggest-annotations-async");
+    const baseParser: Parser<"async", string, string> = {
+      $mode: "async",
+      $valueType: [] as const,
+      $stateType: [] as const,
+      priority: 0,
+      usage: [],
+      initialState: "",
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`Expected a value.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({
+          success: false as const,
+          error: message`Expected a value.`,
+        });
+      },
+      async *suggest(context) {
+        if (getAnnotations(context.state)?.[annotation] !== "ok") {
+          return;
+        }
+        yield { kind: "literal" as const, text: "beta" };
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = multiple(baseParser);
+    const suggestions = await collectSuggestions(
+      parser.suggest({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, {
+          [annotation]: "ok",
+        }),
+        optionsTerminated: false,
+        usage: parser.usage,
+      }, "") as AsyncIterable<Suggestion>,
+    );
+    assert.ok(
+      suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
+    );
+  });
+
   it("should return empty array when no matches found in object context", () => {
     const parser = object({
       locales: multiple(option("-l", "--locale", string())),

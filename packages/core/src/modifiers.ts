@@ -1075,6 +1075,10 @@ export function multiple<M extends Mode, TValue, TState>(
       // Extract already-selected values from completed states to exclude them
       // from suggestions (fixes https://github.com/dahlia/optique/issues/73)
       const selectedValues = new Set<string>();
+      const suggestInitialState = inheritAnnotations(
+        context.state,
+        parser.initialState,
+      );
       for (const s of context.state) {
         const completed = completeSyncWithUnwrappedFallback(s as TState);
         if (completed.success) {
@@ -1098,7 +1102,7 @@ export function multiple<M extends Mode, TValue, TState>(
           for (
             const s of syncParser.suggest({
               ...context,
-              state: parser.initialState as TState,
+              state: suggestInitialState as TState,
             }, prefix)
           ) {
             if (shouldInclude(s)) yield s;
@@ -1107,7 +1111,7 @@ export function multiple<M extends Mode, TValue, TState>(
         async function* () {
           const suggestions = parser.suggest({
             ...context,
-            state: parser.initialState,
+            state: suggestInitialState,
           }, prefix) as AsyncIterable<Suggestion>;
           for await (const s of suggestions) {
             if (shouldInclude(s)) yield s;
