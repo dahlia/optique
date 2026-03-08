@@ -4770,7 +4770,7 @@ export function merge<const TParsers extends MergeParsers>(
  * @param parsers Parsers to merge in declaration order.
  * @returns A parser that merges parsed object fields from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
- * @since 0.4.0
+ * @since 0.2.0
  */
 export function merge<const TParsers extends MergeParsers>(
   ...parsers: EnsureMergeParsers<TParsers> & MergeArityGuard<TParsers>
