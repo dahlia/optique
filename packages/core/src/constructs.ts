@@ -5304,11 +5304,15 @@ type ConcatStates<TParsers extends ConcatParsers> = {
   > ? TState
     : never;
 };
-type ConcatValues<TParsers extends ConcatParsers> = TParsers extends readonly [
-  Parser<Mode, infer THead extends readonly unknown[], unknown>,
-  ...infer TRest extends ConcatParsers,
-] ? [...THead, ...ConcatValues<TRest>]
+type ConcatTupleValues<TParsers extends ConcatParsers> = TParsers extends
+  readonly [
+    Parser<Mode, infer THead extends readonly unknown[], unknown>,
+    ...infer TRest extends ConcatParsers,
+  ] ? [...THead, ...ConcatTupleValues<TRest>]
   : [];
+type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
+  true ? ConcatTupleValues<TParsers>
+  : readonly unknown[];
 
 /**
  * Concatenates tuple parsers into one parser with a flattened tuple value.

@@ -4740,6 +4740,13 @@ describe("concat", () => {
     ];
 
     const parser = concat(...dynamicParsers);
+    type Inferred = InferValue<typeof parser>;
+    type Expected = readonly unknown[];
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+
     const result = parseSync(parser, []);
     assert.ok(result.success);
     if (result.success) {
