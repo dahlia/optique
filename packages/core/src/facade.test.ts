@@ -4455,6 +4455,23 @@ describe("runWithSync", () => {
     assert.equal(result, "ok");
   });
 
+  it("should preserve array parser state shape with annotations", () => {
+    const envKey = Symbol.for("@test/env-array");
+    const envContext: SourceContext = {
+      id: envKey,
+      getAnnotations() {
+        return { [envKey]: { value: true } };
+      },
+    };
+
+    const parser = multiple(argument(string()));
+    const result = runWithSync(parser, "test", [envContext], {
+      args: ["alpha"],
+    });
+
+    assert.deepEqual(result, ["alpha"]);
+  });
+
   it("should parse with static contexts synchronously", () => {
     const envKey = Symbol.for("@test/env");
     const envContext: SourceContext = {
