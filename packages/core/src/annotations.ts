@@ -117,6 +117,13 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
       annotations;
     return target;
   }
+  if (Array.isArray(target)) {
+    const cloned = [...target];
+    (cloned as typeof cloned & { [annotationKey]?: Annotations })[
+      annotationKey
+    ] = annotations;
+    return cloned as T;
+  }
   const cloned = Object.create(
     Object.getPrototypeOf(target),
     Object.getOwnPropertyDescriptors(target),
