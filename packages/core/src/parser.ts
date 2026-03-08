@@ -373,6 +373,12 @@ function injectAnnotationsIntoState<TState>(
       [annotationStateValueKey]: state,
     } as TState;
   }
+  if (Array.isArray(state)) {
+    const cloned = [...state];
+    (cloned as unknown as Record<PropertyKey, unknown>)[annotationKey] =
+      annotations;
+    return cloned as TState;
+  }
   return {
     ...(state as Record<PropertyKey, unknown>),
     [annotationKey]: annotations,
