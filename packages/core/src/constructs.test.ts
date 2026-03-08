@@ -2992,6 +2992,50 @@ describe("merge", () => {
     void _checkInferredAssignableToExpected;
   });
 
+  it("should preserve inferred object types with label up to fifteen parsers", () => {
+    const parser = merge(
+      "group",
+      object({ k1: constant("v1" as const) }),
+      object({ k2: constant("v2" as const) }),
+      object({ k3: constant("v3" as const) }),
+      object({ k4: constant("v4" as const) }),
+      object({ k5: constant("v5" as const) }),
+      object({ k6: constant("v6" as const) }),
+      object({ k7: constant("v7" as const) }),
+      object({ k8: constant("v8" as const) }),
+      object({ k9: constant("v9" as const) }),
+      object({ k10: constant("v10" as const) }),
+      object({ k11: constant("v11" as const) }),
+      object({ k12: constant("v12" as const) }),
+      object({ k13: constant("v13" as const) }),
+      object({ k14: constant("v14" as const) }),
+      object({ k15: constant("v15" as const) }),
+    );
+
+    type Inferred = InferValue<typeof parser>;
+    type Expected = {
+      readonly k1: "v1";
+      readonly k2: "v2";
+      readonly k3: "v3";
+      readonly k4: "v4";
+      readonly k5: "v5";
+      readonly k6: "v6";
+      readonly k7: "v7";
+      readonly k8: "v8";
+      readonly k9: "v9";
+      readonly k10: "v10";
+      readonly k11: "v11";
+      readonly k12: "v12";
+      readonly k13: "v13";
+      readonly k14: "v14";
+      readonly k15: "v15";
+    };
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+  });
+
   it("should report type-level arity error for sixteen parsers", () => {
     const parsers = [
       object({ k1: constant("v1" as const) }),
