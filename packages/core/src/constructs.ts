@@ -4756,6 +4756,7 @@ export function merge<const TParsers extends MergeParsers>(
   label: string,
   ...parsers: EnsureMergeParsers<TParsers> & MergeArityGuard<TParsers>
 ): MergeReturnType<TParsers>;
+
 /**
  * Merges multiple object-like parsers into one labeled parser, with options.
  *
