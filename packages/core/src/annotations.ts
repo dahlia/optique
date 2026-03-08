@@ -114,3 +114,39 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
     annotations;
   return target;
 }
+
+/**
+ * Injects annotations into parser state while preserving state shape.
+ *
+ * - Primitive, null, and undefined states are wrapped with internal metadata.
+ * - Array states are cloned and annotated without mutating the original.
+ * - Object states are shallow-cloned with annotations attached.
+ *
+ * @param state The parser state to annotate.
+ * @param annotations The annotations to inject.
+ * @returns Annotated state.
+ * @internal
+ */
+export function injectAnnotations<TState>(
+  state: TState,
+  annotations: Annotations,
+): TState {
+  if (state == null || typeof state !== "object") {
+    return {
+      [annotationKey]: annotations,
+      [annotationStateValueKey]: state,
+      [annotationWrapperKey]: true,
+    } as TState;
+  }
+  if (Array.isArray(state)) {
+    const cloned = [...state];
+    (cloned as typeof cloned & { [annotationKey]?: Annotations })[
+      annotationKey
+    ] = annotations;
+    return cloned as TState;
+  }
+  return {
+    ...(state as Record<PropertyKey, unknown>),
+    [annotationKey]: annotations,
+  } as TState;
+}

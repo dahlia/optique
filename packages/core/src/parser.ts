@@ -5,9 +5,9 @@ import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import {
   annotationKey,
-  type Annotations,
   annotationStateValueKey,
   annotationWrapperKey,
+  injectAnnotations,
   type ParseOptions,
 } from "./annotations.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
@@ -369,24 +369,7 @@ function injectAnnotationsIntoState<TState>(
   if (annotations == null) {
     return state;
   }
-  if (state == null || typeof state !== "object") {
-    return {
-      [annotationKey]: annotations,
-      [annotationStateValueKey]: state,
-      [annotationWrapperKey]: true,
-    } as TState;
-  }
-  if (Array.isArray(state)) {
-    const cloned = [...state];
-    (cloned as typeof cloned & { [annotationKey]?: Annotations })[
-      annotationKey
-    ] = annotations;
-    return cloned as TState;
-  }
-  return {
-    ...(state as Record<PropertyKey, unknown>),
-    [annotationKey]: annotations,
-  } as TState;
+  return injectAnnotations(state, annotations);
 }
 
 function unwrapAnnotatedValue<T>(value: T): T {
