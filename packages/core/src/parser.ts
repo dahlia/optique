@@ -378,16 +378,23 @@ function unwrapAnnotatedValue<T>(value: T): T {
     return value;
   }
   const valueRecord = value as Record<symbol, unknown>;
+  if (valueRecord[annotationWrapperKey] !== true) {
+    return value;
+  }
+  const wrapperKeys = new Set<PropertyKey>([
+    annotationKey,
+    annotationStateValueKey,
+    annotationWrapperKey,
+  ]);
   const ownKeys = Reflect.ownKeys(valueRecord);
-  const isInternalWrapperShape = ownKeys.length === 3 &&
-    ownKeys.every((key) =>
-      key === annotationKey ||
-      key === annotationStateValueKey ||
-      key === annotationWrapperKey
-    );
+  const hasUnexpectedKeys = ownKeys.some((key) => !wrapperKeys.has(key));
+  const hasRequiredKeys = ownKeys.includes(annotationKey) &&
+    ownKeys.includes(annotationStateValueKey) &&
+    ownKeys.includes(annotationWrapperKey);
   if (
-    isInternalWrapperShape &&
-    valueRecord[annotationWrapperKey] === true
+    !hasUnexpectedKeys &&
+    hasRequiredKeys &&
+    isInjectedAnnotationWrapper(value)
   ) {
     return valueRecord[annotationStateValueKey] as T;
   }

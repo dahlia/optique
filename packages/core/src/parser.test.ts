@@ -2141,6 +2141,29 @@ describe("Annotations system", () => {
     }
   });
 
+  it("should not unwrap user-defined wrapper shape with annotations", async () => {
+    const testKey = Symbol.for("@test/user-wrapper-shape");
+    const {
+      annotationKey,
+      annotationStateValueKey,
+      annotationWrapperKey,
+    } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationKey]: { [testKey]: "value" },
+      [annotationStateValueKey]: "not-injected",
+      [annotationWrapperKey]: true,
+    };
+    const result = parse(constant(value), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
   it("should not unwrap wrapper-shaped objects without annotations", async () => {
     const {
       annotationKey,
