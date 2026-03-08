@@ -945,6 +945,32 @@ export function multiple<M extends Mode, TValue, TState>(
       return await parser.complete(unwrapInjectedWrapper(state));
     }
   };
+  const parseAsyncWithUnwrappedFallback = async (
+    context: ParserContext<TState>,
+  ): Promise<Awaited<ReturnType<typeof parser.parse>>> => {
+    try {
+      const result = await parser.parse(context);
+      if (
+        result.success ||
+        result.consumed !== 0 ||
+        !isInjectedAnnotationWrapper(context.state)
+      ) {
+        return result;
+      }
+      return await parser.parse({
+        ...context,
+        state: unwrapInjectedWrapper(context.state),
+      });
+    } catch (error) {
+      if (!isInjectedAnnotationWrapper(context.state)) {
+        throw error;
+      }
+      return await parser.parse({
+        ...context,
+        state: unwrapInjectedWrapper(context.state),
+      });
+    }
+  };
 
   // Sync parse implementation
   const parseSync = (
@@ -999,22 +1025,21 @@ export function multiple<M extends Mode, TValue, TState>(
   ): Promise<ParseResult> => {
     let added = context.state.length < 1;
     const currentItemStateWithAnnotations = context.state.at(-1) ??
-      parser.initialState;
-    const currentItemState = unwrapInjectedWrapper(
-      currentItemStateWithAnnotations,
-    );
-    let resultOrPromise = parser.parse({
+      inheritAnnotations(context.state, parser.initialState);
+    let result = await parseAsyncWithUnwrappedFallback({
       ...context,
-      state: currentItemState,
+      state: currentItemStateWithAnnotations as TState,
     });
-    let result = await resultOrPromise;
     if (!result.success) {
       if (!added) {
-        resultOrPromise = parser.parse({
+        const nextInitialState = inheritAnnotations(
+          context.state,
+          parser.initialState,
+        );
+        result = await parseAsyncWithUnwrappedFallback({
           ...context,
-          state: parser.initialState,
+          state: nextInitialState,
         });
-        result = await resultOrPromise;
         if (!result.success) return result;
         added = true;
       } else {
