@@ -5372,6 +5372,15 @@ type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
 /**
  * Concatenates tuple parsers into one parser with a flattened tuple value.
  *
+ * Unlike {@link merge}, which combines object fields, this combines tuple
+ * entries in order into one flattened tuple value.
+ *
+ * @example
+ * ```typescript
+ * const parser = concat(tuple([string()]), tuple([number()]));
+ * // parser value: [string, number]
+ * ```
+ *
  * @param parsers Tuple parsers to concatenate.
  * @returns A parser with flattened tuple values from all parsers.
  * Type inference is precise for tuple calls up to 15 parser arguments.
