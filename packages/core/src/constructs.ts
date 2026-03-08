@@ -1566,7 +1566,7 @@ export function or<
  * Creates a parser that combines fifteen mutually exclusive parsers into one.
  * The resulting parser will try each of the provided parsers in order,
  * and return the result of the first successful parser.
- * @since 0.9.0
+ * @since 1.0.0
  */
 export function or<
   MA extends Mode,
