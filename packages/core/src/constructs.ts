@@ -2480,6 +2480,9 @@ type LongestMatchArityGuard<TParsers extends readonly unknown[]> =
  * Creates a parser that selects the successful branch that consumed
  * the most input tokens.
  *
+ * The resulting parser tries every given parser and returns the
+ * successful result that consumed more input than the others.
+ *
  * @param parsers Parsers to evaluate and compare by consumed input.
  * @returns A parser that yields the best successful branch result.
  * Type inference is precise for tuple calls up to 15 parser arguments.
@@ -2499,6 +2502,9 @@ export function longestMatch<
  * Creates a parser that selects the successful branch that consumed
  * the most input tokens.
  *
+ * The resulting parser tries every given parser and returns the
+ * successful result that consumed more input than the others.
+ *
  * @param parsers Parsers to evaluate and compare by consumed input.
  * @returns A parser that yields the best successful branch result.
  * Type inference is precise for tuple calls up to 15 parser arguments.
@@ -2517,6 +2523,9 @@ export function longestMatch<
 /**
  * Creates a parser that selects the successful branch that consumed
  * the most input tokens, with custom error options.
+ *
+ * The resulting parser tries every given parser and returns the
+ * successful result that consumed more input than the others.
  *
  * @param rest Parsers to compare, followed by error customization options.
  * @returns A parser that yields the best successful branch result.
