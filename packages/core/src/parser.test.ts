@@ -2097,6 +2097,27 @@ describe("Annotations system", () => {
     }
   });
 
+  it("should not unwrap objects without wrapper marker", async () => {
+    const testKey = Symbol.for("@test/unwrap-guard");
+    const {
+      annotationKey,
+      annotationStateValueKey,
+    } = await import("./annotations.ts");
+    const value = {
+      ok: true,
+      [annotationKey]: { [testKey]: "value" },
+      [annotationStateValueKey]: "not-wrapper",
+    };
+    const result = parse(constant(value), [], {
+      annotations: { [testKey]: "value" },
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, value);
+    }
+  });
+
   it("should support annotations in suggestSync() with non-object state", () => {
     const testKey = Symbol.for("@test/suggest-sync");
     const parser = constant("ok");

@@ -6,6 +6,7 @@ import type { ValueParserResult } from "./valueparser.ts";
 import {
   annotationKey,
   annotationStateValueKey,
+  annotationWrapperKey,
   type ParseOptions,
 } from "./annotations.ts";
 import { dispatchByMode } from "./mode-dispatch.ts";
@@ -371,6 +372,7 @@ function injectAnnotationsIntoState<TState>(
     return {
       [annotationKey]: annotations,
       [annotationStateValueKey]: state,
+      [annotationWrapperKey]: true,
     } as TState;
   }
   if (Array.isArray(state)) {
@@ -391,6 +393,7 @@ function unwrapAnnotatedValue<T>(value: T): T {
   }
   const valueRecord = value as Record<symbol, unknown>;
   if (
+    Object.hasOwn(valueRecord, annotationWrapperKey) &&
     Object.hasOwn(valueRecord, annotationKey) &&
     Object.hasOwn(valueRecord, annotationStateValueKey)
   ) {

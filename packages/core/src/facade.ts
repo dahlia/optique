@@ -54,6 +54,7 @@ import {
   annotationKey,
   type Annotations,
   annotationStateValueKey,
+  annotationWrapperKey,
 } from "./annotations.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
@@ -2835,6 +2836,7 @@ function injectAnnotationsIntoParser<
       : {
         [annotationKey]: annotations,
         [annotationStateValueKey]: parser.initialState,
+        [annotationWrapperKey]: true,
       }
   ) as TState;
 
