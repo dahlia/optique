@@ -32,7 +32,12 @@ To be released.
 
  -  Expanded `or()`'s fully inferred overloads from 10 to 15 parser
     arguments, so large alternative sets keep precise union inference without
-    collapsing to `unknown` at 11+ arguments.  [[#142]]
+    collapsing to `unknown` at 11+ arguments.  [[#142], [#143]]
+
+ -  Added a type-level arity guard for `or()` calls with more than 15 parser
+    arguments.  Instead of degrading to `unknown`, oversized calls now fail
+    at compile time with an actionable message that recommends nesting `or()`
+    calls.  [[#142], [#143]]
 
  -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
     terms as double newlines in the output, instead of collapsing them to
@@ -150,6 +155,7 @@ To be released.
 [#139]: https://github.com/dahlia/optique/issues/139
 [#141]: https://github.com/dahlia/optique/issues/141
 [#142]: https://github.com/dahlia/optique/issues/142
+[#143]: https://github.com/dahlia/optique/pull/143
 
 ### @optique/config
 
