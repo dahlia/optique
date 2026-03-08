@@ -831,6 +831,195 @@ describe("or() error customization", () => {
 });
 
 describe("longestMatch()", () => {
+  it("should preserve inferred unions with up to fifteen parsers", () => {
+    const parser = longestMatch(
+      command("c1", constant("v1" as const)),
+      command("c2", constant("v2" as const)),
+      command("c3", constant("v3" as const)),
+      command("c4", constant("v4" as const)),
+      command("c5", constant("v5" as const)),
+      command("c6", constant("v6" as const)),
+      command("c7", constant("v7" as const)),
+      command("c8", constant("v8" as const)),
+      command("c9", constant("v9" as const)),
+      command("c10", constant("v10" as const)),
+      command("c11", constant("v11" as const)),
+      command("c12", constant("v12" as const)),
+      command("c13", constant("v13" as const)),
+      command("c14", constant("v14" as const)),
+      command("c15", constant("v15" as const)),
+    );
+
+    type Inferred = InferValue<typeof parser>;
+    type Expected =
+      | "v1"
+      | "v2"
+      | "v3"
+      | "v4"
+      | "v5"
+      | "v6"
+      | "v7"
+      | "v8"
+      | "v9"
+      | "v10"
+      | "v11"
+      | "v12"
+      | "v13"
+      | "v14"
+      | "v15";
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+  });
+
+  it("should preserve inferred unions with options up to fifteen parsers", () => {
+    const parser = longestMatch(
+      command("c1", constant("v1" as const)),
+      command("c2", constant("v2" as const)),
+      command("c3", constant("v3" as const)),
+      command("c4", constant("v4" as const)),
+      command("c5", constant("v5" as const)),
+      command("c6", constant("v6" as const)),
+      command("c7", constant("v7" as const)),
+      command("c8", constant("v8" as const)),
+      command("c9", constant("v9" as const)),
+      command("c10", constant("v10" as const)),
+      command("c11", constant("v11" as const)),
+      command("c12", constant("v12" as const)),
+      command("c13", constant("v13" as const)),
+      command("c14", constant("v14" as const)),
+      command("c15", constant("v15" as const)),
+      {
+        errors: {
+          noMatch: message`No matching command found.`,
+        },
+      },
+    );
+
+    type Inferred = InferValue<typeof parser>;
+    type Expected =
+      | "v1"
+      | "v2"
+      | "v3"
+      | "v4"
+      | "v5"
+      | "v6"
+      | "v7"
+      | "v8"
+      | "v9"
+      | "v10"
+      | "v11"
+      | "v12"
+      | "v13"
+      | "v14"
+      | "v15";
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+  });
+
+  it("should report type-level arity error for sixteen parsers", () => {
+    const parsers = [
+      option("--a1"),
+      option("--a2"),
+      option("--a3"),
+      option("--a4"),
+      option("--a5"),
+      option("--a6"),
+      option("--a7"),
+      option("--a8"),
+      option("--a9"),
+      option("--a10"),
+      option("--a11"),
+      option("--a12"),
+      option("--a13"),
+      option("--a14"),
+      option("--a15"),
+      option("--a16"),
+    ] as const;
+
+    // @ts-expect-error - longestMatch() supports up to 15 parser arguments.
+    const _tooMany = longestMatch(...parsers);
+    void _tooMany;
+  });
+
+  it("should report type-level arity error for sixteen parsers with options", () => {
+    const parsers = [
+      option("--a1"),
+      option("--a2"),
+      option("--a3"),
+      option("--a4"),
+      option("--a5"),
+      option("--a6"),
+      option("--a7"),
+      option("--a8"),
+      option("--a9"),
+      option("--a10"),
+      option("--a11"),
+      option("--a12"),
+      option("--a13"),
+      option("--a14"),
+      option("--a15"),
+      option("--a16"),
+    ] as const;
+
+    // @ts-expect-error - longestMatch() supports up to 15 parser arguments.
+    const _tooMany = longestMatch(...parsers, {
+      errors: {
+        noMatch: message`No matching option found.`,
+      },
+    });
+    void _tooMany;
+  });
+
+  it("should enforce arity limit when last argument is a named parser variable", () => {
+    const p16 = option("--a16");
+    const parsers = [
+      option("--a1"),
+      option("--a2"),
+      option("--a3"),
+      option("--a4"),
+      option("--a5"),
+      option("--a6"),
+      option("--a7"),
+      option("--a8"),
+      option("--a9"),
+      option("--a10"),
+      option("--a11"),
+      option("--a12"),
+      option("--a13"),
+      option("--a14"),
+      option("--a15"),
+      p16,
+    ] as const;
+
+    // @ts-expect-error - the 16th parser must not be interpreted as options.
+    const _tooMany = longestMatch(...parsers);
+    void _tooMany;
+  });
+
+  it("should report type-level arity error for zero parsers", () => {
+    // @ts-expect-error - longestMatch() requires at least one parser argument.
+    const _noParsers = longestMatch();
+    void _noParsers;
+  });
+
+  it("should accept spread parser arrays without tuple length information", () => {
+    const dynamicParsers: Parser<"sync", unknown, unknown>[] = [
+      command("first", constant("first" as const)),
+      command("second", constant("second" as const)),
+    ];
+
+    const parser = longestMatch(...dynamicParsers);
+    const result = parseSync(parser, ["second"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "second");
+    }
+  });
+
   it("should select parser that consumes more tokens", () => {
     const shortParser = object({
       type: constant("short"),
@@ -2670,6 +2859,191 @@ describe("tuple() - duplicate option detection", () => {
 });
 
 describe("merge", () => {
+  it("should preserve inferred object types with up to fifteen parsers", () => {
+    const parser = merge(
+      object({ k1: constant("v1" as const) }),
+      object({ k2: constant("v2" as const) }),
+      object({ k3: constant("v3" as const) }),
+      object({ k4: constant("v4" as const) }),
+      object({ k5: constant("v5" as const) }),
+      object({ k6: constant("v6" as const) }),
+      object({ k7: constant("v7" as const) }),
+      object({ k8: constant("v8" as const) }),
+      object({ k9: constant("v9" as const) }),
+      object({ k10: constant("v10" as const) }),
+      object({ k11: constant("v11" as const) }),
+      object({ k12: constant("v12" as const) }),
+      object({ k13: constant("v13" as const) }),
+      object({ k14: constant("v14" as const) }),
+      object({ k15: constant("v15" as const) }),
+    );
+
+    type Inferred = InferValue<typeof parser>;
+    type Expected = {
+      readonly k1: "v1";
+      readonly k2: "v2";
+      readonly k3: "v3";
+      readonly k4: "v4";
+      readonly k5: "v5";
+      readonly k6: "v6";
+      readonly k7: "v7";
+      readonly k8: "v8";
+      readonly k9: "v9";
+      readonly k10: "v10";
+      readonly k11: "v11";
+      readonly k12: "v12";
+      readonly k13: "v13";
+      readonly k14: "v14";
+      readonly k15: "v15";
+    };
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+  });
+
+  it("should preserve inferred object types with options up to fifteen parsers", () => {
+    const parser = merge(
+      object({ k1: constant("v1" as const) }),
+      object({ k2: constant("v2" as const) }),
+      object({ k3: constant("v3" as const) }),
+      object({ k4: constant("v4" as const) }),
+      object({ k5: constant("v5" as const) }),
+      object({ k6: constant("v6" as const) }),
+      object({ k7: constant("v7" as const) }),
+      object({ k8: constant("v8" as const) }),
+      object({ k9: constant("v9" as const) }),
+      object({ k10: constant("v10" as const) }),
+      object({ k11: constant("v11" as const) }),
+      object({ k12: constant("v12" as const) }),
+      object({ k13: constant("v13" as const) }),
+      object({ k14: constant("v14" as const) }),
+      object({ k15: constant("v15" as const) }),
+      { allowDuplicates: false },
+    );
+
+    type Inferred = InferValue<typeof parser>;
+    type Expected = {
+      readonly k1: "v1";
+      readonly k2: "v2";
+      readonly k3: "v3";
+      readonly k4: "v4";
+      readonly k5: "v5";
+      readonly k6: "v6";
+      readonly k7: "v7";
+      readonly k8: "v8";
+      readonly k9: "v9";
+      readonly k10: "v10";
+      readonly k11: "v11";
+      readonly k12: "v12";
+      readonly k13: "v13";
+      readonly k14: "v14";
+      readonly k15: "v15";
+    };
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+  });
+
+  it("should report type-level arity error for sixteen parsers", () => {
+    // @ts-expect-error - merge() supports up to 15 parser arguments.
+    const _tooMany = merge(
+      object({ k1: constant("v1" as const) }),
+      object({ k2: constant("v2" as const) }),
+      object({ k3: constant("v3" as const) }),
+      object({ k4: constant("v4" as const) }),
+      object({ k5: constant("v5" as const) }),
+      object({ k6: constant("v6" as const) }),
+      object({ k7: constant("v7" as const) }),
+      object({ k8: constant("v8" as const) }),
+      object({ k9: constant("v9" as const) }),
+      object({ k10: constant("v10" as const) }),
+      object({ k11: constant("v11" as const) }),
+      object({ k12: constant("v12" as const) }),
+      object({ k13: constant("v13" as const) }),
+      object({ k14: constant("v14" as const) }),
+      object({ k15: constant("v15" as const) }),
+      object({ k16: constant("v16" as const) }),
+    );
+    void _tooMany;
+  });
+
+  it("should report type-level arity error for sixteen parsers with options", () => {
+    // @ts-expect-error - merge() supports up to 15 parser arguments.
+    const _tooMany = merge(
+      object({ k1: constant("v1" as const) }),
+      object({ k2: constant("v2" as const) }),
+      object({ k3: constant("v3" as const) }),
+      object({ k4: constant("v4" as const) }),
+      object({ k5: constant("v5" as const) }),
+      object({ k6: constant("v6" as const) }),
+      object({ k7: constant("v7" as const) }),
+      object({ k8: constant("v8" as const) }),
+      object({ k9: constant("v9" as const) }),
+      object({ k10: constant("v10" as const) }),
+      object({ k11: constant("v11" as const) }),
+      object({ k12: constant("v12" as const) }),
+      object({ k13: constant("v13" as const) }),
+      object({ k14: constant("v14" as const) }),
+      object({ k15: constant("v15" as const) }),
+      object({ k16: constant("v16" as const) }),
+      { allowDuplicates: false },
+    );
+    void _tooMany;
+  });
+
+  it("should enforce arity limit when last argument is a named parser variable", () => {
+    const p16 = object({ k16: constant("v16" as const) });
+
+    // @ts-expect-error - the 16th parser must not be interpreted as options.
+    const _tooMany = merge(
+      object({ k1: constant("v1" as const) }),
+      object({ k2: constant("v2" as const) }),
+      object({ k3: constant("v3" as const) }),
+      object({ k4: constant("v4" as const) }),
+      object({ k5: constant("v5" as const) }),
+      object({ k6: constant("v6" as const) }),
+      object({ k7: constant("v7" as const) }),
+      object({ k8: constant("v8" as const) }),
+      object({ k9: constant("v9" as const) }),
+      object({ k10: constant("v10" as const) }),
+      object({ k11: constant("v11" as const) }),
+      object({ k12: constant("v12" as const) }),
+      object({ k13: constant("v13" as const) }),
+      object({ k14: constant("v14" as const) }),
+      object({ k15: constant("v15" as const) }),
+      p16,
+    );
+    void _tooMany;
+  });
+
+  it("should report type-level arity error for zero parsers", () => {
+    // @ts-expect-error - merge() requires at least one parser argument.
+    const _noParsers = merge();
+    void _noParsers;
+  });
+
+  it("should accept spread parser arrays without tuple length information", () => {
+    const dynamicParsers: Parser<
+      "sync",
+      Record<string | symbol, unknown>,
+      Record<string | symbol, unknown>
+    >[] = [
+      object({ first: constant("first" as const) }),
+      object({ second: constant("second" as const) }),
+    ];
+
+    const parser = merge(...dynamicParsers);
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      const value = result.value as Record<string, unknown>;
+      assert.equal(value.first, "first");
+      assert.equal(value.second, "second");
+    }
+  });
+
   it("should create a parser that combines multiple object parsers", () => {
     const parser1 = object({
       verbose: option("-v", "--verbose"),
@@ -4234,6 +4608,94 @@ describe("merge() - duplicate option detection", () => {
 });
 
 describe("concat", () => {
+  it("should preserve inferred tuple flattening up to fifteen parsers", () => {
+    const parser = concat(
+      tuple([constant("v1" as const)]),
+      tuple([constant("v2" as const)]),
+      tuple([constant("v3" as const)]),
+      tuple([constant("v4" as const)]),
+      tuple([constant("v5" as const)]),
+      tuple([constant("v6" as const)]),
+      tuple([constant("v7" as const)]),
+      tuple([constant("v8" as const)]),
+      tuple([constant("v9" as const)]),
+      tuple([constant("v10" as const)]),
+      tuple([constant("v11" as const)]),
+      tuple([constant("v12" as const)]),
+      tuple([constant("v13" as const)]),
+      tuple([constant("v14" as const)]),
+      tuple([constant("v15" as const)]),
+    );
+
+    type Inferred = InferValue<typeof parser>;
+    type Expected = [
+      "v1",
+      "v2",
+      "v3",
+      "v4",
+      "v5",
+      "v6",
+      "v7",
+      "v8",
+      "v9",
+      "v10",
+      "v11",
+      "v12",
+      "v13",
+      "v14",
+      "v15",
+    ];
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
+  });
+
+  it("should report type-level arity error for sixteen tuple parsers", () => {
+    const tupleParsers = [
+      tuple([constant("v1" as const)]),
+      tuple([constant("v2" as const)]),
+      tuple([constant("v3" as const)]),
+      tuple([constant("v4" as const)]),
+      tuple([constant("v5" as const)]),
+      tuple([constant("v6" as const)]),
+      tuple([constant("v7" as const)]),
+      tuple([constant("v8" as const)]),
+      tuple([constant("v9" as const)]),
+      tuple([constant("v10" as const)]),
+      tuple([constant("v11" as const)]),
+      tuple([constant("v12" as const)]),
+      tuple([constant("v13" as const)]),
+      tuple([constant("v14" as const)]),
+      tuple([constant("v15" as const)]),
+      tuple([constant("v16" as const)]),
+    ] as const;
+
+    // @ts-expect-error - concat() supports up to 15 parser arguments.
+    const _tooMany = concat(...tupleParsers);
+    void _tooMany;
+  });
+
+  it("should report type-level arity error for zero tuple parsers", () => {
+    // @ts-expect-error - concat() requires at least one parser argument.
+    const _noParsers = concat();
+    void _noParsers;
+  });
+
+  it("should accept spread parser arrays without tuple length information", () => {
+    const dynamicParsers: Parser<"sync", readonly unknown[], unknown>[] = [
+      tuple([constant("first" as const)]),
+      tuple([constant("second" as const)]),
+    ];
+
+    const parser = concat(...dynamicParsers);
+    const result = parseSync(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["first", "second"]);
+    }
+  });
+
   it("should create a parser that combines multiple tuple parsers", () => {
     const parser1 = tuple([
       option("-v", "--verbose"),
