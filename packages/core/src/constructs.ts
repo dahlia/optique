@@ -232,7 +232,7 @@ export interface OrOptions {
 /**
  * Context information about what types of inputs are expected,
  * used for generating contextual error messages.
- * @since 1.0.0
+ * @since 0.7.0
  */
 export interface NoMatchContext {
   /**

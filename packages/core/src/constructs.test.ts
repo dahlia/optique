@@ -183,7 +183,7 @@ describe("or", () => {
     );
 
     type Inferred = InferValue<typeof parser>;
-    const _check: Inferred = {} as
+    type Expected =
       | "v1"
       | "v2"
       | "v3"
@@ -199,7 +199,10 @@ describe("or", () => {
       | "v13"
       | "v14"
       | "v15";
-    void _check;
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
 
     const result = parseSync(parser, ["c15"]);
     assert.ok(result.success);
@@ -233,7 +236,7 @@ describe("or", () => {
     );
 
     type Inferred = InferValue<typeof parser>;
-    const _check: Inferred = {} as
+    type Expected =
       | "v1"
       | "v2"
       | "v3"
@@ -249,7 +252,10 @@ describe("or", () => {
       | "v13"
       | "v14"
       | "v15";
-    void _check;
+    const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+    const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+    void _checkExpectedAssignableToInferred;
+    void _checkInferredAssignableToExpected;
 
     const result = parseSync(parser, ["c14"]);
     assert.ok(result.success);
