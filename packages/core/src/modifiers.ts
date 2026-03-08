@@ -10,7 +10,11 @@ import {
   transformsDependencyValueMarker,
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
-import { inheritAnnotations } from "./annotations.ts";
+import {
+  annotationStateValueKey,
+  inheritAnnotations,
+  isInjectedAnnotationWrapper,
+} from "./annotations.ts";
 import {
   dispatchByMode,
   dispatchIterableByMode,
@@ -871,12 +875,25 @@ export function multiple<M extends Mode, TValue, TState>(
   type MultipleState = readonly TState[];
   type ParseResult = ParserResult<MultipleState>;
 
+  const unwrapInjectedItemState = (state: TState): TState => {
+    if (!isInjectedAnnotationWrapper(state)) {
+      return state;
+    }
+    return (state as Record<PropertyKey, unknown>)[
+      annotationStateValueKey
+    ] as TState;
+  };
+
   // Sync parse implementation
   const parseSync = (
     context: ParserContext<MultipleState>,
   ): ParseResult => {
     let added = context.state.length < 1;
-    const currentItemState = context.state.at(-1) ?? syncParser.initialState;
+    const currentItemStateWithAnnotations = context.state.at(-1) ??
+      syncParser.initialState;
+    const currentItemState = unwrapInjectedItemState(
+      currentItemStateWithAnnotations,
+    );
     let result = syncParser.parse({
       ...context,
       state: currentItemState,
@@ -893,7 +910,9 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
-    const itemAnnotationSource = added ? context.state : currentItemState;
+    const itemAnnotationSource = added
+      ? context.state
+      : currentItemStateWithAnnotations;
     const nextItemState = inheritAnnotations(
       itemAnnotationSource,
       result.next.state,
@@ -916,7 +935,11 @@ export function multiple<M extends Mode, TValue, TState>(
     context: ParserContext<MultipleState>,
   ): Promise<ParseResult> => {
     let added = context.state.length < 1;
-    const currentItemState = context.state.at(-1) ?? parser.initialState;
+    const currentItemStateWithAnnotations = context.state.at(-1) ??
+      parser.initialState;
+    const currentItemState = unwrapInjectedItemState(
+      currentItemStateWithAnnotations,
+    );
     let resultOrPromise = parser.parse({
       ...context,
       state: currentItemState,
@@ -935,7 +958,9 @@ export function multiple<M extends Mode, TValue, TState>(
         return result;
       }
     }
-    const itemAnnotationSource = added ? context.state : currentItemState;
+    const itemAnnotationSource = added
+      ? context.state
+      : currentItemStateWithAnnotations;
     const nextItemState = inheritAnnotations(
       itemAnnotationSource,
       result.next.state,
