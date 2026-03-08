@@ -397,7 +397,8 @@ function unwrapAnnotatedValue<T>(value: T): T {
   if (
     Object.hasOwn(valueRecord, annotationWrapperKey) &&
     Object.hasOwn(valueRecord, annotationKey) &&
-    Object.hasOwn(valueRecord, annotationStateValueKey)
+    Object.hasOwn(valueRecord, annotationStateValueKey) &&
+    valueRecord[annotationWrapperKey] === true
   ) {
     return valueRecord[annotationStateValueKey] as T;
   }
