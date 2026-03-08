@@ -4684,10 +4684,14 @@ type EnsureMergeParsers<TParsers extends MergeParsers> = {
     ? never
     : TParsers[K];
 };
-type MergeValues<TParsers extends MergeParsers> = TParsers extends readonly [
-  infer THead extends Parser<Mode, unknown, unknown>,
-  ...infer TRest extends MergeParsers,
-] ? ExtractObjectTypes<THead> & MergeValues<TRest>
+type IntersectMergeValues<TParsers extends MergeParsers> = TParsers extends
+  readonly [
+    infer THead extends Parser<Mode, unknown, unknown>,
+    ...infer TRest extends MergeParsers,
+  ] ? ExtractObjectTypes<THead> & IntersectMergeValues<TRest>
+  : unknown;
+type MergeValues<TParsers extends MergeParsers> = IsTuple<TParsers> extends true
+  ? IntersectMergeValues<TParsers>
   : Record<string | symbol, unknown>;
 type MergeReturnType<TParsers extends MergeParsers> = Parser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
@@ -4733,6 +4737,21 @@ export function merge<const TParsers extends MergeParsers>(
 export function merge<const TParsers extends MergeParsers>(
   label: string,
   ...parsers: EnsureMergeParsers<TParsers> & MergeArityGuard<TParsers>
+): MergeReturnType<TParsers>;
+/**
+ * Merges multiple object-like parsers into one labeled parser, with options.
+ *
+ * @param label Label used in documentation output.
+ * @param rest Parsers to merge, followed by merge options.
+ * @returns A parser that merges parsed object fields from all parsers.
+ * Type inference is precise for tuple calls up to 15 parser arguments.
+ * @since 0.7.0
+ */
+export function merge<const TParsers extends MergeParsers>(
+  label: string,
+  ...rest:
+    & [...parsers: EnsureMergeParsers<TParsers>, options: MergeTailOptions]
+    & MergeArityGuard<TParsers>
 ): MergeReturnType<TParsers>;
 
 export function merge(

@@ -2991,8 +2991,7 @@ describe("merge", () => {
   });
 
   it("should report type-level arity error for sixteen parsers", () => {
-    // @ts-expect-error - merge() supports up to 15 parser arguments.
-    const _tooMany = merge(
+    const parsers = [
       object({ k1: constant("v1" as const) }),
       object({ k2: constant("v2" as const) }),
       object({ k3: constant("v3" as const) }),
@@ -3009,13 +3008,15 @@ describe("merge", () => {
       object({ k14: constant("v14" as const) }),
       object({ k15: constant("v15" as const) }),
       object({ k16: constant("v16" as const) }),
-    );
+    ] as const;
+
+    // @ts-expect-error - merge() supports up to 15 parser arguments.
+    const _tooMany = merge(...parsers);
     void _tooMany;
   });
 
   it("should report type-level arity error for sixteen parsers with options", () => {
-    // @ts-expect-error - merge() supports up to 15 parser arguments.
-    const _tooMany = merge(
+    const parsers = [
       object({ k1: constant("v1" as const) }),
       object({ k2: constant("v2" as const) }),
       object({ k3: constant("v3" as const) }),
@@ -3032,16 +3033,16 @@ describe("merge", () => {
       object({ k14: constant("v14" as const) }),
       object({ k15: constant("v15" as const) }),
       object({ k16: constant("v16" as const) }),
-      { allowDuplicates: false },
-    );
+    ] as const;
+
+    // @ts-expect-error - merge() supports up to 15 parser arguments.
+    const _tooMany = merge(...parsers, { allowDuplicates: false });
     void _tooMany;
   });
 
   it("should enforce arity limit when last argument is a named parser variable", () => {
     const p16 = object({ k16: constant("v16" as const) });
-
-    // @ts-expect-error - the 16th parser must not be interpreted as options.
-    const _tooMany = merge(
+    const parsers = [
       object({ k1: constant("v1" as const) }),
       object({ k2: constant("v2" as const) }),
       object({ k3: constant("v3" as const) }),
@@ -3058,7 +3059,10 @@ describe("merge", () => {
       object({ k14: constant("v14" as const) }),
       object({ k15: constant("v15" as const) }),
       p16,
-    );
+    ] as const;
+
+    // @ts-expect-error - the 16th parser must not be interpreted as options.
+    const _tooMany = merge(...parsers);
     void _tooMany;
   });
 
@@ -3870,6 +3874,41 @@ describe("merge", () => {
         host: option("-h", "--host", string()),
       });
       const parser = merge("Configuration", basicOptions, serverOptions);
+
+      const result = parseSync(parser, ["-v", "-p", "8080", "-h", "localhost"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.verbose, true);
+        assert.equal(result.value.quiet, false);
+        assert.equal(result.value.port, 8080);
+        assert.equal(result.value.host, "localhost");
+      }
+    });
+
+    it("should support labeled merge with options", () => {
+      const basicOptions = object({
+        verbose: option("-v", "--verbose"),
+        quiet: option("-q", "--quiet"),
+      });
+      const serverOptions = object({
+        port: option("-p", "--port", integer()),
+        host: option("-h", "--host", string()),
+      });
+      const parser = merge("Configuration", basicOptions, serverOptions, {
+        allowDuplicates: false,
+      });
+
+      type Inferred = InferValue<typeof parser>;
+      type Expected = {
+        readonly verbose: boolean;
+        readonly quiet: boolean;
+        readonly port: number;
+        readonly host: string;
+      };
+      const _checkExpectedAssignableToInferred: Inferred = {} as Expected;
+      const _checkInferredAssignableToExpected: Expected = {} as Inferred;
+      void _checkExpectedAssignableToInferred;
+      void _checkInferredAssignableToExpected;
 
       const result = parseSync(parser, ["-v", "-p", "8080", "-h", "localhost"]);
       assert.ok(result.success);
