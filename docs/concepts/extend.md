@@ -797,8 +797,10 @@ const envContext: SourceContext = {
 
 The `id` symbol identifies this context for debugging and priority resolution.
 The optional `mode` field declares whether the context is `"static"` or
-`"dynamic"`, which lets `isStaticContext()` and the `runWith*()` runners skip
-probing `getAnnotations()` to determine whether a second parse pass is needed.
+`"dynamic"`, which lets `isStaticContext()` determine static-ness without
+probing `getAnnotations()`. The `runWith*()` runners also use it when
+deciding whether a second parse pass may be required, instead of inferring
+dynamic-ness from an empty first-pass result or `Promise`.
 The `getAnnotations()` method returns an object mapping annotation keys to
 their values. Parsers can then access these values using `getAnnotations()`.
 
@@ -1164,9 +1166,10 @@ guide for a complete implementation.
  -  *Use unique symbols*: Always use `Symbol.for()` with a namespaced string
     matching your package name
  -  *Declare `mode` explicitly*: Set `mode: "static"` or `mode: "dynamic"` on
-    every context so `isStaticContext()` and the `runWith*()` runners can
-    determine the mode without probing `getAnnotations()` or forcing an
-    unnecessary second parse pass
+    every context so `isStaticContext()` can determine static-ness without
+    probing `getAnnotations()`, and so `runWith*()` does not have to infer
+    dynamic-ness from an empty first-pass result or `Promise`, avoiding
+    unnecessary two-phase parsing and duplicate `getAnnotations()` calls
  -  *Handle missing data gracefully*: Return empty objects instead of throwing
     errors
  -  *Keep contexts focused*: Each context should handle one data source
