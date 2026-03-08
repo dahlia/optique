@@ -11,7 +11,9 @@ import {
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import {
+  annotationKey,
   annotationStateValueKey,
+  annotationWrapperKey,
   inheritAnnotations,
   isInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -876,12 +878,24 @@ export function multiple<M extends Mode, TValue, TState>(
   type ParseResult = ParserResult<MultipleState>;
 
   const unwrapInjectedWrapper = <T>(state: T): T => {
-    if (!isInjectedAnnotationWrapper(state)) {
+    if (state == null || typeof state !== "object") {
       return state;
     }
-    return (state as Record<PropertyKey, unknown>)[
-      annotationStateValueKey
-    ] as T;
+    const stateRecord = state as Record<PropertyKey, unknown>;
+    if (stateRecord[annotationWrapperKey] !== true) {
+      return state;
+    }
+    const ownKeys = Reflect.ownKeys(stateRecord);
+    if (
+      ownKeys.length !== 3 ||
+      !ownKeys.includes(annotationKey) ||
+      !ownKeys.includes(annotationStateValueKey) ||
+      !ownKeys.includes(annotationWrapperKey) ||
+      !isInjectedAnnotationWrapper(state)
+    ) {
+      return state;
+    }
+    return stateRecord[annotationStateValueKey] as T;
   };
   const completeSyncWithUnwrappedFallback = (
     state: TState,
