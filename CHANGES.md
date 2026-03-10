@@ -175,6 +175,12 @@ To be released.
     private symbol, so custom parsers can safely return user data objects with
     overlapping field names without being misclassified.  [[#152]]
 
+ -  Fixed `runParser()` swallowing legitimate callback exceptions from
+    `onError`, `help.onShow`, `version.onShow`, and `completion.onShow`
+    while trying to detect zero-argument handlers.  These callbacks now
+    always receive the numeric exit code, and any real exception they throw
+    is propagated unchanged.  [[#153]]
+
  -  Fixed help output incorrectly interleaving meta items (`help`, `--help`,
     `--version`) with user-defined commands when using `group: "…"` to
     assign meta items to a named section that already exists in user-defined
@@ -201,6 +207,7 @@ To be released.
 [#149]: https://github.com/dahlia/optique/issues/149
 [#150]: https://github.com/dahlia/optique/issues/150
 [#152]: https://github.com/dahlia/optique/issues/152
+[#153]: https://github.com/dahlia/optique/issues/153
 [#157]: https://github.com/dahlia/optique/issues/157
 
 ### @optique/config

@@ -1080,21 +1080,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
 
-  const callOnError = (code: number): TError => {
-    try {
-      return onError(code);
-    } catch {
-      return (onError as (() => TError))();
-    }
-  };
+  const callOnError = (code: number): TError => onError(code);
 
-  const callOnCompletion = (code: number): THelp => {
-    try {
-      return onCompletion(code);
-    } catch {
-      return (onCompletion as (() => THelp))();
-    }
-  };
+  const callOnCompletion = (code: number): THelp => onCompletion(code);
 
   // Check if shell name is empty
   if (!shellName) {
@@ -1351,20 +1339,10 @@ export function runParser<
     options.completion?.option,
   );
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
-  const onCompletionResult = (code: number): InferValue<TParser> => {
-    try {
-      return onCompletion(code) as InferValue<TParser>;
-    } catch {
-      return (onCompletion as (() => THelp))() as InferValue<TParser>;
-    }
-  };
-  const onErrorResult = (code: number): InferValue<TParser> => {
-    try {
-      return onError(code) as InferValue<TParser>;
-    } catch {
-      return (onError as (() => TError))() as InferValue<TParser>;
-    }
-  };
+  const onCompletionResult = (code: number): InferValue<TParser> =>
+    onCompletion(code) as InferValue<TParser>;
+  const onErrorResult = (code: number): InferValue<TParser> =>
+    onError(code) as InferValue<TParser>;
 
   // Resolved name arrays for matching
   const helpOptionNames: readonly string[] = helpOptionConfig?.names ??
@@ -1558,11 +1536,7 @@ export function runParser<
 
       case "version":
         stdout(versionValue);
-        try {
-          return onVersion(0);
-        } catch {
-          return (onVersion as (() => THelp))();
-        }
+        return onVersion(0);
 
       case "completion":
         // This case should never be reached due to early return,
@@ -1814,11 +1788,7 @@ export function runParser<
               sectionOrder,
             }));
           }
-          try {
-            return onHelp(0);
-          } catch {
-            return (onHelp as (() => THelp))();
-          }
+          return onHelp(0);
         };
 
         // Validate that the commands before --help are actually valid

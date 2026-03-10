@@ -1655,43 +1655,45 @@ describe("runParser", () => {
       assert.equal(versionOutput, longVersion);
     });
 
-    it("should handle callback exceptions gracefully", () => {
+    it("should propagate callback exceptions", () => {
       const parser = object({
         name: argument(string()),
       });
 
-      // Test onHelp exception handling
-      const result1 = runParser(parser, "test", ["--help"], {
-        help: {
-          option: true,
-          onShow: (exitCode?: number) => {
-            if (exitCode !== undefined) {
-              throw new Error("Exit code provided");
-            }
-            return "help-shown-no-exit";
-          },
-        },
-        stdout: () => {},
-      });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--help"], {
+            help: {
+              option: true,
+              onShow: (exitCode?: number) => {
+                if (exitCode !== undefined) {
+                  throw new Error("Exit code provided");
+                }
+                return "help-shown-no-exit";
+              },
+            },
+            stdout: () => {},
+          }),
+        /Exit code provided/,
+      );
 
-      assert.equal(result1, "help-shown-no-exit");
-
-      // Test onVersion exception handling
-      const result2 = runParser(parser, "test", ["--version"], {
-        version: {
-          option: true,
-          value: "1.0.0",
-          onShow: (exitCode?: number) => {
-            if (exitCode !== undefined) {
-              throw new Error("Exit code provided");
-            }
-            return "version-shown-no-exit";
-          },
-        },
-        stdout: () => {},
-      });
-
-      assert.equal(result2, "version-shown-no-exit");
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: {
+              option: true,
+              value: "1.0.0",
+              onShow: (exitCode?: number) => {
+                if (exitCode !== undefined) {
+                  throw new Error("Exit code provided");
+                }
+                return "version-shown-no-exit";
+              },
+            },
+            stdout: () => {},
+          }),
+        /Exit code provided/,
+      );
     });
 
     it("should handle no arguments with help/version available", () => {
@@ -6698,42 +6700,41 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.deepEqual(result, { x: "hello" });
   });
 
-  // Lines 1114/1122: callOnError/callOnCompletion catch paths (0-arg fallback)
-  // These are inside handleCompletion — triggered via completion with bad shell.
-  it("callOnError in handleCompletion falls back to zero-arg when one-arg throws", () => {
+  // Lines 1114/1122: handleCompletion callback errors should propagate.
+  it("callOnError in handleCompletion propagates callback errors", () => {
     const parser = object({});
-    let zeroArgCalled = false;
-    // onError throws when called with a code number; 0-arg fallback succeeds.
-    runParser(parser, "test", ["completion", "unknownshell"], {
-      completion: { command: true },
-      onError: (code?: number) => {
-        if (code !== undefined) throw new Error("no code allowed");
-        zeroArgCalled = true;
-        return "error-result";
-      },
-      stderr: () => {},
-      stdout: () => {},
-    });
-    assert.ok(zeroArgCalled, "zero-arg callOnError fallback should be called");
+    assert.throws(
+      () =>
+        runParser(parser, "test", ["completion", "unknownshell"], {
+          completion: { command: true },
+          onError: (code?: number) => {
+            assert.equal(code, 1);
+            throw new Error("real onError failure");
+          },
+          stderr: () => {},
+          stdout: () => {},
+        }),
+      /real onError failure/,
+    );
   });
 
-  it("callOnCompletion falls back to zero-arg when one-arg throws", () => {
+  it("callOnCompletion in handleCompletion propagates callback errors", () => {
     const parser = object({});
-    let caught = false;
-    // Provide onShow that throws when called with a code argument
-    runParser(parser, "test", ["completion", "bash"], {
-      completion: {
-        command: true,
-        onShow: (code?: number) => {
-          if (code !== undefined) throw new Error("no code arg");
-          caught = true;
-          return "done";
-        },
-      },
-      stdout: () => {},
-      stderr: () => {},
-    });
-    assert.ok(caught, "zero-arg onShow fallback should be called");
+    assert.throws(
+      () =>
+        runParser(parser, "test", ["completion", "bash"], {
+          completion: {
+            command: true,
+            onShow: (code?: number) => {
+              assert.equal(code, 0);
+              throw new Error("real completion failure");
+            },
+          },
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      /real completion failure/,
+    );
   });
 
   // Line 1133: completion with empty shell + completionParser shown
@@ -6777,46 +6778,23 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(completionCalled, "onShow should be called");
   });
 
-  // Lines 1385/1392: onCompletionResult/onErrorResult catch paths (0-arg)
-  it("onCompletionResult falls back to zero-arg when one-arg throws", () => {
+  // Lines 1385/1392: option-mode early-exit callback errors should propagate.
+  it("onCompletionResult propagates callback errors in option mode", () => {
     const parser = object({});
-    let zeroArgCalled = false;
-    // Use needsEarlyExit path: option-mode completion
-    runParser(parser, "test", ["--completion", "bash"], {
-      completion: {
-        option: true,
-        onShow: (code?: number) => {
-          if (code !== undefined) throw new Error("no code");
-          zeroArgCalled = true;
-          return "done";
-        },
-      },
-      stdout: () => {},
-      stderr: () => {},
-    });
-    assert.ok(zeroArgCalled, "zero-arg onShow fallback for option-mode");
-  });
-
-  // Line 1122: callOnCompletion fallback (also in handleCompletion)
-  it("callOnCompletion in handleCompletion falls back to zero-arg when one-arg throws", () => {
-    const parser = object({});
-    let zeroArgCalled = false;
-    // onShow throws when called with a code number; 0-arg fallback succeeds.
-    runParser(parser, "test", ["completion", "bash"], {
-      completion: {
-        command: true,
-        onShow: (code?: number) => {
-          if (code !== undefined) throw new Error("no code allowed");
-          zeroArgCalled = true;
-          return "done";
-        },
-      },
-      stdout: () => {},
-      stderr: () => {},
-    });
-    assert.ok(
-      zeroArgCalled,
-      "zero-arg callOnCompletion fallback should be called",
+    assert.throws(
+      () =>
+        runParser(parser, "test", ["--completion", "bash"], {
+          completion: {
+            option: true,
+            onShow: (code?: number) => {
+              assert.equal(code, 0);
+              throw new Error("option completion failure");
+            },
+          },
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      /option completion failure/,
     );
   });
 
@@ -7521,41 +7499,42 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(withStaticContext, "second");
   });
 
-  it("completion callbacks fall back to zero-arg overload when arg-call throws", () => {
+  it("completion callbacks preserve real callback errors", () => {
     const parser = object({ verbose: option("--verbose") });
 
-    const completionResult = runParser(
-      parser,
-      "myapp",
-      ["completion", "bash"],
-      {
-        completion: {
-          command: true,
-          onShow: function () {
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["completion", "bash"], {
+          completion: {
+            command: true,
+            onShow: function () {
+              if (arguments.length > 0) {
+                throw new Error("arg-call rejected");
+              }
+              return "completion-fallback";
+            },
+          },
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      /arg-call rejected/,
+    );
+
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["completion"], {
+          completion: { command: true },
+          onError: function () {
             if (arguments.length > 0) {
               throw new Error("arg-call rejected");
             }
-            return "completion-fallback";
+            return "error-fallback";
           },
-        },
-        stdout: () => {},
-        stderr: () => {},
-      },
+          stderr: () => {},
+          stdout: () => {},
+        }),
+      /arg-call rejected/,
     );
-    assert.equal(completionResult, "completion-fallback");
-
-    const errorResult = runParser(parser, "myapp", ["completion"], {
-      completion: { command: true },
-      onError: function () {
-        if (arguments.length > 0) {
-          throw new Error("arg-call rejected");
-        }
-        return "error-fallback";
-      },
-      stderr: () => {},
-      stdout: () => {},
-    });
-    assert.equal(errorResult, "error-fallback");
   });
 
   it("completion unsupported shell follows async dispatch path", async () => {
@@ -7597,22 +7576,47 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(result, "async-error-1");
   });
 
-  it("help callback falls back to zero-arg overload when arg-call throws", () => {
+  it("help callback preserves real callback errors", () => {
     const parser = object({ name: argument(string()) });
-    const result = runParser(parser, "myapp", ["--help"], {
-      help: {
-        option: true,
-        onShow: function () {
-          if (arguments.length > 0) {
-            throw new Error("arg-call rejected");
-          }
-          return "help-fallback";
-        },
-      },
-      stderr: () => {},
-      stdout: () => {},
-    });
-    assert.equal(result, "help-fallback");
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["--help"], {
+          help: {
+            option: true,
+            onShow: function () {
+              if (arguments.length > 0) {
+                throw new Error("arg-call rejected");
+              }
+              return "help-fallback";
+            },
+          },
+          stderr: () => {},
+          stdout: () => {},
+        }),
+      /arg-call rejected/,
+    );
+  });
+
+  it("version callback preserves real callback errors", () => {
+    const parser = object({ name: argument(string()) });
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["--version"], {
+          version: {
+            value: "1.2.3",
+            option: true,
+            onShow: function () {
+              if (arguments.length > 0) {
+                throw new Error("arg-call rejected");
+              }
+              return "version-fallback";
+            },
+          },
+          stderr: () => {},
+          stdout: () => {},
+        }),
+      /arg-call rejected/,
+    );
   });
 
   it("aboveError=help falls back to usage when doc lookup returns undefined", () => {
@@ -7852,27 +7856,25 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(out.includes("completion"));
   });
 
-  it("completion callback fallback works for early option-mode script generation", () => {
+  it("completion callback errors propagate for early option-mode script generation", () => {
     const parser = object({ verbose: option("--verbose") });
-    let script = "";
-    const result = runParser(parser, "myapp", ["--completion", "bash"], {
-      completion: {
-        option: true,
-        onShow: function () {
-          if (arguments.length > 0) {
-            throw new Error("arg-call rejected");
-          }
-          return "fallback-ok";
-        },
-      },
-      stdout: (text) => {
-        script += text;
-      },
-      stderr: () => {},
-    });
-
-    assert.equal(result, "fallback-ok");
-    assert.ok(script.length > 0);
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["--completion", "bash"], {
+          completion: {
+            option: true,
+            onShow: function () {
+              if (arguments.length > 0) {
+                throw new Error("arg-call rejected");
+              }
+              return "fallback-ok";
+            },
+          },
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      /arg-call rejected/,
+    );
   });
 
   it("aboveError=help with async parser uses promise doc path and usage fallback", async () => {
@@ -7964,24 +7966,24 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
-  it("uses option-mode completion script path and callback fallback", () => {
+  it("uses option-mode completion script path without swallowing callback errors", () => {
     const parser = object({ verbose: option("--verbose") });
-    let script = "";
-    const result = runParser(parser, "myapp", ["--completion", "bash"], {
-      completion: {
-        option: true,
-        onShow: function () {
-          if (arguments.length > 0) throw new Error("arg-call rejected");
-          return "option-completion-fallback";
-        },
-      },
-      stdout: (text) => {
-        script += text;
-      },
-      stderr: () => {},
-    });
-
-    assert.equal(result, "option-completion-fallback");
-    assert.ok(script.length > 0);
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["--completion", "bash"], {
+          completion: {
+            option: true,
+            onShow: function () {
+              if (arguments.length > 0) {
+                throw new Error("arg-call rejected");
+              }
+              return "option-completion-fallback";
+            },
+          },
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      /arg-call rejected/,
+    );
   });
 });
