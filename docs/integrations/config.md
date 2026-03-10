@@ -347,13 +347,19 @@ const parser = bindConfig(
   map(option("--out-dir", string()), (value) => resolve(process.cwd(), value)),
   {
     context: configContext,
-    key: (config, meta) => resolve(meta.configDir, config.outDir),
+    key: (config, meta) => {
+      if (meta === undefined) {
+        throw new TypeError("Config metadata is not available.");
+      }
+
+      return resolve(meta.configDir, config.outDir);
+    },
   },
 );
 ~~~~
 
 In single-file mode, Optique provides `meta.configPath` and `meta.configDir`
-automatically.
+automatically, so the guard above only matters when metadata may be absent.
 
 
 Config-only values
@@ -787,7 +793,8 @@ Parameters
         config. Accessor functions receive two arguments:
 
          1)  `config`: validated config data
-         2)  `meta`: config metadata (`ConfigMeta` by default)
+         2)  `meta`: config metadata if available
+             (`ConfigMeta | undefined` by default)
 
      -  `options.default`: Optional default value
 
@@ -806,7 +813,8 @@ options:
 
 `load`
 :   Function that receives parsed result and returns
-    `ConfigLoadResult<TConfigMeta>` (or Promise of it).  Use this for
+    `ConfigLoadResult<TConfigMeta>` (or Promise of it).  `meta` may be
+    `undefined`.  Use this for
     multi-file merging scenarios.  Optional when using `getConfigPath`.
 
 At least one of `getConfigPath` or `load` must be provided.

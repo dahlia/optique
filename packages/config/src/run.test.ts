@@ -19,6 +19,14 @@ import type { ConfigMeta } from "./index.ts";
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 
+function requireValue<T>(value: T | undefined, message: string): T {
+  if (value === undefined) {
+    throw new TypeError(message);
+  }
+
+  return value;
+}
+
 describe("run with config context", { concurrency: false }, () => {
   test("performs two-pass parsing with config file", async () => {
     await mkdir(TEST_DIR, { recursive: true });
@@ -484,7 +492,11 @@ describe("run with config context", { concurrency: false }, () => {
         config: withDefault(option("--config", string()), configPath),
         outDir: bindConfig(option("--out-dir", string()), {
           context,
-          key: (config, meta) => resolve(meta.configDir, config.outDir),
+          key: (config, meta) =>
+            resolve(
+              requireValue(meta, "Expected config metadata.").configDir,
+              config.outDir,
+            ),
           default: "./fallback",
         }),
       });
@@ -515,7 +527,8 @@ describe("run with config context", { concurrency: false }, () => {
       const context = createConfigContext({ schema });
       const parser = bindConfig(option("--name", string()), {
         context,
-        key: (_config, meta) => meta.configPath,
+        key: (_config, meta) =>
+          requireValue(meta, "Expected config metadata.").configPath,
         default: "unused",
       });
 
@@ -546,8 +559,10 @@ describe("run with config context", { concurrency: false }, () => {
 
     const parser = bindConfig(option("--out-dir", string()), {
       context,
-      key: (config, meta) =>
-        `${meta.source}:${resolve(meta.dir, config.outDir)}`,
+      key: (config, meta) => {
+        const metadata = requireValue(meta, "Expected config metadata.");
+        return `${metadata.source}:${resolve(metadata.dir, config.outDir)}`;
+      },
       default: "unused",
     });
 
@@ -571,7 +586,11 @@ describe("run with config context", { concurrency: false }, () => {
 
     const parser = bindConfig(option("--out-dir", string()), {
       context,
-      key: (config, meta) => resolve(meta.configDir, config.outDir),
+      key: (config, meta) =>
+        resolve(
+          requireValue(meta, "Expected config metadata.").configDir,
+          config.outDir,
+        ),
       default: "unused",
     });
 

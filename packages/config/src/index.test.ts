@@ -19,7 +19,22 @@ import {
   setActiveConfig,
   setActiveConfigMeta,
 } from "./index.ts";
-import type { ConfigMeta } from "./index.ts";
+import type { ConfigLoadResult, ConfigMeta } from "./index.ts";
+
+type IsExact<T, U> = (<V>() => V extends T ? 1 : 2) extends
+  (<V>() => V extends U ? 1 : 2)
+  ? ((<V>() => V extends U ? 1 : 2) extends (<V>() => V extends T ? 1 : 2)
+    ? true
+    : false)
+  : false;
+
+function requireValue<T>(value: T | undefined, message: string): T {
+  if (value === undefined) {
+    throw new TypeError(message);
+  }
+
+  return value;
+}
 
 describe("createConfigContext", () => {
   test("creates a config context with Standard Schema", () => {
@@ -201,7 +216,10 @@ describe("bindConfig", () => {
     const context = createConfigContext({ schema });
     const parser = bindConfig(option("--out-dir", string()), {
       context,
-      key: (config, meta) => `${meta.configDir}:${config.outDir}`,
+      key: (config, meta) =>
+        `${
+          requireValue(meta, "Expected config metadata.").configDir
+        }:${config.outDir}`,
       default: "unused",
     });
 
@@ -229,7 +247,11 @@ describe("bindConfig", () => {
     const context = createConfigContext({ schema });
     const parser = bindConfig(option("--out-dir", string()), {
       context,
-      key: (config, meta) => `${meta?.configDir ?? "no-meta"}:${config.outDir}`,
+      key: (config, meta) => {
+        const exact: IsExact<typeof meta, ConfigMeta | undefined> = true;
+        assert.equal(exact, true);
+        return `${meta?.configDir ?? "no-meta"}:${config.outDir}`;
+      },
       default: "unused",
     });
 
@@ -241,6 +263,15 @@ describe("bindConfig", () => {
     const result = parse(parser, [], { annotations });
     assert.ok(result.success);
     assert.equal(result.value, "no-meta:./dist");
+  });
+
+  test("ConfigLoadResult allows undefined metadata", () => {
+    const loaded: ConfigLoadResult = {
+      config: { outDir: "./dist" },
+      meta: undefined,
+    };
+
+    assert.equal(loaded.meta, undefined);
   });
 
   test("supports nested key access with string key path", () => {

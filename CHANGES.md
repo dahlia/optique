@@ -260,8 +260,14 @@ To be released.
     allows `createConfigContext<T, TConfigMeta>()` to carry a custom metadata
     type through to `bindConfig()` key callbacks.  [[#111]]
 
+ -  Fixed `bindConfig()` and `ConfigLoadResult` type signatures to reflect
+    that config metadata can be absent.  Key callbacks now receive
+    `TConfigMeta | undefined`, and `ConfigLoadResult.meta` is typed as
+    `TConfigMeta | undefined` to match runtime behavior.  [[#155]]
+
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
+[#155]: https://github.com/dahlia/optique/issues/155
 
 ### @optique/env
 

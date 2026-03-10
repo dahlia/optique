@@ -140,9 +140,9 @@ export interface ConfigLoadResult<TConfigMeta = ConfigMeta> {
   readonly config: unknown;
 
   /**
-   * Metadata about where the config came from.
+   * Metadata about where the config came from, if available.
    */
-  readonly meta: TConfigMeta;
+  readonly meta: TConfigMeta | undefined;
 }
 
 /**
@@ -394,10 +394,12 @@ export interface BindConfigOptions<T, TValue, TConfigMeta = ConfigMeta> {
   /**
    * Key or accessor function to extract the value from config.
    * Can be a property key (for top-level config values) or a function
-   * that extracts nested values. Accessor callbacks receive config metadata
-   * as the second argument.
+   * that extracts nested values. Accessor callbacks receive config metadata,
+   * if available, as the second argument.
    */
-  readonly key: keyof T | ((config: T, meta: TConfigMeta) => TValue);
+  readonly key:
+    | keyof T
+    | ((config: T, meta: TConfigMeta | undefined) => TValue);
 
   /**
    * Default value to use when neither CLI nor config provides a value.
@@ -579,7 +581,7 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
   const annotations = getAnnotations(state);
   const contextId = options.context.id;
   const annotationValue = annotations?.[contextId] as
-    | { readonly data: T; readonly meta?: TConfigMeta }
+    | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;
   let configData = annotationValue?.data;
   let configMeta = annotationValue?.meta;
@@ -597,7 +599,7 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
     // Extract value from config
     if (typeof options.key === "function") {
       try {
-        configValue = options.key(configData, configMeta as TConfigMeta);
+        configValue = options.key(configData, configMeta);
       } catch {
         configValue = undefined;
       }
