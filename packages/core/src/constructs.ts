@@ -4797,17 +4797,14 @@ export function merge(
 
   // Check if last argument is options
   const lastArg = args[args.length - 1];
-  const options: MergeOptions = (lastArg && typeof lastArg === "object" &&
-      !("parse" in lastArg) && !("complete" in lastArg))
-    ? lastArg as MergeOptions
-    : {};
+  const hasOptions = lastArg != null &&
+    typeof lastArg === "object" &&
+    !("$valueType" in lastArg);
+  const options: MergeOptions = hasOptions ? lastArg as MergeOptions : {};
 
   // Extract parsers (excluding label and options)
   const startIndex = typeof args[0] === "string" ? 1 : 0;
-  const endIndex = (lastArg && typeof lastArg === "object" &&
-      !("parse" in lastArg) && !("complete" in lastArg))
-    ? args.length - 1
-    : args.length;
+  const endIndex = hasOptions ? args.length - 1 : args.length;
 
   const rawParsers = args.slice(startIndex, endIndex) as Parser<
     Mode,
