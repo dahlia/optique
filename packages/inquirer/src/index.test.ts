@@ -13,7 +13,7 @@ import {
 import { fail, flag, option } from "@optique/core/primitives";
 import { multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
-import { bindEnv, createEnvContext } from "@optique/env";
+import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
 
 const promptFunctionsOverrideSymbol = Symbol.for(
@@ -107,6 +107,25 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, ["--port", "8080"]);
       assert.ok(result.success);
       assert.equal(result.value, 8080);
+    });
+
+    it("uses CLI values when provided for multiple()", async () => {
+      const parser = prompt(multiple(option("--tag", string())), {
+        type: "checkbox",
+        message: "Select tags:",
+        choices: ["a", "b", "c"],
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      });
+
+      const result = await parseAsync(parser, [
+        "--tag",
+        "a",
+        "--tag",
+        "c",
+      ]);
+      assert.ok(result.success);
+      assert.deepEqual(result.value, ["a", "c"]);
     });
   });
 
@@ -357,6 +376,36 @@ describe("prompt()", () => {
         },
       );
     });
+
+    it("rethrows prompt validation failures from input prompts", async () => {
+      await withPromptFunctionsOverride(
+        {
+          input: async (config: {
+            readonly validate?: (
+              value: string,
+            ) => boolean | string | Promise<boolean | string>;
+          }) => {
+            const validation = await config.validate?.("");
+            if (validation !== true) {
+              throw new Error(String(validation));
+            }
+            return "ok";
+          },
+        },
+        async () => {
+          const parser = prompt(fail<string>(), {
+            type: "input",
+            message: "Enter name:",
+            validate: (value) => value.length > 0 || "Name is required.",
+          });
+
+          await assert.rejects(
+            () => parseAsync(parser, []),
+            /Name is required\./,
+          );
+        },
+      );
+    });
   });
 
   describe("object() composition", () => {
@@ -572,6 +621,62 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, [], { annotations });
       assert.ok(result.success);
       assert.equal(result.value, "prompted-value");
+    });
+
+    it("skips prompt when standalone bindEnv(flag(...)) supplies a value", async () => {
+      const context = createEnvContext({
+        source: (key) => ({ APP_VERBOSE: "yes" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = prompt(
+        bindEnv(flag("--verbose"), {
+          context,
+          key: "VERBOSE",
+          parser: bool(),
+          default: false,
+        }),
+        {
+          type: "confirm",
+          message: "Verbose?",
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        },
+      );
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value, true);
+    });
+
+    it("prompts when standalone bindEnv(flag(...)) has no env value", async () => {
+      const context = createEnvContext({
+        source: () => undefined,
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = prompt(
+        bindEnv(flag("--verbose"), {
+          context,
+          key: "VERBOSE",
+          parser: bool(),
+        }),
+        {
+          type: "confirm",
+          message: "Verbose?",
+          prompter: () => Promise.resolve(true),
+        },
+      );
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value, true);
     });
   });
 

@@ -8,7 +8,12 @@ import type { Parser } from "@optique/core/parser";
 import { parse } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
-import { bindEnv, bool, createEnvContext } from "@optique/env";
+import {
+  bindEnv,
+  bool,
+  createEnvContext,
+  getActiveEnvSource,
+} from "./index.ts";
 
 describe("bool()", () => {
   describe("parsing", () => {
@@ -91,6 +96,14 @@ describe("bool()", () => {
     it("exposes boolean choices", () => {
       const parser = bool();
       assert.deepEqual(parser.choices, [true, false]);
+    });
+
+    it("rejects an empty metavar", () => {
+      const callBool = bool as (...args: readonly unknown[]) => unknown;
+      assert.throws(
+        () => Reflect.apply(callBool, undefined, [{ metavar: "" }]),
+        TypeError,
+      );
     });
   });
 
@@ -218,6 +231,26 @@ describe("bindEnv()", () => {
     assert.ok(!result.success);
   });
 
+  it("treats an empty env value as defined and passes it to the parser", () => {
+    const context = createEnvContext({
+      source: (key) => ({ APP_PORT: "" })[key],
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+    assert.ok(!result.success);
+  });
+
   it("supports env-only values via fail() parser", () => {
     const context = createEnvContext({
       source: (key) => ({ APP_TIMEOUT: "60" })[key],
@@ -327,6 +360,66 @@ describe("bindEnv()", () => {
     assert.equal(result.host, "env.example.com");
     assert.equal(result.verbose, true);
     assert.equal(result.timeout, 30);
+  });
+
+  it("uses env values when prefix is omitted", () => {
+    const context = createEnvContext({
+      source: (key) => ({ PORT: "8080" })[key],
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+    });
+
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, 8080);
+  });
+
+  it("uses env values when prefix is an empty string", () => {
+    const context = createEnvContext({
+      source: (key) => ({ PORT: "8080" })[key],
+      prefix: "",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+    });
+
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, 8080);
+  });
+
+  it("supports standalone bindEnv(flag(...))", () => {
+    const context = createEnvContext({
+      source: (key) => ({ APP_VERBOSE: "yes" })[key],
+      prefix: "APP_",
+    });
+    const parser = bindEnv(flag("--verbose"), {
+      context,
+      key: "VERBOSE",
+      parser: bool(),
+      default: false,
+    });
+
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value, true);
   });
 
   it("preserves inner parser state across object() iterations", () => {
@@ -851,6 +944,24 @@ describe("bindEnv()", () => {
 });
 
 describe("createEnvContext defaults", () => {
+  it("removes the active registry entry on dispose", () => {
+    const context = createEnvContext({
+      source: (key) => ({ APP_PORT: "8080" })[key],
+      prefix: "APP_",
+    });
+
+    assert.equal(getActiveEnvSource(context.id), undefined);
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    assert.equal(getActiveEnvSource(context.id)?.prefix, "APP_");
+
+    context[Symbol.dispose]?.();
+
+    assert.equal(getActiveEnvSource(context.id), undefined);
+  });
+
   it("uses Deno.env.get by default when available", () => {
     const originalDeno = Object.getOwnPropertyDescriptor(globalThis, "Deno");
     Object.defineProperty(globalThis, "Deno", {

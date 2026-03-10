@@ -335,6 +335,43 @@ describe("bindConfig", () => {
     assert.equal(defaultResult.value, 3000);
   });
 
+  test("keeps multiple ConfigContext instances isolated in the active registry", async () => {
+    const leftContext = createConfigContext({
+      schema: z.object({ host: z.string() }),
+    });
+    const rightContext = createConfigContext({
+      schema: z.object({ host: z.string() }),
+    });
+    const leftParser = bindConfig(fail<string>(), {
+      context: leftContext,
+      key: "host",
+    });
+    const rightParser = bindConfig(fail<string>(), {
+      context: rightContext,
+      key: "host",
+    });
+
+    try {
+      await leftContext.getAnnotations(true, {
+        load: () => ({ config: { host: "left.example.com" } }),
+      });
+      await rightContext.getAnnotations(true, {
+        load: () => ({ config: { host: "right.example.com" } }),
+      });
+
+      const leftResult = parse(leftParser, []);
+      const rightResult = parse(rightParser, []);
+
+      assert.ok(leftResult.success);
+      assert.ok(rightResult.success);
+      assert.equal(leftResult.value, "left.example.com");
+      assert.equal(rightResult.value, "right.example.com");
+    } finally {
+      leftContext[Symbol.dispose]?.();
+      rightContext[Symbol.dispose]?.();
+    }
+  });
+
   test("does not fall back to config/default when CLI value is invalid", () => {
     const schema = z.object({
       port: z.number().optional(),

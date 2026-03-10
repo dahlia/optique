@@ -10,6 +10,7 @@ import {
   inheritAnnotations,
   injectAnnotations,
   isInjectedAnnotationWrapper,
+  unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
 
 describe("getAnnotations", () => {
@@ -122,6 +123,29 @@ describe("injectAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
+  it("should preserve Set state shape", () => {
+    const marker = Symbol.for("@test/inject-set");
+    const source = new Set(["a", "b"]);
+    const result = injectAnnotations(source, { [marker]: "ok" });
+
+    assert.ok(result instanceof Set);
+    assert.notEqual(result, source);
+    assert.deepEqual([...result], ["a", "b"]);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should preserve RegExp state shape", () => {
+    const marker = Symbol.for("@test/inject-regexp");
+    const source = /ab+/gi;
+    const result = injectAnnotations(source, { [marker]: "ok" });
+
+    assert.ok(result instanceof RegExp);
+    assert.notEqual(result, source);
+    assert.equal(result.source, "ab+");
+    assert.equal(result.flags, "gi");
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
   it("should clone non-plain object states without mutation", () => {
     const marker = Symbol.for("@test/inject-nonplain");
     class CustomState {
@@ -200,6 +224,31 @@ describe("inheritAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
+  it("should preserve Set state shape", () => {
+    const marker = Symbol.for("@test/inherit-set");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+    const target = new Set(["a", "b"]);
+    const result = inheritAnnotations(source, target);
+
+    assert.ok(result instanceof Set);
+    assert.notEqual(result, target);
+    assert.deepEqual([...result], ["a", "b"]);
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
+  it("should preserve RegExp state shape", () => {
+    const marker = Symbol.for("@test/inherit-regexp");
+    const source = { [annotationKey]: { [marker]: "ok" } };
+    const target = /ab+/gi;
+    const result = inheritAnnotations(source, target);
+
+    assert.ok(result instanceof RegExp);
+    assert.notEqual(result, target);
+    assert.equal(result.source, "ab+");
+    assert.equal(result.flags, "gi");
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+  });
+
   it("should not mutate extensible non-plain objects", () => {
     const marker = Symbol.for("@test/inherit-nonplain");
     const source = { [annotationKey]: { [marker]: "ok" } };
@@ -213,5 +262,34 @@ describe("inheritAnnotations", () => {
     assert.equal(result, target);
     assert.equal(result.value, 1);
     assert.equal(getAnnotations(target), undefined);
+  });
+});
+
+describe("unwrapInjectedAnnotationWrapper", () => {
+  it("should unwrap pure injected wrappers back to the original value", () => {
+    const wrapped = injectAnnotations(42, {
+      [Symbol.for("@test/unwrap")]: "ok",
+    });
+
+    assert.equal(unwrapInjectedAnnotationWrapper(wrapped), 42);
+  });
+
+  it("should not unwrap wrappers with additional own keys", () => {
+    const wrapped = injectAnnotations("value", {
+      [Symbol.for("@test/unwrap-extra")]: "ok",
+    });
+    const wrapperObject = wrapped as unknown as Record<PropertyKey, unknown>;
+    wrapperObject.extra = true;
+
+    assert.equal(
+      unwrapInjectedAnnotationWrapper(wrapperObject),
+      wrapperObject,
+    );
+  });
+
+  it("should return non-wrapper objects unchanged", () => {
+    const value = { plain: true };
+
+    assert.equal(unwrapInjectedAnnotationWrapper(value), value);
   });
 });
