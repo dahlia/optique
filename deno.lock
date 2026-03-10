@@ -23,6 +23,7 @@
     "npm:hongdown@0.3.2": "0.3.2",
     "npm:hongdown@0.3.4": "0.3.4",
     "npm:hongdown@0.3.7": "0.3.7",
+    "npm:hongdown@0.3.8": "0.3.8",
     "npm:isomorphic-git@^1.36.1": "1.36.1",
     "npm:markdownlint-cli2@*": "0.20.0",
     "npm:markdownlint-cli2@0.20": "0.20.0",
@@ -420,6 +421,11 @@
       "os": ["darwin"],
       "cpu": ["arm64"]
     },
+    "@hongdown/darwin-arm64@0.3.8": {
+      "integrity": "sha512-ckR+H0kOw1M3tfd2sHj3OWlwJYjzE1Mq0c0kA2DSQlhkItiyTXgGf3Mkl/ZzGU0xCY3j9W7vOPQvS+oN05HxuA==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
     "@hongdown/darwin-x64@0.1.0-dev.21": {
       "integrity": "sha512-v8JCi1MS8vK+ry7VjEwID3WrZfhy3TARrnTUi6Jf881aOSmA2HmChGKytAwdtWqYgVvtjWDqxQgL6wp1/wn2xg==",
       "os": ["darwin"],
@@ -472,6 +478,11 @@
     },
     "@hongdown/darwin-x64@0.3.7": {
       "integrity": "sha512-L9MazXs9Ckv+HRkZW6RspXJTSNCpZutP033INJEw4Km+2QN8QGFNuqgf4/bbG2sv6A5ENxineDhX2yMhC5LFlQ==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/darwin-x64@0.3.8": {
+      "integrity": "sha512-lh84KiLZ04nR4W6+pjCNDc08SIB0mG4S7V+wtHmxtCkWUp+DVY5FjeOyeq4fk9VGUbJJnFFYZUHqTc9MvDRWpg==",
       "os": ["darwin"],
       "cpu": ["x64"]
     },
@@ -530,6 +541,11 @@
       "os": ["linux"],
       "cpu": ["arm64"]
     },
+    "@hongdown/linux-arm64@0.3.8": {
+      "integrity": "sha512-XP8hCKuf32EbE042LplCyp58SxQ/OmnP5UY2KJIlEAVhvLXrw+cDFPqy9L5ibtuf01kSclTBtCIxYZNcBAosjg==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
     "@hongdown/linux-x64@0.1.0-dev.21": {
       "integrity": "sha512-Eg6mFwdW18JivmiwWsc/c6I3yNmLg5RpSPcW3mvOXyy6BSJOiqhv/Dg15CwGZUQlUoTjf5mff+sh1WqGOfl4iA==",
       "os": ["linux"],
@@ -582,6 +598,11 @@
     },
     "@hongdown/linux-x64@0.3.7": {
       "integrity": "sha512-fuVGkO7L99MwRkoL07zKMG+pNNp937UvFQSPZLA+gSec1F1uVfabyh/I6OrywUGbcTZuw8EEK3+7744X0xvwBA==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/linux-x64@0.3.8": {
+      "integrity": "sha512-UKGq5h0q1eoBapFYBAtHXHIbnRlxCqSSVfHE8sidkSNa1ZjzdjrTmCQ2io6eewE2E4nlk1ORHMIZGPsfKDqaiQ==",
       "os": ["linux"],
       "cpu": ["x64"]
     },
@@ -640,6 +661,11 @@
       "os": ["win32"],
       "cpu": ["arm64"]
     },
+    "@hongdown/win32-arm64@0.3.8": {
+      "integrity": "sha512-peXpC/sI03mw9K3EaC4iclShFjx/ZsbS++ADiIqY849QAWJnS+0oeJ6MQX5Apgnk7db8RCy6Lkn+YOdRmDak4Q==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
     "@hongdown/win32-x64@0.1.0-dev.21": {
       "integrity": "sha512-iSBwntyFpo6lBKKLeLe5YgDNy11A1JcbyFi4ite9yaTmdyvoGkCLXwSNAD2TKs+4ELGi5tPiQ+Xra9Vkfj1XkA==",
       "os": ["win32"],
@@ -692,6 +718,11 @@
     },
     "@hongdown/win32-x64@0.3.7": {
       "integrity": "sha512-2JqXd6BLXKc/qs3GgULUgT8C7Wn9Dh/7WJGwtdVDN38OXCeH1N35PnmxsJYrAvLMomHzksthRlAJ7ZfZwDcYog==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@hongdown/win32-x64@0.3.8": {
+      "integrity": "sha512-Do40nu29auZcc3EnDvfoBdkGSaCXOTtKG8vOuPx0eh23SVinD1h7TrLLNlQZyvZmPB1mPUvIbFPn7lzxaRFoKg==",
       "os": ["win32"],
       "cpu": ["x64"]
     },
@@ -1595,6 +1626,18 @@
         "@hongdown/linux-x64@0.3.7",
         "@hongdown/win32-arm64@0.3.7",
         "@hongdown/win32-x64@0.3.7"
+      ],
+      "bin": true
+    },
+    "hongdown@0.3.8": {
+      "integrity": "sha512-V0eCE4Kb7ZJTFx275Kchwy69faosJ9GWTCqiIpHJsWDS7WTKdVcfvrUbBrkPzt3Z2NEAsKrqy1MYvMyf49I+Xw==",
+      "optionalDependencies": [
+        "@hongdown/darwin-arm64@0.3.8",
+        "@hongdown/darwin-x64@0.3.8",
+        "@hongdown/linux-arm64@0.3.8",
+        "@hongdown/linux-x64@0.3.8",
+        "@hongdown/win32-arm64@0.3.8",
+        "@hongdown/win32-x64@0.3.8"
       ],
       "bin": true
     },
