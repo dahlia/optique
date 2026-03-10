@@ -5091,13 +5091,19 @@ describe("Realistic async I/O scenarios", () => {
     });
   });
 
-  describe("concurrent async validations", () => {
+  describe("multiple async validations", () => {
     // Simulates multiple independent async validations
-    function slowAsyncValidator(delayMs: number): ValueParser<"async", string> {
+    function slowAsyncValidator(
+      key: string,
+      delayMs: number,
+      calls: Map<string, readonly string[]>,
+    ): ValueParser<"async", string> {
       return {
         $mode: "async",
         metavar: "VALUE",
         async parse(input: string): Promise<ValueParserResult<string>> {
+          const existing = calls.get(key) ?? [];
+          calls.set(key, [...existing, input]);
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           return { success: true, value: `validated:${input}` };
         },
@@ -5107,14 +5113,14 @@ describe("Realistic async I/O scenarios", () => {
       };
     }
 
-    it("should handle multiple concurrent slow validations", async () => {
+    it("should await each async validator exactly once", async () => {
+      const calls = new Map<string, readonly string[]>();
       const parser = object({
-        fast: option("--fast", slowAsyncValidator(1)),
-        medium: option("--medium", slowAsyncValidator(5)),
-        slow: option("--slow", slowAsyncValidator(10)),
+        fast: option("--fast", slowAsyncValidator("fast", 1, calls)),
+        medium: option("--medium", slowAsyncValidator("medium", 5, calls)),
+        slow: option("--slow", slowAsyncValidator("slow", 10, calls)),
       });
 
-      const start = Date.now();
       const result = await parseAsync(parser, [
         "--fast",
         "a",
@@ -5123,7 +5129,6 @@ describe("Realistic async I/O scenarios", () => {
         "--slow",
         "c",
       ]);
-      const elapsed = Date.now() - start;
 
       assert.ok(result.success);
       if (result.success) {
@@ -5131,14 +5136,9 @@ describe("Realistic async I/O scenarios", () => {
         assert.equal(result.value.medium, "validated:b");
         assert.equal(result.value.slow, "validated:c");
       }
-
-      // Should complete in roughly the time of the slowest validator,
-      // not the sum of all validators (if running concurrently)
-      // Allow some buffer for test timing variations
-      assert.ok(
-        elapsed < 50,
-        `Expected parallel execution, but took ${elapsed}ms`,
-      );
+      assert.deepEqual(calls.get("fast"), ["a"]);
+      assert.deepEqual(calls.get("medium"), ["b"]);
+      assert.deepEqual(calls.get("slow"), ["c"]);
     });
   });
 
