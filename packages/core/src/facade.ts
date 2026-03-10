@@ -96,9 +96,7 @@ function createHelpParser(
       commandParsers.push(
         command(names[i], innerParser, {
           description: message`Show help information.`,
-          hidden: i === 0
-            ? commandConfig.hidden
-            : (commandConfig.hidden === true ? true : true),
+          hidden: i === 0 ? commandConfig.hidden : true,
         }),
       );
     }
@@ -140,9 +138,7 @@ function createVersionParser(
       commandParsers.push(
         command(names[i], innerParser, {
           description: message`Show version information.`,
-          hidden: i === 0
-            ? commandConfig.hidden
-            : (commandConfig.hidden === true ? true : true),
+          hidden: i === 0 ? commandConfig.hidden : true,
         }),
       );
     }
@@ -304,9 +300,7 @@ function createCompletionParser(
       commandParsers.push(
         command(names[i], completionInner, {
           ...completionCommandConfig,
-          hidden: i === 0
-            ? commandConfig.hidden
-            : (commandConfig.hidden === true ? true : true),
+          hidden: i === 0 ? commandConfig.hidden : true,
         }),
       );
     }

@@ -7802,6 +7802,65 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(versionResult, "version-alias");
   });
 
+  it("keeps meta-command aliases fully hidden with partial visibility", () => {
+    const parser = object({ name: argument(string()) });
+
+    let helpOutput = "";
+    runParser(parser, "myapp", ["--help"], {
+      help: {
+        command: { names: ["help", "assist"], hidden: "usage" },
+        option: true,
+        onShow: () => "help-shown",
+      },
+      stdout: (text) => {
+        helpOutput += text + "\n";
+      },
+    });
+    assert.ok(helpOutput.includes("help"));
+    assert.ok(
+      !/\bassist\b/.test(helpOutput),
+      `hidden help alias should stay out of help output, got:\n${helpOutput}`,
+    );
+
+    let versionErrorOutput = "";
+    runParser(parser, "myapp", ["--invalid"], {
+      version: {
+        value: "1.2.3",
+        command: { names: ["version", "ver"], hidden: "doc" },
+      },
+      onError: () => "error",
+      stderr: (text) => {
+        versionErrorOutput += text + "\n";
+      },
+    });
+    const versionUsageLines = versionErrorOutput
+      .split("\n")
+      .filter((line) => line.startsWith("Usage:") || line.startsWith("       "))
+      .join("\n");
+    assert.ok(versionUsageLines.includes("version"));
+    assert.ok(
+      !/(?:^|\s)ver(?:\s|$)/m.test(versionUsageLines),
+      `hidden version alias should stay out of usage output, got:\n${versionUsageLines}`,
+    );
+
+    let completionOutput = "";
+    runParser(parser, "myapp", ["--help"], {
+      help: { option: true, onShow: () => "help-shown" },
+      completion: {
+        command: { names: ["completion", "completions"], hidden: "usage" },
+      },
+      stdout: (text) => {
+        completionOutput += text + "\n";
+      },
+    });
+    assert.ok(completionOutput.includes("completion"));
+    assert.ok(
+      !/(?:^|\n)\s+completions\b/m.test(completionOutput) &&
+        !/\bmyapp completions\b/.test(completionOutput),
+      `hidden completion alias should stay out of help output, got:\n${completionOutput}`,
+    );
+  });
+
   it("builds multi-name help/version commands with visible primary names", () => {
     const parser = object({ name: argument(string()) });
 
