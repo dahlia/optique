@@ -641,8 +641,9 @@ type OrArityGuard<TParsers extends readonly unknown[]> =
  * @template TStateB The type of the state used by the second parser.
  * @param a The first {@link Parser} to try.
  * @param b The second {@link Parser} to try.
- * @returns A {@link Parser} that tries to parse using the provided parsers
- *          in order, returning the result of the first successful parser.
+ * @return A {@link Parser} that tries to parse using the provided parsers
+ *         in order, returning the result of the first successful parser.
+ * @since 0.3.0
  */
 export function or<
   MA extends Mode,
@@ -678,6 +679,7 @@ export function or<
  * @param c The third {@link Parser} to try.
  * @return A {@link Parser} that tries to parse using the provided parsers
  *         in order, returning the result of the first successful parser.
+ * @since 0.3.0
  */
 export function or<
   MA extends Mode,
@@ -724,6 +726,7 @@ export function or<
  * @param d The fourth {@link Parser} to try.
  * @return A {@link Parser} that tries to parse using the provided parsers
  *         in order, returning the result of the first successful parser.
+ * @since 0.3.0
  */
 export function or<
   MA extends Mode,
