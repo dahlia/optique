@@ -287,6 +287,54 @@ export interface RunOptions {
   readonly contexts?: readonly SourceContext<unknown>[];
 }
 
+type ProgramHelpMetadata = {
+  readonly brief?: Message;
+  readonly description?: Message;
+  readonly examples?: Message;
+  readonly author?: Message;
+  readonly bugs?: Message;
+  readonly footer?: Message;
+};
+
+function getProgramHelpMetadata(
+  metadata: Program<Mode, unknown>["metadata"],
+): ProgramHelpMetadata {
+  return {
+    brief: metadata.brief,
+    description: metadata.description,
+    examples: metadata.examples,
+    author: metadata.author,
+    bugs: metadata.bugs,
+    footer: metadata.footer,
+  };
+}
+
+function resolveProgramInput<
+  M extends Mode,
+  T extends Parser<M, unknown, unknown>,
+>(
+  parserOrProgram: T | Program<M, unknown>,
+  options: RunOptions,
+): {
+  readonly parser: T;
+  readonly options: RunOptions;
+  readonly programMetadata?: ProgramHelpMetadata;
+} {
+  if ("parser" in parserOrProgram && "metadata" in parserOrProgram) {
+    return {
+      parser: parserOrProgram.parser as T,
+      options: options.programName == null
+        ? { ...options, programName: parserOrProgram.metadata.name }
+        : options,
+      programMetadata: getProgramHelpMetadata(parserOrProgram.metadata),
+    };
+  }
+  return {
+    parser: parserOrProgram,
+    options,
+  };
+}
+
 /**
  * Runs a command-line parser with automatic process integration.
  *
@@ -449,35 +497,9 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
   // For sync parsers with contexts, use runWithSync() instead of async runWith()
   const contexts = options.contexts;
   if (contexts && contexts.length > 0) {
-    const isProgram = "parser" in parserOrProgram &&
-      "metadata" in parserOrProgram;
-    let parser: T;
-    let programMetadata: {
-      brief?: Message;
-      description?: Message;
-      examples?: Message;
-      author?: Message;
-      bugs?: Message;
-      footer?: Message;
-    } | undefined;
-
-    if (isProgram) {
-      const program = parserOrProgram as Program<"sync", unknown>;
-      parser = program.parser as T;
-      if (!options.programName) {
-        options = { ...options, programName: program.metadata.name };
-      }
-      programMetadata = {
-        brief: program.metadata.brief,
-        description: program.metadata.description,
-        examples: program.metadata.examples,
-        author: program.metadata.author,
-        bugs: program.metadata.bugs,
-        footer: program.metadata.footer,
-      };
-    } else {
-      parser = parserOrProgram as T;
-    }
+    const resolved = resolveProgramInput(parserOrProgram, options);
+    const { parser, programMetadata } = resolved;
+    options = resolved.options;
 
     const { programName, args, coreOptions } = buildCoreOptions(
       options,
@@ -572,14 +594,7 @@ export function runAsync<T extends Parser<Mode, unknown, unknown>>(
  */
 function buildCoreOptions(
   options: RunOptions,
-  programMetadata?: {
-    brief?: Message;
-    description?: Message;
-    examples?: Message;
-    author?: Message;
-    bugs?: Message;
-    footer?: Message;
-  },
+  programMetadata?: ProgramHelpMetadata,
 ): {
   programName: string;
   args: readonly string[];
@@ -716,39 +731,9 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
   parserOrProgram: T | Program<Mode, unknown>,
   options: RunOptions = {},
 ): ModeValue<InferMode<T>, InferValue<T>> | Promise<InferValue<T>> {
-  // Determine if we're using the new Program API
-  const isProgram = "parser" in parserOrProgram &&
-    "metadata" in parserOrProgram;
-
-  let parser: T;
-  let programMetadata: {
-    brief?: Message;
-    description?: Message;
-    examples?: Message;
-    author?: Message;
-    bugs?: Message;
-    footer?: Message;
-  } | undefined;
-
-  if (isProgram) {
-    const program = parserOrProgram as Program<Mode, unknown>;
-    parser = program.parser as T;
-    const programNameFromProgram = program.metadata.name;
-    programMetadata = {
-      brief: program.metadata.brief,
-      description: program.metadata.description,
-      examples: program.metadata.examples,
-      author: program.metadata.author,
-      bugs: program.metadata.bugs,
-      footer: program.metadata.footer,
-    };
-    // Inject program name as default if not provided
-    if (!options.programName) {
-      options = { ...options, programName: programNameFromProgram };
-    }
-  } else {
-    parser = parserOrProgram as T;
-  }
+  const resolved = resolveProgramInput(parserOrProgram, options);
+  const { parser, programMetadata } = resolved;
+  options = resolved.options;
 
   // If contexts are present, delegate to runWith() (always async)
   const contexts = options.contexts;
