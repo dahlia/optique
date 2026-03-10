@@ -181,6 +181,12 @@ To be released.
     always receive the numeric exit code, and any real exception they throw
     is propagated unchanged.  [[#153]]
 
+ -  Fixed source-context cleanup in `runWith()` and `runWithSync()`.
+    Disposal now continues across all contexts even if an earlier dispose
+    call throws, and `runWithSync()` no longer skips contexts that only
+    implement `Symbol.asyncDispose` when that cleanup completes
+    synchronously.  [[#154]]
+
  -  Fixed help output incorrectly interleaving meta items (`help`, `--help`,
     `--version`) with user-defined commands when using `group: "…"` to
     assign meta items to a named section that already exists in user-defined
@@ -208,6 +214,7 @@ To be released.
 [#150]: https://github.com/dahlia/optique/issues/150
 [#152]: https://github.com/dahlia/optique/issues/152
 [#153]: https://github.com/dahlia/optique/issues/153
+[#154]: https://github.com/dahlia/optique/issues/154
 [#157]: https://github.com/dahlia/optique/issues/157
 
 ### @optique/config

@@ -4427,6 +4427,45 @@ describe("runWith", () => {
       assert.deepEqual(disposed, ["context1", "context2"]);
     });
 
+    it("should dispose remaining contexts when one async dispose fails", async () => {
+      const disposed: string[] = [];
+
+      const context1: SourceContext = {
+        id: Symbol.for("@test/dispose-error-1"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/dispose-error-1")]: { value: 1 },
+          };
+        },
+        [Symbol.asyncDispose]() {
+          disposed.push("context1");
+          throw new Error("Context 1 dispose failed.");
+        },
+      };
+
+      const context2: SourceContext = {
+        id: Symbol.for("@test/dispose-error-2"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/dispose-error-2")]: { value: 2 },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed.push("context2");
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      await assert.rejects(
+        () => runWith(parser, "test", [context1, context2], { args: [] }),
+        /Context 1 dispose failed\./,
+      );
+      assert.deepEqual(disposed, ["context1", "context2"]);
+    });
+
     it("should handle context without dispose methods", async () => {
       const context: SourceContext = {
         id: Symbol.for("@test/no-dispose"),
@@ -4829,7 +4868,7 @@ describe("runWithSync", () => {
       assert.ok(disposed);
     });
 
-    it("should ignore Symbol.asyncDispose in sync mode", () => {
+    it("should prefer Symbol.dispose over Symbol.asyncDispose in sync mode", () => {
       const disposed: string[] = [];
       const context: SourceContext = {
         id: Symbol.for("@test/sync-no-async-dispose"),
@@ -4851,8 +4890,67 @@ describe("runWithSync", () => {
       });
 
       runWithSync(parser, "test", [context], { args: [] });
-      // disposeContextsSync only calls Symbol.dispose
       assert.deepEqual(disposed, ["sync"]);
+    });
+
+    it("should call Symbol.asyncDispose in sync mode when it is synchronous", () => {
+      const disposed: string[] = [];
+      const context: SourceContext = {
+        id: Symbol.for("@test/sync-async-dispose-only"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/sync-async-dispose-only")]: { value: true },
+          };
+        },
+        [Symbol.asyncDispose]() {
+          disposed.push("async");
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      runWithSync(parser, "test", [context], { args: [] });
+      assert.deepEqual(disposed, ["async"]);
+    });
+
+    it("should dispose remaining contexts when one sync dispose fails", () => {
+      const disposed: string[] = [];
+
+      const context1: SourceContext = {
+        id: Symbol.for("@test/sync-dispose-error-1"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/sync-dispose-error-1")]: { value: 1 },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed.push("context1");
+          throw new Error("Context 1 sync dispose failed.");
+        },
+      };
+
+      const context2: SourceContext = {
+        id: Symbol.for("@test/sync-dispose-error-2"),
+        getAnnotations() {
+          return {
+            [Symbol.for("@test/sync-dispose-error-2")]: { value: 2 },
+          };
+        },
+        [Symbol.dispose]() {
+          disposed.push("context2");
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      assert.throws(() => {
+        runWithSync(parser, "test", [context1, context2], { args: [] });
+      }, /Context 1 sync dispose failed\./);
+      assert.deepEqual(disposed, ["context1", "context2"]);
     });
   });
 

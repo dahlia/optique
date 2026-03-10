@@ -2304,36 +2304,87 @@ function collectAnnotationsSync(
 async function disposeContexts(
   contexts: readonly SourceContext<unknown>[],
 ): Promise<void> {
+  const errors: unknown[] = [];
+
   for (const context of contexts) {
-    if (
-      Symbol.asyncDispose in context &&
-      typeof context[Symbol.asyncDispose] === "function"
-    ) {
-      await context[Symbol.asyncDispose]!();
-    } else if (
-      Symbol.dispose in context &&
-      typeof context[Symbol.dispose] === "function"
-    ) {
-      context[Symbol.dispose]!();
+    try {
+      if (
+        Symbol.asyncDispose in context &&
+        typeof context[Symbol.asyncDispose] === "function"
+      ) {
+        await context[Symbol.asyncDispose]!();
+      } else if (
+        Symbol.dispose in context &&
+        typeof context[Symbol.dispose] === "function"
+      ) {
+        context[Symbol.dispose]!();
+      }
+    } catch (error) {
+      errors.push(error);
     }
+  }
+
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(
+      errors,
+      "Failed to dispose one or more source contexts.",
+    );
   }
 }
 
 /**
  * Disposes all contexts that implement `Disposable` synchronously.
+ * Falls back to `[Symbol.asyncDispose]` when it completes synchronously.
  *
  * @param contexts Source contexts to dispose.
  */
 function disposeContextsSync(
   contexts: readonly SourceContext<unknown>[],
 ): void {
+  const errors: unknown[] = [];
+
   for (const context of contexts) {
-    if (
-      Symbol.dispose in context &&
-      typeof context[Symbol.dispose] === "function"
-    ) {
-      context[Symbol.dispose]!();
+    try {
+      if (
+        Symbol.dispose in context &&
+        typeof context[Symbol.dispose] === "function"
+      ) {
+        context[Symbol.dispose]!();
+      } else if (
+        Symbol.asyncDispose in context &&
+        typeof context[Symbol.asyncDispose] === "function"
+      ) {
+        const result = context[Symbol.asyncDispose]!();
+        if (
+          typeof result === "object" &&
+          result !== null &&
+          "then" in result &&
+          typeof result.then === "function"
+        ) {
+          throw new TypeError(
+            `Context ${
+              String(context.id)
+            } returned a Promise from Symbol.asyncDispose in sync mode. ` +
+              "Use runWith() or runWithAsync() for async disposal.",
+          );
+        }
+      }
+    } catch (error) {
+      errors.push(error);
     }
+  }
+
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(
+      errors,
+      "Failed to dispose one or more source contexts.",
+    );
   }
 }
 
@@ -2628,7 +2679,8 @@ export async function runWith<
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
  * @returns The parsed result.
- * @throws Error if any context returns a Promise.
+ * @throws Error if any context returns a Promise or if a context's
+ * `[Symbol.asyncDispose]` returns a Promise.
  * @since 0.10.0
  */
 export function runWithSync<

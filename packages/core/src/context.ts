@@ -169,7 +169,9 @@ export interface SourceContext<TRequiredOptions = void> {
   /**
    * Optional asynchronous cleanup method.  Called by `runWith()` in a
    * `finally` block after parsing completes.  Takes precedence over
-   * `[Symbol.dispose]` in async runners.
+   * `[Symbol.dispose]` in async runners.  `runWithSync()` also calls this
+   * method when `[Symbol.dispose]` is absent, but throws if it returns a
+   * Promise.
    */
   [Symbol.asyncDispose]?(): void | PromiseLike<void>;
 }
