@@ -160,6 +160,11 @@ To be released.
     `--option=value` inputs now report a duplicate-option error instead of
     silently overwriting the earlier value.  [[#149]]
 
+ -  Fixed `withDefault().getDocFragments()` crashing when a function-based
+    default throws during help generation.  Help output now skips evaluating
+    doc-only defaults when a custom `message` is provided, and otherwise
+    omits the default display instead of throwing.  [[#150]]
+
  -  Fixed async `runParser()` help handling for `command --help` validation.
     In the async validation path, `displayHelp` was referenced before
     initialization, which could throw `ReferenceError` instead of showing help.
@@ -189,6 +194,7 @@ To be released.
 [#145]: https://github.com/dahlia/optique/pull/145
 [#146]: https://github.com/dahlia/optique/pull/146
 [#149]: https://github.com/dahlia/optique/issues/149
+[#150]: https://github.com/dahlia/optique/issues/150
 [#157]: https://github.com/dahlia/optique/issues/157
 
 ### @optique/config

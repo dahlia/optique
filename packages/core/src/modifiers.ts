@@ -427,6 +427,24 @@ export function withDefault<
 ): Parser<M, TValue | TDefault, [TState] | undefined> {
   // Cast to sync for implementation
   const syncParser = parser as Parser<"sync", TValue, TState>;
+  const getDocDefaultValue = (
+    upperDefaultValue?: TValue | TDefault,
+  ): TValue | undefined => {
+    if (upperDefaultValue != null) {
+      return upperDefaultValue as TValue;
+    }
+    if (options?.message) {
+      return undefined;
+    }
+    if (typeof defaultValue !== "function") {
+      return defaultValue as unknown as TValue;
+    }
+    try {
+      return (defaultValue as () => TDefault)() as unknown as TValue;
+    } catch {
+      return undefined;
+    }
+  };
 
   // Sync suggest helper
   function* suggestSync(
@@ -694,15 +712,9 @@ export function withDefault<
         ? { kind: "unavailable" }
         : { kind: "available", state: state.state[0] };
 
-      const actualDefaultValue = upperDefaultValue != null
-        ? upperDefaultValue as TValue
-        : typeof defaultValue === "function"
-        ? (defaultValue as () => TDefault)() as unknown as TValue
-        : defaultValue as unknown as TValue;
-
       const fragments = syncParser.getDocFragments(
         innerState,
-        actualDefaultValue,
+        getDocDefaultValue(upperDefaultValue),
       );
 
       // If a custom message is provided, replace the default field in all entries

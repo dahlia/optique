@@ -997,6 +997,50 @@ describe("withDefault", () => {
       }
     });
 
+    it("should not evaluate function-based defaults when a custom help message is provided", () => {
+      const baseParser = option("--token", string());
+      const customMessage = message`${envVar("API_TOKEN")}`;
+      let callbackCalls = 0;
+      const defaultParser = withDefault(baseParser, () => {
+        callbackCalls += 1;
+        throw new WithDefaultError(
+          message`Environment variable ${envVar("API_TOKEN")} is not set.`,
+        );
+      }, {
+        message: customMessage,
+      });
+
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      assert.equal(callbackCalls, 0);
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.deepEqual(fragments.fragments[0].default, customMessage);
+      }
+    });
+
+    it("should omit the default in help when a function-based default throws", () => {
+      const baseParser = option("--config", string());
+      const defaultParser = withDefault(baseParser, () => {
+        throw new WithDefaultError(
+          message`Environment variable ${envVar("CONFIG_PATH")} is not set.`,
+        );
+      });
+
+      const fragments = defaultParser.getDocFragments({
+        kind: "unavailable" as const,
+      });
+
+      assert.equal(fragments.fragments.length, 1);
+      assert.equal(fragments.fragments[0].type, "entry");
+      if (fragments.fragments[0].type === "entry") {
+        assert.equal(fragments.fragments[0].default, undefined);
+      }
+    });
+
     it("should preserve description from wrapped parser", () => {
       const description = message`Server port number`;
       const baseParser = option("-p", "--port", integer(), { description });
