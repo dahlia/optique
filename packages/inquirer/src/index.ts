@@ -66,6 +66,13 @@ function getPromptFunctions(): PromptFunctions {
   return override ?? defaultPromptFunctions;
 }
 
+function isExitPromptError(error: unknown): boolean {
+  return typeof error === "object" &&
+    error != null &&
+    "name" in error &&
+    error.name === "ExitPromptError";
+}
+
 // ---- Choice types ----
 
 /**
@@ -545,112 +552,118 @@ export function prompt<M extends Mode, TValue, TState>(
 
   async function executePrompt(): Promise<ValueParserResult<TValue>> {
     const prompts = getPromptFunctions();
-
-    // Prompter override (for testing)
-    if ("prompter" in cfg && cfg.prompter != null) {
-      const value = await cfg.prompter();
-      if (cfg.type === "number" && value === undefined) {
-        return { success: false, error: message`No number provided.` };
-      }
-      return { success: true, value: value as TValue };
-    }
-
-    switch (cfg.type) {
-      case "confirm":
-        return {
-          success: true,
-          value: await prompts.confirm({
-            message: cfg.message,
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }) as TValue,
-        };
-
-      case "number": {
-        const numResult = await prompts.number({
-          message: cfg.message,
-          ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          ...(cfg.min !== undefined ? { min: cfg.min } : {}),
-          ...(cfg.max !== undefined ? { max: cfg.max } : {}),
-          ...(cfg.step !== undefined ? { step: cfg.step } : {}),
-        });
-        if (numResult === undefined) {
+    try {
+      // Prompter override (for testing)
+      if ("prompter" in cfg && cfg.prompter != null) {
+        const value = await cfg.prompter();
+        if (cfg.type === "number" && value === undefined) {
           return { success: false, error: message`No number provided.` };
         }
-        return { success: true, value: numResult as TValue };
+        return { success: true, value: value as TValue };
       }
 
-      case "input":
-        return {
-          success: true,
-          value: await prompts.input({
+      switch (cfg.type) {
+        case "confirm":
+          return {
+            success: true,
+            value: await prompts.confirm({
+              message: cfg.message,
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+            }) as TValue,
+          };
+
+        case "number": {
+          const numResult = await prompts.number({
             message: cfg.message,
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-            ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }) as TValue,
-        };
+            ...(cfg.min !== undefined ? { min: cfg.min } : {}),
+            ...(cfg.max !== undefined ? { max: cfg.max } : {}),
+            ...(cfg.step !== undefined ? { step: cfg.step } : {}),
+          });
+          if (numResult === undefined) {
+            return { success: false, error: message`No number provided.` };
+          }
+          return { success: true, value: numResult as TValue };
+        }
 
-      case "password":
-        return {
-          success: true,
-          value: await prompts.password({
-            message: cfg.message,
-            ...(cfg.mask !== undefined ? { mask: cfg.mask } : {}),
-            ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }) as TValue,
-        };
+        case "input":
+          return {
+            success: true,
+            value: await prompts.input({
+              message: cfg.message,
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+              ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
+            }) as TValue,
+          };
 
-      case "editor":
-        return {
-          success: true,
-          value: await prompts.editor({
-            message: cfg.message,
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-            ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }) as TValue,
-        };
+        case "password":
+          return {
+            success: true,
+            value: await prompts.password({
+              message: cfg.message,
+              ...(cfg.mask !== undefined ? { mask: cfg.mask } : {}),
+              ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
+            }) as TValue,
+          };
 
-      case "select":
-        return {
-          success: true,
-          value: await prompts.select({
-            message: cfg.message,
-            choices: normalizeChoices(cfg.choices),
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }) as TValue,
-        };
+        case "editor":
+          return {
+            success: true,
+            value: await prompts.editor({
+              message: cfg.message,
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+              ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
+            }) as TValue,
+          };
 
-      case "rawlist":
-        return {
-          success: true,
-          value: await prompts.rawlist({
-            message: cfg.message,
-            choices: normalizeChoices(cfg.choices),
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }) as TValue,
-        };
+        case "select":
+          return {
+            success: true,
+            value: await prompts.select({
+              message: cfg.message,
+              choices: normalizeChoices(cfg.choices),
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+            }) as TValue,
+          };
 
-      case "expand":
-        return {
-          success: true,
-          value: await (prompts.expand as (config: {
-            message: string;
-            choices: readonly { value: string; name?: string; key: string }[];
-            default?: string;
-          }) => Promise<string>)({
-            message: cfg.message,
-            choices: cfg.choices,
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }) as TValue,
-        };
+        case "rawlist":
+          return {
+            success: true,
+            value: await prompts.rawlist({
+              message: cfg.message,
+              choices: normalizeChoices(cfg.choices),
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+            }) as TValue,
+          };
 
-      case "checkbox":
-        return {
-          success: true,
-          value: await prompts.checkbox({
-            message: cfg.message,
-            choices: normalizeChoices(cfg.choices),
-          }) as TValue,
-        };
+        case "expand":
+          return {
+            success: true,
+            value: await (prompts.expand as (config: {
+              message: string;
+              choices: readonly { value: string; name?: string; key: string }[];
+              default?: string;
+            }) => Promise<string>)({
+              message: cfg.message,
+              choices: cfg.choices,
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+            }) as TValue,
+          };
+
+        case "checkbox":
+          return {
+            success: true,
+            value: await prompts.checkbox({
+              message: cfg.message,
+              choices: normalizeChoices(cfg.choices),
+            }) as TValue,
+          };
+      }
+    } catch (error) {
+      if (isExitPromptError(error)) {
+        return { success: false, error: message`Prompt cancelled.` };
+      }
+      throw error;
     }
   }
 

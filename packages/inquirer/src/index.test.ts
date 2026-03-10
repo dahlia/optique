@@ -327,6 +327,36 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, []);
       assert.ok(!result.success);
     });
+
+    it("converts ExitPromptError into a parse failure", async () => {
+      await withPromptFunctionsOverride(
+        {
+          input: () => {
+            const error = new Error("User cancelled the prompt.");
+            error.name = "ExitPromptError";
+            throw error;
+          },
+        },
+        async () => {
+          const parser = prompt(fail<string>(), {
+            type: "input",
+            message: "Enter name:",
+          });
+
+          const result = await parseAsync(parser, []);
+          assert.ok(!result.success);
+          const errorText = result.error
+            .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
+            .join("");
+          assert.ok(
+            errorText.includes("Prompt cancelled."),
+            `Expected prompt cancellation error, got: ${
+              JSON.stringify(result.error)
+            }`,
+          );
+        },
+      );
+    });
   });
 
   describe("object() composition", () => {

@@ -282,8 +282,14 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     cleanly with `bindEnv()` and `bindConfig()` — the prompt is skipped
     whenever the CLI, environment variable, or config file supplies a value.
 
+ -  Fixed `prompt()` leaving `ExitPromptError` uncaught when a user cancels an
+    Inquirer prompt with <kbd>^C</kbd>.  Prompt cancellation is now converted
+    into a normal parse failure (`Prompt cancelled.`) instead of surfacing as
+    an unhandled promise rejection.  [[#151]]
+
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137
+[#151]: https://github.com/dahlia/optique/issues/151
 
 ### @optique/run
 
