@@ -1032,6 +1032,12 @@ describe("option", () => {
 
       const result = parser.parse(context);
       assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "`-seed` cannot be used multiple times.",
+        );
+      }
     });
 
     it("should reject -key=value for boolean option", () => {

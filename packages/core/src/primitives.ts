@@ -884,6 +884,7 @@ export function option<M extends Mode, T>(
           context.state?.success &&
           (valueParser != null || context.state.value)
         ) {
+          const optionName = prefix.slice(0, -1);
           return {
             success: false,
             consumed: 1,
@@ -891,7 +892,9 @@ export function option<M extends Mode, T>(
               ? (typeof options.errors.duplicate === "function"
                 ? options.errors.duplicate(prefix)
                 : options.errors.duplicate)
-              : message`${eOptionName(prefix)} cannot be used multiple times.`,
+              : message`${
+                eOptionName(optionName)
+              } cannot be used multiple times.`,
           };
         }
         const rawInput = context.buffer[0].slice(prefix.length);
