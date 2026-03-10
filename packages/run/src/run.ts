@@ -702,7 +702,7 @@ function buildCoreOptions(
  * Set of known RunOptions field names.  Used by `runImpl()` to separate
  * RunOptions fields from context-required options via rest-spread.
  */
-const knownRunOptionsKeys = new Set([
+const knownRunOptionsKeyList = [
   "programName",
   "args",
   "stdout",
@@ -725,7 +725,19 @@ const knownRunOptionsKeys = new Set([
   "bugs",
   "footer",
   "contexts",
-]);
+  // Keep this list exhaustive with RunOptions so context option extraction
+  // does not silently forward new runner options into source contexts.
+] as const satisfies readonly (keyof RunOptions)[];
+
+type MissingKnownRunOptionsKeys = Exclude<
+  keyof RunOptions,
+  (typeof knownRunOptionsKeyList)[number]
+>;
+const _knownRunOptionsKeysAreExhaustive: MissingKnownRunOptionsKeys extends
+  never ? true : never = true;
+void _knownRunOptionsKeysAreExhaustive;
+
+const knownRunOptionsKeys = new Set<string>(knownRunOptionsKeyList);
 
 function runImpl<T extends Parser<Mode, unknown, unknown>>(
   parserOrProgram: T | Program<Mode, unknown>,
