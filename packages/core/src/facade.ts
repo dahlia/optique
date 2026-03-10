@@ -175,6 +175,27 @@ interface CompletionParsers {
     | null;
 }
 
+const metaResultBrand: unique symbol = Symbol("@optique/core/facade/meta");
+
+interface MetaParseResult {
+  readonly [metaResultBrand]: true;
+  readonly help: boolean;
+  readonly version: boolean;
+  readonly completion?: boolean;
+  readonly commands?: readonly string[] | { readonly length: number };
+  readonly completionData?: {
+    readonly shell: string | undefined;
+    readonly args: readonly string[] | undefined;
+  };
+  readonly result?: unknown;
+  readonly helpFlag?: boolean;
+  readonly versionFlag?: boolean;
+}
+
+function isMetaParseResult(value: unknown): value is MetaParseResult {
+  return typeof value === "object" && value != null && metaResultBrand in value;
+}
+
 /**
  * Sub-configuration for a meta command's command form.
  *
@@ -463,8 +484,10 @@ function combineWithHelpVersion(
               ...context,
               buffer: [],
               state: {
+                [metaResultBrand]: true,
                 help: true,
                 version: false,
+                completion: false,
                 commands,
                 helpFlag: true,
               },
@@ -567,7 +590,13 @@ function combineWithHelpVersion(
             next: {
               ...context,
               buffer: [],
-              state: { help: false, version: true, versionFlag: true },
+              state: {
+                [metaResultBrand]: true,
+                help: false,
+                version: true,
+                completion: false,
+                versionFlag: true,
+              },
             },
             consumed: buffer.slice(0),
           };
@@ -610,6 +639,7 @@ function combineWithHelpVersion(
   // Add version command with optional help flag (enables version --help)
   if (versionParsers.versionCommand) {
     const versionParser = object({
+      [metaResultBrand]: constant(true),
       help: constant(false),
       version: constant(true),
       completion: constant(false),
@@ -628,6 +658,7 @@ function combineWithHelpVersion(
   // Add completion command with optional help flag (enables completion --help)
   if (completionParsers.completionCommand) {
     const completionParser = object({
+      [metaResultBrand]: constant(true),
       help: constant(false),
       version: constant(false),
       completion: constant(true),
@@ -646,6 +677,7 @@ function combineWithHelpVersion(
   // Add help command
   if (helpParsers.helpCommand) {
     const helpParser = object({
+      [metaResultBrand]: constant(true),
       help: constant(true),
       version: constant(false),
       completion: constant(false),
@@ -668,6 +700,7 @@ function combineWithHelpVersion(
 
   // Add main parser LAST - it's the most general
   parsers.push(object({
+    [metaResultBrand]: constant(true),
     help: constant(false),
     version: constant(false),
     completion: constant(false),
@@ -730,20 +763,8 @@ function classifyResult(
   }
 
   const value = result.value;
-  if (
-    typeof value === "object" && value != null && "help" in value &&
-    "version" in value
-  ) {
-    const parsedValue = value as {
-      help: boolean;
-      version: boolean;
-      completion?: boolean;
-      commands?: readonly string[];
-      completionData?: { shell: string | undefined; args: readonly string[] };
-      result?: unknown;
-      helpFlag?: boolean;
-      versionFlag?: boolean;
-    };
+  if (isMetaParseResult(value)) {
+    const parsedValue = value;
 
     const hasVersionOption = versionOptionNames.some((n) => args.includes(n));
     const hasVersionCommand = args.length > 0 &&
@@ -808,7 +829,10 @@ function classifyResult(
     }
 
     // Neither help nor version nor completion requested, return actual result
-    return { type: "success", value: parsedValue.result ?? value };
+    return {
+      type: "success",
+      value: "result" in parsedValue ? parsedValue.result : value,
+    };
   }
 
   return { type: "success", value };

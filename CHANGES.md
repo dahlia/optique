@@ -170,6 +170,11 @@ To be released.
     initialization, which could throw `ReferenceError` instead of showing help.
     `displayHelp` is now defined before async validation is invoked.
 
+ -  Fixed `runParser()` duck-typing meta-command results based on field names
+    like `help` and `version`.  Internal meta results are now branded with a
+    private symbol, so custom parsers can safely return user data objects with
+    overlapping field names without being misclassified.  [[#152]]
+
  -  Fixed help output incorrectly interleaving meta items (`help`, `--help`,
     `--version`) with user-defined commands when using `group: "…"` to
     assign meta items to a named section that already exists in user-defined
@@ -195,6 +200,7 @@ To be released.
 [#146]: https://github.com/dahlia/optique/pull/146
 [#149]: https://github.com/dahlia/optique/issues/149
 [#150]: https://github.com/dahlia/optique/issues/150
+[#152]: https://github.com/dahlia/optique/issues/152
 [#157]: https://github.com/dahlia/optique/issues/157
 
 ### @optique/config

@@ -7342,15 +7342,16 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
-  it("classifyParseResult accepts array-like commands payload", () => {
+  it("does not classify unbranded help/version-shaped user data", () => {
     const parser: Parser<
       "sync",
       {
-        readonly help: true;
+        readonly help: false;
         readonly version: false;
-        readonly completion: false;
-        readonly commands: { readonly 0: "sub"; readonly length: 1 };
-        readonly result: Record<PropertyKey, never>;
+        readonly result: {
+          readonly command: "status";
+          readonly ok: true;
+        };
       },
       undefined
     > = {
@@ -7371,11 +7372,12 @@ describe("branch coverage: facade.ts edge cases", () => {
         return {
           success: true as const,
           value: {
-            help: true as const,
+            help: false as const,
             version: false as const,
-            completion: false as const,
-            commands: { 0: "sub" as const, length: 1 as const },
-            result: {},
+            result: {
+              command: "status" as const,
+              ok: true as const,
+            },
           },
         };
       },
@@ -7385,23 +7387,15 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
     };
 
-    let helpShown = false;
-    const result = runParser(parser, "test", ["--help"], {
-      help: {
-        option: true,
-        onShow: () => {
-          helpShown = true;
-          return "shown";
-        },
-      },
-      stderr: () => {},
-      stdout: () => {},
+    const result = runParser(parser, "test", ["placeholder"]);
+    assert.deepEqual(result, {
+      help: false,
+      version: false,
+      result: { command: "status", ok: true },
     });
-    assert.equal(result, "shown");
-    assert.ok(helpShown);
   });
 
-  it("runParser throws guard error when classified completion reaches switch", () => {
+  it("does not classify unbranded completion-shaped user data", () => {
     const parser: Parser<
       "sync",
       {
@@ -7447,62 +7441,14 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
     };
 
-    assert.throws(
-      () => runParser(parser, "test", ["placeholder"], {}),
-      /Completion should be handled by early return/,
-    );
-  });
-
-  it("classifyParseResult normalizes missing completionData fields", () => {
-    const parser: Parser<
-      "sync",
-      {
-        readonly help: false;
-        readonly version: false;
-        readonly completion: true;
-        readonly completionData: {
-          readonly shell: undefined;
-          readonly args: undefined;
-        };
-        readonly result: Record<PropertyKey, never>;
-      },
-      undefined
-    > = {
-      $mode: "sync",
-      $valueType: [] as never,
-      $stateType: [] as never,
-      priority: 0,
-      usage: [],
-      initialState: undefined,
-      parse(context) {
-        return {
-          success: true as const,
-          next: { ...context, buffer: [], state: undefined },
-          consumed: [...context.buffer],
-        };
-      },
-      complete() {
-        return {
-          success: true as const,
-          value: {
-            help: false as const,
-            version: false as const,
-            completion: true as const,
-            completionData: { shell: undefined, args: undefined },
-            result: {},
-          },
-        };
-      },
-      *suggest() {},
-      getDocFragments() {
-        return { fragments: [] };
-      },
-    };
-
-    assert.throws(
-      () => runParser(parser, "test", ["placeholder"], {}),
-      /Completion should be handled by early return/,
-    );
+    const result = runParser(parser, "test", ["placeholder"]);
+    assert.deepEqual(result, {
+      help: false,
+      version: false,
+      completion: true,
+      completionData: { shell: "bash", args: ["x"] },
+      result: {},
+    });
   });
 
   it("needsEarlyExit does not trigger for non-matching completion option args", () => {
