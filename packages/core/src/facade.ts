@@ -808,8 +808,8 @@ function classifyResult(
     if (parsedValue.completion && parsedValue.completionData) {
       return {
         type: "completion",
-        shell: parsedValue.completionData.shell || "",
-        args: parsedValue.completionData.args || [],
+        shell: parsedValue.completionData.shell ?? "",
+        args: parsedValue.completionData.args ?? [],
       };
     }
 
