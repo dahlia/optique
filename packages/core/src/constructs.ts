@@ -2378,7 +2378,7 @@ export interface LongestMatchOptions {
 }
 
 /**
- * Options for customizing error messages in the {@link longesMatch} parser.
+ * Options for customizing error messages in the {@link longestMatch} parser.
  * @since 0.5.0
  */
 export interface LongestMatchErrorOptions {
