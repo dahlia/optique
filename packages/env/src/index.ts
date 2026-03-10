@@ -1,6 +1,6 @@
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
-import { type Message, message, valueSet } from "@optique/core/message";
+import { envVar, type Message, message, valueSet } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 import type {
   Mode,
@@ -358,7 +358,7 @@ function getEnvOrDefault<M extends Mode, TValue>(
 
   return wrapForMode(mode, {
     success: false as const,
-    error: message`Missing required environment variable: ${fullKey}.`,
+    error: message`Missing required environment variable: ${envVar(fullKey)}`,
   });
 }
 
