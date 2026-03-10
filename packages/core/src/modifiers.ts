@@ -11,8 +11,7 @@ import {
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
 import {
-  annotationKey,
-  getAnnotations,
+  annotateFreshArray,
   inheritAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
@@ -878,15 +877,6 @@ export function multiple<M extends Mode, TValue, TState>(
   type ParseResult = ParserResult<MultipleState>;
 
   const unwrapInjectedWrapper = unwrapInjectedAnnotationWrapper;
-  const annotateFreshArray = <T>(source: unknown, target: readonly T[]) => {
-    const annotations = getAnnotations(source);
-    if (annotations === undefined) {
-      return target;
-    }
-    const annotated = target as readonly T[] & { [annotationKey]?: unknown };
-    annotated[annotationKey] = annotations;
-    return annotated as readonly T[];
-  };
   const completeSyncWithUnwrappedFallback = (
     state: TState,
   ): ReturnType<typeof syncParser.complete> => {

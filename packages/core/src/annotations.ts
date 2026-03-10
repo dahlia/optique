@@ -106,6 +106,30 @@ export function getAnnotations(state: unknown): Annotations | undefined {
 }
 
 /**
+ * Reattaches annotations to a freshly created array state.
+ *
+ * Array spread copies elements but drops symbol properties, so parsers that
+ * rebuild array states need to copy annotations back explicitly.
+ *
+ * @param source The original state that may carry annotations.
+ * @param target The freshly created array state.
+ * @returns The target array, with annotations copied when available.
+ * @internal
+ */
+export function annotateFreshArray<T>(
+  source: unknown,
+  target: readonly T[],
+): readonly T[] {
+  const annotations = getAnnotations(source);
+  if (annotations === undefined) {
+    return target;
+  }
+  const annotated = target as readonly T[] & { [annotationKey]?: Annotations };
+  annotated[annotationKey] = annotations;
+  return annotated as readonly T[];
+}
+
+/**
  * Propagates annotations from one parser state to another.
  *
  * This is mainly used by parsers that rebuild array states with spread syntax.
