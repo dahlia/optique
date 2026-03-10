@@ -762,20 +762,10 @@ function classifyResult(
 
     // Standard CLI behavior:
     // 1. `command --help` should show help for that command
-    // 2. `--help --version` or `--version --help` should cause error
-    //    (conflicting options)
+    // 2. `--help` and `--version` together follow last-option-wins
     // 3. `--version` alone should show version
     // 4. `--help` alone should show help
     // 5. `completion --help` should show help for completion command
-
-    // Check for conflicting options: both --version and --help flags
-    if (
-      hasVersionOption && hasHelpOption && !hasVersionCommand && !hasHelpCommand
-    ) {
-      // Both version and help options provided - this should be an error
-      // Let the parser handle this naturally by not providing special handling
-      // This will result in a parse error
-    }
 
     // If we have both version command and help flag, help takes precedence
     // (show help for version)
