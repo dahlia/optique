@@ -1022,6 +1022,42 @@ describe("longestMatch()", () => {
     }
   });
 
+  it("should widen homogeneous parser arrays to unknown state", () => {
+    const commandParsers: Parser<"sync", readonly string[], unknown>[] = [
+      command("help", multiple(argument(string()))),
+      command("assist", multiple(argument(string()))),
+    ];
+
+    const parser: Parser<"sync", readonly string[], unknown> = longestMatch(
+      ...commandParsers,
+    );
+    const result = parseSync(parser, ["assist", "topic"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, ["topic"]);
+    }
+  });
+
+  it("should widen homogeneous parser arrays with specific state", () => {
+    const optionParsers: Parser<
+      "sync",
+      string,
+      ValueParserResult<string> | undefined
+    >[] = [
+      option("--bash", string()),
+      option("--zsh", string()),
+    ];
+
+    const parser: Parser<"sync", string, unknown> = longestMatch(
+      ...optionParsers,
+    );
+    const result = parseSync(parser, ["--bash", "shell"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, "shell");
+    }
+  });
+
   it("should preserve discriminated state inference for tuple parsers", () => {
     const parserA = option("--a");
     const parserB = multiple(option("--b"));

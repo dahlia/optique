@@ -49,7 +49,7 @@ import {
   type OptionName,
   type Usage,
 } from "./usage.ts";
-import { string, type ValueParserResult } from "./valueparser.ts";
+import { string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
@@ -104,11 +104,7 @@ function createHelpParser(
     }
     helpCommand = commandParsers.length === 1
       ? commandParsers[0]
-      : (longestMatch as (
-        ...parsers: Parser<"sync", readonly string[], unknown>[]
-      ) => Parser<"sync", readonly string[], unknown>)(
-        ...commandParsers,
-      );
+      : longestMatch(...commandParsers);
   }
 
   if (optionConfig) {
@@ -152,15 +148,7 @@ function createVersionParser(
     }
     versionCommand = commandParsers.length === 1
       ? commandParsers[0]
-      : (longestMatch as (
-        ...parsers: Parser<
-          "sync",
-          Record<PropertyKey, never>,
-          unknown
-        >[]
-      ) => Parser<"sync", Record<PropertyKey, never>, unknown>)(
-        ...commandParsers,
-      );
+      : longestMatch(...commandParsers);
   }
 
   if (optionConfig) {
@@ -325,27 +313,13 @@ function createCompletionParser(
 
     completionCommand = commandParsers.length === 1
       ? commandParsers[0]
-      : (longestMatch as (
-        ...parsers: Parser<
-          "sync",
-          { shell: string | undefined; args: readonly string[] },
-          unknown
-        >[]
-      ) => Parser<
-        "sync",
-        { shell: string | undefined; args: readonly string[] },
-        unknown
-      >)(...commandParsers);
+      : longestMatch(...commandParsers);
   }
 
   if (optionConfig) {
     const names = optionConfig.names ?? ["--completion"];
 
-    const completionOptions: Parser<
-      "sync",
-      string,
-      ValueParserResult<string> | undefined
-    >[] = [];
+    const completionOptions: Parser<"sync", string, unknown>[] = [];
     for (const name of names) {
       completionOptions.push(
         option(name, string({ metavar: "SHELL" }), {
@@ -357,17 +331,7 @@ function createCompletionParser(
 
     const completionOptionParser = completionOptions.length === 1
       ? completionOptions[0]
-      : (longestMatch as (
-        ...parsers: Parser<
-          "sync",
-          string,
-          ValueParserResult<string> | undefined
-        >[]
-      ) => Parser<
-        "sync",
-        string,
-        ValueParserResult<string> | undefined
-      >)(...completionOptions);
+      : longestMatch(...completionOptions);
 
     const argsParser = withDefault(
       multiple(
@@ -729,9 +693,7 @@ function combineWithHelpVersion(
   } else {
     // Use variadic longestMatch for all parsers
     // Our lenient help/version parsers will win because they consume all input
-    combined = (longestMatch as (
-      ...parsers: Parser<Mode, unknown, unknown>[]
-    ) => Parser<Mode, unknown, unknown>)(...parsers);
+    combined = longestMatch(...parsers);
   }
 
   // Reorder the usage so that the main parser's usage appears before
@@ -1688,9 +1650,7 @@ export function runParser<
               commandParsers.push(
                 group(
                   label,
-                  (longestMatch as (
-                    ...ps: Parser<Mode, unknown, unknown>[]
-                  ) => Parser<Mode, unknown, unknown>)(...parsers),
+                  longestMatch(...parsers),
                 ),
               );
             }
@@ -1749,9 +1709,7 @@ export function runParser<
               commandParsers.push(
                 group(
                   label,
-                  (longestMatch as (
-                    ...ps: Parser<Mode, unknown, unknown>[]
-                  ) => Parser<Mode, unknown, unknown>)(...optParsers),
+                  longestMatch(...optParsers),
                 ),
               );
             }
@@ -1766,9 +1724,7 @@ export function runParser<
               commandParsers[1],
             );
           } else {
-            helpGeneratorParser = (longestMatch as (
-              ...parsers: Parser<Mode, unknown, unknown>[]
-            ) => Parser<Mode, unknown, unknown>)(...commandParsers);
+            helpGeneratorParser = longestMatch(...commandParsers);
           }
         }
 

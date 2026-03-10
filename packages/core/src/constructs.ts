@@ -2564,6 +2564,46 @@ export function longestMatch<
   InferValue<TParsers[number]>,
   LongestMatchState<TParsers>
 >;
+
+/**
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens from a homogeneous parser list.
+ *
+ * This overload is intended for spread arrays whose element types are
+ * homogeneous enough that callers only need the shared value type.
+ *
+ * @param parsers Parsers to evaluate and compare by consumed input.
+ * @returns A parser that preserves the shared parser mode and value type.
+ * @since 1.0.0
+ */
+export function longestMatch<
+  M extends Mode,
+  TValue,
+  TState,
+  const TParsers extends readonly Parser<M, TValue, TState>[],
+>(
+  ...parsers: TParsers & LongestMatchArityGuard<TParsers>
+): Parser<M, TValue, unknown>;
+
+/**
+ * Creates a parser that selects the successful branch that consumed
+ * the most input tokens from a homogeneous parser list, with custom
+ * error options.
+ *
+ * @param rest Parsers to compare, followed by error customization options.
+ * @returns A parser that preserves the shared parser mode and value type.
+ * @since 1.0.0
+ */
+export function longestMatch<
+  M extends Mode,
+  TValue,
+  TState,
+  const TParsers extends readonly Parser<M, TValue, TState>[],
+>(
+  ...rest:
+    & [...parsers: TParsers, options: LongestMatchTailOptions]
+    & LongestMatchArityGuard<TParsers>
+): Parser<M, TValue, unknown>;
 /**
  * @since 0.5.0
  */
