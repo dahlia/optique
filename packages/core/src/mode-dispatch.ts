@@ -38,6 +38,37 @@ export function dispatchByMode<M extends Mode, T>(
 }
 
 /**
+ * Wraps a value so it matches the parser execution mode.
+ *
+ * @param mode The execution mode.
+ * @param value The value to wrap.
+ * @returns The wrapped value with correct mode semantics.
+ * @internal
+ * @since 1.0.0
+ */
+export function wrapForMode<T>(mode: "sync", value: T | Promise<T>): T;
+export function wrapForMode<T>(
+  mode: "async",
+  value: T | Promise<T>,
+): Promise<T>;
+export function wrapForMode<M extends Mode, T>(
+  mode: M,
+  value: T | Promise<T>,
+): ModeValue<M, T>;
+export function wrapForMode<T>(
+  mode: Mode,
+  value: T | Promise<T>,
+): T | Promise<T> {
+  if (mode === "async") {
+    return Promise.resolve(value);
+  }
+  if (value instanceof Promise) {
+    throw new TypeError("Synchronous mode cannot wrap Promise value.");
+  }
+  return value;
+}
+
+/**
  * Maps a mode-wrapped value while preserving its execution mode.
  *
  * @param mode The execution mode.
@@ -57,6 +88,9 @@ export function mapModeValue<M extends Mode, T, U>(
       M,
       U
     >;
+  }
+  if (value instanceof Promise) {
+    throw new TypeError("Synchronous mode cannot map Promise value.");
   }
   return mapFn(value as T) as ModeValue<M, U>;
 }

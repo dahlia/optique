@@ -52,6 +52,10 @@ To be released.
     at compile time with actionable messages that recommend nested
     composition.  [[#144], [#145]]
 
+ -  Added the `@optique/core/mode-dispatch` subpath export so sibling
+    packages can share internal sync/async dispatch helpers without
+    duplicating them.  [[#157]]
+
  -  Changed `formatMessage()` to render double newlines (`\n\n`) in `text()`
     terms as double newlines in the output, instead of collapsing them to
     a single newline.  This makes paragraph breaks visually distinct from
@@ -178,6 +182,7 @@ To be released.
 [#144]: https://github.com/dahlia/optique/issues/144
 [#145]: https://github.com/dahlia/optique/pull/145
 [#146]: https://github.com/dahlia/optique/pull/146
+[#157]: https://github.com/dahlia/optique/issues/157
 
 ### @optique/config
 

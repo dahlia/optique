@@ -11,6 +11,7 @@ export default defineConfig({
     "src/doc.ts",
     "src/facade.ts",
     "src/message.ts",
+    "src/mode-dispatch.ts",
     "src/modifiers.ts",
     "src/nonempty.ts",
     "src/parser.ts",

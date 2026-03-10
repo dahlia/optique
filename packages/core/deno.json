@@ -12,6 +12,7 @@
     "./doc": "./src/doc.ts",
     "./facade": "./src/facade.ts",
     "./message": "./src/message.ts",
+    "./mode-dispatch": "./src/mode-dispatch.ts",
     "./modifiers": "./src/modifiers.ts",
     "./nonempty": "./src/nonempty.ts",
     "./parser": "./src/parser.ts",

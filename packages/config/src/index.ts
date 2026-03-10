@@ -16,15 +16,10 @@ import type {
   ParserValuePlaceholder,
   SourceContext,
 } from "@optique/core/context";
-import type {
-  Mode,
-  ModeValue,
-  Parser,
-  ParserResult,
-  Result,
-} from "@optique/core/parser";
+import type { Parser, ParserResult, Result } from "@optique/core/parser";
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import { message } from "@optique/core/message";
+import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 
 /**
  * Metadata about the loaded config source.
@@ -565,45 +560,6 @@ export function bindConfig<
       return parser.getDocFragments(state, defaultValue);
     },
   };
-}
-
-function wrapForMode<T>(mode: "sync", value: T): T;
-function wrapForMode<T>(mode: "async", value: T): Promise<T>;
-function wrapForMode<M extends Mode, T>(mode: M, value: T): ModeValue<M, T>;
-function wrapForMode<T>(mode: Mode, value: T): T | Promise<T> {
-  if (mode === "async") {
-    return Promise.resolve(value);
-  }
-  return value;
-}
-
-function mapModeValue<T, U>(
-  mode: "sync",
-  value: T,
-  mapFn: (value: T) => U,
-): U;
-function mapModeValue<T, U>(
-  mode: "async",
-  value: Promise<T>,
-  mapFn: (value: T) => U,
-): Promise<U>;
-function mapModeValue<M extends Mode, T, U>(
-  mode: M,
-  value: ModeValue<M, T>,
-  mapFn: (value: T) => U,
-): ModeValue<M, U>;
-function mapModeValue<T, U>(
-  mode: Mode,
-  value: T | Promise<T>,
-  mapFn: (value: T) => U,
-): U | Promise<U> {
-  if (mode === "async") {
-    return Promise.resolve(value).then(mapFn);
-  }
-  if (value instanceof Promise) {
-    throw new TypeError("Synchronous mode cannot map Promise value.");
-  }
-  return mapFn(value);
 }
 
 /**
