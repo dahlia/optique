@@ -2050,6 +2050,63 @@ describe("primitives additional branch coverage", () => {
     }
   });
 
+  it("option detects equals-joined duplicates for derived value parsers", () => {
+    const mode = dependency(string({ metavar: "MODE" }));
+    const target = deriveFromSync({
+      metavar: "TARGET",
+      dependencies: [mode] as const,
+      defaultValues: () => ["dev"] as const,
+      factory: (_mode: string) => string({ metavar: "TARGET" }),
+    });
+    const parser = option("--target", target);
+
+    const first = parser.parse({
+      buffer: ["--target=old"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      ...first.next,
+      buffer: ["--target=new"] as readonly string[],
+    });
+    assert.ok(!second.success);
+    if (!second.success) {
+      assert.equal(
+        formatMessage(second.error),
+        "`--target` cannot be used multiple times.",
+      );
+    }
+  });
+
+  it("option detects equals-joined duplicates for dependency sources", () => {
+    const parser = option("--mode", dependency(string({ metavar: "MODE" })));
+
+    const first = parser.parse({
+      buffer: ["--mode=dev"] as readonly string[],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(first.success);
+    if (!first.success) return;
+
+    const second = parser.parse({
+      ...first.next,
+      buffer: ["--mode=prod"] as readonly string[],
+    });
+    assert.ok(!second.success);
+    if (!second.success) {
+      assert.equal(
+        formatMessage(second.error),
+        "`--mode` cannot be used multiple times.",
+      );
+    }
+  });
+
   it("option complete covers deferred success and custom invalid branches", () => {
     const dep = dependency(string({ metavar: "MODE" }));
     const parser = option("--port", integer(), {

@@ -33,6 +33,26 @@ export type OptionState<T> =
   | PendingDependencySourceState
   | undefined;
 
+function hasParsedOptionValue<M extends Mode, T>(
+  state:
+    | ValueParserResult<T | boolean>
+    | DeferredParseState<T>
+    | DependencySourceState<T>
+    | PendingDependencySourceState
+    | undefined,
+  valueParser: ValueParser<M, T> | undefined,
+): boolean {
+  if (valueParser != null) {
+    return isDeferredParseState(state) ||
+      isDependencySourceState(state) ||
+      (state != null && "success" in state && state.success);
+  }
+  return state != null &&
+    "success" in state &&
+    state.success &&
+    (state as { value?: boolean }).value === true;
+}
+
 /**
  * Helper function to create the appropriate state for an option value.
  * - If the value parser is a DerivedValueParser, wraps the result in a DeferredParseState
@@ -793,16 +813,7 @@ export function option<M extends Mode, T>(
       // When the input is split by spaces, the first element is the option name
       // E.g., `--option value` or `/O value`
       if ((optionNames as string[]).includes(context.buffer[0])) {
-        // Check for duplicate option - applies to ValueParserResult, DeferredParseState,
-        // and DependencySourceState. For options with value parsers, any non-null state
-        // means we already have a value. For boolean flags, we check state.success && state.value.
-        const hasValue = valueParser != null
-          ? (context.state?.success ||
-            isDeferredParseState(context.state) ||
-            isDependencySourceState(context.state))
-          : (context.state?.success &&
-            (context.state as { value?: boolean })?.value);
-        if (hasValue) {
+        if (hasParsedOptionValue(context.state, valueParser)) {
           return {
             success: false,
             consumed: 1,
@@ -880,10 +891,7 @@ export function option<M extends Mode, T>(
         .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
       for (const prefix of prefixes) {
         if (!context.buffer[0].startsWith(prefix)) continue;
-        if (
-          context.state?.success &&
-          (valueParser != null || context.state.value)
-        ) {
+        if (hasParsedOptionValue(context.state, valueParser)) {
           const optionName = prefix.slice(0, -1);
           return {
             success: false,
@@ -951,10 +959,7 @@ export function option<M extends Mode, T>(
         );
         for (const shortOption of shortOptions) {
           if (!context.buffer[0].startsWith(shortOption)) continue;
-          if (
-            context.state?.success &&
-            (valueParser != null || context.state.value)
-          ) {
+          if (hasParsedOptionValue(context.state, valueParser)) {
             return {
               success: false,
               consumed: 1,

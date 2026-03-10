@@ -154,6 +154,12 @@ To be released.
     prefix-filtering behavior for value suggestions and aligns with parse
     context (option name consumed ⇒ value expected).
 
+ -  Fixed duplicate detection for equals-joined option syntax in `option()`
+    when the value parser produces deferred or dependency-source state
+    (for example, `DerivedValueParser` or `DependencySource`).  Repeated
+    `--option=value` inputs now report a duplicate-option error instead of
+    silently overwriting the earlier value.  [[#149]]
+
  -  Fixed async `runParser()` help handling for `command --help` validation.
     In the async validation path, `displayHelp` was referenced before
     initialization, which could throw `ReferenceError` instead of showing help.
@@ -182,6 +188,7 @@ To be released.
 [#144]: https://github.com/dahlia/optique/issues/144
 [#145]: https://github.com/dahlia/optique/pull/145
 [#146]: https://github.com/dahlia/optique/pull/146
+[#149]: https://github.com/dahlia/optique/issues/149
 [#157]: https://github.com/dahlia/optique/issues/157
 
 ### @optique/config
