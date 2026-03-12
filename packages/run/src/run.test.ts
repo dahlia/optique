@@ -1747,6 +1747,27 @@ describe("run with contexts", () => {
     void assertUnknownOptionsAreRejected;
   });
 
+  it("should reject widened Program run() option variables with extra keys", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-widened-typo-run",
+      },
+    };
+    const options: RunOptions & { readonly argz: readonly string[] } = {
+      args: ["Alice"],
+      argz: ["Alice"],
+    };
+
+    const assertWidenedOptionsAreRejected = (): void => {
+      // @ts-expect-error - widened option variables must not bypass key checks.
+      run(program, options);
+    };
+    void assertWidenedOptionsAreRejected;
+  });
+
   it("should require context options for Program input in run()", async () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {
@@ -2054,6 +2075,27 @@ describe("runSync with contexts", () => {
       });
     };
     void assertUnknownOptionsAreRejected;
+  });
+
+  it("should reject widened Program runSync() option variables with extra keys", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-widened-typo-runsync",
+      },
+    };
+    const options: RunOptions & { readonly argz: readonly string[] } = {
+      args: ["Bob"],
+      argz: ["Bob"],
+    };
+
+    const assertWidenedOptionsAreRejected = (): void => {
+      // @ts-expect-error - widened option variables must not bypass key checks.
+      runSync(program, options);
+    };
+    void assertWidenedOptionsAreRejected;
   });
 
   it("should require context options for Program input in runSync()", () => {
@@ -2378,5 +2420,26 @@ describe("runAsync with contexts", () => {
       });
     };
     void assertUnknownOptionsAreRejected;
+  });
+
+  it("should reject widened Program runAsync() option variables with extra keys", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-widened-typo-runasync",
+      },
+    };
+    const options: RunOptions & { readonly argz: readonly string[] } = {
+      args: ["Charlie"],
+      argz: ["Charlie"],
+    };
+
+    const assertWidenedOptionsAreRejected = (): void => {
+      // @ts-expect-error - widened option variables must not bypass key checks.
+      runAsync(program, options);
+    };
+    void assertWidenedOptionsAreRejected;
   });
 });
