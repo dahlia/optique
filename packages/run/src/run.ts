@@ -412,6 +412,19 @@ export function run<
     & ExtractRequiredOptions<TContexts, InferValue<T>>,
 ): Promise<InferValue<T>>;
 
+// Overload: Program with contexts — always returns Promise
+export function run<
+  M extends Mode,
+  T,
+  TContexts extends readonly SourceContext<unknown>[],
+>(
+  program: Program<M, T>,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & ExtractRequiredOptions<TContexts, T>,
+): Promise<T>;
+
 // Overload: Program with sync parser
 export function run<T>(
   program: Program<"sync", T>,
@@ -476,6 +489,18 @@ export function runSync<
     & { readonly contexts: TContexts }
     & ExtractRequiredOptions<TContexts, InferValue<T>>,
 ): InferValue<T>;
+
+// Overload: Program with contexts
+export function runSync<
+  T,
+  TContexts extends readonly SourceContext<unknown>[],
+>(
+  program: Program<"sync", T>,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & ExtractRequiredOptions<TContexts, T>,
+): T;
 
 // Overload: Program with sync parser
 export function runSync<T>(
@@ -555,6 +580,19 @@ export function runAsync<
     & { readonly contexts: TContexts }
     & ExtractRequiredOptions<TContexts, InferValue<T>>,
 ): Promise<InferValue<T>>;
+
+// Overload: Program with contexts
+export function runAsync<
+  M extends Mode,
+  T,
+  TContexts extends readonly SourceContext<unknown>[],
+>(
+  program: Program<M, T>,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & ExtractRequiredOptions<TContexts, T>,
+): Promise<T>;
 
 // Overload: Program with sync parser
 export function runAsync<T>(

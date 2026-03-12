@@ -1,5 +1,8 @@
 import { longestMatch, object, or } from "@optique/core/constructs";
-import type { SourceContext } from "@optique/core/context";
+import type {
+  ParserValuePlaceholder,
+  SourceContext,
+} from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { argument, command, option } from "@optique/core/primitives";
@@ -33,6 +36,11 @@ function createSyncConfigSchema(): Parameters<
     },
   };
 }
+
+interface ProgramPathContext extends
+  SourceContext<{
+    readonly getPath: (parsed: ParserValuePlaceholder) => string;
+  }> {}
 
 describe("run", () => {
   describe("basic parsing", () => {
@@ -1604,6 +1612,96 @@ describe("runSync with contexts", () => {
     );
 
     assert.deepEqual(result, { name: "default" });
+  });
+
+  it("should require context options for Program input in run()", async () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-run-context"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const parser = object({
+      config: withDefault(option("--config", string()), "optique.json"),
+      host: withDefault(option("--host", string()), "localhost"),
+    });
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser,
+      metadata: {
+        name: "configurable-app",
+      },
+    };
+
+    const result = run(program, {
+      args: [],
+      contexts: [context],
+      getPath: (parsed) => {
+        // @ts-expect-error - parsed must not be any.
+        void parsed.nonexistent;
+        return parsed.config;
+      },
+    });
+
+    const promise: Promise<{ config: string; host: string }> = result;
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await promise, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.equal(resolvedPath, "optique.json");
+
+    // @ts-expect-error - run() with contexts must not return synchronously.
+    const syncResult: { config: string; host: string } = result;
+    void syncResult;
+  });
+
+  it("should require context options for Program input in runSync()", () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-runsync-context"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const parser = object({
+      config: withDefault(option("--config", string()), "optique.json"),
+      host: withDefault(option("--host", string()), "localhost"),
+    });
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser,
+      metadata: {
+        name: "configurable-app-sync",
+      },
+    };
+
+    const result: { config: string; host: string } = runSync(program, {
+      args: [],
+      contexts: [context],
+      getPath: (parsed) => {
+        // @ts-expect-error - parsed must not be any.
+        void parsed.nonexistent;
+        return parsed.config;
+      },
+    });
+
+    assert.equal(result.config, "optique.json");
+    assert.equal(result.host, "localhost");
+    assert.equal(resolvedPath, "optique.json");
   });
 
   it("should load config fallbacks through createConfigContext", async () => {
