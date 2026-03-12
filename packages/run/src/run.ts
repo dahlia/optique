@@ -452,13 +452,38 @@ export function run<
     & ExtractRequiredOptions<TContexts, InferValue<T>>,
 ): ModeValue<InferMode<T>, InferValue<T>> | Promise<InferValue<T>>;
 
-// Overload: Program with contexts — always returns Promise
+// Overload: Program with statically non-empty contexts — returns Promise
 export function run<
   M extends Mode,
   T,
-  const TContexts extends readonly SourceContext<unknown>[],
+  const TContexts extends NonEmptySourceContexts,
 >(
   program: Program<M, T>,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & ExtractRequiredOptions<TContexts, T>,
+): Promise<T>;
+
+// Overload: sync Program with dynamic non-empty-or-empty contexts
+export function run<
+  T,
+  const TContexts extends readonly SourceContext<unknown>[],
+>(
+  program: Program<"sync", T>,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & RejectEmptyContexts<TContexts>
+    & ExtractRequiredOptions<TContexts, T>,
+): T | Promise<T>;
+
+// Overload: async Program with dynamic non-empty-or-empty contexts
+export function run<
+  T,
+  const TContexts extends readonly SourceContext<unknown>[],
+>(
+  program: Program<"async", T>,
   options:
     & RunOptions
     & { readonly contexts: TContexts }

@@ -1643,6 +1643,73 @@ describe("run with contexts", () => {
     void syncResult;
   });
 
+  it("should widen Program run() for dynamic context arrays", async () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-run-dynamic-context-array"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser: object({
+        config: withDefault(option("--config", string()), "optique.json"),
+        host: withDefault(option("--host", string()), "localhost"),
+      }),
+      metadata: {
+        name: "dynamic-context-array-program",
+      },
+    };
+    const emptyContexts: ProgramPathContext[] = [];
+    const filledContexts: ProgramPathContext[] = [context];
+
+    const emptyResult:
+      | { config: string; host: string }
+      | Promise<{ config: string; host: string }> = run(program, {
+        args: [],
+        contexts: emptyContexts,
+        getPath: (parsed) => parsed.config,
+      });
+    const filledResult:
+      | { config: string; host: string }
+      | Promise<{ config: string; host: string }> = run(program, {
+        args: [],
+        contexts: filledContexts,
+        getPath: (parsed) => {
+          // @ts-expect-error - parsed must not be any.
+          void parsed.nonexistent;
+          return parsed.config;
+        },
+      });
+
+    assert.ok(!(emptyResult instanceof Promise));
+    assert.deepEqual(emptyResult, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.ok(filledResult instanceof Promise);
+    assert.deepEqual(await filledResult, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.equal(resolvedPath, "optique.json");
+
+    // @ts-expect-error - dynamic context arrays may resolve asynchronously.
+    const syncResult: { config: string; host: string } = run(program, {
+      args: [],
+      contexts: filledContexts,
+      getPath: (parsed) => parsed.config,
+    });
+    void syncResult;
+  });
+
   it("should reject unknown option keys for Program run()", () => {
     const program: Program<"sync", { name: string }> = {
       parser: object({
