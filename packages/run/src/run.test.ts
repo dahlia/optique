@@ -1613,6 +1613,54 @@ describe("run with contexts", () => {
     const syncResult: { config: string; host: string } = result;
     void syncResult;
   });
+
+  it("should treat non-tuple context arrays as async in run()", async () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-run-dynamic-contexts"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const parser = object({
+      config: withDefault(option("--config", string()), "optique.json"),
+      host: withDefault(option("--host", string()), "localhost"),
+    });
+    const contexts: readonly ProgramPathContext[] = [context];
+    const options: RunOptions & {
+      readonly contexts: readonly ProgramPathContext[];
+      readonly getPath: (parsed: { config: string; host: string }) => string;
+    } = {
+      args: [],
+      contexts,
+      getPath: (parsed) => {
+        // @ts-expect-error - parsed must not be any.
+        void parsed.nonexistent;
+        return parsed.config;
+      },
+    };
+
+    const result = run(parser, options);
+
+    const promise: Promise<{ config: string; host: string }> = result;
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await promise, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.equal(resolvedPath, "optique.json");
+
+    // @ts-expect-error - run() with non-empty contexts must not return synchronously.
+    const syncResult: { config: string; host: string } = result;
+    void syncResult;
+  });
 });
 
 describe("runSync with contexts", () => {

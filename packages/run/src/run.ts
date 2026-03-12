@@ -296,14 +296,14 @@ type ProgramHelpMetadata = {
   readonly footer?: Message;
 };
 
-type NonEmptySourceContexts = readonly [
-  SourceContext<unknown>,
-  ...SourceContext<unknown>[],
-];
+type RejectEmptyContexts<TContexts extends readonly SourceContext<unknown>[]> =
+  TContexts extends readonly [] ? never
+    : unknown;
 
-type RejectNonEmptyContexts<TOptions> = TOptions extends {
-  readonly contexts: NonEmptySourceContexts;
-} ? never
+type RejectContextfulOptions<TOptions> = TOptions extends {
+  readonly contexts: infer TContexts extends readonly SourceContext<unknown>[];
+} ? TContexts extends readonly [] ? unknown
+  : never
   : unknown;
 
 function getProgramHelpMetadata(
@@ -413,12 +413,13 @@ function resolveProgramInput<
 // Overload: parser with contexts — always returns Promise
 export function run<
   T extends Parser<Mode, unknown, unknown>,
-  TContexts extends NonEmptySourceContexts,
+  const TContexts extends readonly SourceContext<unknown>[],
 >(
   parser: T,
   options:
     & RunOptions
     & { readonly contexts: TContexts }
+    & RejectEmptyContexts<TContexts>
     & ExtractRequiredOptions<TContexts, InferValue<T>>,
 ): Promise<InferValue<T>>;
 
@@ -426,25 +427,26 @@ export function run<
 export function run<
   M extends Mode,
   T,
-  TContexts extends NonEmptySourceContexts,
+  const TContexts extends readonly SourceContext<unknown>[],
 >(
   program: Program<M, T>,
   options:
     & RunOptions
     & { readonly contexts: TContexts }
+    & RejectEmptyContexts<TContexts>
     & ExtractRequiredOptions<TContexts, T>,
 ): Promise<T>;
 
 // Overload: Program with sync parser
 export function run<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: TOptions & RejectNonEmptyContexts<TOptions>,
+  options?: TOptions & RejectContextfulOptions<TOptions>,
 ): T;
 
 // Overload: Program with async parser
 export function run<T, const TOptions extends RunOptions | undefined>(
   program: Program<"async", T>,
-  options?: TOptions & RejectNonEmptyContexts<TOptions>,
+  options?: TOptions & RejectContextfulOptions<TOptions>,
 ): Promise<T>;
 
 // Overload: sync parser returns sync result
@@ -503,19 +505,20 @@ export function runSync<
 // Overload: Program with contexts
 export function runSync<
   T,
-  TContexts extends NonEmptySourceContexts,
+  const TContexts extends readonly SourceContext<unknown>[],
 >(
   program: Program<"sync", T>,
   options:
     & RunOptions
     & { readonly contexts: TContexts }
+    & RejectEmptyContexts<TContexts>
     & ExtractRequiredOptions<TContexts, T>,
 ): T;
 
 // Overload: Program with sync parser
 export function runSync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: TOptions & RejectNonEmptyContexts<TOptions>,
+  options?: TOptions & RejectContextfulOptions<TOptions>,
 ): T;
 
 // Overload: Sync parser
@@ -595,25 +598,26 @@ export function runAsync<
 export function runAsync<
   M extends Mode,
   T,
-  TContexts extends NonEmptySourceContexts,
+  const TContexts extends readonly SourceContext<unknown>[],
 >(
   program: Program<M, T>,
   options:
     & RunOptions
     & { readonly contexts: TContexts }
+    & RejectEmptyContexts<TContexts>
     & ExtractRequiredOptions<TContexts, T>,
 ): Promise<T>;
 
 // Overload: Program with sync parser
 export function runAsync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: TOptions & RejectNonEmptyContexts<TOptions>,
+  options?: TOptions & RejectContextfulOptions<TOptions>,
 ): Promise<T>;
 
 // Overload: Program with async parser
 export function runAsync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"async", T>,
-  options?: TOptions & RejectNonEmptyContexts<TOptions>,
+  options?: TOptions & RejectContextfulOptions<TOptions>,
 ): Promise<T>;
 
 // Overload: Any parser
