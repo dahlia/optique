@@ -296,6 +296,11 @@ type ProgramHelpMetadata = {
   readonly footer?: Message;
 };
 
+type NonEmptySourceContexts = readonly [
+  SourceContext<unknown>,
+  ...SourceContext<unknown>[],
+];
+
 function getProgramHelpMetadata(
   metadata: Program<Mode, unknown>["metadata"],
 ): ProgramHelpMetadata {
@@ -416,7 +421,7 @@ export function run<
 export function run<
   M extends Mode,
   T,
-  TContexts extends readonly SourceContext<unknown>[],
+  TContexts extends NonEmptySourceContexts,
 >(
   program: Program<M, T>,
   options:

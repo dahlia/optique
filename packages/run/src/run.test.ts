@@ -1488,6 +1488,26 @@ describe("run with contexts", () => {
 
     assert.ok(disposed);
   });
+
+  it("should keep Program run() synchronous with empty contexts", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+    const program: Program<"sync", { name: string }> = {
+      parser,
+      metadata: {
+        name: "empty-contexts",
+      },
+    };
+
+    const result: { name: string } = run(program, {
+      args: ["Alice"],
+      contexts: [],
+    });
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "Alice" });
+  });
 });
 
 describe("runSync with contexts", () => {
