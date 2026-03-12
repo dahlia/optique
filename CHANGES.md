@@ -243,6 +243,11 @@ To be released.
  -  Added `ConfigContext` implementation of `Symbol.dispose` for automatic
     cleanup of the global config registry.  [[#110]]
 
+ -  Fixed `createConfigContext()` breaking sync runner flows.  When config
+    loading and schema validation complete synchronously, config contexts now
+    return annotations without a Promise so documented `runSync()` and
+    `runWithSync()` config fallbacks work again.  [[#159], [#162]]
+
  -  Fixed `bindConfig()` composition with `bindEnv()`: when no CLI token is
     consumed, `bindConfig()` no longer incorrectly marks the result as
     “CLI-provided”, which was causing `bindEnv(bindConfig(…))` to skip the
@@ -268,6 +273,8 @@ To be released.
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
 [#155]: https://github.com/dahlia/optique/issues/155
+[#159]: https://github.com/dahlia/optique/issues/159
+[#162]: https://github.com/dahlia/optique/pull/162
 
 ### @optique/env
 
