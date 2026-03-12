@@ -296,15 +296,27 @@ type ProgramHelpMetadata = {
   readonly footer?: Message;
 };
 
+/**
+ * Rejects context tuples that are statically known to be empty so those calls
+ * fall back to the synchronous no-context overloads.
+ */
 type RejectEmptyContexts<TContexts extends readonly SourceContext<unknown>[]> =
   TContexts extends readonly [] ? never
     : unknown;
 
+/**
+ * Represents a context tuple that is statically known to contain at least one
+ * source context.
+ */
 type NonEmptySourceContexts = readonly [
   SourceContext<unknown>,
   ...SourceContext<unknown>[],
 ];
 
+/**
+ * Rejects option shapes that may carry a non-empty `contexts` array so plain
+ * Program overloads do not bypass the context-aware overloads.
+ */
 type RejectContextfulOptions<TOptions> = TOptions extends {
   readonly contexts?: infer TContexts extends
     | readonly SourceContext<unknown>[]
@@ -313,11 +325,19 @@ type RejectContextfulOptions<TOptions> = TOptions extends {
   : never
   : unknown;
 
+/**
+ * Rejects option shapes that introduce keys outside the public `RunOptions`
+ * contract, preserving excess-property checks for direct object literals.
+ */
 type RejectUnknownRunOptionKeys<TOptions> = [TOptions] extends [undefined]
   ? unknown
   : Exclude<keyof TOptions, keyof RunOptions> extends never ? unknown
   : never;
 
+/**
+ * Accepts only values typed exactly as `RunOptions`, which are widened to the
+ * conservative fallback overloads because they may hide context presence.
+ */
 type AcceptExactRunOptions<TOptions> = [TOptions] extends [RunOptions]
   ? [RunOptions] extends [TOptions] ? unknown
   : never
