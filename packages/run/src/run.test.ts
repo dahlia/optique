@@ -1643,6 +1643,24 @@ describe("run with contexts", () => {
     void syncResult;
   });
 
+  it("should reject optional RunOptions wrappers for Program run()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: withDefault(option("--name", string()), "default"),
+      }),
+      metadata: {
+        name: "optional-runoptions-wrapper",
+      },
+    };
+
+    function _wrap(options?: RunOptions) {
+      // @ts-expect-error - optional RunOptions wrappers could hide contexts.
+      return run(program, options);
+    }
+
+    void _wrap;
+  });
+
   it("should widen Program run() for dynamic context arrays", async () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {

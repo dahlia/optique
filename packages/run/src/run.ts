@@ -317,13 +317,18 @@ type NonEmptySourceContexts = readonly [
  * Rejects option shapes that may carry a non-empty `contexts` array so plain
  * Program overloads do not bypass the context-aware overloads.
  */
-type RejectContextfulOptions<TOptions> = TOptions extends {
-  readonly contexts?: infer TContexts extends
-    | readonly SourceContext<unknown>[]
-    | undefined;
-} ? [TContexts] extends [undefined | readonly []] ? unknown
-  : never
-  : unknown;
+type ContextsFromOptions<TOptions> = [Exclude<TOptions, undefined>] extends
+  [never] ? undefined
+  : Exclude<TOptions, undefined> extends {
+    readonly contexts?: infer TContexts extends
+      | readonly SourceContext<unknown>[]
+      | undefined;
+  } ? TContexts
+  : undefined;
+
+type RejectContextfulOptions<TOptions> = [ContextsFromOptions<TOptions>] extends
+  [undefined | readonly []] ? unknown
+  : never;
 
 /**
  * Rejects option shapes that introduce keys outside the public `RunOptions`
