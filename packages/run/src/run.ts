@@ -410,7 +410,7 @@ function resolveProgramInput<
  *
  * @since 0.11.0 Added support for {@link Program} objects.
  */
-// Overload: parser with contexts — always returns Promise
+// Overload: parser with non-empty or dynamic contexts — returns Promise
 export function run<
   T extends Parser<Mode, unknown, unknown>,
   const TContexts extends readonly SourceContext<unknown>[],
