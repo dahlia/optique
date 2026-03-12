@@ -1560,9 +1560,64 @@ describe("run with contexts", () => {
       args: ["Alice"],
     };
 
-    const result: { name: string } = run(program, options);
+    const result: { name: string } | Promise<{ name: string }> = run(
+      program,
+      options,
+    );
 
+    assert.ok(!(result instanceof Promise));
     assert.deepEqual(result, { name: "Alice" });
+  });
+
+  it("should widen Program run() when RunOptions variables may include contexts", async () => {
+    const key = Symbol.for("@test/program-run-runoptions-contexts");
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        return { [key]: { value: true } };
+      },
+    };
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: withDefault(option("--name", string()), "default"),
+      }),
+      metadata: {
+        name: "forwarded-options-with-contexts",
+      },
+    };
+    const options: RunOptions = {
+      args: [],
+      contexts: [context],
+    };
+
+    const result = run(program, options);
+
+    const maybePromise: { name: string } | Promise<{ name: string }> = result;
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await maybePromise, { name: "default" });
+
+    // @ts-expect-error - RunOptions may include contexts, so run() may be async.
+    const syncResult: { name: string } = run(program, options);
+    void syncResult;
+  });
+
+  it("should reject unknown option keys for Program run()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-typo-run",
+      },
+    };
+
+    const assertUnknownOptionsAreRejected = (): void => {
+      // @ts-expect-error - argz is not a valid RunOptions key.
+      run(program, {
+        argz: ["Alice"],
+      });
+    };
+    void assertUnknownOptionsAreRejected;
   });
 
   it("should require context options for Program input in run()", async () => {
@@ -1830,6 +1885,25 @@ describe("runSync with contexts", () => {
     const result: { name: string } = runSync(program, options);
 
     assert.deepEqual(result, { name: "Bob" });
+  });
+
+  it("should reject unknown option keys for Program runSync()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-typo-runsync",
+      },
+    };
+
+    const assertUnknownOptionsAreRejected = (): void => {
+      // @ts-expect-error - argz is not a valid RunOptions key.
+      runSync(program, {
+        argz: ["Bob"],
+      });
+    };
+    void assertUnknownOptionsAreRejected;
   });
 
   it("should require context options for Program input in runSync()", () => {
@@ -2114,5 +2188,24 @@ describe("runAsync with contexts", () => {
     const result: Promise<{ name: string }> = runAsync(program, options);
 
     assert.deepEqual(await result, { name: "Charlie" });
+  });
+
+  it("should reject unknown option keys for Program runAsync()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-typo-runasync",
+      },
+    };
+
+    const assertUnknownOptionsAreRejected = (): void => {
+      // @ts-expect-error - argz is not a valid RunOptions key.
+      runAsync(program, {
+        argz: ["Charlie"],
+      });
+    };
+    void assertUnknownOptionsAreRejected;
   });
 });

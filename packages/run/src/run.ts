@@ -301,10 +301,22 @@ type RejectEmptyContexts<TContexts extends readonly SourceContext<unknown>[]> =
     : unknown;
 
 type RejectContextfulOptions<TOptions> = TOptions extends {
-  readonly contexts: infer TContexts extends readonly SourceContext<unknown>[];
-} ? TContexts extends readonly [] ? unknown
+  readonly contexts?: infer TContexts extends
+    | readonly SourceContext<unknown>[]
+    | undefined;
+} ? [TContexts] extends [undefined | readonly []] ? unknown
   : never
   : unknown;
+
+type RejectUnknownRunOptionKeys<TOptions> = [TOptions] extends [undefined]
+  ? unknown
+  : Exclude<keyof TOptions, keyof RunOptions> extends never ? unknown
+  : never;
+
+type AcceptExactRunOptions<TOptions> = [TOptions] extends [RunOptions]
+  ? [RunOptions] extends [TOptions] ? unknown
+  : never
+  : never;
 
 function getProgramHelpMetadata(
   metadata: Program<Mode, unknown>["metadata"],
@@ -440,13 +452,31 @@ export function run<
 // Overload: Program with sync parser
 export function run<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: TOptions & RejectContextfulOptions<TOptions>,
+  options?:
+    & TOptions
+    & RejectContextfulOptions<TOptions>
+    & RejectUnknownRunOptionKeys<TOptions>,
 ): T;
+
+// Overload: Program with sync parser and exact RunOptions
+export function run<T, TOptions extends RunOptions>(
+  program: Program<"sync", T>,
+  options: TOptions & AcceptExactRunOptions<TOptions>,
+): T | Promise<T>;
 
 // Overload: Program with async parser
 export function run<T, const TOptions extends RunOptions | undefined>(
   program: Program<"async", T>,
-  options?: TOptions & RejectContextfulOptions<TOptions>,
+  options?:
+    & TOptions
+    & RejectContextfulOptions<TOptions>
+    & RejectUnknownRunOptionKeys<TOptions>,
+): Promise<T>;
+
+// Overload: Program with async parser and exact RunOptions
+export function run<T, TOptions extends RunOptions>(
+  program: Program<"async", T>,
+  options: TOptions & AcceptExactRunOptions<TOptions>,
 ): Promise<T>;
 
 // Overload: sync parser returns sync result
@@ -518,7 +548,16 @@ export function runSync<
 // Overload: Program with sync parser
 export function runSync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: TOptions & RejectContextfulOptions<TOptions>,
+  options?:
+    & TOptions
+    & RejectContextfulOptions<TOptions>
+    & RejectUnknownRunOptionKeys<TOptions>,
+): T;
+
+// Overload: Program with sync parser and exact RunOptions
+export function runSync<T, TOptions extends RunOptions>(
+  program: Program<"sync", T>,
+  options: TOptions & AcceptExactRunOptions<TOptions>,
 ): T;
 
 // Overload: Sync parser
@@ -611,13 +650,25 @@ export function runAsync<
 // Overload: Program with sync parser
 export function runAsync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: TOptions & RejectContextfulOptions<TOptions>,
+  options?:
+    & TOptions
+    & RejectContextfulOptions<TOptions>
+    & RejectUnknownRunOptionKeys<TOptions>,
 ): Promise<T>;
 
 // Overload: Program with async parser
 export function runAsync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"async", T>,
-  options?: TOptions & RejectContextfulOptions<TOptions>,
+  options?:
+    & TOptions
+    & RejectContextfulOptions<TOptions>
+    & RejectUnknownRunOptionKeys<TOptions>,
+): Promise<T>;
+
+// Overload: Program with exact RunOptions
+export function runAsync<T, TOptions extends RunOptions>(
+  program: Program<Mode, T>,
+  options: TOptions & AcceptExactRunOptions<TOptions>,
 ): Promise<T>;
 
 // Overload: Any parser
