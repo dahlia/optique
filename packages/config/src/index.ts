@@ -8,7 +8,7 @@
  * @since 0.10.0
  */
 
-import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type {
@@ -220,15 +220,12 @@ function isErrnoException(
  * Validates raw data against a Standard Schema and returns the validated value.
  * @internal
  */
-async function validateWithSchema<T>(
-  schema: StandardSchemaV1<unknown, T>,
-  rawData: unknown,
-): Promise<T> {
-  const validation = schema["~standard"].validate(rawData);
-  const validationResult = validation instanceof Promise
-    ? await validation
-    : validation;
-
+function processValidationResult<T>(
+  validationResult: {
+    readonly issues?: readonly { readonly message?: string }[];
+    readonly value?: T;
+  },
+): T {
   if (validationResult.issues) {
     const firstIssue = validationResult.issues[0];
     throw new Error(
@@ -237,6 +234,17 @@ async function validateWithSchema<T>(
   }
 
   return validationResult.value as T;
+}
+
+function validateWithSchema<T>(
+  schema: StandardSchemaV1<unknown, T>,
+  rawData: unknown,
+): T | Promise<T> {
+  const validation = schema["~standard"].validate(rawData);
+  if (validation instanceof Promise) {
+    return validation.then((result) => processValidationResult(result));
+  }
+  return processValidationResult(validation);
 }
 
 /**
@@ -277,10 +285,10 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
     schema: options.schema,
     mode: "dynamic",
 
-    async getAnnotations(
+    getAnnotations(
       parsed?: unknown,
       runtimeOptions?: unknown,
-    ): Promise<Annotations> {
+    ): Promise<Annotations> | Annotations {
       // Phase 1 (no parsed result): return empty — this is a dynamic context
       if (!parsed) {
         return {};
@@ -296,62 +304,19 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         );
       }
 
-      let configData: T | undefined;
-      let configMeta: TConfigMeta | undefined;
-
       // At runtime, `parsed` is the actual parser value.  The
       // ParserValuePlaceholder brand is compile-time only.
       const parsedValue = parsed as ParserValuePlaceholder;
 
-      if (opts.load) {
-        // Custom load mode
-        const loaded = await Promise.resolve(opts.load(parsedValue));
-        configData = await validateWithSchema(options.schema, loaded.config);
-        configMeta = loaded.meta;
-      } else if (opts.getConfigPath) {
-        // Single-file mode
-        const configPath = opts.getConfigPath(parsedValue);
-
-        if (configPath) {
-          const absoluteConfigPath = resolvePath(configPath);
-          const singleFileMeta: ConfigMeta = {
-            configDir: dirname(absoluteConfigPath),
-            configPath: absoluteConfigPath,
-          };
-
-          try {
-            const contents = await readFile(absoluteConfigPath);
-
-            // Parse file contents
-            let rawData: unknown;
-            if (options.fileParser) {
-              rawData = options.fileParser(contents);
-            } else {
-              // Default to JSON
-              const text = new TextDecoder().decode(contents);
-              rawData = JSON.parse(text);
-            }
-
-            configData = await validateWithSchema(options.schema, rawData);
-            configMeta = singleFileMeta as TConfigMeta;
-          } catch (error) {
-            // Missing config file is optional in single-file mode.
-            if (isErrnoException(error) && error.code === "ENOENT") {
-              configData = undefined;
-            } else if (error instanceof SyntaxError) {
-              throw new Error(
-                `Failed to parse config file ` +
-                  `${absoluteConfigPath}: ${error.message}`,
-              );
-            } else {
-              throw error;
-            }
-          }
+      const buildAnnotations = (
+        configData: T | undefined,
+        configMeta: TConfigMeta | undefined,
+      ): Annotations => {
+        if (configData === undefined || configData === null) {
+          return {};
         }
-      }
 
-      // Set active config in registry for nested parsers inside object()
-      if (configData !== undefined && configData !== null) {
+        // Set active config in registry for nested parsers inside object()
         setActiveConfig(contextId, configData);
         // Use the per-instance contextId as the annotation key so that
         // multiple ConfigContext instances can coexist without overwriting
@@ -366,6 +331,77 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         }
 
         return { [contextId]: { data: configData } };
+      };
+
+      const validateAndBuildAnnotations = (
+        rawData: unknown,
+        configMeta: TConfigMeta | undefined,
+      ): Promise<Annotations> | Annotations => {
+        const validated = validateWithSchema(options.schema, rawData);
+        if (validated instanceof Promise) {
+          return validated.then((configData) =>
+            buildAnnotations(configData, configMeta)
+          );
+        }
+        return buildAnnotations(validated, configMeta);
+      };
+
+      if (opts.load) {
+        // Custom load mode
+        const loaded = opts.load(parsedValue);
+        if (loaded instanceof Promise) {
+          return loaded.then(({ config, meta }) =>
+            validateAndBuildAnnotations(config, meta)
+          );
+        }
+
+        return validateAndBuildAnnotations(loaded.config, loaded.meta);
+      }
+
+      if (opts.getConfigPath) {
+        // Single-file mode
+        const configPath = opts.getConfigPath(parsedValue);
+
+        if (!configPath) {
+          return {};
+        }
+
+        const absoluteConfigPath = resolvePath(configPath);
+        const singleFileMeta: ConfigMeta = {
+          configDir: dirname(absoluteConfigPath),
+          configPath: absoluteConfigPath,
+        };
+
+        try {
+          const contents = readFileSync(absoluteConfigPath);
+
+          // Parse file contents
+          let rawData: unknown;
+          if (options.fileParser) {
+            rawData = options.fileParser(contents);
+          } else {
+            // Default to JSON
+            const text = new TextDecoder().decode(contents);
+            rawData = JSON.parse(text);
+          }
+
+          return validateAndBuildAnnotations(
+            rawData,
+            singleFileMeta as TConfigMeta,
+          );
+        } catch (error) {
+          // Missing config file is optional in single-file mode.
+          if (isErrnoException(error) && error.code === "ENOENT") {
+            return {};
+          }
+          if (error instanceof SyntaxError) {
+            throw new Error(
+              `Failed to parse config file ` +
+                `${absoluteConfigPath}: ${error.message}`,
+            );
+          }
+          throw error;
+        }
       }
 
       return {};

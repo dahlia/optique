@@ -8,7 +8,7 @@ import { object } from "@optique/core/constructs";
 import { flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
-import { runWith } from "@optique/core/facade";
+import { runWith, runWithSync } from "@optique/core/facade";
 import {
   bindConfig,
   createConfigContext,
@@ -1029,5 +1029,101 @@ describe("run with config context", { concurrency: false }, () => {
 
     // Must read from context2's validated config, not context1's.
     assert.equal(result, 8080);
+  });
+
+  test("supports runWithSync() with config file fallbacks", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-sync.json");
+
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        host: "sync.example.com",
+        port: 7000,
+      }),
+    );
+
+    try {
+      const schema = z.object({
+        host: z.string(),
+        port: z.number(),
+      });
+
+      const context = createConfigContext({ schema });
+      const parser = object({
+        config: withDefault(option("--config", string()), configPath),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+        port: bindConfig(option("--port", integer()), {
+          context,
+          key: "port",
+          default: 3000,
+        }),
+      });
+
+      const result = runWithSync(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
+        args: [],
+      });
+
+      assert.deepEqual(result, {
+        config: configPath,
+        host: "sync.example.com",
+        port: 7000,
+      });
+    } finally {
+      await rm(configPath, { force: true });
+    }
+  });
+
+  test("runWithSync() keeps CLI values ahead of config fallbacks", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-sync-override.json");
+
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        host: "sync.example.com",
+        port: 7000,
+      }),
+    );
+
+    try {
+      const schema = z.object({
+        host: z.string(),
+        port: z.number(),
+      });
+
+      const context = createConfigContext({ schema });
+      const parser = object({
+        config: withDefault(option("--config", string()), configPath),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+        port: bindConfig(option("--port", integer()), {
+          context,
+          key: "port",
+          default: 3000,
+        }),
+      });
+
+      const result = runWithSync(parser, "test", [context], {
+        getConfigPath: (parsed: { config: string }) => parsed.config,
+        args: ["--host", "cli.example.com"],
+      });
+
+      assert.deepEqual(result, {
+        config: configPath,
+        host: "cli.example.com",
+        port: 7000,
+      });
+    } finally {
+      await rm(configPath, { force: true });
+    }
   });
 });
