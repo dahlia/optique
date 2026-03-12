@@ -1946,4 +1946,57 @@ describe("runAsync with contexts", () => {
 
     assert.deepEqual(result, { name: "default" });
   });
+
+  it("should require context options for Program input in runAsync()", async () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-runasync-context"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser: object({
+        config: withDefault(option("--config", string()), "optique.json"),
+        host: withDefault(option("--host", string()), "localhost"),
+      }),
+      metadata: {
+        name: "configurable-app-async",
+      },
+    };
+
+    const assertMissingOptionsAreRejected = (): void => {
+      // @ts-expect-error - contexts require getPath for this Program context.
+      runAsync(program, {
+        args: [],
+        contexts: [context],
+      });
+    };
+    void assertMissingOptionsAreRejected;
+
+    const result = runAsync(program, {
+      args: [],
+      contexts: [context],
+      getPath: (parsed) => {
+        // @ts-expect-error - parsed must not be any.
+        void parsed.nonexistent;
+        return parsed.config;
+      },
+    });
+
+    const promise: Promise<{ config: string; host: string }> = result;
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await promise, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.equal(resolvedPath, "optique.json");
+  });
 });
