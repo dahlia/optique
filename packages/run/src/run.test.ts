@@ -1508,6 +1508,30 @@ describe("run with contexts", () => {
     assert.ok(!(result instanceof Promise));
     assert.deepEqual(result, { name: "Alice" });
   });
+
+  it("should reject Program run() with contexts when options are missing", () => {
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-run-missing-options"),
+      getAnnotations() {
+        return {};
+      },
+    };
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser: object({
+        config: withDefault(option("--config", string()), "optique.json"),
+        host: withDefault(option("--host", string()), "localhost"),
+      }),
+      metadata: {
+        name: "missing-options",
+      },
+    };
+
+    // @ts-expect-error - contexts require getPath for this Program context.
+    run(program, {
+      args: [],
+      contexts: [context],
+    });
+  });
 });
 
 describe("runSync with contexts", () => {
@@ -1628,10 +1652,37 @@ describe("runSync with contexts", () => {
         args: [],
         contexts: [context],
         envName: "dev",
-      } as RunOptions & { readonly envName: string },
+      } as RunOptions & {
+        readonly contexts: readonly [SourceContext];
+        readonly envName: string;
+      },
     );
 
     assert.deepEqual(result, { name: "default" });
+  });
+
+  it("should reject Program runSync() with contexts when options are missing", () => {
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-runsync-missing-options"),
+      getAnnotations() {
+        return {};
+      },
+    };
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser: object({
+        config: withDefault(option("--config", string()), "optique.json"),
+        host: withDefault(option("--host", string()), "localhost"),
+      }),
+      metadata: {
+        name: "missing-options-sync",
+      },
+    };
+
+    // @ts-expect-error - contexts require getPath for this Program context.
+    runSync(program, {
+      args: [],
+      contexts: [context],
+    });
   });
 
   it("should require context options for Program input in run()", async () => {

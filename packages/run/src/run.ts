@@ -301,6 +301,10 @@ type NonEmptySourceContexts = readonly [
   ...SourceContext<unknown>[],
 ];
 
+type RunOptionsWithoutContexts = RunOptions & {
+  readonly contexts?: readonly [] | undefined;
+};
+
 function getProgramHelpMetadata(
   metadata: Program<Mode, unknown>["metadata"],
 ): ProgramHelpMetadata {
@@ -433,13 +437,13 @@ export function run<
 // Overload: Program with sync parser
 export function run<T>(
   program: Program<"sync", T>,
-  options?: RunOptions,
+  options?: RunOptionsWithoutContexts,
 ): T;
 
 // Overload: Program with async parser
 export function run<T>(
   program: Program<"async", T>,
-  options?: RunOptions,
+  options?: RunOptionsWithoutContexts,
 ): Promise<T>;
 
 // Overload: sync parser returns sync result
@@ -510,7 +514,7 @@ export function runSync<
 // Overload: Program with sync parser
 export function runSync<T>(
   program: Program<"sync", T>,
-  options?: RunOptions,
+  options?: RunOptionsWithoutContexts,
 ): T;
 
 // Overload: Sync parser
@@ -602,13 +606,13 @@ export function runAsync<
 // Overload: Program with sync parser
 export function runAsync<T>(
   program: Program<"sync", T>,
-  options?: RunOptions,
+  options?: RunOptionsWithoutContexts,
 ): Promise<T>;
 
 // Overload: Program with async parser
 export function runAsync<T>(
   program: Program<"async", T>,
-  options?: RunOptions,
+  options?: RunOptionsWithoutContexts,
 ): Promise<T>;
 
 // Overload: Any parser
