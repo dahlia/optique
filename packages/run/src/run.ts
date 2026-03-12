@@ -327,7 +327,8 @@ type RejectContextfulOptions<TOptions> = TOptions extends {
 
 /**
  * Rejects option shapes that introduce keys outside the public `RunOptions`
- * contract, preserving excess-property checks for direct object literals.
+ * contract, preserving typo detection for direct object literals and wider
+ * option variables.
  */
 type RejectUnknownRunOptionKeys<TOptions> = [TOptions] extends [undefined]
   ? unknown
