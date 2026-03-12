@@ -503,7 +503,7 @@ export function runSync<
 // Overload: Program with contexts
 export function runSync<
   T,
-  TContexts extends readonly SourceContext<unknown>[],
+  TContexts extends NonEmptySourceContexts,
 >(
   program: Program<"sync", T>,
   options:
@@ -595,7 +595,7 @@ export function runAsync<
 export function runAsync<
   M extends Mode,
   T,
-  TContexts extends readonly SourceContext<unknown>[],
+  TContexts extends NonEmptySourceContexts,
 >(
   program: Program<M, T>,
   options:
