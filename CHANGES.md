@@ -345,7 +345,17 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `CompletionOptionsBoth`, `CompletionOptionsSingular`,
     `CompletionOptionsPlural`, and `CompletionOptions` types.  [[#130]]
 
+ -  Fixed `run()`, `runSync()`, and `runAsync()` overload resolution for
+    `Program` values used with `contexts`.  Context-aware `Program` calls
+    now preserve the correct return type and accept context-specific runner
+    options instead of falling back to the plain `Program` overloads.
+    The stricter plain-`Program` overloads also reject option variables
+    whose types add keys outside `RunOptions`, preserving the tighter
+    direct-call checks introduced by this change set.  [[#160], [#163]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
+[#160]: https://github.com/dahlia/optique/issues/160
+[#163]: https://github.com/dahlia/optique/pull/163
 
 
 Version 0.10.7

@@ -1,5 +1,8 @@
 import { longestMatch, object, or } from "@optique/core/constructs";
-import type { SourceContext } from "@optique/core/context";
+import type {
+  ParserValuePlaceholder,
+  SourceContext,
+} from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { argument, command, option } from "@optique/core/primitives";
@@ -33,6 +36,11 @@ function createSyncConfigSchema(): Parameters<
     },
   };
 }
+
+interface ProgramPathContext extends
+  SourceContext<{
+    readonly getPath: (parsed: ParserValuePlaceholder) => string;
+  }> {}
 
 describe("run", () => {
   describe("basic parsing", () => {
@@ -1480,6 +1488,384 @@ describe("run with contexts", () => {
 
     assert.ok(disposed);
   });
+
+  it("should keep Program run() synchronous with empty contexts", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+    const program: Program<"sync", { name: string }> = {
+      parser,
+      metadata: {
+        name: "empty-contexts",
+      },
+    };
+
+    const result: { name: string } = run(program, {
+      args: ["Alice"],
+      contexts: [],
+    });
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "Alice" });
+  });
+
+  it("should keep parser run() synchronous with empty contexts", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    const result: { name: string } = run(parser, {
+      args: ["Alice"],
+      contexts: [],
+    });
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "Alice" });
+  });
+
+  it("should widen parser run() for dynamic context arrays", async () => {
+    const key = Symbol.for("@test/parser-run-dynamic-contexts");
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        return { [key]: { value: true } };
+      },
+    };
+    const emptyContexts: SourceContext[] = [];
+    const filledContexts: SourceContext[] = [context];
+
+    const emptyResult: { name: string } | Promise<{ name: string }> = run(
+      parser,
+      {
+        args: [],
+        contexts: emptyContexts,
+      },
+    );
+    const filledResult: { name: string } | Promise<{ name: string }> = run(
+      parser,
+      {
+        args: [],
+        contexts: filledContexts,
+      },
+    );
+
+    assert.ok(!(emptyResult instanceof Promise));
+    assert.deepEqual(emptyResult, { name: "default" });
+    assert.ok(filledResult instanceof Promise);
+    assert.deepEqual(await filledResult, { name: "default" });
+
+    // @ts-expect-error - dynamic context arrays may still resolve async.
+    const syncResult: { name: string } = run(parser, {
+      args: [],
+      contexts: filledContexts,
+    });
+    void syncResult;
+  });
+
+  it("should reject Program run() with contexts when options are missing", () => {
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-run-missing-options"),
+      getAnnotations() {
+        return {};
+      },
+    };
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser: object({
+        config: withDefault(option("--config", string()), "optique.json"),
+        host: withDefault(option("--host", string()), "localhost"),
+      }),
+      metadata: {
+        name: "missing-options",
+      },
+    };
+
+    // @ts-expect-error - contexts require getPath for this Program context.
+    run(program, {
+      args: [],
+      contexts: [context],
+    });
+  });
+
+  it("should accept RunOptions variables for Program run() without contexts", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-options",
+      },
+    };
+    const options: RunOptions = {
+      args: ["Alice"],
+    };
+
+    const result: { name: string } | Promise<{ name: string }> = run(
+      program,
+      options,
+    );
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "Alice" });
+  });
+
+  it("should widen Program run() when RunOptions variables may include contexts", async () => {
+    const key = Symbol.for("@test/program-run-runoptions-contexts");
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        return { [key]: { value: true } };
+      },
+    };
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: withDefault(option("--name", string()), "default"),
+      }),
+      metadata: {
+        name: "forwarded-options-with-contexts",
+      },
+    };
+    const options: RunOptions = {
+      args: [],
+      contexts: [context],
+    };
+
+    const result = run(program, options);
+
+    const maybePromise: { name: string } | Promise<{ name: string }> = result;
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await maybePromise, { name: "default" });
+
+    // @ts-expect-error - RunOptions may include contexts, so run() may be async.
+    const syncResult: { name: string } = run(program, options);
+    void syncResult;
+  });
+
+  it("should reject optional RunOptions wrappers for Program run()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: withDefault(option("--name", string()), "default"),
+      }),
+      metadata: {
+        name: "optional-runoptions-wrapper",
+      },
+    };
+
+    function _wrap(options?: RunOptions) {
+      // @ts-expect-error - optional RunOptions wrappers could hide contexts.
+      return run(program, options);
+    }
+
+    void _wrap;
+  });
+
+  it("should widen Program run() for dynamic context arrays", async () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-run-dynamic-context-array"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser: object({
+        config: withDefault(option("--config", string()), "optique.json"),
+        host: withDefault(option("--host", string()), "localhost"),
+      }),
+      metadata: {
+        name: "dynamic-context-array-program",
+      },
+    };
+    const emptyContexts: ProgramPathContext[] = [];
+    const filledContexts: ProgramPathContext[] = [context];
+
+    const emptyResult:
+      | { config: string; host: string }
+      | Promise<{ config: string; host: string }> = run(program, {
+        args: [],
+        contexts: emptyContexts,
+        getPath: (parsed) => parsed.config,
+      });
+    const filledResult:
+      | { config: string; host: string }
+      | Promise<{ config: string; host: string }> = run(program, {
+        args: [],
+        contexts: filledContexts,
+        getPath: (parsed) => {
+          // @ts-expect-error - parsed must not be any.
+          void parsed.nonexistent;
+          return parsed.config;
+        },
+      });
+
+    assert.ok(!(emptyResult instanceof Promise));
+    assert.deepEqual(emptyResult, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.ok(filledResult instanceof Promise);
+    assert.deepEqual(await filledResult, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.equal(resolvedPath, "optique.json");
+
+    // @ts-expect-error - dynamic context arrays may resolve asynchronously.
+    const syncResult: { config: string; host: string } = run(program, {
+      args: [],
+      contexts: filledContexts,
+      getPath: (parsed) => parsed.config,
+    });
+    void syncResult;
+  });
+
+  it("should reject unknown option keys for Program run()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-typo-run",
+      },
+    };
+
+    const assertUnknownOptionsAreRejected = (): void => {
+      // @ts-expect-error - argz is not a valid RunOptions key.
+      run(program, {
+        argz: ["Alice"],
+      });
+    };
+    void assertUnknownOptionsAreRejected;
+  });
+
+  it("should reject widened Program run() option variables with extra keys", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-widened-typo-run",
+      },
+    };
+    const options: RunOptions & { readonly argz: readonly string[] } = {
+      args: ["Alice"],
+      argz: ["Alice"],
+    };
+
+    const assertWidenedOptionsAreRejected = (): void => {
+      // @ts-expect-error - widened option variables must not bypass key checks.
+      run(program, options);
+    };
+    void assertWidenedOptionsAreRejected;
+  });
+
+  it("should require context options for Program input in run()", async () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-run-context"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const parser = object({
+      config: withDefault(option("--config", string()), "optique.json"),
+      host: withDefault(option("--host", string()), "localhost"),
+    });
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser,
+      metadata: {
+        name: "configurable-app",
+      },
+    };
+
+    const result = run(program, {
+      args: [],
+      contexts: [context],
+      getPath: (parsed) => {
+        // @ts-expect-error - parsed must not be any.
+        void parsed.nonexistent;
+        return parsed.config;
+      },
+    });
+
+    const promise: Promise<{ config: string; host: string }> = result;
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await promise, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.equal(resolvedPath, "optique.json");
+
+    // @ts-expect-error - run() with contexts must not return synchronously.
+    const syncResult: { config: string; host: string } = result;
+    void syncResult;
+  });
+
+  it("should widen parser run() for non-tuple context arrays", async () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-run-dynamic-contexts"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const parser = object({
+      config: withDefault(option("--config", string()), "optique.json"),
+      host: withDefault(option("--host", string()), "localhost"),
+    });
+    const contexts: readonly ProgramPathContext[] = [context];
+    const options: RunOptions & {
+      readonly contexts: readonly ProgramPathContext[];
+      readonly getPath: (parsed: { config: string; host: string }) => string;
+    } = {
+      args: [],
+      contexts,
+      getPath: (parsed) => {
+        // @ts-expect-error - parsed must not be any.
+        void parsed.nonexistent;
+        return parsed.config;
+      },
+    };
+
+    const result = run(parser, options);
+
+    const maybePromise:
+      | { config: string; host: string }
+      | Promise<{ config: string; host: string }> = result;
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await maybePromise, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.equal(resolvedPath, "optique.json");
+
+    // @ts-expect-error - non-tuple context arrays may resolve asynchronously.
+    const syncResult: { config: string; host: string } = result;
+    void syncResult;
+  });
 });
 
 describe("runSync with contexts", () => {
@@ -1600,10 +1986,157 @@ describe("runSync with contexts", () => {
         args: [],
         contexts: [context],
         envName: "dev",
-      } as RunOptions & { readonly envName: string },
+      } as RunOptions & {
+        readonly contexts: readonly [SourceContext];
+        readonly envName: string;
+      },
     );
 
     assert.deepEqual(result, { name: "default" });
+  });
+
+  it("should reject Program runSync() with contexts when options are missing", () => {
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-runsync-missing-options"),
+      getAnnotations() {
+        return {};
+      },
+    };
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser: object({
+        config: withDefault(option("--config", string()), "optique.json"),
+        host: withDefault(option("--host", string()), "localhost"),
+      }),
+      metadata: {
+        name: "missing-options-sync",
+      },
+    };
+
+    // @ts-expect-error - contexts require getPath for this Program context.
+    runSync(program, {
+      args: [],
+      contexts: [context],
+    });
+  });
+
+  it("should accept RunOptions variables for Program runSync() without contexts", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-options-sync",
+      },
+    };
+    const options: RunOptions = {
+      args: ["Bob"],
+    };
+
+    const result: { name: string } = runSync(program, options);
+
+    assert.deepEqual(result, { name: "Bob" });
+  });
+
+  it("should accept optional RunOptions wrappers for Program runSync()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-optional-options-sync",
+      },
+    };
+
+    function wrap(options?: RunOptions) {
+      return runSync(program, options);
+    }
+
+    const result: { name: string } = wrap({
+      args: ["Bob"],
+    });
+
+    assert.deepEqual(result, { name: "Bob" });
+  });
+
+  it("should reject unknown option keys for Program runSync()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-typo-runsync",
+      },
+    };
+
+    const assertUnknownOptionsAreRejected = (): void => {
+      // @ts-expect-error - argz is not a valid RunOptions key.
+      runSync(program, {
+        argz: ["Bob"],
+      });
+    };
+    void assertUnknownOptionsAreRejected;
+  });
+
+  it("should reject widened Program runSync() option variables with extra keys", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-widened-typo-runsync",
+      },
+    };
+    const options: RunOptions & { readonly argz: readonly string[] } = {
+      args: ["Bob"],
+      argz: ["Bob"],
+    };
+
+    const assertWidenedOptionsAreRejected = (): void => {
+      // @ts-expect-error - widened option variables must not bypass key checks.
+      runSync(program, options);
+    };
+    void assertWidenedOptionsAreRejected;
+  });
+
+  it("should require context options for Program input in runSync()", () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-runsync-context"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const parser = object({
+      config: withDefault(option("--config", string()), "optique.json"),
+      host: withDefault(option("--host", string()), "localhost"),
+    });
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser,
+      metadata: {
+        name: "configurable-app-sync",
+      },
+    };
+
+    const result: { config: string; host: string } = runSync(program, {
+      args: [],
+      contexts: [context],
+      getPath: (parsed) => {
+        // @ts-expect-error - parsed must not be any.
+        void parsed.nonexistent;
+        return parsed.config;
+      },
+    });
+
+    assert.equal(result.config, "optique.json");
+    assert.equal(result.host, "localhost");
+    assert.equal(resolvedPath, "optique.json");
   });
 
   it("should load config fallbacks through createConfigContext", async () => {
@@ -1776,5 +2309,137 @@ describe("runAsync with contexts", () => {
     );
 
     assert.deepEqual(result, { name: "default" });
+  });
+
+  it("should require context options for Program input in runAsync()", async () => {
+    let resolvedPath: string | undefined;
+    const context: ProgramPathContext = {
+      id: Symbol.for("@test/program-runasync-context"),
+      getAnnotations(parsed, options) {
+        if (parsed && options) {
+          resolvedPath = (
+            options as {
+              getPath: (parsed: { config: string; host: string }) => string;
+            }
+          ).getPath(parsed as { config: string; host: string });
+        }
+        return {};
+      },
+    };
+    const program: Program<"sync", { config: string; host: string }> = {
+      parser: object({
+        config: withDefault(option("--config", string()), "optique.json"),
+        host: withDefault(option("--host", string()), "localhost"),
+      }),
+      metadata: {
+        name: "configurable-app-async",
+      },
+    };
+
+    const assertMissingOptionsAreRejected = (): void => {
+      // @ts-expect-error - contexts require getPath for this Program context.
+      runAsync(program, {
+        args: [],
+        contexts: [context],
+      });
+    };
+    void assertMissingOptionsAreRejected;
+
+    const result = runAsync(program, {
+      args: [],
+      contexts: [context],
+      getPath: (parsed) => {
+        // @ts-expect-error - parsed must not be any.
+        void parsed.nonexistent;
+        return parsed.config;
+      },
+    });
+
+    const promise: Promise<{ config: string; host: string }> = result;
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await promise, {
+      config: "optique.json",
+      host: "localhost",
+    });
+    assert.equal(resolvedPath, "optique.json");
+  });
+
+  it("should accept RunOptions variables for Program runAsync() without contexts", async () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-options-async",
+      },
+    };
+    const options: RunOptions = {
+      args: ["Charlie"],
+    };
+
+    const result: Promise<{ name: string }> = runAsync(program, options);
+
+    assert.deepEqual(await result, { name: "Charlie" });
+  });
+
+  it("should accept optional RunOptions wrappers for Program runAsync()", async () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-optional-options-async",
+      },
+    };
+
+    function wrap(options?: RunOptions) {
+      return runAsync(program, options);
+    }
+
+    const result: Promise<{ name: string }> = wrap({
+      args: ["Charlie"],
+    });
+
+    assert.deepEqual(await result, { name: "Charlie" });
+  });
+
+  it("should reject unknown option keys for Program runAsync()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-typo-runasync",
+      },
+    };
+
+    const assertUnknownOptionsAreRejected = (): void => {
+      // @ts-expect-error - argz is not a valid RunOptions key.
+      runAsync(program, {
+        argz: ["Charlie"],
+      });
+    };
+    void assertUnknownOptionsAreRejected;
+  });
+
+  it("should reject widened Program runAsync() option variables with extra keys", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "program-widened-typo-runasync",
+      },
+    };
+    const options: RunOptions & { readonly argz: readonly string[] } = {
+      args: ["Charlie"],
+      argz: ["Charlie"],
+    };
+
+    const assertWidenedOptionsAreRejected = (): void => {
+      // @ts-expect-error - widened option variables must not bypass key checks.
+      runAsync(program, options);
+    };
+    void assertWidenedOptionsAreRejected;
   });
 });
