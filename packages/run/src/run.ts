@@ -413,7 +413,7 @@ function resolveProgramInput<
 // Overload: parser with contexts — always returns Promise
 export function run<
   T extends Parser<Mode, unknown, unknown>,
-  TContexts extends readonly SourceContext<unknown>[],
+  TContexts extends NonEmptySourceContexts,
 >(
   parser: T,
   options:

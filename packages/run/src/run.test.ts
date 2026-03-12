@@ -1509,6 +1509,20 @@ describe("run with contexts", () => {
     assert.deepEqual(result, { name: "Alice" });
   });
 
+  it("should keep parser run() synchronous with empty contexts", () => {
+    const parser = object({
+      name: argument(string()),
+    });
+
+    const result: { name: string } = run(parser, {
+      args: ["Alice"],
+      contexts: [],
+    });
+
+    assert.ok(!(result instanceof Promise));
+    assert.deepEqual(result, { name: "Alice" });
+  });
+
   it("should reject Program run() with contexts when options are missing", () => {
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-run-missing-options"),
