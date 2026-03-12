@@ -1523,6 +1523,48 @@ describe("run with contexts", () => {
     assert.deepEqual(result, { name: "Alice" });
   });
 
+  it("should widen parser run() for dynamic context arrays", async () => {
+    const key = Symbol.for("@test/parser-run-dynamic-contexts");
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+    const context: SourceContext = {
+      id: key,
+      getAnnotations() {
+        return { [key]: { value: true } };
+      },
+    };
+    const emptyContexts: SourceContext[] = [];
+    const filledContexts: SourceContext[] = [context];
+
+    const emptyResult: { name: string } | Promise<{ name: string }> = run(
+      parser,
+      {
+        args: [],
+        contexts: emptyContexts,
+      },
+    );
+    const filledResult: { name: string } | Promise<{ name: string }> = run(
+      parser,
+      {
+        args: [],
+        contexts: filledContexts,
+      },
+    );
+
+    assert.ok(!(emptyResult instanceof Promise));
+    assert.deepEqual(emptyResult, { name: "default" });
+    assert.ok(filledResult instanceof Promise);
+    assert.deepEqual(await filledResult, { name: "default" });
+
+    // @ts-expect-error - dynamic context arrays may still resolve async.
+    const syncResult: { name: string } = run(parser, {
+      args: [],
+      contexts: filledContexts,
+    });
+    void syncResult;
+  });
+
   it("should reject Program run() with contexts when options are missing", () => {
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-run-missing-options"),
@@ -1669,7 +1711,7 @@ describe("run with contexts", () => {
     void syncResult;
   });
 
-  it("should treat non-tuple context arrays as async in run()", async () => {
+  it("should widen parser run() for non-tuple context arrays", async () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {
       id: Symbol.for("@test/program-run-dynamic-contexts"),
@@ -1704,15 +1746,17 @@ describe("run with contexts", () => {
 
     const result = run(parser, options);
 
-    const promise: Promise<{ config: string; host: string }> = result;
+    const maybePromise:
+      | { config: string; host: string }
+      | Promise<{ config: string; host: string }> = result;
     assert.ok(result instanceof Promise);
-    assert.deepEqual(await promise, {
+    assert.deepEqual(await maybePromise, {
       config: "optique.json",
       host: "localhost",
     });
     assert.equal(resolvedPath, "optique.json");
 
-    // @ts-expect-error - run() with non-empty contexts must not return synchronously.
+    // @ts-expect-error - non-tuple context arrays may resolve asynchronously.
     const syncResult: { config: string; host: string } = result;
     void syncResult;
   });

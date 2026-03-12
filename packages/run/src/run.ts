@@ -300,6 +300,11 @@ type RejectEmptyContexts<TContexts extends readonly SourceContext<unknown>[]> =
   TContexts extends readonly [] ? never
     : unknown;
 
+type NonEmptySourceContexts = readonly [
+  SourceContext<unknown>,
+  ...SourceContext<unknown>[],
+];
+
 type RejectContextfulOptions<TOptions> = TOptions extends {
   readonly contexts?: infer TContexts extends
     | readonly SourceContext<unknown>[]
@@ -422,7 +427,19 @@ function resolveProgramInput<
  *
  * @since 0.11.0 Added support for {@link Program} objects.
  */
-// Overload: parser with non-empty or dynamic contexts — returns Promise
+// Overload: parser with statically non-empty contexts — returns Promise
+export function run<
+  T extends Parser<Mode, unknown, unknown>,
+  const TContexts extends NonEmptySourceContexts,
+>(
+  parser: T,
+  options:
+    & RunOptions
+    & { readonly contexts: TContexts }
+    & ExtractRequiredOptions<TContexts, InferValue<T>>,
+): Promise<InferValue<T>>;
+
+// Overload: parser with dynamic non-empty-or-empty contexts
 export function run<
   T extends Parser<Mode, unknown, unknown>,
   const TContexts extends readonly SourceContext<unknown>[],
@@ -433,7 +450,7 @@ export function run<
     & { readonly contexts: TContexts }
     & RejectEmptyContexts<TContexts>
     & ExtractRequiredOptions<TContexts, InferValue<T>>,
-): Promise<InferValue<T>>;
+): ModeValue<InferMode<T>, InferValue<T>> | Promise<InferValue<T>>;
 
 // Overload: Program with contexts — always returns Promise
 export function run<
