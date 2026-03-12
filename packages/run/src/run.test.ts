@@ -1533,6 +1533,24 @@ describe("run with contexts", () => {
     });
   });
 
+  it("should accept RunOptions variables for Program run() without contexts", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-options",
+      },
+    };
+    const options: RunOptions = {
+      args: ["Alice"],
+    };
+
+    const result: { name: string } = run(program, options);
+
+    assert.deepEqual(result, { name: "Alice" });
+  });
+
   it("should require context options for Program input in run()", async () => {
     let resolvedPath: string | undefined;
     const context: ProgramPathContext = {
@@ -1732,6 +1750,24 @@ describe("runSync with contexts", () => {
       args: [],
       contexts: [context],
     });
+  });
+
+  it("should accept RunOptions variables for Program runSync() without contexts", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-options-sync",
+      },
+    };
+    const options: RunOptions = {
+      args: ["Bob"],
+    };
+
+    const result: { name: string } = runSync(program, options);
+
+    assert.deepEqual(result, { name: "Bob" });
   });
 
   it("should require context options for Program input in runSync()", () => {
@@ -1998,5 +2034,23 @@ describe("runAsync with contexts", () => {
       host: "localhost",
     });
     assert.equal(resolvedPath, "optique.json");
+  });
+
+  it("should accept RunOptions variables for Program runAsync() without contexts", async () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-options-async",
+      },
+    };
+    const options: RunOptions = {
+      args: ["Charlie"],
+    };
+
+    const result: Promise<{ name: string }> = runAsync(program, options);
+
+    assert.deepEqual(await result, { name: "Charlie" });
   });
 });

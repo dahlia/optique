@@ -301,9 +301,10 @@ type NonEmptySourceContexts = readonly [
   ...SourceContext<unknown>[],
 ];
 
-type RunOptionsWithoutContexts = RunOptions & {
-  readonly contexts?: readonly [] | undefined;
-};
+type RejectNonEmptyContexts<TOptions> = TOptions extends {
+  readonly contexts: NonEmptySourceContexts;
+} ? never
+  : unknown;
 
 function getProgramHelpMetadata(
   metadata: Program<Mode, unknown>["metadata"],
@@ -435,15 +436,15 @@ export function run<
 ): Promise<T>;
 
 // Overload: Program with sync parser
-export function run<T>(
+export function run<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: RunOptionsWithoutContexts,
+  options?: TOptions & RejectNonEmptyContexts<TOptions>,
 ): T;
 
 // Overload: Program with async parser
-export function run<T>(
+export function run<T, const TOptions extends RunOptions | undefined>(
   program: Program<"async", T>,
-  options?: RunOptionsWithoutContexts,
+  options?: TOptions & RejectNonEmptyContexts<TOptions>,
 ): Promise<T>;
 
 // Overload: sync parser returns sync result
@@ -512,9 +513,9 @@ export function runSync<
 ): T;
 
 // Overload: Program with sync parser
-export function runSync<T>(
+export function runSync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: RunOptionsWithoutContexts,
+  options?: TOptions & RejectNonEmptyContexts<TOptions>,
 ): T;
 
 // Overload: Sync parser
@@ -604,15 +605,15 @@ export function runAsync<
 ): Promise<T>;
 
 // Overload: Program with sync parser
-export function runAsync<T>(
+export function runAsync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?: RunOptionsWithoutContexts,
+  options?: TOptions & RejectNonEmptyContexts<TOptions>,
 ): Promise<T>;
 
 // Overload: Program with async parser
-export function runAsync<T>(
+export function runAsync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"async", T>,
-  options?: RunOptionsWithoutContexts,
+  options?: TOptions & RejectNonEmptyContexts<TOptions>,
 ): Promise<T>;
 
 // Overload: Any parser
