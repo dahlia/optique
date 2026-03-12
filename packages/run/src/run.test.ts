@@ -2016,6 +2016,27 @@ describe("runSync with contexts", () => {
     assert.deepEqual(result, { name: "Bob" });
   });
 
+  it("should accept optional RunOptions wrappers for Program runSync()", () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-optional-options-sync",
+      },
+    };
+
+    function wrap(options?: RunOptions) {
+      return runSync(program, options);
+    }
+
+    const result: { name: string } = wrap({
+      args: ["Bob"],
+    });
+
+    assert.deepEqual(result, { name: "Bob" });
+  });
+
   it("should reject unknown option keys for Program runSync()", () => {
     const program: Program<"sync", { name: string }> = {
       parser: object({
@@ -2315,6 +2336,27 @@ describe("runAsync with contexts", () => {
     };
 
     const result: Promise<{ name: string }> = runAsync(program, options);
+
+    assert.deepEqual(await result, { name: "Charlie" });
+  });
+
+  it("should accept optional RunOptions wrappers for Program runAsync()", async () => {
+    const program: Program<"sync", { name: string }> = {
+      parser: object({
+        name: argument(string()),
+      }),
+      metadata: {
+        name: "forwarded-optional-options-async",
+      },
+    };
+
+    function wrap(options?: RunOptions) {
+      return runAsync(program, options);
+    }
+
+    const result: Promise<{ name: string }> = wrap({
+      args: ["Charlie"],
+    });
 
     assert.deepEqual(await result, { name: "Charlie" });
   });

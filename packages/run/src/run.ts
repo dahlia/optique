@@ -298,7 +298,7 @@ type ProgramHelpMetadata = {
 
 /**
  * Rejects context tuples that are statically known to be empty so those calls
- * fall back to the synchronous no-context overloads.
+ * fall back to the no-context overloads.
  */
 type RejectEmptyContexts<TContexts extends readonly SourceContext<unknown>[]> =
   TContexts extends readonly [] ? never
@@ -346,6 +346,16 @@ type RejectUnknownRunOptionKeys<TOptions> = [TOptions] extends [undefined]
  */
 type AcceptExactRunOptions<TOptions> = [TOptions] extends [RunOptions]
   ? [RunOptions] extends [TOptions] ? unknown
+  : never
+  : never;
+
+/**
+ * Accepts only values typed exactly as `RunOptions | undefined`, which model
+ * optional forwarding wrappers without widening generic Program overloads.
+ */
+type AcceptExactOptionalRunOptions<TOptions> = [TOptions] extends
+  [RunOptions | undefined]
+  ? [RunOptions | undefined] extends [TOptions] ? unknown
   : never
   : never;
 
@@ -628,6 +638,12 @@ export function runSync<T, TOptions extends RunOptions>(
   options: TOptions & AcceptExactRunOptions<TOptions>,
 ): T;
 
+// Overload: Program with sync parser and exact optional RunOptions
+export function runSync<T, TOptions extends RunOptions | undefined>(
+  program: Program<"sync", T>,
+  options: TOptions & AcceptExactOptionalRunOptions<TOptions>,
+): T;
+
 // Overload: Sync parser
 export function runSync<T extends Parser<"sync", unknown, unknown>>(
   parser: T,
@@ -737,6 +753,12 @@ export function runAsync<T, const TOptions extends RunOptions | undefined>(
 export function runAsync<T, TOptions extends RunOptions>(
   program: Program<Mode, T>,
   options: TOptions & AcceptExactRunOptions<TOptions>,
+): Promise<T>;
+
+// Overload: Program with exact optional RunOptions
+export function runAsync<T, TOptions extends RunOptions | undefined>(
+  program: Program<Mode, T>,
+  options: TOptions & AcceptExactOptionalRunOptions<TOptions>,
 ): Promise<T>;
 
 // Overload: Any parser
