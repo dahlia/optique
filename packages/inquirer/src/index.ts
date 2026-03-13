@@ -29,6 +29,14 @@ import type { ValueParserResult } from "@optique/core/valueparser";
 // Re-export Separator for use in choice lists.
 export { Separator };
 
+/**
+ * Prompt functions used to render Inquirer.js prompts.
+ *
+ * This interface primarily exists to type-check the module's internal prompt
+ * function overrides, especially in tests.
+ *
+ * @since 1.0.0
+ */
 interface PromptFunctions {
   readonly confirm: typeof confirm;
   readonly number: typeof number;
@@ -74,6 +82,9 @@ function assignPromptFunctionOverride<K extends keyof PromptFunctions>(
   }
 }
 
+/**
+ * Extracts valid prompt function overrides from an arbitrary value.
+ */
 function getPromptFunctionsOverride(
   value: unknown,
 ): Partial<PromptFunctions> | undefined {
@@ -90,6 +101,9 @@ function getPromptFunctionsOverride(
   return override;
 }
 
+/**
+ * Returns the active prompt function set, applying any global test overrides.
+ */
 function getPromptFunctions(): PromptFunctions {
   const override = getPromptFunctionsOverride(
     Reflect.get(globalThis, promptFunctionsOverrideSymbol),
@@ -99,6 +113,9 @@ function getPromptFunctions(): PromptFunctions {
     : defaultPromptFunctions;
 }
 
+/**
+ * Determines whether an error came from an interrupted Inquirer prompt.
+ */
 function isExitPromptError(error: unknown): boolean {
   return typeof error === "object" &&
     error != null &&

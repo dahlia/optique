@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { annotationKey } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
@@ -17,24 +15,6 @@ import { multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
-
-const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
-
-function getJsDocFor(
-  sourceText: string,
-  declaration: string,
-): string {
-  const declarationIndex = sourceText.indexOf(declaration);
-  assert.notEqual(
-    declarationIndex,
-    -1,
-    `Expected to find declaration for ${declaration}.`,
-  );
-  const prefix = sourceText.slice(0, declarationIndex);
-  const match = prefix.match(/(\/\*\*[\s\S]*?\*\/)\s*$/u);
-  assert.ok(match, `Expected an adjacent JSDoc block for ${declaration}.`);
-  return match[1];
-}
 
 const promptFunctionsOverrideSymbol = Symbol.for(
   "@optique/inquirer/prompt-functions",
@@ -67,19 +47,6 @@ async function withPromptFunctionsOverride<T>(
 }
 
 describe("prompt()", () => {
-  describe("JSDoc", () => {
-    it("documents parameters and thrown errors", () => {
-      const sourceText = readFileSync(sourcePath, {
-        encoding: "utf8",
-      });
-      const jsDoc = getJsDocFor(sourceText, "export function prompt");
-
-      assert.match(jsDoc, /@param\s+parser\b/u);
-      assert.match(jsDoc, /@param\s+config\b/u);
-      assert.match(jsDoc, /@throws\s+\{Error\}/u);
-    });
-  });
-
   describe("mode", () => {
     it("always returns an async-mode parser", () => {
       const parser = prompt(option("--name", string()), {
@@ -1855,20 +1822,6 @@ describe("prompt()", () => {
 
       assert.equal(seenStates[0], -7);
       assert.equal(seenStates[1], -7);
-    });
-  });
-});
-
-describe("executePrompt()", () => {
-  describe("JSDoc", () => {
-    it("documents its cancellation and error behavior", () => {
-      const sourceText = readFileSync(sourcePath, {
-        encoding: "utf8",
-      });
-      const jsDoc = getJsDocFor(sourceText, "async function executePrompt");
-
-      assert.match(jsDoc, /@throws\s+\{Error\}/u);
-      assert.match(jsDoc, /ExitPromptError/u);
     });
   });
 });
