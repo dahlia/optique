@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { annotationKey } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
@@ -16,6 +17,8 @@ import { multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
+
+const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
 
 function getJsDocFor(
   sourceText: string,
@@ -66,7 +69,7 @@ async function withPromptFunctionsOverride<T>(
 describe("prompt()", () => {
   describe("JSDoc", () => {
     it("documents parameters and thrown errors", () => {
-      const sourceText = readFileSync(new URL("./index.ts", import.meta.url), {
+      const sourceText = readFileSync(sourcePath, {
         encoding: "utf8",
       });
       const jsDoc = getJsDocFor(sourceText, "export function prompt");
@@ -1565,7 +1568,7 @@ describe("prompt()", () => {
 describe("executePrompt()", () => {
   describe("JSDoc", () => {
     it("documents its cancellation and error behavior", () => {
-      const sourceText = readFileSync(new URL("./index.ts", import.meta.url), {
+      const sourceText = readFileSync(sourcePath, {
         encoding: "utf8",
       });
       const jsDoc = getJsDocFor(sourceText, "async function executePrompt");
