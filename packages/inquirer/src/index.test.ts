@@ -76,8 +76,7 @@ describe("prompt()", () => {
 
       assert.match(jsDoc, /@param\s+parser\b/u);
       assert.match(jsDoc, /@param\s+config\b/u);
-      assert.match(jsDoc, /@throws/u);
-      assert.match(jsDoc, /prompt execution fails/u);
+      assert.match(jsDoc, /@throws\s+\{Error\}/u);
     });
   });
 
@@ -1573,9 +1572,8 @@ describe("executePrompt()", () => {
       });
       const jsDoc = getJsDocFor(sourceText, "async function executePrompt");
 
-      assert.match(jsDoc, /@throws/u);
+      assert.match(jsDoc, /@throws\s+\{Error\}/u);
       assert.match(jsDoc, /ExitPromptError/u);
-      assert.match(jsDoc, /Rethrows/u);
     });
   });
 });
