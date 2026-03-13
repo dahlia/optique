@@ -290,7 +290,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       runtimeOptions?: unknown,
     ): Promise<Annotations> | Annotations {
       // Phase 1 (no parsed result): return empty — this is a dynamic context
-      if (!parsed) {
+      if (parsed === undefined) {
         return {};
       }
 

@@ -419,6 +419,97 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(result, 0);
   });
 
+  for (
+    const [parserName, configValue, cliArgs, label] of [
+      [
+        "number",
+        9,
+        [] as readonly string[],
+        "0 as the initial parsed result",
+      ],
+      [
+        "boolean",
+        true,
+        [] as readonly string[],
+        "false as the initial parsed result",
+      ],
+      [
+        "string",
+        "config-name",
+        [] as readonly string[],
+        '"" as the initial parsed result',
+      ],
+    ] as const
+  ) {
+    test(
+      `runs phase-two config loading when the top-level parser returns ${label}`,
+      async () => {
+        if (parserName === "number") {
+          const schema = z.number();
+          const context = createConfigContext({ schema });
+          const parser = bindConfig(
+            withDefault(option("--count", integer()), 0),
+            {
+              context,
+              key: (config) => config,
+              default: 0,
+            },
+          );
+
+          const result = await runWith(parser, "test", [context], {
+            load: (parsed: number) => {
+              assert.equal(parsed, 0);
+              return { config: configValue, meta: undefined };
+            },
+            args: cliArgs,
+          });
+
+          assert.equal(result, configValue);
+          return;
+        }
+
+        if (parserName === "boolean") {
+          const schema = z.boolean();
+          const context = createConfigContext({ schema });
+          const parser = bindConfig(withDefault(flag("--enabled"), false), {
+            context,
+            key: (config) => config,
+            default: false,
+          });
+
+          const result = await runWith(parser, "test", [context], {
+            load: (parsed: boolean) => {
+              assert.equal(parsed, false);
+              return { config: configValue, meta: undefined };
+            },
+            args: cliArgs,
+          });
+
+          assert.equal(result, configValue);
+          return;
+        }
+
+        const schema = z.string();
+        const context = createConfigContext({ schema });
+        const parser = bindConfig(withDefault(option("--name", string()), ""), {
+          context,
+          key: (config) => config,
+          default: "",
+        });
+
+        const result = await runWith(parser, "test", [context], {
+          load: (parsed: string) => {
+            assert.equal(parsed, "");
+            return { config: configValue, meta: undefined };
+          },
+          args: cliArgs,
+        });
+
+        assert.equal(result, configValue);
+      },
+    );
+  }
+
   test("works with nested config values", async () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-nested.json");
