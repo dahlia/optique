@@ -83,7 +83,7 @@ function assignPromptFunctionOverride<K extends keyof PromptFunctions>(
 }
 
 /**
- * Extracts valid prompt function overrides from an arbitrary global value.
+ * Extracts valid prompt function overrides from an arbitrary value.
  */
 function getPromptFunctionsOverride(
   value: unknown,
