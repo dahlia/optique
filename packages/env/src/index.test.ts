@@ -8,7 +8,6 @@ import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
 import { parse } from "@optique/core/parser";
-import type { Suggestion } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import {
@@ -179,19 +178,10 @@ describe("bindEnv()", () => {
       const asyncEnvParser: ValueParser<"async", number> = {
         $mode: "async",
         metavar: syncIntegerParser.metavar,
-        format(value: number): string {
-          return syncIntegerParser.format(value);
-        },
+        format: syncIntegerParser.format,
         parse(input: string): Promise<ValueParserResult<number>> {
           return Promise.resolve(syncIntegerParser.parse(input));
         },
-        ...(syncIntegerParser.suggest
-          ? {
-            async *suggest(prefix: string): AsyncIterable<Suggestion> {
-              yield* syncIntegerParser.suggest!(prefix);
-            },
-          }
-          : {}),
       };
       const asyncCliParser = option("--port", asyncEnvParser);
 
