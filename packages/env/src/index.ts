@@ -188,8 +188,9 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.
  * @returns A parser with environment fallback behavior.
- * @throws {Error} If the inner parser or environment value parser throws
- *                 while parsing or completing a value.
+ * @throws {Error} If the inner parser throws while parsing or completing a
+ *                 value, or if the environment value parser throws while
+ *                 parsing the environment variable value.
  * @since 1.0.0
  */
 export function bindEnv<
