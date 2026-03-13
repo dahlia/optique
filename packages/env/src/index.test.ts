@@ -244,9 +244,15 @@ describe("bindEnv()", () => {
       const sourceText = readFileSync(sourcePath, {
         encoding: "utf8",
       });
+      const match = sourceText.match(
+        /\/\*\*([\s\S]*?)\*\/\s*readonly parser:/u,
+      );
+
+      assert.ok(match, "Could not find JSDoc for 'parser' property.");
+      const jsDoc = match[1];
 
       assert.match(
-        sourceText,
+        jsDoc,
         /Value parser used to parse the environment variable string value\.[\s\S]*In sync mode, the value parser must also be synchronous\.[\s\S]*In async mode, either sync or async value parsers are accepted,/u,
       );
     });
