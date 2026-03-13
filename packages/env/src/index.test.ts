@@ -170,6 +170,48 @@ describe("bool()", () => {
 });
 
 describe("bindEnv()", () => {
+  describe("type constraints", () => {
+    it("accepts only sync env parsers for sync bindEnv, but both for async bindEnv", () => {
+      const context = createEnvContext();
+      const syncIntegerParser = integer();
+      const syncCliParser = option("--port", syncIntegerParser);
+      const asyncEnvParser: ValueParser<"async", number> = {
+        $mode: "async",
+        metavar: syncIntegerParser.metavar,
+        format: syncIntegerParser.format,
+        parse(input: string): Promise<ValueParserResult<number>> {
+          return Promise.resolve(syncIntegerParser.parse(input));
+        },
+      };
+      const asyncCliParser = option("--port", asyncEnvParser);
+
+      bindEnv(syncCliParser, {
+        context,
+        key: "PORT",
+        parser: syncIntegerParser,
+      });
+
+      bindEnv(asyncCliParser, {
+        context,
+        key: "PORT",
+        parser: syncIntegerParser,
+      });
+
+      bindEnv(asyncCliParser, {
+        context,
+        key: "PORT",
+        parser: asyncEnvParser,
+      });
+
+      bindEnv(syncCliParser, {
+        context,
+        key: "PORT",
+        // @ts-expect-error Sync bindEnv must reject async env value parsers.
+        parser: asyncEnvParser,
+      });
+    });
+  });
+
   it("uses CLI value when provided", () => {
     const context = createEnvContext({
       source: (key) => ({ APP_PORT: "8080" })[key],
@@ -195,6 +237,23 @@ describe("bindEnv()", () => {
       const jsDoc = getJsDocFor(sourceText, "bindEnv");
 
       assert.match(jsDoc, /@throws\s+\{Error\}/u);
+    });
+
+    it("documents the sync and async parser mode constraint", () => {
+      const sourceText = readFileSync(sourcePath, {
+        encoding: "utf8",
+      });
+      const match = sourceText.match(
+        /\/\*\*((?:[^*]|\*(?!\/))*)\*\/\s*\r?\n\s*readonly parser:/u,
+      );
+
+      assert.ok(match, "Could not find JSDoc for 'parser' property.");
+      const jsDoc = match[1];
+
+      assert.match(
+        jsDoc,
+        /Value parser used to parse the environment variable string value\.[\s\S]*In sync mode, the value parser must also be synchronous\.[\s\S]*In async mode, either sync or async value parsers are accepted,/u,
+      );
     });
   });
 

@@ -166,6 +166,10 @@ export interface BindEnvOptions<M extends Mode, TValue> {
 
   /**
    * Value parser used to parse the environment variable string value.
+   *
+   * In sync mode, the value parser must also be synchronous.
+   * In async mode, either sync or async value parsers are accepted,
+   * since the async pipeline can await sync results as well.
    */
   readonly parser: ValueParser<M extends "sync" ? "sync" : Mode, TValue>;
 
