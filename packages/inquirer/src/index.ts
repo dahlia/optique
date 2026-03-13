@@ -58,6 +58,8 @@ const defaultPromptFunctions: PromptFunctions = {
 };
 
 function promptFunctionKeys(): ReadonlyArray<keyof PromptFunctions> {
+  // Safe because defaultPromptFunctions is contextually typed as
+  // PromptFunctions, so its enumerable own keys are exactly prompt keys.
   return Object.keys(defaultPromptFunctions) as Array<keyof PromptFunctions>;
 }
 
@@ -67,6 +69,7 @@ function assignPromptFunctionOverride<K extends keyof PromptFunctions>(
   candidate: unknown,
 ): void {
   if (typeof candidate === "function") {
+    // Safe because we only accept function-valued overrides for known keys.
     override[key] = candidate as PromptFunctions[K];
   }
 }
