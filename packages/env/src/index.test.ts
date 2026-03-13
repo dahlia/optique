@@ -8,6 +8,7 @@ import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
 import { parse } from "@optique/core/parser";
+import type { Suggestion } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import {
@@ -173,37 +174,43 @@ describe("bindEnv()", () => {
   describe("type constraints", () => {
     it("accepts only sync env parsers for sync bindEnv, but both for async bindEnv", () => {
       const context = createEnvContext();
-      const syncCliParser = option("--port", integer());
+      const syncIntegerParser = integer();
+      const syncCliParser = option("--port", syncIntegerParser);
       const asyncEnvParser: ValueParser<"async", number> = {
         $mode: "async",
-        metavar: "INT",
-        parse(input: string): Promise<ValueParserResult<number>> {
-          const n = parseInt(input, 10);
-          if (Number.isNaN(n)) {
-            return Promise.resolve({
-              success: false,
-              error: message`Invalid integer: ${input}`,
-            });
-          }
-
-          return Promise.resolve({ success: true, value: n });
-        },
+        metavar: syncIntegerParser.metavar,
         format(value: number): string {
-          return value.toString();
+          return syncIntegerParser.format(value);
         },
+        parse(input: string): Promise<ValueParserResult<number>> {
+          return Promise.resolve(syncIntegerParser.parse(input));
+        },
+        ...(syncIntegerParser.suggest
+          ? {
+            suggest(prefix: string): AsyncIterable<Suggestion> {
+              return {
+                async *[Symbol.asyncIterator](): AsyncIterableIterator<
+                  Suggestion
+                > {
+                  yield* syncIntegerParser.suggest!(prefix);
+                },
+              };
+            },
+          }
+          : {}),
       };
       const asyncCliParser = option("--port", asyncEnvParser);
 
       bindEnv(syncCliParser, {
         context,
         key: "PORT",
-        parser: integer(),
+        parser: syncIntegerParser,
       });
 
       bindEnv(asyncCliParser, {
         context,
         key: "PORT",
-        parser: integer(),
+        parser: syncIntegerParser,
       });
 
       bindEnv(asyncCliParser, {
