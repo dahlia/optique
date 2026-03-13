@@ -601,7 +601,8 @@ export function prompt<M extends Mode, TValue, TState>(
         if (cfg.type === "number" && value === undefined) {
           return { success: false, error: message`No number provided.` };
         }
-        // Safe because PromptConfig<TValue> constrains prompter() to TValue.
+        // Safe because PromptConfig<TValue> constrains the runtime shape, and
+        // the number-specific undefined case is rejected just above.
         return { success: true, value: value as TValue };
       }
 
