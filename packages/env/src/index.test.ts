@@ -1040,6 +1040,111 @@ describe("bindEnv()", () => {
       message: "Synchronous mode cannot wrap Promise value.",
     });
   });
+
+  it("propagates source errors from the annotation-backed env lookup", () => {
+    const sourceError = new Error("Environment access failed.");
+    const context = createEnvContext({
+      source: (key) => {
+        if (key === "APP_PORT") {
+          throw sourceError;
+        }
+        return undefined;
+      },
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    assert.throws(() => parse(parser, [], { annotations }), sourceError);
+  });
+
+  it("propagates source errors from the active registry lookup", () => {
+    const sourceError = new Error("Environment access failed.");
+    const context = createEnvContext({
+      source: (key) => {
+        if (key === "APP_PORT") {
+          throw sourceError;
+        }
+        return undefined;
+      },
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+
+    context.getAnnotations();
+
+    try {
+      assert.throws(() => parse(parser, []), sourceError);
+    } finally {
+      context[Symbol.dispose]?.();
+    }
+  });
+
+  it("throws synchronously in async mode when the source function throws", () => {
+    const asyncInt: ValueParser<"async", number> = {
+      $mode: "async",
+      metavar: "INT",
+      parse(input: string): Promise<ValueParserResult<number>> {
+        const n = parseInt(input, 10);
+        if (isNaN(n)) {
+          return Promise.resolve({
+            success: false,
+            error: message`Invalid integer: ${input}`,
+          });
+        }
+        return Promise.resolve({ success: true, value: n });
+      },
+      format(v: number): string {
+        return v.toString();
+      },
+    };
+    const sourceError = new Error("Environment access failed.");
+    const context = createEnvContext({
+      source: (key) => {
+        if (key === "APP_PORT") {
+          throw sourceError;
+        }
+        return undefined;
+      },
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", asyncInt), {
+      context,
+      key: "PORT",
+      parser: asyncInt,
+      default: 3000,
+    });
+
+    context.getAnnotations();
+
+    try {
+      assert.throws(
+        () =>
+          parser.complete(
+            { hasCliValue: false } as unknown as Parameters<
+              typeof parser.complete
+            >[0],
+          ),
+        sourceError,
+      );
+    } finally {
+      context[Symbol.dispose]?.();
+    }
+  });
 });
 
 describe("createEnvContext defaults", () => {
