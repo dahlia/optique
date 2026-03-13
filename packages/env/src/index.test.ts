@@ -253,7 +253,7 @@ describe("bindEnv()", () => {
         encoding: "utf8",
       });
       const match = sourceText.match(
-        /\/\*\*((?:[^*]|\*(?!\/))*)\*\/\s*\n\s*readonly parser:/u,
+        /\/\*\*((?:[^*]|\*(?!\/))*)\*\/\s*\r?\n\s*readonly parser:/u,
       );
 
       assert.ok(match, "Could not find JSDoc for 'parser' property.");
