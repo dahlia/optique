@@ -346,7 +346,7 @@ describe("prompt()", () => {
   });
 
   describe("error handling", () => {
-    it("ignores non-function entries in prompt function overrides", async () => {
+    it("keeps valid overrides working with unrelated invalid entries", async () => {
       await withPromptFunctionsOverride(
         {
           input: () => Promise.resolve("override value"),
