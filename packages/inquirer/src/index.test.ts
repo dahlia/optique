@@ -458,6 +458,66 @@ describe("prompt()", () => {
         },
       );
     });
+
+    it("rethrows prompt validation failures from password prompts", async () => {
+      await withPromptFunctionsOverride(
+        {
+          password: async (config: {
+            readonly validate?: (
+              value: string,
+            ) => boolean | string | Promise<boolean | string>;
+          }) => {
+            const validation = await config.validate?.("");
+            if (validation !== true) {
+              throw new Error(String(validation));
+            }
+            return "ok";
+          },
+        },
+        async () => {
+          const parser = prompt(fail<string>(), {
+            type: "password",
+            message: "Enter secret:",
+            validate: (value) => value.length > 0 || "Secret is required.",
+          });
+
+          await assert.rejects(
+            () => parseAsync(parser, []),
+            /Secret is required\./,
+          );
+        },
+      );
+    });
+
+    it("rethrows prompt validation failures from editor prompts", async () => {
+      await withPromptFunctionsOverride(
+        {
+          editor: async (config: {
+            readonly validate?: (
+              value: string,
+            ) => boolean | string | Promise<boolean | string>;
+          }) => {
+            const validation = await config.validate?.("");
+            if (validation !== true) {
+              throw new Error(String(validation));
+            }
+            return "ok";
+          },
+        },
+        async () => {
+          const parser = prompt(fail<string>(), {
+            type: "editor",
+            message: "Enter body:",
+            validate: (value) => value.length > 0 || "Body is required.",
+          });
+
+          await assert.rejects(
+            () => parseAsync(parser, []),
+            /Body is required\./,
+          );
+        },
+      );
+    });
   });
 
   describe("object() composition", () => {
@@ -757,6 +817,66 @@ describe("prompt()", () => {
     });
   });
 
+  describe("number prompt edge cases", () => {
+    it("preserves min/max boundary values from the number prompter", async () => {
+      const parser = prompt(fail<number>(), {
+        type: "number",
+        message: "Enter level:",
+        min: -2,
+        max: 4,
+        prompter: () => Promise.resolve(-2),
+      });
+
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, -2);
+    });
+
+    it("accepts negative numbers from the number prompter", async () => {
+      const parser = prompt(fail<number>(), {
+        type: "number",
+        message: "Enter offset:",
+        prompter: () => Promise.resolve(-42),
+      });
+
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, -42);
+    });
+
+    it("passes decimal-friendly config through to number prompts", async () => {
+      const calls: Array<Record<string, unknown>> = [];
+      await withPromptFunctionsOverride(
+        {
+          number: (config: Record<string, unknown>) => {
+            calls.push(config);
+            return -1.25;
+          },
+        },
+        async () => {
+          const parser = prompt(fail<number>(), {
+            type: "number",
+            message: "Enter ratio:",
+            min: -2,
+            max: 2,
+            step: "any",
+          });
+
+          const result = await parseAsync(parser, []);
+          assert.ok(result.success);
+          assert.equal(result.value, -1.25);
+        },
+      );
+
+      assert.deepEqual(calls, [{
+        message: "Enter ratio:",
+        min: -2,
+        max: 2,
+        step: "any",
+      }]);
+    });
+  });
+
   describe("select with Choice objects", () => {
     it("supports Choice objects in select choices", async () => {
       const parser = prompt(option("--color", string()), {
@@ -790,6 +910,96 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
       assert.deepEqual(result.value, ["typescript", "deno"]);
+    });
+
+    it("passes an empty choices array through unchanged", async () => {
+      const calls: Array<Record<string, unknown>> = [];
+      await withPromptFunctionsOverride(
+        {
+          select: (config: Record<string, unknown>) => {
+            calls.push(config);
+            return "";
+          },
+        },
+        async () => {
+          const parser = prompt(fail<string>(), {
+            type: "select",
+            message: "Choose color:",
+            choices: [],
+          });
+
+          const result = await parseAsync(parser, []);
+          assert.ok(result.success);
+          assert.equal(result.value, "");
+        },
+      );
+
+      assert.deepEqual(calls, [{
+        message: "Choose color:",
+        choices: [],
+      }]);
+    });
+
+    it("preserves separator-only choice arrays", async () => {
+      const calls: Array<Record<string, unknown>> = [];
+      await withPromptFunctionsOverride(
+        {
+          checkbox: (config: Record<string, unknown>) => {
+            calls.push(config);
+            return [];
+          },
+        },
+        async () => {
+          const parser = prompt(fail<readonly string[]>(), {
+            type: "checkbox",
+            message: "Select tags:",
+            choices: [new Separator("---"), new Separator("===")],
+          });
+
+          const result = await parseAsync(parser, []);
+          assert.ok(result.success);
+          assert.deepEqual(result.value, []);
+        },
+      );
+
+      const choices = calls[0]?.choices as readonly unknown[] | undefined;
+      assert.equal(choices?.length, 2);
+      assert.ok(choices?.[0] instanceof Separator);
+      assert.ok(choices?.[1] instanceof Separator);
+    });
+
+    it("preserves disabled reasons and empty display names", async () => {
+      const calls: Array<Record<string, unknown>> = [];
+      await withPromptFunctionsOverride(
+        {
+          rawlist: (config: Record<string, unknown>) => {
+            calls.push(config);
+            return "hidden";
+          },
+        },
+        async () => {
+          const parser = prompt(fail<string>(), {
+            type: "rawlist",
+            message: "Choose entry:",
+            choices: [
+              { value: "hidden", name: "", disabled: "Not available." },
+            ],
+          });
+
+          const result = await parseAsync(parser, []);
+          assert.ok(result.success);
+          assert.equal(result.value, "hidden");
+        },
+      );
+
+      assert.deepEqual(calls, [{
+        message: "Choose entry:",
+        choices: [{
+          value: "hidden",
+          name: "",
+          disabled: "Not available.",
+        }],
+      }]);
     });
   });
 
@@ -1579,6 +1789,72 @@ describe("prompt()", () => {
           assert.ok(selectResult.success);
         },
       );
+    });
+
+    it("leaves primitive inner state unchanged when annotations are present", async () => {
+      const seenStates: unknown[] = [];
+      const annotations = { source: "test" };
+      const inner: Parser<"async", string, number> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly number[],
+        priority: 1,
+        usage: [],
+        initialState: -7,
+        parse(context) {
+          seenStates.push(context.state);
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`missing`,
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: false as const,
+            error: message`missing`,
+          });
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => Promise.resolve("prompted"),
+      });
+
+      const first = await parser.parse({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(first.success);
+      if (!first.success) return;
+
+      const second = await parser.parse({
+        buffer: [],
+        state: {
+          ...(first.next.state as unknown as object),
+          [annotationKey]: annotations,
+        } as unknown as number,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(second.success);
+
+      assert.equal(seenStates[0], -7);
+      assert.equal(seenStates[1], -7);
     });
   });
 });
