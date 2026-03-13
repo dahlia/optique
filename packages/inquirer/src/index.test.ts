@@ -21,10 +21,15 @@ function getJsDocFor(
   sourceText: string,
   declaration: string,
 ): string {
-  const match = sourceText.match(
-    new RegExp(String.raw`(\/\*\*[\s\S]*?\*\/)\n\s*${declaration}\b`),
+  const declarationIndex = sourceText.indexOf(declaration);
+  assert.notEqual(
+    declarationIndex,
+    -1,
+    `Expected to find declaration for ${declaration}.`,
   );
-  assert.ok(match, `Expected a JSDoc block for ${declaration}.`);
+  const prefix = sourceText.slice(0, declarationIndex);
+  const match = prefix.match(/(\/\*\*[\s\S]*?\*\/)\s*$/u);
+  assert.ok(match, `Expected an adjacent JSDoc block for ${declaration}.`);
   return match[1];
 }
 
