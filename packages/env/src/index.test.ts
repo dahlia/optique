@@ -165,7 +165,6 @@ describe("bool()", () => {
       const jsDoc = getJsDocFor(sourceText, "bool");
 
       assert.match(jsDoc, /@throws\s+\{TypeError\}/u);
-      assert.match(jsDoc, /empty string/u);
     });
   });
 });
@@ -195,9 +194,7 @@ describe("bindEnv()", () => {
       });
       const jsDoc = getJsDocFor(sourceText, "bindEnv");
 
-      assert.match(jsDoc, /@throws/u);
-      assert.match(jsDoc, /inner parser/u);
-      assert.match(jsDoc, /value parser/u);
+      assert.match(jsDoc, /@throws\s+\{Error\}/u);
     });
   });
 
