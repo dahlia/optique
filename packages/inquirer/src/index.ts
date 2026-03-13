@@ -57,13 +57,46 @@ const defaultPromptFunctions: PromptFunctions = {
   checkbox,
 };
 
+function promptFunctionKeys(): ReadonlyArray<keyof PromptFunctions> {
+  // Safe because defaultPromptFunctions is contextually typed as
+  // PromptFunctions, so its enumerable own keys are exactly prompt keys.
+  return Object.keys(defaultPromptFunctions) as Array<keyof PromptFunctions>;
+}
+
+function assignPromptFunctionOverride<K extends keyof PromptFunctions>(
+  override: { -readonly [P in keyof PromptFunctions]?: PromptFunctions[P] },
+  key: K,
+  candidate: unknown,
+): void {
+  if (typeof candidate === "function") {
+    // Safe because we only accept function-valued overrides for known keys.
+    override[key] = candidate as PromptFunctions[K];
+  }
+}
+
+function getPromptFunctionsOverride(
+  value: unknown,
+): Partial<PromptFunctions> | undefined {
+  if (typeof value !== "object" || value == null) {
+    return undefined;
+  }
+
+  const override: {
+    -readonly [K in keyof PromptFunctions]?: PromptFunctions[K];
+  } = {};
+  for (const key of promptFunctionKeys()) {
+    assignPromptFunctionOverride(override, key, Reflect.get(value, key));
+  }
+  return override;
+}
+
 function getPromptFunctions(): PromptFunctions {
-  const override = (
-    globalThis as unknown as {
-      readonly [promptFunctionsOverrideSymbol]?: PromptFunctions;
-    }
-  )[promptFunctionsOverrideSymbol];
-  return override ?? defaultPromptFunctions;
+  const override = getPromptFunctionsOverride(
+    Reflect.get(globalThis, promptFunctionsOverrideSymbol),
+  );
+  return override != null
+    ? { ...defaultPromptFunctions, ...override }
+    : defaultPromptFunctions;
 }
 
 function isExitPromptError(error: unknown): boolean {
@@ -571,6 +604,8 @@ export function prompt<M extends Mode, TValue, TState>(
         if (cfg.type === "number" && value === undefined) {
           return { success: false, error: message`No number provided.` };
         }
+        // Safe because PromptConfig<TValue> constrains the runtime shape, and
+        // the number-specific undefined case is rejected just above.
         return { success: true, value: value as TValue };
       }
 
@@ -578,6 +613,7 @@ export function prompt<M extends Mode, TValue, TState>(
         case "confirm":
           return {
             success: true,
+            // Safe because confirm prompts are only valid for boolean TValue.
             value: await prompts.confirm({
               message: cfg.message,
               ...(cfg.default !== undefined ? { default: cfg.default } : {}),
@@ -595,12 +631,14 @@ export function prompt<M extends Mode, TValue, TState>(
           if (numResult === undefined) {
             return { success: false, error: message`No number provided.` };
           }
+          // Safe because number prompts are only valid for numeric TValue.
           return { success: true, value: numResult as TValue };
         }
 
         case "input":
           return {
             success: true,
+            // Safe because input prompts are only valid for string TValue.
             value: await prompts.input({
               message: cfg.message,
               ...(cfg.default !== undefined ? { default: cfg.default } : {}),
@@ -611,6 +649,7 @@ export function prompt<M extends Mode, TValue, TState>(
         case "password":
           return {
             success: true,
+            // Safe because password prompts are only valid for string TValue.
             value: await prompts.password({
               message: cfg.message,
               ...(cfg.mask !== undefined ? { mask: cfg.mask } : {}),
@@ -621,6 +660,7 @@ export function prompt<M extends Mode, TValue, TState>(
         case "editor":
           return {
             success: true,
+            // Safe because editor prompts are only valid for string TValue.
             value: await prompts.editor({
               message: cfg.message,
               ...(cfg.default !== undefined ? { default: cfg.default } : {}),
@@ -631,6 +671,7 @@ export function prompt<M extends Mode, TValue, TState>(
         case "select":
           return {
             success: true,
+            // Safe because select prompts are only valid for string TValue.
             value: await prompts.select({
               message: cfg.message,
               choices: normalizeChoices(cfg.choices),
@@ -641,6 +682,7 @@ export function prompt<M extends Mode, TValue, TState>(
         case "rawlist":
           return {
             success: true,
+            // Safe because rawlist prompts are only valid for string TValue.
             value: await prompts.rawlist({
               message: cfg.message,
               choices: normalizeChoices(cfg.choices),
@@ -651,6 +693,7 @@ export function prompt<M extends Mode, TValue, TState>(
         case "expand":
           return {
             success: true,
+            // Safe because expand prompts are only valid for string TValue.
             value: await (prompts.expand as (config: {
               message: string;
               choices: readonly { value: string; name?: string; key: string }[];
@@ -665,6 +708,7 @@ export function prompt<M extends Mode, TValue, TState>(
         case "checkbox":
           return {
             success: true,
+            // Safe because checkbox prompts are only valid for string[] TValue.
             value: await prompts.checkbox({
               message: cfg.message,
               choices: normalizeChoices(cfg.choices),
@@ -868,6 +912,7 @@ export function prompt<M extends Mode, TValue, TState>(
         ? (cfg as { default?: unknown }).default
         : undefined;
       const defaultValue = upperDefaultValue ?? configDefault;
+      // Safe because prompt defaults share the same runtime type as TValue.
       return parser.getDocFragments(state, defaultValue as TValue);
     },
   };
