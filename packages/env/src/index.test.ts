@@ -1059,12 +1059,16 @@ describe("bindEnv()", () => {
       default: 3000,
     });
 
-    const annotations = context.getAnnotations();
-    if (annotations instanceof Promise) {
-      throw new TypeError("Expected synchronous annotations.");
-    }
+    try {
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
 
-    assert.throws(() => parse(parser, [], { annotations }), sourceError);
+      assert.throws(() => parse(parser, [], { annotations }), sourceError);
+    } finally {
+      context[Symbol.dispose]?.();
+    }
   });
 
   it("propagates source errors from the active registry lookup", () => {
