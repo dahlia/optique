@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { object } from "@optique/core/constructs";
 import { runWith } from "@optique/core/facade";
@@ -14,6 +16,22 @@ import {
   createEnvContext,
   getActiveEnvSource,
 } from "./index.ts";
+
+const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
+
+function getJsDocFor(sourceText: string, functionName: string): string {
+  const declaration = `export function ${functionName}`;
+  const declarationIndex = sourceText.indexOf(declaration);
+  assert.notEqual(
+    declarationIndex,
+    -1,
+    `Expected to find declaration for ${functionName}().`,
+  );
+  const prefix = sourceText.slice(0, declarationIndex);
+  const match = prefix.match(/(\/\*\*[\s\S]*?\*\/)\s*$/u);
+  assert.ok(match, `Expected an adjacent JSDoc block for ${functionName}().`);
+  return match[1];
+}
 
 describe("bool()", () => {
   describe("parsing", () => {
@@ -138,6 +156,17 @@ describe("bool()", () => {
       ]);
     });
   });
+
+  describe("JSDoc", () => {
+    it("documents its TypeError failure mode", () => {
+      const sourceText = readFileSync(sourcePath, {
+        encoding: "utf8",
+      });
+      const jsDoc = getJsDocFor(sourceText, "bool");
+
+      assert.match(jsDoc, /@throws\s+\{TypeError\}/u);
+    });
+  });
 });
 
 describe("bindEnv()", () => {
@@ -156,6 +185,17 @@ describe("bindEnv()", () => {
     const result = parse(parser, ["--port", "9000"]);
     assert.ok(result.success);
     assert.equal(result.value, 9000);
+  });
+
+  describe("JSDoc", () => {
+    it("documents that inner parser failures can surface", () => {
+      const sourceText = readFileSync(sourcePath, {
+        encoding: "utf8",
+      });
+      const jsDoc = getJsDocFor(sourceText, "bindEnv");
+
+      assert.match(jsDoc, /@throws\s+\{Error\}/u);
+    });
   });
 
   it("uses env value when CLI value is missing", () => {
