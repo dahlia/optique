@@ -57,15 +57,49 @@ const defaultPromptFunctions: PromptFunctions = {
   checkbox,
 };
 
-function isPromptFunctionsOverride(
+const promptFunctionKeys = [
+  "confirm",
+  "number",
+  "input",
+  "password",
+  "editor",
+  "select",
+  "rawlist",
+  "expand",
+  "checkbox",
+] as const satisfies readonly (keyof PromptFunctions)[];
+
+function assignPromptFunctionOverride<K extends keyof PromptFunctions>(
+  override: { -readonly [P in keyof PromptFunctions]?: PromptFunctions[P] },
+  key: K,
+  candidate: unknown,
+): void {
+  if (typeof candidate === "function") {
+    override[key] = candidate as PromptFunctions[K];
+  }
+}
+
+function getPromptFunctionsOverride(
   value: unknown,
-): value is Partial<PromptFunctions> {
-  return typeof value === "object" && value != null;
+): Partial<PromptFunctions> | undefined {
+  if (typeof value !== "object" || value == null) {
+    return undefined;
+  }
+
+  const override: {
+    -readonly [K in keyof PromptFunctions]?: PromptFunctions[K];
+  } = {};
+  for (const key of promptFunctionKeys) {
+    assignPromptFunctionOverride(override, key, Reflect.get(value, key));
+  }
+  return override;
 }
 
 function getPromptFunctions(): PromptFunctions {
-  const override = Reflect.get(globalThis, promptFunctionsOverrideSymbol);
-  return isPromptFunctionsOverride(override)
+  const override = getPromptFunctionsOverride(
+    Reflect.get(globalThis, promptFunctionsOverrideSymbol),
+  );
+  return override != null
     ? { ...defaultPromptFunctions, ...override }
     : defaultPromptFunctions;
 }

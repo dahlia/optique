@@ -346,6 +346,25 @@ describe("prompt()", () => {
   });
 
   describe("error handling", () => {
+    it("ignores non-function entries in prompt function overrides", async () => {
+      await withPromptFunctionsOverride(
+        {
+          input: () => Promise.resolve("override value"),
+          confirm: "not a function",
+        },
+        async () => {
+          const parser = prompt(fail<string>(), {
+            type: "input",
+            message: "Enter name:",
+          });
+
+          const result = await parseAsync(parser, []);
+          assert.ok(result.success);
+          assert.equal(result.value, "override value");
+        },
+      );
+    });
+
     it("propagates parse failure when inner parser consumed tokens", async () => {
       const parser = prompt(option("--port", integer()), {
         type: "number",
