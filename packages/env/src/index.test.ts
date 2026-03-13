@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { object } from "@optique/core/constructs";
 import { runWith } from "@optique/core/facade";
@@ -15,6 +16,8 @@ import {
   createEnvContext,
   getActiveEnvSource,
 } from "./index.ts";
+
+const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
 
 function getJsDocFor(sourceText: string, functionName: string): string {
   const declaration = `export function ${functionName}`;
@@ -156,7 +159,7 @@ describe("bool()", () => {
 
   describe("JSDoc", () => {
     it("documents its TypeError failure mode", () => {
-      const sourceText = readFileSync(new URL("./index.ts", import.meta.url), {
+      const sourceText = readFileSync(sourcePath, {
         encoding: "utf8",
       });
       const jsDoc = getJsDocFor(sourceText, "bool");
@@ -187,7 +190,7 @@ describe("bindEnv()", () => {
 
   describe("JSDoc", () => {
     it("documents that inner parser failures can surface", () => {
-      const sourceText = readFileSync(new URL("./index.ts", import.meta.url), {
+      const sourceText = readFileSync(sourcePath, {
         encoding: "utf8",
       });
       const jsDoc = getJsDocFor(sourceText, "bindEnv");
