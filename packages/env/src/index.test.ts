@@ -187,14 +187,8 @@ describe("bindEnv()", () => {
         },
         ...(syncIntegerParser.suggest
           ? {
-            suggest(prefix: string): AsyncIterable<Suggestion> {
-              return {
-                async *[Symbol.asyncIterator](): AsyncIterableIterator<
-                  Suggestion
-                > {
-                  yield* syncIntegerParser.suggest!(prefix);
-                },
-              };
+            async *suggest(prefix: string): AsyncIterable<Suggestion> {
+              yield* syncIntegerParser.suggest!(prefix);
             },
           }
           : {}),
