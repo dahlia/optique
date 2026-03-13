@@ -1059,6 +1059,7 @@ describe("bindEnv()", () => {
       parser: integer(),
       default: 3000,
     });
+    let disposed = false;
 
     try {
       const annotations = context.getAnnotations();
@@ -1066,13 +1067,16 @@ describe("bindEnv()", () => {
         throw new TypeError("Expected synchronous annotations.");
       }
       context[Symbol.dispose]?.();
+      disposed = true;
 
       assert.throws(
         () => parse(parser, [], { annotations }),
         (error) => error === sourceError,
       );
     } finally {
-      context[Symbol.dispose]?.();
+      if (!disposed) {
+        context[Symbol.dispose]?.();
+      }
     }
   });
 
