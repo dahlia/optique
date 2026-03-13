@@ -270,11 +270,19 @@ To be released.
     `TConfigMeta | undefined`, and `ConfigLoadResult.meta` is typed as
     `TConfigMeta | undefined` to match runtime behavior.  [[#155]]
 
+ -  Fixed `createConfigContext()` treating falsy first-pass parse results
+    such as `0`, `false`, and `""` as the phase-one sentinel.  Dynamic
+    config loading now skips only when the parsed value is actually
+    `undefined`, so top-level primitive parsers still reach the second
+    config-loading phase correctly.  [[#161], [#164]]
+
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
 [#155]: https://github.com/dahlia/optique/issues/155
 [#159]: https://github.com/dahlia/optique/issues/159
+[#161]: https://github.com/dahlia/optique/issues/161
 [#162]: https://github.com/dahlia/optique/pull/162
+[#164]: https://github.com/dahlia/optique/pull/164
 
 ### @optique/env
 

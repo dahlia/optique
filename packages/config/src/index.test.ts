@@ -77,6 +77,49 @@ describe("createConfigContext", () => {
     assert.ok(annotations);
     assert.deepEqual(Object.getOwnPropertySymbols(annotations).length, 0);
   });
+
+  for (
+    const [parsed, expectedHost, label] of [
+      [0, "zero-host", "0"],
+      [false, "false-host", "false"],
+      ["", "empty-string-host", '""'],
+    ] as const
+  ) {
+    test(
+      `treats ${label} as a valid phase-two parsed value`,
+      async () => {
+        const schema = z.object({
+          host: z.string(),
+        });
+
+        const context = createConfigContext({ schema });
+        let receivedParsed: unknown;
+
+        const annotations = await context.getAnnotations(
+          parsed,
+          {
+            load: (value: unknown) => {
+              receivedParsed = value;
+              return {
+                config: { host: expectedHost },
+                meta: {
+                  configDir: "/app",
+                  configPath: "/app/config.json",
+                } satisfies ConfigMeta,
+              };
+            },
+          },
+        );
+
+        assert.equal(receivedParsed, parsed);
+        const contextAnnotation = annotations[context.id] as
+          | { readonly data: unknown; readonly meta?: unknown }
+          | undefined;
+        assert.ok(contextAnnotation != null);
+        assert.deepEqual(contextAnnotation.data, { host: expectedHost });
+      },
+    );
+  }
 });
 
 describe("bindConfig", () => {
