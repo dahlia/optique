@@ -193,7 +193,8 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  * @param options Environment binding options.
  * @returns A parser with environment fallback behavior.
  * @throws {Error} If the inner parser throws while parsing or completing a
- *                 value, or if the environment value parser throws while
+ *                 value, if the environment source throws while reading a
+ *                 variable, or if the environment value parser throws while
  *                 parsing the environment variable value.
  * @since 1.0.0
  */

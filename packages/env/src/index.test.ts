@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { injectAnnotations } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -1039,6 +1040,123 @@ describe("bindEnv()", () => {
       name: "TypeError",
       message: "Synchronous mode cannot wrap Promise value.",
     });
+  });
+
+  it("propagates source errors from the annotation-backed env lookup", () => {
+    const sourceError = new Error("Environment access failed.");
+    const context = createEnvContext({
+      source: (key) => {
+        if (key === "APP_PORT") {
+          throw sourceError;
+        }
+        return undefined;
+      },
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+    let disposed = false;
+
+    try {
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      context[Symbol.dispose]?.();
+      disposed = true;
+
+      assert.throws(
+        () => parse(parser, [], { annotations }),
+        (error) => error === sourceError,
+      );
+    } finally {
+      if (!disposed) {
+        context[Symbol.dispose]?.();
+      }
+    }
+  });
+
+  it("propagates source errors from the active registry lookup", () => {
+    const sourceError = new Error("Environment access failed.");
+    const context = createEnvContext({
+      source: (key) => {
+        if (key === "APP_PORT") {
+          throw sourceError;
+        }
+        return undefined;
+      },
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", integer()), {
+      context,
+      key: "PORT",
+      parser: integer(),
+      default: 3000,
+    });
+
+    context.getAnnotations();
+
+    try {
+      assert.throws(
+        () => parse(parser, []),
+        (error) => error === sourceError,
+      );
+    } finally {
+      context[Symbol.dispose]?.();
+    }
+  });
+
+  it("throws synchronously in async mode when the source function throws", async () => {
+    const syncInt = integer();
+    const asyncInt: ValueParser<"async", number> = {
+      $mode: "async",
+      metavar: syncInt.metavar,
+      parse(input: string): Promise<ValueParserResult<number>> {
+        return Promise.resolve(syncInt.parse(input));
+      },
+      format: syncInt.format,
+    };
+    const sourceError = new Error("Environment access failed.");
+    const context = createEnvContext({
+      source: (key) => {
+        if (key === "APP_PORT") {
+          throw sourceError;
+        }
+        return undefined;
+      },
+      prefix: "APP_",
+    });
+    const parser = bindEnv(option("--port", asyncInt), {
+      context,
+      key: "PORT",
+      parser: asyncInt,
+      default: 3000,
+    });
+
+    try {
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parseResult = await parser.parse({
+        buffer: [] as readonly string[],
+        state: injectAnnotations(parser.initialState, annotations),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parseResult.success);
+
+      assert.throws(
+        () => parser.complete(parseResult.next.state),
+        (error) => error === sourceError,
+      );
+    } finally {
+      context[Symbol.dispose]?.();
+    }
   });
 });
 
