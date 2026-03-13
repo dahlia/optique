@@ -17,12 +17,16 @@ import {
 } from "./index.ts";
 
 function getJsDocFor(sourceText: string, functionName: string): string {
-  const match = sourceText.match(
-    new RegExp(
-      String.raw`(\/\*\*[\s\S]*?\*\/)\nexport function ${functionName}\b`,
-    ),
+  const declaration = `export function ${functionName}`;
+  const declarationIndex = sourceText.indexOf(declaration);
+  assert.notEqual(
+    declarationIndex,
+    -1,
+    `Expected to find declaration for ${functionName}().`,
   );
-  assert.ok(match, `Expected a JSDoc block for ${functionName}().`);
+  const prefix = sourceText.slice(0, declarationIndex);
+  const match = prefix.match(/(\/\*\*[\s\S]*?\*\/)\s*$/u);
+  assert.ok(match, `Expected an adjacent JSDoc block for ${functionName}().`);
   return match[1];
 }
 
