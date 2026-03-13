@@ -57,17 +57,9 @@ const defaultPromptFunctions: PromptFunctions = {
   checkbox,
 };
 
-const promptFunctionKeys = [
-  "confirm",
-  "number",
-  "input",
-  "password",
-  "editor",
-  "select",
-  "rawlist",
-  "expand",
-  "checkbox",
-] as const satisfies readonly (keyof PromptFunctions)[];
+function promptFunctionKeys(): ReadonlyArray<keyof PromptFunctions> {
+  return Object.keys(defaultPromptFunctions) as Array<keyof PromptFunctions>;
+}
 
 function assignPromptFunctionOverride<K extends keyof PromptFunctions>(
   override: { -readonly [P in keyof PromptFunctions]?: PromptFunctions[P] },
@@ -89,7 +81,7 @@ function getPromptFunctionsOverride(
   const override: {
     -readonly [K in keyof PromptFunctions]?: PromptFunctions[K];
   } = {};
-  for (const key of promptFunctionKeys) {
+  for (const key of promptFunctionKeys()) {
     assignPromptFunctionOverride(override, key, Reflect.get(value, key));
   }
   return override;
