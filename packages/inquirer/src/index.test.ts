@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { annotationKey } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
@@ -15,6 +16,17 @@ import { multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
+
+function getJsDocFor(
+  sourceText: string,
+  declaration: string,
+): string {
+  const match = sourceText.match(
+    new RegExp(String.raw`(\/\*\*[\s\S]*?\*\/)\n\s*${declaration}\b`),
+  );
+  assert.ok(match, `Expected a JSDoc block for ${declaration}.`);
+  return match[1];
+}
 
 const promptFunctionsOverrideSymbol = Symbol.for(
   "@optique/inquirer/prompt-functions",
@@ -47,6 +59,20 @@ async function withPromptFunctionsOverride<T>(
 }
 
 describe("prompt()", () => {
+  describe("JSDoc", () => {
+    it("documents parameters and thrown errors", () => {
+      const sourceText = readFileSync(new URL("./index.ts", import.meta.url), {
+        encoding: "utf8",
+      });
+      const jsDoc = getJsDocFor(sourceText, "export function prompt");
+
+      assert.match(jsDoc, /@param\s+parser\b/u);
+      assert.match(jsDoc, /@param\s+config\b/u);
+      assert.match(jsDoc, /@throws/u);
+      assert.match(jsDoc, /prompt execution fails/u);
+    });
+  });
+
   describe("mode", () => {
     it("always returns an async-mode parser", () => {
       const parser = prompt(option("--name", string()), {
@@ -1527,6 +1553,21 @@ describe("prompt()", () => {
           assert.ok(selectResult.success);
         },
       );
+    });
+  });
+});
+
+describe("executePrompt()", () => {
+  describe("JSDoc", () => {
+    it("documents its cancellation and error behavior", () => {
+      const sourceText = readFileSync(new URL("./index.ts", import.meta.url), {
+        encoding: "utf8",
+      });
+      const jsDoc = getJsDocFor(sourceText, "async function executePrompt");
+
+      assert.match(jsDoc, /@throws/u);
+      assert.match(jsDoc, /ExitPromptError/u);
+      assert.match(jsDoc, /Rethrows/u);
     });
   });
 });

@@ -495,6 +495,8 @@ type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
  * @param parser Inner parser that reads CLI values.
  * @param config Type-safe Inquirer.js prompt configuration.
  * @returns A parser with interactive prompt fallback, always in async mode.
+ * @throws {Error} If prompt execution fails with an unexpected error or if
+ *                 the inner parser throws while parsing or completing.
  * @since 1.0.0
  */
 export function prompt<M extends Mode, TValue, TState>(
@@ -550,6 +552,16 @@ export function prompt<M extends Mode, TValue, TState>(
     }
     | null = null;
 
+  /**
+   * Executes the configured prompt and normalizes its result.
+   *
+   * Converts `ExitPromptError` into a parse failure and returns prompt values
+   * in Optique's `ValueParserResult` shape.
+   *
+   * @returns The normalized prompt result.
+   * @throws {Error} Rethrows unexpected prompt failures after converting
+   *                 `ExitPromptError` cancellations into parse failures.
+   */
   async function executePrompt(): Promise<ValueParserResult<TValue>> {
     const prompts = getPromptFunctions();
     try {
