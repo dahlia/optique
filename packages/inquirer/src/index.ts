@@ -32,8 +32,8 @@ export { Separator };
 /**
  * Prompt functions used to render Inquirer.js prompts.
  *
- * This interface primarily exists to type-check prompt function overrides used
- * by tests and other controlled environments.
+ * This interface primarily exists to type-check the module's internal prompt
+ * function overrides, especially in tests.
  *
  * @since 1.0.0
  */
