@@ -1065,6 +1065,7 @@ describe("bindEnv()", () => {
       if (annotations instanceof Promise) {
         throw new TypeError("Expected synchronous annotations.");
       }
+      context[Symbol.dispose]?.();
 
       assert.throws(
         () => parse(parser, [], { annotations }),
