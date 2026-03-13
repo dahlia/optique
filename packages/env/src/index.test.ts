@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { injectAnnotations } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -1065,7 +1066,10 @@ describe("bindEnv()", () => {
         throw new TypeError("Expected synchronous annotations.");
       }
 
-      assert.throws(() => parse(parser, [], { annotations }), sourceError);
+      assert.throws(
+        () => parse(parser, [], { annotations }),
+        (error) => error === sourceError,
+      );
     } finally {
       context[Symbol.dispose]?.();
     }
@@ -1092,13 +1096,16 @@ describe("bindEnv()", () => {
     context.getAnnotations();
 
     try {
-      assert.throws(() => parse(parser, []), sourceError);
+      assert.throws(
+        () => parse(parser, []),
+        (error) => error === sourceError,
+      );
     } finally {
       context[Symbol.dispose]?.();
     }
   });
 
-  it("throws synchronously in async mode when the source function throws", () => {
+  it("throws synchronously in async mode when the source function throws", async () => {
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
       metavar: "INT",
@@ -1133,17 +1140,22 @@ describe("bindEnv()", () => {
       default: 3000,
     });
 
-    context.getAnnotations();
-
     try {
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parseResult = await parser.parse({
+        buffer: [] as readonly string[],
+        state: injectAnnotations(parser.initialState, annotations),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(parseResult.success);
+
       assert.throws(
-        () =>
-          parser.complete(
-            { hasCliValue: false } as unknown as Parameters<
-              typeof parser.complete
-            >[0],
-          ),
-        sourceError,
+        () => parser.complete(parseResult.next.state),
+        (error) => error === sourceError,
       );
     } finally {
       context[Symbol.dispose]?.();
