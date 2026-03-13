@@ -1111,22 +1111,14 @@ describe("bindEnv()", () => {
   });
 
   it("throws synchronously in async mode when the source function throws", async () => {
+    const syncInt = integer();
     const asyncInt: ValueParser<"async", number> = {
       $mode: "async",
-      metavar: "INT",
+      metavar: syncInt.metavar,
       parse(input: string): Promise<ValueParserResult<number>> {
-        const n = parseInt(input, 10);
-        if (isNaN(n)) {
-          return Promise.resolve({
-            success: false,
-            error: message`Invalid integer: ${input}`,
-          });
-        }
-        return Promise.resolve({ success: true, value: n });
+        return Promise.resolve(syncInt.parse(input));
       },
-      format(v: number): string {
-        return v.toString();
-      },
+      format: syncInt.format,
     };
     const sourceError = new Error("Environment access failed.");
     const context = createEnvContext({
