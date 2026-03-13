@@ -178,7 +178,15 @@ describe("bindEnv()", () => {
         $mode: "async",
         metavar: "INT",
         parse(input: string): Promise<ValueParserResult<number>> {
-          return Promise.resolve({ success: true, value: parseInt(input, 10) });
+          const n = parseInt(input, 10);
+          if (Number.isNaN(n)) {
+            return Promise.resolve({
+              success: false,
+              error: message`Invalid integer: ${input}`,
+            });
+          }
+
+          return Promise.resolve({ success: true, value: n });
         },
         format(value: number): string {
           return value.toString();
