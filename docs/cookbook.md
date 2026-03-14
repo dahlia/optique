@@ -1491,7 +1491,8 @@ underlying command, the
 [`passThrough()`](./concepts/primitives.md#passthrough-parser) parser captures
 unrecognized options without validation errors.
 
-> **Note**: By default, `passThrough()` uses the `"equalsOnly"` format, which
+> [!NOTE]
+> By default, `passThrough()` uses the `"equalsOnly"` format, which
 > only captures `--opt=val` style options. Options like `--foo bar` will fail.
 > See [Choosing the right format](#choosing-the-right-format) below for
 > alternatives.
