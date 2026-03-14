@@ -50,7 +50,11 @@ import {
   type Usage,
 } from "./usage.ts";
 import { string } from "./valueparser.ts";
-import { type Annotations, injectAnnotations } from "./annotations.ts";
+import {
+  type Annotations,
+  firstPassAnnotationKey,
+  injectAnnotations,
+} from "./annotations.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
@@ -2575,9 +2579,13 @@ export async function runWith<
 
     // Two-phase parsing for dynamic contexts
     // First pass: parse with Phase 1 annotations to get initial result
+    const firstPassAnnotations: Annotations = {
+      ...phase1Annotations,
+      [firstPassAnnotationKey]: true,
+    };
     const augmentedParser1 = injectAnnotationsIntoParser(
       parser,
-      phase1Annotations,
+      firstPassAnnotations,
     );
 
     let firstPassResult: unknown;

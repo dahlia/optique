@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { annotationKey } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
 import type { DocFragments } from "@optique/core/doc";
+import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import {
   parseAsync,
@@ -15,6 +16,8 @@ import { multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
+import { bindConfig, createConfigContext } from "../../config/src/index.ts";
+import { runAsync } from "../../run/src/run.ts";
 
 const promptFunctionsOverrideSymbol = Symbol.for(
   "@optique/inquirer/prompt-functions",
@@ -47,6 +50,26 @@ async function withPromptFunctionsOverride<T>(
 }
 
 describe("prompt()", () => {
+  interface PromptConfigData {
+    readonly apiKey?: string;
+  }
+
+  function createPromptConfigSchema(): Parameters<
+    typeof createConfigContext<PromptConfigData>
+  >[0]["schema"] {
+    return {
+      "~standard": {
+        version: 1,
+        vendor: "optique-test",
+        validate(input: unknown) {
+          return {
+            value: input as PromptConfigData,
+          };
+        },
+      },
+    };
+  }
+
   describe("mode", () => {
     it("always returns an async-mode parser", () => {
       const parser = prompt(option("--name", string()), {
@@ -757,6 +780,102 @@ describe("prompt()", () => {
       assert.ok(result.success);
       assert.equal(result.value, true);
     });
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "skips the prompt when runWith() resolves a config value in phase 2",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "runs the prompt once when runWith() finds no config value in phase 2",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompt-secret");
+            },
+          },
+        );
+
+        const result = await runWith(parser, "test", [context], {
+          load: () => ({ config, meta: undefined }),
+          args: [],
+        });
+
+        assert.equal(result, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "skips the prompt in object() when runAsync() resolves a config value in phase 2",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "runs the prompt once in object() when runAsync() finds no config value in phase 2",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => {
+                promptCalls += 1;
+                return Promise.resolve("prompt-secret");
+              },
+            },
+          ),
+        });
+
+        const result = await runAsync(parser, {
+          programName: "test",
+          args: [],
+          contexts: [context],
+          load: () => ({ config, meta: undefined }),
+        });
+
+        assert.equal(result.apiKey, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
   });
 
   describe("prompt config default", () => {

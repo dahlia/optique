@@ -16,7 +16,11 @@ import {
   select,
   Separator,
 } from "@inquirer/prompts";
-import { annotationKey, getAnnotations } from "@optique/core/annotations";
+import {
+  annotationKey,
+  firstPassAnnotationKey,
+  getAnnotations,
+} from "@optique/core/annotations";
 import type {
   Mode,
   ModeValue,
@@ -121,6 +125,25 @@ function isExitPromptError(error: unknown): boolean {
     error != null &&
     "name" in error &&
     error.name === "ExitPromptError";
+}
+
+const deferredPromptValueKey: unique symbol = Symbol(
+  "@optique/inquirer/deferredPromptValue",
+);
+
+class DeferredPromptValue {
+  readonly [deferredPromptValueKey] = true as const;
+}
+
+function shouldDeferPrompt(state: unknown): boolean {
+  return getAnnotations(state)?.[firstPassAnnotationKey] === true;
+}
+
+function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
+  return {
+    success: true,
+    value: new DeferredPromptValue() as TValue,
+  };
 }
 
 // ---- Choice types ----
@@ -740,6 +763,18 @@ export function prompt<M extends Mode, TValue, TState>(
     }
   }
 
+  function usePromptOrDefer(
+    state: unknown,
+    result: ValueParserResult<TValue>,
+  ): Promise<ValueParserResult<TValue>> {
+    if (result.success) {
+      return Promise.resolve(result);
+    }
+    return shouldDeferPrompt(state)
+      ? Promise.resolve(deferredPromptResult<TValue>())
+      : executePrompt();
+  }
+
   return {
     $mode: "async",
     $valueType: parser.$valueType,
@@ -865,13 +900,11 @@ export function prompt<M extends Mode, TValue, TState>(
         // First call: try inner parser, fall back to prompt if it fails.
         const innerState = parser.initialState;
         const r = parser.complete(innerState);
-        const fallback = (
-          res: ValueParserResult<TValue>,
-        ): Promise<ValueParserResult<TValue>> =>
-          res.success ? Promise.resolve(res) : executePrompt();
         const cachedResult = r instanceof Promise
-          ? (r as Promise<ValueParserResult<TValue>>).then(fallback)
-          : fallback(r as ValueParserResult<TValue>);
+          ? (r as Promise<ValueParserResult<TValue>>).then((res) =>
+            usePromptOrDefer(state, res)
+          )
+          : usePromptOrDefer(state, r as ValueParserResult<TValue>);
         promptCache = { state, result: cachedResult };
         return cachedResult;
       }
@@ -891,17 +924,17 @@ export function prompt<M extends Mode, TValue, TState>(
       if (cliStateHasAnnotations) {
         const innerState = cliState as TState;
         const r = parser.complete(innerState);
-        const fallback = (
-          res: ValueParserResult<TValue>,
-        ): Promise<ValueParserResult<TValue>> =>
-          res.success ? Promise.resolve(res) : executePrompt();
         if (r instanceof Promise) {
-          return (r as Promise<ValueParserResult<TValue>>).then(fallback);
+          return (r as Promise<ValueParserResult<TValue>>).then((res) =>
+            usePromptOrDefer(state, res)
+          );
         }
-        return fallback(r as ValueParserResult<TValue>);
+        return usePromptOrDefer(state, r as ValueParserResult<TValue>);
       }
 
-      return executePrompt();
+      return shouldDeferPrompt(state)
+        ? Promise.resolve(deferredPromptResult<TValue>())
+        : executePrompt();
     },
 
     suggest: (context, prefix) => {

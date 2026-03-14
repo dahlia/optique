@@ -9,6 +9,7 @@ import {
   parseWithDependency,
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
+import { getAnnotations, injectAnnotations } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
 import {
@@ -3490,6 +3491,37 @@ export function object<
     }
     return state;
   };
+  const getFieldState = (
+    parentState: unknown,
+    field: keyof T,
+    parser: Parser<Mode, unknown, unknown>,
+  ): unknown => {
+    const fieldKey = field as string | symbol;
+    const sourceState = parentState != null &&
+        typeof parentState === "object" &&
+        fieldKey in parentState
+      ? (parentState as Record<string | symbol, unknown>)[fieldKey]
+      : parser.initialState;
+    if (sourceState == null || typeof sourceState !== "object") {
+      return sourceState;
+    }
+    const annotations = getAnnotations(parentState);
+    if (
+      annotations === undefined || getAnnotations(sourceState) === annotations
+    ) {
+      return sourceState;
+    }
+    const inheritedState = injectAnnotations(sourceState, annotations);
+    if (
+      inheritedState !== sourceState &&
+      parentState != null &&
+      typeof parentState === "object"
+    ) {
+      (parentState as Record<string | symbol, unknown>)[fieldKey] =
+        inheritedState;
+    }
+    return inheritedState;
+  };
 
   // Check for duplicate option names at construction time unless explicitly allowed
   if (!options.allowDuplicates) {
@@ -3569,13 +3601,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse({
           ...currentContext,
-          state: (currentContext.state &&
-              typeof currentContext.state === "object" &&
-              field in currentContext.state)
-            ? (currentContext.state as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ]
-            : parser.initialState,
+          state: getFieldState(currentContext.state, field, parser),
         });
 
         if (result.success && result.consumed.length > 0) {
@@ -3611,13 +3637,7 @@ export function object<
     if (context.buffer.length === 0) {
       let allCanComplete = true;
       for (const [field, parser] of parserPairs) {
-        const fieldState =
-          (context.state && typeof context.state === "object" &&
-              field in context.state)
-            ? (context.state as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ]
-            : parser.initialState;
+        const fieldState = getFieldState(context.state, field, parser);
         const completeResult = (parser as Parser<"sync", unknown, unknown>)
           .complete(fieldState);
         if (!completeResult.success) {
@@ -3657,13 +3677,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         const resultOrPromise = parser.parse({
           ...currentContext,
-          state: (currentContext.state &&
-              typeof currentContext.state === "object" &&
-              field in currentContext.state)
-            ? (currentContext.state as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ]
-            : parser.initialState,
+          state: getFieldState(currentContext.state, field, parser),
         });
         const result = await resultOrPromise;
 
@@ -3700,13 +3714,7 @@ export function object<
     if (context.buffer.length === 0) {
       let allCanComplete = true;
       for (const [field, parser] of parserPairs) {
-        const fieldState =
-          (context.state && typeof context.state === "object" &&
-              field in context.state)
-            ? (context.state as Record<string | symbol, unknown>)[
-              field as string | symbol
-            ]
-            : parser.initialState;
+        const fieldState = getFieldState(context.state, field, parser);
         const completeResult = await parser.complete(fieldState);
         if (!completeResult.success) {
           allCanComplete = false;
@@ -3821,7 +3829,11 @@ export function object<
                 preCompletedState[fieldKey] = fieldState;
               }
             } else {
-              preCompletedState[fieldKey] = fieldState;
+              preCompletedState[fieldKey] = getFieldState(
+                state,
+                field,
+                fieldParser,
+              );
             }
           }
 
@@ -3860,7 +3872,10 @@ export function object<
               continue;
             }
 
-            const valueResult = fieldParser.complete(fieldResolvedState);
+            const completionState = fieldResolvedState === undefined
+              ? getFieldState(state, field, fieldParser)
+              : fieldResolvedState;
+            const valueResult = fieldParser.complete(completionState);
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;
@@ -3925,7 +3940,11 @@ export function object<
                 preCompletedState[fieldKey] = fieldState;
               }
             } else {
-              preCompletedState[fieldKey] = fieldState;
+              preCompletedState[fieldKey] = getFieldState(
+                state,
+                field,
+                fieldParser,
+              );
             }
           }
 
@@ -3960,7 +3979,10 @@ export function object<
               continue;
             }
 
-            const valueResult = await fieldParser.complete(fieldResolvedState);
+            const completionState = fieldResolvedState === undefined
+              ? getFieldState(state, field, fieldParser)
+              : fieldResolvedState;
+            const valueResult = await fieldParser.complete(completionState);
             if (valueResult.success) {
               (result as Record<string | symbol, unknown>)[fieldKey] =
                 valueResult.value;

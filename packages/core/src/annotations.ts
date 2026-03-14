@@ -18,6 +18,16 @@ export const annotationKey: unique symbol = Symbol.for(
 );
 
 /**
+ * Internal marker attached during the first pass of `runWith()` so wrappers
+ * with side effects can defer work until dynamic contexts have resolved.
+ *
+ * @internal
+ */
+export const firstPassAnnotationKey: unique symbol = Symbol.for(
+  "@optique/core/parser/firstPass",
+);
+
+/**
  * Internal key for preserving primitive parser state values when annotations
  * are injected into non-object states.
  * @internal
