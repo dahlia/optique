@@ -21,6 +21,16 @@ import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 
+const deferPromptUntilConfigResolvesKey = Symbol.for(
+  "@optique/config/deferPromptUntilResolved",
+);
+const phase1ConfigAnnotationsKey = Symbol.for(
+  "@optique/config/phase1PromptAnnotations",
+);
+const deferredPromptValueKey = Symbol.for(
+  "@optique/inquirer/deferredPromptValue",
+);
+
 /**
  * Metadata about the loaded config source.
  *
@@ -51,6 +61,67 @@ const activeConfigRegistry: Map<symbol, unknown> = new Map();
  * @internal
  */
 const activeConfigMetaRegistry: Map<symbol, unknown> = new Map();
+const phase1ConfigAnnotationMarker = Symbol(
+  "@optique/config/phase1Annotation",
+);
+
+function isDeferredPromptValue(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    deferredPromptValueKey in value;
+}
+
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function stripDeferredPromptValues<T>(
+  value: T,
+  seen = new WeakMap<object, unknown>(),
+  isRoot = true,
+): T {
+  if (isDeferredPromptValue(value)) {
+    return (isRoot ? value : undefined) as T;
+  }
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  const cached = seen.get(value);
+  if (cached !== undefined) {
+    return cached as T;
+  }
+  if (Array.isArray(value)) {
+    const clone: unknown[] = new Array(value.length);
+    seen.set(value, clone);
+    for (let i = 0; i < value.length; i++) {
+      clone[i] = stripDeferredPromptValues(value[i], seen, false);
+    }
+    return clone as T;
+  }
+  if (!isPlainObject(value)) {
+    return value;
+  }
+  const clone: Record<PropertyKey, unknown> = Object.create(
+    Object.getPrototypeOf(value),
+  );
+  seen.set(value, clone);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor == null) {
+      continue;
+    }
+    if ("value" in descriptor) {
+      descriptor.value = stripDeferredPromptValues(
+        descriptor.value,
+        seen,
+        false,
+      );
+    }
+    Object.defineProperty(clone, key, descriptor);
+  }
+  return clone as T;
+}
 
 /**
  * Sets active config data for a context.
@@ -280,16 +351,30 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   // Create a unique ID for this context instance
   const contextId = Symbol(`@optique/config:${Math.random()}`);
 
-  return {
+  const context: ConfigContext<T, TConfigMeta> & {
+    readonly [phase1ConfigAnnotationsKey]: (
+      parsed: unknown,
+      annotations: Annotations,
+    ) => Annotations | undefined;
+  } = {
     id: contextId,
     schema: options.schema,
     mode: "dynamic",
+    [phase1ConfigAnnotationsKey](parsed: unknown, annotations: Annotations) {
+      if (parsed === undefined) {
+        return { [contextId]: phase1ConfigAnnotationMarker };
+      }
+      return Object.getOwnPropertySymbols(annotations).includes(contextId)
+        ? undefined
+        : { [contextId]: undefined };
+    },
 
     getAnnotations(
       parsed?: unknown,
       runtimeOptions?: unknown,
     ): Promise<Annotations> | Annotations {
-      // Phase 1 (no parsed result): return empty — this is a dynamic context
+      // Phase 1 (no parsed result): mark the context as unresolved so
+      // prompt(bindConfig(...)) can defer interactive fallback.
       if (parsed === undefined) {
         return {};
       }
@@ -306,7 +391,9 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
       // At runtime, `parsed` is the actual parser value.  The
       // ParserValuePlaceholder brand is compile-time only.
-      const parsedValue = parsed as ParserValuePlaceholder;
+      const parsedValue = stripDeferredPromptValues(
+        parsed,
+      ) as ParserValuePlaceholder;
 
       const buildAnnotations = (
         configData: T | undefined,
@@ -412,6 +499,8 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       clearActiveConfigMeta(contextId);
     },
   };
+
+  return context;
 }
 
 /**
@@ -503,7 +592,14 @@ export function bindConfig<
       configBindStateKey in value;
   }
 
-  return {
+  function shouldDeferPromptUntilConfigResolves(state: unknown): boolean {
+    const annotations = getAnnotations(state);
+    return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
+  }
+
+  const boundParser: Parser<M, TValue, TState> & {
+    readonly [deferPromptUntilConfigResolvesKey]: (state: unknown) => boolean;
+  } = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
@@ -593,11 +689,14 @@ export function bindConfig<
     },
 
     suggest: parser.suggest,
+    [deferPromptUntilConfigResolvesKey]: shouldDeferPromptUntilConfigResolves,
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
       return parser.getDocFragments(state, defaultValue);
     },
   };
+
+  return boundParser;
 }
 
 /**

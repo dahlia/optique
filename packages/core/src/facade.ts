@@ -50,14 +50,14 @@ import {
   type Usage,
 } from "./usage.ts";
 import { string } from "./valueparser.ts";
-import {
-  type Annotations,
-  firstPassAnnotationKey,
-  injectAnnotations,
-} from "./annotations.ts";
+import { type Annotations, injectAnnotations } from "./annotations.ts";
 import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
+
+const phase1ConfigAnnotationsKey = Symbol.for(
+  "@optique/config/phase1PromptAnnotations",
+);
 
 /**
  * Helper types for parser generation
@@ -2181,7 +2181,23 @@ async function collectPhase1Annotations(
   for (const context of contexts) {
     const result = context.getAnnotations(undefined, options);
     hasDynamic ||= needsTwoPhaseContext(context, result);
-    annotationsList.push(result instanceof Promise ? await result : result);
+    const annotations = result instanceof Promise ? await result : result;
+    const internalAnnotationsGetter = Reflect.get(
+      context,
+      phase1ConfigAnnotationsKey,
+    );
+    const internalAnnotations = typeof internalAnnotationsGetter === "function"
+      ? internalAnnotationsGetter.call(
+        context,
+        undefined,
+        annotations,
+      ) as (Annotations | undefined)
+      : undefined;
+    annotationsList.push(
+      internalAnnotations == null
+        ? annotations
+        : mergeAnnotations([annotations, internalAnnotations]),
+    );
   }
 
   return {
@@ -2207,7 +2223,23 @@ async function collectAnnotations(
 
   for (const context of contexts) {
     const result = context.getAnnotations(parsed, options);
-    annotationsList.push(result instanceof Promise ? await result : result);
+    const annotations = result instanceof Promise ? await result : result;
+    const internalAnnotationsGetter = Reflect.get(
+      context,
+      phase1ConfigAnnotationsKey,
+    );
+    const internalAnnotations = typeof internalAnnotationsGetter === "function"
+      ? internalAnnotationsGetter.call(
+        context,
+        parsed,
+        annotations,
+      ) as (Annotations | undefined)
+      : undefined;
+    annotationsList.push(
+      internalAnnotations == null
+        ? annotations
+        : mergeAnnotations([annotations, internalAnnotations]),
+    );
   }
 
   return mergeAnnotations(annotationsList);
@@ -2238,7 +2270,22 @@ function collectPhase1AnnotationsSync(
       );
     }
     hasDynamic ||= needsTwoPhaseContext(context, result);
-    annotationsList.push(result);
+    const internalAnnotationsGetter = Reflect.get(
+      context,
+      phase1ConfigAnnotationsKey,
+    );
+    const internalAnnotations = typeof internalAnnotationsGetter === "function"
+      ? internalAnnotationsGetter.call(
+        context,
+        undefined,
+        result,
+      ) as (Annotations | undefined)
+      : undefined;
+    annotationsList.push(
+      internalAnnotations == null
+        ? result
+        : mergeAnnotations([result, internalAnnotations]),
+    );
   }
 
   return {
@@ -2293,7 +2340,22 @@ function collectAnnotationsSync(
           "Use runWith() or runWithAsync() for async contexts.",
       );
     }
-    annotationsList.push(result);
+    const internalAnnotationsGetter = Reflect.get(
+      context,
+      phase1ConfigAnnotationsKey,
+    );
+    const internalAnnotations = typeof internalAnnotationsGetter === "function"
+      ? internalAnnotationsGetter.call(
+        context,
+        parsed,
+        result,
+      ) as (Annotations | undefined)
+      : undefined;
+    annotationsList.push(
+      internalAnnotations == null
+        ? result
+        : mergeAnnotations([result, internalAnnotations]),
+    );
   }
 
   return mergeAnnotations(annotationsList);
@@ -2579,13 +2641,9 @@ export async function runWith<
 
     // Two-phase parsing for dynamic contexts
     // First pass: parse with Phase 1 annotations to get initial result
-    const firstPassAnnotations: Annotations = {
-      ...phase1Annotations,
-      [firstPassAnnotationKey]: true,
-    };
     const augmentedParser1 = injectAnnotationsIntoParser(
       parser,
-      firstPassAnnotations,
+      phase1Annotations,
     );
 
     let firstPassResult: unknown;
@@ -2650,8 +2708,8 @@ export async function runWith<
 
     // Final parse with merged annotations
     const finalAnnotations = mergeAnnotations([
-      phase1Annotations,
       phase2Annotations,
+      phase1Annotations,
     ]);
     const augmentedParser2 = injectAnnotationsIntoParser(
       parser,
@@ -2760,8 +2818,8 @@ export function runWithSync<
 
     // Final parse with merged annotations
     const finalAnnotations = mergeAnnotations([
-      phase1Annotations,
       phase2Annotations,
+      phase1Annotations,
     ]);
     const augmentedParser2 = injectAnnotationsIntoParser(
       parser,

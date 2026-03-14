@@ -9,7 +9,11 @@ import {
   parseWithDependency,
   wrappedDependencySourceMarker,
 } from "./dependency.ts";
-import { getAnnotations, injectAnnotations } from "./annotations.ts";
+import {
+  getAnnotations,
+  inheritAnnotations,
+  injectAnnotations,
+} from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
 import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
 import {
@@ -49,6 +53,10 @@ type CombineObjectModes<
     ? M extends Mode ? readonly [M] : never
     : never
 >;
+
+const inheritParentAnnotationsKey = Symbol.for(
+  "@optique/core/inheritParentAnnotations",
+);
 
 /**
  * Helper type to combine modes from a tuple of parsers.
@@ -3511,7 +3519,10 @@ export function object<
     ) {
       return sourceState;
     }
-    const inheritedState = injectAnnotations(sourceState, annotations);
+    const inheritedState = Reflect.get(parser, inheritParentAnnotationsKey) ===
+        true
+      ? injectAnnotations(sourceState, annotations)
+      : inheritAnnotations(parentState, sourceState);
     if (
       inheritedState !== sourceState &&
       parentState != null &&

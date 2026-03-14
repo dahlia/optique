@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { annotationKey } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
+import type { SourceContext } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -876,6 +877,74 @@ describe("prompt()", () => {
         assert.equal(promptCalls, expectedPromptCalls);
       });
     }
+
+    it("keeps non-config prompts available to other phase-two contexts", async () => {
+      let phase2Parsed: { readonly config: string } | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/prompt-phase-two"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed === undefined) {
+            return {};
+          }
+          phase2Parsed = parsed as { readonly config: string };
+          return {};
+        },
+      };
+      let promptCalls = 0;
+      const parser = object({
+        config: prompt(option("--config", string()), {
+          type: "input",
+          message: "Config path:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("prompt-config.json");
+          },
+        }),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: [],
+      });
+
+      assert.deepEqual(phase2Parsed, { config: "prompt-config.json" });
+      assert.deepEqual(result, { config: "prompt-config.json" });
+      assert.equal(promptCalls, 2);
+    });
+
+    it("hides deferred config-backed prompt values from config loaders", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let loaderParsed: { readonly apiKey?: string | undefined } | undefined;
+      const parser = object({
+        apiKey: prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => Promise.resolve("prompt-secret"),
+          },
+        ),
+      });
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          loaderParsed = parsed as { readonly apiKey?: string | undefined };
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.deepEqual(loaderParsed, { apiKey: undefined });
+      assert.deepEqual(result, { apiKey: "config-secret" });
+    });
   });
 
   describe("prompt config default", () => {

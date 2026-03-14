@@ -10,6 +10,7 @@ import {
   tuple,
 } from "@optique/core/constructs";
 import type { DocEntry, DocFragment, DocSection } from "@optique/core/doc";
+import { annotationKey, type Annotations } from "@optique/core/annotations";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -2496,6 +2497,59 @@ describe("object() - duplicate option detection", () => {
         assert.equal(error.optionName, "-v");
         return true;
       },
+    );
+  });
+
+  it("should preserve custom child states when annotations are present", () => {
+    const marker = Symbol.for("@test/object-custom-state");
+
+    class PrivateState {
+      #value = "ok";
+
+      getValue(): string {
+        return this.#value;
+      }
+    }
+
+    const childParser: Parser<"sync", string, PrivateState> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly PrivateState[],
+      priority: 0,
+      usage: [],
+      initialState: new PrivateState(),
+      parse(context) {
+        return {
+          success: true,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return {
+          success: true,
+          value: state.getValue(),
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const result = parseSync(parser, [], {
+      annotations: { [marker]: true } satisfies Annotations,
+    });
+
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.value, "ok");
+    }
+    assert.ok(
+      !Reflect.ownKeys(childParser.initialState).includes(annotationKey),
     );
   });
 

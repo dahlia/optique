@@ -18,8 +18,8 @@ import {
 } from "@inquirer/prompts";
 import {
   annotationKey,
-  firstPassAnnotationKey,
   getAnnotations,
+  inheritAnnotations,
 } from "@optique/core/annotations";
 import type {
   Mode,
@@ -127,16 +127,30 @@ function isExitPromptError(error: unknown): boolean {
     error.name === "ExitPromptError";
 }
 
-const deferredPromptValueKey: unique symbol = Symbol(
+const deferredPromptValueKey: unique symbol = Symbol.for(
   "@optique/inquirer/deferredPromptValue",
+);
+const deferPromptUntilConfigResolvesKey = Symbol.for(
+  "@optique/config/deferPromptUntilResolved",
+);
+const inheritParentAnnotationsKey = Symbol.for(
+  "@optique/core/inheritParentAnnotations",
 );
 
 class DeferredPromptValue {
   readonly [deferredPromptValueKey] = true as const;
 }
 
-function shouldDeferPrompt(state: unknown): boolean {
-  return getAnnotations(state)?.[firstPassAnnotationKey] === true;
+function shouldDeferPrompt(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+): boolean {
+  const maybeShouldDefer = Reflect.get(
+    parser,
+    deferPromptUntilConfigResolvesKey,
+  );
+  return typeof maybeShouldDefer === "function" &&
+    maybeShouldDefer(state) === true;
 }
 
 function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
@@ -770,16 +784,19 @@ export function prompt<M extends Mode, TValue, TState>(
     if (result.success) {
       return Promise.resolve(result);
     }
-    return shouldDeferPrompt(state)
+    return shouldDeferPrompt(parser, state)
       ? Promise.resolve(deferredPromptResult<TValue>())
       : executePrompt();
   }
 
-  return {
+  const promptedParser: Parser<"async", TValue, TState> & {
+    readonly [inheritParentAnnotationsKey]: true;
+  } = {
     $mode: "async",
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
+    [inheritParentAnnotationsKey]: true,
     // prompt() makes the CLI argument optional because missing values are
     // handled interactively.
     usage: [{ type: "optional", terms: parser.usage }],
@@ -806,18 +823,11 @@ export function prompt<M extends Mode, TValue, TState>(
       // their output state.  This is necessary when parse() is called with
       // an annotation-injected initial state (via parseAsync options) and
       // innerState would otherwise be undefined/null, losing the annotations.
-      const innerStateWithAnnotations: TState = (
-          annotations != null &&
+      const innerStateWithAnnotations: TState = annotations != null &&
           (innerState == null ||
             (typeof innerState === "object" &&
               !(annotationKey in (innerState as object))))
-        )
-        ? ({
-          ...(innerState != null && typeof innerState === "object"
-            ? innerState
-            : {}),
-          [annotationKey]: annotations,
-        } as unknown as TState)
+        ? inheritAnnotations(context.state, innerState)
         : innerState;
       const innerContext = innerStateWithAnnotations !== context.state
         ? { ...context, state: innerStateWithAnnotations }
@@ -932,7 +942,7 @@ export function prompt<M extends Mode, TValue, TState>(
         return usePromptOrDefer(state, r as ValueParserResult<TValue>);
       }
 
-      return shouldDeferPrompt(state)
+      return shouldDeferPrompt(parser, state)
         ? Promise.resolve(deferredPromptResult<TValue>())
         : executePrompt();
     },
@@ -966,6 +976,8 @@ export function prompt<M extends Mode, TValue, TState>(
       return parser.getDocFragments(state, defaultValue as TValue);
     },
   };
+
+  return promptedParser;
 }
 
 // ---- Helpers ----
