@@ -1491,6 +1491,11 @@ underlying command, the
 [`passThrough()`](./concepts/primitives.md#passthrough-parser) parser captures
 unrecognized options without validation errors.
 
+> **Note**: By default, `passThrough()` uses the `"equalsOnly"` format, which
+> only captures `--opt=val` style options. Options like `--foo bar` will fail.
+> See [Choosing the right format](#choosing-the-right-format) below for
+> alternatives.
+
 ### Basic wrapper pattern
 
 A common use case is wrapping another CLI tool while adding your own options:
@@ -1504,6 +1509,7 @@ import { run } from "@optique/run";
 const parser = object({
   debug: option("--debug"),
   config: option("-c", "--config", string({ metavar: "FILE" })),
+  // Default format is "equalsOnly", captures --opt=val only
   extraOpts: passThrough(),
 });
 
