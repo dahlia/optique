@@ -154,6 +154,9 @@ function shouldDeferPrompt(
     maybeShouldDefer(state) === true;
 }
 
+// TODO: Avoid surfacing DeferredPromptValue as a successful TValue result in
+// outer combinators during phase one. See:
+// https://github.com/dahlia/optique/issues/296
 function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
   return {
     success: true,
