@@ -1122,6 +1122,66 @@ describe("prompt()", () => {
       assert.deepEqual([...result], ["config-secret"]);
     });
 
+    it(
+      "hides deferred prompt values inside nested non-plain phase-two inputs",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        class InnerInput {
+          constructor(readonly apiKey: string | undefined) {}
+        }
+
+        let phase2ApiKey: string | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/nested-non-plain-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed != null && typeof parsed === "object") {
+              phase2ApiKey = (
+                parsed as { readonly inner: InnerInput }
+              ).inner.apiKey;
+            }
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => ({ inner: new InnerInput(value.apiKey) }),
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
+        );
+
+        assert.equal(phase2ApiKey, undefined);
+        assert.equal(result.inner.apiKey, "config-secret");
+      },
+    );
+
     it("hides top-level deferred prompt values from config loaders", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
