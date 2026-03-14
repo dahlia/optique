@@ -2380,7 +2380,11 @@ async function collectPhase1Annotations(
   contexts: readonly SourceContext<unknown>[],
   options?: unknown,
 ): Promise<
-  { readonly annotations: Annotations; readonly hasDynamic: boolean }
+  {
+    readonly annotations: Annotations;
+    readonly annotationsList: readonly Annotations[];
+    readonly hasDynamic: boolean;
+  }
 > {
   const annotationsList: Annotations[] = [];
   let hasDynamic = false;
@@ -2409,6 +2413,7 @@ async function collectPhase1Annotations(
 
   return {
     annotations: mergeAnnotations(annotationsList),
+    annotationsList,
     hasDynamic,
   };
 }
@@ -2425,7 +2430,10 @@ async function collectAnnotations(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
   options?: unknown,
-): Promise<Annotations> {
+): Promise<{
+  readonly annotations: Annotations;
+  readonly annotationsList: readonly Annotations[];
+}> {
   const annotationsList: Annotations[] = [];
 
   for (const context of contexts) {
@@ -2455,7 +2463,10 @@ async function collectAnnotations(
     annotationsList.push(mergedAnnotations);
   }
 
-  return mergeAnnotations(annotationsList);
+  return {
+    annotations: mergeAnnotations(annotationsList),
+    annotationsList,
+  };
 }
 
 /**
@@ -2470,7 +2481,11 @@ async function collectAnnotations(
 function collectPhase1AnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   options?: unknown,
-): { readonly annotations: Annotations; readonly hasDynamic: boolean } {
+): {
+  readonly annotations: Annotations;
+  readonly annotationsList: readonly Annotations[];
+  readonly hasDynamic: boolean;
+} {
   const annotationsList: Annotations[] = [];
   let hasDynamic = false;
 
@@ -2503,6 +2518,7 @@ function collectPhase1AnnotationsSync(
 
   return {
     annotations: mergeAnnotations(annotationsList),
+    annotationsList,
     hasDynamic,
   };
 }
@@ -2542,7 +2558,10 @@ function collectAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
   options?: unknown,
-): Annotations {
+): {
+  readonly annotations: Annotations;
+  readonly annotationsList: readonly Annotations[];
+} {
   const annotationsList: Annotations[] = [];
 
   for (const context of contexts) {
@@ -2577,7 +2596,30 @@ function collectAnnotationsSync(
     annotationsList.push(mergedAnnotations);
   }
 
-  return mergeAnnotations(annotationsList);
+  return {
+    annotations: mergeAnnotations(annotationsList),
+    annotationsList,
+  };
+}
+
+function mergeTwoPhaseAnnotations(
+  phase1AnnotationsList: readonly Annotations[],
+  phase2AnnotationsList: readonly Annotations[],
+): Annotations {
+  const mergedPerContext: Annotations[] = [];
+  const length = Math.max(
+    phase1AnnotationsList.length,
+    phase2AnnotationsList.length,
+  );
+  for (let i = 0; i < length; i++) {
+    mergedPerContext.push(
+      mergeAnnotations([
+        phase2AnnotationsList[i] ?? {},
+        phase1AnnotationsList[i] ?? {},
+      ]),
+    );
+  }
+  return mergeAnnotations(mergedPerContext);
 }
 
 /**
@@ -2832,8 +2874,11 @@ export async function runWith<
 
   try {
     // Phase 1: Collect initial annotations
-    const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
-      await collectPhase1Annotations(contexts, options);
+    const {
+      annotations: phase1Annotations,
+      annotationsList: phase1AnnotationsList,
+      hasDynamic: needsTwoPhase,
+    } = await collectPhase1Annotations(contexts, options);
 
     if (!needsTwoPhase) {
       // All static contexts - single pass is sufficient
@@ -2919,17 +2964,17 @@ export async function runWith<
     }
 
     // Phase 2: Collect annotations with parsed result
-    const phase2Annotations = await collectAnnotations(
+    const { annotationsList: phase2AnnotationsList } = await collectAnnotations(
       contexts,
       firstPassResult,
       options,
     );
 
     // Final parse with merged annotations
-    const finalAnnotations = mergeAnnotations([
-      phase2Annotations,
-      phase1Annotations,
-    ]);
+    const finalAnnotations = mergeTwoPhaseAnnotations(
+      phase1AnnotationsList,
+      phase2AnnotationsList,
+    );
     const augmentedParser2 = injectAnnotationsIntoParser(
       parser,
       finalAnnotations,
@@ -2995,8 +3040,11 @@ export function runWithSync<
 
   try {
     // Phase 1: Collect initial annotations
-    const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
-      collectPhase1AnnotationsSync(contexts, options);
+    const {
+      annotations: phase1Annotations,
+      annotationsList: phase1AnnotationsList,
+      hasDynamic: needsTwoPhase,
+    } = collectPhase1AnnotationsSync(contexts, options);
 
     if (!needsTwoPhase) {
       // All static contexts - single pass is sufficient
@@ -3029,17 +3077,17 @@ export function runWithSync<
     }
 
     // Phase 2: Collect annotations with parsed result
-    const phase2Annotations = collectAnnotationsSync(
+    const { annotationsList: phase2AnnotationsList } = collectAnnotationsSync(
       contexts,
       firstPassResult,
       options,
     );
 
     // Final parse with merged annotations
-    const finalAnnotations = mergeAnnotations([
-      phase2Annotations,
-      phase1Annotations,
-    ]);
+    const finalAnnotations = mergeTwoPhaseAnnotations(
+      phase1AnnotationsList,
+      phase2AnnotationsList,
+    );
     const augmentedParser2 = injectAnnotationsIntoParser(
       parser,
       finalAnnotations,

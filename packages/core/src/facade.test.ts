@@ -1,4 +1,5 @@
 import { group, merge, object, or } from "@optique/core/constructs";
+import { getAnnotations } from "@optique/core/annotations";
 import type { SourceContext } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
 import type { Parser } from "@optique/core/parser";
@@ -3820,6 +3821,72 @@ describe("runWith", () => {
 
       assert.deepEqual(result, { value: "default" });
     });
+
+    it("keeps earlier context precedence after phase 2", async () => {
+      const sharedKey = Symbol.for("@test/phase-merge-priority");
+
+      const parser: Parser<"sync", string, string | undefined> = {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly (string | undefined)[],
+        priority: 1,
+        usage: [],
+        initialState: undefined,
+        parse(context) {
+          const value = getAnnotations(context.state)?.[sharedKey];
+          if (typeof value !== "string") {
+            return {
+              success: false as const,
+              consumed: 0,
+              error: message`missing`,
+            };
+          }
+          return {
+            success: true as const,
+            next: { ...context, state: value },
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return typeof state === "string"
+            ? { success: true as const, value: state }
+            : { success: false as const, error: message`missing` };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const earlyContext: SourceContext = {
+        id: Symbol.for("@test/phase-merge-early"),
+        getAnnotations() {
+          return { [sharedKey]: "phase1-early" };
+        },
+      };
+
+      const lateDynamicContext: SourceContext = {
+        id: Symbol.for("@test/phase-merge-late"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed == null) {
+            return {};
+          }
+          return { [sharedKey]: "phase2-late" };
+        },
+      };
+
+      const result = await runWith(
+        parser,
+        "test",
+        [earlyContext, lateDynamicContext],
+        { args: [] },
+      );
+
+      assert.equal(result, "phase1-early");
+    });
   });
 
   describe("dynamic contexts", () => {
@@ -4951,6 +5018,74 @@ describe("runWithSync", () => {
         runWithSync(parser, "test", [context1, context2], { args: [] });
       }, /Context 1 sync dispose failed\./);
       assert.deepEqual(disposed, ["context1", "context2"]);
+    });
+  });
+
+  describe("priority handling (sync)", () => {
+    it("keeps earlier context precedence after phase 2", () => {
+      const sharedKey = Symbol.for("@test/phase-merge-priority-sync");
+
+      const parser: Parser<"sync", string, string | undefined> = {
+        $mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly (string | undefined)[],
+        priority: 1,
+        usage: [],
+        initialState: undefined,
+        parse(context) {
+          const value = getAnnotations(context.state)?.[sharedKey];
+          if (typeof value !== "string") {
+            return {
+              success: false as const,
+              consumed: 0,
+              error: message`missing`,
+            };
+          }
+          return {
+            success: true as const,
+            next: { ...context, state: value },
+            consumed: [],
+          };
+        },
+        complete(state) {
+          return typeof state === "string"
+            ? { success: true as const, value: state }
+            : { success: false as const, error: message`missing` };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+
+      const earlyContext: SourceContext = {
+        id: Symbol.for("@test/phase-merge-sync-early"),
+        getAnnotations() {
+          return { [sharedKey]: "phase1-early" };
+        },
+      };
+
+      const lateDynamicContext: SourceContext = {
+        id: Symbol.for("@test/phase-merge-sync-late"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed == null) {
+            return {};
+          }
+          return { [sharedKey]: "phase2-late" };
+        },
+      };
+
+      const result = runWithSync(
+        parser,
+        "test",
+        [earlyContext, lateDynamicContext],
+        { args: [] },
+      );
+
+      assert.equal(result, "phase1-early");
     });
   });
 
