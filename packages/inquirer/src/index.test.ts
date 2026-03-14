@@ -2288,7 +2288,7 @@ describe("prompt()", () => {
       );
     });
 
-    it("leaves primitive inner state unchanged when annotations are present", async () => {
+    it("injects annotations into primitive inner states", async () => {
       const seenStates: unknown[] = [];
       const annotations = { source: "test" };
       const inner: Parser<"async", string, number> = {
@@ -2351,7 +2351,74 @@ describe("prompt()", () => {
       assert.ok(second.success);
 
       assert.equal(seenStates[0], -7);
-      assert.equal(seenStates[1], -7);
+      assert.deepEqual(getAnnotations(seenStates[1]), annotations);
+    });
+
+    it("preserves parse-time annotations for primitive inner states", async () => {
+      const marker = Symbol.for("@test/prompt-primitive-parse-state");
+      let promptCalls = 0;
+
+      const inner: Parser<"async", string, string | undefined> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly (string | undefined)[],
+        priority: 1,
+        usage: [],
+        initialState: undefined,
+        parse(context) {
+          const [head, ...rest] = context.buffer;
+          if (
+            head == null ||
+            getAnnotations(context.state)?.[marker] !== "annotated"
+          ) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`missing`,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            next: { ...context, buffer: rest, state: head },
+            consumed: [head],
+          });
+        },
+        complete(state) {
+          return Promise.resolve(
+            getAnnotations(state)?.[marker] === "annotated" &&
+              state != null
+              ? { success: true as const, value: state }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
+
+      const result = await parseAsync(parser, ["cli-value"], {
+        annotations: { [marker]: "annotated" } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      assert.equal(result.value, "cli-value");
+      assert.equal(promptCalls, 0);
     });
 
     it("preserves annotations for non-plain inner states", async () => {

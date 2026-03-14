@@ -224,9 +224,11 @@ function withAnnotatedInnerState<TState, TResult>(
   const annotations = getAnnotations(sourceState);
   if (
     annotations == null ||
-    innerState == null ||
-    typeof innerState !== "object" ||
-    (typeof innerState === "object" && annotationKey in innerState)
+    (
+      innerState != null &&
+      typeof innerState === "object" &&
+      annotationKey in innerState
+    )
   ) {
     return run(innerState);
   }
