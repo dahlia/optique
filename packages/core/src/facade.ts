@@ -76,6 +76,49 @@ function isPlainObject(value: object): boolean {
   return proto === Object.prototype || proto === null;
 }
 
+function containsDeferredPromptValuesForContexts(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): boolean {
+  if (isDeferredPromptValue(value)) {
+    return true;
+  }
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return value.some((item) =>
+      containsDeferredPromptValuesForContexts(item, seen)
+    );
+  }
+  if (value instanceof Map) {
+    for (const [key, entryValue] of value) {
+      if (
+        containsDeferredPromptValuesForContexts(key, seen) ||
+        containsDeferredPromptValuesForContexts(entryValue, seen)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      descriptor != null &&
+      "value" in descriptor &&
+      containsDeferredPromptValuesForContexts(descriptor.value, seen)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function stripDeferredPromptValuesForContexts<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
@@ -95,6 +138,17 @@ function stripDeferredPromptValuesForContexts<T>(
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
       clone[i] = stripDeferredPromptValuesForContexts(value[i], seen);
+    }
+    return clone as T;
+  }
+  if (value instanceof Map) {
+    const clone = new Map<unknown, unknown>();
+    seen.set(value, clone);
+    for (const [key, entryValue] of value) {
+      clone.set(
+        stripDeferredPromptValuesForContexts(key, seen),
+        stripDeferredPromptValuesForContexts(entryValue, seen),
+      );
     }
     return clone as T;
   }
@@ -121,18 +175,85 @@ function stripDeferredPromptValuesForContexts<T>(
   return clone as T;
 }
 
-function prepareParsedForContext(
+function finalizeParsedForContext(
   context: SourceContext<unknown>,
   parsed: unknown,
 ): unknown {
-  const sanitizedParsed = stripDeferredPromptValuesForContexts(parsed);
   if (
-    sanitizedParsed !== undefined ||
-    !Reflect.has(context, phase1ConfigAnnotationsKey)
+    parsed !== undefined || !Reflect.has(context, phase1ConfigAnnotationsKey)
   ) {
-    return sanitizedParsed;
+    return parsed;
   }
   return { [phase2UndefinedParsedValueKey]: true };
+}
+
+function withPreparedParsedForContext<T>(
+  context: SourceContext<unknown>,
+  parsed: unknown,
+  run: (prepared: unknown) => T,
+): T {
+  if (
+    parsed == null ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    isPlainObject(parsed) ||
+    parsed instanceof Map
+  ) {
+    return run(
+      finalizeParsedForContext(
+        context,
+        stripDeferredPromptValuesForContexts(parsed),
+      ),
+    );
+  }
+
+  if (!containsDeferredPromptValuesForContexts(parsed)) {
+    return run(finalizeParsedForContext(context, parsed));
+  }
+
+  const previousDescriptors = new Map<PropertyKey, PropertyDescriptor>();
+  try {
+    for (const key of Reflect.ownKeys(parsed)) {
+      const descriptor = Object.getOwnPropertyDescriptor(parsed, key);
+      if (descriptor == null || !("value" in descriptor)) {
+        continue;
+      }
+      const sanitizedValue = stripDeferredPromptValuesForContexts(
+        descriptor.value,
+      );
+      if (sanitizedValue === descriptor.value) {
+        continue;
+      }
+      previousDescriptors.set(key, descriptor);
+      Object.defineProperty(parsed, key, {
+        ...descriptor,
+        value: sanitizedValue,
+      });
+    }
+  } catch {
+    for (const [key, descriptor] of previousDescriptors) {
+      Object.defineProperty(parsed, key, descriptor);
+    }
+    return run(finalizeParsedForContext(context, parsed));
+  }
+
+  const restore = (): void => {
+    for (const [key, descriptor] of previousDescriptors) {
+      Object.defineProperty(parsed, key, descriptor);
+    }
+  };
+
+  try {
+    const result = run(finalizeParsedForContext(context, parsed));
+    if (result instanceof Promise) {
+      return result.finally(restore) as T;
+    }
+    restore();
+    return result;
+  } catch (error) {
+    restore();
+    throw error;
+  }
 }
 
 /**
@@ -2298,25 +2419,30 @@ async function collectAnnotations(
   const annotationsList: Annotations[] = [];
 
   for (const context of contexts) {
-    const contextParsed = prepareParsedForContext(context, parsed);
-    const result = context.getAnnotations(contextParsed, options);
-    const annotations = result instanceof Promise ? await result : result;
-    const internalAnnotationsGetter = Reflect.get(
+    const mergedAnnotations = await withPreparedParsedForContext(
       context,
-      phase1ConfigAnnotationsKey,
+      parsed,
+      async (contextParsed) => {
+        const result = context.getAnnotations(contextParsed, options);
+        const annotations = result instanceof Promise ? await result : result;
+        const internalAnnotationsGetter = Reflect.get(
+          context,
+          phase1ConfigAnnotationsKey,
+        );
+        const internalAnnotations =
+          typeof internalAnnotationsGetter === "function"
+            ? internalAnnotationsGetter.call(
+              context,
+              contextParsed,
+              annotations,
+            ) as (Annotations | undefined)
+            : undefined;
+        return internalAnnotations == null
+          ? annotations
+          : mergeAnnotations([annotations, internalAnnotations]);
+      },
     );
-    const internalAnnotations = typeof internalAnnotationsGetter === "function"
-      ? internalAnnotationsGetter.call(
-        context,
-        contextParsed,
-        annotations,
-      ) as (Annotations | undefined)
-      : undefined;
-    annotationsList.push(
-      internalAnnotations == null
-        ? annotations
-        : mergeAnnotations([annotations, internalAnnotations]),
-    );
+    annotationsList.push(mergedAnnotations);
   }
 
   return mergeAnnotations(annotationsList);
@@ -2410,30 +2536,35 @@ function collectAnnotationsSync(
   const annotationsList: Annotations[] = [];
 
   for (const context of contexts) {
-    const contextParsed = prepareParsedForContext(context, parsed);
-    const result = context.getAnnotations(contextParsed, options);
-    if (result instanceof Promise) {
-      throw new Error(
-        `Context ${String(context.id)} returned a Promise in sync mode. ` +
-          "Use runWith() or runWithAsync() for async contexts.",
-      );
-    }
-    const internalAnnotationsGetter = Reflect.get(
+    const mergedAnnotations = withPreparedParsedForContext(
       context,
-      phase1ConfigAnnotationsKey,
+      parsed,
+      (contextParsed) => {
+        const result = context.getAnnotations(contextParsed, options);
+        if (result instanceof Promise) {
+          throw new Error(
+            `Context ${String(context.id)} returned a Promise in sync mode. ` +
+              "Use runWith() or runWithAsync() for async contexts.",
+          );
+        }
+        const internalAnnotationsGetter = Reflect.get(
+          context,
+          phase1ConfigAnnotationsKey,
+        );
+        const internalAnnotations =
+          typeof internalAnnotationsGetter === "function"
+            ? internalAnnotationsGetter.call(
+              context,
+              contextParsed,
+              result,
+            ) as (Annotations | undefined)
+            : undefined;
+        return internalAnnotations == null
+          ? result
+          : mergeAnnotations([result, internalAnnotations]);
+      },
     );
-    const internalAnnotations = typeof internalAnnotationsGetter === "function"
-      ? internalAnnotationsGetter.call(
-        context,
-        contextParsed,
-        result,
-      ) as (Annotations | undefined)
-      : undefined;
-    annotationsList.push(
-      internalAnnotations == null
-        ? result
-        : mergeAnnotations([result, internalAnnotations]),
-    );
+    annotationsList.push(mergedAnnotations);
   }
 
   return mergeAnnotations(annotationsList);
