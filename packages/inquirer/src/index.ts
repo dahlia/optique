@@ -960,7 +960,11 @@ export function prompt<M extends Mode, TValue, TState>(
     complete: (state): Promise<ValueParserResult<TValue>> => {
       if (isPromptBindState(state) && state.hasCliValue) {
         // Inner parser consumed CLI tokens — delegate to it directly.
-        const r = parser.complete(state.cliState!);
+        const r = withAnnotatedInnerState(
+          state,
+          state.cliState!,
+          (annotatedInnerState) => parser.complete(annotatedInnerState),
+        );
         if (r instanceof Promise) {
           return r as Promise<ValueParserResult<TValue>>;
         }

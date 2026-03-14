@@ -2157,5 +2157,83 @@ describe("prompt()", () => {
       assert.equal(result.value, "state");
       assert.equal(promptCalls, 0);
     });
+
+    it("preserves annotations for CLI-backed non-plain inner states", async () => {
+      const marker = Symbol.for("@test/prompt-cli-class-state");
+      let promptCalls = 0;
+
+      class MutableAnnotatedState {
+        #value: string | undefined;
+
+        setValue(value: string): void {
+          this.#value = value;
+        }
+
+        read(): string | undefined {
+          return this.#value;
+        }
+      }
+
+      const inner: Parser<"async", string, MutableAnnotatedState> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly MutableAnnotatedState[],
+        priority: 1,
+        usage: [],
+        initialState: new MutableAnnotatedState(),
+        parse(context) {
+          const [head, ...rest] = context.buffer;
+          if (head == null) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`missing`,
+            });
+          }
+          context.state.setValue(head);
+          return Promise.resolve({
+            success: true as const,
+            next: { ...context, buffer: rest, state: context.state },
+            consumed: [head],
+          });
+        },
+        complete(state) {
+          const annotated = getAnnotations(state)?.[marker] === "annotated";
+          const value = state.read();
+          return Promise.resolve(
+            annotated && value != null
+              ? { success: true as const, value }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
+
+      const result = await parseAsync(parser, ["cli-value"], {
+        annotations: { [marker]: "annotated" } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      assert.equal(result.value, "cli-value");
+      assert.equal(promptCalls, 0);
+    });
   });
 });
