@@ -58,6 +58,22 @@ export type { ParserValuePlaceholder, SourceContext };
 const phase1ConfigAnnotationsKey = Symbol.for(
   "@optique/config/phase1PromptAnnotations",
 );
+const phase2UndefinedParsedValueKey = Symbol.for(
+  "@optique/config/phase2UndefinedParsedValue",
+);
+
+function prepareParsedForContext(
+  context: SourceContext<unknown>,
+  parsed: unknown,
+): unknown {
+  if (
+    parsed !== undefined ||
+    !Reflect.has(context, phase1ConfigAnnotationsKey)
+  ) {
+    return parsed;
+  }
+  return { [phase2UndefinedParsedValueKey]: true };
+}
 
 /**
  * Helper types for parser generation
@@ -2222,7 +2238,8 @@ async function collectAnnotations(
   const annotationsList: Annotations[] = [];
 
   for (const context of contexts) {
-    const result = context.getAnnotations(parsed, options);
+    const contextParsed = prepareParsedForContext(context, parsed);
+    const result = context.getAnnotations(contextParsed, options);
     const annotations = result instanceof Promise ? await result : result;
     const internalAnnotationsGetter = Reflect.get(
       context,
@@ -2231,7 +2248,7 @@ async function collectAnnotations(
     const internalAnnotations = typeof internalAnnotationsGetter === "function"
       ? internalAnnotationsGetter.call(
         context,
-        parsed,
+        contextParsed,
         annotations,
       ) as (Annotations | undefined)
       : undefined;
@@ -2333,7 +2350,8 @@ function collectAnnotationsSync(
   const annotationsList: Annotations[] = [];
 
   for (const context of contexts) {
-    const result = context.getAnnotations(parsed, options);
+    const contextParsed = prepareParsedForContext(context, parsed);
+    const result = context.getAnnotations(contextParsed, options);
     if (result instanceof Promise) {
       throw new Error(
         `Context ${String(context.id)} returned a Promise in sync mode. ` +
@@ -2347,7 +2365,7 @@ function collectAnnotationsSync(
     const internalAnnotations = typeof internalAnnotationsGetter === "function"
       ? internalAnnotationsGetter.call(
         context,
-        parsed,
+        contextParsed,
         result,
       ) as (Annotations | undefined)
       : undefined;

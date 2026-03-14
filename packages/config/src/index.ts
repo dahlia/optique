@@ -27,6 +27,9 @@ const deferPromptUntilConfigResolvesKey = Symbol.for(
 const phase1ConfigAnnotationsKey = Symbol.for(
   "@optique/config/phase1PromptAnnotations",
 );
+const phase2UndefinedParsedValueKey = Symbol.for(
+  "@optique/config/phase2UndefinedParsedValue",
+);
 const deferredPromptValueKey = Symbol.for(
   "@optique/inquirer/deferredPromptValue",
 );
@@ -71,6 +74,12 @@ function isDeferredPromptValue(value: unknown): boolean {
     deferredPromptValueKey in value;
 }
 
+function isPhase2UndefinedParsedValue(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    phase2UndefinedParsedValueKey in value;
+}
+
 function isPlainObject(value: object): boolean {
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
@@ -79,10 +88,9 @@ function isPlainObject(value: object): boolean {
 function stripDeferredPromptValues<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
-  isRoot = true,
 ): T {
   if (isDeferredPromptValue(value)) {
-    return (isRoot ? value : undefined) as T;
+    return undefined as T;
   }
   if (value == null || typeof value !== "object") {
     return value;
@@ -95,7 +103,7 @@ function stripDeferredPromptValues<T>(
     const clone: unknown[] = new Array(value.length);
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
-      clone[i] = stripDeferredPromptValues(value[i], seen, false);
+      clone[i] = stripDeferredPromptValues(value[i], seen);
     }
     return clone as T;
   }
@@ -115,7 +123,6 @@ function stripDeferredPromptValues<T>(
       descriptor.value = stripDeferredPromptValues(
         descriptor.value,
         seen,
-        false,
       );
     }
     Object.defineProperty(clone, key, descriptor);
@@ -391,9 +398,10 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
       // At runtime, `parsed` is the actual parser value.  The
       // ParserValuePlaceholder brand is compile-time only.
-      const parsedValue = stripDeferredPromptValues(
-        parsed,
-      ) as ParserValuePlaceholder;
+      const parsedValue: unknown = isPhase2UndefinedParsedValue(parsed)
+        ? undefined
+        : stripDeferredPromptValues(parsed);
+      const parsedPlaceholder = parsedValue as ParserValuePlaceholder;
 
       const buildAnnotations = (
         configData: T | undefined,
@@ -435,7 +443,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
       if (opts.load) {
         // Custom load mode
-        const loaded = opts.load(parsedValue);
+        const loaded = opts.load(parsedPlaceholder);
         if (loaded instanceof Promise) {
           return loaded.then(({ config, meta }) =>
             validateAndBuildAnnotations(config, meta)
@@ -447,7 +455,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
       if (opts.getConfigPath) {
         // Single-file mode
-        const configPath = opts.getConfigPath(parsedValue);
+        const configPath = opts.getConfigPath(parsedPlaceholder);
 
         if (!configPath) {
           return {};

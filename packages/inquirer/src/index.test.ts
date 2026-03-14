@@ -959,6 +959,38 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 2);
     });
 
+    it("hides top-level deferred prompt values from config loaders", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let loaderParsed: string | undefined;
+      const parser = prompt(
+        bindConfig(option("--api-key", string()), {
+          context,
+          key: "apiKey",
+        }),
+        {
+          type: "password",
+          message: "API key:",
+          prompter: () => Promise.resolve("prompt-secret"),
+        },
+      );
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          loaderParsed = parsed as string | undefined;
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.equal(loaderParsed, undefined);
+      assert.equal(result, "config-secret");
+    });
+
     it("hides deferred config-backed prompt values from config loaders", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
