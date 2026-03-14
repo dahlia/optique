@@ -200,12 +200,17 @@ function withTemporaryAnnotations<T>(
     }
   };
 
-  const result = run(state);
-  if (result instanceof Promise) {
-    return result.finally(restore) as T;
+  try {
+    const result = run(state);
+    if (result instanceof Promise) {
+      return result.finally(restore) as T;
+    }
+    restore();
+    return result;
+  } catch (error) {
+    restore();
+    throw error;
   }
-  restore();
-  return result;
 }
 
 function withAnnotatedInnerState<TState, TResult>(
