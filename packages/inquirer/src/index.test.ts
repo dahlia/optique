@@ -2331,5 +2331,71 @@ describe("prompt()", () => {
       assert.equal(result.value, "cli-value");
       assert.equal(promptCalls, 0);
     });
+
+    it("restores temporary annotations when inner parse throws", async () => {
+      const marker = Symbol.for("@test/prompt-throw-state");
+      let promptCalls = 0;
+
+      class ThrowingState {}
+
+      const inner: Parser<"async", string, ThrowingState> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly ThrowingState[],
+        priority: 1,
+        usage: [],
+        initialState: new ThrowingState(),
+        parse(context) {
+          if (getAnnotations(context.state)?.[marker] === "annotated") {
+            throw new Error("boom");
+          }
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`missing`,
+          });
+        },
+        complete(state) {
+          return Promise.resolve(
+            getAnnotations(state)?.[marker] === "annotated"
+              ? { success: true as const, value: "annotated-state" }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
+
+      await assert.rejects(
+        async () => {
+          await parseAsync(parser, ["cli"], {
+            annotations: { [marker]: "annotated" } satisfies Annotations,
+          });
+        },
+        /boom/,
+      );
+
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "prompted");
+      assert.equal(promptCalls, 1);
+    });
   });
 });
