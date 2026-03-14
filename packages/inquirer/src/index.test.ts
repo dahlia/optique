@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { annotationKey } from "@optique/core/annotations";
+import {
+  annotationKey,
+  type Annotations,
+  getAnnotations,
+} from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
@@ -2089,6 +2093,69 @@ describe("prompt()", () => {
 
       assert.equal(seenStates[0], -7);
       assert.equal(seenStates[1], -7);
+    });
+
+    it("preserves annotations for non-plain inner states", async () => {
+      const marker = Symbol.for("@test/prompt-class-state");
+      let promptCalls = 0;
+
+      class AnnotatedState {
+        #value = "state";
+
+        read(): string {
+          return this.#value;
+        }
+      }
+
+      const inner: Parser<"async", string, AnnotatedState> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly AnnotatedState[],
+        priority: 1,
+        usage: [],
+        initialState: new AnnotatedState(),
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state) {
+          return Promise.resolve(
+            getAnnotations(state)?.[marker] === "annotated"
+              ? { success: true as const, value: state.read() }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
+
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "annotated" } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      assert.equal(result.value, "state");
+      assert.equal(promptCalls, 0);
     });
   });
 });

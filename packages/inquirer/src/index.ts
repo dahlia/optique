@@ -18,6 +18,7 @@ import {
 } from "@inquirer/prompts";
 import {
   annotationKey,
+  type Annotations,
   getAnnotations,
   inheritAnnotations,
 } from "@optique/core/annotations";
@@ -158,6 +159,80 @@ function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
     success: true,
     value: new DeferredPromptValue() as TValue,
   };
+}
+
+function withTemporaryAnnotations<T>(
+  state: unknown,
+  annotations: Annotations | undefined,
+  run: (annotatedState: unknown) => T,
+): T {
+  if (
+    annotations == null || state == null || typeof state !== "object" ||
+    annotationKey in state
+  ) {
+    return run(state);
+  }
+
+  const hadOwnAnnotation = Object.prototype.hasOwnProperty.call(
+    state,
+    annotationKey,
+  );
+  const previousDescriptor = hadOwnAnnotation
+    ? Object.getOwnPropertyDescriptor(state, annotationKey)
+    : undefined;
+
+  try {
+    Object.defineProperty(state, annotationKey, {
+      value: annotations,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  } catch {
+    return run(state);
+  }
+
+  const restore = (): void => {
+    if (previousDescriptor != null) {
+      Object.defineProperty(state, annotationKey, previousDescriptor);
+    } else {
+      delete (state as { [annotationKey]?: Annotations })[annotationKey];
+    }
+  };
+
+  const result = run(state);
+  if (result instanceof Promise) {
+    return result.finally(restore) as T;
+  }
+  restore();
+  return result;
+}
+
+function withAnnotatedInnerState<TState, TResult>(
+  sourceState: unknown,
+  innerState: TState,
+  run: (annotatedState: TState) => TResult,
+): TResult {
+  const annotations = getAnnotations(sourceState);
+  if (
+    annotations == null ||
+    innerState == null ||
+    typeof innerState !== "object" ||
+    (typeof innerState === "object" && annotationKey in innerState)
+  ) {
+    return run(innerState);
+  }
+
+  const inheritedState = inheritAnnotations(sourceState, innerState);
+  if (inheritedState !== innerState) {
+    return run(inheritedState);
+  }
+
+  return withTemporaryAnnotations(
+    innerState,
+    annotations,
+    (annotatedState) => run(annotatedState as TState),
+  );
 }
 
 // ---- Choice types ----
@@ -818,21 +893,14 @@ export function prompt<M extends Mode, TValue, TState>(
           ? (context.state.cliState as TState)
           : parser.initialState)
         : context.state;
+      const baseInnerContext = innerState !== context.state
+        ? { ...context, state: innerState }
+        : context;
       // Propagate annotations into the inner context state so that source-
       // binding wrappers (bindEnv, bindConfig) can carry them through into
       // their output state.  This is necessary when parse() is called with
       // an annotation-injected initial state (via parseAsync options) and
       // innerState would otherwise be undefined/null, losing the annotations.
-      const innerStateWithAnnotations: TState = annotations != null &&
-          (innerState == null ||
-            (typeof innerState === "object" &&
-              !(annotationKey in (innerState as object))))
-        ? inheritAnnotations(context.state, innerState)
-        : innerState;
-      const innerContext = innerStateWithAnnotations !== context.state
-        ? { ...context, state: innerStateWithAnnotations }
-        : context;
-
       const processResult = (
         result: ParserResult<TState>,
       ): ParserResult<TState> => {
@@ -868,12 +936,21 @@ export function prompt<M extends Mode, TValue, TState>(
         } as unknown as TState;
         return {
           success: true,
-          next: { ...innerContext, state: nextState },
+          next: { ...baseInnerContext, state: nextState },
           consumed: [],
         };
       };
 
-      const result = parser.parse(innerContext);
+      const result = withAnnotatedInnerState(
+        context.state,
+        innerState,
+        (annotatedInnerState) => {
+          const innerContext = annotatedInnerState !== context.state
+            ? { ...context, state: annotatedInnerState }
+            : context;
+          return parser.parse(innerContext);
+        },
+      );
       if (result instanceof Promise) {
         return result.then(processResult);
       }
@@ -908,8 +985,11 @@ export function prompt<M extends Mode, TValue, TState>(
           return cached;
         }
         // First call: try inner parser, fall back to prompt if it fails.
-        const innerState = parser.initialState;
-        const r = parser.complete(innerState);
+        const r = withAnnotatedInnerState(
+          state,
+          parser.initialState,
+          (annotatedInnerState) => parser.complete(annotatedInnerState),
+        );
         const cachedResult = r instanceof Promise
           ? (r as Promise<ValueParserResult<TValue>>).then((res) =>
             usePromptOrDefer(state, res)
@@ -930,10 +1010,18 @@ export function prompt<M extends Mode, TValue, TState>(
       const cliStateHasAnnotations = cliState != null &&
         typeof cliState === "object" &&
         annotationKey in (cliState as object);
+      const outerAnnotationsAvailable = getAnnotations(state) != null;
 
-      if (cliStateHasAnnotations) {
-        const innerState = cliState as TState;
-        const r = parser.complete(innerState);
+      if (
+        cliState != null &&
+        (cliStateHasAnnotations ||
+          (outerAnnotationsAvailable && typeof cliState === "object"))
+      ) {
+        const r = withAnnotatedInnerState(
+          state,
+          cliState as TState,
+          (annotatedInnerState) => parser.complete(annotatedInnerState),
+        );
         if (r instanceof Promise) {
           return (r as Promise<ValueParserResult<TValue>>).then((res) =>
             usePromptOrDefer(state, res)
