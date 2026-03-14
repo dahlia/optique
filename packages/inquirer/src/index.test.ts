@@ -17,7 +17,7 @@ import {
   type Suggestion,
 } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
-import { multiple, optional } from "@optique/core/modifiers";
+import { map, multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
@@ -1079,6 +1079,50 @@ describe("prompt()", () => {
 
       assert.deepEqual(loaderParsed, { apiKey: undefined });
       assert.deepEqual(result, { apiKey: "config-secret" });
+    });
+
+    it("hides deferred prompt values inside non-plain loader inputs", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      class ConfigInput {
+        constructor(readonly apiKey: string | undefined) {}
+      }
+
+      let loaderParsed: ConfigInput | undefined;
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => new ConfigInput(value.apiKey),
+      );
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          loaderParsed = parsed as ConfigInput;
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.ok(loaderParsed instanceof ConfigInput);
+      assert.equal(loaderParsed.apiKey, undefined);
+      assert.ok(result instanceof ConfigInput);
+      assert.equal(result.apiKey, "config-secret");
     });
   });
 

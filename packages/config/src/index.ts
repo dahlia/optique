@@ -85,6 +85,74 @@ function isPlainObject(value: object): boolean {
   return proto === Object.prototype || proto === null;
 }
 
+function containsDeferredPromptValues(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): boolean {
+  if (isDeferredPromptValue(value)) {
+    return true;
+  }
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return value.some((item) => containsDeferredPromptValues(item, seen));
+  }
+  if (value instanceof Map) {
+    for (const [key, entryValue] of value) {
+      if (
+        containsDeferredPromptValues(key, seen) ||
+        containsDeferredPromptValues(entryValue, seen)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      descriptor != null &&
+      "value" in descriptor &&
+      containsDeferredPromptValues(descriptor.value, seen)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function createSanitizedNonPlainView<T extends object>(
+  value: T,
+  seen: WeakMap<object, unknown>,
+): T {
+  const proxy = new Proxy(value, {
+    get(target, key, receiver) {
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor != null && "value" in descriptor) {
+        return stripDeferredPromptValues(descriptor.value, seen);
+      }
+      return Reflect.get(target, key, receiver);
+    },
+    getOwnPropertyDescriptor(target, key) {
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor == null || !("value" in descriptor)) {
+        return descriptor;
+      }
+      return {
+        ...descriptor,
+        value: stripDeferredPromptValues(descriptor.value, seen),
+      };
+    },
+  });
+  seen.set(value, proxy);
+  return proxy;
+}
+
 function stripDeferredPromptValues<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
@@ -107,8 +175,24 @@ function stripDeferredPromptValues<T>(
     }
     return clone as T;
   }
+  if (value instanceof Map) {
+    if (!containsDeferredPromptValues(value)) {
+      return value;
+    }
+    const clone = new Map<unknown, unknown>();
+    seen.set(value, clone);
+    for (const [key, entryValue] of value) {
+      clone.set(
+        stripDeferredPromptValues(key, seen),
+        stripDeferredPromptValues(entryValue, seen),
+      );
+    }
+    return clone as T;
+  }
   if (!isPlainObject(value)) {
-    return value;
+    return containsDeferredPromptValues(value)
+      ? createSanitizedNonPlainView(value, seen) as T
+      : value;
   }
   const clone: Record<PropertyKey, unknown> = Object.create(
     Object.getPrototypeOf(value),
