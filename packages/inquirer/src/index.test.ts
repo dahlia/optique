@@ -697,6 +697,53 @@ describe("prompt()", () => {
       assert.equal(result.value.name, "env-name");
     });
 
+    it("skips prompt when bindEnv(bindConfig(...)) resolves from config", async () => {
+      const envContext = createEnvContext({
+        source: () => undefined,
+      });
+      const configContext = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let promptCalls = 0;
+      const parser = prompt(
+        bindEnv(
+          bindConfig(option("--api-key", string()), {
+            context: configContext,
+            key: "apiKey",
+          }),
+          {
+            context: envContext,
+            key: "API_KEY",
+            parser: string(),
+          },
+        ),
+        {
+          type: "password",
+          message: "API key:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("prompt-secret");
+          },
+        },
+      );
+
+      const result = await runWith(
+        parser,
+        "test",
+        [envContext, configContext],
+        {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+          args: [],
+        },
+      );
+
+      assert.equal(result, "config-secret");
+      assert.equal(promptCalls, 0);
+    });
+
     it("prompts when bindEnv() has no value and env var is absent", async () => {
       // prompt(bindEnv(...)) must fall back to the interactive prompt when
       // the CLI option is absent and the environment variable is not set.
