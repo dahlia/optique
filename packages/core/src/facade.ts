@@ -187,6 +187,33 @@ function finalizeParsedForContext(
   return { [phase2UndefinedParsedValueKey]: true };
 }
 
+function createSanitizedNonPlainContextView<T extends object>(
+  value: T,
+  seen: WeakMap<object, unknown>,
+): T {
+  const proxy = new Proxy(value, {
+    get(target, key, receiver) {
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor != null && "value" in descriptor) {
+        return stripDeferredPromptValuesForContexts(descriptor.value, seen);
+      }
+      return Reflect.get(target, key, receiver);
+    },
+    getOwnPropertyDescriptor(target, key) {
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor == null || !("value" in descriptor)) {
+        return descriptor;
+      }
+      return {
+        ...descriptor,
+        value: stripDeferredPromptValuesForContexts(descriptor.value, seen),
+      };
+    },
+  });
+  seen.set(value, proxy);
+  return proxy;
+}
+
 function withPreparedParsedForContext<T>(
   context: SourceContext<unknown>,
   parsed: unknown,
@@ -211,49 +238,15 @@ function withPreparedParsedForContext<T>(
     return run(finalizeParsedForContext(context, parsed));
   }
 
-  const previousDescriptors = new Map<PropertyKey, PropertyDescriptor>();
-  try {
-    for (const key of Reflect.ownKeys(parsed)) {
-      const descriptor = Object.getOwnPropertyDescriptor(parsed, key);
-      if (descriptor == null || !("value" in descriptor)) {
-        continue;
-      }
-      const sanitizedValue = stripDeferredPromptValuesForContexts(
-        descriptor.value,
-      );
-      if (sanitizedValue === descriptor.value) {
-        continue;
-      }
-      previousDescriptors.set(key, descriptor);
-      Object.defineProperty(parsed, key, {
-        ...descriptor,
-        value: sanitizedValue,
-      });
-    }
-  } catch {
-    for (const [key, descriptor] of previousDescriptors) {
-      Object.defineProperty(parsed, key, descriptor);
-    }
-    return run(finalizeParsedForContext(context, parsed));
-  }
-
-  const restore = (): void => {
-    for (const [key, descriptor] of previousDescriptors) {
-      Object.defineProperty(parsed, key, descriptor);
-    }
-  };
-
-  try {
-    const result = run(finalizeParsedForContext(context, parsed));
-    if (result instanceof Promise) {
-      return result.finally(restore) as T;
-    }
-    restore();
-    return result;
-  } catch (error) {
-    restore();
-    throw error;
-  }
+  return run(
+    finalizeParsedForContext(
+      context,
+      createSanitizedNonPlainContextView(
+        parsed,
+        new WeakMap<object, unknown>(),
+      ),
+    ),
+  );
 }
 
 /**

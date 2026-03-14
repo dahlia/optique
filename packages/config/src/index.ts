@@ -130,6 +130,9 @@ function createSanitizedNonPlainView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
+  // FIXME: This proxy still changes method receiver semantics for non-plain
+  // parsed values, so private-field-backed methods can break in config
+  // loaders. See: https://github.com/dahlia/optique/issues/307
   const proxy = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
