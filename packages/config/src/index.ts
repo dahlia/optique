@@ -102,6 +102,14 @@ function containsDeferredPromptValues(
   if (Array.isArray(value)) {
     return value.some((item) => containsDeferredPromptValues(item, seen));
   }
+  if (value instanceof Set) {
+    for (const entryValue of value) {
+      if (containsDeferredPromptValues(entryValue, seen)) {
+        return true;
+      }
+    }
+    return false;
+  }
   if (value instanceof Map) {
     for (const [key, entryValue] of value) {
       if (
@@ -175,6 +183,14 @@ function stripDeferredPromptValues<T>(
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
       clone[i] = stripDeferredPromptValues(value[i], seen);
+    }
+    return clone as T;
+  }
+  if (value instanceof Set) {
+    const clone = new Set<unknown>();
+    seen.set(value, clone);
+    for (const entryValue of value) {
+      clone.add(stripDeferredPromptValues(entryValue, seen));
     }
     return clone as T;
   }

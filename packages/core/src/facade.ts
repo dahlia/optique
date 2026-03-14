@@ -95,6 +95,14 @@ function containsDeferredPromptValuesForContexts(
       containsDeferredPromptValuesForContexts(item, seen)
     );
   }
+  if (value instanceof Set) {
+    for (const entryValue of value) {
+      if (containsDeferredPromptValuesForContexts(entryValue, seen)) {
+        return true;
+      }
+    }
+    return false;
+  }
   if (value instanceof Map) {
     for (const [key, entryValue] of value) {
       if (
@@ -138,6 +146,14 @@ function stripDeferredPromptValuesForContexts<T>(
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
       clone[i] = stripDeferredPromptValuesForContexts(value[i], seen);
+    }
+    return clone as T;
+  }
+  if (value instanceof Set) {
+    const clone = new Set<unknown>();
+    seen.set(value, clone);
+    for (const entryValue of value) {
+      clone.add(stripDeferredPromptValuesForContexts(entryValue, seen));
     }
     return clone as T;
   }
@@ -224,6 +240,7 @@ function withPreparedParsedForContext<T>(
     typeof parsed !== "object" ||
     Array.isArray(parsed) ||
     isPlainObject(parsed) ||
+    parsed instanceof Set ||
     parsed instanceof Map
   ) {
     return run(

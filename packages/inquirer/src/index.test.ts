@@ -1075,6 +1075,53 @@ describe("prompt()", () => {
       },
     );
 
+    it("hides deferred prompt values inside Set phase-two context inputs", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      let phase2Values: readonly unknown[] | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/set-phase-two"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed instanceof Set) {
+            phase2Values = [...parsed];
+          }
+          return {};
+        },
+      };
+
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => new Set([value.apiKey]),
+      );
+
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        load: () => ({
+          config: { apiKey: "config-secret" },
+          meta: undefined,
+        }),
+      });
+
+      assert.deepEqual(phase2Values, [undefined]);
+      assert.ok(result instanceof Set);
+      assert.deepEqual([...result], ["config-secret"]);
+    });
+
     it("hides top-level deferred prompt values from config loaders", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
@@ -1139,6 +1186,46 @@ describe("prompt()", () => {
 
       assert.deepEqual(loaderParsed, { apiKey: undefined });
       assert.deepEqual(result, { apiKey: "config-secret" });
+    });
+
+    it("hides deferred prompt values inside Set loader inputs", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let loaderValues: readonly unknown[] | undefined;
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => new Set([value.apiKey]),
+      );
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          if (parsed instanceof Set) {
+            loaderValues = [...parsed];
+          }
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.deepEqual(loaderValues, [undefined]);
+      assert.ok(result instanceof Set);
+      assert.deepEqual([...result], ["config-secret"]);
     });
   });
 
