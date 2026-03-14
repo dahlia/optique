@@ -61,16 +61,76 @@ const phase1ConfigAnnotationsKey = Symbol.for(
 const phase2UndefinedParsedValueKey = Symbol.for(
   "@optique/config/phase2UndefinedParsedValue",
 );
+const deferredPromptValueKey = Symbol.for(
+  "@optique/inquirer/deferredPromptValue",
+);
+
+function isDeferredPromptValue(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    deferredPromptValueKey in value;
+}
+
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function stripDeferredPromptValuesForContexts<T>(
+  value: T,
+  seen = new WeakMap<object, unknown>(),
+): T {
+  if (isDeferredPromptValue(value)) {
+    return undefined as T;
+  }
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  const cached = seen.get(value);
+  if (cached !== undefined) {
+    return cached as T;
+  }
+  if (Array.isArray(value)) {
+    const clone: unknown[] = new Array(value.length);
+    seen.set(value, clone);
+    for (let i = 0; i < value.length; i++) {
+      clone[i] = stripDeferredPromptValuesForContexts(value[i], seen);
+    }
+    return clone as T;
+  }
+  if (!isPlainObject(value)) {
+    return value;
+  }
+  const clone: Record<PropertyKey, unknown> = Object.create(
+    Object.getPrototypeOf(value),
+  );
+  seen.set(value, clone);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor == null) {
+      continue;
+    }
+    if ("value" in descriptor) {
+      descriptor.value = stripDeferredPromptValuesForContexts(
+        descriptor.value,
+        seen,
+      );
+    }
+    Object.defineProperty(clone, key, descriptor);
+  }
+  return clone as T;
+}
 
 function prepareParsedForContext(
   context: SourceContext<unknown>,
   parsed: unknown,
 ): unknown {
+  const sanitizedParsed = stripDeferredPromptValuesForContexts(parsed);
   if (
-    parsed !== undefined ||
+    sanitizedParsed !== undefined ||
     !Reflect.has(context, phase1ConfigAnnotationsKey)
   ) {
-    return parsed;
+    return sanitizedParsed;
   }
   return { [phase2UndefinedParsedValueKey]: true };
 }

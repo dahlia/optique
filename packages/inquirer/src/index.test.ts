@@ -963,6 +963,58 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 2);
     });
 
+    it(
+      "hides deferred config-backed prompts from other phase-two contexts",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let phase2Parsed: { readonly apiKey?: string | undefined } | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/config-prompt-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed === undefined) {
+              return {};
+            }
+            phase2Parsed = parsed as {
+              readonly apiKey?: string | undefined;
+            };
+            return {};
+          },
+        };
+        const parser = object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        });
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
+        );
+
+        assert.deepEqual(phase2Parsed, { apiKey: undefined });
+        assert.deepEqual(result, { apiKey: "config-secret" });
+      },
+    );
+
     it("hides top-level deferred prompt values from config loaders", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
