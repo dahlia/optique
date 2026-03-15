@@ -133,6 +133,81 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(formatUsageTermAsRoff(term), "");
   });
+
+  it("skips terms with hidden: 'usage'", () => {
+    const term: UsageTerm = {
+      type: "argument",
+      metavar: "SECRET",
+      hidden: "usage",
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("skips terms with hidden: 'help'", () => {
+    const term: UsageTerm = {
+      type: "argument",
+      metavar: "SECRET",
+      hidden: "help",
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("keeps terms with hidden: 'doc' visible in usage", () => {
+    const term: UsageTerm = {
+      type: "argument",
+      metavar: "SECRET",
+      hidden: "doc",
+    };
+    assert.equal(formatUsageTermAsRoff(term), "\\fISECRET\\fR");
+  });
+
+  it("collapses optional wrapping all-hidden terms", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "argument", metavar: "SECRET", hidden: true }],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("collapses multiple (min=0) wrapping all-hidden terms", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{ type: "argument", metavar: "SECRET", hidden: true }],
+      min: 0,
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("collapses multiple (min=1) wrapping all-hidden terms", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{ type: "argument", metavar: "SECRET", hidden: true }],
+      min: 1,
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("removes hidden branches from exclusive terms", () => {
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [
+        [{ type: "command", name: "shown" }],
+        [{ type: "command", name: "hidden", hidden: true }],
+      ],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "\\fBshown\\fR");
+  });
+
+  it("collapses exclusive with all-hidden branches", () => {
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [
+        [{ type: "command", name: "a", hidden: true }],
+        [{ type: "command", name: "b", hidden: true }],
+      ],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
 });
 
 describe("formatDocPageAsMan()", () => {

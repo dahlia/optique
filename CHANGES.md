@@ -402,6 +402,21 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
 
+### @optique/man
+
+ -  Fixed `generateManPage()` leaving empty wrappers and dangling separators
+    in SYNOPSIS when hidden terms are nested inside `optional`, `multiple`,
+    or `exclusive` usage nodes.  Empty wrapper nodes are now collapsed and
+    exclusive separators are cleaned up after hidden terms are removed.
+    [[#222], [#526]]
+
+ -  Fixed `formatUsageTermAsRoff()` incorrectly hiding `hidden: "doc"` terms
+    from SYNOPSIS.  Since SYNOPSIS is usage output, only usage-hidden terms
+    (`hidden: true`, `"usage"`, `"help"`) are now suppressed.  [[#222], [#526]]
+
+[#222]: https://github.com/dahlia/optique/issues/222
+[#526]: https://github.com/dahlia/optique/issues/526
+
 
 Version 0.10.7
 --------------

@@ -1,6 +1,6 @@
 import type { DocPage, DocSection } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
-import type { Usage, UsageTerm } from "@optique/core/usage";
+import { isUsageHidden, type Usage, type UsageTerm } from "@optique/core/usage";
 import { escapeHyphens, formatMessageAsRoff } from "./roff.ts";
 
 /**
@@ -133,8 +133,8 @@ function escapeThField(value: string): string {
  * @since 0.10.0
  */
 export function formatUsageTermAsRoff(term: UsageTerm): string {
-  // Skip hidden terms
-  if ("hidden" in term && term.hidden) return "";
+  // Skip usage-hidden terms
+  if ("hidden" in term && isUsageHidden(term.hidden)) return "";
 
   switch (term.type) {
     case "argument":
@@ -153,11 +153,13 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
 
     case "optional": {
       const inner = formatUsageAsRoff(term.terms);
+      if (inner === "") return "";
       return `[${inner}]`;
     }
 
     case "multiple": {
       const inner = formatUsageAsRoff(term.terms);
+      if (inner === "") return "";
       if (term.min < 1) {
         return `[${inner} ...]`;
       }
@@ -167,8 +169,10 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
     case "exclusive": {
       const alternatives = term.terms
         .map((t) => formatUsageAsRoff(t))
-        .join(" | ");
-      return `(${alternatives})`;
+        .filter((s) => s !== "");
+      if (alternatives.length === 0) return "";
+      if (alternatives.length === 1) return alternatives[0];
+      return `(${alternatives.join(" | ")})`;
     }
 
     case "literal":
