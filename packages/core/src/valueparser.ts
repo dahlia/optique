@@ -290,19 +290,13 @@ export function choice<const T extends string | number>(
     // Number choice implementation
     const numberChoices = choices as readonly number[];
     const numberOptions = options as ChoiceOptionsNumber;
+    const numberStrings = numberChoices.map((v) => String(v));
     return {
       $mode: "sync",
       metavar,
       choices: choices as readonly T[],
       parse(input: string): ValueParserResult<T> {
-        const parsed = Number(input);
-        if (Number.isNaN(parsed)) {
-          return {
-            success: false,
-            error: formatNumberChoiceError(input, numberChoices, numberOptions),
-          };
-        }
-        const index = numberChoices.indexOf(parsed);
+        const index = numberStrings.indexOf(input);
         if (index < 0) {
           return {
             success: false,

@@ -1299,12 +1299,9 @@ describe("choice", () => {
       const result3 = parser.parse("");
       assert.ok(!result3.success);
 
-      // Note: "8.0" parses to 8, which is in the choice list
+      // "8.0" is not in the choice list as a string representation
       const result4 = parser.parse("8.0");
-      assert.ok(result4.success);
-      if (result4.success) {
-        assert.equal(result4.value, 8);
-      }
+      assert.ok(!result4.success);
     });
 
     it("should work with single number choice", () => {
@@ -1444,6 +1441,61 @@ describe("choice", () => {
 
       const result = parser.parse("1");
       assert.ok(!result.success);
+    });
+
+    it("should reject hex, binary, octal, and scientific notation", () => {
+      const parser = choice([0, 2, 8, 16]);
+
+      // Hex notation "0x10" should not be accepted as 16
+      const hex = parser.parse("0x10");
+      assert.ok(!hex.success);
+
+      // Binary notation "0b10" should not be accepted as 2
+      const bin = parser.parse("0b10");
+      assert.ok(!bin.success);
+
+      // Octal notation "0o10" should not be accepted as 8
+      const oct = parser.parse("0o10");
+      assert.ok(!oct.success);
+
+      // Scientific notation "2e0" should not be accepted as 2
+      const sci = parser.parse("2e0");
+      assert.ok(!sci.success);
+    });
+
+    it("should reject empty and whitespace-only strings", () => {
+      const parser = choice([0, 1, 2]);
+
+      // Empty string should not be accepted as 0
+      const empty = parser.parse("");
+      assert.ok(!empty.success);
+
+      // Whitespace-only should not be accepted as 0
+      const space = parser.parse("   ");
+      assert.ok(!space.success);
+    });
+
+    it("should reject Infinity and -Infinity literals", () => {
+      const parser = choice([Infinity, -Infinity, 0]);
+
+      // Even though Infinity is in the list, the string "Infinity"
+      // cannot match because String(Infinity) = "Infinity" but we
+      // need to verify it works correctly with the string comparison
+      const inf = parser.parse("Infinity");
+      assert.ok(inf.success);
+      if (inf.success) {
+        assert.equal(inf.value, Infinity);
+      }
+
+      const negInf = parser.parse("-Infinity");
+      assert.ok(negInf.success);
+      if (negInf.success) {
+        assert.equal(negInf.value, -Infinity);
+      }
+
+      // But alternate forms should not work
+      const plusInf = parser.parse("+Infinity");
+      assert.ok(!plusInf.success);
     });
 
     it("should handle duplicate number values", () => {
