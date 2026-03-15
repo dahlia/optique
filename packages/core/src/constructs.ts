@@ -5653,22 +5653,35 @@ function tryParseSuggestList(
             tail,
           );
           if (next === null) return { ...context, state: stateArray };
-          // A tail parser consumed — restart the loop on the updated context.
+          // A tail parser consumed — restart the loop on the updated
+          // context, but only if the buffer actually shrank; otherwise
+          // we'd re-enter with the same state and recurse infinitely.
           if (
             typeof next === "object" && "then" in next &&
             typeof next.then === "function"
           ) {
             return (next as Promise<ParserContext<readonly unknown[]>>)
               .then((ctx) =>
-                preParseSuggestLoop(ctx, stateArray, parsers, matchedParsers)
+                ctx.buffer.length < context.buffer.length
+                  ? preParseSuggestLoop(
+                    ctx,
+                    stateArray,
+                    parsers,
+                    matchedParsers,
+                  )
+                  : ctx
               );
           }
-          return preParseSuggestLoop(
-            next as ParserContext<readonly unknown[]>,
-            stateArray,
-            parsers,
-            matchedParsers,
-          );
+          const nextCtx = next as ParserContext<readonly unknown[]>;
+          if (nextCtx.buffer.length < context.buffer.length) {
+            return preParseSuggestLoop(
+              nextCtx,
+              stateArray,
+              parsers,
+              matchedParsers,
+            );
+          }
+          return nextCtx;
         });
     }
 
