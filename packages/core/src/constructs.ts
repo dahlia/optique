@@ -5483,6 +5483,31 @@ type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
   : readonly unknown[];
 
 /**
+ * Builds a dependency registry from the pre-parsed context state and returns
+ * the enriched context alongside the state array.  Used by both the sync and
+ * async branches of `concat().suggest()`.
+ * @internal
+ */
+function buildSuggestRegistry(
+  preParsedContext: ParserContext<readonly unknown[]>,
+): {
+  context: ParserContext<readonly unknown[]>;
+  stateArray: unknown[] | undefined;
+} {
+  const stateArray = preParsedContext.state as unknown[] | undefined;
+  const registry = preParsedContext.dependencyRegistry
+    ? preParsedContext.dependencyRegistry.clone()
+    : new DependencyRegistry();
+  if (stateArray && Array.isArray(stateArray)) {
+    collectDependencies(stateArray, registry);
+  }
+  return {
+    context: { ...preParsedContext, dependencyRegistry: registry },
+    stateArray,
+  };
+}
+
+/**
  * This helper replays child parsers in priority order (mirroring
  * `concat.parse()`) to accumulate dependency source values for suggestions.
  * @internal
@@ -6018,18 +6043,8 @@ export function concat(
             context,
             parsers,
           );
-          const stateArray = preParsedContext.state as unknown[] | undefined;
-
-          const registry = preParsedContext.dependencyRegistry
-            ? preParsedContext.dependencyRegistry.clone()
-            : new DependencyRegistry();
-          if (stateArray && Array.isArray(stateArray)) {
-            collectDependencies(stateArray, registry);
-          }
-          const contextWithRegistry = {
-            ...preParsedContext,
-            dependencyRegistry: registry,
-          };
+          const { context: contextWithRegistry, stateArray } =
+            buildSuggestRegistry(preParsedContext);
 
           const suggestions: Suggestion[] = [];
 
@@ -6064,18 +6079,9 @@ export function concat(
         context,
         syncParsers,
       );
-      const stateArray = preParsedContext.state as unknown[] | undefined;
-
-      const registry = preParsedContext.dependencyRegistry
-        ? preParsedContext.dependencyRegistry.clone()
-        : new DependencyRegistry();
-      if (stateArray && Array.isArray(stateArray)) {
-        collectDependencies(stateArray, registry);
-      }
-      const contextWithRegistry = {
-        ...preParsedContext,
-        dependencyRegistry: registry,
-      };
+      const { context: contextWithRegistry, stateArray } = buildSuggestRegistry(
+        preParsedContext,
+      );
 
       return (function* () {
         const suggestions: Suggestion[] = [];
