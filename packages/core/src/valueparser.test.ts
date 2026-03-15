@@ -1478,7 +1478,7 @@ describe("choice", () => {
       assert.ok(!space.success);
     });
 
-    it("should accept alternate decimal spellings for large/small numbers", () => {
+    it("should accept alternate decimal and scientific spellings for large/small numbers", () => {
       const parser = choice([1e21, 1e-7, 42]);
 
       // Decimal spelling of 1e21
