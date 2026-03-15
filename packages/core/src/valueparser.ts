@@ -424,6 +424,8 @@ function formatDefaultChoiceError(
  * @param options Configuration options for the string parser.
  * @returns A {@link ValueParser} that parses strings according to the
  *          specified options.
+ * @throws {TypeError} If `options.pattern` is provided but is not a
+ *         `RegExp` instance.
  */
 export function string(
   options: StringOptions = {},
