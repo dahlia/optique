@@ -235,14 +235,7 @@ function withPreparedParsedForContext<T>(
   parsed: unknown,
   run: (prepared: unknown) => T,
 ): T {
-  if (
-    parsed == null ||
-    typeof parsed !== "object" ||
-    Array.isArray(parsed) ||
-    isPlainObject(parsed) ||
-    parsed instanceof Set ||
-    parsed instanceof Map
-  ) {
+  if (parsed == null || typeof parsed !== "object") {
     return run(
       finalizeParsedForContext(
         context,
@@ -253,6 +246,23 @@ function withPreparedParsedForContext<T>(
 
   if (isDeferredPromptValue(parsed)) {
     return run(finalizeParsedForContext(context, undefined));
+  }
+
+  if (
+    Array.isArray(parsed) ||
+    isPlainObject(parsed) ||
+    parsed instanceof Set ||
+    parsed instanceof Map
+  ) {
+    if (!containsDeferredPromptValuesForContexts(parsed)) {
+      return run(finalizeParsedForContext(context, parsed));
+    }
+    return run(
+      finalizeParsedForContext(
+        context,
+        stripDeferredPromptValuesForContexts(parsed),
+      ),
+    );
   }
 
   if (!containsDeferredPromptValuesForContexts(parsed)) {

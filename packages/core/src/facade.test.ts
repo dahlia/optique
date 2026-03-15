@@ -3918,6 +3918,47 @@ describe("runWith", () => {
       assert.equal(result.host, "default");
     });
 
+    it("preserves plain parsed object identity when no scrub is needed", async () => {
+      const seenParsed = new WeakMap<object, true>();
+      let reusedIdentity = false;
+
+      const firstContext: SourceContext = {
+        id: Symbol.for("@test/phase-two-identity-first"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed != null && typeof parsed === "object") {
+            seenParsed.set(parsed as object, true);
+          }
+          return {};
+        },
+      };
+
+      const secondContext: SourceContext = {
+        id: Symbol.for("@test/phase-two-identity-second"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          reusedIdentity = parsed != null &&
+            typeof parsed === "object" &&
+            seenParsed.has(parsed as object);
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      const result = await runWith(
+        parser,
+        "test",
+        [firstContext, secondContext],
+        { args: [] },
+      );
+
+      assert.ok(reusedIdentity);
+      assert.deepEqual(result, { name: "default" });
+    });
+
     it("should handle mixed static and dynamic contexts", async () => {
       const envKey = Symbol.for("@test/env");
       const configKey = Symbol.for("@test/config");
