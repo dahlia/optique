@@ -452,7 +452,7 @@ function expandScientific(s: string): string {
   if (!match) return s;
   const [, rawSign, mantissa, expStr] = match;
   const sign = rawSign === "-" ? "-" : "";
-  const exp = parseInt(expStr);
+  const exp = parseInt(expStr, 10);
   const dotPos = mantissa.indexOf(".");
   const digits = mantissa.replace(".", "");
   const intLen = dotPos >= 0 ? dotPos : digits.length;
