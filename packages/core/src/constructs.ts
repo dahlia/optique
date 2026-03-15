@@ -3499,15 +3499,26 @@ export function object<
     }
     return state;
   };
+  const inheritedFieldStateCache = new WeakMap<
+    object,
+    Map<string | symbol, unknown>
+  >();
   const createFieldStateGetter = (parentState: unknown) => {
-    const cachedStates = new Map<string | symbol, unknown>();
     return (
       field: keyof T,
       parser: Parser<Mode, unknown, unknown>,
     ): unknown => {
       const fieldKey = field as string | symbol;
-      if (cachedStates.has(fieldKey)) {
-        return cachedStates.get(fieldKey);
+      const cache = parentState != null && typeof parentState === "object"
+        ? (inheritedFieldStateCache.get(parentState) ??
+          (() => {
+            const stateCache = new Map<string | symbol, unknown>();
+            inheritedFieldStateCache.set(parentState, stateCache);
+            return stateCache;
+          })())
+        : undefined;
+      if (cache?.has(fieldKey)) {
+        return cache.get(fieldKey);
       }
       const sourceState = parentState != null &&
           typeof parentState === "object" &&
@@ -3515,21 +3526,21 @@ export function object<
         ? (parentState as Record<string | symbol, unknown>)[fieldKey]
         : parser.initialState;
       if (sourceState == null || typeof sourceState !== "object") {
-        cachedStates.set(fieldKey, sourceState);
+        cache?.set(fieldKey, sourceState);
         return sourceState;
       }
       const annotations = getAnnotations(parentState);
       if (
         annotations === undefined || getAnnotations(sourceState) === annotations
       ) {
-        cachedStates.set(fieldKey, sourceState);
+        cache?.set(fieldKey, sourceState);
         return sourceState;
       }
       const inheritedState =
         Reflect.get(parser, inheritParentAnnotationsKey) === true
           ? injectAnnotations(sourceState, annotations)
           : inheritAnnotations(parentState, sourceState);
-      cachedStates.set(fieldKey, inheritedState);
+      cache?.set(fieldKey, inheritedState);
       return inheritedState;
     };
   };
