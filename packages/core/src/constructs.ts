@@ -15,6 +15,7 @@ import {
   injectAnnotations,
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
 import {
   type Message,
@@ -2922,8 +2923,8 @@ function* suggestObjectSync<
   parserPairs: [string | symbol, Parser<"sync", unknown, unknown>][],
 ): Generator<Suggestion> {
   // Build dependency registry from all parsed fields
-  const registry = context.dependencyRegistry instanceof DependencyRegistry
-    ? context.dependencyRegistry
+  const registry = context.dependencyRegistry
+    ? context.dependencyRegistry.clone()
     : new DependencyRegistry();
 
   // Collect dependency values from the current state
@@ -2991,8 +2992,8 @@ async function* suggestObjectAsync<
   parserPairs: readonly [string | symbol, Parser<Mode, unknown, unknown>][],
 ): AsyncGenerator<Suggestion> {
   // Build dependency registry from all parsed fields
-  const registry = context.dependencyRegistry instanceof DependencyRegistry
-    ? context.dependencyRegistry
+  const registry = context.dependencyRegistry
+    ? context.dependencyRegistry.clone()
     : new DependencyRegistry();
 
   // Collect dependency values from the current state
@@ -3052,21 +3053,13 @@ async function* suggestObjectAsync<
 }
 
 /**
- * Resolves deferred parse states in an object's field states.
- * This function builds a dependency registry from DependencySourceState fields
- * and re-parses DeferredParseState fields using the actual dependency values.
- *
- * @param fieldStates A record of field names to their state values
- * @returns The field states with deferred states resolved to their actual values
- * @internal
- */
-/**
  * Recursively collects dependency values from DependencySourceState objects
  * found anywhere in the state tree.
+ * @internal
  */
 function collectDependencies(
   state: unknown,
-  registry: DependencyRegistry,
+  registry: DependencyRegistryLike,
   visited: WeakSet<object> = new WeakSet<object>(),
 ): void {
   if (state === null || state === undefined) return;
@@ -5285,6 +5278,18 @@ export function merge(
         return p.initialState;
       };
 
+      // Build dependency registry from the full merged state so that
+      // derived parsers in one sub-parser can see dependency sources
+      // from another sub-parser.  Clone any caller-supplied registry
+      // to preserve custom DependencyRegistryLike implementations:
+      const registry = context.dependencyRegistry
+        ? context.dependencyRegistry.clone()
+        : new DependencyRegistry();
+      if (context.state && typeof context.state === "object") {
+        collectDependencies(context.state, registry);
+      }
+      const contextWithRegistry = { ...context, dependencyRegistry: registry };
+
       if (isAsync) {
         return (async function* () {
           const suggestions: Suggestion[] = [];
@@ -5294,7 +5299,7 @@ export function merge(
             const parserState = extractState(parser, i);
 
             const parserSuggestions = parser.suggest({
-              ...context,
+              ...contextWithRegistry,
               state: parserState as Parameters<
                 typeof parser.suggest
               >[0]["state"],
@@ -5323,7 +5328,7 @@ export function merge(
           const parserState = extractState(parser, i);
 
           const parserSuggestions = parser.suggest({
-            ...context,
+            ...contextWithRegistry,
             state: parserState as Parameters<typeof parser.suggest>[0]["state"],
           }, prefix);
 
@@ -5468,6 +5473,225 @@ type ConcatTupleValues<TParsers extends ConcatParsers> = TParsers extends
 type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
   true ? ConcatTupleValues<TParsers>
   : readonly unknown[];
+
+/**
+ * Builds a dependency registry from the pre-parsed context state and returns
+ * the enriched context alongside the state array.  Used by both the sync and
+ * async branches of `concat().suggest()`.
+ * @internal
+ */
+function buildSuggestRegistry(
+  preParsedContext: ParserContext<readonly unknown[]>,
+): {
+  context: ParserContext<readonly unknown[]>;
+  stateArray: unknown[] | undefined;
+} {
+  const stateArray = preParsedContext.state as unknown[] | undefined;
+  const registry = preParsedContext.dependencyRegistry
+    ? preParsedContext.dependencyRegistry.clone()
+    : new DependencyRegistry();
+  if (stateArray && Array.isArray(stateArray)) {
+    collectDependencies(stateArray, registry);
+  }
+  return {
+    context: { ...preParsedContext, dependencyRegistry: registry },
+    stateArray,
+  };
+}
+
+/**
+ * This helper replays child parsers in priority order (mirroring
+ * `concat.parse()`) to accumulate dependency source values for suggestions.
+ * @internal
+ */
+function preParseSuggestContext(
+  context: ParserContext<readonly unknown[]>,
+  parsers: readonly Parser<"sync", readonly unknown[], unknown>[],
+): ParserContext<readonly unknown[]> {
+  if (
+    context.buffer.length < 1 || !Array.isArray(context.state)
+  ) {
+    return context;
+  }
+  // All parsers are sync, so the loop never returns a Promise.
+  return preParseSuggestLoop(
+    context,
+    context.state.slice(),
+    parsers,
+  ) as ParserContext<readonly unknown[]>;
+}
+
+/**
+ * Async variant of {@link preParseSuggestContext} that awaits async child
+ * parsers so that dependency sources from async sub-parsers are resolved.
+ * @internal
+ */
+async function preParseSuggestContextAsync(
+  context: ParserContext<readonly unknown[]>,
+  parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
+): Promise<ParserContext<readonly unknown[]>> {
+  if (
+    context.buffer.length < 1 || !Array.isArray(context.state)
+  ) {
+    return context;
+  }
+  return await preParseSuggestLoop(context, context.state.slice(), parsers);
+}
+
+/**
+ * Shared loop for sync and async concat suggest pre-parse.  When a child
+ * parser returns a Promise its result is awaited; sync results are used
+ * directly.  Parsers are tried in priority order, matching `concat.parse()`.
+ * @internal
+ */
+function preParseSuggestLoop(
+  context: ParserContext<readonly unknown[]>,
+  stateArray: unknown[],
+  parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
+  matchedParsers: Set<number> = new Set<number>(),
+):
+  | ParserContext<readonly unknown[]>
+  | Promise<ParserContext<readonly unknown[]>> {
+  const indexedParsers = parsers
+    .map((parser, index) => [parser, index] as [typeof parser, number]);
+
+  let currentContext = context;
+  let changed = true;
+  while (changed && currentContext.buffer.length > 0) {
+    changed = false;
+    const remaining = indexedParsers
+      .filter(([_, index]) => !matchedParsers.has(index))
+      .sort(([a], [b]) => b.priority - a.priority);
+
+    const tried = tryParseSuggestList(
+      currentContext,
+      stateArray,
+      parsers,
+      matchedParsers,
+      remaining,
+    );
+    if (tried === null) continue;
+    // If a Promise was returned, the async chain continues from there.
+    if (
+      typeof tried === "object" && "then" in tried &&
+      typeof tried.then === "function"
+    ) {
+      return tried as Promise<ParserContext<readonly unknown[]>>;
+    }
+    // A sync parser consumed input — restart the outer loop.
+    currentContext = tried as ParserContext<readonly unknown[]>;
+    changed = true;
+  }
+
+  return { ...currentContext, state: stateArray };
+}
+
+/**
+ * Tries each parser in `remaining` once.  Returns the updated context if a
+ * parser consumed input (sync), a Promise that resolves to a context if an
+ * async parser was encountered, or `null` if no parser consumed.
+ * @internal
+ */
+function tryParseSuggestList(
+  context: ParserContext<readonly unknown[]>,
+  stateArray: unknown[],
+  parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
+  matchedParsers: Set<number>,
+  remaining: [Parser<Mode, readonly unknown[], unknown>, number][],
+):
+  | ParserContext<readonly unknown[]>
+  | Promise<ParserContext<readonly unknown[]>>
+  | null {
+  for (let ri = 0; ri < remaining.length; ri++) {
+    const [parser, index] = remaining[ri];
+    const parserState = index < stateArray.length
+      ? stateArray[index]
+      : parser.initialState;
+    const resultOrPromise = parser.parse({
+      ...context,
+      state: parserState,
+    });
+
+    // If the result is a thenable, chain the rest asynchronously.
+    if (
+      resultOrPromise != null && typeof resultOrPromise === "object" &&
+      "then" in resultOrPromise && typeof resultOrPromise.then === "function"
+    ) {
+      const tail = remaining.slice(ri + 1);
+      return (resultOrPromise as Promise<ParserResult<readonly unknown[]>>)
+        .then((result) => {
+          if (result.success && result.consumed.length > 0) {
+            stateArray[index] = result.next.state;
+            matchedParsers.add(index);
+            return preParseSuggestLoop(
+              {
+                ...context,
+                buffer: result.next.buffer,
+                optionsTerminated: result.next.optionsTerminated,
+                state: stateArray,
+              },
+              stateArray,
+              parsers,
+              matchedParsers,
+            );
+          }
+          // This async parser didn't consume — try the remaining parsers.
+          // If one of them consumes, restart the full outer loop.
+          const next = tryParseSuggestList(
+            context,
+            stateArray,
+            parsers,
+            matchedParsers,
+            tail,
+          );
+          if (next === null) return { ...context, state: stateArray };
+          // A tail parser consumed — restart the loop on the updated
+          // context, but only if the buffer actually shrank; otherwise
+          // we'd re-enter with the same state and recurse infinitely.
+          if (
+            typeof next === "object" && "then" in next &&
+            typeof next.then === "function"
+          ) {
+            return (next as Promise<ParserContext<readonly unknown[]>>)
+              .then((ctx) =>
+                ctx.buffer.length < context.buffer.length
+                  ? preParseSuggestLoop(
+                    ctx,
+                    stateArray,
+                    parsers,
+                    matchedParsers,
+                  )
+                  : ctx
+              );
+          }
+          const nextCtx = next as ParserContext<readonly unknown[]>;
+          if (nextCtx.buffer.length < context.buffer.length) {
+            return preParseSuggestLoop(
+              nextCtx,
+              stateArray,
+              parsers,
+              matchedParsers,
+            );
+          }
+          return nextCtx;
+        });
+    }
+
+    const result = resultOrPromise as ParserResult<readonly unknown[]>;
+    if (result.success && result.consumed.length > 0) {
+      stateArray[index] = result.next.state;
+      matchedParsers.add(index);
+      return {
+        ...context,
+        buffer: result.next.buffer,
+        optionsTerminated: result.next.optionsTerminated,
+        state: stateArray,
+      };
+    }
+  }
+
+  return null;
+}
 
 /**
  * Concatenates tuple parsers into one parser with a flattened tuple value.
@@ -5816,10 +6040,17 @@ export function concat(
       return completeSync(state);
     },
     suggest(context, prefix) {
-      const stateArray = context.state as unknown[] | undefined;
-
       if (isAsync) {
         return (async function* () {
+          // Pre-parse the buffer (awaiting async children) to build up
+          // state across sub-parsers for dependency resolution.
+          const preParsedContext = await preParseSuggestContextAsync(
+            context,
+            parsers,
+          );
+          const { context: contextWithRegistry, stateArray } =
+            buildSuggestRegistry(preParsedContext);
+
           const suggestions: Suggestion[] = [];
 
           for (let i = 0; i < parsers.length; i++) {
@@ -5829,7 +6060,7 @@ export function concat(
               : parser.initialState;
 
             const parserSuggestions = parser.suggest({
-              ...context,
+              ...contextWithRegistry,
               state: parserState,
             }, prefix);
 
@@ -5848,6 +6079,15 @@ export function concat(
         })();
       }
 
+      // Sync branch: pre-parse sync children only.
+      const preParsedContext = preParseSuggestContext(
+        context,
+        syncParsers,
+      );
+      const { context: contextWithRegistry, stateArray } = buildSuggestRegistry(
+        preParsedContext,
+      );
+
       return (function* () {
         const suggestions: Suggestion[] = [];
 
@@ -5858,7 +6098,7 @@ export function concat(
             : parser.initialState;
 
           const parserSuggestions = parser.suggest({
-            ...context,
+            ...contextWithRegistry,
             state: parserState,
           }, prefix);
 
