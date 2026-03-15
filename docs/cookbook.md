@@ -1046,19 +1046,19 @@ When at least one option is provided:
 
 ~~~~ bash
 # No options: help mode
-myapp dev
+myapp
 # → "No options provided. Showing help."
 
 # With --key: active mode with defaults
-myapp dev --key mykey
+myapp --key mykey
 # → "Running with cwd=./, key=mykey"
 
 # With --cwd: active mode
-myapp dev --cwd /tmp
+myapp --cwd /tmp
 # → "Running with cwd=/tmp, key=none"
 
 # With both options: active mode
-myapp dev --cwd /tmp --key mykey
+myapp --cwd /tmp --key mykey
 # → "Running with cwd=/tmp, key=mykey"
 ~~~~
 
