@@ -300,7 +300,8 @@ export function choice<const T extends string | number>(
         typeof c === "string" || !Number.isNaN(c)
       ) as readonly T[],
       parse(input: string): ValueParserResult<T> {
-        // Exact match against canonical String() representations.
+        // Exact match against canonical string representations
+        // (String(value) for most values, "-0" for negative zero).
         // NaN is never a valid CLI literal (consistent with float()
         // requiring explicit allowNaN), so skip NaN entries.
         const index = numberStrings.indexOf(input);
