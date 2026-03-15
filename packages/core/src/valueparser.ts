@@ -662,7 +662,7 @@ export interface IntegerOptionsNumber {
     invalidInteger?: Message | ((input: string) => Message);
 
     /**
-     * Custom error message when integer exceeds the safe integer range
+     * Custom error message when integer is outside the safe integer range
      * (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
      * Can be a static message or a function that receives the input string.
      * @since 1.0.0
@@ -856,6 +856,23 @@ export function integer(
   ensureNonEmptyString(metavar);
   const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
   const minSafe = BigInt(Number.MIN_SAFE_INTEGER);
+  const unsafeIntegerError = options?.errors?.unsafeInteger;
+  function makeUnsafeIntegerError(
+    input: string,
+  ): ValueParserResult<number> {
+    return {
+      success: false,
+      error: unsafeIntegerError
+        ? (typeof unsafeIntegerError === "function"
+          ? unsafeIntegerError(input)
+          : unsafeIntegerError)
+        : message`Expected a safe integer between ${
+          text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
+        } and ${
+          text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
+        }, but got ${input}. Use type: "bigint" for large values.`,
+    };
+  }
   return {
     $mode: "sync",
     metavar,
@@ -874,32 +891,10 @@ export function integer(
       try {
         n = BigInt(input);
       } catch {
-        return {
-          success: false,
-          error: options?.errors?.unsafeInteger
-            ? (typeof options.errors.unsafeInteger === "function"
-              ? options.errors.unsafeInteger(input)
-              : options.errors.unsafeInteger)
-            : message`Expected a safe integer between ${
-              text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
-            } and ${
-              text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
-            }, but got ${input}. Use type: "bigint" for large values.`,
-        };
+        return makeUnsafeIntegerError(input);
       }
       if (n > maxSafe || n < minSafe) {
-        return {
-          success: false,
-          error: options?.errors?.unsafeInteger
-            ? (typeof options.errors.unsafeInteger === "function"
-              ? options.errors.unsafeInteger(input)
-              : options.errors.unsafeInteger)
-            : message`Expected a safe integer between ${
-              text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
-            } and ${
-              text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
-            }, but got ${input}. Use type: "bigint" for large values.`,
-        };
+        return makeUnsafeIntegerError(input);
       }
       const value = Number(input);
       if (options?.min != null && value < options.min) {
