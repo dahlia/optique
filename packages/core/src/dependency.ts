@@ -537,7 +537,11 @@ export function dependency<M extends Mode, T>(
     deriveAsync<U>(
       options: DeriveAsyncOptions<T, U>,
     ): DerivedValueParser<"async", U, T> {
-      return createDerivedValueParser(id, parser, options);
+      // Skip mode detection — the type guarantees the factory returns async
+      return createAsyncDerivedParserFromAsyncFactory(
+        id,
+        options,
+      );
     },
   };
   return result;
@@ -743,11 +747,18 @@ function determineFactoryModeForDeriveFrom<
 >(
   options: DeriveFromOptions<Deps, T, FM>,
 ): boolean {
-  const defaultValues = options.defaultValues();
-  const parser = options.factory(
-    ...(defaultValues as DependencyValues<Deps>),
-  );
-  return parser.$mode === "async";
+  try {
+    const defaultValues = options.defaultValues();
+    const parser = options.factory(
+      ...(defaultValues as DependencyValues<Deps>),
+    );
+    return parser.$mode === "async";
+  } catch {
+    // If the factory throws for the default values, assume sync mode.
+    // The actual mode will be validated when parseWithDependency() is called
+    // with the real dependency values.
+    return false;
+  }
 }
 
 function isAsyncModeParser(parser: { readonly $mode: Mode }): boolean {
@@ -1113,9 +1124,16 @@ function createDerivedValueParser<
 function determineFactoryMode<S, T, FM extends Mode>(
   options: InternalDeriveOptions<S, T, FM>,
 ): boolean {
-  const defaultValue = options.defaultValue();
-  const parser = options.factory(defaultValue);
-  return parser.$mode === "async";
+  try {
+    const defaultValue = options.defaultValue();
+    const parser = options.factory(defaultValue);
+    return parser.$mode === "async";
+  } catch {
+    // If the factory throws for the default value, assume sync mode.
+    // The actual mode will be validated when parseWithDependency() is called
+    // with the real dependency value.
+    return false;
+  }
 }
 
 function createSyncDerivedParser<S, T>(
