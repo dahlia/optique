@@ -790,6 +790,7 @@ describe("suggest function", () => {
       const mode = dependency(choice(["dev", "prod"] as const));
       const level = mode.derive({
         metavar: "LEVEL",
+        mode: "sync",
         factory: (value) =>
           choice(
             value === "dev"
@@ -817,6 +818,7 @@ describe("suggest function", () => {
       const mode = dependency(choice(["dev", "prod"] as const));
       const level = mode.derive({
         metavar: "LEVEL",
+        mode: "sync",
         factory: (value) =>
           choice(
             value === "dev"

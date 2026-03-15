@@ -20,6 +20,7 @@ test("dependency resolution handles cyclic plain objects", () => {
   const modeParser = dependency(choice(["dev", "prod"] as const));
   const derivedParser = modeParser.derive({
     metavar: "VALUE",
+    mode: "sync",
     defaultValue: () => "dev" as const,
     factory: (mode: "dev" | "prod") =>
       choice(mode === "dev" ? (["a"] as const) : (["b"] as const)),

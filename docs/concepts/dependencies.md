@@ -57,6 +57,7 @@ const modeParser = dependency(choice(["dev", "prod"] as const));
 // Create a derived parser that depends on the mode
 const logLevelParser = modeParser.derive({
   metavar: "LEVEL",
+  mode: "sync",
   factory: (mode) =>
     choice(
       mode === "dev"
@@ -102,6 +103,7 @@ const remoteParser = dependency(string({ metavar: "REMOTE" }));
 // Factory returns an async parser - derived parser is also async
 const branchParser = remoteParser.derive({
   metavar: "BRANCH",
+  mode: "async",
   factory: (remote) => gitRemoteBranch({ remote }),
   defaultValue: () => "origin",
 });
@@ -157,6 +159,7 @@ const modeParser = dependency(choice(["dev", "prod"] as const));
 
 const logLevelParser = modeParser.derive({
   metavar: "LEVEL",
+  mode: "sync",
   factory: (mode) =>
     choice(mode === "dev"
       ? ["debug", "info", "warn", "error"]
@@ -196,6 +199,7 @@ import { choice, string } from "@optique/core/valueparser";
 const modeParser = dependency(choice(["dev", "prod"] as const));
 const logLevelParser = modeParser.derive({
   metavar: "LEVEL",
+  mode: "sync",
   factory: (mode) =>
     choice(mode === "dev"
       ? ["debug", "info", "warn", "error"]
@@ -240,6 +244,7 @@ const modeParser = dependency(choice(["dev", "prod"] as const));
 
 const logLevelParser = modeParser.derive({
   metavar: "LEVEL",
+  mode: "sync",
   factory: (mode) =>
     choice(mode === "dev"
       ? ["debug", "info", "warn", "error"]
@@ -279,6 +284,7 @@ const modeParser = dependency(choice(["dev", "prod"] as const));
 
 const logLevelParser = modeParser.derive({
   metavar: "LEVEL",
+  mode: "sync",
   factory: (mode) =>
     choice(mode === "dev"
       ? ["debug", "info", "warn", "error"]
@@ -317,6 +323,7 @@ const regionParser = dependency(choice(["us", "eu", "asia"] as const));
 // Create a parser that depends on both
 const serverParser = deriveFrom({
   metavar: "SERVER",
+  mode: "sync",
   dependencies: [envParser, regionParser] as const,
   factory: (env, region) => {
     // Generate valid servers based on both environment and region
@@ -385,6 +392,7 @@ import { choice } from "@optique/core/valueparser";
 const modeParser = dependency(choice(["dev", "prod"] as const));
 const portParser = modeParser.derive({
   metavar: "PORT",
+  mode: "sync",
   factory: (mode) =>
     choice(mode === "dev" ? ["3000", "8080"] : ["80", "443"]),
   defaultValue: () => "dev" as const,
@@ -426,6 +434,7 @@ const remoteParser = dependency(choice(fetchRemotes()));
 // Branch depends on which remote is selected
 const branchParser = remoteParser.derive({
   metavar: "BRANCH",
+  mode: "sync",
   factory: (remote) => choice(fetchBranches(remote)),
   defaultValue: () => "origin",
 });

@@ -165,6 +165,7 @@ const remoteParser = dependency(gitRemote());
 // Create a derived parser that validates branches against the selected remote
 const branchParser = remoteParser.derive({
   metavar: "BRANCH",
+  mode: "async",
   factory: (remote) => gitRemoteBranch(remote),
   defaultValue: () => "origin",
 });

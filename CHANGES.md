@@ -229,11 +229,11 @@ To be released.
 
  -  Fixed `derive()` and `deriveFrom()` eagerly executing default factories
     during parser construction to detect sync/async mode.  The factory is
-    no longer called at construction time; instead, the factory mode
-    defaults to `"sync"` (matching the type default).  An optional `mode`
-    field can be passed to explicitly declare the factory mode.  Callers
-    with async factories should pass `mode: "async"` or use
-    `deriveAsync()`/`deriveFromAsync()`.  [[#223], [#527]]
+    no longer called at construction time; instead, callers must provide
+    a required `mode` field (`"sync"` or `"async"`) that declares the
+    factory's return mode.  Callers with async factories should pass
+    `mode: "async"` or use `deriveAsync()`/`deriveFromAsync()`.
+    [[#223], [#527]]
 
  -  The `integer()` parser in number mode now rejects values outside the safe
     integer range (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).

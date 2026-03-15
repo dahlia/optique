@@ -1689,6 +1689,7 @@ describe("property-based tests", () => {
     const modeSource = dependency(choice(["dev", "prod"] as const));
     const levelValue = modeSource.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode) =>
         choice(
           mode === "dev"
@@ -1744,6 +1745,7 @@ describe("property-based tests", () => {
     const modeSource = dependency(choice(["dev", "prod"] as const));
     const levelValue = modeSource.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode) =>
         choice(
           mode === "dev"
@@ -1782,6 +1784,7 @@ describe("property-based tests", () => {
     const targetSource = dependency(choice(["node", "browser"] as const));
     const presetValue = deriveFrom({
       metavar: "PRESET",
+      mode: "sync",
       dependencies: [modeSource, targetSource] as const,
       factory: (mode, target) =>
         choice(

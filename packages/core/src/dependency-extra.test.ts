@@ -93,6 +93,7 @@ describe("Nested objects with dependencies", () => {
     );
     const dbConnParser = dbTypeParser.derive({
       metavar: "CONNECTION",
+      mode: "sync",
       factory: (dbType: "postgres" | "mysql" | "sqlite") => {
         const patterns = {
           postgres: choice(
@@ -130,6 +131,7 @@ describe("Nested objects with dependencies", () => {
     const dbTypeParser = dependency(choice(["postgres", "mysql"] as const));
     const dbConnParser = dbTypeParser.derive({
       metavar: "DB_CONN",
+      mode: "sync",
       factory: (dbType: "postgres" | "mysql") =>
         choice(
           dbType === "postgres"
@@ -142,6 +144,7 @@ describe("Nested objects with dependencies", () => {
     const cacheTypeParser = dependency(choice(["redis", "memcached"] as const));
     const cacheConnParser = cacheTypeParser.derive({
       metavar: "CACHE_CONN",
+      mode: "sync",
       factory: (cacheType: "redis" | "memcached") =>
         choice(
           cacheType === "redis"
@@ -188,6 +191,7 @@ describe("Nested objects with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = envParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (env: "dev" | "prod") =>
         choice(
           env === "dev"
@@ -231,6 +235,7 @@ describe("argument() with dependencies", () => {
     const formatParser = dependency(choice(["json", "xml", "csv"] as const));
     const outputParser = formatParser.derive({
       metavar: "OUTPUT",
+      mode: "sync",
       factory: (format: "json" | "xml" | "csv") => {
         const extensions = {
           json: choice(["output.json", "data.json"] as const),
@@ -259,6 +264,7 @@ describe("argument() with dependencies", () => {
     const modeParser = dependency(choice(["read", "write"] as const));
     const pathParser = modeParser.derive({
       metavar: "PATH",
+      mode: "sync",
       factory: (mode: "read" | "write") =>
         choice(
           mode === "read"
@@ -289,6 +295,7 @@ describe("argument() with dependencies", () => {
     const sourceFormatParser = dependency(choice(["json", "yaml"] as const));
     const targetFormatParser = sourceFormatParser.derive({
       metavar: "TARGET_FORMAT",
+      mode: "sync",
       factory: (source: "json" | "yaml") =>
         // Can only convert json to yaml or yaml to json
         choice(source === "json" ? (["yaml"] as const) : (["json"] as const)),
@@ -318,6 +325,7 @@ describe("longestMatch() with dependencies", () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const algorithmParser = modeParser.derive({
       metavar: "ALGORITHM",
+      mode: "sync",
       factory: (mode: "fast" | "safe") =>
         choice(
           mode === "fast"
@@ -355,6 +363,7 @@ describe("longestMatch() with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const portParser = envParser.derive({
       metavar: "PORT",
+      mode: "sync",
       factory: (env: "dev" | "prod") =>
         choice(
           env === "dev"
@@ -402,6 +411,7 @@ describe("Help and usage generation with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -425,6 +435,7 @@ describe("Help and usage generation with dependencies", () => {
     const envParser = dependency(choice(["dev", "staging", "prod"] as const));
     const regionParser = envParser.derive({
       metavar: "REGION",
+      mode: "sync",
       factory: (env: "dev" | "staging" | "prod") => {
         if (env === "dev") return choice(["local"] as const);
         if (env === "staging") {
@@ -465,6 +476,7 @@ describe("Help and usage generation with dependencies", () => {
     const formatParser = dependency(choice(["json", "yaml"] as const));
     const outputParser = formatParser.derive({
       metavar: "OUTPUT",
+      mode: "sync",
       factory: (f: "json" | "yaml") =>
         choice(
           f === "json" ? (["out.json"] as const) : (["out.yaml"] as const),
@@ -499,6 +511,7 @@ describe("Shell completion with dependencies", () => {
     const modeParser = dependency(choice(["dev", "staging", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "staging" | "prod") =>
         choice(
           mode === "dev"
@@ -527,6 +540,7 @@ describe("Shell completion with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -557,6 +571,7 @@ describe("Shell completion with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const portParser = modeParser.derive({
       metavar: "PORT",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -593,6 +608,7 @@ describe("passThrough() with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -633,6 +649,7 @@ describe("passThrough() with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const logParser = envParser.derive({
       metavar: "LOG",
+      mode: "sync",
       factory: (env: "dev" | "prod") =>
         choice(env === "dev" ? (["debug"] as const) : (["info"] as const)),
       defaultValue: () => "dev" as const,
@@ -673,6 +690,7 @@ describe("Error recovery scenarios with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(mode === "dev" ? (["debug"] as const) : (["info"] as const)),
       defaultValue: () => "dev" as const,
@@ -696,6 +714,7 @@ describe("Error recovery scenarios with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod", "broken"] as const));
     const derivedParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: (mode: "dev" | "prod" | "broken") => {
         if (mode === "broken") {
           throw new Error("Factory error for broken mode");
@@ -742,6 +761,7 @@ describe("Error recovery scenarios with dependencies", () => {
     const modeParser = dependency(choice(["strict", "lenient"] as const));
     const valueParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: (mode: "strict" | "lenient") => {
         if (mode === "strict") {
           // Only accepts "valid"
@@ -781,6 +801,7 @@ describe("Error recovery scenarios with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -851,6 +872,7 @@ describe("group() with dependencies", () => {
     const protocolParser = dependency(choice(["http", "https"] as const));
     const portParser = protocolParser.derive({
       metavar: "PORT",
+      mode: "sync",
       factory: (protocol: "http" | "https") =>
         choice(
           protocol === "http"
@@ -889,6 +911,7 @@ describe("group() with dependencies", () => {
     const dbParser = dependency(choice(["postgres", "mysql"] as const));
     const dbPortParser = dbParser.derive({
       metavar: "DB_PORT",
+      mode: "sync",
       factory: (db: "postgres" | "mysql") =>
         choice(db === "postgres" ? (["5432"] as const) : (["3306"] as const)),
       defaultValue: () => "postgres" as const,
@@ -897,6 +920,7 @@ describe("group() with dependencies", () => {
     const cacheParser = dependency(choice(["redis", "memcached"] as const));
     const cachePortParser = cacheParser.derive({
       metavar: "CACHE_PORT",
+      mode: "sync",
       factory: (cache: "redis" | "memcached") =>
         choice(cache === "redis" ? (["6379"] as const) : (["11211"] as const)),
       defaultValue: () => "redis" as const,
@@ -942,6 +966,7 @@ describe("group() with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const configParser = envParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       factory: (env: "dev" | "prod") =>
         choice(
           env === "dev" ? (["dev.json"] as const) : (["prod.json"] as const),
@@ -980,6 +1005,7 @@ describe("concat() with dependencies", () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const levelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "fast" | "safe") =>
         choice(
           mode === "fast" ? (["1", "2"] as const) : (["3", "4", "5"] as const),
@@ -1023,6 +1049,7 @@ describe("Same dependency source used by multiple derived parsers", () => {
 
     const logLevelParser = envParser.derive({
       metavar: "LOG_LEVEL",
+      mode: "sync",
       factory: (env: "dev" | "staging" | "prod") => {
         if (env === "dev") return choice(["debug", "trace"] as const);
         if (env === "staging") return choice(["info", "debug"] as const);
@@ -1033,6 +1060,7 @@ describe("Same dependency source used by multiple derived parsers", () => {
 
     const timeoutParser = envParser.derive({
       metavar: "TIMEOUT",
+      mode: "sync",
       factory: (env: "dev" | "staging" | "prod") => {
         if (env === "dev") return choice(["1000", "5000"] as const);
         if (env === "staging") return choice(["5000", "10000"] as const);
@@ -1043,6 +1071,7 @@ describe("Same dependency source used by multiple derived parsers", () => {
 
     const retriesParser = envParser.derive({
       metavar: "RETRIES",
+      mode: "sync",
       factory: (env: "dev" | "staging" | "prod") => {
         if (env === "dev") return choice(["0", "1"] as const);
         if (env === "staging") return choice(["2", "3"] as const);
@@ -1082,6 +1111,7 @@ describe("Same dependency source used by multiple derived parsers", () => {
 
     const derived1 = modeParser.derive({
       metavar: "D1",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a1"] as const) : (["b1"] as const)),
       defaultValue: () => "a" as const,
@@ -1089,6 +1119,7 @@ describe("Same dependency source used by multiple derived parsers", () => {
 
     const derived2 = modeParser.derive({
       metavar: "D2",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a2"] as const) : (["b2"] as const)),
       defaultValue: () => "a" as const,
@@ -1129,6 +1160,7 @@ describe("deriveFrom with more than 2 dependencies", () => {
 
     const endpointParser = deriveFrom({
       metavar: "ENDPOINT",
+      mode: "sync",
       dependencies: [envParser, regionParser, tierParser] as const,
       factory: (
         env: "dev" | "prod",
@@ -1176,6 +1208,7 @@ describe("deriveFrom with more than 2 dependencies", () => {
 
     const combinedParser = deriveFrom({
       metavar: "COMBINED",
+      mode: "sync",
       dependencies: [a, b, c, d] as const,
       factory: (av, bv, cv, dv) => choice([`${av}-${bv}-${cv}-${dv}`] as const),
       defaultValues: () => ["a1", "b1", "c1", "d1"] as const,
@@ -1222,6 +1255,7 @@ describe("Dependencies with map() modifier", () => {
 
     const logLevelParser = rawModeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(mode === "dev" ? (["debug"] as const) : (["info"] as const)),
       defaultValue: () => "dev" as const,
@@ -1251,6 +1285,7 @@ describe("Dependencies with map() modifier", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const portParser = modeParser.derive({
       metavar: "PORT",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -1289,6 +1324,7 @@ describe("Dependencies with or() containing objects", () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const levelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "fast" | "safe") =>
         choice(mode === "fast" ? (["1", "2"] as const) : (["3", "4"] as const)),
       defaultValue: () => "fast" as const,
@@ -1339,6 +1375,7 @@ describe("Edge case: dependency source appears after derived parser in args", ()
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -1377,6 +1414,7 @@ describe("Edge case: dependency source appears after derived parser in args", ()
 
     const derivedParser = deriveFrom({
       metavar: "DERIVED",
+      mode: "sync",
       dependencies: [aParser, bParser] as const,
       factory: (a, b) => choice([`${a}-${b}`] as const),
       defaultValues: () => ["a1", "b1"] as const,
@@ -1415,6 +1453,7 @@ describe("optional() + withDefault() double wrapping with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -1458,6 +1497,7 @@ describe("optional() + withDefault() double wrapping with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -1495,6 +1535,7 @@ describe("map() transformed dependency source", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -1529,6 +1570,7 @@ describe("map() transformed dependency source", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -1564,6 +1606,7 @@ describe("map() transformed dependency source", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -1627,6 +1670,7 @@ describe("flag() parser with dependencies", () => {
     const verboseParser = dependency(boolParser);
     const outputParser = verboseParser.derive({
       metavar: "OUTPUT",
+      mode: "sync",
       factory: (verbose: boolean) =>
         choice(
           verbose
@@ -1678,6 +1722,7 @@ describe("Factory edge cases", () => {
     const modeParser = dependency(choice(["fail"] as const));
     const derivedParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: (_mode: "fail") => ({
         $mode: "sync" as const,
         metavar: "VALUE" as NonEmptyString,
@@ -1714,6 +1759,7 @@ describe("Factory edge cases", () => {
     const modeParser = dependency(choice(["normal", "error"] as const));
     const derivedParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: (mode: "normal" | "error") => {
         callCount++;
         if (mode === "error") {
@@ -1781,6 +1827,7 @@ describe("Deeply nested merge() with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -1833,6 +1880,7 @@ describe("Deeply nested merge() with dependencies", () => {
     const envParser = dependency(choice(["local", "staging", "prod"] as const));
     const serverParser = envParser.derive({
       metavar: "SERVER",
+      mode: "sync",
       factory: (env: "local" | "staging" | "prod") => {
         if (env === "local") return choice(["localhost"] as const);
         if (env === "staging") {
@@ -1886,60 +1934,70 @@ describe("Many derived parsers from same source", () => {
     // Create 10 derived parsers
     const derived1 = modeParser.derive({
       metavar: "D1",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a1"] as const) : (["b1"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived2 = modeParser.derive({
       metavar: "D2",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a2"] as const) : (["b2"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived3 = modeParser.derive({
       metavar: "D3",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a3"] as const) : (["b3"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived4 = modeParser.derive({
       metavar: "D4",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a4"] as const) : (["b4"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived5 = modeParser.derive({
       metavar: "D5",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a5"] as const) : (["b5"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived6 = modeParser.derive({
       metavar: "D6",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a6"] as const) : (["b6"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived7 = modeParser.derive({
       metavar: "D7",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a7"] as const) : (["b7"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived8 = modeParser.derive({
       metavar: "D8",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a8"] as const) : (["b8"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived9 = modeParser.derive({
       metavar: "D9",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a9"] as const) : (["b9"] as const)),
       defaultValue: () => "a" as const,
     });
     const derived10 = modeParser.derive({
       metavar: "D10",
+      mode: "sync",
       factory: (m: "a" | "b") =>
         choice(m === "a" ? (["a10"] as const) : (["b10"] as const)),
       defaultValue: () => "a" as const,
@@ -2005,6 +2063,7 @@ describe("Many derived parsers from same source", () => {
     const createDerived = (suffix: string) =>
       modeParser.derive({
         metavar: `D${suffix}`,
+        mode: "sync",
         factory: (m: "x" | "y") =>
           choice(
             m === "x" ? ([`x${suffix}`] as const) : ([`y${suffix}`] as const),
@@ -2047,6 +2106,7 @@ describe("constant() parser with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -2086,6 +2146,7 @@ describe("tuple() with dependencies in various positions", () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const levelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "fast" | "safe") =>
         choice(mode === "fast" ? (["1", "2"] as const) : (["3", "4"] as const)),
       defaultValue: () => "fast" as const,
@@ -2120,6 +2181,7 @@ describe("tuple() with dependencies in various positions", () => {
 
     const server = deriveFrom({
       metavar: "SERVER",
+      mode: "sync",
       dependencies: [env, region] as const,
       factory: (e, r) => choice([`${e}-${r}`] as const),
       defaultValues: () => ["dev", "us"] as const,
@@ -2162,6 +2224,7 @@ describe("Deep modifier chains with dependencies", () => {
     const modeParser = dependency(choice(["a", "b"] as const));
     const itemParser = modeParser.derive({
       metavar: "ITEM",
+      mode: "sync",
       factory: (mode: "a" | "b") =>
         choice(
           mode === "a" ? (["a1", "a2"] as const) : (["b1", "b2"] as const),
@@ -2198,6 +2261,7 @@ describe("Deep modifier chains with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -2248,6 +2312,7 @@ describe("Deep modifier chains with dependencies", () => {
     const modeParser = dependency(choice(["x", "y"] as const));
     const valueParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: (mode: "x" | "y") =>
         choice(
           mode === "x" ? (["xa", "xb"] as const) : (["ya", "yb"] as const),
@@ -2392,11 +2457,13 @@ describe("or() with dependencies - complex cases", () => {
 
     const derivedA = modeA.derive({
       metavar: "DA",
+      mode: "sync",
       factory: (m) => choice([`${m}-derived`] as const),
       defaultValue: () => "a1" as const,
     });
     const derivedB = modeB.derive({
       metavar: "DB",
+      mode: "sync",
       factory: (m) => choice([`${m}-derived`] as const),
       defaultValue: () => "b1" as const,
     });
@@ -2444,11 +2511,13 @@ describe("or() with dependencies - complex cases", () => {
 
     const derivedForA = sharedMode.derive({
       metavar: "DA",
+      mode: "sync",
       factory: (m) => choice([`a-${m}`] as const),
       defaultValue: () => "shared1" as const,
     });
     const derivedForB = sharedMode.derive({
       metavar: "DB",
+      mode: "sync",
       factory: (m) => choice([`b-${m}`] as const),
       defaultValue: () => "shared1" as const,
     });
@@ -2502,6 +2571,7 @@ describe("longestMatch() with dependencies - additional cases", () => {
     const mode = dependency(choice(["x", "y"] as const));
     const derived = mode.derive({
       metavar: "D",
+      mode: "sync",
       factory: (m) =>
         choice(m === "x" ? (["x1", "x2"] as const) : (["y1", "y2"] as const)),
       defaultValue: () => "x" as const,
@@ -2569,6 +2639,7 @@ describe("longestMatch() with conflicting dependency states", () => {
     // Branch 1: fast mode accepts "1" or "2", safe mode accepts "3" or "4"
     const levelForBranch1 = mode.derive({
       metavar: "LEVEL1",
+      mode: "sync",
       factory: (m) =>
         choice(m === "fast" ? (["1", "2"] as const) : (["3", "4"] as const)),
       defaultValue: () => "fast" as const,
@@ -2578,6 +2649,7 @@ describe("longestMatch() with conflicting dependency states", () => {
     // (completely different values than branch 1)
     const levelForBranch2 = mode.derive({
       metavar: "LEVEL2",
+      mode: "sync",
       factory: (m) =>
         choice(m === "fast" ? (["a", "b"] as const) : (["c", "d"] as const)),
       defaultValue: () => "fast" as const,
@@ -2654,6 +2726,7 @@ describe("longestMatch() with conflicting dependency states", () => {
 
     const derived = mode.derive({
       metavar: "D",
+      mode: "sync",
       factory: (m) =>
         choice(m === "x" ? (["x1", "x2"] as const) : (["y1", "y2"] as const)),
       defaultValue: () => "x" as const,
@@ -2699,6 +2772,7 @@ describe("longestMatch() with conflicting dependency states", () => {
     // Branch 1 only accepts values for alpha mode
     const alphaValues = mode.derive({
       metavar: "ALPHA_VAL",
+      mode: "sync",
       factory: (m) =>
         choice(m === "alpha" ? (["a1", "a2"] as const) : ([] as const)),
       defaultValue: () => "alpha" as const,
@@ -2707,6 +2781,7 @@ describe("longestMatch() with conflicting dependency states", () => {
     // Branch 2 only accepts values for beta mode
     const betaValues = mode.derive({
       metavar: "BETA_VAL",
+      mode: "sync",
       factory: (m) =>
         choice(m === "beta" ? (["b1", "b2"] as const) : ([] as const)),
       defaultValue: () => "beta" as const,
@@ -2756,6 +2831,7 @@ describe("longestMatch() with conflicting dependency states", () => {
     // Each branch has a derived parser specific to certain environments
     const devConfig = env.derive({
       metavar: "DEV_CFG",
+      mode: "sync",
       factory: (e) =>
         choice(
           e === "dev" ? (["local", "docker"] as const) : (["N/A"] as const),
@@ -2764,6 +2840,7 @@ describe("longestMatch() with conflicting dependency states", () => {
     });
     const stagingConfig = env.derive({
       metavar: "STAGING_CFG",
+      mode: "sync",
       factory: (e) =>
         choice(
           e === "staging"
@@ -2774,6 +2851,7 @@ describe("longestMatch() with conflicting dependency states", () => {
     });
     const prodConfig = env.derive({
       metavar: "PROD_CFG",
+      mode: "sync",
       factory: (e) =>
         choice(
           e === "prod"
@@ -2849,12 +2927,14 @@ describe("command() with dependencies - additional cases", () => {
 
     const levelForStart = mode.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (m) =>
         choice(m === "fast" ? (["1", "2"] as const) : (["3", "4"] as const)),
       defaultValue: () => "fast" as const,
     });
     const levelForStop = mode.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (m) =>
         choice(m === "fast" ? (["5", "6"] as const) : (["7", "8"] as const)),
       defaultValue: () => "fast" as const,
@@ -2916,6 +2996,7 @@ describe("conditional() with dependencies", () => {
     const modeParser = dependency(choice(["json", "xml"] as const));
     const formatParser = modeParser.derive({
       metavar: "FORMAT",
+      mode: "sync",
       factory: (mode: "json" | "xml") =>
         choice(
           mode === "json"
@@ -2970,6 +3051,7 @@ describe("conditional() with dependencies", () => {
     const jsonStyleParser = dependency(choice(["array", "object"] as const));
     const jsonDetailParser = jsonStyleParser.derive({
       metavar: "DETAIL",
+      mode: "sync",
       factory: (style: "array" | "object") =>
         choice(
           style === "array"
@@ -2984,6 +3066,7 @@ describe("conditional() with dependencies", () => {
     );
     const xmlDetailParser = xmlStyleParser.derive({
       metavar: "DETAIL",
+      mode: "sync",
       factory: (style: "element" | "attribute") =>
         choice(
           style === "element"
@@ -3044,6 +3127,7 @@ describe("conditional() with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const portParser = envParser.derive({
       metavar: "PORT",
+      mode: "sync",
       factory: (env: "dev" | "prod") =>
         choice(
           env === "dev"
@@ -3089,6 +3173,7 @@ describe("conditional() with dependencies", () => {
     const jsonStyleParser = dependency(choice(["array", "object"] as const));
     const jsonDetailParser = jsonStyleParser.derive({
       metavar: "JSON_DETAIL",
+      mode: "sync",
       factory: (style: "array" | "object") =>
         choice(
           style === "array"
@@ -3103,6 +3188,7 @@ describe("conditional() with dependencies", () => {
     );
     const xmlDetailParser = xmlStyleParser.derive({
       metavar: "XML_DETAIL",
+      mode: "sync",
       factory: (style: "element" | "attribute") =>
         choice(
           style === "element"
@@ -3163,6 +3249,7 @@ describe("conditional() with dependencies", () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const levelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "fast" | "safe") =>
         choice(mode === "fast" ? (["1", "2"] as const) : (["3", "4"] as const)),
       defaultValue: () => "fast" as const,
@@ -3214,6 +3301,7 @@ describe("deriveFrom() with partially provided dependencies", () => {
 
     const endpointParser = deriveFrom({
       metavar: "ENDPOINT",
+      mode: "sync",
       dependencies: [envParser, regionParser, tierParser] as const,
       factory: (
         env: "dev" | "prod",
@@ -3257,6 +3345,7 @@ describe("deriveFrom() with partially provided dependencies", () => {
 
     const derivedParser = deriveFrom({
       metavar: "DERIVED",
+      mode: "sync",
       dependencies: [a, b, c] as const,
       factory: (av, bv, cv) => choice([`${av}-${bv}-${cv}`] as const),
       defaultValues: () => ["a1", "b1", "c1"] as const,
@@ -3292,6 +3381,7 @@ describe("deriveFrom() with partially provided dependencies", () => {
 
     const derivedParser = deriveFrom({
       metavar: "XYZ",
+      mode: "sync",
       dependencies: [x, y, z] as const,
       factory: (xv, yv, zv) => choice([`${xv}-${yv}-${zv}`] as const),
       defaultValues: () => ["x1", "y1", "z1"] as const,
@@ -3326,6 +3416,7 @@ describe("deriveFrom() with partially provided dependencies", () => {
 
     const configParser = deriveFrom({
       metavar: "CONFIG",
+      mode: "sync",
       dependencies: [env, region] as const,
       factory: (e, r) => choice([`${e}-${r}.json`] as const),
       defaultValues: () => ["dev", "us"] as const,
@@ -3354,6 +3445,7 @@ describe("deriveFrom() with partially provided dependencies", () => {
 
     const outputParser = deriveFrom({
       metavar: "OUTPUT",
+      mode: "sync",
       dependencies: [format, compression, encoding] as const,
       factory: (f, c, e) => {
         const ext = f === "json" ? "json" : "yaml";
@@ -3391,6 +3483,7 @@ describe("deriveFrom() with partially provided dependencies", () => {
 
     const connectionParser = deriveFrom({
       metavar: "CONN",
+      mode: "sync",
       dependencies: [dbType, cacheType] as const,
       factory: (db, cache) => {
         const dbPort = db === "postgres" ? "5432" : "3306";
@@ -3433,6 +3526,7 @@ describe("deriveFrom() with partially provided dependencies", () => {
 
     const serverParser = deriveFrom({
       metavar: "SERVER",
+      mode: "sync",
       dependencies: [env, region] as const,
       factory: (e, r) => {
         // Only certain combinations are valid
@@ -3497,6 +3591,7 @@ describe("suggestAsync() with derived parsers and provided dependencies", () => 
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -3550,6 +3645,7 @@ describe("suggestAsync() with derived parsers and provided dependencies", () => 
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -3581,6 +3677,7 @@ describe("suggestAsync() with derived parsers and provided dependencies", () => 
 
     const endpointParser = deriveFrom({
       metavar: "ENDPOINT",
+      mode: "sync",
       dependencies: [envParser, regionParser] as const,
       factory: (env, region) => {
         if (env === "dev") {
@@ -3633,6 +3730,7 @@ describe("suggestAsync() with derived parsers and provided dependencies", () => 
 
     const configParser = deriveFrom({
       metavar: "CONFIG",
+      mode: "sync",
       dependencies: [envParser, regionParser] as const,
       factory: (env, region) =>
         choice([`config-${env}-${region}.json`] as const),
@@ -3705,6 +3803,7 @@ describe("suggestAsync() with derived parsers and provided dependencies", () => 
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -3921,6 +4020,7 @@ describe("Internal type guards and factory functions", () => {
       const depSource = dependency(string({ metavar: "VALUE" }));
       const derived = depSource.derive({
         metavar: "DERIVED",
+        mode: "sync",
         factory: () => string({ metavar: "INNER" }),
         defaultValue: () => "",
       });
@@ -3933,6 +4033,7 @@ describe("Internal type guards and factory functions", () => {
       const depSource = dependency(string({ metavar: "VALUE" }));
       const derived = depSource.derive({
         metavar: "DERIVED",
+        mode: "sync",
         factory: () => string({ metavar: "INNER" }),
         defaultValue: () => "",
       });
@@ -4017,6 +4118,7 @@ describe("Error handling paths", () => {
       const modeParser = dependency(choice(["a", "b"] as const));
       const derivedParser = modeParser.derive({
         metavar: "VALUE",
+        mode: "sync",
         factory: (mode: "a" | "b") => {
           if (mode === "b") {
             throw "string error message"; // eslint-disable-line @typescript-eslint/only-throw-error
@@ -4059,6 +4161,7 @@ describe("Error handling paths", () => {
       const modeParser = dependency(choice(["a", "b"] as const));
       const derivedParser = modeParser.derive({
         metavar: "VALUE",
+        mode: "sync",
         factory: (mode: "a" | "b") => {
           if (mode === "b") {
             throw 42; // eslint-disable-line @typescript-eslint/only-throw-error
@@ -4101,6 +4204,7 @@ describe("Error handling paths", () => {
 
       const derived = deriveFrom({
         metavar: "VALUE",
+        mode: "sync",
         dependencies: [dep1, dep2] as const,
         factory: (v1: "x" | "y", v2: "1" | "2") => {
           if (v1 === "y" && v2 === "2") {
@@ -4134,6 +4238,7 @@ describe("Error handling paths", () => {
       const modeParser = dependency(choice(["safe", "dangerous"] as const));
       const derivedParser = modeParser.derive({
         metavar: "VALUE",
+        mode: "sync",
         factory: (mode: "safe" | "dangerous") => {
           if (mode === "dangerous") {
             throw new Error("Cannot create parser for dangerous mode");
@@ -4170,6 +4275,7 @@ describe("Error handling paths", () => {
 
       const derived = deriveFrom({
         metavar: "VALUE",
+        mode: "sync",
         dependencies: [dep1, dep2] as const,
         factory: (v1: "a" | "b", v2: "1" | "2") => {
           if (v1 === "b") {
@@ -4219,6 +4325,7 @@ describe("Git-like CLI with subcommands and shared global dependency", () => {
     // Branch parser that depends on directory
     const branchParser = dirParser.derive({
       metavar: "BRANCH",
+      mode: "sync",
       factory: (dir: string) => {
         // In real code, this would validate against actual branches in dir
         const branches = dir === "/repo1"
@@ -4298,6 +4405,7 @@ describe("Git-like CLI with subcommands and shared global dependency", () => {
 
     const resourceParser = regionParser.derive({
       metavar: "RESOURCE",
+      mode: "sync",
       factory: (region: "us-east" | "eu-west") => {
         const resources = region === "us-east"
           ? (["server-1", "server-2"] as const)
@@ -4376,6 +4484,7 @@ describe("Git-like CLI with subcommands and shared global dependency", () => {
 
     const serviceParser = envParser.derive({
       metavar: "SERVICE",
+      mode: "sync",
       factory: (env: "dev" | "prod") => {
         const services = env === "dev"
           ? (["api-dev", "web-dev", "worker-dev"] as const)
@@ -4431,6 +4540,7 @@ describe("multiple() with derived parser", () => {
 
     const valueParser = typeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: (type: "number" | "string") => {
         if (type === "number") {
           // Only accept numeric strings
@@ -4504,6 +4614,7 @@ describe("multiple() with derived parser", () => {
     const modeParser = dependency(choice(["a", "b"] as const));
     const valueParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: () => string({ metavar: "VALUE" }),
       defaultValue: () => "a" as const,
     });
@@ -4525,6 +4636,7 @@ describe("multiple() with derived parser", () => {
 
     const fileParser = formatParser.derive({
       metavar: "FILE",
+      mode: "sync",
       factory: (format: "json" | "csv") => {
         return {
           $mode: "sync" as const,
@@ -4589,6 +4701,7 @@ describe("Multi-level dependencies using deriveFrom()", () => {
     // Instance depends on both env and region
     const instanceParser = deriveFrom({
       metavar: "INSTANCE",
+      mode: "sync",
       dependencies: [envParser, regionParser] as const,
       factory: (
         env: "dev" | "staging" | "prod",
@@ -4688,6 +4801,7 @@ describe("Multi-level dependencies using deriveFrom()", () => {
     // Features depend on both tier and category
     const featureParser = deriveFrom({
       metavar: "FEATURE",
+      mode: "sync",
       dependencies: [tierParser, categoryParser] as const,
       factory: (tier: "free" | "pro", category: "basic" | "advanced") => {
         const features: Record<string, Record<string, readonly string[]>> = {
@@ -4745,6 +4859,7 @@ describe("Multi-level dependencies using deriveFrom()", () => {
 
     const resource = deriveFrom({
       metavar: "RESOURCE",
+      mode: "sync",
       dependencies: [cloud, region, tier] as const,
       factory: (
         c: "aws" | "gcp",
@@ -4806,6 +4921,7 @@ describe("Edge case dependency values", () => {
 
     const valueParser = prefixParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: (prefix: string) => {
         return {
           $mode: "sync" as const,
@@ -4867,6 +4983,7 @@ describe("Edge case dependency values", () => {
 
     const itemsParser = delimParser.derive({
       metavar: "ITEMS",
+      mode: "sync",
       factory: (delim: string) => {
         return {
           $mode: "sync" as const,
@@ -4904,6 +5021,7 @@ describe("Edge case dependency values", () => {
 
     const matchParser = patternParser.derive({
       metavar: "INPUT",
+      mode: "sync",
       factory: (pattern: string) => {
         return {
           $mode: "sync" as const,
@@ -4956,6 +5074,7 @@ describe("Edge case dependency values", () => {
 
     const greetingParser = langParser.derive({
       metavar: "GREETING",
+      mode: "sync",
       factory: (lang: "en" | "ko" | "ja") => {
         const greetings = {
           en: ["Hello", "Hi", "Hey"] as const,
@@ -5000,6 +5119,7 @@ describe("Edge case dependency values", () => {
 
     const itemsParser = countParser.derive({
       metavar: "ITEMS",
+      mode: "sync",
       factory: (count: "0" | "1" | "2") => {
         const num = parseInt(count, 10);
         const options = Array.from(
@@ -5040,6 +5160,7 @@ describe("Real-world scenario: Database CLI", () => {
     // Schema depends only on database
     const schemaParser = dbParser.derive({
       metavar: "SCHEMA",
+      mode: "sync",
       factory: (db: "postgres" | "mysql") => {
         if (db === "postgres") {
           return choice(["public", "private", "audit"] as const);
@@ -5063,6 +5184,7 @@ describe("Real-world scenario: Database CLI", () => {
     // Table depends on schema value (using deriveFrom for explicit dependency)
     const tableParser = schemaDep.derive({
       metavar: "TABLE",
+      mode: "sync",
       factory: (schema: string) => {
         const tables: Record<string, readonly string[]> = {
           public: ["users", "posts", "comments"],
@@ -5158,6 +5280,7 @@ describe("Real-world scenario: Database CLI", () => {
     const tableParser = deriveFrom({
       dependencies: [dbParser, schemaParser] as const,
       metavar: "TABLE",
+      mode: "sync",
       factory: (db: "postgres" | "mysql", schema: string) => {
         // Define valid schema-table combinations per database
         const dbSchemas: Record<string, readonly string[]> = {
@@ -5256,26 +5379,31 @@ describe("Performance and stress tests", () => {
     // Create derived parsers with explicit types
     const derived0 = baseParser.derive({
       metavar: "V0",
+      mode: "sync",
       factory: (v: "a" | "b") => choice([`${v}-0-x`, `${v}-0-y`] as const),
       defaultValue: () => "a" as const,
     });
     const derived1 = baseParser.derive({
       metavar: "V1",
+      mode: "sync",
       factory: (v: "a" | "b") => choice([`${v}-1-x`, `${v}-1-y`] as const),
       defaultValue: () => "a" as const,
     });
     const derived2 = baseParser.derive({
       metavar: "V2",
+      mode: "sync",
       factory: (v: "a" | "b") => choice([`${v}-2-x`, `${v}-2-y`] as const),
       defaultValue: () => "a" as const,
     });
     const derived3 = baseParser.derive({
       metavar: "V3",
+      mode: "sync",
       factory: (v: "a" | "b") => choice([`${v}-3-x`, `${v}-3-y`] as const),
       defaultValue: () => "a" as const,
     });
     const derived4 = baseParser.derive({
       metavar: "V4",
+      mode: "sync",
       factory: (v: "a" | "b") => choice([`${v}-4-x`, `${v}-4-y`] as const),
       defaultValue: () => "a" as const,
     });
@@ -5316,24 +5444,28 @@ describe("Performance and stress tests", () => {
     const level1Parser = dependency(choice(["L1"] as const));
     const level2Parser = level1Parser.derive({
       metavar: "L2",
+      mode: "sync",
       factory: () => choice(["L1-L2"] as const),
       defaultValue: () => "L1" as const,
     });
     const level2Dep = dependency(level2Parser);
     const level3Parser = level2Dep.derive({
       metavar: "L3",
+      mode: "sync",
       factory: () => choice(["L1-L2-L3"] as const),
       defaultValue: () => "L1-L2",
     });
     const level3Dep = dependency(level3Parser);
     const level4Parser = level3Dep.derive({
       metavar: "L4",
+      mode: "sync",
       factory: () => choice(["L1-L2-L3-L4"] as const),
       defaultValue: () => "L1-L2-L3",
     });
     const level4Dep = dependency(level4Parser);
     const level5Parser = level4Dep.derive({
       metavar: "L5",
+      mode: "sync",
       factory: () => choice(["L1-L2-L3-L4-L5"] as const),
       defaultValue: () => "L1-L2-L3-L4",
     });
@@ -5373,6 +5505,7 @@ describe("Performance and stress tests", () => {
 
     const combined = deriveFrom({
       metavar: "COMBINED",
+      mode: "sync",
       dependencies: [d1, d2, d3, d4, d5] as const,
       factory: (
         v1: "a" | "b",
@@ -5436,6 +5569,7 @@ describe("Performance and stress tests", () => {
     const modeParser = dependency(choice(["fast", "slow"] as const));
     const valueParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       factory: (mode: "fast" | "slow") =>
         choice(
           mode === "fast" ? (["f1", "f2"] as const) : (["s1", "s2"] as const),
@@ -5479,6 +5613,7 @@ describe("Short option clustering with dependencies", () => {
     const verboseParser = dependency(choice(["true", "false"] as const));
     const debugParser = verboseParser.derive({
       metavar: "DEBUG",
+      mode: "sync",
       defaultValue: () => "false" as const,
       factory: (verbose: "true" | "false") => {
         if (verbose === "true") {
@@ -5519,6 +5654,7 @@ describe("Short option clustering with dependencies", () => {
     const modeParser = dependency(choice(["fast", "slow"] as const));
     const levelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       defaultValue: () => "fast" as const,
       factory: (mode: "fast" | "slow") => {
         if (mode === "fast") {
@@ -5547,6 +5683,7 @@ describe("Short option clustering with dependencies", () => {
     const typeParser = dependency(choice(["json", "xml"] as const));
     const formatParser = typeParser.derive({
       metavar: "FORMAT",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (type: "json" | "xml") => {
         if (type === "json") {
@@ -5574,6 +5711,7 @@ describe("Short option clustering with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const regionParser = envParser.derive({
       metavar: "REGION",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (env: "dev" | "prod") => {
         if (env === "dev") {
@@ -5584,6 +5722,7 @@ describe("Short option clustering with dependencies", () => {
     });
     const tierParser = envParser.derive({
       metavar: "TIER",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (env: "dev" | "prod") => {
         if (env === "dev") {
@@ -5620,6 +5759,7 @@ describe("Short option clustering with dependencies", () => {
     const sourceParser = dependency(choice(["a", "b"] as const));
     const derivedParser = sourceParser.derive({
       metavar: "DERIVED",
+      mode: "sync",
       defaultValue: () => "a" as const,
       factory: (source: "a" | "b") => {
         if (source === "a") {
@@ -5691,6 +5831,7 @@ describe("Negatable-style options with dependencies", () => {
     const verboseParser = dependency(booleanValueParser());
     const outputParser = verboseParser.derive({
       metavar: "OUTPUT",
+      mode: "sync",
       defaultValue: () => false,
       factory: (verbose: boolean) =>
         choice(
@@ -5740,6 +5881,7 @@ describe("Negatable-style options with dependencies", () => {
     const verboseParser = dependency(booleanValueParser());
     const formatParser = verboseParser.derive({
       metavar: "FORMAT",
+      mode: "sync",
       defaultValue: () => false,
       factory: (verbose: boolean) =>
         choice(verbose ? (["json", "yaml"] as const) : (["text"] as const)),
@@ -5777,6 +5919,7 @@ describe("Negatable-style options with dependencies", () => {
 
     const logLevelParser = debugParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       defaultValue: () => false,
       factory: (debug: boolean) =>
         choice(
@@ -5788,6 +5931,7 @@ describe("Negatable-style options with dependencies", () => {
 
     const outputFormatParser = debugParser.derive({
       metavar: "OUTPUT",
+      mode: "sync",
       defaultValue: () => false,
       factory: (debug: boolean) =>
         choice(
@@ -5851,6 +5995,7 @@ describe("Negatable-style options with dependencies", () => {
     const enabledParser = dependency(booleanValueParser());
     const modeParser = enabledParser.derive({
       metavar: "MODE",
+      mode: "sync",
       defaultValue: () => false,
       factory: (enabled: boolean) =>
         choice(enabled ? (["full", "partial"] as const) : (["off"] as const)),
@@ -5924,6 +6069,7 @@ describe("Diamond dependency pattern", () => {
     const dbConnParser = deriveFrom({
       dependencies: [envParser, regionParser] as const,
       metavar: "DB_CONN",
+      mode: "sync",
       defaultValues: () => ["dev", "us"] as const,
       factory: (
         env: "dev" | "staging" | "prod",
@@ -5956,6 +6102,7 @@ describe("Diamond dependency pattern", () => {
     const cacheParser = deriveFrom({
       dependencies: [envParser, regionParser] as const,
       metavar: "CACHE",
+      mode: "sync",
       defaultValues: () => ["dev", "us"] as const,
       factory: (
         env: "dev" | "staging" | "prod",
@@ -6049,6 +6196,7 @@ describe("Diamond dependency pattern", () => {
     const urlParser = deriveFrom({
       dependencies: [protocolParser, portParser] as const,
       metavar: "URL",
+      mode: "sync",
       defaultValues: () => ["http", "80"] as const,
       factory: (protocol: "http" | "https", port: "80" | "443" | "8080") => {
         if (protocol === "https") {
@@ -6071,6 +6219,7 @@ describe("Diamond dependency pattern", () => {
     const wsUrlParser = deriveFrom({
       dependencies: [protocolParser, portParser] as const,
       metavar: "WS_URL",
+      mode: "sync",
       defaultValues: () => ["http", "80"] as const,
       factory: (protocol: "http" | "https", port: "80" | "443" | "8080") => {
         const wsProtocol = protocol === "https" ? "wss" : "ws";
@@ -6121,6 +6270,7 @@ describe("Diamond dependency pattern", () => {
     const instanceTypeParser = deriveFrom({
       dependencies: [cloudParser, tierParser, regionParser] as const,
       metavar: "INSTANCE",
+      mode: "sync",
       defaultValues: () => ["aws", "free", "us"] as const,
       factory: (
         cloud: "aws" | "gcp" | "azure",
@@ -6207,6 +6357,7 @@ describe("Diamond dependency pattern", () => {
     const extensionParser = deriveFrom({
       dependencies: [formatParser, compressionParser] as const,
       metavar: "EXT",
+      mode: "sync",
       defaultValues: () => ["json", "none"] as const,
       factory: (format: "json" | "xml", compression: "gzip" | "none") => {
         const ext = format === "json" ? ".json" : ".xml";
@@ -6276,6 +6427,7 @@ describe("Hidden option with dependencies", () => {
     );
     const logLevelParser = internalModeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       defaultValue: () => "release" as const,
       factory: (mode: "debug" | "release") =>
         choice(
@@ -6330,6 +6482,7 @@ describe("Hidden option with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const internalFlagParser = envParser.derive({
       metavar: "FLAG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (env: "dev" | "prod") =>
         choice(env === "dev" ? (["on", "off"] as const) : (["off"] as const)),
@@ -6370,6 +6523,7 @@ describe("Hidden option with dependencies", () => {
     const secretParser = dependency(choice(["a", "b"] as const));
     const secretDerivedParser = secretParser.derive({
       metavar: "DERIVED",
+      mode: "sync",
       defaultValue: () => "a" as const,
       factory: (secret: "a" | "b") =>
         choice(secret === "a" ? (["x", "y"] as const) : (["z", "w"] as const)),
@@ -6420,6 +6574,7 @@ describe("parseSync() comprehensive tests", () => {
     const formatParser = dependency(choice(["json", "xml", "csv"] as const));
     const outputParser = formatParser.derive({
       metavar: "FILE",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (format: "json" | "xml" | "csv") =>
         // Derive output file extension from format
@@ -6468,6 +6623,7 @@ describe("parseSync() comprehensive tests", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -6517,6 +6673,7 @@ describe("parseSync() comprehensive tests", () => {
     const urlParser = deriveFrom({
       dependencies: [hostParser, portParser] as const,
       metavar: "URL",
+      mode: "sync",
       defaultValues: () => ["localhost", "8080"] as const,
       factory: (
         host: "localhost" | "example.com",
@@ -6557,6 +6714,7 @@ describe("parseSync() comprehensive tests", () => {
     const typeParser = dependency(choice(["a", "b", "c"] as const));
     const valueParser = typeParser.derive({
       metavar: "VAL",
+      mode: "sync",
       defaultValue: () => "a" as const,
       factory: (type: "a" | "b" | "c") => {
         if (type === "a") return choice(["x", "y"] as const);
@@ -6592,6 +6750,7 @@ describe("parseSync() comprehensive tests", () => {
     const modeParser = dependency(choice(["read", "write", "append"] as const));
     const fileParser = modeParser.derive({
       metavar: "PATH",
+      mode: "sync",
       defaultValue: () => "read" as const,
       factory: (mode: "read" | "write" | "append") =>
         choice([`${mode}.txt`, `${mode}.log`, `${mode}.dat`] as const),
@@ -6633,6 +6792,7 @@ describe("parseSync() comprehensive tests", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const configParser = envParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (env: "dev" | "prod") =>
         choice(
@@ -6663,6 +6823,7 @@ describe("Nested withDefault with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -6712,6 +6873,7 @@ describe("Nested withDefault with dependencies", () => {
 
     const logLevelParser = envParser.derive({
       metavar: "LOG_LEVEL",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (env: "dev" | "staging" | "prod") => {
         if (env === "dev") return choice(["debug", "trace"] as const);
@@ -6724,6 +6886,7 @@ describe("Nested withDefault with dependencies", () => {
 
     const formatParser = outputParser.derive({
       metavar: "FORMAT",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (output: "json" | "text") =>
         choice(
@@ -6812,6 +6975,7 @@ describe("Nested withDefault with dependencies", () => {
     const urlParser = deriveFrom({
       dependencies: [hostParser, portParser] as const,
       metavar: "URL",
+      mode: "sync",
       defaultValues: () => ["localhost", "8080"] as const,
       factory: (
         host: "localhost" | "example.com",
@@ -6873,6 +7037,7 @@ describe("Nested withDefault with dependencies", () => {
     const dbTypeParser = dependency(choice(["postgres", "mysql"] as const));
     const connParser = dbTypeParser.derive({
       metavar: "CONN",
+      mode: "sync",
       defaultValue: () => "postgres" as const,
       factory: (dbType: "postgres" | "mysql") =>
         choice(
@@ -6926,6 +7091,7 @@ describe("Nested withDefault with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -6979,6 +7145,7 @@ describe("map() with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -7013,6 +7180,7 @@ describe("map() with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = envParser.derive({
       metavar: "LOG_LEVEL",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (env: "dev" | "prod") =>
         choice(
@@ -7054,6 +7222,7 @@ describe("map() with dependencies", () => {
     const formatParser = dependency(choice(["json", "xml"] as const));
     const outputParser = formatParser.derive({
       metavar: "OUTPUT",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (format: "json" | "xml") =>
         choice(
@@ -7094,6 +7263,7 @@ describe("map() with dependencies", () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "fast" as const,
       factory: (mode: "fast" | "safe") =>
         choice(
@@ -7143,6 +7313,7 @@ describe("map() with dependencies", () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "fast" as const,
       factory: (mode: "fast" | "safe") =>
         choice(
@@ -7190,6 +7361,7 @@ describe("map() with dependencies", () => {
     const typeParser = dependency(choice(["a", "b"] as const));
     const valueParser = typeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       defaultValue: () => "a" as const,
       factory: (type: "a" | "b") =>
         choice(type === "a" ? (["x", "y"] as const) : (["m", "n"] as const)),
@@ -7223,6 +7395,7 @@ describe("map() with dependencies", () => {
     const envParser = dependency(choice(["dev", "prod"] as const));
     const configParser = envParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (env: "dev" | "prod") =>
         choice(
@@ -7271,6 +7444,7 @@ describe("map() with dependencies", () => {
     const aParser = dependency(choice(["a1", "a2"] as const));
     const bParser = aParser.derive({
       metavar: "B",
+      mode: "sync",
       defaultValue: () => "a1" as const,
       factory: (a: "a1" | "a2") =>
         choice(a === "a1" ? (["b1", "b2"] as const) : (["b3", "b4"] as const)),
@@ -7280,6 +7454,7 @@ describe("map() with dependencies", () => {
     const bSource = dependency(choice(["b1", "b2", "b3", "b4"] as const));
     const cParser = bSource.derive({
       metavar: "C",
+      mode: "sync",
       defaultValue: () => "b1" as const,
       factory: (b: "b1" | "b2" | "b3" | "b4") =>
         choice(
@@ -7334,6 +7509,7 @@ describe("Error customization with dependencies", () => {
     const formatParser = dependency(choice(["json", "xml"] as const));
     const styleParser = formatParser.derive({
       metavar: "STYLE",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (format: "json" | "xml") =>
         choice(
@@ -7371,6 +7547,7 @@ describe("Error customization with dependencies", () => {
     const envParser = dependency(choice(["dev", "staging", "prod"] as const));
     const logLevelParser = envParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (env: "dev" | "staging" | "prod") => {
         if (env === "dev") return choice(["debug", "trace"] as const);
@@ -7405,12 +7582,14 @@ describe("Error customization with dependencies", () => {
     const typeParser = dependency(choice(["a", "b"] as const));
     const value1Parser = typeParser.derive({
       metavar: "V1",
+      mode: "sync",
       defaultValue: () => "a" as const,
       factory: (type: "a" | "b") =>
         choice(type === "a" ? (["x", "y"] as const) : (["m", "n"] as const)),
     });
     const value2Parser = typeParser.derive({
       metavar: "V2",
+      mode: "sync",
       defaultValue: () => "a" as const,
       factory: (type: "a" | "b") =>
         choice(type === "a" ? (["p", "q"] as const) : (["r", "s"] as const)),
@@ -7438,6 +7617,7 @@ describe("Error customization with dependencies", () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "fast" as const,
       factory: (mode: "fast" | "safe") =>
         choice(
@@ -7477,6 +7657,7 @@ describe("Error customization with dependencies", () => {
     const urlParser = deriveFrom({
       dependencies: [hostParser, portParser] as const,
       metavar: "URL",
+      mode: "sync",
       defaultValues: () => ["localhost", "80"] as const,
       factory: (
         host: "localhost" | "remote",
@@ -7518,6 +7699,7 @@ describe("Error customization with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -7546,6 +7728,7 @@ describe("Error customization with dependencies", () => {
     const typeParser = dependency(choice(["a", "b"] as const));
     const valueParser = typeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       defaultValue: () => "a" as const,
       factory: (type: "a" | "b") =>
         choice(type === "a" ? (["x", "y"] as const) : (["m", "n"] as const)),
@@ -7577,6 +7760,7 @@ describe("conditional() with dependencies", () => {
     const formatParser = dependency(choice(["json", "xml"] as const));
     const jsonStyleParser = formatParser.derive({
       metavar: "STYLE",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (format: "json" | "xml") =>
         choice(
@@ -7615,6 +7799,7 @@ describe("conditional() with dependencies", () => {
     // Simple mode: just one option
     const simpleValueParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       defaultValue: () => "simple" as const,
       factory: () => choice(["a", "b"] as const),
     });
@@ -7622,6 +7807,7 @@ describe("conditional() with dependencies", () => {
     // Advanced mode: multiple options
     const advancedValueParser = modeParser.derive({
       metavar: "ADV_VALUE",
+      mode: "sync",
       defaultValue: () => "simple" as const,
       factory: () => choice(["x", "y", "z"] as const),
     });
@@ -7673,6 +7859,7 @@ describe("Suggestions with dependencies", () => {
     const formatParser = dependency(choice(["json", "xml"] as const));
     const styleParser = formatParser.derive({
       metavar: "STYLE",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (format: "json" | "xml") =>
         choice(
@@ -7724,6 +7911,7 @@ describe("Suggestions with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -7760,6 +7948,7 @@ describe("Suggestions with dependencies", () => {
     const urlParser = deriveFrom({
       dependencies: [hostParser, portParser] as const,
       metavar: "URL",
+      mode: "sync",
       defaultValues: () => ["localhost", "80"] as const,
       factory: (host: "localhost" | "remote", port: "80" | "443") =>
         choice([`http://${host}:${port}`, `https://${host}:${port}`] as const),
@@ -7793,6 +7982,7 @@ describe("argument() with derived parsers", () => {
     const typeParser = dependency(choice(["file", "url"] as const));
     const pathParser = typeParser.derive({
       metavar: "PATH",
+      mode: "sync",
       defaultValue: () => "file" as const,
       factory: (type: "file" | "url") =>
         choice(
@@ -7836,6 +8026,7 @@ describe("argument() with derived parsers", () => {
     const formatParser = dependency(choice(["csv", "json"] as const));
     const inputParser = formatParser.derive({
       metavar: "INPUT",
+      mode: "sync",
       defaultValue: () => "csv" as const,
       factory: (format: "csv" | "json") =>
         choice(
@@ -7846,6 +8037,7 @@ describe("argument() with derived parsers", () => {
     });
     const outputParser = formatParser.derive({
       metavar: "OUTPUT",
+      mode: "sync",
       defaultValue: () => "csv" as const,
       factory: (format: "csv" | "json") =>
         choice(
@@ -7882,6 +8074,7 @@ describe("argument() with derived parsers", () => {
     const endpointParser = deriveFrom({
       dependencies: [envParser, regionParser] as const,
       metavar: "ENDPOINT",
+      mode: "sync",
       defaultValues: () => ["dev", "us"] as const,
       factory: (env: "dev" | "prod", region: "us" | "eu") =>
         choice(
@@ -7920,6 +8113,7 @@ describe("or() with derived parser fallback", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -7968,6 +8162,7 @@ describe("or() with derived parser fallback", () => {
     const envParser = dependency(choice(["test", "live"] as const));
     const endpointParser = envParser.derive({
       metavar: "ENDPOINT",
+      mode: "sync",
       defaultValue: () => "test" as const,
       factory: (env: "test" | "live") =>
         choice(
@@ -8020,6 +8215,7 @@ describe("or() with derived parser fallback", () => {
     const formatParser = dependency(choice(["json", "yaml"] as const));
     const schemaParser = formatParser.derive({
       metavar: "SCHEMA",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (format: "json" | "yaml") =>
         choice(
@@ -8073,6 +8269,7 @@ describe("Circular dependency prevention", () => {
     // B derives from A
     const derivedB = sourceA.derive({
       metavar: "B",
+      mode: "sync",
       defaultValue: () => "a1" as const,
       factory: (a: "a1" | "a2") =>
         choice(a === "a1" ? (["b1", "b2"] as const) : (["b3", "b4"] as const)),
@@ -8102,6 +8299,7 @@ describe("Circular dependency prevention", () => {
     const derivedC = deriveFrom({
       dependencies: [sourceA, sourceB] as const,
       metavar: "C",
+      mode: "sync",
       defaultValues: () => ["x", "1"] as const,
       factory: (a: "x" | "y", b: "1" | "2") => {
         if (a === "x" && b === "1") {
@@ -8140,6 +8338,7 @@ describe("Circular dependency prevention", () => {
     // const bad = dependency(choice(["a"] as const));
     // const badDerived = bad.derive({
     //   metavar: "X",
+    //   mode: "sync",
     //   defaultValue: () => "a" as const,
     //   factory: () => badDerived, // Error: badDerived used before declaration
     // });
@@ -8149,6 +8348,7 @@ describe("Circular dependency prevention", () => {
     const source = dependency(choice(["1", "2", "3"] as const));
     const derived = source.derive({
       metavar: "DERIVED",
+      mode: "sync",
       defaultValue: () => "1" as const,
       factory: (s: "1" | "2" | "3") =>
         choice(
@@ -8197,6 +8397,7 @@ describe("Complex modifier chains with dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -8243,6 +8444,7 @@ describe("Complex modifier chains with dependencies", () => {
     const envParser = dependency(choice(["test", "staging", "prod"] as const));
     const endpointParser = envParser.derive({
       metavar: "ENDPOINT",
+      mode: "sync",
       defaultValue: () => "test" as const,
       factory: (env: "test" | "staging" | "prod") =>
         choice(
@@ -8287,6 +8489,7 @@ describe("Complex modifier chains with dependencies", () => {
     const formatParser = dependency(choice(["json", "yaml", "xml"] as const));
     const schemaParser = formatParser.derive({
       metavar: "SCHEMA",
+      mode: "sync",
       defaultValue: () => "json" as const,
       factory: (format: "json" | "yaml" | "xml") =>
         choice(
@@ -8338,6 +8541,7 @@ describe("map() chain with multiple() and dependencies", () => {
     );
     const featureParser = tierParser.derive({
       metavar: "FEATURE",
+      mode: "sync",
       defaultValue: () => "free" as const,
       factory: (tier: "free" | "pro" | "enterprise") =>
         choice(
@@ -8375,6 +8579,7 @@ describe("map() chain with multiple() and dependencies", () => {
     const levelParser = dependency(choice(["low", "medium", "high"] as const));
     const valueParser = levelParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       defaultValue: () => "low" as const,
       factory: (level: "low" | "medium" | "high") =>
         choice(
@@ -8413,6 +8618,7 @@ describe("map() chain with multiple() and dependencies", () => {
     const scaleParser = dependency(choice(["small", "large"] as const));
     const sizeParser = scaleParser.derive({
       metavar: "SIZE",
+      mode: "sync",
       defaultValue: () => "small" as const,
       factory: (scale: "small" | "large") =>
         choice(
@@ -8558,6 +8764,7 @@ describe("parseSync() with async derived parser", () => {
 
     const valueParser = modeParser.derive({
       metavar: "VALUE",
+      mode: "sync",
       defaultValue: () => "sync" as const,
       factory: (mode: "sync" | "async") =>
         mode === "sync"
@@ -8599,6 +8806,7 @@ describe("Mixed mode deriveFrom() with sync/async sources", () => {
     const derived = deriveFrom({
       dependencies: [sourceA, sourceB] as const,
       metavar: "DERIVED",
+      mode: "sync",
       defaultValues: () => ["a1", "b1"] as const,
       factory: (a: "a1" | "a2", b: "b1" | "b2") =>
         choice(
@@ -8670,6 +8878,7 @@ describe("Mixed mode deriveFrom() with sync/async sources", () => {
     const derived = deriveFrom({
       dependencies: [asyncSource, syncSource] as const,
       metavar: "DERIVED",
+      mode: "sync",
       defaultValues: () => ["s1", "t1"] as const,
       factory: (s: "s1" | "s2", _t: "t1" | "t2") =>
         choice(s === "s1" ? (["v1", "v2"] as const) : (["v3", "v4"] as const)),
@@ -8703,6 +8912,7 @@ describe("Help and usage with derived parser descriptions", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const configParser = modeParser.derive({
       metavar: "CONFIG_FILE",
+      mode: "sync",
       defaultValue: () => "dev" as const,
       factory: (mode: "dev" | "prod") =>
         choice(
@@ -8746,6 +8956,7 @@ describe("Help and usage with derived parser descriptions", () => {
     const envParser = dependency(choice(["test", "prod"] as const));
     const dbParser = envParser.derive({
       metavar: "DB_URL",
+      mode: "sync",
       defaultValue: () => "test" as const,
       factory: (env: "test" | "prod") =>
         choice(
@@ -8778,6 +8989,7 @@ describe("Suggestions with --option=value form and dependencies", () => {
     const modeParser = dependency(choice(["dev", "staging", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "staging" | "prod") =>
         choice(
           mode === "dev"
@@ -8810,6 +9022,7 @@ describe("Suggestions with --option=value form and dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const logLevelParser = modeParser.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -8842,6 +9055,7 @@ describe("Suggestions with --option=value form and dependencies", () => {
     const envParser = dependency(choice(["dev", "test", "prod"] as const));
     const configParser = envParser.derive({
       metavar: "CONFIG",
+      mode: "sync",
       factory: (env: "dev" | "test" | "prod") =>
         choice(
           env === "dev"
@@ -8879,6 +9093,7 @@ describe("Suggestions with --option=value form and dependencies", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
     const portParser = modeParser.derive({
       metavar: "PORT",
+      mode: "sync",
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
@@ -8927,6 +9142,7 @@ describe("Real-world scenario: Environment-based configuration", () => {
 
     const regionParser = envParser.derive({
       metavar: "REGION",
+      mode: "sync",
       defaultValue: () => "development" as const,
       factory: (env: "development" | "staging" | "production") => {
         switch (env) {
@@ -8950,6 +9166,7 @@ describe("Real-world scenario: Environment-based configuration", () => {
     // Instance types also depend on environment directly
     const instanceParser = envParser.derive({
       metavar: "INSTANCE",
+      mode: "sync",
       defaultValue: () => "development" as const,
       factory: (env: "development" | "staging" | "production") => {
         switch (env) {
@@ -9022,6 +9239,7 @@ describe("Real-world scenario: Environment-based configuration", () => {
 
     const dbTypeParser = envParser.derive({
       metavar: "DB_TYPE",
+      mode: "sync",
       defaultValue: () => "local" as const,
       factory: (env: "local" | "cloud") =>
         choice(
@@ -9089,6 +9307,7 @@ describe("Real-world scenario: Mutually dependent option groups", () => {
 
     const archParser = targetParser.derive({
       metavar: "ARCH",
+      mode: "sync",
       defaultValue: () => "web" as const,
       factory: (target: "web" | "mobile" | "desktop") => {
         switch (target) {
@@ -9105,6 +9324,7 @@ describe("Real-world scenario: Mutually dependent option groups", () => {
     // Optimization also depends on target directly
     const optimizationParser = targetParser.derive({
       metavar: "OPT_LEVEL",
+      mode: "sync",
       defaultValue: () => "web" as const,
       factory: (target: "web" | "mobile" | "desktop") => {
         switch (target) {
@@ -9182,6 +9402,7 @@ describe("Real-world scenario: Mutually dependent option groups", () => {
 
     const endpointParser = versionParser.derive({
       metavar: "ENDPOINT",
+      mode: "sync",
       defaultValue: () => "v1" as const,
       factory: (version: "v1" | "v2" | "v3") => {
         switch (version) {
@@ -9204,6 +9425,7 @@ describe("Real-world scenario: Mutually dependent option groups", () => {
 
     const formatParser = versionParser.derive({
       metavar: "FORMAT",
+      mode: "sync",
       defaultValue: () => "v1" as const,
       factory: (version: "v1" | "v2" | "v3") => {
         switch (version) {

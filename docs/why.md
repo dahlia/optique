@@ -359,6 +359,7 @@ const modeParser = dependency(choice(["dev", "prod"] as const));
 // Log levels depend on the selected mode
 const logLevel = modeParser.derive({
   metavar: "LEVEL",
+  mode: "sync",
   factory: (mode) => {
     if (mode === "dev") return choice(["debug", "info", "warn", "error"]);
     return choice(["warn", "error"]);

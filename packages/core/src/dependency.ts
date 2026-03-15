@@ -113,14 +113,13 @@ export interface DeriveOptions<S, T, FM extends Mode = Mode> {
   readonly defaultValue: () => S;
 
   /**
-   * The execution mode of the factory's returned parser.  When provided,
-   * skips runtime mode detection entirely, so the factory is never called
-   * during parser construction.  When omitted, mode detection is deferred
-   * until the parser is first used.
+   * The execution mode of the factory's returned parser.  This tells the
+   * runtime whether the factory returns a sync or async parser, avoiding
+   * the need to call the factory during parser construction.
    *
    * @since 1.0.0
    */
-  readonly mode?: FM;
+  readonly mode: FM;
 }
 
 /**
@@ -252,7 +251,6 @@ interface InternalDeriveOptions<S, T, FM extends Mode = Mode> {
   readonly metavar: NonEmptyString;
   readonly factory: (sourceValue: S) => ValueParser<FM, T>;
   readonly defaultValue: () => S;
-  readonly mode?: FM;
 }
 
 /**
@@ -343,14 +341,13 @@ export interface DeriveFromOptions<
   readonly defaultValues: () => DependencyValues<Deps>;
 
   /**
-   * The execution mode of the factory's returned parser.  When provided,
-   * skips runtime mode detection entirely, so the factory is never called
-   * during parser construction.  When omitted, mode detection is deferred
-   * until the parser is first used.
+   * The execution mode of the factory's returned parser.  This tells the
+   * runtime whether the factory returns a sync or async parser, avoiding
+   * the need to call the factory during parser construction.
    *
    * @since 1.0.0
    */
-  readonly mode?: FM;
+  readonly mode: FM;
 }
 
 /**
@@ -521,6 +518,7 @@ export interface DerivedValueParser<
  * // Create a derived parser that depends on the directory
  * const branchParser = cwdParser.derive({
  *   metavar: "BRANCH",
+ *   mode: "sync",
  *   factory: (dir) => gitBranch({ dir }),
  *   defaultValue: () => process.cwd(),
  * });
@@ -538,7 +536,7 @@ export function dependency<M extends Mode, T>(
     derive<U, FM extends Mode = "sync">(
       options: DeriveOptions<T, U, FM>,
     ): DerivedValueParser<CombineMode<M, FM>, U, T> {
-      return createDerivedValueParser(id, parser, options);
+      return createDerivedValueParser(id, parser, options, options.mode);
     },
     deriveSync<U>(
       options: DeriveSyncOptions<T, U>,
@@ -641,10 +639,9 @@ export function deriveFrom<
     ? options.dependencies[0][dependencyId]
     : Symbol();
 
-  // Use the explicit mode when provided; otherwise default to "sync"
-  // (matching the FM type default).  This avoids calling the factory
-  // during parser construction.
-  const factoryReturnsAsync = (options.mode ?? "sync") === "async";
+  // Use the explicit mode to avoid calling the factory during
+  // parser construction.
+  const factoryReturnsAsync = options.mode === "async";
 
   const isAsync = depsAsync || factoryReturnsAsync;
 
@@ -1084,11 +1081,11 @@ function createDerivedValueParser<
   sourceId: symbol,
   sourceParser: ValueParser<M, S>,
   options: InternalDeriveOptions<S, T, FM>,
+  factoryMode: FM,
 ): DerivedValueParser<CombineMode<M, FM>, T, S> {
-  // Use the explicit mode when provided; otherwise default to "sync"
-  // (matching the FM type default).  This avoids calling the factory
-  // during parser construction.
-  const factoryReturnsAsync = (options.mode ?? "sync") === "async";
+  // Use the explicit mode to avoid calling the factory during
+  // parser construction.
+  const factoryReturnsAsync = factoryMode === "async";
   const isAsync = sourceParser.$mode === "async" || factoryReturnsAsync;
 
   if (isAsync) {
