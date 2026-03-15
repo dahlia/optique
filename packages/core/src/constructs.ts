@@ -3073,7 +3073,10 @@ function registerCompletedDependency(
   completed: unknown,
   registry: DependencyRegistryLike,
 ): void {
-  if (isDependencySourceState(completed) && completed.result.success) {
+  if (
+    isDependencySourceState(completed) && completed.result.success &&
+    !registry.has(completed[dependencyId])
+  ) {
     registry.set(completed[dependencyId], completed.result.value);
   }
 }
