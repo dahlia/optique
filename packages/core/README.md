@@ -47,8 +47,8 @@ const parser = object({
 });
 
 const config = runParser(parser, "myapp", process.argv.slice(2), {
-  help: "both",
-  onError: process.exit,
+  help: { command: true, option: true },
+  onError: (exitCode) => process.exit(exitCode),
 });
 
 console.log(`Hello ${config.name}!`);

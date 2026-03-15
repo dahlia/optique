@@ -64,6 +64,50 @@ async function findReadmeFiles(dir: string): Promise<string[]> {
   return results;
 }
 
+const STALE_OPTION_PATTERNS: {
+  pattern: RegExp;
+  description: string;
+  files?: string[];
+}[] = [
+  {
+    pattern: /completion:\s*\{\s*mode:/,
+    description:
+      'completion should use string shorthand (e.g., "both") in @optique/run, not { mode: "both" }',
+    files: ["packages/run/README.md"],
+  },
+  {
+    pattern: /help:\s*"(?:both|command|option)"/,
+    description:
+      "runParser() help option requires object shape (e.g., { command: true, option: true }), not a string shorthand",
+    files: ["packages/core/README.md"],
+  },
+];
+
+describe("README option shapes", () => {
+  it("should not use stale run()/runParser() option shapes", async () => {
+    const root = new URL(".", import.meta.url).pathname;
+    const readmes = await findReadmeFiles(root);
+    const violations: string[] = [];
+
+    for (const readme of readmes) {
+      const content = await readFile(readme, "utf-8");
+      const rel = readme.replace(root, "");
+      for (const { pattern, description, files } of STALE_OPTION_PATTERNS) {
+        if (files && !files.some((f) => rel === f)) continue;
+        if (pattern.test(content)) {
+          violations.push(`${rel}: ${description}`);
+        }
+      }
+    }
+
+    assert.deepStrictEqual(
+      violations,
+      [],
+      `Found stale option shapes in README files:\n${violations.join("\n")}`,
+    );
+  });
+});
+
 describe("README imports", () => {
   it("should not import primitives/constructs/modifiers from @optique/core/parser", async () => {
     const root = new URL(".", import.meta.url).pathname;

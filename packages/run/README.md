@@ -88,7 +88,7 @@ const parser = object({
 });
 
 const config = run(parser, {
-  completion: { mode: "both" }
+  completion: "both"
 });
 ~~~~
 
