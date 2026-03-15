@@ -16,8 +16,16 @@ import {
   suggestSync,
   withDefault,
 } from "./index.ts";
-import { choice, integer, string } from "./valueparser.ts";
+import {
+  choice,
+  integer,
+  string,
+  type ValueParser,
+  type ValueParserResult,
+} from "./valueparser.ts";
 import { message } from "./message.ts";
+import type { NonEmptyString } from "./nonempty.ts";
+import { suggestAsync } from "./parser.ts";
 
 // Helper function to extract text from suggestions
 function extractText(suggestion: Suggestion): string {
@@ -802,5 +810,124 @@ describe("suggest function", () => {
         ["debug", "verbose"],
       );
     });
+
+    it(
+      "should suggest values based on withDefault() source value with async map()",
+      async () => {
+        function asyncChoice<T extends string>(
+          choices: readonly T[],
+        ): ValueParser<"async", T> {
+          return {
+            $mode: "async",
+            metavar: "ASYNC_CHOICE" as NonEmptyString,
+            parse(input: string): Promise<ValueParserResult<T>> {
+              if (choices.includes(input as T)) {
+                return Promise.resolve({ success: true, value: input as T });
+              }
+              return Promise.resolve({
+                success: false,
+                error: message`Must be one of: ${choices.join(", ")}`,
+              });
+            },
+            format(value: T): string {
+              return value;
+            },
+            async *suggest(prefix: string): AsyncIterable<Suggestion> {
+              for (const c of choices) {
+                if (c.startsWith(prefix)) {
+                  yield { kind: "literal", text: c };
+                }
+              }
+            },
+          };
+        }
+
+        const mode = dependency(asyncChoice(["dev", "prod"] as const));
+        const level = mode.derive({
+          metavar: "LEVEL",
+          factory: (value) =>
+            asyncChoice(
+              value === "dev"
+                ? (["debug", "verbose"] as const)
+                : (["silent", "strict"] as const),
+            ),
+          defaultValue: () => "dev" as const,
+        });
+
+        // Wrapping with map() adds transformsDependencyValueMarker,
+        // which causes complete() to return a Promise for async parsers
+        const parser = object({
+          mode: withDefault(
+            map(option("--mode", mode), (v) => v),
+            "prod" as const,
+          ),
+          level: option("--level", level),
+        });
+
+        const result = await suggestAsync(parser, ["--level", "s"]);
+        deepStrictEqual(
+          result.map(extractText),
+          ["silent", "strict"],
+        );
+      },
+    );
+
+    it(
+      "should suggest values based on withDefault() source value for async parsers",
+      async () => {
+        function asyncChoice<T extends string>(
+          choices: readonly T[],
+        ): ValueParser<"async", T> {
+          return {
+            $mode: "async",
+            metavar: "ASYNC_CHOICE" as NonEmptyString,
+            parse(input: string): Promise<ValueParserResult<T>> {
+              if (choices.includes(input as T)) {
+                return Promise.resolve({ success: true, value: input as T });
+              }
+              return Promise.resolve({
+                success: false,
+                error: message`Must be one of: ${choices.join(", ")}`,
+              });
+            },
+            format(value: T): string {
+              return value;
+            },
+            async *suggest(prefix: string): AsyncIterable<Suggestion> {
+              for (const c of choices) {
+                if (c.startsWith(prefix)) {
+                  yield { kind: "literal", text: c };
+                }
+              }
+            },
+          };
+        }
+
+        const mode = dependency(asyncChoice(["dev", "prod"] as const));
+        const level = mode.derive({
+          metavar: "LEVEL",
+          factory: (value) =>
+            asyncChoice(
+              value === "dev"
+                ? (["debug", "verbose"] as const)
+                : (["silent", "strict"] as const),
+            ),
+          defaultValue: () => "dev" as const,
+        });
+
+        const parser = object({
+          mode: withDefault(option("--mode", mode), "prod" as const),
+          level: option("--level", level),
+        });
+
+        // When --mode is not provided, withDefault gives "prod",
+        // so --level should suggest "silent" and "strict"
+        const result = await suggestAsync(parser, ["--level", "s"]);
+        deepStrictEqual(
+          result.map(extractText),
+          ["silent", "strict"],
+        );
+      },
+    );
   });
 });

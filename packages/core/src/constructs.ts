@@ -3010,7 +3010,7 @@ async function* suggestObjectAsync<
   // Pre-complete dependency sources wrapped in withDefault() whose state is
   // unpopulated, so that their default values get registered in the registry.
   // See: https://github.com/dahlia/optique/issues/186
-  completeDependencySourceDefaults(context, parserPairs, registry);
+  await completeDependencySourceDefaultsAsync(context, parserPairs, registry);
 
   // Create context with dependency registry for child parsers
   const contextWithRegistry = { ...context, dependencyRegistry: registry };
@@ -3064,6 +3064,22 @@ async function* suggestObjectAsync<
 }
 
 /**
+ * Registers a completed dependency source value in the registry if it is
+ * a successful {@link DependencySourceState}.  Handles both sync results
+ * and `Promise`-wrapped results (for async parsers).
+ *
+ * @internal
+ */
+function registerCompletedDependency(
+  completed: unknown,
+  registry: DependencyRegistryLike,
+): void {
+  if (isDependencySourceState(completed) && completed.result.success) {
+    registry.set(completed[dependencyId], completed.result.value);
+  }
+}
+
+/**
  * Pre-completes dependency source parsers wrapped in `withDefault()` whose
  * field state is unpopulated, so that their default values are registered
  * in the dependency registry.  This mirrors Phase 1 of parse-time dependency
@@ -3091,15 +3107,47 @@ function completeDependencySourceDefaults(
 
     if (isPendingDependencySourceState(fieldParser.initialState)) {
       const completed = fieldParser.complete(fieldParser.initialState);
-      if (isDependencySourceState(completed) && completed.result.success) {
-        registry.set(completed[dependencyId], completed.result.value);
-      }
+      registerCompletedDependency(completed, registry);
     } else if (isWrappedDependencySource(fieldParser)) {
       const pendingState = fieldParser[wrappedDependencySourceMarker];
       const completed = fieldParser.complete([pendingState]);
-      if (isDependencySourceState(completed) && completed.result.success) {
-        registry.set(completed[dependencyId], completed.result.value);
-      }
+      registerCompletedDependency(completed, registry);
+    }
+  }
+}
+
+/**
+ * Async version of {@link completeDependencySourceDefaults} that awaits
+ * `complete()` results.  Async parsers with `transformsDependencyValue`
+ * return a `Promise` from `complete()`, which the sync version cannot handle.
+ *
+ * @see https://github.com/dahlia/optique/issues/186
+ * @internal
+ */
+async function completeDependencySourceDefaultsAsync(
+  context: ParserContext<unknown>,
+  parserPairs: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+  registry: DependencyRegistryLike,
+): Promise<void> {
+  for (const [field, fieldParser] of parserPairs) {
+    const fieldState = context.state != null &&
+        typeof context.state === "object" &&
+        field in context.state
+      ? (context.state as Record<string | symbol, unknown>)[field]
+      : undefined;
+
+    // Only handle unpopulated state for parsers that wrap a dependency source
+    if (fieldState != null) continue;
+
+    if (isPendingDependencySourceState(fieldParser.initialState)) {
+      const completed = await fieldParser.complete(fieldParser.initialState);
+      registerCompletedDependency(completed, registry);
+    } else if (isWrappedDependencySource(fieldParser)) {
+      const pendingState = fieldParser[wrappedDependencySourceMarker];
+      const completed = await fieldParser.complete([pendingState]);
+      registerCompletedDependency(completed, registry);
     }
   }
 }
