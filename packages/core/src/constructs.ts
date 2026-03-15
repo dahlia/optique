@@ -2932,6 +2932,12 @@ function* suggestObjectSync<
     collectDependencies(context.state, registry);
   }
 
+  // Pre-complete dependency sources wrapped in withDefault() whose state is
+  // unpopulated, so that their default values get registered in the registry.
+  // This mirrors Phase 1 of the parse-time dependency resolution in object().
+  // See: https://github.com/dahlia/optique/issues/186
+  completeDependencySourceDefaults(context, parserPairs, registry);
+
   // Create context with dependency registry for child parsers
   const contextWithRegistry = { ...context, dependencyRegistry: registry };
 
@@ -3001,6 +3007,11 @@ async function* suggestObjectAsync<
     collectDependencies(context.state, registry);
   }
 
+  // Pre-complete dependency sources wrapped in withDefault() whose state is
+  // unpopulated, so that their default values get registered in the registry.
+  // See: https://github.com/dahlia/optique/issues/186
+  await completeDependencySourceDefaultsAsync(context, parserPairs, registry);
+
   // Create context with dependency registry for child parsers
   const contextWithRegistry = { ...context, dependencyRegistry: registry };
 
@@ -3050,6 +3061,110 @@ async function* suggestObjectAsync<
   }
 
   yield* deduplicateSuggestions(suggestions);
+}
+
+/**
+ * Registers an already-resolved dependency source value in the registry
+ * if it is a successful {@link DependencySourceState}.
+ *
+ * @internal
+ */
+function registerCompletedDependency(
+  completed: unknown,
+  registry: DependencyRegistryLike,
+): void {
+  if (
+    isDependencySourceState(completed) && completed.result.success &&
+    !registry.has(completed[dependencyId])
+  ) {
+    registry.set(completed[dependencyId], completed.result.value);
+  }
+}
+
+/**
+ * Yields `(parser, state)` pairs for dependency source parsers whose field
+ * state is unpopulated, so callers can invoke `complete()` on them.
+ *
+ * @see https://github.com/dahlia/optique/issues/186
+ * @internal
+ */
+function* pendingDependencyDefaults(
+  context: ParserContext<unknown>,
+  parserPairs: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+): Generator<
+  { readonly parser: Parser<Mode, unknown, unknown>; readonly state: unknown }
+> {
+  for (const [field, fieldParser] of parserPairs) {
+    const fieldState = context.state != null &&
+        typeof context.state === "object" &&
+        field in context.state
+      ? (context.state as Record<string | symbol, unknown>)[field]
+      : undefined;
+
+    if (fieldState != null) continue;
+
+    if (isPendingDependencySourceState(fieldParser.initialState)) {
+      yield { parser: fieldParser, state: fieldParser.initialState };
+    } else if (isWrappedDependencySource(fieldParser)) {
+      yield {
+        parser: fieldParser,
+        state: [fieldParser[wrappedDependencySourceMarker]],
+      };
+    }
+  }
+}
+
+/**
+ * Pre-completes dependency source parsers wrapped in `withDefault()` whose
+ * field state is unpopulated, so that their default values are registered
+ * in the dependency registry.  This mirrors Phase 1 of parse-time dependency
+ * resolution and ensures `suggest()` sees the same defaults as `parse()`.
+ *
+ * @see https://github.com/dahlia/optique/issues/186
+ * @internal
+ */
+function completeDependencySourceDefaults(
+  context: ParserContext<unknown>,
+  parserPairs: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+  registry: DependencyRegistryLike,
+): void {
+  for (
+    const { parser, state } of pendingDependencyDefaults(
+      context,
+      parserPairs,
+    )
+  ) {
+    registerCompletedDependency(parser.complete(state), registry);
+  }
+}
+
+/**
+ * Async version of {@link completeDependencySourceDefaults} that awaits
+ * `complete()` results.  Async parsers with `transformsDependencyValue`
+ * return a `Promise` from `complete()`, which the sync version cannot handle.
+ *
+ * @see https://github.com/dahlia/optique/issues/186
+ * @internal
+ */
+async function completeDependencySourceDefaultsAsync(
+  context: ParserContext<unknown>,
+  parserPairs: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+  registry: DependencyRegistryLike,
+): Promise<void> {
+  for (
+    const { parser, state } of pendingDependencyDefaults(
+      context,
+      parserPairs,
+    )
+  ) {
+    registerCompletedDependency(await parser.complete(state), registry);
+  }
 }
 
 /**

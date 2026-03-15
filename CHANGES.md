@@ -213,6 +213,11 @@ To be released.
     composed state before delegating to child parsers, matching the behavior
     that `object()` already had.  [[#178], [#520]]
 
+ -  Fixed dependency-aware completion ignoring `withDefault()` source values.
+    When a dependency source was wrapped with `withDefault()` and no explicit
+    CLI value was provided, `suggest()` returned an empty array instead of
+    suggesting values based on the default.  [[#186], [#522]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -236,10 +241,12 @@ To be released.
 [#157]: https://github.com/dahlia/optique/issues/157
 [#177]: https://github.com/dahlia/optique/issues/177
 [#178]: https://github.com/dahlia/optique/issues/178
+[#186]: https://github.com/dahlia/optique/issues/186
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
 [#520]: https://github.com/dahlia/optique/pull/520
+[#522]: https://github.com/dahlia/optique/pull/522
 
 ### @optique/config
 
