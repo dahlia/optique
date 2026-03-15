@@ -290,6 +290,7 @@ export function choice<const T extends string | number>(
     // Number choice implementation
     const numberChoices = choices as readonly number[];
     const numberOptions = options as ChoiceOptionsNumber;
+    const validNumberChoices = numberChoices.filter((v) => !Number.isNaN(v));
     const numberStrings = numberChoices.map((v) =>
       Object.is(v, -0) ? "-0" : String(v)
     );
@@ -386,7 +387,11 @@ export function choice<const T extends string | number>(
         }
         return {
           success: false,
-          error: formatNumberChoiceError(input, numberChoices, numberOptions),
+          error: formatNumberChoiceError(
+            input,
+            validNumberChoices,
+            numberOptions,
+          ),
         };
       },
       format(value: T): string {
