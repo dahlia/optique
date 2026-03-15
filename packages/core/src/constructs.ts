@@ -3053,17 +3053,9 @@ async function* suggestObjectAsync<
 }
 
 /**
- * Resolves deferred parse states in an object's field states.
- * This function builds a dependency registry from DependencySourceState fields
- * and re-parses DeferredParseState fields using the actual dependency values.
- *
- * @param fieldStates A record of field names to their state values
- * @returns The field states with deferred states resolved to their actual values
- * @internal
- */
-/**
  * Recursively collects dependency values from DependencySourceState objects
  * found anywhere in the state tree.
+ * @internal
  */
 function collectDependencies(
   state: unknown,
