@@ -2932,6 +2932,12 @@ function* suggestObjectSync<
     collectDependencies(context.state, registry);
   }
 
+  // Pre-complete dependency sources wrapped in withDefault() whose state is
+  // unpopulated, so that their default values get registered in the registry.
+  // This mirrors Phase 1 of the parse-time dependency resolution in object().
+  // See: https://github.com/dahlia/optique/issues/186
+  completeDependencySourceDefaults(context, parserPairs, registry);
+
   // Create context with dependency registry for child parsers
   const contextWithRegistry = { ...context, dependencyRegistry: registry };
 
@@ -3001,6 +3007,11 @@ async function* suggestObjectAsync<
     collectDependencies(context.state, registry);
   }
 
+  // Pre-complete dependency sources wrapped in withDefault() whose state is
+  // unpopulated, so that their default values get registered in the registry.
+  // See: https://github.com/dahlia/optique/issues/186
+  completeDependencySourceDefaults(context, parserPairs, registry);
+
   // Create context with dependency registry for child parsers
   const contextWithRegistry = { ...context, dependencyRegistry: registry };
 
@@ -3050,6 +3061,47 @@ async function* suggestObjectAsync<
   }
 
   yield* deduplicateSuggestions(suggestions);
+}
+
+/**
+ * Pre-completes dependency source parsers wrapped in `withDefault()` whose
+ * field state is unpopulated, so that their default values are registered
+ * in the dependency registry.  This mirrors Phase 1 of parse-time dependency
+ * resolution and ensures `suggest()` sees the same defaults as `parse()`.
+ *
+ * @see https://github.com/dahlia/optique/issues/186
+ * @internal
+ */
+function completeDependencySourceDefaults(
+  context: ParserContext<unknown>,
+  parserPairs: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+  registry: DependencyRegistryLike,
+): void {
+  for (const [field, fieldParser] of parserPairs) {
+    const fieldState = context.state != null &&
+        typeof context.state === "object" &&
+        field in context.state
+      ? (context.state as Record<string | symbol, unknown>)[field]
+      : undefined;
+
+    // Only handle unpopulated state for parsers that wrap a dependency source
+    if (fieldState != null) continue;
+
+    if (isPendingDependencySourceState(fieldParser.initialState)) {
+      const completed = fieldParser.complete(fieldParser.initialState);
+      if (isDependencySourceState(completed) && completed.result.success) {
+        registry.set(completed[dependencyId], completed.result.value);
+      }
+    } else if (isWrappedDependencySource(fieldParser)) {
+      const pendingState = fieldParser[wrappedDependencySourceMarker];
+      const completed = fieldParser.complete([pendingState]);
+      if (isDependencySourceState(completed) && completed.result.success) {
+        registry.set(completed[dependencyId], completed.result.value);
+      }
+    }
+  }
 }
 
 /**

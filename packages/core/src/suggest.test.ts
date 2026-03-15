@@ -4,6 +4,7 @@ import {
   argument,
   command,
   constant,
+  dependency,
   flag,
   map,
   multiple,
@@ -744,6 +745,62 @@ describe("suggest function", () => {
       // Test with invalid option-like prefix
       const result = suggestSync(parser, ["---invalid"]);
       deepStrictEqual(result, []);
+    });
+  });
+
+  describe("dependency-aware completion with withDefault()", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/186
+    it("should suggest values based on withDefault() source value", () => {
+      const mode = dependency(choice(["dev", "prod"] as const));
+      const level = mode.derive({
+        metavar: "LEVEL",
+        factory: (value) =>
+          choice(
+            value === "dev"
+              ? (["debug", "verbose"] as const)
+              : (["silent", "strict"] as const),
+          ),
+        defaultValue: () => "dev" as const,
+      });
+
+      const parser = object({
+        mode: withDefault(option("--mode", mode), "prod" as const),
+        level: option("--level", level),
+      });
+
+      // When --mode is not provided, withDefault gives "prod",
+      // so --level should suggest "silent" and "strict"
+      const result = suggestSync(parser, ["--level", "s"]);
+      deepStrictEqual(
+        result.map(extractText),
+        ["silent", "strict"],
+      );
+    });
+
+    it("should suggest values based on explicit source value", () => {
+      const mode = dependency(choice(["dev", "prod"] as const));
+      const level = mode.derive({
+        metavar: "LEVEL",
+        factory: (value) =>
+          choice(
+            value === "dev"
+              ? (["debug", "verbose"] as const)
+              : (["silent", "strict"] as const),
+          ),
+        defaultValue: () => "dev" as const,
+      });
+
+      const parser = object({
+        mode: withDefault(option("--mode", mode), "prod" as const),
+        level: option("--level", level),
+      });
+
+      // When --mode is explicitly "dev", --level should suggest "debug" and "verbose"
+      const result = suggestSync(parser, ["--mode", "dev", "--level", ""]);
+      deepStrictEqual(
+        result.map(extractText),
+        ["debug", "verbose"],
+      );
     });
   });
 });
