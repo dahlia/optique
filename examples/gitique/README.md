@@ -301,7 +301,8 @@ This example demonstrates key Optique patterns in a realistic CLI application:
 
 ~~~~ typescript
 import { run } from "@optique/run";
-import { command, constant, object, option, or } from "@optique/core/parser";
+import { command, constant, option } from "@optique/core/primitives";
+import { object, or } from "@optique/core/constructs";
 import { string } from "@optique/core/valueparser";
 
 const parser = or(

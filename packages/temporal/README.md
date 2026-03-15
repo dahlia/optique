@@ -36,7 +36,7 @@ The following example uses the `plainDate()` value parser to accept a date in
 
 ~~~~ typescript
 import { run } from "@optique/run";
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { plainDate } from "@optique/temporal";
 
 const cli = run({

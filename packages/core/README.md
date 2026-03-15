@@ -35,7 +35,8 @@ Quick example
 
 ~~~~ typescript
 import { runParser } from "@optique/core/facade";
-import { object, option, argument } from "@optique/core/parser";
+import { option, argument } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
 import { string, integer } from "@optique/core/valueparser";
 import process from "node:process";
 

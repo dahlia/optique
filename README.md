@@ -89,7 +89,9 @@ Quick example
 -------------
 
 ~~~~ typescript
-import { object, option, optional, or, merge, constant } from "@optique/core/parser";
+import { option, constant } from "@optique/core/primitives";
+import { object, or, merge } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
 import { string, integer } from "@optique/core/valueparser";
 import { run, print } from "@optique/run";
 

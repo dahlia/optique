@@ -38,7 +38,7 @@ address.
 
 ~~~~ typescript
 import { run } from "@optique/run";
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 

@@ -30,7 +30,7 @@ address.
 
 ~~~~ typescript
 import { run } from "@optique/run";
-import { option } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 

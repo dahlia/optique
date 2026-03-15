@@ -40,7 +40,8 @@ Quick example
 
 ~~~~ typescript
 import { run } from "@optique/run";
-import { object, option, argument } from "@optique/core/parser";
+import { option, argument } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
 import { string, integer } from "@optique/core/valueparser";
 
 const parser = object({
@@ -76,7 +77,8 @@ configuration:
 
 ~~~~ typescript
 import { run } from "@optique/run";
-import { object, option, argument } from "@optique/core/parser";
+import { option, argument } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
 import { string, choice } from "@optique/core/valueparser";
 
 const parser = object({
