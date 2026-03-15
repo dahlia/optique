@@ -5501,13 +5501,20 @@ function preParseSuggestContext(
   const stateArray = (context.state as unknown[]).slice();
   const matchedParsers = new Set<number>();
 
+  // Build an indexed list so we can sort by priority each iteration,
+  // matching the resolution order used by concat.parse().
+  const indexedParsers = activeParsers
+    .map((parser, index) => [parser, index] as [typeof parser, number]);
+
   let changed = true;
   while (changed && currentContext.buffer.length > 0) {
     changed = false;
-    for (let i = 0; i < activeParsers.length; i++) {
-      if (matchedParsers.has(i)) continue;
-      const parser = activeParsers[i];
-      const parserState = stateArray[i] ?? parser.initialState;
+    const remaining = indexedParsers
+      .filter(([_, index]) => !matchedParsers.has(index))
+      .sort(([a], [b]) => b.priority - a.priority);
+
+    for (const [parser, index] of remaining) {
+      const parserState = stateArray[index] ?? parser.initialState;
       const result = parser.parse({
         ...currentContext,
         state: parserState,
@@ -5516,14 +5523,14 @@ function preParseSuggestContext(
       if (result && typeof result === "object" && "then" in result) continue;
       const syncResult = result as ParserResult<readonly unknown[]>;
       if (syncResult.success && syncResult.consumed.length > 0) {
-        stateArray[i] = syncResult.next.state;
+        stateArray[index] = syncResult.next.state;
         currentContext = {
           ...currentContext,
           buffer: syncResult.next.buffer,
           optionsTerminated: syncResult.next.optionsTerminated,
           state: stateArray,
         };
-        matchedParsers.add(i);
+        matchedParsers.add(index);
         changed = true;
         break;
       }
