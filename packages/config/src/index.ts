@@ -85,6 +85,59 @@ function isPlainObject(value: object): boolean {
   return proto === Object.prototype || proto === null;
 }
 
+function shouldSkipCollectionOwnKey(
+  value: object,
+  key: PropertyKey,
+): boolean {
+  if (Array.isArray(value)) {
+    return key === "length" ||
+      (typeof key === "string" &&
+        Number.isInteger(Number(key)) &&
+        String(Number(key)) === key);
+  }
+  return false;
+}
+
+function containsDeferredPromptValuesInOwnProperties(
+  value: object,
+  seen: WeakSet<object>,
+): boolean {
+  for (const key of Reflect.ownKeys(value)) {
+    if (shouldSkipCollectionOwnKey(value, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      descriptor != null &&
+      "value" in descriptor &&
+      containsDeferredPromptValues(descriptor.value, seen)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function copySanitizedOwnProperties(
+  source: object,
+  target: object,
+  seen: WeakMap<object, unknown>,
+): void {
+  for (const key of Reflect.ownKeys(source)) {
+    if (shouldSkipCollectionOwnKey(source, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor == null) {
+      continue;
+    }
+    if ("value" in descriptor) {
+      descriptor.value = stripDeferredPromptValues(descriptor.value, seen);
+    }
+    Object.defineProperty(target, key, descriptor);
+  }
+}
+
 function containsDeferredPromptValues(
   value: unknown,
   seen = new WeakSet<object>(),
@@ -103,7 +156,10 @@ function containsDeferredPromptValues(
   }
   seen.add(value);
   if (Array.isArray(value)) {
-    return value.some((item) => containsDeferredPromptValues(item, seen));
+    if (value.some((item) => containsDeferredPromptValues(item, seen))) {
+      return true;
+    }
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
   }
   if (value instanceof Set) {
     for (const entryValue of value) {
@@ -111,7 +167,7 @@ function containsDeferredPromptValues(
         return true;
       }
     }
-    return false;
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
   }
   if (value instanceof Map) {
     for (const [key, entryValue] of value) {
@@ -122,19 +178,9 @@ function containsDeferredPromptValues(
         return true;
       }
     }
-    return false;
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
   }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (
-      descriptor != null &&
-      "value" in descriptor &&
-      containsDeferredPromptValues(descriptor.value, seen)
-    ) {
-      return true;
-    }
-  }
-  return false;
+  return containsDeferredPromptValuesInOwnProperties(value, seen);
 }
 
 function createSanitizedNonPlainView<T extends object>(
@@ -190,6 +236,7 @@ function stripDeferredPromptValues<T>(
     for (let i = 0; i < value.length; i++) {
       clone[i] = stripDeferredPromptValues(value[i], seen);
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (value instanceof Set) {
@@ -201,6 +248,7 @@ function stripDeferredPromptValues<T>(
     for (const entryValue of value) {
       clone.add(stripDeferredPromptValues(entryValue, seen));
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (value instanceof Map) {
@@ -215,6 +263,7 @@ function stripDeferredPromptValues<T>(
         stripDeferredPromptValues(entryValue, seen),
       );
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (!isPlainObject(value)) {

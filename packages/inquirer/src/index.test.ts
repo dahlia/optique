@@ -1418,6 +1418,56 @@ describe("prompt()", () => {
       assert.ok(result instanceof Set);
       assert.deepEqual([...result], ["config-secret"]);
     });
+
+    it("hides deferred prompt values in Set own properties for config loaders", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      class BoxSet extends Set<string | undefined> {
+        apiKey: string | undefined;
+
+        constructor(value: string | undefined) {
+          super([value]);
+          this.apiKey = value;
+        }
+      }
+
+      let loaderApiKey: string | undefined;
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => new BoxSet(value.apiKey),
+      );
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          if (parsed instanceof BoxSet) {
+            loaderApiKey = parsed.apiKey;
+          }
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.equal(loaderApiKey, undefined);
+      assert.ok(result instanceof BoxSet);
+      assert.equal(result.apiKey, "config-secret");
+    });
   });
 
   describe("prompt config default", () => {
