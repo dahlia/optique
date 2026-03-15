@@ -5619,6 +5619,7 @@ function tryParseSuggestList(
             );
           }
           // This async parser didn't consume — try the remaining parsers.
+          // If one of them consumes, restart the full outer loop.
           const next = tryParseSuggestList(
             context,
             stateArray,
@@ -5626,7 +5627,23 @@ function tryParseSuggestList(
             matchedParsers,
             tail,
           );
-          return next ?? { ...context, state: stateArray };
+          if (next === null) return { ...context, state: stateArray };
+          // A tail parser consumed — restart the loop on the updated context.
+          if (
+            typeof next === "object" && "then" in next &&
+            typeof next.then === "function"
+          ) {
+            return (next as Promise<ParserContext<readonly unknown[]>>)
+              .then((ctx) =>
+                preParseSuggestLoop(ctx, stateArray, parsers, matchedParsers)
+              );
+          }
+          return preParseSuggestLoop(
+            next as ParserContext<readonly unknown[]>,
+            stateArray,
+            parsers,
+            matchedParsers,
+          );
         });
     }
 
