@@ -443,8 +443,9 @@ export function choice<const T extends string | number>(
 }
 
 /**
- * Expands a canonical `String(number)` representation that uses scientific
- * notation (e.g., `"1e+21"`, `"1.5e-3"`) into plain decimal form.
+ * Expands a numeric string in scientific notation (e.g., `"1e+21"`,
+ * `"1.5e-3"`, `".1e-6"`) into plain decimal form for normalization.
+ * Used for both canonical `String(number)` output and user input.
  * Returns the input unchanged if it does not contain scientific notation.
  */
 function expandScientific(s: string): string {
