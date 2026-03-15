@@ -5484,26 +5484,25 @@ type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
  * Pre-parses the buffer in a concat suggest context to build up state across
  * sub-parsers.  `concat.parse()` is atomic (it fails unless every sub-parser
  * matches), so after a parse failure the state may still be the initial state.
- * This helper iterates the sub-parsers against the buffer, accumulating state
- * from any that succeed, so that dependency source values are available when
- * collecting dependencies for suggestions.
+ * This helper replays **sync** child parsers in priority order (mirroring
+ * `concat.parse()`) to accumulate dependency source values for suggestions.
+ *
+ * Only sync parsers are attempted — async parsers are skipped to avoid
+ * launching unawaited I/O during tab completion.
  * @internal
  */
 function preParseSuggestContext(
   context: ParserContext<readonly unknown[]>,
-  parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
   syncParsers: readonly Parser<"sync", readonly unknown[], unknown>[],
-  isAsync: boolean,
 ): ParserContext<readonly unknown[]> {
   if (context.buffer.length < 1) return context;
-  const activeParsers = isAsync ? parsers : syncParsers;
   let currentContext = context;
   const stateArray = (context.state as unknown[]).slice();
   const matchedParsers = new Set<number>();
 
   // Build an indexed list so we can sort by priority each iteration,
   // matching the resolution order used by concat.parse().
-  const indexedParsers = activeParsers
+  const indexedParsers = syncParsers
     .map((parser, index) => [parser, index] as [typeof parser, number]);
 
   let changed = true;
@@ -5519,15 +5518,12 @@ function preParseSuggestContext(
         ...currentContext,
         state: parserState,
       });
-      // Skip promises — sync pre-parse only:
-      if (result && typeof result === "object" && "then" in result) continue;
-      const syncResult = result as ParserResult<readonly unknown[]>;
-      if (syncResult.success && syncResult.consumed.length > 0) {
-        stateArray[index] = syncResult.next.state;
+      if (result.success && result.consumed.length > 0) {
+        stateArray[index] = result.next.state;
         currentContext = {
           ...currentContext,
-          buffer: syncResult.next.buffer,
-          optionsTerminated: syncResult.next.optionsTerminated,
+          buffer: result.next.buffer,
+          optionsTerminated: result.next.optionsTerminated,
           state: stateArray,
         };
         matchedParsers.add(index);
@@ -5895,9 +5891,7 @@ export function concat(
       // sub-parsers are available to later derived parsers.
       const preParsedContext = preParseSuggestContext(
         context,
-        parsers,
         syncParsers,
-        isAsync,
       );
       const stateArray = preParsedContext.state as unknown[] | undefined;
 
