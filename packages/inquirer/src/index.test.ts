@@ -2785,6 +2785,79 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 0);
     });
 
+    it("keeps concurrent non-plain prompt annotations isolated", async () => {
+      const marker = Symbol.for("@test/prompt-concurrent-class-state");
+
+      class SharedState {}
+
+      let pendingCompletions = 0;
+      let releaseCompletions: (() => void) | undefined;
+      const completionGate = new Promise<void>((resolve) => {
+        releaseCompletions = resolve;
+      });
+
+      const inner: Parser<"async", string, SharedState> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly SharedState[],
+        priority: 1,
+        usage: [],
+        initialState: new SharedState(),
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        async complete(state) {
+          pendingCompletions += 1;
+          if (pendingCompletions === 2) {
+            releaseCompletions?.();
+          }
+          await completionGate;
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[marker] as string,
+          };
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => Promise.resolve("prompted"),
+      });
+
+      const [first, second] = await Promise.all([
+        parseAsync(parser, [], {
+          annotations: { [marker]: "first" } satisfies Annotations,
+        }),
+        parseAsync(parser, [], {
+          annotations: { [marker]: "second" } satisfies Annotations,
+        }),
+      ]);
+
+      assert.ok(first.success);
+      assert.ok(second.success);
+      if (first.success) {
+        assert.equal(first.value, "first");
+      }
+      if (second.success) {
+        assert.equal(second.value, "second");
+      }
+    });
+
     it("preserves annotations for CLI-backed non-plain inner states", async () => {
       const marker = Symbol.for("@test/prompt-cli-class-state");
       let promptCalls = 0;

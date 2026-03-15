@@ -168,56 +168,24 @@ function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
   };
 }
 
-function withTemporaryAnnotations<T>(
-  state: unknown,
-  annotations: Annotations | undefined,
-  run: (annotatedState: unknown) => T,
-): T {
-  if (
-    annotations == null || state == null || typeof state !== "object" ||
-    annotationKey in state
-  ) {
-    return run(state);
-  }
-
-  const hadOwnAnnotation = Object.prototype.hasOwnProperty.call(
-    state,
-    annotationKey,
-  );
-  const previousDescriptor = hadOwnAnnotation
-    ? Object.getOwnPropertyDescriptor(state, annotationKey)
-    : undefined;
-
-  try {
-    Object.defineProperty(state, annotationKey, {
-      value: annotations,
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    });
-  } catch {
-    return run(state);
-  }
-
-  const restore = (): void => {
-    if (previousDescriptor != null) {
-      Object.defineProperty(state, annotationKey, previousDescriptor);
-    } else {
-      delete (state as { [annotationKey]?: Annotations })[annotationKey];
-    }
-  };
-
-  try {
-    const result = run(state);
-    if (result instanceof Promise) {
-      return result.finally(restore) as T;
-    }
-    restore();
-    return result;
-  } catch (error) {
-    restore();
-    throw error;
-  }
+function withAnnotationView<T extends object, TResult>(
+  state: T,
+  annotations: Annotations,
+  run: (annotatedState: T) => TResult,
+): TResult {
+  const annotatedState = new Proxy(state, {
+    get(target, key) {
+      if (key === annotationKey) {
+        return annotations;
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    has(target, key) {
+      return key === annotationKey || Reflect.has(target, key);
+    },
+  });
+  return run(annotatedState);
 }
 
 function withAnnotatedInnerState<TState, TResult>(
@@ -240,7 +208,7 @@ function withAnnotatedInnerState<TState, TResult>(
     return run(inheritedState);
   }
 
-  return withTemporaryAnnotations(
+  return withAnnotationView(
     innerState,
     annotations,
     (annotatedState) => run(annotatedState as TState),
