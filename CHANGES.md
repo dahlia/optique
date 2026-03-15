@@ -785,9 +785,10 @@ Released on February 15, 2026.
  -  Fixed number `choice()` accepting hex (`0x10`), binary (`0b10`), octal
     (`0o10`), scientific notation (`2e0`), empty strings, and whitespace-only
     strings via JavaScript's `Number()` coercion.  Number choices now accept
-    only the canonical string representation and mathematically equivalent
-    decimal or scientific-notation spellings of each choice value.
-    [[#315], [#523]]
+    the canonical string representation and equivalent decimal spellings
+    (e.g., `"8.0"` for `8`).  Alternate scientific-notation spellings are
+    only accepted for values whose canonical form uses scientific notation
+    (e.g., `"1e21"` for `1e+21`).  [[#315], [#523]]
 
  -  Added `@optique/core/program` module with `Program` and `ProgramMetadata`
     interfaces. These provide a structured way to bundle a parser with its
