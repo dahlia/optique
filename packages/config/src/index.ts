@@ -143,7 +143,7 @@ function containsDeferredPromptValues(
   seen = new WeakSet<object>(),
 ): boolean {
   // FIXME: This only inspects own data properties, so deferred prompt values
-  // hidden behind private fields in class-based parser results are missed.
+  // hidden behind private fields or method-only wrapper DTOs are missed.
   // See: https://github.com/dahlia/optique/issues/407
   if (isDeferredPromptValue(value)) {
     return true;
@@ -188,8 +188,8 @@ function createSanitizedNonPlainView<T extends object>(
   seen: WeakMap<object, unknown>,
 ): T {
   // FIXME: This proxy changes method receiver semantics and still cannot scrub
-  // deferred prompt values hidden behind private fields. See:
-  // https://github.com/dahlia/optique/issues/407
+  // deferred prompt values hidden behind private fields or wrapper methods.
+  // See: https://github.com/dahlia/optique/issues/407
   const proxy = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
