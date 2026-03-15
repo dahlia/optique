@@ -3986,6 +3986,16 @@ describe("integer edge cases", () => {
       // the safe integer range
       const result2 = parser.parse("9007199254740992"); // MAX_SAFE_INTEGER + 1
       assert.ok(!result2.success);
+      if (!result2.success) {
+        assert.deepEqual(
+          result2.error,
+          message`Expected a safe integer between ${
+            text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
+          } and ${
+            text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
+          }, but got ${"9007199254740992"}. Use type: "bigint" for large values.`,
+        );
+      }
 
       // MAX_SAFE_INTEGER + 2
       const result3 = parser.parse("9007199254740993");
