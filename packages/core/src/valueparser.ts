@@ -449,9 +449,10 @@ export function choice<const T extends string | number>(
  * Returns the input unchanged if it does not contain scientific notation.
  */
 function expandScientific(s: string): string {
-  const match = /^(-?)(\d+\.?\d*)[eE]([+-]?\d+)$/.exec(s);
+  const match = /^([+-]?)(\d+\.?\d*|\.\d+)[eE]([+-]?\d+)$/.exec(s);
   if (!match) return s;
-  const [, sign, mantissa, expStr] = match;
+  const [, rawSign, mantissa, expStr] = match;
+  const sign = rawSign === "-" ? "-" : "";
   const exp = parseInt(expStr);
   const dotPos = mantissa.indexOf(".");
   const digits = mantissa.replace(".", "");

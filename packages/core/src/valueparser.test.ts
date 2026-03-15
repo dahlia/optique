@@ -1529,6 +1529,20 @@ describe("choice", () => {
         assert.equal(altSci3.value, 1e21);
       }
 
+      // Leading + sign should work
+      const altSci4 = parser.parse("+1e21");
+      assert.ok(altSci4.success);
+      if (altSci4.success) {
+        assert.equal(altSci4.value, 1e21);
+      }
+
+      // Leading-dot mantissa should work
+      const altSci5 = parser.parse(".1e-6");
+      assert.ok(altSci5.success);
+      if (altSci5.success) {
+        assert.equal(altSci5.value, 1e-7);
+      }
+
       // But scientific notation for a value whose canonical form is plain
       // decimal should still be rejected
       const sci = parser.parse("4.2e1");
