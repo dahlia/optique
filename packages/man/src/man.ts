@@ -240,8 +240,56 @@ function formatDocEntryTerm(term: UsageTerm): string {
       return term.value;
 
     default:
+      return formatDocUsageTermAsRoff(term);
+  }
+}
+
+/**
+ * Formats a {@link UsageTerm} as roff markup for doc rendering, filtering
+ * doc-hidden terms instead of usage-hidden terms.
+ */
+function formatDocUsageTermAsRoff(term: UsageTerm): string {
+  if ("hidden" in term && isDocHidden(term.hidden)) return "";
+
+  switch (term.type) {
+    case "optional": {
+      const inner = formatDocUsageAsRoff(term.terms);
+      if (inner === "") return "";
+      return `[${inner}]`;
+    }
+
+    case "multiple": {
+      const inner = formatDocUsageAsRoff(term.terms);
+      if (inner === "") return "";
+      if (term.min < 1) {
+        return `[${inner} ...]`;
+      }
+      return `${inner} ...`;
+    }
+
+    case "exclusive": {
+      const alternatives = term.terms
+        .map((t) => formatDocUsageAsRoff(t))
+        .filter((s) => s !== "");
+      if (alternatives.length === 0) return "";
+      if (alternatives.length === 1) return alternatives[0];
+      return `(${alternatives.join(" | ")})`;
+    }
+
+    default:
       return formatUsageTermAsRoff(term);
   }
+}
+
+/**
+ * Formats a {@link Usage} array as roff markup for doc rendering,
+ * filtering doc-hidden terms.
+ */
+function formatDocUsageAsRoff(usage: Usage): string {
+  return usage
+    .map(formatDocUsageTermAsRoff)
+    .filter((s) => s !== "")
+    .join(" ");
 }
 
 /**

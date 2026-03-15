@@ -774,4 +774,38 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(!result.includes("\\-\\-secret"));
     assert.ok(!result.includes("A secret option"));
   });
+
+  it("suppresses nested doc-hidden terms inside wrapper doc entries", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "OPTIONS",
+          entries: [
+            {
+              term: {
+                type: "optional",
+                terms: [
+                  { type: "argument", metavar: "SECRET", hidden: "doc" },
+                ],
+              },
+              description: message`A wrapped secret`,
+            },
+            {
+              term: { type: "option", names: ["--keep"] },
+              description: message`A visible option`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    assert.ok(!result.includes("SECRET"));
+    assert.ok(!result.includes("A wrapped secret"));
+    assert.ok(result.includes("\\-\\-keep"));
+  });
 });
