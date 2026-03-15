@@ -76,6 +76,62 @@ function isPlainObject(value: object): boolean {
   return proto === Object.prototype || proto === null;
 }
 
+function shouldSkipCollectionOwnKey(
+  value: object,
+  key: PropertyKey,
+): boolean {
+  if (Array.isArray(value)) {
+    return key === "length" ||
+      (typeof key === "string" &&
+        Number.isInteger(Number(key)) &&
+        String(Number(key)) === key);
+  }
+  return false;
+}
+
+function containsDeferredPromptValuesInOwnProperties(
+  value: object,
+  seen: WeakSet<object>,
+): boolean {
+  for (const key of Reflect.ownKeys(value)) {
+    if (shouldSkipCollectionOwnKey(value, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      descriptor != null &&
+      "value" in descriptor &&
+      containsDeferredPromptValuesForContexts(descriptor.value, seen)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function copySanitizedOwnProperties(
+  source: object,
+  target: object,
+  seen: WeakMap<object, unknown>,
+): void {
+  for (const key of Reflect.ownKeys(source)) {
+    if (shouldSkipCollectionOwnKey(source, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor == null) {
+      continue;
+    }
+    if ("value" in descriptor) {
+      descriptor.value = stripDeferredPromptValuesForContexts(
+        descriptor.value,
+        seen,
+      );
+    }
+    Object.defineProperty(target, key, descriptor);
+  }
+}
+
 function containsDeferredPromptValuesForContexts(
   value: unknown,
   seen = new WeakSet<object>(),
@@ -94,9 +150,12 @@ function containsDeferredPromptValuesForContexts(
   }
   seen.add(value);
   if (Array.isArray(value)) {
-    return value.some((item) =>
-      containsDeferredPromptValuesForContexts(item, seen)
-    );
+    if (
+      value.some((item) => containsDeferredPromptValuesForContexts(item, seen))
+    ) {
+      return true;
+    }
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
   }
   if (value instanceof Set) {
     for (const entryValue of value) {
@@ -104,7 +163,7 @@ function containsDeferredPromptValuesForContexts(
         return true;
       }
     }
-    return false;
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
   }
   if (value instanceof Map) {
     for (const [key, entryValue] of value) {
@@ -115,19 +174,9 @@ function containsDeferredPromptValuesForContexts(
         return true;
       }
     }
-    return false;
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
   }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (
-      descriptor != null &&
-      "value" in descriptor &&
-      containsDeferredPromptValuesForContexts(descriptor.value, seen)
-    ) {
-      return true;
-    }
-  }
-  return false;
+  return containsDeferredPromptValuesInOwnProperties(value, seen);
 }
 
 function stripDeferredPromptValuesForContexts<T>(
@@ -150,6 +199,7 @@ function stripDeferredPromptValuesForContexts<T>(
     for (let i = 0; i < value.length; i++) {
       clone[i] = stripDeferredPromptValuesForContexts(value[i], seen);
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (value instanceof Set) {
@@ -158,6 +208,7 @@ function stripDeferredPromptValuesForContexts<T>(
     for (const entryValue of value) {
       clone.add(stripDeferredPromptValuesForContexts(entryValue, seen));
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (value instanceof Map) {
@@ -169,6 +220,7 @@ function stripDeferredPromptValuesForContexts<T>(
         stripDeferredPromptValuesForContexts(entryValue, seen),
       );
     }
+    copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (!isPlainObject(value)) {
