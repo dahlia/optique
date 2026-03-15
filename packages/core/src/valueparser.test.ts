@@ -1691,6 +1691,10 @@ describe("choice", () => {
       const result = parser.parse("NaN");
       assert.ok(!result.success);
 
+      // The internal sentinel must not be matchable either
+      const sentinel = parser.parse("\0");
+      assert.ok(!sentinel.success);
+
       // Other values should still work
       const result2 = parser.parse("1");
       assert.ok(result2.success);
