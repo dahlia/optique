@@ -5495,17 +5495,23 @@ type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
  */
 function preParseSuggestContext(
   context: ParserContext<readonly unknown[]>,
-  syncParsers: readonly Parser<"sync", readonly unknown[], unknown>[],
+  parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
 ): ParserContext<readonly unknown[]> {
   if (context.buffer.length < 1) return context;
   let currentContext = context;
   const stateArray = (context.state as unknown[]).slice();
   const matchedParsers = new Set<number>();
 
-  // Build an indexed list so we can sort by priority each iteration,
-  // matching the resolution order used by concat.parse().
-  const indexedParsers = syncParsers
-    .map((parser, index) => [parser, index] as [typeof parser, number]);
+  // Build a priority-sorted index list of sync-only parsers, matching the
+  // resolution order used by concat.parse().  Async parsers are excluded
+  // entirely to avoid launching unawaited I/O during tab completion.
+  type SyncParser = Parser<"sync", readonly unknown[], unknown>;
+  const indexedParsers: [SyncParser, number][] = [];
+  for (let i = 0; i < parsers.length; i++) {
+    if (parsers[i].$mode === "sync") {
+      indexedParsers.push([parsers[i] as SyncParser, i]);
+    }
+  }
 
   let changed = true;
   while (changed && currentContext.buffer.length > 0) {
@@ -5893,7 +5899,7 @@ export function concat(
       // sub-parsers are available to later derived parsers.
       const preParsedContext = preParseSuggestContext(
         context,
-        syncParsers,
+        parsers,
       );
       const stateArray = preParsedContext.state as unknown[] | undefined;
 
