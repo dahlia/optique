@@ -36,12 +36,15 @@ The following example uses the `plainDate()` value parser to accept a date in
 
 ~~~~ typescript
 import { run } from "@optique/run";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { plainDate } from "@optique/temporal";
 
-const cli = run({
-  birthday: option("--birthday", plainDate()),
-});
+const cli = run(
+  object({
+    birthday: option("--birthday", plainDate()),
+  }),
+);
 
 if (cli.birthday) {
   console.log(`Your next birthday is on ${cli.birthday.toLocaleString()}.`);

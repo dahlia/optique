@@ -30,13 +30,16 @@ address.
 
 ~~~~ typescript
 import { run } from "@optique/run";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 
-const cli = run({
-  email: option("--email", zod(z.string().email())),
-});
+const cli = run(
+  object({
+    email: option("--email", zod(z.string().email())),
+  }),
+);
 
 console.log(`Welcome, ${cli.email}!`);
 ~~~~
@@ -58,6 +61,7 @@ Common use cases
 ### Email validation
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 
@@ -67,6 +71,7 @@ const email = option("--email", zod(z.string().email()));
 ### URL validation
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 
@@ -80,6 +85,7 @@ const url = option("--url", zod(z.string().url()));
 > always strings.
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 
@@ -91,6 +97,7 @@ const port = option("-p", "--port",
 ### Enum choices
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 
@@ -102,6 +109,7 @@ const logLevel = option("--log-level",
 ### Date transformations
 
 ~~~~ typescript
+import { argument } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { z } from "zod";
 
@@ -117,6 +125,7 @@ Custom error messages
 You can customize error messages using the `errors` option:
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { zod } from "@optique/zod";
 import { message } from "@optique/core/message";
 import { z } from "zod";
@@ -140,11 +149,15 @@ CLI arguments are always strings. If you want to parse numbers, booleans,
 or other types, you must use `z.coerce`:
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
+import { zod } from "@optique/zod";
+import { z } from "zod";
+
 // ✅ Correct
 const port = option("-p", zod(z.coerce.number()));
 
 // ❌ Won't work (CLI arguments are always strings)
-const port = option("-p", zod(z.number()));
+// const port = option("-p", zod(z.number()));
 ~~~~
 
 ### Async refinements are not supported
@@ -153,6 +166,10 @@ Optique's `ValueParser.parse()` is synchronous, so async Zod features like
 async refinements cannot be supported:
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
+import { zod } from "@optique/zod";
+import { z } from "zod";
+
 // ❌ Not supported
 const email = option("--email",
   zod(z.string().refine(async (val) => await checkDB(val)))

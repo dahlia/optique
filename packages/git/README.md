@@ -30,7 +30,8 @@ Quick start
 
 ~~~~ typescript
 import { gitBranch, gitTag, gitCommit } from "@optique/git";
-import { argument, option, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { argument, option } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
@@ -53,7 +54,8 @@ Use `createGitParsers()` to create parsers for a different repository:
 
 ~~~~ typescript
 import { createGitParsers } from "@optique/git";
-import { argument, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { argument, option } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const git = createGitParsers({ dir: "/path/to/repo" });
@@ -79,7 +81,8 @@ existing branch in the repository.
 
 ~~~~ typescript
 import { gitBranch } from "@optique/git";
-import { argument, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { argument } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
@@ -102,7 +105,8 @@ existing branch on the specified remote.
 
 ~~~~ typescript
 import { gitRemoteBranch } from "@optique/git";
-import { option, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
@@ -120,7 +124,8 @@ in the repository.
 
 ~~~~ typescript
 import { gitTag } from "@optique/git";
-import { option, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
@@ -138,7 +143,8 @@ remote in the repository.
 
 ~~~~ typescript
 import { gitRemote } from "@optique/git";
-import { option, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
@@ -156,7 +162,8 @@ A value parser for commit SHAs. Validates that the input is a valid commit SHA
 
 ~~~~ typescript
 import { gitCommit } from "@optique/git";
-import { option, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
@@ -174,7 +181,8 @@ that the input resolves to a valid Git reference.
 
 ~~~~ typescript
 import { gitRef } from "@optique/git";
-import { option, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const parser = object({
@@ -192,7 +200,8 @@ created by the factory share the same filesystem and directory options.
 
 ~~~~ typescript
 import { createGitParsers } from "@optique/git";
-import { argument, option, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { argument, option } from "@optique/core/primitives";
 import { parseAsync } from "@optique/core/parser";
 
 const git = createGitParsers({ dir: "/path/to/repo" });
@@ -224,7 +233,8 @@ the user's input prefix.
 
 ~~~~ typescript
 import { gitBranch } from "@optique/git";
-import { argument, object } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { argument } from "@optique/core/primitives";
 
 const parser = object({
   branch: argument(gitBranch()),

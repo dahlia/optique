@@ -26,12 +26,18 @@ Quick start
 
 ~~~~ typescript
 import { generateManPage } from "@optique/man";
-import { object, option, argument } from "@optique/core/primitives";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 const parser = object({
-  port: option("-p", "--port", integer(), { description: "Port to listen on" }),
-  host: option("-h", "--host", string(), { description: "Host to bind to" }),
+  port: option("-p", "--port", integer(), {
+    description: message`Port to listen on`,
+  }),
+  host: option("-h", "--host", string(), {
+    description: message`Host to bind to`,
+  }),
 });
 
 const manPage = generateManPage(parser, {
@@ -66,7 +72,10 @@ formatMessageAsRoff(msg);  // "Use \\fB\\-\\-help\\fR for more info."
 
 ~~~~ typescript
 import { formatDocPageAsMan } from "@optique/man/man";
+import { message } from "@optique/core/message";
 import type { DocPage } from "@optique/core/doc";
+
+declare const docPage: DocPage;
 
 const manPage = formatDocPageAsMan(docPage, {
   name: "myapp",

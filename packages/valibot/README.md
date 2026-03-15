@@ -38,13 +38,16 @@ address.
 
 ~~~~ typescript
 import { run } from "@optique/run";
+import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
-const cli = run({
-  email: option("--email", valibot(v.pipe(v.string(), v.email()))),
-});
+const cli = run(
+  object({
+    email: option("--email", valibot(v.pipe(v.string(), v.email()))),
+  }),
+);
 
 console.log(`Welcome, ${cli.email}!`);
 ~~~~
@@ -66,6 +69,7 @@ Common use cases
 ### Email validation
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
@@ -75,6 +79,7 @@ const email = option("--email", valibot(v.pipe(v.string(), v.email())));
 ### URL validation
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
@@ -88,6 +93,7 @@ const url = option("--url", valibot(v.pipe(v.string(), v.url())));
 > non-string types, since CLI arguments are always strings.
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
@@ -106,6 +112,7 @@ const port = option("-p", "--port",
 ### Enum choices
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
@@ -117,11 +124,12 @@ const logLevel = option("--log-level",
 ### Date transformations
 
 ~~~~ typescript
+import { argument } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import * as v from "valibot";
 
 const startDate = argument(
-  valibot(v.pipe(v.string(), v.transform((s) => new Date(s))))
+  valibot(v.pipe(v.string(), v.transform((s: string) => new Date(s))))
 );
 ~~~~
 
@@ -132,6 +140,7 @@ Custom error messages
 You can customize error messages using the `errors` option:
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
 import { valibot } from "@optique/valibot";
 import { message } from "@optique/core/message";
 import * as v from "valibot";
@@ -155,11 +164,15 @@ CLI arguments are always strings. If you want to parse numbers, booleans,
 or other types, you must use explicit `v.transform()`:
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
+import { valibot } from "@optique/valibot";
+import * as v from "valibot";
+
 // ✅ Correct
 const port = option("-p", valibot(v.pipe(v.string(), v.transform(Number))));
 
 // ❌ Won't work (CLI arguments are always strings)
-const port = option("-p", valibot(v.number()));
+// const port = option("-p", valibot(v.number()));
 ~~~~
 
 ### Async validations are not supported
@@ -168,6 +181,10 @@ Optique's `ValueParser.parse()` is synchronous, so async Valibot features like
 async validations cannot be supported:
 
 ~~~~ typescript
+import { option } from "@optique/core/primitives";
+import { valibot } from "@optique/valibot";
+import * as v from "valibot";
+
 // ❌ Not supported
 const email = option("--email",
   valibot(v.pipeAsync(v.string(), v.checkAsync(async (val) => await checkDB(val))))

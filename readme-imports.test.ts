@@ -108,6 +108,94 @@ describe("README option shapes", () => {
   });
 });
 
+describe("README run() usage", () => {
+  it("should not call run() with a plain object instead of a parser", async () => {
+    const root = new URL(".", import.meta.url).pathname;
+    const readmes = await findReadmeFiles(root);
+    const violations: string[] = [];
+    // Match run({ ... }) but not run(object({ ... })) or run(parser, { ... })
+    const runObjectPattern = /\brun\(\s*\{/g;
+
+    for (const readme of readmes) {
+      const content = await readFile(readme, "utf-8");
+      const rel = readme.replace(root, "");
+      // Only check inside code blocks
+      const codeBlocks = content.matchAll(
+        /~~~~ typescript\n([\s\S]*?)~~~~/g,
+      );
+      for (const block of codeBlocks) {
+        if (runObjectPattern.test(block[1])) {
+          violations.push(
+            `${rel}: run() should take a parser, not a plain object (use run(object({ ... })))`,
+          );
+        }
+        runObjectPattern.lastIndex = 0;
+      }
+    }
+
+    assert.deepStrictEqual(
+      violations,
+      [],
+      `Found run() calls with plain objects:\n${violations.join("\n")}`,
+    );
+  });
+
+  it("should not import object from @optique/core/primitives", async () => {
+    const root = new URL(".", import.meta.url).pathname;
+    const readmes = await findReadmeFiles(root);
+    const violations: string[] = [];
+    const pattern =
+      /import\s+\{[^}]*\bobject\b[^}]*\}\s+from\s+["']@optique\/core\/primitives["']/g;
+
+    for (const readme of readmes) {
+      const content = await readFile(readme, "utf-8");
+      if (pattern.test(content)) {
+        const rel = readme.replace(root, "");
+        violations.push(
+          `${rel}: "object" should be imported from "@optique/core/constructs", not "@optique/core/primitives"`,
+        );
+      }
+      pattern.lastIndex = 0;
+    }
+
+    assert.deepStrictEqual(
+      violations,
+      [],
+      `Found "object" imported from wrong module:\n${violations.join("\n")}`,
+    );
+  });
+
+  it("should not use plain strings for option descriptions", async () => {
+    const root = new URL(".", import.meta.url).pathname;
+    const readmes = await findReadmeFiles(root);
+    const violations: string[] = [];
+    // Match description: "..." (plain string instead of message`...`)
+    const pattern = /description:\s*["'][^"']*["']/g;
+
+    for (const readme of readmes) {
+      const content = await readFile(readme, "utf-8");
+      const rel = readme.replace(root, "");
+      const codeBlocks = content.matchAll(
+        /~~~~ typescript\n([\s\S]*?)~~~~/g,
+      );
+      for (const block of codeBlocks) {
+        if (pattern.test(block[1])) {
+          violations.push(
+            `${rel}: description should use message\`...\` template, not a plain string`,
+          );
+        }
+        pattern.lastIndex = 0;
+      }
+    }
+
+    assert.deepStrictEqual(
+      violations,
+      [],
+      `Found plain string descriptions:\n${violations.join("\n")}`,
+    );
+  });
+});
+
 describe("README imports", () => {
   it("should not import primitives/constructs/modifiers from @optique/core/parser", async () => {
     const root = new URL(".", import.meta.url).pathname;
