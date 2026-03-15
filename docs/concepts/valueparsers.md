@@ -130,7 +130,8 @@ const largeNumber = integer({
 
 The `integer()` parser provides detailed validation:
 
- -  *Format validation*: Ensures input contains only digits
+ -  *Format validation*: Ensures input contains only digits with an optional
+    leading `-`
  -  *Range validation*: Enforces minimum and maximum bounds
  -  *Safe integer protection*: Rejects values outside `Number.MIN_SAFE_INTEGER`
     to `Number.MAX_SAFE_INTEGER` (use `type: "bigint"` for larger values)
