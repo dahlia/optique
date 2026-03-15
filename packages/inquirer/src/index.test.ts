@@ -2488,6 +2488,66 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 0);
     });
 
+    it(
+      "delegates to annotation-backed primitive wrapper states before prompting",
+      async () => {
+        const marker = Symbol.for("@test/prompt-primitive-wrapper-complete");
+        let promptCalls = 0;
+
+        const inner: Parser<"async", string, string | undefined> = {
+          $mode: "async",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly (string | undefined)[],
+          priority: 1,
+          usage: [],
+          initialState: undefined,
+          parse(context) {
+            return Promise.resolve({
+              success: true as const,
+              next: { ...context, state: context.state },
+              consumed: [],
+            });
+          },
+          complete(state) {
+            return Promise.resolve(
+              getAnnotations(state)?.[marker] === "annotated"
+                ? { success: true as const, value: "from-annotations" }
+                : { success: false as const, error: message`missing` },
+            );
+          },
+          suggest() {
+            return {
+              async *[Symbol.asyncIterator](): AsyncIterableIterator<
+                Suggestion
+              > {
+                yield* [];
+              },
+            };
+          },
+          getDocFragments(): DocFragments {
+            return { fragments: [] };
+          },
+        };
+
+        const parser = prompt(inner, {
+          type: "input",
+          message: "Enter value:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("prompted");
+          },
+        });
+
+        const result = await parseAsync(parser, [], {
+          annotations: { [marker]: "annotated" } satisfies Annotations,
+        });
+
+        assert.ok(result.success);
+        assert.equal(result.value, "from-annotations");
+        assert.equal(promptCalls, 0);
+      },
+    );
+
     it("preserves annotations for non-plain inner states", async () => {
       const marker = Symbol.for("@test/prompt-class-state");
       let promptCalls = 0;

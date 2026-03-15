@@ -1029,8 +1029,9 @@ export function prompt<M extends Mode, TValue, TState>(
       const cliStateHasAnnotations = cliState != null &&
         typeof cliState === "object" &&
         annotationKey in (cliState as object);
-      const cliStateHasDirectAnnotations = cliStateHasAnnotations &&
-        unwrapInjectedAnnotationWrapper(cliState) === cliState;
+      const cliStateIsInjectedAnnotationWrapper = cliState != null &&
+        typeof cliState === "object" &&
+        unwrapInjectedAnnotationWrapper(cliState) !== cliState;
       const outerAnnotationsAvailable = getAnnotations(state) != null;
       const cliStateIsNonPlainObject = cliState != null &&
         typeof cliState === "object" &&
@@ -1040,20 +1041,33 @@ export function prompt<M extends Mode, TValue, TState>(
 
       if (
         cliState != null &&
-        (cliStateHasDirectAnnotations ||
+        !(cliState instanceof PromptBindInitialStateClass) &&
+        (cliStateHasAnnotations ||
           (outerAnnotationsAvailable && cliStateIsNonPlainObject))
       ) {
+        const useCompleteResultOrPrompt = (
+          result: ValueParserResult<TValue>,
+        ): Promise<ValueParserResult<TValue>> => {
+          if (
+            result.success &&
+            result.value === undefined &&
+            cliStateIsInjectedAnnotationWrapper
+          ) {
+            return executePrompt();
+          }
+          return usePromptOrDefer(state, result);
+        };
         const r = withAnnotatedInnerState(
           state,
           cliState as TState,
           (annotatedInnerState) => parser.complete(annotatedInnerState),
         );
         if (r instanceof Promise) {
-          return (r as Promise<ValueParserResult<TValue>>).then((res) =>
-            usePromptOrDefer(state, res)
+          return (r as Promise<ValueParserResult<TValue>>).then(
+            useCompleteResultOrPrompt,
           );
         }
-        return usePromptOrDefer(state, r as ValueParserResult<TValue>);
+        return useCompleteResultOrPrompt(r as ValueParserResult<TValue>);
       }
 
       return shouldDeferPrompt(parser, state)
