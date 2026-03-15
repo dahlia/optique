@@ -3982,8 +3982,8 @@ describe("integer edge cases", () => {
         assert.equal(result1.value, Number.MAX_SAFE_INTEGER);
       }
 
-      // MAX_SAFE_INTEGER + 1: parseInt rounds to a safe integer, but must
-      // still be rejected
+      // MAX_SAFE_INTEGER + 1: exactly representable as a number, but outside
+      // the safe integer range
       const result2 = parser.parse("9007199254740992"); // MAX_SAFE_INTEGER + 1
       assert.ok(!result2.success);
 
