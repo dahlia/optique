@@ -5497,9 +5497,13 @@ function preParseSuggestContext(
   context: ParserContext<readonly unknown[]>,
   parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
 ): ParserContext<readonly unknown[]> {
-  if (context.buffer.length < 1) return context;
+  if (
+    context.buffer.length < 1 || !Array.isArray(context.state)
+  ) {
+    return context;
+  }
   let currentContext = context;
-  const stateArray = (context.state as unknown[]).slice();
+  const stateArray = context.state.slice();
   const matchedParsers = new Set<number>();
 
   // Build a priority-sorted index list of sync-only parsers, matching the
