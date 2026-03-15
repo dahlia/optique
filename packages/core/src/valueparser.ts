@@ -400,7 +400,7 @@ function formatDefaultChoiceError(
   input: string,
   choices: readonly (string | number)[],
 ): Message {
-  const choiceStrings = choices.map((c) => String(c));
+  const choiceStrings = choices.map((c) => Object.is(c, -0) ? "-0" : String(c));
   return message`Expected one of ${
     valueSet(choiceStrings, { locale: "en-US" })
   }, but got ${input}.`;

@@ -1507,9 +1507,23 @@ describe("choice", () => {
         assert.ok(Object.is(result.value, -0));
       }
 
-      // "0" should not match -0
+      // "0" should not match -0, and the error should show "-0" not "0"
       const result2 = parser.parse("0");
       assert.ok(!result2.success);
+      if (!result2.success) {
+        assert.deepEqual(
+          result2.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "-0" },
+            { type: "text", text: " and " },
+            { type: "value", value: "1" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "0" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
     });
 
     it("should distinguish 0 and -0 when both are in choices", () => {
