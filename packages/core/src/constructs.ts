@@ -5631,7 +5631,9 @@ function preParseSuggestRemainder(
 
   for (let ri = 0; ri < remaining.length; ri++) {
     const [parser, index] = remaining[ri];
-    const parserState = stateArray[index] ?? parser.initialState;
+    const parserState = index < stateArray.length
+      ? stateArray[index]
+      : parser.initialState;
     const resultOrPromise = parser.parse({
       ...currentContext,
       state: parserState,
