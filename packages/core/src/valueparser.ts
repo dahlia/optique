@@ -298,14 +298,28 @@ export function choice<const T extends string | number>(
       metavar,
       choices: choices as readonly T[],
       parse(input: string): ValueParserResult<T> {
+        // Exact match against canonical String() representations
         const index = numberStrings.indexOf(input);
-        if (index < 0) {
-          return {
-            success: false,
-            error: formatNumberChoiceError(input, numberChoices, numberOptions),
-          };
+        if (index >= 0) {
+          return { success: true, value: numberChoices[index] as T };
         }
-        return { success: true, value: numberChoices[index] as T };
+        // Fall back to strict decimal parsing for alternate spellings
+        // (e.g., "1000000000000000000000" for 1e21, or "8.0" for 8).
+        // Rejects hex, binary, octal, scientific notation, empty, and
+        // whitespace inputs.
+        if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(input)) {
+          const parsed = Number(input);
+          const fallbackIndex = numberChoices.findIndex((v) =>
+            Object.is(v, parsed)
+          );
+          if (fallbackIndex >= 0) {
+            return { success: true, value: numberChoices[fallbackIndex] as T };
+          }
+        }
+        return {
+          success: false,
+          error: formatNumberChoiceError(input, numberChoices, numberOptions),
+        };
       },
       format(value: T): string {
         return Object.is(value, -0) ? "-0" : String(value);

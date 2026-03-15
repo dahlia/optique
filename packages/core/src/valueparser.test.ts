@@ -1299,9 +1299,12 @@ describe("choice", () => {
       const result3 = parser.parse("");
       assert.ok(!result3.success);
 
-      // "8.0" is not in the choice list as a string representation
+      // "8.0" is an alternate decimal spelling of 8, which is in the list
       const result4 = parser.parse("8.0");
-      assert.ok(!result4.success);
+      assert.ok(result4.success);
+      if (result4.success) {
+        assert.equal(result4.value, 8);
+      }
     });
 
     it("should work with single number choice", () => {
@@ -1473,6 +1476,43 @@ describe("choice", () => {
       // Whitespace-only should not be accepted as 0
       const space = parser.parse("   ");
       assert.ok(!space.success);
+    });
+
+    it("should accept alternate decimal spellings for large/small numbers", () => {
+      const parser = choice([1e21, 1e-7, 42]);
+
+      // Decimal spelling of 1e21
+      const big = parser.parse("1000000000000000000000");
+      assert.ok(big.success);
+      if (big.success) {
+        assert.equal(big.value, 1e21);
+      }
+
+      // Canonical form should also work
+      const bigCanon = parser.parse("1e+21");
+      assert.ok(bigCanon.success);
+      if (bigCanon.success) {
+        assert.equal(bigCanon.value, 1e21);
+      }
+
+      // Decimal spelling of 1e-7
+      const small = parser.parse("0.0000001");
+      assert.ok(small.success);
+      if (small.success) {
+        assert.equal(small.value, 1e-7);
+      }
+
+      // Canonical form should also work
+      const smallCanon = parser.parse("1e-7");
+      assert.ok(smallCanon.success);
+      if (smallCanon.success) {
+        assert.equal(smallCanon.value, 1e-7);
+      }
+
+      // But scientific notation for a value whose canonical form is plain
+      // decimal should still be rejected
+      const sci = parser.parse("4.2e1");
+      assert.ok(!sci.success);
     });
 
     it("should reject Infinity and -Infinity literals", () => {
