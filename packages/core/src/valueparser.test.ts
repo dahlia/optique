@@ -1629,6 +1629,31 @@ describe("choice", () => {
       }
     });
 
+    it("should accept -0 spellings when only 0 is in the choice list", () => {
+      const parser = choice([0, 1, 2]);
+
+      // "-0" should match 0 when -0 is not explicitly in the list
+      const neg = parser.parse("-0");
+      assert.ok(neg.success);
+      if (neg.success) {
+        assert.equal(neg.value, 0);
+      }
+
+      // "-0.0" should also match 0
+      const negAlt = parser.parse("-0.0");
+      assert.ok(negAlt.success);
+      if (negAlt.success) {
+        assert.equal(negAlt.value, 0);
+      }
+
+      // "-000" should also match 0
+      const negZeros = parser.parse("-000");
+      assert.ok(negZeros.success);
+      if (negZeros.success) {
+        assert.equal(negZeros.value, 0);
+      }
+    });
+
     it("should handle duplicate number values", () => {
       const parser = choice([1, 1, 2]);
 

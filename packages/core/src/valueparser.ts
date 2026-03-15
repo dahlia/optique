@@ -329,6 +329,25 @@ export function choice<const T extends string | number>(
                 };
               }
             }
+            // When parsed is -0 but only 0 is in the list (or vice
+            // versa), the normalization above won't match because
+            // "-0" normalizes differently from "0". Treat -0 and 0
+            // as interchangeable when the list does not distinguish
+            // them (i.e., does not contain both 0 and -0).
+            if (
+              parsed === 0 &&
+              normalizedInput.replace(/^-/, "") === "0" &&
+              !numberChoices.some((v) => Object.is(v, -0))
+            ) {
+              // Use indexOf (===) which treats -0 and 0 as equal
+              const zeroIndex = numberChoices.indexOf(0);
+              if (zeroIndex >= 0) {
+                return {
+                  success: true,
+                  value: numberChoices[zeroIndex] as T,
+                };
+              }
+            }
           }
         }
         return {
