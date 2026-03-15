@@ -1299,7 +1299,7 @@ describe("choice", () => {
       const result3 = parser.parse("");
       assert.ok(!result3.success);
 
-      // Note: "8.0" parses to 8, which is in the choice list
+      // "8.0" is an alternate decimal spelling of 8, which is in the list
       const result4 = parser.parse("8.0");
       assert.ok(result4.success);
       if (result4.success) {
@@ -1444,6 +1444,263 @@ describe("choice", () => {
 
       const result = parser.parse("1");
       assert.ok(!result.success);
+    });
+
+    it("should reject hex, binary, octal, and scientific notation", () => {
+      const parser = choice([0, 2, 8, 16]);
+
+      // Hex notation "0x10" should not be accepted as 16
+      const hex = parser.parse("0x10");
+      assert.ok(!hex.success);
+
+      // Binary notation "0b10" should not be accepted as 2
+      const bin = parser.parse("0b10");
+      assert.ok(!bin.success);
+
+      // Octal notation "0o10" should not be accepted as 8
+      const oct = parser.parse("0o10");
+      assert.ok(!oct.success);
+
+      // Scientific notation "2e0" should not be accepted as 2
+      const sci = parser.parse("2e0");
+      assert.ok(!sci.success);
+    });
+
+    it("should reject empty and whitespace-only strings", () => {
+      const parser = choice([0, 1, 2]);
+
+      // Empty string should not be accepted as 0
+      const empty = parser.parse("");
+      assert.ok(!empty.success);
+
+      // Whitespace-only should not be accepted as 0
+      const space = parser.parse("   ");
+      assert.ok(!space.success);
+    });
+
+    it("should accept alternate decimal and scientific spellings for large/small numbers", () => {
+      const parser = choice([1e21, 1e-7, 42]);
+
+      // Decimal spelling of 1e21
+      const big = parser.parse("1000000000000000000000");
+      assert.ok(big.success);
+      if (big.success) {
+        assert.equal(big.value, 1e21);
+      }
+
+      // Canonical form should also work
+      const bigCanon = parser.parse("1e+21");
+      assert.ok(bigCanon.success);
+      if (bigCanon.success) {
+        assert.equal(bigCanon.value, 1e21);
+      }
+
+      // Decimal spelling of 1e-7
+      const small = parser.parse("0.0000001");
+      assert.ok(small.success);
+      if (small.success) {
+        assert.equal(small.value, 1e-7);
+      }
+
+      // Canonical form should also work
+      const smallCanon = parser.parse("1e-7");
+      assert.ok(smallCanon.success);
+      if (smallCanon.success) {
+        assert.equal(smallCanon.value, 1e-7);
+      }
+
+      // Alternate scientific notation spellings should work for
+      // values whose canonical form uses scientific notation
+      const altSci1 = parser.parse("1e21");
+      assert.ok(altSci1.success);
+      if (altSci1.success) {
+        assert.equal(altSci1.value, 1e21);
+      }
+
+      const altSci2 = parser.parse("1.0e-7");
+      assert.ok(altSci2.success);
+      if (altSci2.success) {
+        assert.equal(altSci2.value, 1e-7);
+      }
+
+      const altSci3 = parser.parse("10e20");
+      assert.ok(altSci3.success);
+      if (altSci3.success) {
+        assert.equal(altSci3.value, 1e21);
+      }
+
+      // Leading + sign should work
+      const altSci4 = parser.parse("+1e21");
+      assert.ok(altSci4.success);
+      if (altSci4.success) {
+        assert.equal(altSci4.value, 1e21);
+      }
+
+      // Leading-dot mantissa should work
+      const altSci5 = parser.parse(".1e-6");
+      assert.ok(altSci5.success);
+      if (altSci5.success) {
+        assert.equal(altSci5.value, 1e-7);
+      }
+
+      // But scientific notation for a value whose canonical form is plain
+      // decimal should still be rejected
+      const sci = parser.parse("4.2e1");
+      assert.ok(!sci.success);
+    });
+
+    it("should reject decimals that only round to a choice value", () => {
+      // "1000000000000000000001" rounds to 1e21 in IEEE-754 but is
+      // mathematically different
+      const parser1 = choice([1e21]);
+      const rounded = parser1.parse("1000000000000000000001");
+      assert.ok(!rounded.success);
+
+      // "0.10000000000000001" rounds to 0.1 in IEEE-754 but is
+      // mathematically different
+      const parser2 = choice([0.1]);
+      const rounded2 = parser2.parse("0.10000000000000001");
+      assert.ok(!rounded2.success);
+
+      // But exact alternate spellings should still work
+      const exact = parser1.parse("1000000000000000000000");
+      assert.ok(exact.success);
+    });
+
+    it("should reject overflowed and underflowed decimal inputs", () => {
+      const parser = choice([Infinity, -Infinity, 0]);
+
+      // A 400-digit decimal should not overflow to Infinity
+      const bigOverflow = parser.parse("9".repeat(400));
+      assert.ok(!bigOverflow.success);
+
+      // A negative 400-digit decimal should not overflow to -Infinity
+      const negOverflow = parser.parse("-" + "9".repeat(400));
+      assert.ok(!negOverflow.success);
+
+      // An extremely small decimal should not underflow to 0
+      const tinyUnderflow = parser.parse("0." + "0".repeat(400) + "1");
+      assert.ok(!tinyUnderflow.success);
+
+      // But legitimate alternate zero spellings should still work
+      const zeroAlt = parser.parse("0.0");
+      assert.ok(zeroAlt.success);
+      if (zeroAlt.success) {
+        assert.equal(zeroAlt.value, 0);
+      }
+
+      const zeroAlt2 = parser.parse("0.00");
+      assert.ok(zeroAlt2.success);
+
+      const zeroAlt3 = parser.parse(".0");
+      assert.ok(zeroAlt3.success);
+    });
+
+    it("should accept Infinity and -Infinity when in the choice list", () => {
+      const parser = choice([Infinity, -Infinity, 0]);
+
+      const inf = parser.parse("Infinity");
+      assert.ok(inf.success);
+      if (inf.success) {
+        assert.equal(inf.value, Infinity);
+      }
+
+      const negInf = parser.parse("-Infinity");
+      assert.ok(negInf.success);
+      if (negInf.success) {
+        assert.equal(negInf.value, -Infinity);
+      }
+
+      // Alternate forms like "+Infinity" should not work
+      const plusInf = parser.parse("+Infinity");
+      assert.ok(!plusInf.success);
+    });
+
+    it("should preserve negative zero as a valid choice", () => {
+      const parser = choice([-0, 1]);
+
+      const result = parser.parse("-0");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.ok(Object.is(result.value, -0));
+      }
+
+      // "0" should not match -0, and the error should show "-0" not "0"
+      const result2 = parser.parse("0");
+      assert.ok(!result2.success);
+      if (!result2.success) {
+        assert.deepEqual(
+          result2.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "-0" },
+            { type: "text", text: " and " },
+            { type: "value", value: "1" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "0" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should distinguish 0 and -0 when both are in choices", () => {
+      const parser = choice([0, -0]);
+
+      const pos = parser.parse("0");
+      assert.ok(pos.success);
+      if (pos.success) {
+        assert.ok(Object.is(pos.value, 0));
+      }
+
+      const neg = parser.parse("-0");
+      assert.ok(neg.success);
+      if (neg.success) {
+        assert.ok(Object.is(neg.value, -0));
+      }
+    });
+
+    it("should accept -0 spellings when only 0 is in the choice list", () => {
+      const parser = choice([0, 1, 2]);
+
+      // "-0" should match 0 when -0 is not explicitly in the list
+      const neg = parser.parse("-0");
+      assert.ok(neg.success);
+      if (neg.success) {
+        assert.equal(neg.value, 0);
+      }
+
+      // "-0.0" should also match 0
+      const negAlt = parser.parse("-0.0");
+      assert.ok(negAlt.success);
+      if (negAlt.success) {
+        assert.equal(negAlt.value, 0);
+      }
+
+      // "-000" should also match 0
+      const negZeros = parser.parse("-000");
+      assert.ok(negZeros.success);
+      if (negZeros.success) {
+        assert.equal(negZeros.value, 0);
+      }
+    });
+
+    it("should reject NaN even when it appears in the choice list", () => {
+      const parser = choice([NaN, 1, 2]);
+
+      const result = parser.parse("NaN");
+      assert.ok(!result.success);
+
+      // No hidden literal should parse to NaN
+      const nul = parser.parse("\0");
+      assert.ok(!nul.success);
+
+      // Other values should still work
+      const result2 = parser.parse("1");
+      assert.ok(result2.success);
+
+      // NaN should be excluded from choices metadata
+      assert.deepEqual(parser.choices, [1, 2]);
     });
 
     it("should handle duplicate number values", () => {

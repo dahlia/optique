@@ -290,34 +290,120 @@ export function choice<const T extends string | number>(
     // Number choice implementation
     const numberChoices = choices as readonly number[];
     const numberOptions = options as ChoiceOptionsNumber;
+    const hasNaN = numberChoices.some((v) => Number.isNaN(v));
+    const validNumberChoices = hasNaN
+      ? numberChoices.filter((v) => !Number.isNaN(v))
+      : numberChoices;
+    const numberStrings = numberChoices.map((v) =>
+      Object.is(v, -0) ? "-0" : String(v)
+    );
     return {
       $mode: "sync",
       metavar,
-      choices: choices as readonly T[],
+      choices: (hasNaN ? validNumberChoices : numberChoices) as readonly T[],
       parse(input: string): ValueParserResult<T> {
-        const parsed = Number(input);
-        if (Number.isNaN(parsed)) {
-          return {
-            success: false,
-            error: formatNumberChoiceError(input, numberChoices, numberOptions),
-          };
+        // Exact match against canonical string representations
+        // (String(value) for most values, "-0" for negative zero).
+        // NaN is never a valid CLI literal (consistent with float()
+        // requiring explicit allowNaN), so skip NaN entries.
+        const index = numberStrings.indexOf(input);
+        if (index >= 0 && !Number.isNaN(numberChoices[index])) {
+          return { success: true, value: numberChoices[index] as T };
         }
-        const index = numberChoices.indexOf(parsed);
-        if (index < 0) {
-          return {
-            success: false,
-            error: formatNumberChoiceError(input, numberChoices, numberOptions),
-          };
+        // Fall back to strict decimal parsing for alternate spellings
+        // (e.g., "1000000000000000000000" for 1e21, or "8.0" for 8).
+        // Rejects hex, binary, octal, scientific notation, empty, and
+        // whitespace inputs.
+        if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(input)) {
+          const parsed = Number(input);
+          if (Number.isFinite(parsed)) {
+            // Verify exact decimal equivalence: the input must normalize
+            // to the same string as the canonical form, not merely round
+            // to the same IEEE-754 double.
+            const canonical = Object.is(parsed, -0) ? "-0" : String(parsed);
+            const normalizedInput = normalizeDecimal(input);
+            const normalizedCanonical = normalizeDecimal(
+              expandScientific(canonical),
+            );
+            if (normalizedInput === normalizedCanonical) {
+              const fallbackIndex = numberChoices.findIndex((v) =>
+                Object.is(v, parsed)
+              );
+              if (fallbackIndex >= 0) {
+                return {
+                  success: true,
+                  value: numberChoices[fallbackIndex] as T,
+                };
+              }
+            }
+            // When parsed is -0 but only 0 is in the list (or vice
+            // versa), the normalization above won't match because
+            // "-0" normalizes differently from "0". Treat -0 and 0
+            // as interchangeable when the list does not distinguish
+            // them (i.e., does not contain both 0 and -0).
+            if (
+              parsed === 0 &&
+              normalizedInput.replace(/^-/, "") === "0" &&
+              !numberChoices.some((v) => Object.is(v, -0))
+            ) {
+              // Use indexOf (===) which treats -0 and 0 as equal
+              const zeroIndex = numberChoices.indexOf(0);
+              if (zeroIndex >= 0) {
+                return {
+                  success: true,
+                  value: numberChoices[zeroIndex] as T,
+                };
+              }
+            }
+          }
         }
-        return { success: true, value: numberChoices[index] as T };
+        // Fall back to scientific notation parsing for alternate exponent
+        // spellings (e.g., "1e21" for canonical "1e+21", "1.0e-7" for
+        // "1e-7"). Only accepted when the canonical form also uses
+        // scientific notation, so "2e0" for choice([2]) stays rejected.
+        if (/^[+-]?(\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.test(input)) {
+          const parsed = Number(input);
+          if (Number.isFinite(parsed)) {
+            const canonical = Object.is(parsed, -0) ? "-0" : String(parsed);
+            if (/[eE]/.test(canonical)) {
+              const normalizedInput = normalizeDecimal(
+                expandScientific(input),
+              );
+              const normalizedCanonical = normalizeDecimal(
+                expandScientific(canonical),
+              );
+              if (normalizedInput === normalizedCanonical) {
+                const fallbackIndex = numberChoices.findIndex((v) =>
+                  Object.is(v, parsed)
+                );
+                if (fallbackIndex >= 0) {
+                  return {
+                    success: true,
+                    value: numberChoices[fallbackIndex] as T,
+                  };
+                }
+              }
+            }
+          }
+        }
+        return {
+          success: false,
+          error: formatNumberChoiceError(
+            input,
+            validNumberChoices,
+            numberChoices,
+            numberOptions,
+          ),
+        };
       },
       format(value: T): string {
-        return String(value);
+        return Object.is(value, -0) ? "-0" : String(value);
       },
       suggest(prefix: string) {
-        return numberChoices
-          .map((value) => String(value))
-          .filter((valueStr) => valueStr.startsWith(prefix))
+        return numberStrings
+          .filter((valueStr, i) =>
+            !Number.isNaN(numberChoices[i]) && valueStr.startsWith(prefix)
+          )
           .map((valueStr) => ({ kind: "literal" as const, text: valueStr }));
       },
     };
@@ -367,6 +453,60 @@ export function choice<const T extends string | number>(
 }
 
 /**
+ * Expands a numeric string in scientific notation (e.g., `"1e+21"`,
+ * `"1.5e-3"`, `".1e-6"`) into plain decimal form for normalization.
+ * Used for both canonical `String(number)` output and user input.
+ * Returns the input unchanged if it does not contain scientific notation.
+ */
+function expandScientific(s: string): string {
+  const match = /^([+-]?)(\d+\.?\d*|\.\d+)[eE]([+-]?\d+)$/.exec(s);
+  if (!match) return s;
+  const [, rawSign, mantissa, expStr] = match;
+  const sign = rawSign === "-" ? "-" : "";
+  const exp = parseInt(expStr, 10);
+  const dotPos = mantissa.indexOf(".");
+  const digits = mantissa.replace(".", "");
+  const intLen = dotPos >= 0 ? dotPos : digits.length;
+  const newIntLen = intLen + exp;
+  let result: string;
+  if (newIntLen >= digits.length) {
+    result = digits + "0".repeat(newIntLen - digits.length);
+  } else if (newIntLen <= 0) {
+    result = "0." + "0".repeat(-newIntLen) + digits;
+  } else {
+    result = digits.slice(0, newIntLen) + "." + digits.slice(newIntLen);
+  }
+  return sign + result;
+}
+
+/**
+ * Normalizes a plain decimal string by stripping leading zeros from the
+ * integer part and trailing zeros from the fractional part, so that two
+ * strings representing the same mathematical value compare as equal.
+ */
+function normalizeDecimal(s: string): string {
+  let sign = "";
+  let str = s;
+  if (str.startsWith("-") || str.startsWith("+")) {
+    if (str[0] === "-") sign = "-";
+    str = str.slice(1);
+  }
+  const dot = str.indexOf(".");
+  let int: string;
+  let frac: string;
+  if (dot >= 0) {
+    int = str.slice(0, dot);
+    frac = str.slice(dot + 1);
+  } else {
+    int = str;
+    frac = "";
+  }
+  int = int.replace(/^0+/, "") || "0";
+  frac = frac.replace(/0+$/, "");
+  return sign + (frac ? int + "." + frac : int);
+}
+
+/**
  * Formats error message for string choice parser.
  */
 function formatStringChoiceError(
@@ -387,15 +527,16 @@ function formatStringChoiceError(
  */
 function formatNumberChoiceError(
   input: string,
-  choices: readonly number[],
+  validChoices: readonly number[],
+  allChoices: readonly number[],
   options: ChoiceOptionsNumber,
 ): Message {
   if (options.errors?.invalidChoice) {
     return typeof options.errors.invalidChoice === "function"
-      ? options.errors.invalidChoice(input, choices)
+      ? options.errors.invalidChoice(input, validChoices)
       : options.errors.invalidChoice;
   }
-  return formatDefaultChoiceError(input, choices);
+  return formatDefaultChoiceError(input, allChoices);
 }
 
 /**
@@ -405,7 +546,12 @@ function formatDefaultChoiceError(
   input: string,
   choices: readonly (string | number)[],
 ): Message {
-  const choiceStrings = choices.map((c) => String(c));
+  const choiceStrings = choices
+    .filter((c) => typeof c === "string" || !Number.isNaN(c))
+    .map((c) => Object.is(c, -0) ? "-0" : String(c));
+  if (choiceStrings.length === 0 && choices.length > 0) {
+    return message`No valid choices are configured, but got ${input}.`;
+  }
   return message`Expected one of ${
     valueSet(choiceStrings, { locale: "en-US" })
   }, but got ${input}.`;
