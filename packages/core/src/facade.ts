@@ -280,6 +280,9 @@ function stripDeferredPromptValuesForContexts<T>(
     return clone as T;
   }
   if (!isPlainObject(value)) {
+    if (!containsDeferredPromptValuesForContexts(value)) {
+      return value;
+    }
     return createSanitizedNonPlainContextView(value, seen) as T;
   }
   const clone: Record<PropertyKey, unknown> = Object.create(

@@ -1313,6 +1313,74 @@ describe("prompt()", () => {
       assert.equal(result.apiKey, "config-secret");
     });
 
+    it("keeps nested clean non-plain values unproxied in phase two", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      class CleanBox {
+        #value: string;
+
+        constructor(value: string) {
+          this.#value = value;
+        }
+
+        getValue(): string {
+          return this.#value;
+        }
+      }
+
+      const cleanBox = new CleanBox("clean");
+      let phase2Box: CleanBox | undefined;
+      let phase2Value: string | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/nested-clean-non-plain-phase-two"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed != null && typeof parsed === "object") {
+            phase2Box = (parsed as { readonly clean: CleanBox }).clean;
+            phase2Value = phase2Box.getValue();
+          }
+          return {};
+        },
+      };
+
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => ({ clean: cleanBox, apiKey: value.apiKey }),
+      );
+
+      const result = await runWith(
+        parser,
+        "test",
+        [dynamicContext, context],
+        {
+          args: [],
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      );
+
+      assert.equal(phase2Box, cleanBox);
+      assert.equal(phase2Value, "clean");
+      assert.equal(result.clean, cleanBox);
+      assert.equal(result.apiKey, "config-secret");
+    });
+
     it(
       "hides deferred prompt values inside nested non-plain phase-two inputs",
       async () => {
