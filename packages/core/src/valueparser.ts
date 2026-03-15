@@ -662,6 +662,14 @@ export interface IntegerOptionsNumber {
     invalidInteger?: Message | ((input: string) => Message);
 
     /**
+     * Custom error message when integer exceeds the safe integer range
+     * (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
+     * Can be a static message or a function that receives the input string.
+     * @since 1.0.0
+     */
+    unsafeInteger?: Message | ((input: string) => Message);
+
+    /**
      * Custom error message when integer is below minimum value.
      * Can be a static message or a function that receives the value and minimum.
      * @since 0.5.0
@@ -861,6 +869,20 @@ export function integer(
         };
       }
       const value = Number.parseInt(input);
+      if (!Number.isSafeInteger(value)) {
+        return {
+          success: false,
+          error: options?.errors?.unsafeInteger
+            ? (typeof options.errors.unsafeInteger === "function"
+              ? options.errors.unsafeInteger(input)
+              : options.errors.unsafeInteger)
+            : message`Expected a safe integer between ${
+              text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
+            } and ${
+              text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
+            }, but got ${input}. Use type: "bigint" for large values.`,
+        };
+      }
       if (options?.min != null && value < options.min) {
         return {
           success: false,

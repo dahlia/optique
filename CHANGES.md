@@ -230,6 +230,13 @@ To be released.
     detection; use the explicit variants when the default branch is
     unreachable.  [[#225]]
 
+ -  The `integer()` parser in number mode now rejects values outside the safe
+    integer range (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
+    Previously, such values were silently rounded, losing precision.  A new
+    `unsafeInteger` error callback in `IntegerOptionsNumber.errors` allows
+    customizing the error message.  Use `type: "bigint"` for values beyond
+    this range.  [[#248], [#525]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -255,11 +262,13 @@ To be released.
 [#178]: https://github.com/dahlia/optique/issues/178
 [#186]: https://github.com/dahlia/optique/issues/186
 [#225]: https://github.com/dahlia/optique/issues/225
+[#248]: https://github.com/dahlia/optique/issues/248
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
+[#525]: https://github.com/dahlia/optique/pull/525
 
 ### @optique/config
 
