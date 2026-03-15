@@ -1596,12 +1596,9 @@ describe("choice", () => {
       assert.ok(zeroAlt3.success);
     });
 
-    it("should reject Infinity and -Infinity literals", () => {
+    it("should accept Infinity and -Infinity when in the choice list", () => {
       const parser = choice([Infinity, -Infinity, 0]);
 
-      // Even though Infinity is in the list, the string "Infinity"
-      // cannot match because String(Infinity) = "Infinity" but we
-      // need to verify it works correctly with the string comparison
       const inf = parser.parse("Infinity");
       assert.ok(inf.success);
       if (inf.success) {
@@ -1614,7 +1611,7 @@ describe("choice", () => {
         assert.equal(negInf.value, -Infinity);
       }
 
-      // But alternate forms should not work
+      // Alternate forms like "+Infinity" should not work
       const plusInf = parser.parse("+Infinity");
       assert.ok(!plusInf.success);
     });
