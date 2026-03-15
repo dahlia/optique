@@ -218,6 +218,14 @@ To be released.
     CLI value was provided, `suggest()` returned an empty array instead of
     suggesting values based on the default.  [[#186], [#522]]
 
+ -  Fixed `deriveSync()`, `deriveFromSync()`, and `deriveFromAsync()` (and
+    their async variants) executing the factory with default dependency values
+    during the initial parse even when the actual dependency values were
+    explicitly provided on the command line.  The factory now catches errors
+    from the default branch and returns a failure result that gets overridden
+    by the actual dependency values during deferred resolution.
+    [[#225], [#524]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -242,11 +250,13 @@ To be released.
 [#177]: https://github.com/dahlia/optique/issues/177
 [#178]: https://github.com/dahlia/optique/issues/178
 [#186]: https://github.com/dahlia/optique/issues/186
+[#225]: https://github.com/dahlia/optique/issues/225
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
+[#524]: https://github.com/dahlia/optique/pull/524
 
 ### @optique/config
 

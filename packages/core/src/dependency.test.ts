@@ -3614,3 +3614,99 @@ describe("property-based tests", () => {
     );
   });
 });
+
+// https://github.com/dahlia/optique/issues/225
+describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not touched when dependency provided", () => {
+  test("deriveSync() does not call factory with default when dependency is provided", () => {
+    const mode = dependency(choice(["safe", "broken"] as const));
+    const derived = mode.deriveSync({
+      metavar: "VALUE",
+      factory: (value) => {
+        if (value === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+    const parser = object({
+      mode: option("--mode", mode),
+      value: option("--value", derived),
+    });
+    const result = parseSync(parser, ["--mode", "safe", "--value", "ok"]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { mode: "safe", value: "ok" });
+  });
+
+  test("deriveFromSync() does not call factory with defaults when dependencies are provided", () => {
+    const a = dependency(choice(["safe", "broken"] as const));
+    const b = dependency(integer({ metavar: "N" }));
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [a, b] as const,
+      factory: (aVal, _bVal) => {
+        if (aVal === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValues: () => ["broken" as const, 0] as const,
+    });
+    const parser = object({
+      a: option("--a", a),
+      b: option("--b", b),
+      value: option("--value", derived),
+    });
+    const result = parseSync(parser, [
+      "--a",
+      "safe",
+      "--b",
+      "1",
+      "--value",
+      "ok",
+    ]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { a: "safe", b: 1, value: "ok" });
+  });
+
+  test("deriveFromAsync() does not call factory with defaults when dependencies are provided", async () => {
+    const asyncString: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE" as NonEmptyString,
+      parse(input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({ success: true, value: input });
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const a = dependency(choice(["safe", "broken"] as const));
+    const b = dependency(integer({ metavar: "N" }));
+    const derived = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [a, b] as const,
+      factory: (aVal, _bVal) => {
+        if (aVal === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return asyncString;
+      },
+      defaultValues: () => ["broken" as const, 0] as const,
+    });
+    const parser = object({
+      a: option("--a", a),
+      b: option("--b", b),
+      value: option("--value", derived),
+    });
+    const result = await parseAsync(parser, [
+      "--a",
+      "safe",
+      "--b",
+      "1",
+      "--value",
+      "ok",
+    ]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { a: "safe", b: 1, value: "ok" });
+  });
+});
