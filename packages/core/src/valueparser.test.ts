@@ -3982,9 +3982,14 @@ describe("integer edge cases", () => {
         assert.equal(result1.value, Number.MAX_SAFE_INTEGER);
       }
 
-      // Values beyond MAX_SAFE_INTEGER must be rejected
-      const result2 = parser.parse("9007199254740993"); // MAX_SAFE_INTEGER + 2
+      // MAX_SAFE_INTEGER + 1: parseInt rounds to a safe integer, but must
+      // still be rejected
+      const result2 = parser.parse("9007199254740992"); // MAX_SAFE_INTEGER + 1
       assert.ok(!result2.success);
+
+      // MAX_SAFE_INTEGER + 2
+      const result3 = parser.parse("9007199254740993");
+      assert.ok(!result3.success);
     });
 
     it("should handle Number.MIN_SAFE_INTEGER boundary", () => {
@@ -3996,9 +4001,13 @@ describe("integer edge cases", () => {
         assert.equal(result1.value, Number.MIN_SAFE_INTEGER);
       }
 
-      // Values beyond MIN_SAFE_INTEGER must be rejected
-      const result2 = parser.parse("-9007199254740993"); // MIN_SAFE_INTEGER - 2
+      // MIN_SAFE_INTEGER - 1
+      const result2 = parser.parse("-9007199254740992");
       assert.ok(!result2.success);
+
+      // MIN_SAFE_INTEGER - 2
+      const result3 = parser.parse("-9007199254740993");
+      assert.ok(!result3.success);
     });
 
     it("should reject very large integers in number mode", () => {

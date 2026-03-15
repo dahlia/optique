@@ -868,8 +868,11 @@ export function integer(
             : message`Expected a valid integer, but got ${input}.`,
         };
       }
-      const value = Number.parseInt(input);
-      if (!Number.isSafeInteger(value)) {
+      const n = BigInt(input);
+      if (
+        n > BigInt(Number.MAX_SAFE_INTEGER) ||
+        n < BigInt(Number.MIN_SAFE_INTEGER)
+      ) {
         return {
           success: false,
           error: options?.errors?.unsafeInteger
@@ -883,6 +886,7 @@ export function integer(
             }, but got ${input}. Use type: "bigint" for large values.`,
         };
       }
+      const value = Number(input);
       if (options?.min != null && value < options.min) {
         return {
           success: false,
