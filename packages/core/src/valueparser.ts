@@ -390,6 +390,7 @@ export function choice<const T extends string | number>(
           success: false,
           error: formatNumberChoiceError(
             input,
+            validNumberChoices,
             numberChoices,
             numberOptions,
           ),
@@ -526,15 +527,16 @@ function formatStringChoiceError(
  */
 function formatNumberChoiceError(
   input: string,
-  choices: readonly number[],
+  validChoices: readonly number[],
+  allChoices: readonly number[],
   options: ChoiceOptionsNumber,
 ): Message {
   if (options.errors?.invalidChoice) {
     return typeof options.errors.invalidChoice === "function"
-      ? options.errors.invalidChoice(input, choices)
+      ? options.errors.invalidChoice(input, validChoices)
       : options.errors.invalidChoice;
   }
-  return formatDefaultChoiceError(input, choices);
+  return formatDefaultChoiceError(input, allChoices);
 }
 
 /**
