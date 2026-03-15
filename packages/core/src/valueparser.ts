@@ -432,7 +432,8 @@ export function string(
 ): ValueParser<"sync", string> {
   if (options.pattern != null && !(options.pattern instanceof RegExp)) {
     throw new TypeError(
-      `Expected pattern to be a RegExp, but got: ${typeof options.pattern}`,
+      "Expected pattern to be a RegExp, but got: " +
+        `${Object.prototype.toString.call(options.pattern)}`,
     );
   }
   const metavar = options.metavar ?? "STRING";
