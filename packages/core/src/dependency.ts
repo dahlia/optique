@@ -629,10 +629,15 @@ export function deriveFrom<
     ? options.dependencies[0][dependencyId]
     : Symbol();
 
-  const isAsync = depsAsync || factoryReturnsAsync;
+  const isAsync = depsAsync || factoryReturnsAsync === true ||
+    factoryReturnsAsync === null;
 
   if (isAsync) {
-    if (factoryReturnsAsync) {
+    // When the mode is known to be async, use the async-factory wrapper.
+    // When the mode is unknown (null) or sync, use the sync-factory wrapper
+    // which wraps results with Promise.resolve() and handles both sync and
+    // async factory results correctly.
+    if (factoryReturnsAsync === true) {
       return createAsyncDerivedFromParserFromAsyncFactory(
         sourceId,
         options as DeriveFromOptions<Deps, T, "async">,
@@ -740,13 +745,17 @@ export function deriveFromAsync<
 /**
  * Determines if the factory returns an async parser for deriveFrom options.
  */
+/**
+ * @returns `true` if the factory returns an async parser, `false` if sync,
+ *          or `null` if the factory threw and the mode could not be determined.
+ */
 function determineFactoryModeForDeriveFrom<
   Deps extends readonly AnyDependencySource[],
   T,
   FM extends Mode,
 >(
   options: DeriveFromOptions<Deps, T, FM>,
-): boolean {
+): boolean | null {
   try {
     const defaultValues = options.defaultValues();
     const parser = options.factory(
@@ -754,10 +763,10 @@ function determineFactoryModeForDeriveFrom<
     );
     return parser.$mode === "async";
   } catch {
-    // If the factory throws for the default values, assume sync mode.
-    // The actual mode will be validated when parseWithDependency() is called
-    // with the real dependency values.
-    return false;
+    // If the factory throws for the default values, the mode is unknown.
+    // The caller must handle this by choosing an async-from-sync-factory
+    // wrapper that can accept either sync or async factory results.
+    return null;
   }
 }
 
@@ -1094,12 +1103,18 @@ function createDerivedValueParser<
 ): DerivedValueParser<CombineMode<M, FM>, T, S> {
   // Determine if the resulting parser should be async
   // It's async if either the source is async OR the factory returns async parser
+  // Returns null when the factory threw for the default value (mode unknown)
   const factoryReturnsAsync = determineFactoryMode(options);
-  const isAsync = sourceParser.$mode === "async" || factoryReturnsAsync;
+  const isAsync = sourceParser.$mode === "async" ||
+    factoryReturnsAsync === true || factoryReturnsAsync === null;
 
   if (isAsync) {
-    // Use the appropriate async parser based on factory mode
-    if (factoryReturnsAsync) {
+    // Use the appropriate async parser based on factory mode.
+    // When the mode is known to be async, use the async-factory wrapper.
+    // When the mode is unknown (null) or sync, use the sync-factory wrapper
+    // which wraps results with Promise.resolve() and handles both sync and
+    // async factory results correctly.
+    if (factoryReturnsAsync === true) {
       return createAsyncDerivedParserFromAsyncFactory(
         sourceId,
         options as InternalDeriveOptions<S, T, "async">,
@@ -1120,19 +1135,22 @@ function createDerivedValueParser<
 /**
  * Determines if the factory returns an async parser by calling it with
  * the default value and checking the mode.
+ *
+ * @returns `true` if the factory returns an async parser, `false` if sync,
+ *          or `null` if the factory threw and the mode could not be determined.
  */
 function determineFactoryMode<S, T, FM extends Mode>(
   options: InternalDeriveOptions<S, T, FM>,
-): boolean {
+): boolean | null {
   try {
     const defaultValue = options.defaultValue();
     const parser = options.factory(defaultValue);
     return parser.$mode === "async";
   } catch {
-    // If the factory throws for the default value, assume sync mode.
-    // The actual mode will be validated when parseWithDependency() is called
-    // with the real dependency value.
-    return false;
+    // If the factory throws for the default value, the mode is unknown.
+    // The caller must handle this by choosing an async-from-sync-factory
+    // wrapper that can accept either sync or async factory results.
+    return null;
   }
 }
 

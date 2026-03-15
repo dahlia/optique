@@ -3710,7 +3710,7 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
     assert.deepEqual(result.value, { a: "safe", b: 1, value: "ok" });
   });
 
-  test("derive() does not throw during construction when factory throws for default value", () => {
+  test("derive() does not throw during construction when factory throws for default value", async () => {
     const mode = dependency(choice(["safe", "broken"] as const));
     const derived = mode.derive({
       metavar: "VALUE",
@@ -3726,7 +3726,14 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
       mode: option("--mode", mode),
       value: option("--value", derived),
     });
-    const result = parseSync(parser, ["--mode", "safe", "--value", "ok"]);
+    // When the factory throws for the default value, derive() cannot determine
+    // the factory mode so it falls back to async.  Use parseAsync() accordingly.
+    const result = await parseAsync(parser, [
+      "--mode",
+      "safe",
+      "--value",
+      "ok",
+    ]);
     assert.ok(result.success);
     assert.deepEqual(result.value, { mode: "safe", value: "ok" });
   });
@@ -3767,7 +3774,84 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
     assert.deepEqual(result.value, { mode: "safe", value: "ok" });
   });
 
-  test("deriveFrom() does not throw during construction when factory throws for default values", () => {
+  test("derive() with async factory that throws for default value infers async mode correctly", async () => {
+    const asyncString: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE" as NonEmptyString,
+      parse(input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({ success: true, value: input });
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const mode = dependency(choice(["safe", "broken"] as const));
+    const derived = mode.derive({
+      metavar: "VALUE",
+      factory: (value) => {
+        if (value === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return asyncString;
+      },
+      defaultValue: () => "broken" as const,
+    });
+    const parser = object({
+      mode: option("--mode", mode),
+      value: option("--value", derived),
+    });
+    const result = await parseAsync(parser, [
+      "--mode",
+      "safe",
+      "--value",
+      "ok",
+    ]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { mode: "safe", value: "ok" });
+  });
+
+  test("deriveFrom() with async factory that throws for default values infers async mode correctly", async () => {
+    const asyncString: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE" as NonEmptyString,
+      parse(input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({ success: true, value: input });
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const a = dependency(choice(["safe", "broken"] as const));
+    const b = dependency(integer({ metavar: "N" }));
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      dependencies: [a, b] as const,
+      factory: (aVal, _bVal) => {
+        if (aVal === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return asyncString;
+      },
+      defaultValues: () => ["broken" as const, 0] as const,
+    });
+    const parser = object({
+      a: option("--a", a),
+      b: option("--b", b),
+      value: option("--value", derived),
+    });
+    const result = await parseAsync(parser, [
+      "--a",
+      "safe",
+      "--b",
+      "1",
+      "--value",
+      "ok",
+    ]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { a: "safe", b: 1, value: "ok" });
+  });
+
+  test("deriveFrom() does not throw during construction when factory throws for default values", async () => {
     const a = dependency(choice(["safe", "broken"] as const));
     const b = dependency(integer({ metavar: "N" }));
     const derived = deriveFrom({
@@ -3786,7 +3870,9 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
       b: option("--b", b),
       value: option("--value", derived),
     });
-    const result = parseSync(parser, [
+    // When the factory throws for default values, deriveFrom() cannot determine
+    // the factory mode so it falls back to async.  Use parseAsync() accordingly.
+    const result = await parseAsync(parser, [
       "--a",
       "safe",
       "--b",
