@@ -2923,8 +2923,8 @@ function* suggestObjectSync<
   parserPairs: [string | symbol, Parser<"sync", unknown, unknown>][],
 ): Generator<Suggestion> {
   // Build dependency registry from all parsed fields
-  const registry = context.dependencyRegistry instanceof DependencyRegistry
-    ? context.dependencyRegistry
+  const registry = context.dependencyRegistry
+    ? context.dependencyRegistry.clone()
     : new DependencyRegistry();
 
   // Collect dependency values from the current state
@@ -2992,8 +2992,8 @@ async function* suggestObjectAsync<
   parserPairs: readonly [string | symbol, Parser<Mode, unknown, unknown>][],
 ): AsyncGenerator<Suggestion> {
   // Build dependency registry from all parsed fields
-  const registry = context.dependencyRegistry instanceof DependencyRegistry
-    ? context.dependencyRegistry
+  const registry = context.dependencyRegistry
+    ? context.dependencyRegistry.clone()
     : new DependencyRegistry();
 
   // Collect dependency values from the current state
