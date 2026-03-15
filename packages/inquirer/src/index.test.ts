@@ -1257,6 +1257,62 @@ describe("prompt()", () => {
       },
     );
 
+    it("keeps nested clean collection subclasses unproxied in phase two", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      class BoxSet extends Set<string> {}
+
+      const cleanSet = new BoxSet(["clean"]);
+      let phase2Set: BoxSet | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/nested-clean-collection-phase-two"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed != null && typeof parsed === "object") {
+            phase2Set = (parsed as { readonly clean: BoxSet }).clean;
+          }
+          return {};
+        },
+      };
+
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => ({ clean: cleanSet, apiKey: value.apiKey }),
+      );
+
+      const result = await runWith(
+        parser,
+        "test",
+        [dynamicContext, context],
+        {
+          args: [],
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      );
+
+      assert.ok(phase2Set instanceof BoxSet);
+      assert.equal(phase2Set, cleanSet);
+      assert.equal(result.clean, cleanSet);
+      assert.equal(result.apiKey, "config-secret");
+    });
+
     it(
       "hides deferred prompt values inside nested non-plain phase-two inputs",
       async () => {

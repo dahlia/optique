@@ -241,6 +241,9 @@ function stripDeferredPromptValuesForContexts<T>(
     return cached as T;
   }
   if (Array.isArray(value)) {
+    if (!containsDeferredPromptValuesForContexts(value)) {
+      return value;
+    }
     const clone = createArrayCloneLike(value);
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
@@ -250,6 +253,9 @@ function stripDeferredPromptValuesForContexts<T>(
     return clone as T;
   }
   if (value instanceof Set) {
+    if (!containsDeferredPromptValuesForContexts(value)) {
+      return value;
+    }
     const clone = createSetCloneLike(value);
     seen.set(value, clone);
     for (const entryValue of value) {
@@ -259,6 +265,9 @@ function stripDeferredPromptValuesForContexts<T>(
     return clone as T;
   }
   if (value instanceof Map) {
+    if (!containsDeferredPromptValuesForContexts(value)) {
+      return value;
+    }
     const clone = createMapCloneLike(value);
     seen.set(value, clone);
     for (const [key, entryValue] of value) {
