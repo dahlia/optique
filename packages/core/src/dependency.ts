@@ -782,7 +782,10 @@ function createSyncDerivedFromParser<
         );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return { success: false, error: message`Factory error: ${msg}` };
+        return {
+          success: false,
+          error: message`Derived parser error: ${msg}`,
+        };
       }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
         return {
@@ -895,7 +898,7 @@ function createAsyncDerivedFromParserFromAsyncFactory<
         const msg = e instanceof Error ? e.message : String(e);
         return Promise.resolve({
           success: false,
-          error: message`Factory error: ${msg}`,
+          error: message`Derived parser error: ${msg}`,
         });
       }
       return derivedParser.parse(input);
@@ -1002,7 +1005,7 @@ function createAsyncDerivedFromParserFromSyncFactory<
         const msg = e instanceof Error ? e.message : String(e);
         return Promise.resolve({
           success: false,
-          error: message`Factory error: ${msg}`,
+          error: message`Derived parser error: ${msg}`,
         });
       }
       return Promise.resolve(derivedParser.parse(input));
@@ -1136,7 +1139,10 @@ function createSyncDerivedParser<S, T>(
         derivedParser = options.factory(sourceValue);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return { success: false, error: message`Factory error: ${msg}` };
+        return {
+          success: false,
+          error: message`Derived parser error: ${msg}`,
+        };
       }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
         return {
@@ -1228,7 +1234,7 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
         const msg = e instanceof Error ? e.message : String(e);
         return Promise.resolve({
           success: false,
-          error: message`Factory error: ${msg}`,
+          error: message`Derived parser error: ${msg}`,
         });
       }
       // Wrap with Promise.resolve() to ensure the result is always a Promise,
@@ -1317,7 +1323,7 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
         const msg = e instanceof Error ? e.message : String(e);
         return Promise.resolve({
           success: false,
-          error: message`Factory error: ${msg}`,
+          error: message`Derived parser error: ${msg}`,
         });
       }
       return Promise.resolve(derivedParser.parse(input));
