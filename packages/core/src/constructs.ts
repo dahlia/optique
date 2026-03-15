@@ -5285,6 +5285,17 @@ export function merge(
         return p.initialState;
       };
 
+      // Build dependency registry from the full merged state so that
+      // derived parsers in one sub-parser can see dependency sources
+      // from another sub-parser:
+      const registry = context.dependencyRegistry instanceof DependencyRegistry
+        ? context.dependencyRegistry
+        : new DependencyRegistry();
+      if (context.state && typeof context.state === "object") {
+        collectDependencies(context.state, registry);
+      }
+      const contextWithRegistry = { ...context, dependencyRegistry: registry };
+
       if (isAsync) {
         return (async function* () {
           const suggestions: Suggestion[] = [];
@@ -5294,7 +5305,7 @@ export function merge(
             const parserState = extractState(parser, i);
 
             const parserSuggestions = parser.suggest({
-              ...context,
+              ...contextWithRegistry,
               state: parserState as Parameters<
                 typeof parser.suggest
               >[0]["state"],
@@ -5323,7 +5334,7 @@ export function merge(
           const parserState = extractState(parser, i);
 
           const parserSuggestions = parser.suggest({
-            ...context,
+            ...contextWithRegistry,
             state: parserState as Parameters<typeof parser.suggest>[0]["state"],
           }, prefix);
 
@@ -5468,6 +5479,59 @@ type ConcatTupleValues<TParsers extends ConcatParsers> = TParsers extends
 type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
   true ? ConcatTupleValues<TParsers>
   : readonly unknown[];
+
+/**
+ * Pre-parses the buffer in a concat suggest context to build up state across
+ * sub-parsers.  `concat.parse()` is atomic (it fails unless every sub-parser
+ * matches), so after a parse failure the state may still be the initial state.
+ * This helper iterates the sub-parsers against the buffer, accumulating state
+ * from any that succeed, so that dependency source values are available when
+ * collecting dependencies for suggestions.
+ * @internal
+ */
+function preParseSuggestContext(
+  context: ParserContext<readonly unknown[]>,
+  parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
+  syncParsers: readonly Parser<"sync", readonly unknown[], unknown>[],
+  isAsync: boolean,
+): ParserContext<readonly unknown[]> {
+  if (context.buffer.length < 1) return context;
+  const activeParsers = isAsync ? parsers : syncParsers;
+  let currentContext = context;
+  const stateArray = (context.state as unknown[]).slice();
+  const matchedParsers = new Set<number>();
+
+  let changed = true;
+  while (changed && currentContext.buffer.length > 0) {
+    changed = false;
+    for (let i = 0; i < activeParsers.length; i++) {
+      if (matchedParsers.has(i)) continue;
+      const parser = activeParsers[i];
+      const parserState = stateArray[i] ?? parser.initialState;
+      const result = parser.parse({
+        ...currentContext,
+        state: parserState,
+      });
+      // Skip promises — sync pre-parse only:
+      if (result && typeof result === "object" && "then" in result) continue;
+      const syncResult = result as ParserResult<readonly unknown[]>;
+      if (syncResult.success && syncResult.consumed.length > 0) {
+        stateArray[i] = syncResult.next.state;
+        currentContext = {
+          ...currentContext,
+          buffer: syncResult.next.buffer,
+          optionsTerminated: syncResult.next.optionsTerminated,
+          state: stateArray,
+        };
+        matchedParsers.add(i);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return { ...currentContext, state: stateArray };
+}
 
 /**
  * Concatenates tuple parsers into one parser with a flattened tuple value.
@@ -5816,7 +5880,34 @@ export function concat(
       return completeSync(state);
     },
     suggest(context, prefix) {
-      const stateArray = context.state as unknown[] | undefined;
+      // Pre-parse the buffer to build up state across sub-parsers.
+      // concat.parse() is atomic (fails unless ALL sub-parsers match),
+      // so when suggestAsync falls back to suggest after a parse failure,
+      // context.state may still be the initial state.  We re-parse the
+      // buffer here so that dependency source values from earlier
+      // sub-parsers are available to later derived parsers.
+      const preParsedContext = preParseSuggestContext(
+        context,
+        parsers,
+        syncParsers,
+        isAsync,
+      );
+      const stateArray = preParsedContext.state as unknown[] | undefined;
+
+      // Build dependency registry from the (possibly updated) state array
+      // so that derived parsers in one sub-parser can see dependency
+      // sources from another sub-parser:
+      const registry =
+        preParsedContext.dependencyRegistry instanceof DependencyRegistry
+          ? preParsedContext.dependencyRegistry
+          : new DependencyRegistry();
+      if (stateArray && Array.isArray(stateArray)) {
+        collectDependencies(stateArray, registry);
+      }
+      const contextWithRegistry = {
+        ...preParsedContext,
+        dependencyRegistry: registry,
+      };
 
       if (isAsync) {
         return (async function* () {
@@ -5829,7 +5920,7 @@ export function concat(
               : parser.initialState;
 
             const parserSuggestions = parser.suggest({
-              ...context,
+              ...contextWithRegistry,
               state: parserState,
             }, prefix);
 
@@ -5858,7 +5949,7 @@ export function concat(
             : parser.initialState;
 
           const parserSuggestions = parser.suggest({
-            ...context,
+            ...contextWithRegistry,
             state: parserState,
           }, prefix);
 

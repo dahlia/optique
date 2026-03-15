@@ -207,6 +207,12 @@ To be released.
     user's commands are in a titled section, the meta items now appear
     *after* the user's section rather than before it.  [[#138]]
 
+ -  Fixed `merge()` and `concat()` dropping dependency-aware suggestions when
+    the dependency source and derived parser live in different sub-parsers.
+    The `suggest()` methods now build a `DependencyRegistry` from the full
+    composed state before delegating to child parsers, matching the behavior
+    that `object()` already had.  [[#178], [#520]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -229,9 +235,11 @@ To be released.
 [#154]: https://github.com/dahlia/optique/issues/154
 [#157]: https://github.com/dahlia/optique/issues/157
 [#177]: https://github.com/dahlia/optique/issues/177
+[#178]: https://github.com/dahlia/optique/issues/178
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
+[#520]: https://github.com/dahlia/optique/pull/520
 
 ### @optique/config
 
