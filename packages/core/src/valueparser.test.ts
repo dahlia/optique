@@ -1515,6 +1515,24 @@ describe("choice", () => {
       assert.ok(!sci.success);
     });
 
+    it("should reject decimals that only round to a choice value", () => {
+      // "1000000000000000000001" rounds to 1e21 in IEEE-754 but is
+      // mathematically different
+      const parser1 = choice([1e21]);
+      const rounded = parser1.parse("1000000000000000000001");
+      assert.ok(!rounded.success);
+
+      // "0.10000000000000001" rounds to 0.1 in IEEE-754 but is
+      // mathematically different
+      const parser2 = choice([0.1]);
+      const rounded2 = parser2.parse("0.10000000000000001");
+      assert.ok(!rounded2.success);
+
+      // But exact alternate spellings should still work
+      const exact = parser1.parse("1000000000000000000000");
+      assert.ok(exact.success);
+    });
+
     it("should reject overflowed and underflowed decimal inputs", () => {
       const parser = choice([Infinity, -Infinity, 0]);
 

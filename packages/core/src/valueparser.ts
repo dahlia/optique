@@ -309,20 +309,25 @@ export function choice<const T extends string | number>(
         // whitespace inputs.
         if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(input)) {
           const parsed = Number(input);
-          // Accept only if the conversion is lossless: reject overflow
-          // (finite decimal → Infinity) and underflow (nonzero decimal → 0)
-          const overflowed = !Number.isFinite(parsed);
-          const underflowed = parsed === 0 &&
-            !/^[+-]?0*(\.0*)?$/.test(input);
-          if (!overflowed && !underflowed) {
-            const fallbackIndex = numberChoices.findIndex((v) =>
-              Object.is(v, parsed)
+          if (Number.isFinite(parsed)) {
+            // Verify exact decimal equivalence: the input must normalize
+            // to the same string as the canonical form, not merely round
+            // to the same IEEE-754 double.
+            const canonical = Object.is(parsed, -0) ? "-0" : String(parsed);
+            const normalizedInput = normalizeDecimal(input);
+            const normalizedCanonical = normalizeDecimal(
+              expandScientific(canonical),
             );
-            if (fallbackIndex >= 0) {
-              return {
-                success: true,
-                value: numberChoices[fallbackIndex] as T,
-              };
+            if (normalizedInput === normalizedCanonical) {
+              const fallbackIndex = numberChoices.findIndex((v) =>
+                Object.is(v, parsed)
+              );
+              if (fallbackIndex >= 0) {
+                return {
+                  success: true,
+                  value: numberChoices[fallbackIndex] as T,
+                };
+              }
             }
           }
         }
@@ -383,6 +388,58 @@ export function choice<const T extends string | number>(
         .map((value) => ({ kind: "literal" as const, text: value }));
     },
   };
+}
+
+/**
+ * Expands a canonical `String(number)` representation that uses scientific
+ * notation (e.g., `"1e+21"`, `"1.5e-3"`) into plain decimal form.
+ * Returns the input unchanged if it does not contain scientific notation.
+ */
+function expandScientific(s: string): string {
+  const match = /^(-?)(\d+\.?\d*)[eE]([+-]?\d+)$/.exec(s);
+  if (!match) return s;
+  const [, sign, mantissa, expStr] = match;
+  const exp = parseInt(expStr);
+  const dotPos = mantissa.indexOf(".");
+  const digits = mantissa.replace(".", "");
+  const intLen = dotPos >= 0 ? dotPos : digits.length;
+  const newIntLen = intLen + exp;
+  let result: string;
+  if (newIntLen >= digits.length) {
+    result = digits + "0".repeat(newIntLen - digits.length);
+  } else if (newIntLen <= 0) {
+    result = "0." + "0".repeat(-newIntLen) + digits;
+  } else {
+    result = digits.slice(0, newIntLen) + "." + digits.slice(newIntLen);
+  }
+  return sign + result;
+}
+
+/**
+ * Normalizes a plain decimal string by stripping leading zeros from the
+ * integer part and trailing zeros from the fractional part, so that two
+ * strings representing the same mathematical value compare as equal.
+ */
+function normalizeDecimal(s: string): string {
+  let sign = "";
+  let str = s;
+  if (str.startsWith("-") || str.startsWith("+")) {
+    if (str[0] === "-") sign = "-";
+    str = str.slice(1);
+  }
+  const dot = str.indexOf(".");
+  let int: string;
+  let frac: string;
+  if (dot >= 0) {
+    int = str.slice(0, dot);
+    frac = str.slice(dot + 1);
+  } else {
+    int = str;
+    frac = "";
+  }
+  int = int.replace(/^0+/, "") || "0";
+  frac = frac.replace(/0+$/, "");
+  return sign + (frac ? int + "." + frac : int);
 }
 
 /**
