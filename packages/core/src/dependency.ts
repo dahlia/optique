@@ -111,6 +111,16 @@ export interface DeriveOptions<S, T, FM extends Mode = Mode> {
    * @returns The default value for the dependency source.
    */
   readonly defaultValue: () => S;
+
+  /**
+   * The execution mode of the factory's returned parser.  When provided,
+   * skips runtime mode detection entirely, so the factory is never called
+   * during parser construction.  When omitted, mode detection is deferred
+   * until the parser is first used.
+   *
+   * @since 1.0.0
+   */
+  readonly mode?: FM;
 }
 
 /**
@@ -242,6 +252,7 @@ interface InternalDeriveOptions<S, T, FM extends Mode = Mode> {
   readonly metavar: NonEmptyString;
   readonly factory: (sourceValue: S) => ValueParser<FM, T>;
   readonly defaultValue: () => S;
+  readonly mode?: FM;
 }
 
 /**
@@ -330,6 +341,16 @@ export interface DeriveFromOptions<
    * @returns A tuple of default values for each dependency source.
    */
   readonly defaultValues: () => DependencyValues<Deps>;
+
+  /**
+   * The execution mode of the factory's returned parser.  When provided,
+   * skips runtime mode detection entirely, so the factory is never called
+   * during parser construction.  When omitted, mode detection is deferred
+   * until the parser is first used.
+   *
+   * @since 1.0.0
+   */
+  readonly mode?: FM;
 }
 
 /**
@@ -614,17 +635,101 @@ export function deriveFrom<
   T,
   DependencyValues<Deps>
 > {
-  // Check if any dependency is async
+  type Result = DerivedValueParser<
+    CombineMode<CombinedDependencyMode<Deps>, FM>,
+    T,
+    DependencyValues<Deps>
+  >;
+
   const depsAsync = options.dependencies.some((dep) => dep.$mode === "async");
 
-  // Check if factory returns async parser
-  const factoryReturnsAsync = determineFactoryModeForDeriveFrom(options);
-
-  // Create a combined dependency ID (using the first dependency's ID for now)
-  // In a full implementation, we might want to track all dependency IDs
   const sourceId = options.dependencies.length > 0
     ? options.dependencies[0][dependencyId]
     : Symbol();
+
+  if (options.mode != null) {
+    // Explicit mode provided — skip factory probing entirely.
+    return deriveFromWithMode(
+      sourceId,
+      depsAsync,
+      options,
+      options.mode === "async",
+    );
+  }
+
+  // No explicit mode — create a lazy proxy that defers mode detection.
+  let delegate: Result | undefined;
+
+  function ensureDelegate(): Result {
+    if (delegate == null) {
+      const factoryReturnsAsync = determineFactoryModeForDeriveFrom(options);
+      delegate = deriveFromWithMode(
+        sourceId,
+        depsAsync,
+        options,
+        factoryReturnsAsync,
+      );
+    }
+    return delegate;
+  }
+
+  return {
+    get $mode() {
+      return ensureDelegate().$mode;
+    },
+    metavar: options.metavar,
+    [derivedValueParserMarker]: true,
+    [dependencyId]: sourceId,
+    [dependencyIds]: options.dependencies.map((dep) => dep[dependencyId]),
+    [defaultValues]: options.defaultValues,
+    parse(input: string) {
+      return ensureDelegate().parse(input);
+    },
+    [parseWithDependency](
+      input: string,
+      depValue: DependencyValues<Deps>,
+    ) {
+      return ensureDelegate()[parseWithDependency](input, depValue);
+    },
+    format(value: T): string {
+      return ensureDelegate().format(value);
+    },
+    suggest(prefix: string) {
+      return ensureDelegate().suggest?.(prefix);
+    },
+    [suggestWithDependency](
+      prefix: string,
+      depValue: DependencyValues<Deps>,
+    ) {
+      const d = ensureDelegate();
+      const fn = d[suggestWithDependency];
+      if (fn != null) {
+        return fn(prefix, depValue);
+      }
+      return [][Symbol.iterator]();
+    },
+  } as Result;
+}
+
+function deriveFromWithMode<
+  Deps extends readonly AnyDependencySource[],
+  T,
+  FM extends Mode,
+>(
+  sourceId: symbol,
+  depsAsync: boolean,
+  options: DeriveFromOptions<Deps, T, FM>,
+  factoryReturnsAsync: boolean,
+): DerivedValueParser<
+  CombineMode<CombinedDependencyMode<Deps>, FM>,
+  T,
+  DependencyValues<Deps>
+> {
+  type Result = DerivedValueParser<
+    CombineMode<CombinedDependencyMode<Deps>, FM>,
+    T,
+    DependencyValues<Deps>
+  >;
 
   const isAsync = depsAsync || factoryReturnsAsync;
 
@@ -633,30 +738,18 @@ export function deriveFrom<
       return createAsyncDerivedFromParserFromAsyncFactory(
         sourceId,
         options as DeriveFromOptions<Deps, T, "async">,
-      ) as DerivedValueParser<
-        CombineMode<CombinedDependencyMode<Deps>, FM>,
-        T,
-        DependencyValues<Deps>
-      >;
+      ) as Result;
     }
     return createAsyncDerivedFromParserFromSyncFactory(
       sourceId,
       options as DeriveFromOptions<Deps, T, "sync">,
-    ) as DerivedValueParser<
-      CombineMode<CombinedDependencyMode<Deps>, FM>,
-      T,
-      DependencyValues<Deps>
-    >;
+    ) as Result;
   }
 
   return createSyncDerivedFromParser(
     sourceId,
     options as DeriveFromOptions<Deps, T, "sync">,
-  ) as DerivedValueParser<
-    CombineMode<CombinedDependencyMode<Deps>, FM>,
-    T,
-    DependencyValues<Deps>
-  >;
+  ) as Result;
 }
 
 /**
@@ -1088,13 +1181,39 @@ function createDerivedValueParser<
   sourceParser: ValueParser<M, S>,
   options: InternalDeriveOptions<S, T, FM>,
 ): DerivedValueParser<CombineMode<M, FM>, T, S> {
-  // Determine if the resulting parser should be async
-  // It's async if either the source is async OR the factory returns async parser
-  const factoryReturnsAsync = determineFactoryMode(options);
+  if (options.mode != null) {
+    // Explicit mode provided — skip factory probing entirely.
+    return createDerivedValueParserWithMode(
+      sourceId,
+      sourceParser,
+      options,
+      options.mode === "async",
+    );
+  }
+
+  // No explicit mode — create a lazy proxy that defers mode detection
+  // until the parser is first used.
+  return createLazyDerivedValueParser(
+    sourceId,
+    sourceParser,
+    options,
+  );
+}
+
+function createDerivedValueParserWithMode<
+  M extends Mode,
+  S,
+  T,
+  FM extends Mode,
+>(
+  sourceId: symbol,
+  sourceParser: ValueParser<M, S>,
+  options: InternalDeriveOptions<S, T, FM>,
+  factoryReturnsAsync: boolean,
+): DerivedValueParser<CombineMode<M, FM>, T, S> {
   const isAsync = sourceParser.$mode === "async" || factoryReturnsAsync;
 
   if (isAsync) {
-    // Use the appropriate async parser based on factory mode
     if (factoryReturnsAsync) {
       return createAsyncDerivedParserFromAsyncFactory(
         sourceId,
@@ -1111,6 +1230,61 @@ function createDerivedValueParser<
     sourceId,
     options as InternalDeriveOptions<S, T, "sync">,
   ) as DerivedValueParser<CombineMode<M, FM>, T, S>;
+}
+
+function createLazyDerivedValueParser<
+  M extends Mode,
+  S,
+  T,
+  FM extends Mode,
+>(
+  sourceId: symbol,
+  sourceParser: ValueParser<M, S>,
+  options: InternalDeriveOptions<S, T, FM>,
+): DerivedValueParser<CombineMode<M, FM>, T, S> {
+  let delegate: DerivedValueParser<CombineMode<M, FM>, T, S> | undefined;
+
+  function ensureDelegate(): DerivedValueParser<CombineMode<M, FM>, T, S> {
+    if (delegate == null) {
+      const factoryReturnsAsync = determineFactoryMode(options);
+      delegate = createDerivedValueParserWithMode(
+        sourceId,
+        sourceParser,
+        options,
+        factoryReturnsAsync,
+      );
+    }
+    return delegate;
+  }
+
+  return {
+    get $mode() {
+      return ensureDelegate().$mode;
+    },
+    metavar: options.metavar,
+    [derivedValueParserMarker]: true,
+    [dependencyId]: sourceId,
+    parse(input: string) {
+      return ensureDelegate().parse(input);
+    },
+    [parseWithDependency](input: string, dependencyValue: S) {
+      return ensureDelegate()[parseWithDependency](input, dependencyValue);
+    },
+    format(value: T): string {
+      return ensureDelegate().format(value);
+    },
+    suggest(prefix: string) {
+      return ensureDelegate().suggest?.(prefix);
+    },
+    [suggestWithDependency](prefix: string, dependencyValue: S) {
+      const d = ensureDelegate();
+      const fn = d[suggestWithDependency];
+      if (fn != null) {
+        return fn(prefix, dependencyValue);
+      }
+      return [][Symbol.iterator]();
+    },
+  } as DerivedValueParser<CombineMode<M, FM>, T, S>;
 }
 
 /**

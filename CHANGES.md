@@ -225,10 +225,13 @@ To be released.
     from the default branch are now caught and produce a preliminary failure
     result, which gets overridden when `parseWithDependency()` runs with
     the actual values.  `deriveAsync()` also no longer calls the factory
-    during parser construction.  Note that the auto-detecting `derive()`
-    and `deriveFrom()` still require a working default value for mode
-    detection; use the explicit variants when the default branch is
-    unreachable.  [[#225]]
+    during parser construction.  [[#225], [#524]]
+
+ -  Fixed `derive()` and `deriveFrom()` eagerly executing default factories
+    during parser construction to detect sync/async mode.  Construction is
+    now lazy; the factory is not called until the parser is first used.
+    An optional `mode` field can be passed to skip runtime detection
+    entirely.  [[#223], [#527]]
 
  -  The `integer()` parser in number mode now rejects values outside the safe
     integer range (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
@@ -266,6 +269,7 @@ To be released.
 [#177]: https://github.com/dahlia/optique/issues/177
 [#178]: https://github.com/dahlia/optique/issues/178
 [#186]: https://github.com/dahlia/optique/issues/186
+[#223]: https://github.com/dahlia/optique/issues/223
 [#225]: https://github.com/dahlia/optique/issues/225
 [#242]: https://github.com/dahlia/optique/issues/242
 [#248]: https://github.com/dahlia/optique/issues/248
@@ -274,7 +278,9 @@ To be released.
 [#512]: https://github.com/dahlia/optique/pull/512
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
+[#524]: https://github.com/dahlia/optique/pull/524
 [#525]: https://github.com/dahlia/optique/pull/525
+[#527]: https://github.com/dahlia/optique/pull/527
 [#528]: https://github.com/dahlia/optique/pull/528
 
 ### @optique/config

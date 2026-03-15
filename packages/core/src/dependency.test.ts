@@ -2563,23 +2563,22 @@ describe("Error cases with dependencies", () => {
     assert.ok(!result2.success);
   });
 
-  test("factory throws error propagates correctly", () => {
-    // The factory is called during derive() to determine if it returns sync/async.
-    // So a factory that always throws will throw during derive().
+  test("factory that throws for default value does not throw during derive()", () => {
+    // derive() should not call the factory during construction.
+    // The factory is only called at parse/suggest time.
     const modeParser = dependency(choice(["dev", "prod"] as const));
 
-    assert.throws(
-      () => {
-        modeParser.derive({
-          metavar: "VALUE",
-          factory: (_mode: "dev" | "prod") => {
-            throw new Error("Factory error");
-          },
-          defaultValue: () => "dev" as const,
-        });
+    // Construction should succeed even though the factory always throws
+    const derived = modeParser.derive({
+      metavar: "VALUE",
+      factory: (_mode: "dev" | "prod") => {
+        throw new Error("Factory error");
       },
-      /Factory error/,
-    );
+      defaultValue: () => "dev" as const,
+    });
+
+    // The factory error should surface at parse time, not construction time
+    assert.ok(derived);
   });
 
   test("invalid value for derived parser shows appropriate error", async () => {
@@ -3707,27 +3706,59 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
     assert.deepEqual(result.value, { a: "safe", b: 1, value: "ok" });
   });
 
-  test("derive() throws during construction when factory throws for default (use deriveSync/deriveAsync instead)", () => {
-    // derive() calls the factory with the default value during construction
-    // to auto-detect the mode.  If the factory throws, construction fails.
-    // Users should use deriveSync() or deriveAsync() when the default branch
-    // is unreachable.
+  test("derive() does not call factory during construction", () => {
+    // derive() should not call the factory during construction.
+    // Even if the factory throws for the default value, construction succeeds.
     const mode = dependency(choice(["safe", "broken"] as const));
-    assert.throws(
-      () => {
-        mode.derive({
-          metavar: "VALUE",
-          factory: (value) => {
-            if (value === "broken") {
-              throw new Error("broken default branch");
-            }
-            return string({ metavar: "VALUE" });
-          },
-          defaultValue: () => "broken" as const,
-        });
+    const derived = mode.derive({
+      metavar: "VALUE",
+      factory: (value) => {
+        if (value === "broken") {
+          throw new Error("broken default branch");
+        }
+        return string({ metavar: "VALUE" });
       },
-      /broken default branch/,
-    );
+      defaultValue: () => "broken" as const,
+    });
+    assert.ok(derived);
+  });
+
+  test("derive() with explicit mode: 'sync' does not call factory during construction", () => {
+    let factoryCalls = 0;
+    const mode = dependency(choice(["safe", "broken"] as const));
+    const derived = mode.derive({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (value) => {
+        factoryCalls++;
+        if (value === "broken") {
+          throw new Error("broken default branch");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+    assert.equal(factoryCalls, 0);
+    assert.equal(derived.$mode, "sync");
+  });
+
+  test("derive() with explicit mode: 'async' does not call factory during construction", () => {
+    let factoryCalls = 0;
+    const mode = dependency(choice(["safe", "broken"] as const));
+    const derived = mode.derive({
+      metavar: "VALUE",
+      mode: "async",
+      factory: (value) => {
+        factoryCalls++;
+        if (value === "broken") {
+          throw new Error("broken default branch");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValue: () => "broken" as const,
+    });
+    assert.equal(factoryCalls, 0);
+    assert.equal(derived.$mode, "async");
   });
 
   test("deriveAsync() does not throw during construction when factory throws for default value", async () => {
@@ -3766,28 +3797,63 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
     assert.deepEqual(result.value, { mode: "safe", value: "ok" });
   });
 
-  test("deriveFrom() throws during construction when factory throws for default (use deriveFromSync/deriveFromAsync instead)", () => {
-    // deriveFrom() calls the factory with default values during construction
-    // to auto-detect the mode.  If the factory throws, construction fails.
-    // Users should use deriveFromSync() or deriveFromAsync() when the default
-    // branch is unreachable.
+  test("deriveFrom() does not call factory during construction", () => {
+    // deriveFrom() should not call the factory during construction.
     const a = dependency(choice(["safe", "broken"] as const));
     const b = dependency(integer({ metavar: "N" }));
-    assert.throws(
-      () => {
-        deriveFrom({
-          metavar: "VALUE",
-          dependencies: [a, b] as const,
-          factory: (aVal, _bVal) => {
-            if (aVal === "broken") {
-              throw new Error("broken default branch");
-            }
-            return string({ metavar: "VALUE" });
-          },
-          defaultValues: () => ["broken" as const, 0] as const,
-        });
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      dependencies: [a, b] as const,
+      factory: (aVal, _bVal) => {
+        if (aVal === "broken") {
+          throw new Error("broken default branch");
+        }
+        return string({ metavar: "VALUE" });
       },
-      /broken default branch/,
-    );
+      defaultValues: () => ["broken" as const, 0] as const,
+    });
+    assert.ok(derived);
+  });
+
+  test("deriveFrom() with explicit mode: 'sync' does not call factory during construction", () => {
+    let factoryCalls = 0;
+    const a = dependency(choice(["safe", "broken"] as const));
+    const b = dependency(integer({ metavar: "N" }));
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      mode: "sync",
+      dependencies: [a, b] as const,
+      factory: (aVal, _bVal) => {
+        factoryCalls++;
+        if (aVal === "broken") {
+          throw new Error("broken default branch");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValues: () => ["broken" as const, 0] as const,
+    });
+    assert.equal(factoryCalls, 0);
+    assert.equal(derived.$mode, "sync");
+  });
+
+  test("deriveFrom() with explicit mode: 'async' does not call factory during construction", () => {
+    let factoryCalls = 0;
+    const a = dependency(choice(["safe", "broken"] as const));
+    const b = dependency(integer({ metavar: "N" }));
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      mode: "async",
+      dependencies: [a, b] as const,
+      factory: (aVal, _bVal) => {
+        factoryCalls++;
+        if (aVal === "broken") {
+          throw new Error("broken default branch");
+        }
+        return asyncChoice(["x", "y"]);
+      },
+      defaultValues: () => ["broken" as const, 0] as const,
+    });
+    assert.equal(factoryCalls, 0);
+    assert.equal(derived.$mode, "async");
   });
 });
