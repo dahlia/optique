@@ -428,6 +428,11 @@ function formatDefaultChoiceError(
 export function string(
   options: StringOptions = {},
 ): ValueParser<"sync", string> {
+  if (options.pattern != null && !(options.pattern instanceof RegExp)) {
+    throw new TypeError(
+      `Expected pattern to be a RegExp, but got: ${typeof options.pattern}`,
+    );
+  }
   const metavar = options.metavar ?? "STRING";
   ensureNonEmptyString(metavar);
   return {

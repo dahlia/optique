@@ -3684,6 +3684,17 @@ describe("string", () => {
       const result2 = parser.parse("non-empty");
       assert.ok(!result2.success);
     });
+
+    it("should throw TypeError when pattern is not a RegExp", () => {
+      assert.throws(
+        () => string({ pattern: "abc" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => string({ pattern: 123 as never }),
+        TypeError,
+      );
+    });
   });
 });
 

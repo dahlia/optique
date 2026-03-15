@@ -148,6 +148,11 @@ To be released.
     evaluates a fresh regular expression per parse, so repeated calls are
     deterministic and no longer mutate the caller's `pattern.lastIndex`.
 
+ -  Fixed `string({ pattern })` to validate that `pattern` is a real `RegExp`
+    at construction time.  Previously, a non-`RegExp` value reaching the
+    parser through an untyped path would silently produce an always-matching
+    regular expression; it now throws a `TypeError`.  [[#388], [#512]]
+
  -  Fixed option-value completion in `option()` so value-position suggestions
     no longer leak option-name candidates when the value prefix starts with
     `-` (for example, after `--mode --`).  This restores monotonic
@@ -224,7 +229,9 @@ To be released.
 [#154]: https://github.com/dahlia/optique/issues/154
 [#157]: https://github.com/dahlia/optique/issues/157
 [#177]: https://github.com/dahlia/optique/issues/177
+[#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
+[#512]: https://github.com/dahlia/optique/pull/512
 
 ### @optique/config
 
