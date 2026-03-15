@@ -5560,7 +5560,7 @@ function preParseSuggestLoop(
       // asynchronously to avoid launching unawaited I/O.
       if (
         resultOrPromise != null && typeof resultOrPromise === "object" &&
-        "then" in resultOrPromise
+        "then" in resultOrPromise && typeof resultOrPromise.then === "function"
       ) {
         // Capture the tail of remaining parsers still to try in this round.
         const tail = remaining.slice(ri + 1);
