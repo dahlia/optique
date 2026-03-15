@@ -251,6 +251,10 @@ function withPreparedParsedForContext<T>(
     );
   }
 
+  if (isDeferredPromptValue(parsed)) {
+    return run(finalizeParsedForContext(context, undefined));
+  }
+
   if (!containsDeferredPromptValuesForContexts(parsed)) {
     return run(finalizeParsedForContext(context, parsed));
   }

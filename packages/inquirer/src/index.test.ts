@@ -1016,6 +1016,51 @@ describe("prompt()", () => {
     );
 
     it(
+      "hides top-level deferred prompts from other phase-two contexts",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let sawUndefined = false;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/top-level-config-prompt-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            sawUndefined = parsed === undefined;
+            return {};
+          },
+        };
+        const parser = prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => Promise.resolve("prompt-secret"),
+          },
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
+        );
+
+        assert.ok(sawUndefined);
+        assert.equal(result, "config-secret");
+      },
+    );
+
+    it(
       "hides deferred prompt values inside non-plain phase-two context inputs",
       async () => {
         const context = createConfigContext({
