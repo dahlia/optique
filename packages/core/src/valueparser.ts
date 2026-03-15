@@ -353,6 +353,35 @@ export function choice<const T extends string | number>(
             }
           }
         }
+        // Fall back to scientific notation parsing for alternate exponent
+        // spellings (e.g., "1e21" for canonical "1e+21", "1.0e-7" for
+        // "1e-7"). Only accepted when the canonical form also uses
+        // scientific notation, so "2e0" for choice([2]) stays rejected.
+        if (/^[+-]?(\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.test(input)) {
+          const parsed = Number(input);
+          if (Number.isFinite(parsed)) {
+            const canonical = Object.is(parsed, -0) ? "-0" : String(parsed);
+            if (/[eE]/.test(canonical)) {
+              const normalizedInput = normalizeDecimal(
+                expandScientific(input),
+              );
+              const normalizedCanonical = normalizeDecimal(
+                expandScientific(canonical),
+              );
+              if (normalizedInput === normalizedCanonical) {
+                const fallbackIndex = numberChoices.findIndex((v) =>
+                  Object.is(v, parsed)
+                );
+                if (fallbackIndex >= 0) {
+                  return {
+                    success: true,
+                    value: numberChoices[fallbackIndex] as T,
+                  };
+                }
+              }
+            }
+          }
+        }
         return {
           success: false,
           error: formatNumberChoiceError(input, numberChoices, numberOptions),

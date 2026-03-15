@@ -1509,6 +1509,26 @@ describe("choice", () => {
         assert.equal(smallCanon.value, 1e-7);
       }
 
+      // Alternate scientific notation spellings should work for
+      // values whose canonical form uses scientific notation
+      const altSci1 = parser.parse("1e21");
+      assert.ok(altSci1.success);
+      if (altSci1.success) {
+        assert.equal(altSci1.value, 1e21);
+      }
+
+      const altSci2 = parser.parse("1.0e-7");
+      assert.ok(altSci2.success);
+      if (altSci2.success) {
+        assert.equal(altSci2.value, 1e-7);
+      }
+
+      const altSci3 = parser.parse("10e20");
+      assert.ok(altSci3.success);
+      if (altSci3.success) {
+        assert.equal(altSci3.value, 1e21);
+      }
+
       // But scientific notation for a value whose canonical form is plain
       // decimal should still be rejected
       const sci = parser.parse("4.2e1");
