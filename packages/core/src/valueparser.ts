@@ -390,7 +390,7 @@ export function choice<const T extends string | number>(
           success: false,
           error: formatNumberChoiceError(
             input,
-            validNumberChoices,
+            numberChoices,
             numberOptions,
           ),
         };
