@@ -8630,6 +8630,7 @@ describe("Mixed mode deriveFrom() with sync/async sources", () => {
     const derived = deriveFrom({
       dependencies: [sourceA, sourceB] as const,
       metavar: "DERIVED",
+      mode: "async",
       defaultValues: () => ["a1", "b1"] as const,
       factory: (a: "a1" | "a2", b: "b1" | "b2") =>
         asyncChoice(

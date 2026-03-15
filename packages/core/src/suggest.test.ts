@@ -845,6 +845,7 @@ describe("suggest function", () => {
         const mode = dependency(asyncChoice(["dev", "prod"] as const));
         const level = mode.derive({
           metavar: "LEVEL",
+          mode: "async",
           factory: (value) =>
             asyncChoice(
               value === "dev"
@@ -878,6 +879,7 @@ describe("suggest function", () => {
         const mode = dependency(asyncChoice(["dev", "prod"] as const));
         const level = mode.derive({
           metavar: "LEVEL",
+          mode: "async",
           factory: (value) =>
             asyncChoice(
               value === "dev"
