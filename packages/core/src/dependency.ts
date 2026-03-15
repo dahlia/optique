@@ -537,11 +537,8 @@ export function dependency<M extends Mode, T>(
     deriveAsync<U>(
       options: DeriveAsyncOptions<T, U>,
     ): DerivedValueParser<"async", U, T> {
-      // Skip mode detection — the type guarantees the factory returns async
-      return createAsyncDerivedParserFromAsyncFactory(
-        id,
-        options,
-      );
+      // Skip mode detection — the type guarantees the factory returns async.
+      return createAsyncDerivedParserFromAsyncFactory(id, options);
     },
   };
   return result;
@@ -1234,7 +1231,9 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
           error: message`Factory error: ${msg}`,
         });
       }
-      return derivedParser.parse(input);
+      // Wrap with Promise.resolve() to ensure the result is always a Promise,
+      // even if a JS caller passes a factory returning a sync parser.
+      return Promise.resolve(derivedParser.parse(input));
     },
 
     [parseWithDependency](
@@ -1251,7 +1250,8 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
           error: message`Factory error: ${msg}`,
         });
       }
-      return derivedParser.parse(input);
+      // Wrap with Promise.resolve() to ensure the result is always a Promise.
+      return Promise.resolve(derivedParser.parse(input));
     },
 
     format(value: T): string {
