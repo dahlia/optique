@@ -10459,4 +10459,50 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
       `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
     );
   });
+
+  // https://github.com/dahlia/optique/issues/178
+  // Ensure an earlier async child that doesn't consume doesn't short-circuit
+  // pre-parsing, so later sync dependency sources are still resolved.
+  it("concat() suggest skips unmatched async child", async () => {
+    const asyncValueParser: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VAL",
+      parse: (v) => Promise.resolve({ success: true, value: v }),
+      format: (v) => v,
+    };
+
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      factory: (value) =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+
+    const parser = concat(
+      tuple([option("--skip", asyncValueParser)] as const),
+      tuple([option("--mode", mode)] as const),
+      tuple([option("--level", level)] as const),
+    );
+
+    const suggestions = await suggestAsync(
+      parser,
+      ["--mode", "prod", "--level", "s"],
+    );
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+    assert.ok(
+      texts.includes("silent"),
+      `Expected "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("strict"),
+      `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
 });

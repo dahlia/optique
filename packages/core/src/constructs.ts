@@ -5531,11 +5531,10 @@ function preParseSuggestLoop(
   context: ParserContext<readonly unknown[]>,
   stateArray: unknown[],
   parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
+  matchedParsers: Set<number> = new Set<number>(),
 ):
   | ParserContext<readonly unknown[]>
   | Promise<ParserContext<readonly unknown[]>> {
-  const matchedParsers = new Set<number>();
-
   const indexedParsers = parsers
     .map((parser, index) => [parser, index] as [typeof parser, number]);
 
@@ -5547,37 +5546,49 @@ function preParseSuggestLoop(
       .filter(([_, index]) => !matchedParsers.has(index))
       .sort(([a], [b]) => b.priority - a.priority);
 
-    for (const [parser, index] of remaining) {
+    for (let ri = 0; ri < remaining.length; ri++) {
+      const [parser, index] = remaining[ri];
       const parserState = stateArray[index] ?? parser.initialState;
       const resultOrPromise = parser.parse({
         ...currentContext,
         state: parserState,
       });
 
-      // If the result is a Promise, chain the rest of the loop asynchronously
-      // to avoid launching unawaited I/O.
+      // If the result is a Promise, chain the rest of the iteration
+      // asynchronously to avoid launching unawaited I/O.
       if (
         resultOrPromise != null && typeof resultOrPromise === "object" &&
         "then" in resultOrPromise
       ) {
+        // Capture the tail of remaining parsers still to try in this round.
+        const tail = remaining.slice(ri + 1);
         return (resultOrPromise as Promise<ParserResult<readonly unknown[]>>)
           .then((result) => {
             if (result.success && result.consumed.length > 0) {
               stateArray[index] = result.next.state;
-              currentContext = {
-                ...currentContext,
-                buffer: result.next.buffer,
-                optionsTerminated: result.next.optionsTerminated,
-                state: stateArray,
-              };
               matchedParsers.add(index);
+              // Restart the outer loop with all parsers.
               return preParseSuggestLoop(
-                currentContext,
+                {
+                  ...currentContext,
+                  buffer: result.next.buffer,
+                  optionsTerminated: result.next.optionsTerminated,
+                  state: stateArray,
+                },
                 stateArray,
                 parsers,
+                matchedParsers,
               );
             }
-            return { ...currentContext, state: stateArray };
+            // This parser didn't consume — continue with the remaining
+            // parsers in this round before giving up.
+            return preParseSuggestRemainder(
+              currentContext,
+              stateArray,
+              parsers,
+              matchedParsers,
+              tail,
+            );
           });
       }
 
@@ -5594,6 +5605,83 @@ function preParseSuggestLoop(
         changed = true;
         break;
       }
+    }
+  }
+
+  return { ...currentContext, state: stateArray };
+}
+
+/**
+ * Continues trying the remaining parsers in the current round after an async
+ * parser did not consume.  If one succeeds, restarts the full outer loop.
+ * @internal
+ */
+function preParseSuggestRemainder(
+  context: ParserContext<readonly unknown[]>,
+  stateArray: unknown[],
+  parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
+  matchedParsers: Set<number>,
+  remaining: [Parser<Mode, readonly unknown[], unknown>, number][],
+):
+  | ParserContext<readonly unknown[]>
+  | Promise<ParserContext<readonly unknown[]>> {
+  const currentContext = context;
+
+  for (let ri = 0; ri < remaining.length; ri++) {
+    const [parser, index] = remaining[ri];
+    const parserState = stateArray[index] ?? parser.initialState;
+    const resultOrPromise = parser.parse({
+      ...currentContext,
+      state: parserState,
+    });
+
+    if (
+      resultOrPromise != null && typeof resultOrPromise === "object" &&
+      "then" in resultOrPromise
+    ) {
+      const tail = remaining.slice(ri + 1);
+      return (resultOrPromise as Promise<ParserResult<readonly unknown[]>>)
+        .then((result) => {
+          if (result.success && result.consumed.length > 0) {
+            stateArray[index] = result.next.state;
+            matchedParsers.add(index);
+            return preParseSuggestLoop(
+              {
+                ...currentContext,
+                buffer: result.next.buffer,
+                optionsTerminated: result.next.optionsTerminated,
+                state: stateArray,
+              },
+              stateArray,
+              parsers,
+              matchedParsers,
+            );
+          }
+          return preParseSuggestRemainder(
+            currentContext,
+            stateArray,
+            parsers,
+            matchedParsers,
+            tail,
+          );
+        });
+    }
+
+    const result = resultOrPromise as ParserResult<readonly unknown[]>;
+    if (result.success && result.consumed.length > 0) {
+      stateArray[index] = result.next.state;
+      matchedParsers.add(index);
+      return preParseSuggestLoop(
+        {
+          ...currentContext,
+          buffer: result.next.buffer,
+          optionsTerminated: result.next.optionsTerminated,
+          state: stateArray,
+        },
+        stateArray,
+        parsers,
+        matchedParsers,
+      );
     }
   }
 
