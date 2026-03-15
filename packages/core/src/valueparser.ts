@@ -296,7 +296,9 @@ export function choice<const T extends string | number>(
     return {
       $mode: "sync",
       metavar,
-      choices: choices as readonly T[],
+      choices: choices.filter((c) =>
+        typeof c === "string" || !Number.isNaN(c)
+      ) as readonly T[],
       parse(input: string): ValueParserResult<T> {
         // Exact match against canonical String() representations.
         // NaN is never a valid CLI literal (consistent with float()

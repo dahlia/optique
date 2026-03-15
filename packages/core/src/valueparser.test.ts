@@ -1698,6 +1698,9 @@ describe("choice", () => {
       // Other values should still work
       const result2 = parser.parse("1");
       assert.ok(result2.success);
+
+      // NaN should be excluded from choices metadata
+      assert.deepEqual(parser.choices, [1, 2]);
     });
 
     it("should handle duplicate number values", () => {
