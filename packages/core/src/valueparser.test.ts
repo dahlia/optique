@@ -1691,9 +1691,9 @@ describe("choice", () => {
       const result = parser.parse("NaN");
       assert.ok(!result.success);
 
-      // The internal sentinel must not be matchable either
-      const sentinel = parser.parse("\0");
-      assert.ok(!sentinel.success);
+      // No hidden literal should parse to NaN
+      const nul = parser.parse("\0");
+      assert.ok(!nul.success);
 
       // Other values should still work
       const result2 = parser.parse("1");
