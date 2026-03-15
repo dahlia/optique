@@ -1,6 +1,11 @@
 import type { DocPage, DocSection } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
-import { isUsageHidden, type Usage, type UsageTerm } from "@optique/core/usage";
+import {
+  isDocHidden,
+  isUsageHidden,
+  type Usage,
+  type UsageTerm,
+} from "@optique/core/usage";
 import { escapeHyphens, formatMessageAsRoff } from "./roff.ts";
 
 /**
@@ -213,6 +218,9 @@ function formatUsageAsRoff(usage: Usage): string {
  * @returns The roff-formatted term string.
  */
 function formatDocEntryTerm(term: UsageTerm): string {
+  // Skip doc-hidden terms
+  if ("hidden" in term && isDocHidden(term.hidden)) return "";
+
   switch (term.type) {
     case "option": {
       const names = term.names
