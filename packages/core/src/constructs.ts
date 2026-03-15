@@ -15,6 +15,7 @@ import {
   injectAnnotations,
 } from "./annotations.ts";
 import { dispatchByMode, dispatchIterableByMode } from "./mode-dispatch.ts";
+import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { DocEntry, DocFragment, DocSection } from "./doc.ts";
 import {
   type Message,
@@ -3066,7 +3067,7 @@ async function* suggestObjectAsync<
  */
 function collectDependencies(
   state: unknown,
-  registry: DependencyRegistry,
+  registry: DependencyRegistryLike,
   visited: WeakSet<object> = new WeakSet<object>(),
 ): void {
   if (state === null || state === undefined) return;
@@ -5287,9 +5288,10 @@ export function merge(
 
       // Build dependency registry from the full merged state so that
       // derived parsers in one sub-parser can see dependency sources
-      // from another sub-parser:
-      const registry = context.dependencyRegistry instanceof DependencyRegistry
-        ? context.dependencyRegistry
+      // from another sub-parser.  Clone any caller-supplied registry
+      // to preserve custom DependencyRegistryLike implementations:
+      const registry = context.dependencyRegistry
+        ? context.dependencyRegistry.clone()
         : new DependencyRegistry();
       if (context.state && typeof context.state === "object") {
         collectDependencies(context.state, registry);
@@ -5897,11 +5899,11 @@ export function concat(
 
       // Build dependency registry from the (possibly updated) state array
       // so that derived parsers in one sub-parser can see dependency
-      // sources from another sub-parser:
-      const registry =
-        preParsedContext.dependencyRegistry instanceof DependencyRegistry
-          ? preParsedContext.dependencyRegistry
-          : new DependencyRegistry();
+      // sources from another sub-parser.  Clone any caller-supplied
+      // registry to preserve custom DependencyRegistryLike implementations:
+      const registry = preParsedContext.dependencyRegistry
+        ? preParsedContext.dependencyRegistry.clone()
+        : new DependencyRegistry();
       if (stateArray && Array.isArray(stateArray)) {
         collectDependencies(stateArray, registry);
       }
