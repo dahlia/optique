@@ -290,16 +290,17 @@ export function choice<const T extends string | number>(
     // Number choice implementation
     const numberChoices = choices as readonly number[];
     const numberOptions = options as ChoiceOptionsNumber;
-    const validNumberChoices = numberChoices.filter((v) => !Number.isNaN(v));
+    const hasNaN = numberChoices.some((v) => Number.isNaN(v));
+    const validNumberChoices = hasNaN
+      ? numberChoices.filter((v) => !Number.isNaN(v))
+      : numberChoices;
     const numberStrings = numberChoices.map((v) =>
       Object.is(v, -0) ? "-0" : String(v)
     );
     return {
       $mode: "sync",
       metavar,
-      choices: choices.filter((c) =>
-        typeof c === "string" || !Number.isNaN(c)
-      ) as readonly T[],
+      choices: (hasNaN ? validNumberChoices : numberChoices) as readonly T[],
       parse(input: string): ValueParserResult<T> {
         // Exact match against canonical string representations
         // (String(value) for most values, "-0" for negative zero).
