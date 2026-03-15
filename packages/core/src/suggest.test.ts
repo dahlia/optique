@@ -757,6 +757,34 @@ describe("suggest function", () => {
   });
 
   describe("dependency-aware completion with withDefault()", () => {
+    function asyncChoice<T extends string>(
+      choices: readonly T[],
+    ): ValueParser<"async", T> {
+      return {
+        $mode: "async",
+        metavar: "ASYNC_CHOICE" as NonEmptyString,
+        parse(input: string): Promise<ValueParserResult<T>> {
+          if (choices.includes(input as T)) {
+            return Promise.resolve({ success: true, value: input as T });
+          }
+          return Promise.resolve({
+            success: false,
+            error: message`Must be one of: ${choices.join(", ")}`,
+          });
+        },
+        format(value: T): string {
+          return value;
+        },
+        async *suggest(prefix: string): AsyncIterable<Suggestion> {
+          for (const c of choices) {
+            if (c.startsWith(prefix)) {
+              yield { kind: "literal", text: c };
+            }
+          }
+        },
+      };
+    }
+
     // Regression test for https://github.com/dahlia/optique/issues/186
     it("should suggest values based on withDefault() source value", () => {
       const mode = dependency(choice(["dev", "prod"] as const));
@@ -814,34 +842,6 @@ describe("suggest function", () => {
     it(
       "should suggest values based on withDefault() source value with async map()",
       async () => {
-        function asyncChoice<T extends string>(
-          choices: readonly T[],
-        ): ValueParser<"async", T> {
-          return {
-            $mode: "async",
-            metavar: "ASYNC_CHOICE" as NonEmptyString,
-            parse(input: string): Promise<ValueParserResult<T>> {
-              if (choices.includes(input as T)) {
-                return Promise.resolve({ success: true, value: input as T });
-              }
-              return Promise.resolve({
-                success: false,
-                error: message`Must be one of: ${choices.join(", ")}`,
-              });
-            },
-            format(value: T): string {
-              return value;
-            },
-            async *suggest(prefix: string): AsyncIterable<Suggestion> {
-              for (const c of choices) {
-                if (c.startsWith(prefix)) {
-                  yield { kind: "literal", text: c };
-                }
-              }
-            },
-          };
-        }
-
         const mode = dependency(asyncChoice(["dev", "prod"] as const));
         const level = mode.derive({
           metavar: "LEVEL",
@@ -875,34 +875,6 @@ describe("suggest function", () => {
     it(
       "should suggest values based on withDefault() source value for async parsers",
       async () => {
-        function asyncChoice<T extends string>(
-          choices: readonly T[],
-        ): ValueParser<"async", T> {
-          return {
-            $mode: "async",
-            metavar: "ASYNC_CHOICE" as NonEmptyString,
-            parse(input: string): Promise<ValueParserResult<T>> {
-              if (choices.includes(input as T)) {
-                return Promise.resolve({ success: true, value: input as T });
-              }
-              return Promise.resolve({
-                success: false,
-                error: message`Must be one of: ${choices.join(", ")}`,
-              });
-            },
-            format(value: T): string {
-              return value;
-            },
-            async *suggest(prefix: string): AsyncIterable<Suggestion> {
-              for (const c of choices) {
-                if (c.startsWith(prefix)) {
-                  yield { kind: "literal", text: c };
-                }
-              }
-            },
-          };
-        }
-
         const mode = dependency(asyncChoice(["dev", "prod"] as const));
         const level = mode.derive({
           metavar: "LEVEL",
