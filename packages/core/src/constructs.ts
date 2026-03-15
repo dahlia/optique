@@ -3064,9 +3064,8 @@ async function* suggestObjectAsync<
 }
 
 /**
- * Registers a completed dependency source value in the registry if it is
- * a successful {@link DependencySourceState}.  Handles both sync results
- * and `Promise`-wrapped results (for async parsers).
+ * Registers an already-resolved dependency source value in the registry
+ * if it is a successful {@link DependencySourceState}.
  *
  * @internal
  */
