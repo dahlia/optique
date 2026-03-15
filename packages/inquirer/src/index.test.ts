@@ -1379,6 +1379,59 @@ describe("prompt()", () => {
       assert.deepEqual(result, { apiKey: "config-secret" });
     });
 
+    it(
+      "reuses scrubbed phase-two parsed identity across contexts and loaders",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        const metadataByParsed = new WeakMap<object, string>();
+        const identityContext: SourceContext = {
+          id: Symbol.for("@test/scrubbed-phase-two-identity"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed != null && typeof parsed === "object") {
+              metadataByParsed.set(parsed as object, "seen");
+            }
+            return {};
+          },
+        };
+        let loaderMetadata: string | undefined;
+        const parser = object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        });
+
+        const result = await runWith(
+          parser,
+          "test",
+          [identityContext, context],
+          {
+            args: [],
+            load: (parsed) => {
+              loaderMetadata = metadataByParsed.get(parsed as object);
+              return {
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              };
+            },
+          },
+        );
+
+        assert.equal(loaderMetadata, "seen");
+        assert.deepEqual(result, { apiKey: "config-secret" });
+      },
+    );
+
     it("hides deferred prompt values inside Set loader inputs", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),

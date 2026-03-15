@@ -288,22 +288,15 @@ function createSanitizedNonPlainContextView<T extends object>(
   return proxy;
 }
 
-function withPreparedParsedForContext<T>(
-  context: SourceContext<unknown>,
+function prepareParsedForContexts(
   parsed: unknown,
-  run: (prepared: unknown) => T,
-): T {
+): unknown {
   if (parsed == null || typeof parsed !== "object") {
-    return run(
-      finalizeParsedForContext(
-        context,
-        stripDeferredPromptValuesForContexts(parsed),
-      ),
-    );
+    return stripDeferredPromptValuesForContexts(parsed);
   }
 
   if (isDeferredPromptValue(parsed)) {
-    return run(finalizeParsedForContext(context, undefined));
+    return undefined;
   }
 
   if (
@@ -313,29 +306,27 @@ function withPreparedParsedForContext<T>(
     parsed instanceof Map
   ) {
     if (!containsDeferredPromptValuesForContexts(parsed)) {
-      return run(finalizeParsedForContext(context, parsed));
+      return parsed;
     }
-    return run(
-      finalizeParsedForContext(
-        context,
-        stripDeferredPromptValuesForContexts(parsed),
-      ),
-    );
+    return stripDeferredPromptValuesForContexts(parsed);
   }
 
   if (!containsDeferredPromptValuesForContexts(parsed)) {
-    return run(finalizeParsedForContext(context, parsed));
+    return parsed;
   }
 
-  return run(
-    finalizeParsedForContext(
-      context,
-      createSanitizedNonPlainContextView(
-        parsed,
-        new WeakMap<object, unknown>(),
-      ),
-    ),
+  return createSanitizedNonPlainContextView(
+    parsed,
+    new WeakMap<object, unknown>(),
   );
+}
+
+function withPreparedParsedForContext<T>(
+  context: SourceContext<unknown>,
+  preparedParsed: unknown,
+  run: (prepared: unknown) => T,
+): T {
+  return run(finalizeParsedForContext(context, preparedParsed));
 }
 
 /**
@@ -2507,11 +2498,12 @@ async function collectAnnotations(
   readonly annotationsList: readonly Annotations[];
 }> {
   const annotationsList: Annotations[] = [];
+  const preparedParsed = prepareParsedForContexts(parsed);
 
   for (const context of contexts) {
     const mergedAnnotations = await withPreparedParsedForContext(
       context,
-      parsed,
+      preparedParsed,
       async (contextParsed) => {
         const result = context.getAnnotations(contextParsed, options);
         const annotations = result instanceof Promise ? await result : result;
@@ -2635,11 +2627,12 @@ function collectAnnotationsSync(
   readonly annotationsList: readonly Annotations[];
 } {
   const annotationsList: Annotations[] = [];
+  const preparedParsed = prepareParsedForContexts(parsed);
 
   for (const context of contexts) {
     const mergedAnnotations = withPreparedParsedForContext(
       context,
-      parsed,
+      preparedParsed,
       (contextParsed) => {
         const result = context.getAnnotations(contextParsed, options);
         if (result instanceof Promise) {
