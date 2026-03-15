@@ -21,6 +21,7 @@ import {
   type Annotations,
   getAnnotations,
   inheritAnnotations,
+  unwrapInjectedAnnotationWrapper,
 } from "@optique/core/annotations";
 import type {
   Mode,
@@ -1018,21 +1019,29 @@ export function prompt<M extends Mode, TValue, TState>(
 
       // Normal case: parse() built a PromptBindState with hasCliValue: false.
       // Only delegate to the inner parser's complete() when the cliState
-      // carries annotations — i.e., when it came from a source-binding
+      // itself carries annotations — i.e., when it came from a source-binding
       // wrapper like bindEnv or bindConfig that injected [annotationKey].
-      // Pure combinators (optional, multiple, withDefault) do not inject
-      // annotations, so their cliState will not carry the key; for those,
-      // we skip straight to the interactive prompt.
+      // Pure combinators such as optional() may preserve the outer
+      // annotation-bearing wrapper state even when no CLI value exists, but
+      // that is not evidence that complete() can satisfy the value without
+      // prompting.
       const cliState = isPromptBindState(state) ? state.cliState : undefined;
       const cliStateHasAnnotations = cliState != null &&
         typeof cliState === "object" &&
         annotationKey in (cliState as object);
+      const cliStateHasDirectAnnotations = cliStateHasAnnotations &&
+        unwrapInjectedAnnotationWrapper(cliState) === cliState;
       const outerAnnotationsAvailable = getAnnotations(state) != null;
+      const cliStateIsNonPlainObject = cliState != null &&
+        typeof cliState === "object" &&
+        !Array.isArray(cliState) &&
+        Object.getPrototypeOf(cliState) !== Object.prototype &&
+        Object.getPrototypeOf(cliState) !== null;
 
       if (
         cliState != null &&
-        (cliStateHasAnnotations ||
-          (outerAnnotationsAvailable && typeof cliState === "object"))
+        (cliStateHasDirectAnnotations ||
+          (outerAnnotationsAvailable && cliStateIsNonPlainObject))
       ) {
         const r = withAnnotatedInnerState(
           state,

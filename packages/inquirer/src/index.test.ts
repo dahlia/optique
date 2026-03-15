@@ -338,6 +338,28 @@ describe("prompt()", () => {
       assert.ok(result.success);
       assert.equal(result.value, "Eve");
     });
+
+    it("still prompts for optional() under annotations", async () => {
+      const marker = Symbol.for("@test/prompt-optional-annotations");
+      let promptCalls = 0;
+
+      const parser = prompt(optional(option("--name", string())), {
+        type: "input",
+        message: "Enter name:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("Eve");
+        },
+      });
+
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "annotated" } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      assert.equal(result.value, "Eve");
+      assert.equal(promptCalls, 1);
+    });
   });
 
   describe("error handling", () => {
