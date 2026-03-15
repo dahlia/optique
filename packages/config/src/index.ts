@@ -89,6 +89,9 @@ function containsDeferredPromptValues(
   value: unknown,
   seen = new WeakSet<object>(),
 ): boolean {
+  // FIXME: This only inspects own data properties, so deferred prompt values
+  // hidden behind private fields in class-based parser results are missed.
+  // See: https://github.com/dahlia/optique/issues/407
   if (isDeferredPromptValue(value)) {
     return true;
   }
@@ -138,9 +141,9 @@ function createSanitizedNonPlainView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
-  // FIXME: This proxy still changes method receiver semantics for non-plain
-  // parsed values, so private-field-backed methods can break in config
-  // loaders. See: https://github.com/dahlia/optique/issues/307
+  // FIXME: This proxy changes method receiver semantics and still cannot scrub
+  // deferred prompt values hidden behind private fields. See:
+  // https://github.com/dahlia/optique/issues/407
   const proxy = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);

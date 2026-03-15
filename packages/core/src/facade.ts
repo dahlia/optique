@@ -80,6 +80,9 @@ function containsDeferredPromptValuesForContexts(
   value: unknown,
   seen = new WeakSet<object>(),
 ): boolean {
+  // FIXME: This only inspects own data properties, so deferred prompt values
+  // hidden behind private fields in class instances are missed. See:
+  // https://github.com/dahlia/optique/issues/407
   if (isDeferredPromptValue(value)) {
     return true;
   }
@@ -207,6 +210,9 @@ function createSanitizedNonPlainContextView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
+  // FIXME: Proxying non-plain parsed values changes method receiver semantics,
+  // so phase-two contexts can break on private-field-backed methods/getters.
+  // See: https://github.com/dahlia/optique/issues/407
   const proxy = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
