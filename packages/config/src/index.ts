@@ -182,6 +182,9 @@ function stripDeferredPromptValues<T>(
     return cached as T;
   }
   if (Array.isArray(value)) {
+    if (!containsDeferredPromptValues(value)) {
+      return value;
+    }
     const clone: unknown[] = new Array(value.length);
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
@@ -190,6 +193,9 @@ function stripDeferredPromptValues<T>(
     return clone as T;
   }
   if (value instanceof Set) {
+    if (!containsDeferredPromptValues(value)) {
+      return value;
+    }
     const clone = new Set<unknown>();
     seen.set(value, clone);
     for (const entryValue of value) {
@@ -215,6 +221,9 @@ function stripDeferredPromptValues<T>(
     return containsDeferredPromptValues(value)
       ? createSanitizedNonPlainView(value, seen) as T
       : value;
+  }
+  if (!containsDeferredPromptValues(value)) {
+    return value;
   }
   const clone: Record<PropertyKey, unknown> = Object.create(
     Object.getPrototypeOf(value),

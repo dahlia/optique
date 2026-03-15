@@ -5,6 +5,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
+import type { SourceContext } from "@optique/core/context";
 import { flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
@@ -70,6 +71,41 @@ describe("run with config context", { concurrency: false }, () => {
     } finally {
       await rm(configPath, { force: true });
     }
+  });
+
+  test("config loaders preserve parsed object identity when no scrub is needed", async () => {
+    const schema = z.object({
+      token: z.string().optional(),
+    }).optional();
+
+    const context = createConfigContext({ schema });
+    const parser = object({
+      token: withDefault(option("--token", string()), "cli-token"),
+    });
+
+    const metadataByParsed = new WeakMap<object, string>();
+    const identityContext: SourceContext = {
+      id: Symbol.for("@test/config-loader-identity"),
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed != null && typeof parsed === "object") {
+          metadataByParsed.set(parsed as object, "seen");
+        }
+        return {};
+      },
+    };
+
+    let observedMetadata: string | undefined;
+    const result = await runWith(parser, "test", [identityContext, context], {
+      args: [],
+      load(parsed) {
+        observedMetadata = metadataByParsed.get(parsed as object);
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    assert.deepEqual(result, { token: "cli-token" });
+    assert.equal(observedMetadata, "seen");
   });
 
   test("CLI values override config file values", async () => {
