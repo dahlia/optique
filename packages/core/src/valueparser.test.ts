@@ -1654,6 +1654,17 @@ describe("choice", () => {
       }
     });
 
+    it("should reject NaN even when it appears in the choice list", () => {
+      const parser = choice([NaN, 1, 2]);
+
+      const result = parser.parse("NaN");
+      assert.ok(!result.success);
+
+      // Other values should still work
+      const result2 = parser.parse("1");
+      assert.ok(result2.success);
+    });
+
     it("should handle duplicate number values", () => {
       const parser = choice([1, 1, 2]);
 

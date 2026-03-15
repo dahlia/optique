@@ -291,7 +291,10 @@ export function choice<const T extends string | number>(
     const numberChoices = choices as readonly number[];
     const numberOptions = options as ChoiceOptionsNumber;
     const numberStrings = numberChoices.map((v) =>
-      Object.is(v, -0) ? "-0" : String(v)
+      // NaN is never a valid CLI literal (consistent with float()
+      // requiring explicit allowNaN), so map it to a string that
+      // can never match any input.
+      Number.isNaN(v) ? "\0" : Object.is(v, -0) ? "-0" : String(v)
     );
     return {
       $mode: "sync",
@@ -360,7 +363,9 @@ export function choice<const T extends string | number>(
       },
       suggest(prefix: string) {
         return numberStrings
-          .filter((valueStr) => valueStr.startsWith(prefix))
+          .filter((valueStr) =>
+            valueStr !== "\0" && valueStr.startsWith(prefix)
+          )
           .map((valueStr) => ({ kind: "literal" as const, text: valueStr }));
       },
     };
