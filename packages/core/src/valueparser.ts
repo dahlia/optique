@@ -854,6 +854,8 @@ export function integer(
   }
   const metavar = options?.metavar ?? "INTEGER";
   ensureNonEmptyString(metavar);
+  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+  const minSafe = BigInt(Number.MIN_SAFE_INTEGER);
   return {
     $mode: "sync",
     metavar,
@@ -868,11 +870,24 @@ export function integer(
             : message`Expected a valid integer, but got ${input}.`,
         };
       }
-      const n = BigInt(input);
-      if (
-        n > BigInt(Number.MAX_SAFE_INTEGER) ||
-        n < BigInt(Number.MIN_SAFE_INTEGER)
-      ) {
+      let n: bigint;
+      try {
+        n = BigInt(input);
+      } catch {
+        return {
+          success: false,
+          error: options?.errors?.unsafeInteger
+            ? (typeof options.errors.unsafeInteger === "function"
+              ? options.errors.unsafeInteger(input)
+              : options.errors.unsafeInteger)
+            : message`Expected a safe integer between ${
+              text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
+            } and ${
+              text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
+            }, but got ${input}. Use type: "bigint" for large values.`,
+        };
+      }
+      if (n > maxSafe || n < minSafe) {
         return {
           success: false,
           error: options?.errors?.unsafeInteger
