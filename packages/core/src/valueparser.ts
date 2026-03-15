@@ -546,6 +546,9 @@ function formatDefaultChoiceError(
   const choiceStrings = choices
     .filter((c) => typeof c === "string" || !Number.isNaN(c))
     .map((c) => Object.is(c, -0) ? "-0" : String(c));
+  if (choiceStrings.length === 0 && choices.length > 0) {
+    return message`No valid choices are configured, but got ${input}.`;
+  }
   return message`Expected one of ${
     valueSet(choiceStrings, { locale: "en-US" })
   }, but got ${input}.`;
