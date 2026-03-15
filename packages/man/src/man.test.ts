@@ -808,4 +808,65 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(!result.includes("A wrapped secret"));
     assert.ok(result.includes("\\-\\-keep"));
   });
+
+  it("keeps hidden: 'usage' terms visible in doc sections", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "OPTIONS",
+          entries: [
+            {
+              term: {
+                type: "option",
+                names: ["--internal"],
+                hidden: "usage",
+              },
+              description: message`An internal option`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    assert.ok(result.includes("\\-\\-internal"));
+    assert.ok(result.includes("An internal option"));
+  });
+
+  it("keeps nested hidden: 'usage' terms visible in doc wrappers", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "OPTIONS",
+          entries: [
+            {
+              term: {
+                type: "optional",
+                terms: [
+                  {
+                    type: "argument",
+                    metavar: "INTERNAL",
+                    hidden: "usage",
+                  },
+                ],
+              },
+              description: message`A wrapped usage-hidden term`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    assert.ok(result.includes("INTERNAL"));
+    assert.ok(result.includes("A wrapped usage-hidden term"));
+  });
 });

@@ -276,8 +276,35 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
       return `(${alternatives.join(" | ")})`;
     }
 
-    default:
-      return formatUsageTermAsRoff(term);
+    case "argument":
+      return `\\fI${term.metavar}\\fR`;
+
+    case "option": {
+      const names = term.names
+        .map((name) => `\\fB${escapeHyphens(name)}\\fR`)
+        .join(" | ");
+      const metavarPart = term.metavar ? ` \\fI${term.metavar}\\fR` : "";
+      return `${names}${metavarPart}`;
+    }
+
+    case "command":
+      return `\\fB${term.name}\\fR`;
+
+    case "literal":
+      return term.value;
+
+    case "passthrough":
+      return "[...]";
+
+    case "ellipsis":
+      return "...";
+
+    default: {
+      const _exhaustive: never = term;
+      throw new TypeError(
+        `Unknown usage term type: ${(_exhaustive as UsageTerm).type}.`,
+      );
+    }
   }
 }
 
