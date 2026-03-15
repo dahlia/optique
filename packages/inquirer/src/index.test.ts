@@ -1206,12 +1206,14 @@ describe("prompt()", () => {
           }
         }
 
+        let phase2WasBoxSet = false;
         let phase2ApiKey: string | undefined;
         const dynamicContext: SourceContext = {
           id: Symbol.for("@test/set-own-prop-phase-two"),
           mode: "dynamic",
           getAnnotations(parsed?: unknown) {
             if (parsed instanceof BoxSet) {
+              phase2WasBoxSet = true;
               phase2ApiKey = parsed.apiKey;
             }
             return {};
@@ -1248,6 +1250,7 @@ describe("prompt()", () => {
           },
         );
 
+        assert.ok(phase2WasBoxSet);
         assert.equal(phase2ApiKey, undefined);
         assert.ok(result instanceof BoxSet);
         assert.equal(result.apiKey, "config-secret");

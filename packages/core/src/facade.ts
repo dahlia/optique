@@ -132,6 +132,53 @@ function copySanitizedOwnProperties(
   }
 }
 
+function createArrayCloneLike(value: readonly unknown[]): unknown[] {
+  try {
+    const arrayCtor = value.constructor as abstract new (
+      length?: number,
+    ) => unknown[];
+    return Reflect.construct(
+      Array,
+      [value.length],
+      arrayCtor,
+    ) as unknown[];
+  } catch {
+    return new Array(value.length);
+  }
+}
+
+function createSetCloneLike(value: Set<unknown>): Set<unknown> {
+  try {
+    const setCtor = value.constructor as abstract new (
+      iterable?: Iterable<unknown>,
+    ) => Set<unknown>;
+    return Reflect.construct(
+      Set,
+      [],
+      setCtor,
+    ) as Set<unknown>;
+  } catch {
+    return new Set<unknown>();
+  }
+}
+
+function createMapCloneLike(
+  value: Map<unknown, unknown>,
+): Map<unknown, unknown> {
+  try {
+    const mapCtor = value.constructor as abstract new (
+      iterable?: Iterable<readonly [unknown, unknown]>,
+    ) => Map<unknown, unknown>;
+    return Reflect.construct(
+      Map,
+      [],
+      mapCtor,
+    ) as Map<unknown, unknown>;
+  } catch {
+    return new Map<unknown, unknown>();
+  }
+}
+
 function containsDeferredPromptValuesForContexts(
   value: unknown,
   seen = new WeakSet<object>(),
@@ -194,7 +241,7 @@ function stripDeferredPromptValuesForContexts<T>(
     return cached as T;
   }
   if (Array.isArray(value)) {
-    const clone: unknown[] = new Array(value.length);
+    const clone = createArrayCloneLike(value);
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
       clone[i] = stripDeferredPromptValuesForContexts(value[i], seen);
@@ -203,7 +250,7 @@ function stripDeferredPromptValuesForContexts<T>(
     return clone as T;
   }
   if (value instanceof Set) {
-    const clone = new Set<unknown>();
+    const clone = createSetCloneLike(value);
     seen.set(value, clone);
     for (const entryValue of value) {
       clone.add(stripDeferredPromptValuesForContexts(entryValue, seen));
@@ -212,7 +259,7 @@ function stripDeferredPromptValuesForContexts<T>(
     return clone as T;
   }
   if (value instanceof Map) {
-    const clone = new Map<unknown, unknown>();
+    const clone = createMapCloneLike(value);
     seen.set(value, clone);
     for (const [key, entryValue] of value) {
       clone.set(
