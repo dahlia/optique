@@ -254,8 +254,11 @@ function formatDocSectionEntries(section: DocSection): string {
   const lines: string[] = [];
 
   for (const entry of section.entries) {
+    const termStr = formatDocEntryTerm(entry.term);
+    if (termStr === "") continue;
+
     lines.push(".TP");
-    lines.push(formatDocEntryTerm(entry.term));
+    lines.push(termStr);
 
     if (entry.description) {
       let desc = formatMessageAsRoff(entry.description);

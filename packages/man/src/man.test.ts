@@ -745,4 +745,33 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(optionsPos < seeAlsoPos);
     assert.ok(seeAlsoPos < authorPos);
   });
+
+  it("skips doc entries with doc-hidden terms entirely", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "OPTIONS",
+          entries: [
+            {
+              term: { type: "option", names: ["--visible"], hidden: false },
+              description: message`A visible option`,
+            },
+            {
+              term: { type: "option", names: ["--secret"], hidden: "doc" },
+              description: message`A secret option`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    assert.ok(result.includes("\\-\\-visible"));
+    assert.ok(!result.includes("\\-\\-secret"));
+    assert.ok(!result.includes("A secret option"));
+  });
 });
