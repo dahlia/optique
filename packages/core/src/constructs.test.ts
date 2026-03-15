@@ -10,7 +10,12 @@ import {
   tuple,
 } from "@optique/core/constructs";
 import type { DocEntry, DocFragment, DocSection } from "@optique/core/doc";
-import { annotationKey, type Annotations } from "@optique/core/annotations";
+import {
+  annotationKey,
+  type Annotations,
+  getAnnotations,
+  injectAnnotations,
+} from "@optique/core/annotations";
 import {
   createDependencySourceState,
   createPendingDependencySourceState,
@@ -2551,6 +2556,55 @@ describe("object() - duplicate option detection", () => {
     assert.ok(
       !Reflect.ownKeys(childParser.initialState).includes(annotationKey),
     );
+  });
+
+  it("should not mutate parent field state when inheriting annotations", () => {
+    const marker = Symbol.for("@test/object-parent-state");
+
+    class ChildState {
+      value = "ok";
+    }
+
+    const childState = new ChildState();
+    const childParser: Parser<"sync", string, ChildState> = {
+      $mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly ChildState[],
+      priority: 1,
+      usage: [],
+      initialState: childState,
+      [Symbol.for("@optique/core/inheritParentAnnotations")]: true,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return getAnnotations(state)?.[marker] === true
+          ? { success: true as const, value: state.value }
+          : { success: false as const, error: message`missing` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const parser = object({ value: childParser });
+    const parentState = injectAnnotations(
+      { value: childState },
+      { [marker]: true } satisfies Annotations,
+    );
+
+    const result = parser.complete(parentState as never);
+
+    assert.ok(result.success);
+    assert.equal(parentState.value, childState);
+    assert.ok(!Reflect.ownKeys(childState).includes(annotationKey));
   });
 
   it("should allow opt-out with allowDuplicates option", () => {

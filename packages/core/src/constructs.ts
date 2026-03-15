@@ -3499,39 +3499,39 @@ export function object<
     }
     return state;
   };
-  const getFieldState = (
-    parentState: unknown,
-    field: keyof T,
-    parser: Parser<Mode, unknown, unknown>,
-  ): unknown => {
-    const fieldKey = field as string | symbol;
-    const sourceState = parentState != null &&
-        typeof parentState === "object" &&
-        fieldKey in parentState
-      ? (parentState as Record<string | symbol, unknown>)[fieldKey]
-      : parser.initialState;
-    if (sourceState == null || typeof sourceState !== "object") {
-      return sourceState;
-    }
-    const annotations = getAnnotations(parentState);
-    if (
-      annotations === undefined || getAnnotations(sourceState) === annotations
-    ) {
-      return sourceState;
-    }
-    const inheritedState = Reflect.get(parser, inheritParentAnnotationsKey) ===
-        true
-      ? injectAnnotations(sourceState, annotations)
-      : inheritAnnotations(parentState, sourceState);
-    if (
-      inheritedState !== sourceState &&
-      parentState != null &&
-      typeof parentState === "object"
-    ) {
-      (parentState as Record<string | symbol, unknown>)[fieldKey] =
-        inheritedState;
-    }
-    return inheritedState;
+  const createFieldStateGetter = (parentState: unknown) => {
+    const cachedStates = new Map<string | symbol, unknown>();
+    return (
+      field: keyof T,
+      parser: Parser<Mode, unknown, unknown>,
+    ): unknown => {
+      const fieldKey = field as string | symbol;
+      if (cachedStates.has(fieldKey)) {
+        return cachedStates.get(fieldKey);
+      }
+      const sourceState = parentState != null &&
+          typeof parentState === "object" &&
+          fieldKey in parentState
+        ? (parentState as Record<string | symbol, unknown>)[fieldKey]
+        : parser.initialState;
+      if (sourceState == null || typeof sourceState !== "object") {
+        cachedStates.set(fieldKey, sourceState);
+        return sourceState;
+      }
+      const annotations = getAnnotations(parentState);
+      if (
+        annotations === undefined || getAnnotations(sourceState) === annotations
+      ) {
+        cachedStates.set(fieldKey, sourceState);
+        return sourceState;
+      }
+      const inheritedState =
+        Reflect.get(parser, inheritParentAnnotationsKey) === true
+          ? injectAnnotations(sourceState, annotations)
+          : inheritAnnotations(parentState, sourceState);
+      cachedStates.set(fieldKey, inheritedState);
+      return inheritedState;
+    };
   };
 
   // Check for duplicate option names at construction time unless explicitly allowed
@@ -3608,11 +3608,12 @@ export function object<
     let madeProgress = true;
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      const getFieldState = createFieldStateGetter(currentContext.state);
 
       for (const [field, parser] of parserPairs) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse({
           ...currentContext,
-          state: getFieldState(currentContext.state, field, parser),
+          state: getFieldState(field, parser),
         });
 
         if (result.success && result.consumed.length > 0) {
@@ -3647,8 +3648,9 @@ export function object<
     // If buffer is empty and no parser consumed input, check if all parsers can complete
     if (context.buffer.length === 0) {
       let allCanComplete = true;
+      const getFieldState = createFieldStateGetter(context.state);
       for (const [field, parser] of parserPairs) {
-        const fieldState = getFieldState(context.state, field, parser);
+        const fieldState = getFieldState(field, parser);
         const completeResult = (parser as Parser<"sync", unknown, unknown>)
           .complete(fieldState);
         if (!completeResult.success) {
@@ -3684,11 +3686,12 @@ export function object<
     let madeProgress = true;
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      const getFieldState = createFieldStateGetter(currentContext.state);
 
       for (const [field, parser] of parserPairs) {
         const resultOrPromise = parser.parse({
           ...currentContext,
-          state: getFieldState(currentContext.state, field, parser),
+          state: getFieldState(field, parser),
         });
         const result = await resultOrPromise;
 
@@ -3724,8 +3727,9 @@ export function object<
     // If buffer is empty and no parser consumed input, check if all parsers can complete
     if (context.buffer.length === 0) {
       let allCanComplete = true;
+      const getFieldState = createFieldStateGetter(context.state);
       for (const [field, parser] of parserPairs) {
-        const fieldState = getFieldState(context.state, field, parser);
+        const fieldState = getFieldState(field, parser);
         const completeResult = await parser.complete(fieldState);
         if (!completeResult.success) {
           allCanComplete = false;
@@ -3783,6 +3787,7 @@ export function object<
           // withDefault(option(..., dependencySource), defaultValue) pattern.
           const preCompletedState: Record<string | symbol, unknown> = {};
           const preCompletedKeys = new Set<string | symbol>();
+          const getFieldState = createFieldStateGetter(state);
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldState =
@@ -3841,7 +3846,6 @@ export function object<
               }
             } else {
               preCompletedState[fieldKey] = getFieldState(
-                state,
                 field,
                 fieldParser,
               );
@@ -3857,6 +3861,7 @@ export function object<
           const result = {} as {
             [K in keyof T]: T[K]["$valueType"][number];
           };
+          const getCompletionFieldState = createFieldStateGetter(state);
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldResolvedState =
@@ -3884,7 +3889,7 @@ export function object<
             }
 
             const completionState = fieldResolvedState === undefined
-              ? getFieldState(state, field, fieldParser)
+              ? getCompletionFieldState(field, fieldParser)
               : fieldResolvedState;
             const valueResult = fieldParser.complete(completionState);
             if (valueResult.success) {
@@ -3898,6 +3903,7 @@ export function object<
           // Phase 1: Pre-complete fields with PendingDependencySourceState
           const preCompletedState: Record<string | symbol, unknown> = {};
           const preCompletedKeys = new Set<string | symbol>();
+          const getFieldState = createFieldStateGetter(state);
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldState =
@@ -3952,7 +3958,6 @@ export function object<
               }
             } else {
               preCompletedState[fieldKey] = getFieldState(
-                state,
                 field,
                 fieldParser,
               );
@@ -3968,6 +3973,7 @@ export function object<
           const result = {} as {
             [K in keyof T]: T[K]["$valueType"][number];
           };
+          const getCompletionFieldState = createFieldStateGetter(state);
           for (const field of parserKeys) {
             const fieldKey = field as string | symbol;
             const fieldResolvedState =
@@ -3991,7 +3997,7 @@ export function object<
             }
 
             const completionState = fieldResolvedState === undefined
-              ? getFieldState(state, field, fieldParser)
+              ? getCompletionFieldState(field, fieldParser)
               : fieldResolvedState;
             const valueResult = await fieldParser.complete(completionState);
             if (valueResult.success) {
