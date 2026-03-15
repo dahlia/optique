@@ -1515,6 +1515,35 @@ describe("choice", () => {
       assert.ok(!sci.success);
     });
 
+    it("should reject overflowed and underflowed decimal inputs", () => {
+      const parser = choice([Infinity, -Infinity, 0]);
+
+      // A 400-digit decimal should not overflow to Infinity
+      const bigOverflow = parser.parse("9".repeat(400));
+      assert.ok(!bigOverflow.success);
+
+      // A negative 400-digit decimal should not overflow to -Infinity
+      const negOverflow = parser.parse("-" + "9".repeat(400));
+      assert.ok(!negOverflow.success);
+
+      // An extremely small decimal should not underflow to 0
+      const tinyUnderflow = parser.parse("0." + "0".repeat(400) + "1");
+      assert.ok(!tinyUnderflow.success);
+
+      // But legitimate alternate zero spellings should still work
+      const zeroAlt = parser.parse("0.0");
+      assert.ok(zeroAlt.success);
+      if (zeroAlt.success) {
+        assert.equal(zeroAlt.value, 0);
+      }
+
+      const zeroAlt2 = parser.parse("0.00");
+      assert.ok(zeroAlt2.success);
+
+      const zeroAlt3 = parser.parse(".0");
+      assert.ok(zeroAlt3.success);
+    });
+
     it("should reject Infinity and -Infinity literals", () => {
       const parser = choice([Infinity, -Infinity, 0]);
 

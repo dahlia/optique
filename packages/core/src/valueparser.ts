@@ -309,11 +309,21 @@ export function choice<const T extends string | number>(
         // whitespace inputs.
         if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(input)) {
           const parsed = Number(input);
-          const fallbackIndex = numberChoices.findIndex((v) =>
-            Object.is(v, parsed)
-          );
-          if (fallbackIndex >= 0) {
-            return { success: true, value: numberChoices[fallbackIndex] as T };
+          // Accept only if the conversion is lossless: reject overflow
+          // (finite decimal → Infinity) and underflow (nonzero decimal → 0)
+          const overflowed = !Number.isFinite(parsed);
+          const underflowed = parsed === 0 &&
+            !/^[+-]?0*(\.0*)?$/.test(input);
+          if (!overflowed && !underflowed) {
+            const fallbackIndex = numberChoices.findIndex((v) =>
+              Object.is(v, parsed)
+            );
+            if (fallbackIndex >= 0) {
+              return {
+                success: true,
+                value: numberChoices[fallbackIndex] as T,
+              };
+            }
           }
         }
         return {
