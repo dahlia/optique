@@ -142,6 +142,9 @@ class DeferredPromptValue {
   readonly [deferredPromptValueKey] = true as const;
 }
 
+// FIXME: Wrapped config-bound parsers such as optional(bindConfig(...)) and
+// group(..., bindConfig(...)) currently drop this hook. See:
+// https://github.com/dahlia/optique/issues/385
 function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
   state: unknown,
