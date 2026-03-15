@@ -3082,6 +3082,41 @@ function registerCompletedDependency(
 }
 
 /**
+ * Yields `(parser, state)` pairs for dependency source parsers whose field
+ * state is unpopulated, so callers can invoke `complete()` on them.
+ *
+ * @see https://github.com/dahlia/optique/issues/186
+ * @internal
+ */
+function* pendingDependencyDefaults(
+  context: ParserContext<unknown>,
+  parserPairs: ReadonlyArray<
+    readonly [string | symbol, Parser<Mode, unknown, unknown>]
+  >,
+): Generator<
+  { readonly parser: Parser<Mode, unknown, unknown>; readonly state: unknown }
+> {
+  for (const [field, fieldParser] of parserPairs) {
+    const fieldState = context.state != null &&
+        typeof context.state === "object" &&
+        field in context.state
+      ? (context.state as Record<string | symbol, unknown>)[field]
+      : undefined;
+
+    if (fieldState != null) continue;
+
+    if (isPendingDependencySourceState(fieldParser.initialState)) {
+      yield { parser: fieldParser, state: fieldParser.initialState };
+    } else if (isWrappedDependencySource(fieldParser)) {
+      yield {
+        parser: fieldParser,
+        state: [fieldParser[wrappedDependencySourceMarker]],
+      };
+    }
+  }
+}
+
+/**
  * Pre-completes dependency source parsers wrapped in `withDefault()` whose
  * field state is unpopulated, so that their default values are registered
  * in the dependency registry.  This mirrors Phase 1 of parse-time dependency
@@ -3097,24 +3132,13 @@ function completeDependencySourceDefaults(
   >,
   registry: DependencyRegistryLike,
 ): void {
-  for (const [field, fieldParser] of parserPairs) {
-    const fieldState = context.state != null &&
-        typeof context.state === "object" &&
-        field in context.state
-      ? (context.state as Record<string | symbol, unknown>)[field]
-      : undefined;
-
-    // Only handle unpopulated state for parsers that wrap a dependency source
-    if (fieldState != null) continue;
-
-    if (isPendingDependencySourceState(fieldParser.initialState)) {
-      const completed = fieldParser.complete(fieldParser.initialState);
-      registerCompletedDependency(completed, registry);
-    } else if (isWrappedDependencySource(fieldParser)) {
-      const pendingState = fieldParser[wrappedDependencySourceMarker];
-      const completed = fieldParser.complete([pendingState]);
-      registerCompletedDependency(completed, registry);
-    }
+  for (
+    const { parser, state } of pendingDependencyDefaults(
+      context,
+      parserPairs,
+    )
+  ) {
+    registerCompletedDependency(parser.complete(state), registry);
   }
 }
 
@@ -3133,24 +3157,13 @@ async function completeDependencySourceDefaultsAsync(
   >,
   registry: DependencyRegistryLike,
 ): Promise<void> {
-  for (const [field, fieldParser] of parserPairs) {
-    const fieldState = context.state != null &&
-        typeof context.state === "object" &&
-        field in context.state
-      ? (context.state as Record<string | symbol, unknown>)[field]
-      : undefined;
-
-    // Only handle unpopulated state for parsers that wrap a dependency source
-    if (fieldState != null) continue;
-
-    if (isPendingDependencySourceState(fieldParser.initialState)) {
-      const completed = await fieldParser.complete(fieldParser.initialState);
-      registerCompletedDependency(completed, registry);
-    } else if (isWrappedDependencySource(fieldParser)) {
-      const pendingState = fieldParser[wrappedDependencySourceMarker];
-      const completed = await fieldParser.complete([pendingState]);
-      registerCompletedDependency(completed, registry);
-    }
+  for (
+    const { parser, state } of pendingDependencyDefaults(
+      context,
+      parserPairs,
+    )
+  ) {
+    registerCompletedDependency(await parser.complete(state), registry);
   }
 }
 
