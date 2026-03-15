@@ -71,9 +71,9 @@ Verbose mode enabled.
 Shell completion
 ----------------
 
-*@optique/run* automatically supports shell completion for Bash and zsh.
-Enable completion by adding the `completion` option to your `run()`
-configuration:
+*@optique/run* automatically supports shell completion for Bash, zsh, fish,
+PowerShell, and Nushell.  Enable completion by adding the `completion` option
+to your `run()` configuration:
 
 ~~~~ typescript
 import { run } from "@optique/run";
@@ -95,12 +95,23 @@ const config = run(parser, {
 Users can then generate and install completion scripts:
 
 ~~~~ bash
-# Generate Bash completion script
+# Bash
 myapp completion bash > ~/.bashrc.d/myapp.bash
 source ~/.bashrc.d/myapp.bash
 
-# Generate zsh completion script
+# zsh
 myapp completion zsh > ~/.zsh/completions/_myapp
+
+# fish
+myapp completion fish > ~/.config/fish/completions/myapp.fish
+
+# PowerShell
+myapp completion pwsh > myapp-completion.ps1
+. ./myapp-completion.ps1
+
+# Nushell
+myapp completion nu | save myapp-completion.nu
+source myapp-completion.nu
 ~~~~
 
 The completion system automatically provides intelligent suggestions for:

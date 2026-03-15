@@ -1,8 +1,8 @@
 ---
 description: >-
   Learn how to add shell completion support to your CLI applications using
-  Optique's built-in completion system. Covers Bash and zsh integration,
-  custom suggestions, and native file completion.
+  Optique's built-in completion system. Covers Bash, zsh, fish, PowerShell,
+  and Nushell integration, custom suggestions, and native file completion.
 ---
 
 Shell completion
@@ -31,8 +31,8 @@ Optique's completion system operates through three key components:
     context
 
 Shell script generation
-:   Optique generates completion scripts for Bash and zsh that integrate
-    with shell completion systems
+:   Optique generates completion scripts for Bash, zsh, fish, PowerShell,
+    and Nushell that integrate with shell completion systems
 
 Runtime completion
 :   Your application automatically handles completion requests triggered by
