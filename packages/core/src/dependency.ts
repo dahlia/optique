@@ -901,7 +901,9 @@ function createAsyncDerivedFromParserFromAsyncFactory<
           error: message`Derived parser error: ${msg}`,
         });
       }
-      return derivedParser.parse(input);
+      // Wrap with Promise.resolve() to ensure the result is always a Promise,
+      // even if a JS caller passes a factory returning a sync parser.
+      return Promise.resolve(derivedParser.parse(input));
     },
 
     [parseWithDependency](
@@ -920,7 +922,8 @@ function createAsyncDerivedFromParserFromAsyncFactory<
           error: message`Factory error: ${msg}`,
         });
       }
-      return derivedParser.parse(input);
+      // Wrap with Promise.resolve() to ensure the result is always a Promise.
+      return Promise.resolve(derivedParser.parse(input));
     },
 
     format(value: T): string {
