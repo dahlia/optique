@@ -3325,15 +3325,12 @@ describe("coverage-guided dependency parser tests", () => {
     );
 
     const modeParser = dependency(choice(["ok", "boom"] as const));
-    let singleAsyncFactoryCalls = 0;
     const singleAsyncFactory = modeParser.deriveAsync({
       metavar: "VALUE",
       factory: (_mode: "ok" | "boom") => {
-        singleAsyncFactoryCalls++;
-        if (singleAsyncFactoryCalls > 1) {
-          throw new Error(`single async failed ${singleAsyncFactoryCalls}`);
-        }
-        return asyncChoice(["value"] as const);
+        // deriveAsync() no longer calls the factory during construction,
+        // so every call here comes from suggest/suggestWithDependency.
+        throw new Error("single async factory always fails");
       },
       defaultValue: () => "ok" as const,
     });
@@ -3611,6 +3608,186 @@ describe("property-based tests", () => {
         },
       ),
       propertyParameters,
+    );
+  });
+});
+
+// https://github.com/dahlia/optique/issues/225
+describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not touched when dependency provided", () => {
+  test("deriveSync() does not call factory with default when dependency is provided", () => {
+    const mode = dependency(choice(["safe", "broken"] as const));
+    const derived = mode.deriveSync({
+      metavar: "VALUE",
+      factory: (value) => {
+        if (value === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+    const parser = object({
+      mode: option("--mode", mode),
+      value: option("--value", derived),
+    });
+    const result = parseSync(parser, ["--mode", "safe", "--value", "ok"]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { mode: "safe", value: "ok" });
+  });
+
+  test("deriveFromSync() does not call factory with defaults when dependencies are provided", () => {
+    const a = dependency(choice(["safe", "broken"] as const));
+    const b = dependency(integer({ metavar: "N" }));
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [a, b] as const,
+      factory: (aVal, _bVal) => {
+        if (aVal === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValues: () => ["broken" as const, 0] as const,
+    });
+    const parser = object({
+      a: option("--a", a),
+      b: option("--b", b),
+      value: option("--value", derived),
+    });
+    const result = parseSync(parser, [
+      "--a",
+      "safe",
+      "--b",
+      "1",
+      "--value",
+      "ok",
+    ]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { a: "safe", b: 1, value: "ok" });
+  });
+
+  test("deriveFromAsync() does not call factory with defaults when dependencies are provided", async () => {
+    const asyncString: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE" as NonEmptyString,
+      parse(input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({ success: true, value: input });
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const a = dependency(choice(["safe", "broken"] as const));
+    const b = dependency(integer({ metavar: "N" }));
+    const derived = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [a, b] as const,
+      factory: (aVal, _bVal) => {
+        if (aVal === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return asyncString;
+      },
+      defaultValues: () => ["broken" as const, 0] as const,
+    });
+    const parser = object({
+      a: option("--a", a),
+      b: option("--b", b),
+      value: option("--value", derived),
+    });
+    const result = await parseAsync(parser, [
+      "--a",
+      "safe",
+      "--b",
+      "1",
+      "--value",
+      "ok",
+    ]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { a: "safe", b: 1, value: "ok" });
+  });
+
+  test("derive() throws during construction when factory throws for default (use deriveSync/deriveAsync instead)", () => {
+    // derive() calls the factory with the default value during construction
+    // to auto-detect the mode.  If the factory throws, construction fails.
+    // Users should use deriveSync() or deriveAsync() when the default branch
+    // is unreachable.
+    const mode = dependency(choice(["safe", "broken"] as const));
+    assert.throws(
+      () => {
+        mode.derive({
+          metavar: "VALUE",
+          factory: (value) => {
+            if (value === "broken") {
+              throw new Error("broken default branch");
+            }
+            return string({ metavar: "VALUE" });
+          },
+          defaultValue: () => "broken" as const,
+        });
+      },
+      /broken default branch/,
+    );
+  });
+
+  test("deriveAsync() does not throw during construction when factory throws for default value", async () => {
+    const asyncString: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "VALUE" as NonEmptyString,
+      parse(input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({ success: true, value: input });
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const mode = dependency(choice(["safe", "broken"] as const));
+    const derived = mode.deriveAsync({
+      metavar: "VALUE",
+      factory: (value) => {
+        if (value === "broken") {
+          throw new Error("broken default branch should not be touched");
+        }
+        return asyncString;
+      },
+      defaultValue: () => "broken" as const,
+    });
+    const parser = object({
+      mode: option("--mode", mode),
+      value: option("--value", derived),
+    });
+    const result = await parseAsync(parser, [
+      "--mode",
+      "safe",
+      "--value",
+      "ok",
+    ]);
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { mode: "safe", value: "ok" });
+  });
+
+  test("deriveFrom() throws during construction when factory throws for default (use deriveFromSync/deriveFromAsync instead)", () => {
+    // deriveFrom() calls the factory with default values during construction
+    // to auto-detect the mode.  If the factory throws, construction fails.
+    // Users should use deriveFromSync() or deriveFromAsync() when the default
+    // branch is unreachable.
+    const a = dependency(choice(["safe", "broken"] as const));
+    const b = dependency(integer({ metavar: "N" }));
+    assert.throws(
+      () => {
+        deriveFrom({
+          metavar: "VALUE",
+          dependencies: [a, b] as const,
+          factory: (aVal, _bVal) => {
+            if (aVal === "broken") {
+              throw new Error("broken default branch");
+            }
+            return string({ metavar: "VALUE" });
+          },
+          defaultValues: () => ["broken" as const, 0] as const,
+        });
+      },
+      /broken default branch/,
     );
   });
 });

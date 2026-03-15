@@ -537,7 +537,8 @@ export function dependency<M extends Mode, T>(
     deriveAsync<U>(
       options: DeriveAsyncOptions<T, U>,
     ): DerivedValueParser<"async", U, T> {
-      return createDerivedValueParser(id, parser, options);
+      // Skip mode detection — the type guarantees the factory returns async.
+      return createAsyncDerivedParserFromAsyncFactory(id, options);
     },
   };
   return result;
@@ -773,10 +774,19 @@ function createSyncDerivedFromParser<
     [defaultValues]: options.defaultValues,
 
     parse(input: string): ValueParserResult<T> {
-      const sourceValues = options.defaultValues();
-      const derivedParser = options.factory(
-        ...(sourceValues as DependencyValues<Deps>),
-      );
+      let derivedParser;
+      try {
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return {
+          success: false,
+          error: message`Derived parser error: ${msg}`,
+        };
+      }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
         return {
           success: false,
@@ -878,11 +888,22 @@ function createAsyncDerivedFromParserFromAsyncFactory<
     [defaultValues]: options.defaultValues,
 
     parse(input: string): Promise<ValueParserResult<T>> {
-      const sourceValues = options.defaultValues();
-      const derivedParser = options.factory(
-        ...(sourceValues as DependencyValues<Deps>),
-      );
-      return derivedParser.parse(input);
+      let derivedParser;
+      try {
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Promise.resolve({
+          success: false,
+          error: message`Derived parser error: ${msg}`,
+        });
+      }
+      // Wrap with Promise.resolve() to ensure the result is always a Promise,
+      // even if a JS caller passes a factory returning a sync parser.
+      return Promise.resolve(derivedParser.parse(input));
     },
 
     [parseWithDependency](
@@ -901,7 +922,8 @@ function createAsyncDerivedFromParserFromAsyncFactory<
           error: message`Factory error: ${msg}`,
         });
       }
-      return derivedParser.parse(input);
+      // Wrap with Promise.resolve() to ensure the result is always a Promise.
+      return Promise.resolve(derivedParser.parse(input));
     },
 
     format(value: T): string {
@@ -976,10 +998,19 @@ function createAsyncDerivedFromParserFromSyncFactory<
     [defaultValues]: options.defaultValues,
 
     parse(input: string): Promise<ValueParserResult<T>> {
-      const sourceValues = options.defaultValues();
-      const derivedParser = options.factory(
-        ...(sourceValues as DependencyValues<Deps>),
-      );
+      let derivedParser;
+      try {
+        const sourceValues = options.defaultValues();
+        derivedParser = options.factory(
+          ...(sourceValues as DependencyValues<Deps>),
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Promise.resolve({
+          success: false,
+          error: message`Derived parser error: ${msg}`,
+        });
+      }
       return Promise.resolve(derivedParser.parse(input));
     },
 
@@ -1105,8 +1136,17 @@ function createSyncDerivedParser<S, T>(
     [dependencyId]: sourceId,
 
     parse(input: string): ValueParserResult<T> {
-      const sourceValue = options.defaultValue();
-      const derivedParser = options.factory(sourceValue);
+      let derivedParser;
+      try {
+        const sourceValue = options.defaultValue();
+        derivedParser = options.factory(sourceValue);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return {
+          success: false,
+          error: message`Derived parser error: ${msg}`,
+        };
+      }
       if (isAsyncModeParser(derivedParser as { readonly $mode: Mode })) {
         return {
           success: false,
@@ -1189,9 +1229,20 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
     [dependencyId]: sourceId,
 
     parse(input: string): Promise<ValueParserResult<T>> {
-      const sourceValue = options.defaultValue();
-      const derivedParser = options.factory(sourceValue);
-      return derivedParser.parse(input);
+      let derivedParser;
+      try {
+        const sourceValue = options.defaultValue();
+        derivedParser = options.factory(sourceValue);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Promise.resolve({
+          success: false,
+          error: message`Derived parser error: ${msg}`,
+        });
+      }
+      // Wrap with Promise.resolve() to ensure the result is always a Promise,
+      // even if a JS caller passes a factory returning a sync parser.
+      return Promise.resolve(derivedParser.parse(input));
     },
 
     [parseWithDependency](
@@ -1208,7 +1259,8 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
           error: message`Factory error: ${msg}`,
         });
       }
-      return derivedParser.parse(input);
+      // Wrap with Promise.resolve() to ensure the result is always a Promise.
+      return Promise.resolve(derivedParser.parse(input));
     },
 
     format(value: T): string {
@@ -1266,8 +1318,17 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
     [dependencyId]: sourceId,
 
     parse(input: string): Promise<ValueParserResult<T>> {
-      const sourceValue = options.defaultValue();
-      const derivedParser = options.factory(sourceValue);
+      let derivedParser;
+      try {
+        const sourceValue = options.defaultValue();
+        derivedParser = options.factory(sourceValue);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return Promise.resolve({
+          success: false,
+          error: message`Derived parser error: ${msg}`,
+        });
+      }
       return Promise.resolve(derivedParser.parse(input));
     },
 

@@ -218,6 +218,18 @@ To be released.
     CLI value was provided, `suggest()` returned an empty array instead of
     suggesting values based on the default.  [[#186], [#522]]
 
+ -  Fixed `deriveSync()`, `deriveAsync()`, `deriveFromSync()`, and
+    `deriveFromAsync()` so that errors thrown by the factory with default
+    dependency values during the initial parse no longer prevent deferred
+    resolution from succeeding with the actual dependency values.  Errors
+    from the default branch are now caught and produce a preliminary failure
+    result, which gets overridden when `parseWithDependency()` runs with
+    the actual values.  `deriveAsync()` also no longer calls the factory
+    during parser construction.  Note that the auto-detecting `derive()`
+    and `deriveFrom()` still require a working default value for mode
+    detection; use the explicit variants when the default branch is
+    unreachable.  [[#225]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -242,6 +254,7 @@ To be released.
 [#177]: https://github.com/dahlia/optique/issues/177
 [#178]: https://github.com/dahlia/optique/issues/178
 [#186]: https://github.com/dahlia/optique/issues/186
+[#225]: https://github.com/dahlia/optique/issues/225
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
