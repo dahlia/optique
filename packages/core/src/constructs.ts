@@ -5546,79 +5546,36 @@ function preParseSuggestLoop(
       .filter(([_, index]) => !matchedParsers.has(index))
       .sort(([a], [b]) => b.priority - a.priority);
 
-    for (let ri = 0; ri < remaining.length; ri++) {
-      const [parser, index] = remaining[ri];
-      const parserState = index < stateArray.length
-        ? stateArray[index]
-        : parser.initialState;
-      const resultOrPromise = parser.parse({
-        ...currentContext,
-        state: parserState,
-      });
-
-      // If the result is a Promise, chain the rest of the iteration
-      // asynchronously to avoid launching unawaited I/O.
-      if (
-        resultOrPromise != null && typeof resultOrPromise === "object" &&
-        "then" in resultOrPromise && typeof resultOrPromise.then === "function"
-      ) {
-        // Capture the tail of remaining parsers still to try in this round.
-        const tail = remaining.slice(ri + 1);
-        return (resultOrPromise as Promise<ParserResult<readonly unknown[]>>)
-          .then((result) => {
-            if (result.success && result.consumed.length > 0) {
-              stateArray[index] = result.next.state;
-              matchedParsers.add(index);
-              // Restart the outer loop with all parsers.
-              return preParseSuggestLoop(
-                {
-                  ...currentContext,
-                  buffer: result.next.buffer,
-                  optionsTerminated: result.next.optionsTerminated,
-                  state: stateArray,
-                },
-                stateArray,
-                parsers,
-                matchedParsers,
-              );
-            }
-            // This parser didn't consume — continue with the remaining
-            // parsers in this round before giving up.
-            return preParseSuggestRemainder(
-              currentContext,
-              stateArray,
-              parsers,
-              matchedParsers,
-              tail,
-            );
-          });
-      }
-
-      const result = resultOrPromise as ParserResult<readonly unknown[]>;
-      if (result.success && result.consumed.length > 0) {
-        stateArray[index] = result.next.state;
-        currentContext = {
-          ...currentContext,
-          buffer: result.next.buffer,
-          optionsTerminated: result.next.optionsTerminated,
-          state: stateArray,
-        };
-        matchedParsers.add(index);
-        changed = true;
-        break;
-      }
+    const tried = tryParseSuggestList(
+      currentContext,
+      stateArray,
+      parsers,
+      matchedParsers,
+      remaining,
+    );
+    if (tried === null) continue;
+    // If a Promise was returned, the async chain continues from there.
+    if (
+      typeof tried === "object" && "then" in tried &&
+      typeof tried.then === "function"
+    ) {
+      return tried as Promise<ParserContext<readonly unknown[]>>;
     }
+    // A sync parser consumed input — restart the outer loop.
+    currentContext = tried as ParserContext<readonly unknown[]>;
+    changed = true;
   }
 
   return { ...currentContext, state: stateArray };
 }
 
 /**
- * Continues trying the remaining parsers in the current round after an async
- * parser did not consume.  If one succeeds, restarts the full outer loop.
+ * Tries each parser in `remaining` once.  Returns the updated context if a
+ * parser consumed input (sync), a Promise that resolves to a context if an
+ * async parser was encountered, or `null` if no parser consumed.
  * @internal
  */
-function preParseSuggestRemainder(
+function tryParseSuggestList(
   context: ParserContext<readonly unknown[]>,
   stateArray: unknown[],
   parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
@@ -5626,22 +5583,22 @@ function preParseSuggestRemainder(
   remaining: [Parser<Mode, readonly unknown[], unknown>, number][],
 ):
   | ParserContext<readonly unknown[]>
-  | Promise<ParserContext<readonly unknown[]>> {
-  const currentContext = context;
-
+  | Promise<ParserContext<readonly unknown[]>>
+  | null {
   for (let ri = 0; ri < remaining.length; ri++) {
     const [parser, index] = remaining[ri];
     const parserState = index < stateArray.length
       ? stateArray[index]
       : parser.initialState;
     const resultOrPromise = parser.parse({
-      ...currentContext,
+      ...context,
       state: parserState,
     });
 
+    // If the result is a thenable, chain the rest asynchronously.
     if (
       resultOrPromise != null && typeof resultOrPromise === "object" &&
-      "then" in resultOrPromise
+      "then" in resultOrPromise && typeof resultOrPromise.then === "function"
     ) {
       const tail = remaining.slice(ri + 1);
       return (resultOrPromise as Promise<ParserResult<readonly unknown[]>>)
@@ -5651,7 +5608,7 @@ function preParseSuggestRemainder(
             matchedParsers.add(index);
             return preParseSuggestLoop(
               {
-                ...currentContext,
+                ...context,
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: stateArray,
@@ -5661,13 +5618,15 @@ function preParseSuggestRemainder(
               matchedParsers,
             );
           }
-          return preParseSuggestRemainder(
-            currentContext,
+          // This async parser didn't consume — try the remaining parsers.
+          const next = tryParseSuggestList(
+            context,
             stateArray,
             parsers,
             matchedParsers,
             tail,
           );
+          return next ?? { ...context, state: stateArray };
         });
     }
 
@@ -5675,21 +5634,16 @@ function preParseSuggestRemainder(
     if (result.success && result.consumed.length > 0) {
       stateArray[index] = result.next.state;
       matchedParsers.add(index);
-      return preParseSuggestLoop(
-        {
-          ...currentContext,
-          buffer: result.next.buffer,
-          optionsTerminated: result.next.optionsTerminated,
-          state: stateArray,
-        },
-        stateArray,
-        parsers,
-        matchedParsers,
-      );
+      return {
+        ...context,
+        buffer: result.next.buffer,
+        optionsTerminated: result.next.optionsTerminated,
+        state: stateArray,
+      };
     }
   }
 
-  return { ...currentContext, state: stateArray };
+  return null;
 }
 
 /**
