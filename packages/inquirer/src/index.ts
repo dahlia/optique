@@ -228,11 +228,9 @@ function withAnnotatedInnerState<TState, TResult>(
   const annotations = getAnnotations(sourceState);
   if (
     annotations == null ||
-    (
-      innerState != null &&
-      typeof innerState === "object" &&
-      annotationKey in innerState
-    )
+    innerState == null ||
+    typeof innerState !== "object" ||
+    (typeof innerState === "object" && annotationKey in innerState)
   ) {
     return run(innerState);
   }
@@ -1038,12 +1036,16 @@ export function prompt<M extends Mode, TValue, TState>(
         !Array.isArray(cliState) &&
         Object.getPrototypeOf(cliState) !== Object.prototype &&
         Object.getPrototypeOf(cliState) !== null;
+      const cliStateLooksLikeSourceState = cliState != null &&
+        typeof cliState === "object" &&
+        "hasCliValue" in cliState;
 
       if (
         cliState != null &&
         !(cliState instanceof PromptBindInitialStateClass) &&
         (cliStateHasAnnotations ||
-          (outerAnnotationsAvailable && cliStateIsNonPlainObject))
+          (outerAnnotationsAvailable &&
+            (cliStateIsNonPlainObject || cliStateLooksLikeSourceState)))
       ) {
         const useCompleteResultOrPrompt = (
           result: ValueParserResult<TValue>,

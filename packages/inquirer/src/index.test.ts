@@ -4,6 +4,7 @@ import {
   annotationKey,
   type Annotations,
   getAnnotations,
+  injectAnnotations,
 } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
@@ -2522,7 +2523,7 @@ describe("prompt()", () => {
       );
     });
 
-    it("injects annotations into primitive inner states", async () => {
+    it("leaves primitive inner states unchanged when annotations are present", async () => {
       const seenStates: unknown[] = [];
       const annotations = { source: "test" };
       const inner: Parser<"async", string, number> = {
@@ -2585,11 +2586,11 @@ describe("prompt()", () => {
       assert.ok(second.success);
 
       assert.equal(seenStates[0], -7);
-      assert.deepEqual(getAnnotations(seenStates[1]), annotations);
+      assert.equal(seenStates[1], -7);
     });
 
-    it("preserves parse-time annotations for primitive inner states", async () => {
-      const marker = Symbol.for("@test/prompt-primitive-parse-state");
+    it("preserves primitive state shape under annotations", async () => {
+      let seenStateType: string | undefined;
       let promptCalls = 0;
 
       const inner: Parser<"async", string, string | undefined> = {
@@ -2601,10 +2602,8 @@ describe("prompt()", () => {
         initialState: undefined,
         parse(context) {
           const [head, ...rest] = context.buffer;
-          if (
-            head == null ||
-            getAnnotations(context.state)?.[marker] !== "annotated"
-          ) {
+          seenStateType = typeof context.state;
+          if (head == null) {
             return Promise.resolve({
               success: false as const,
               consumed: 0,
@@ -2619,8 +2618,7 @@ describe("prompt()", () => {
         },
         complete(state) {
           return Promise.resolve(
-            getAnnotations(state)?.[marker] === "annotated" &&
-              state != null
+            typeof state === "string" && state.length > 0
               ? { success: true as const, value: state }
               : { success: false as const, error: message`missing` },
           );
@@ -2647,11 +2645,14 @@ describe("prompt()", () => {
       });
 
       const result = await parseAsync(parser, ["cli-value"], {
-        annotations: { [marker]: "annotated" } satisfies Annotations,
+        annotations: {
+          [Symbol.for("@test/prompt-primitive-shape")]: "annotated",
+        } satisfies Annotations,
       });
 
       assert.ok(result.success);
       assert.equal(result.value, "cli-value");
+      assert.equal(seenStateType, "undefined");
       assert.equal(promptCalls, 0);
     });
 
@@ -2671,7 +2672,10 @@ describe("prompt()", () => {
           parse(context) {
             return Promise.resolve({
               success: true as const,
-              next: { ...context, state: context.state },
+              next: {
+                ...context,
+                state: injectAnnotations(undefined, { [marker]: "annotated" }),
+              },
               consumed: [],
             });
           },
