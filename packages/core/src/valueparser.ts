@@ -290,7 +290,9 @@ export function choice<const T extends string | number>(
     // Number choice implementation
     const numberChoices = choices as readonly number[];
     const numberOptions = options as ChoiceOptionsNumber;
-    const numberStrings = numberChoices.map((v) => String(v));
+    const numberStrings = numberChoices.map((v) =>
+      Object.is(v, -0) ? "-0" : String(v)
+    );
     return {
       $mode: "sync",
       metavar,
@@ -306,11 +308,10 @@ export function choice<const T extends string | number>(
         return { success: true, value: numberChoices[index] as T };
       },
       format(value: T): string {
-        return String(value);
+        return Object.is(value, -0) ? "-0" : String(value);
       },
       suggest(prefix: string) {
-        return numberChoices
-          .map((value) => String(value))
+        return numberStrings
           .filter((valueStr) => valueStr.startsWith(prefix))
           .map((valueStr) => ({ kind: "literal" as const, text: valueStr }));
       },

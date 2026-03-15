@@ -1498,6 +1498,36 @@ describe("choice", () => {
       assert.ok(!plusInf.success);
     });
 
+    it("should preserve negative zero as a valid choice", () => {
+      const parser = choice([-0, 1]);
+
+      const result = parser.parse("-0");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.ok(Object.is(result.value, -0));
+      }
+
+      // "0" should not match -0
+      const result2 = parser.parse("0");
+      assert.ok(!result2.success);
+    });
+
+    it("should distinguish 0 and -0 when both are in choices", () => {
+      const parser = choice([0, -0]);
+
+      const pos = parser.parse("0");
+      assert.ok(pos.success);
+      if (pos.success) {
+        assert.ok(Object.is(pos.value, 0));
+      }
+
+      const neg = parser.parse("-0");
+      assert.ok(neg.success);
+      if (neg.success) {
+        assert.ok(Object.is(neg.value, -0));
+      }
+    });
+
     it("should handle duplicate number values", () => {
       const parser = choice([1, 1, 2]);
 
