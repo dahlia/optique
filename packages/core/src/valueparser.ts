@@ -424,10 +424,18 @@ function formatDefaultChoiceError(
  * @param options Configuration options for the string parser.
  * @returns A {@link ValueParser} that parses strings according to the
  *          specified options.
+ * @throws {TypeError} If `options.pattern` is provided but is not a
+ *         `RegExp` instance.
  */
 export function string(
   options: StringOptions = {},
 ): ValueParser<"sync", string> {
+  if (options.pattern != null && !(options.pattern instanceof RegExp)) {
+    throw new TypeError(
+      "Expected pattern to be a RegExp, but got: " +
+        `${Object.prototype.toString.call(options.pattern)}`,
+    );
+  }
   const metavar = options.metavar ?? "STRING";
   ensureNonEmptyString(metavar);
   return {
