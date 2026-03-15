@@ -16,7 +16,13 @@ import {
   select,
   Separator,
 } from "@inquirer/prompts";
-import { annotationKey, getAnnotations } from "@optique/core/annotations";
+import {
+  annotationKey,
+  type Annotations,
+  getAnnotations,
+  inheritAnnotations,
+  unwrapInjectedAnnotationWrapper,
+} from "@optique/core/annotations";
 import type {
   Mode,
   ModeValue,
@@ -121,6 +127,92 @@ function isExitPromptError(error: unknown): boolean {
     error != null &&
     "name" in error &&
     error.name === "ExitPromptError";
+}
+
+const deferredPromptValueKey: unique symbol = Symbol.for(
+  "@optique/inquirer/deferredPromptValue",
+);
+const deferPromptUntilConfigResolvesKey = Symbol.for(
+  "@optique/config/deferPromptUntilResolved",
+);
+const inheritParentAnnotationsKey = Symbol.for(
+  "@optique/core/inheritParentAnnotations",
+);
+
+class DeferredPromptValue {
+  readonly [deferredPromptValueKey] = true as const;
+}
+
+// FIXME: Wrapped config-bound parsers such as optional(bindConfig(...)) and
+// group(..., bindConfig(...)) currently drop this hook. See:
+// https://github.com/dahlia/optique/issues/385
+function shouldDeferPrompt(
+  parser: Parser<Mode, unknown, unknown>,
+  state: unknown,
+): boolean {
+  const maybeShouldDefer = Reflect.get(
+    parser,
+    deferPromptUntilConfigResolvesKey,
+  );
+  return typeof maybeShouldDefer === "function" &&
+    maybeShouldDefer(state) === true;
+}
+
+// TODO: Avoid surfacing DeferredPromptValue as a successful TValue result in
+// outer combinators during phase one. See:
+// https://github.com/dahlia/optique/issues/296
+function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
+  return {
+    success: true,
+    value: new DeferredPromptValue() as TValue,
+  };
+}
+
+function withAnnotationView<T extends object, TResult>(
+  state: T,
+  annotations: Annotations,
+  run: (annotatedState: T) => TResult,
+): TResult {
+  const annotatedState = new Proxy(state, {
+    get(target, key) {
+      if (key === annotationKey) {
+        return annotations;
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    has(target, key) {
+      return key === annotationKey || Reflect.has(target, key);
+    },
+  });
+  return run(annotatedState);
+}
+
+function withAnnotatedInnerState<TState, TResult>(
+  sourceState: unknown,
+  innerState: TState,
+  run: (annotatedState: TState) => TResult,
+): TResult {
+  const annotations = getAnnotations(sourceState);
+  if (
+    annotations == null ||
+    innerState == null ||
+    typeof innerState !== "object" ||
+    (typeof innerState === "object" && annotationKey in innerState)
+  ) {
+    return run(innerState);
+  }
+
+  const inheritedState = inheritAnnotations(sourceState, innerState);
+  if (inheritedState !== innerState) {
+    return run(inheritedState);
+  }
+
+  return withAnnotationView(
+    innerState,
+    annotations,
+    (annotatedState) => run(annotatedState as TState),
+  );
 }
 
 // ---- Choice types ----
@@ -602,6 +694,33 @@ export function prompt<M extends Mode, TValue, TState>(
     }
     | null = null;
 
+  function shouldAttemptInnerCompletion(
+    cliState: unknown,
+    state: unknown,
+  ): boolean {
+    if (
+      cliState == null || cliState instanceof PromptBindInitialStateClass
+    ) {
+      return false;
+    }
+    const cliStateHasAnnotations = typeof cliState === "object" &&
+      annotationKey in cliState;
+    if (cliStateHasAnnotations) {
+      return true;
+    }
+    if (getAnnotations(state) == null || typeof cliState !== "object") {
+      return false;
+    }
+    if ("hasCliValue" in cliState) {
+      return true;
+    }
+    if (Array.isArray(cliState)) {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(cliState);
+    return prototype !== Object.prototype && prototype !== null;
+  }
+
   /**
    * Executes the configured prompt and normalizes its result.
    *
@@ -740,11 +859,26 @@ export function prompt<M extends Mode, TValue, TState>(
     }
   }
 
-  return {
+  function usePromptOrDefer(
+    state: unknown,
+    result: ValueParserResult<TValue>,
+  ): Promise<ValueParserResult<TValue>> {
+    if (result.success) {
+      return Promise.resolve(result);
+    }
+    return shouldDeferPrompt(parser, state)
+      ? Promise.resolve(deferredPromptResult<TValue>())
+      : executePrompt();
+  }
+
+  const promptedParser: Parser<"async", TValue, TState> & {
+    readonly [inheritParentAnnotationsKey]: true;
+  } = {
     $mode: "async",
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
+    [inheritParentAnnotationsKey]: true,
     // prompt() makes the CLI argument optional because missing values are
     // handled interactively.
     usage: [{ type: "optional", terms: parser.usage }],
@@ -766,28 +900,14 @@ export function prompt<M extends Mode, TValue, TState>(
           ? (context.state.cliState as TState)
           : parser.initialState)
         : context.state;
+      const baseInnerContext = innerState !== context.state
+        ? { ...context, state: innerState }
+        : context;
       // Propagate annotations into the inner context state so that source-
       // binding wrappers (bindEnv, bindConfig) can carry them through into
       // their output state.  This is necessary when parse() is called with
       // an annotation-injected initial state (via parseAsync options) and
       // innerState would otherwise be undefined/null, losing the annotations.
-      const innerStateWithAnnotations: TState = (
-          annotations != null &&
-          (innerState == null ||
-            (typeof innerState === "object" &&
-              !(annotationKey in (innerState as object))))
-        )
-        ? ({
-          ...(innerState != null && typeof innerState === "object"
-            ? innerState
-            : {}),
-          [annotationKey]: annotations,
-        } as unknown as TState)
-        : innerState;
-      const innerContext = innerStateWithAnnotations !== context.state
-        ? { ...context, state: innerStateWithAnnotations }
-        : context;
-
       const processResult = (
         result: ParserResult<TState>,
       ): ParserResult<TState> => {
@@ -823,12 +943,21 @@ export function prompt<M extends Mode, TValue, TState>(
         } as unknown as TState;
         return {
           success: true,
-          next: { ...innerContext, state: nextState },
+          next: { ...baseInnerContext, state: nextState },
           consumed: [],
         };
       };
 
-      const result = parser.parse(innerContext);
+      const result = withAnnotatedInnerState(
+        context.state,
+        innerState,
+        (annotatedInnerState) => {
+          const innerContext = annotatedInnerState !== context.state
+            ? { ...context, state: annotatedInnerState }
+            : context;
+          return parser.parse(innerContext);
+        },
+      );
       if (result instanceof Promise) {
         return result.then(processResult);
       }
@@ -838,7 +967,11 @@ export function prompt<M extends Mode, TValue, TState>(
     complete: (state): Promise<ValueParserResult<TValue>> => {
       if (isPromptBindState(state) && state.hasCliValue) {
         // Inner parser consumed CLI tokens — delegate to it directly.
-        const r = parser.complete(state.cliState!);
+        const r = withAnnotatedInnerState(
+          state,
+          state.cliState!,
+          (annotatedInnerState) => parser.complete(annotatedInnerState),
+        );
         if (r instanceof Promise) {
           return r as Promise<ValueParserResult<TValue>>;
         }
@@ -863,45 +996,62 @@ export function prompt<M extends Mode, TValue, TState>(
           return cached;
         }
         // First call: try inner parser, fall back to prompt if it fails.
-        const innerState = parser.initialState;
-        const r = parser.complete(innerState);
-        const fallback = (
-          res: ValueParserResult<TValue>,
-        ): Promise<ValueParserResult<TValue>> =>
-          res.success ? Promise.resolve(res) : executePrompt();
+        const r = withAnnotatedInnerState(
+          state,
+          parser.initialState,
+          (annotatedInnerState) => parser.complete(annotatedInnerState),
+        );
         const cachedResult = r instanceof Promise
-          ? (r as Promise<ValueParserResult<TValue>>).then(fallback)
-          : fallback(r as ValueParserResult<TValue>);
+          ? (r as Promise<ValueParserResult<TValue>>).then((res) =>
+            usePromptOrDefer(state, res)
+          )
+          : usePromptOrDefer(state, r as ValueParserResult<TValue>);
         promptCache = { state, result: cachedResult };
         return cachedResult;
       }
 
       // Normal case: parse() built a PromptBindState with hasCliValue: false.
       // Only delegate to the inner parser's complete() when the cliState
-      // carries annotations — i.e., when it came from a source-binding
+      // itself carries annotations — i.e., when it came from a source-binding
       // wrapper like bindEnv or bindConfig that injected [annotationKey].
-      // Pure combinators (optional, multiple, withDefault) do not inject
-      // annotations, so their cliState will not carry the key; for those,
-      // we skip straight to the interactive prompt.
+      // Pure combinators such as optional() may preserve the outer
+      // annotation-bearing wrapper state even when no CLI value exists, but
+      // that is not evidence that complete() can satisfy the value without
+      // prompting.
       const cliState = isPromptBindState(state) ? state.cliState : undefined;
-      const cliStateHasAnnotations = cliState != null &&
+      const cliStateIsInjectedAnnotationWrapper = cliState != null &&
         typeof cliState === "object" &&
-        annotationKey in (cliState as object);
+        unwrapInjectedAnnotationWrapper(cliState) !== cliState;
 
-      if (cliStateHasAnnotations) {
-        const innerState = cliState as TState;
-        const r = parser.complete(innerState);
-        const fallback = (
-          res: ValueParserResult<TValue>,
-        ): Promise<ValueParserResult<TValue>> =>
-          res.success ? Promise.resolve(res) : executePrompt();
+      if (shouldAttemptInnerCompletion(cliState, state)) {
+        const useCompleteResultOrPrompt = (
+          result: ValueParserResult<TValue>,
+        ): Promise<ValueParserResult<TValue>> => {
+          if (
+            result.success &&
+            result.value === undefined &&
+            cliStateIsInjectedAnnotationWrapper
+          ) {
+            return executePrompt();
+          }
+          return usePromptOrDefer(state, result);
+        };
+        const r = withAnnotatedInnerState(
+          state,
+          cliState as TState,
+          (annotatedInnerState) => parser.complete(annotatedInnerState),
+        );
         if (r instanceof Promise) {
-          return (r as Promise<ValueParserResult<TValue>>).then(fallback);
+          return (r as Promise<ValueParserResult<TValue>>).then(
+            useCompleteResultOrPrompt,
+          );
         }
-        return fallback(r as ValueParserResult<TValue>);
+        return useCompleteResultOrPrompt(r as ValueParserResult<TValue>);
       }
 
-      return executePrompt();
+      return shouldDeferPrompt(parser, state)
+        ? Promise.resolve(deferredPromptResult<TValue>())
+        : executePrompt();
     },
 
     suggest: (context, prefix) => {
@@ -933,6 +1083,8 @@ export function prompt<M extends Mode, TValue, TState>(
       return parser.getDocFragments(state, defaultValue as TValue);
     },
   };
+
+  return promptedParser;
 }
 
 // ---- Helpers ----

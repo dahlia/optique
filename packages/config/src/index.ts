@@ -21,6 +21,19 @@ import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 
+const deferPromptUntilConfigResolvesKey = Symbol.for(
+  "@optique/config/deferPromptUntilResolved",
+);
+const phase1ConfigAnnotationsKey = Symbol.for(
+  "@optique/config/phase1PromptAnnotations",
+);
+const phase2UndefinedParsedValueKey = Symbol.for(
+  "@optique/config/phase2UndefinedParsedValue",
+);
+const deferredPromptValueKey = Symbol.for(
+  "@optique/inquirer/deferredPromptValue",
+);
+
 /**
  * Metadata about the loaded config source.
  *
@@ -51,6 +64,235 @@ const activeConfigRegistry: Map<symbol, unknown> = new Map();
  * @internal
  */
 const activeConfigMetaRegistry: Map<symbol, unknown> = new Map();
+const phase1ConfigAnnotationMarker = Symbol(
+  "@optique/config/phase1Annotation",
+);
+
+function isDeferredPromptValue(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    deferredPromptValueKey in value;
+}
+
+function isPhase2UndefinedParsedValue(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    phase2UndefinedParsedValueKey in value;
+}
+
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function shouldSkipCollectionOwnKey(
+  value: object,
+  key: PropertyKey,
+): boolean {
+  if (Array.isArray(value)) {
+    return key === "length" ||
+      (typeof key === "string" &&
+        Number.isInteger(Number(key)) &&
+        String(Number(key)) === key);
+  }
+  return false;
+}
+
+function containsDeferredPromptValuesInOwnProperties(
+  value: object,
+  seen: WeakSet<object>,
+): boolean {
+  for (const key of Reflect.ownKeys(value)) {
+    if (shouldSkipCollectionOwnKey(value, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      descriptor != null &&
+      "value" in descriptor &&
+      containsDeferredPromptValues(descriptor.value, seen)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function copySanitizedOwnProperties(
+  source: object,
+  target: object,
+  seen: WeakMap<object, unknown>,
+): void {
+  for (const key of Reflect.ownKeys(source)) {
+    if (shouldSkipCollectionOwnKey(source, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor == null) {
+      continue;
+    }
+    if ("value" in descriptor) {
+      descriptor.value = stripDeferredPromptValues(descriptor.value, seen);
+    }
+    Object.defineProperty(target, key, descriptor);
+  }
+}
+
+function containsDeferredPromptValues(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): boolean {
+  // FIXME: This only inspects own data properties, so deferred prompt values
+  // hidden behind private fields or method-only wrapper DTOs are missed.
+  // See: https://github.com/dahlia/optique/issues/407
+  if (isDeferredPromptValue(value)) {
+    return true;
+  }
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    if (value.some((item) => containsDeferredPromptValues(item, seen))) {
+      return true;
+    }
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
+  }
+  if (value instanceof Set) {
+    for (const entryValue of value) {
+      if (containsDeferredPromptValues(entryValue, seen)) {
+        return true;
+      }
+    }
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
+  }
+  if (value instanceof Map) {
+    for (const [key, entryValue] of value) {
+      if (
+        containsDeferredPromptValues(key, seen) ||
+        containsDeferredPromptValues(entryValue, seen)
+      ) {
+        return true;
+      }
+    }
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
+  }
+  return containsDeferredPromptValuesInOwnProperties(value, seen);
+}
+
+function createSanitizedNonPlainView<T extends object>(
+  value: T,
+  seen: WeakMap<object, unknown>,
+): T {
+  // FIXME: This proxy changes method receiver semantics and still cannot scrub
+  // deferred prompt values hidden behind private fields or wrapper methods.
+  // See: https://github.com/dahlia/optique/issues/407
+  const proxy = new Proxy(value, {
+    get(target, key, receiver) {
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor != null && "value" in descriptor) {
+        return stripDeferredPromptValues(descriptor.value, seen);
+      }
+      return Reflect.get(target, key, receiver);
+    },
+    getOwnPropertyDescriptor(target, key) {
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor == null || !("value" in descriptor)) {
+        return descriptor;
+      }
+      return {
+        ...descriptor,
+        value: stripDeferredPromptValues(descriptor.value, seen),
+      };
+    },
+  });
+  seen.set(value, proxy);
+  return proxy;
+}
+
+function stripDeferredPromptValues<T>(
+  value: T,
+  seen = new WeakMap<object, unknown>(),
+): T {
+  if (isDeferredPromptValue(value)) {
+    return undefined as T;
+  }
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  const cached = seen.get(value);
+  if (cached !== undefined) {
+    return cached as T;
+  }
+  if (Array.isArray(value)) {
+    if (!containsDeferredPromptValues(value)) {
+      return value;
+    }
+    const clone: unknown[] = new Array(value.length);
+    seen.set(value, clone);
+    for (let i = 0; i < value.length; i++) {
+      clone[i] = stripDeferredPromptValues(value[i], seen);
+    }
+    copySanitizedOwnProperties(value, clone, seen);
+    return clone as T;
+  }
+  if (value instanceof Set) {
+    if (!containsDeferredPromptValues(value)) {
+      return value;
+    }
+    const clone = new Set<unknown>();
+    seen.set(value, clone);
+    for (const entryValue of value) {
+      clone.add(stripDeferredPromptValues(entryValue, seen));
+    }
+    copySanitizedOwnProperties(value, clone, seen);
+    return clone as T;
+  }
+  if (value instanceof Map) {
+    if (!containsDeferredPromptValues(value)) {
+      return value;
+    }
+    const clone = new Map<unknown, unknown>();
+    seen.set(value, clone);
+    for (const [key, entryValue] of value) {
+      clone.set(
+        stripDeferredPromptValues(key, seen),
+        stripDeferredPromptValues(entryValue, seen),
+      );
+    }
+    copySanitizedOwnProperties(value, clone, seen);
+    return clone as T;
+  }
+  if (!isPlainObject(value)) {
+    return containsDeferredPromptValues(value)
+      ? createSanitizedNonPlainView(value, seen) as T
+      : value;
+  }
+  if (!containsDeferredPromptValues(value)) {
+    return value;
+  }
+  const clone: Record<PropertyKey, unknown> = Object.create(
+    Object.getPrototypeOf(value),
+  );
+  seen.set(value, clone);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor == null) {
+      continue;
+    }
+    if ("value" in descriptor) {
+      descriptor.value = stripDeferredPromptValues(
+        descriptor.value,
+        seen,
+      );
+    }
+    Object.defineProperty(clone, key, descriptor);
+  }
+  return clone as T;
+}
 
 /**
  * Sets active config data for a context.
@@ -280,16 +522,30 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   // Create a unique ID for this context instance
   const contextId = Symbol(`@optique/config:${Math.random()}`);
 
-  return {
+  const context: ConfigContext<T, TConfigMeta> & {
+    readonly [phase1ConfigAnnotationsKey]: (
+      parsed: unknown,
+      annotations: Annotations,
+    ) => Annotations | undefined;
+  } = {
     id: contextId,
     schema: options.schema,
     mode: "dynamic",
+    [phase1ConfigAnnotationsKey](parsed: unknown, annotations: Annotations) {
+      if (parsed === undefined) {
+        return { [contextId]: phase1ConfigAnnotationMarker };
+      }
+      return Object.getOwnPropertySymbols(annotations).includes(contextId)
+        ? undefined
+        : { [contextId]: undefined };
+    },
 
     getAnnotations(
       parsed?: unknown,
       runtimeOptions?: unknown,
     ): Promise<Annotations> | Annotations {
-      // Phase 1 (no parsed result): return empty — this is a dynamic context
+      // Phase 1 (no parsed result): mark the context as unresolved so
+      // prompt(bindConfig(...)) can defer interactive fallback.
       if (parsed === undefined) {
         return {};
       }
@@ -306,7 +562,10 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
       // At runtime, `parsed` is the actual parser value.  The
       // ParserValuePlaceholder brand is compile-time only.
-      const parsedValue = parsed as ParserValuePlaceholder;
+      const parsedValue: unknown = isPhase2UndefinedParsedValue(parsed)
+        ? undefined
+        : stripDeferredPromptValues(parsed);
+      const parsedPlaceholder = parsedValue as ParserValuePlaceholder;
 
       const buildAnnotations = (
         configData: T | undefined,
@@ -348,7 +607,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
       if (opts.load) {
         // Custom load mode
-        const loaded = opts.load(parsedValue);
+        const loaded = opts.load(parsedPlaceholder);
         if (loaded instanceof Promise) {
           return loaded.then(({ config, meta }) =>
             validateAndBuildAnnotations(config, meta)
@@ -360,7 +619,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
       if (opts.getConfigPath) {
         // Single-file mode
-        const configPath = opts.getConfigPath(parsedValue);
+        const configPath = opts.getConfigPath(parsedPlaceholder);
 
         if (!configPath) {
           return {};
@@ -412,6 +671,8 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       clearActiveConfigMeta(contextId);
     },
   };
+
+  return context;
 }
 
 /**
@@ -503,7 +764,14 @@ export function bindConfig<
       configBindStateKey in value;
   }
 
-  return {
+  function shouldDeferPromptUntilConfigResolves(state: unknown): boolean {
+    const annotations = getAnnotations(state);
+    return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
+  }
+
+  const boundParser: Parser<M, TValue, TState> & {
+    readonly [deferPromptUntilConfigResolvesKey]: (state: unknown) => boolean;
+  } = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
@@ -593,11 +861,14 @@ export function bindConfig<
     },
 
     suggest: parser.suggest,
+    [deferPromptUntilConfigResolvesKey]: shouldDeferPromptUntilConfigResolves,
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
       return parser.getDocFragments(state, defaultValue);
     },
   };
+
+  return boundParser;
 }
 
 /**

@@ -187,6 +187,13 @@ To be released.
     implement `Symbol.asyncDispose` when that cleanup completes
     synchronously.  [[#154]]
 
+ -  Fixed phase-two source-context inputs when later integrations need to
+    inspect parsed values before the final parse completes.  During the
+    second pass of `runWith()` / `runWithSync()`, deferred prompt placeholders
+    are now scrubbed from parsed values before they reach later dynamic
+    contexts, while preserving earlier-context precedence and stable
+    parsed-value identity within the phase-two pass.  [[#177], [#490]]
+
  -  Fixed help output incorrectly interleaving meta items (`help`, `--help`,
     `--version`) with user-defined commands when using `group: "…"` to
     assign meta items to a named section that already exists in user-defined
@@ -216,6 +223,8 @@ To be released.
 [#153]: https://github.com/dahlia/optique/issues/153
 [#154]: https://github.com/dahlia/optique/issues/154
 [#157]: https://github.com/dahlia/optique/issues/157
+[#177]: https://github.com/dahlia/optique/issues/177
+[#490]: https://github.com/dahlia/optique/pull/490
 
 ### @optique/config
 
@@ -275,6 +284,12 @@ To be released.
     config loading now skips only when the parsed value is actually
     `undefined`, so top-level primitive parsers still reach the second
     config-loading phase correctly.  [[#161], [#164]]
+
+ -  Fixed phase-two `load(parsed)` / `getConfigPath(parsed)` inputs for
+    unresolved prompt-backed values.  Config callbacks now receive scrubbed
+    parsed values with deferred prompt placeholders normalized to
+    `undefined`, while keeping the original parsed object identity when no
+    sanitization is needed.  [[#177], [#490]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136

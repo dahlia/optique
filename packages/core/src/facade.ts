@@ -55,6 +55,339 @@ import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
 
+const phase1ConfigAnnotationsKey = Symbol.for(
+  "@optique/config/phase1PromptAnnotations",
+);
+const phase2UndefinedParsedValueKey = Symbol.for(
+  "@optique/config/phase2UndefinedParsedValue",
+);
+const deferredPromptValueKey = Symbol.for(
+  "@optique/inquirer/deferredPromptValue",
+);
+
+function isDeferredPromptValue(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    deferredPromptValueKey in value;
+}
+
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function shouldSkipCollectionOwnKey(
+  value: object,
+  key: PropertyKey,
+): boolean {
+  if (Array.isArray(value)) {
+    return key === "length" ||
+      (typeof key === "string" &&
+        Number.isInteger(Number(key)) &&
+        String(Number(key)) === key);
+  }
+  return false;
+}
+
+function containsDeferredPromptValuesInOwnProperties(
+  value: object,
+  seen: WeakSet<object>,
+): boolean {
+  for (const key of Reflect.ownKeys(value)) {
+    if (shouldSkipCollectionOwnKey(value, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      descriptor != null &&
+      "value" in descriptor &&
+      containsDeferredPromptValuesForContexts(descriptor.value, seen)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function copySanitizedOwnProperties(
+  source: object,
+  target: object,
+  seen: WeakMap<object, unknown>,
+): void {
+  for (const key of Reflect.ownKeys(source)) {
+    if (shouldSkipCollectionOwnKey(source, key)) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor == null) {
+      continue;
+    }
+    if ("value" in descriptor) {
+      descriptor.value = stripDeferredPromptValuesForContexts(
+        descriptor.value,
+        seen,
+      );
+    }
+    Object.defineProperty(target, key, descriptor);
+  }
+}
+
+function createArrayCloneLike(value: readonly unknown[]): unknown[] {
+  try {
+    const arrayCtor = value.constructor as abstract new (
+      length?: number,
+    ) => unknown[];
+    return Reflect.construct(
+      Array,
+      [value.length],
+      arrayCtor,
+    ) as unknown[];
+  } catch {
+    return new Array(value.length);
+  }
+}
+
+function createSetCloneLike(value: Set<unknown>): Set<unknown> {
+  try {
+    const setCtor = value.constructor as abstract new (
+      iterable?: Iterable<unknown>,
+    ) => Set<unknown>;
+    return Reflect.construct(
+      Set,
+      [],
+      setCtor,
+    ) as Set<unknown>;
+  } catch {
+    return new Set<unknown>();
+  }
+}
+
+function createMapCloneLike(
+  value: Map<unknown, unknown>,
+): Map<unknown, unknown> {
+  try {
+    const mapCtor = value.constructor as abstract new (
+      iterable?: Iterable<readonly [unknown, unknown]>,
+    ) => Map<unknown, unknown>;
+    return Reflect.construct(
+      Map,
+      [],
+      mapCtor,
+    ) as Map<unknown, unknown>;
+  } catch {
+    return new Map<unknown, unknown>();
+  }
+}
+
+function containsDeferredPromptValuesForContexts(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): boolean {
+  // FIXME: This only inspects own data properties, so deferred prompt values
+  // hidden behind private fields or method-only wrapper DTOs are missed. See:
+  // https://github.com/dahlia/optique/issues/407
+  if (isDeferredPromptValue(value)) {
+    return true;
+  }
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    if (
+      value.some((item) => containsDeferredPromptValuesForContexts(item, seen))
+    ) {
+      return true;
+    }
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
+  }
+  if (value instanceof Set) {
+    for (const entryValue of value) {
+      if (containsDeferredPromptValuesForContexts(entryValue, seen)) {
+        return true;
+      }
+    }
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
+  }
+  if (value instanceof Map) {
+    for (const [key, entryValue] of value) {
+      if (
+        containsDeferredPromptValuesForContexts(key, seen) ||
+        containsDeferredPromptValuesForContexts(entryValue, seen)
+      ) {
+        return true;
+      }
+    }
+    return containsDeferredPromptValuesInOwnProperties(value, seen);
+  }
+  return containsDeferredPromptValuesInOwnProperties(value, seen);
+}
+
+function stripDeferredPromptValuesForContexts<T>(
+  value: T,
+  seen = new WeakMap<object, unknown>(),
+): T {
+  if (isDeferredPromptValue(value)) {
+    return undefined as T;
+  }
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+  const cached = seen.get(value);
+  if (cached !== undefined) {
+    return cached as T;
+  }
+  if (Array.isArray(value)) {
+    if (!containsDeferredPromptValuesForContexts(value)) {
+      return value;
+    }
+    const clone = createArrayCloneLike(value);
+    seen.set(value, clone);
+    for (let i = 0; i < value.length; i++) {
+      clone[i] = stripDeferredPromptValuesForContexts(value[i], seen);
+    }
+    copySanitizedOwnProperties(value, clone, seen);
+    return clone as T;
+  }
+  if (value instanceof Set) {
+    if (!containsDeferredPromptValuesForContexts(value)) {
+      return value;
+    }
+    const clone = createSetCloneLike(value);
+    seen.set(value, clone);
+    for (const entryValue of value) {
+      clone.add(stripDeferredPromptValuesForContexts(entryValue, seen));
+    }
+    copySanitizedOwnProperties(value, clone, seen);
+    return clone as T;
+  }
+  if (value instanceof Map) {
+    if (!containsDeferredPromptValuesForContexts(value)) {
+      return value;
+    }
+    const clone = createMapCloneLike(value);
+    seen.set(value, clone);
+    for (const [key, entryValue] of value) {
+      clone.set(
+        stripDeferredPromptValuesForContexts(key, seen),
+        stripDeferredPromptValuesForContexts(entryValue, seen),
+      );
+    }
+    copySanitizedOwnProperties(value, clone, seen);
+    return clone as T;
+  }
+  if (!isPlainObject(value)) {
+    if (!containsDeferredPromptValuesForContexts(value)) {
+      return value;
+    }
+    return createSanitizedNonPlainContextView(value, seen) as T;
+  }
+  const clone: Record<PropertyKey, unknown> = Object.create(
+    Object.getPrototypeOf(value),
+  );
+  seen.set(value, clone);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor == null) {
+      continue;
+    }
+    if ("value" in descriptor) {
+      descriptor.value = stripDeferredPromptValuesForContexts(
+        descriptor.value,
+        seen,
+      );
+    }
+    Object.defineProperty(clone, key, descriptor);
+  }
+  return clone as T;
+}
+
+function finalizeParsedForContext(
+  context: SourceContext<unknown>,
+  parsed: unknown,
+): unknown {
+  if (
+    parsed !== undefined || !Reflect.has(context, phase1ConfigAnnotationsKey)
+  ) {
+    return parsed;
+  }
+  return { [phase2UndefinedParsedValueKey]: true };
+}
+
+function createSanitizedNonPlainContextView<T extends object>(
+  value: T,
+  seen: WeakMap<object, unknown>,
+): T {
+  // FIXME: Proxying non-plain parsed values changes method receiver semantics,
+  // and method-only wrappers still need a safe way to expose scrubbed values.
+  // See: https://github.com/dahlia/optique/issues/407
+  const proxy = new Proxy(value, {
+    get(target, key, receiver) {
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor != null && "value" in descriptor) {
+        return stripDeferredPromptValuesForContexts(descriptor.value, seen);
+      }
+      return Reflect.get(target, key, receiver);
+    },
+    getOwnPropertyDescriptor(target, key) {
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      if (descriptor == null || !("value" in descriptor)) {
+        return descriptor;
+      }
+      return {
+        ...descriptor,
+        value: stripDeferredPromptValuesForContexts(descriptor.value, seen),
+      };
+    },
+  });
+  seen.set(value, proxy);
+  return proxy;
+}
+
+function prepareParsedForContexts(
+  parsed: unknown,
+): unknown {
+  if (parsed == null || typeof parsed !== "object") {
+    return stripDeferredPromptValuesForContexts(parsed);
+  }
+
+  if (isDeferredPromptValue(parsed)) {
+    return undefined;
+  }
+
+  if (
+    Array.isArray(parsed) ||
+    isPlainObject(parsed) ||
+    parsed instanceof Set ||
+    parsed instanceof Map
+  ) {
+    if (!containsDeferredPromptValuesForContexts(parsed)) {
+      return parsed;
+    }
+    return stripDeferredPromptValuesForContexts(parsed);
+  }
+
+  if (!containsDeferredPromptValuesForContexts(parsed)) {
+    return parsed;
+  }
+
+  return createSanitizedNonPlainContextView(
+    parsed,
+    new WeakMap<object, unknown>(),
+  );
+}
+
+function withPreparedParsedForContext<T>(
+  context: SourceContext<unknown>,
+  preparedParsed: unknown,
+  run: (prepared: unknown) => T,
+): T {
+  return run(finalizeParsedForContext(context, preparedParsed));
+}
+
 /**
  * Helper types for parser generation
  */
@@ -2169,7 +2502,11 @@ async function collectPhase1Annotations(
   contexts: readonly SourceContext<unknown>[],
   options?: unknown,
 ): Promise<
-  { readonly annotations: Annotations; readonly hasDynamic: boolean }
+  {
+    readonly annotations: Annotations;
+    readonly annotationsList: readonly Annotations[];
+    readonly hasDynamic: boolean;
+  }
 > {
   const annotationsList: Annotations[] = [];
   let hasDynamic = false;
@@ -2177,11 +2514,28 @@ async function collectPhase1Annotations(
   for (const context of contexts) {
     const result = context.getAnnotations(undefined, options);
     hasDynamic ||= needsTwoPhaseContext(context, result);
-    annotationsList.push(result instanceof Promise ? await result : result);
+    const annotations = result instanceof Promise ? await result : result;
+    const internalAnnotationsGetter = Reflect.get(
+      context,
+      phase1ConfigAnnotationsKey,
+    );
+    const internalAnnotations = typeof internalAnnotationsGetter === "function"
+      ? internalAnnotationsGetter.call(
+        context,
+        undefined,
+        annotations,
+      ) as (Annotations | undefined)
+      : undefined;
+    annotationsList.push(
+      internalAnnotations == null
+        ? annotations
+        : mergeAnnotations([annotations, internalAnnotations]),
+    );
   }
 
   return {
     annotations: mergeAnnotations(annotationsList),
+    annotationsList,
     hasDynamic,
   };
 }
@@ -2198,15 +2552,44 @@ async function collectAnnotations(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
   options?: unknown,
-): Promise<Annotations> {
+): Promise<{
+  readonly annotations: Annotations;
+  readonly annotationsList: readonly Annotations[];
+}> {
   const annotationsList: Annotations[] = [];
+  const preparedParsed = prepareParsedForContexts(parsed);
 
   for (const context of contexts) {
-    const result = context.getAnnotations(parsed, options);
-    annotationsList.push(result instanceof Promise ? await result : result);
+    const mergedAnnotations = await withPreparedParsedForContext(
+      context,
+      preparedParsed,
+      async (contextParsed) => {
+        const result = context.getAnnotations(contextParsed, options);
+        const annotations = result instanceof Promise ? await result : result;
+        const internalAnnotationsGetter = Reflect.get(
+          context,
+          phase1ConfigAnnotationsKey,
+        );
+        const internalAnnotations =
+          typeof internalAnnotationsGetter === "function"
+            ? internalAnnotationsGetter.call(
+              context,
+              contextParsed,
+              annotations,
+            ) as (Annotations | undefined)
+            : undefined;
+        return internalAnnotations == null
+          ? annotations
+          : mergeAnnotations([annotations, internalAnnotations]);
+      },
+    );
+    annotationsList.push(mergedAnnotations);
   }
 
-  return mergeAnnotations(annotationsList);
+  return {
+    annotations: mergeAnnotations(annotationsList),
+    annotationsList,
+  };
 }
 
 /**
@@ -2221,7 +2604,11 @@ async function collectAnnotations(
 function collectPhase1AnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   options?: unknown,
-): { readonly annotations: Annotations; readonly hasDynamic: boolean } {
+): {
+  readonly annotations: Annotations;
+  readonly annotationsList: readonly Annotations[];
+  readonly hasDynamic: boolean;
+} {
   const annotationsList: Annotations[] = [];
   let hasDynamic = false;
 
@@ -2234,11 +2621,27 @@ function collectPhase1AnnotationsSync(
       );
     }
     hasDynamic ||= needsTwoPhaseContext(context, result);
-    annotationsList.push(result);
+    const internalAnnotationsGetter = Reflect.get(
+      context,
+      phase1ConfigAnnotationsKey,
+    );
+    const internalAnnotations = typeof internalAnnotationsGetter === "function"
+      ? internalAnnotationsGetter.call(
+        context,
+        undefined,
+        result,
+      ) as (Annotations | undefined)
+      : undefined;
+    annotationsList.push(
+      internalAnnotations == null
+        ? result
+        : mergeAnnotations([result, internalAnnotations]),
+    );
   }
 
   return {
     annotations: mergeAnnotations(annotationsList),
+    annotationsList,
     hasDynamic,
   };
 }
@@ -2278,21 +2681,69 @@ function collectAnnotationsSync(
   contexts: readonly SourceContext<unknown>[],
   parsed?: unknown,
   options?: unknown,
-): Annotations {
+): {
+  readonly annotations: Annotations;
+  readonly annotationsList: readonly Annotations[];
+} {
   const annotationsList: Annotations[] = [];
+  const preparedParsed = prepareParsedForContexts(parsed);
 
   for (const context of contexts) {
-    const result = context.getAnnotations(parsed, options);
-    if (result instanceof Promise) {
-      throw new Error(
-        `Context ${String(context.id)} returned a Promise in sync mode. ` +
-          "Use runWith() or runWithAsync() for async contexts.",
-      );
-    }
-    annotationsList.push(result);
+    const mergedAnnotations = withPreparedParsedForContext(
+      context,
+      preparedParsed,
+      (contextParsed) => {
+        const result = context.getAnnotations(contextParsed, options);
+        if (result instanceof Promise) {
+          throw new Error(
+            `Context ${String(context.id)} returned a Promise in sync mode. ` +
+              "Use runWith() or runWithAsync() for async contexts.",
+          );
+        }
+        const internalAnnotationsGetter = Reflect.get(
+          context,
+          phase1ConfigAnnotationsKey,
+        );
+        const internalAnnotations =
+          typeof internalAnnotationsGetter === "function"
+            ? internalAnnotationsGetter.call(
+              context,
+              contextParsed,
+              result,
+            ) as (Annotations | undefined)
+            : undefined;
+        return internalAnnotations == null
+          ? result
+          : mergeAnnotations([result, internalAnnotations]);
+      },
+    );
+    annotationsList.push(mergedAnnotations);
   }
 
-  return mergeAnnotations(annotationsList);
+  return {
+    annotations: mergeAnnotations(annotationsList),
+    annotationsList,
+  };
+}
+
+function mergeTwoPhaseAnnotations(
+  phase1AnnotationsList: readonly Annotations[],
+  phase2AnnotationsList: readonly Annotations[],
+): Annotations {
+  const mergedPerContext: Annotations[] = [];
+  const length = Math.max(
+    phase1AnnotationsList.length,
+    phase2AnnotationsList.length,
+  );
+  for (let i = 0; i < length; i++) {
+    mergedPerContext.push(
+      mergeAnnotations([
+        phase2AnnotationsList[i] ?? {},
+        phase1AnnotationsList[i] ?? {},
+      ]),
+    );
+  }
+  return mergeAnnotations(mergedPerContext);
 }
 
 /**
@@ -2547,8 +2998,11 @@ export async function runWith<
 
   try {
     // Phase 1: Collect initial annotations
-    const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
-      await collectPhase1Annotations(contexts, options);
+    const {
+      annotations: phase1Annotations,
+      annotationsList: phase1AnnotationsList,
+      hasDynamic: needsTwoPhase,
+    } = await collectPhase1Annotations(contexts, options);
 
     if (!needsTwoPhase) {
       // All static contexts - single pass is sufficient
@@ -2634,17 +3088,17 @@ export async function runWith<
     }
 
     // Phase 2: Collect annotations with parsed result
-    const phase2Annotations = await collectAnnotations(
+    const { annotationsList: phase2AnnotationsList } = await collectAnnotations(
       contexts,
       firstPassResult,
       options,
     );
 
     // Final parse with merged annotations
-    const finalAnnotations = mergeAnnotations([
-      phase1Annotations,
-      phase2Annotations,
-    ]);
+    const finalAnnotations = mergeTwoPhaseAnnotations(
+      phase1AnnotationsList,
+      phase2AnnotationsList,
+    );
     const augmentedParser2 = injectAnnotationsIntoParser(
       parser,
       finalAnnotations,
@@ -2710,8 +3164,11 @@ export function runWithSync<
 
   try {
     // Phase 1: Collect initial annotations
-    const { annotations: phase1Annotations, hasDynamic: needsTwoPhase } =
-      collectPhase1AnnotationsSync(contexts, options);
+    const {
+      annotations: phase1Annotations,
+      annotationsList: phase1AnnotationsList,
+      hasDynamic: needsTwoPhase,
+    } = collectPhase1AnnotationsSync(contexts, options);
 
     if (!needsTwoPhase) {
       // All static contexts - single pass is sufficient
@@ -2744,17 +3201,17 @@ export function runWithSync<
     }
 
     // Phase 2: Collect annotations with parsed result
-    const phase2Annotations = collectAnnotationsSync(
+    const { annotationsList: phase2AnnotationsList } = collectAnnotationsSync(
       contexts,
       firstPassResult,
       options,
     );
 
     // Final parse with merged annotations
-    const finalAnnotations = mergeAnnotations([
-      phase1Annotations,
-      phase2Annotations,
-    ]);
+    const finalAnnotations = mergeTwoPhaseAnnotations(
+      phase1AnnotationsList,
+      phase2AnnotationsList,
+    );
     const augmentedParser2 = injectAnnotationsIntoParser(
       parser,
       finalAnnotations,

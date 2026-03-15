@@ -16,6 +16,10 @@ import {
   type ValueParserResult,
 } from "@optique/core/valueparser";
 
+const deferPromptUntilConfigResolvesKey = Symbol.for(
+  "@optique/config/deferPromptUntilResolved",
+);
+
 /**
  * Function type for reading environment variable values.
  *
@@ -223,6 +227,11 @@ export function bindEnv<
       envBindStateKey in value;
   }
 
+  const deferPromptUntilConfigResolves = Reflect.get(
+    parser,
+    deferPromptUntilConfigResolvesKey,
+  );
+
   return {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
@@ -315,6 +324,12 @@ export function bindEnv<
     },
 
     suggest: parser.suggest,
+    ...(typeof deferPromptUntilConfigResolves === "function"
+      ? {
+        [deferPromptUntilConfigResolvesKey]: (state: unknown) =>
+          deferPromptUntilConfigResolves(state),
+      }
+      : {}),
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
       return parser.getDocFragments(state, defaultValue);

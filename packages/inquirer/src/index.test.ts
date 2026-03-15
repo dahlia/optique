@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { annotationKey } from "@optique/core/annotations";
+import {
+  annotationKey,
+  type Annotations,
+  getAnnotations,
+  injectAnnotations,
+} from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
+import type { SourceContext } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
+import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import {
   parseAsync,
@@ -11,10 +18,12 @@ import {
   type Suggestion,
 } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
-import { multiple, optional } from "@optique/core/modifiers";
+import { map, multiple, optional } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
+import { bindConfig, createConfigContext } from "../../config/src/index.ts";
+import { runAsync } from "../../run/src/run.ts";
 
 const promptFunctionsOverrideSymbol = Symbol.for(
   "@optique/inquirer/prompt-functions",
@@ -47,6 +56,26 @@ async function withPromptFunctionsOverride<T>(
 }
 
 describe("prompt()", () => {
+  interface PromptConfigData {
+    readonly apiKey?: string;
+  }
+
+  function createPromptConfigSchema(): Parameters<
+    typeof createConfigContext<PromptConfigData>
+  >[0]["schema"] {
+    return {
+      "~standard": {
+        version: 1,
+        vendor: "optique-test",
+        validate(input: unknown) {
+          return {
+            value: input as PromptConfigData,
+          };
+        },
+      },
+    };
+  }
+
   describe("mode", () => {
     it("always returns an async-mode parser", () => {
       const parser = prompt(option("--name", string()), {
@@ -309,6 +338,28 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
       assert.equal(result.value, "Eve");
+    });
+
+    it("still prompts for optional() under annotations", async () => {
+      const marker = Symbol.for("@test/prompt-optional-annotations");
+      let promptCalls = 0;
+
+      const parser = prompt(optional(option("--name", string())), {
+        type: "input",
+        message: "Enter name:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("Eve");
+        },
+      });
+
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "annotated" } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      assert.equal(result.value, "Eve");
+      assert.equal(promptCalls, 1);
     });
   });
 
@@ -673,6 +724,53 @@ describe("prompt()", () => {
       assert.equal(result.value.name, "env-name");
     });
 
+    it("skips prompt when bindEnv(bindConfig(...)) resolves from config", async () => {
+      const envContext = createEnvContext({
+        source: () => undefined,
+      });
+      const configContext = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let promptCalls = 0;
+      const parser = prompt(
+        bindEnv(
+          bindConfig(option("--api-key", string()), {
+            context: configContext,
+            key: "apiKey",
+          }),
+          {
+            context: envContext,
+            key: "API_KEY",
+            parser: string(),
+          },
+        ),
+        {
+          type: "password",
+          message: "API key:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("prompt-secret");
+          },
+        },
+      );
+
+      const result = await runWith(
+        parser,
+        "test",
+        [envContext, configContext],
+        {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+          args: [],
+        },
+      );
+
+      assert.equal(result, "config-secret");
+      assert.equal(promptCalls, 0);
+    });
+
     it("prompts when bindEnv() has no value and env var is absent", async () => {
       // prompt(bindEnv(...)) must fall back to the interactive prompt when
       // the CLI option is absent and the environment variable is not set.
@@ -756,6 +854,800 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, [], { annotations });
       assert.ok(result.success);
       assert.equal(result.value, true);
+    });
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "skips the prompt when runWith() resolves a config value in phase 2",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "runs the prompt once when runWith() finds no config value in phase 2",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompt-secret");
+            },
+          },
+        );
+
+        const result = await runWith(parser, "test", [context], {
+          load: () => ({ config, meta: undefined }),
+          args: [],
+        });
+
+        assert.equal(result, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "skips the prompt in object() when runAsync() resolves a config value in phase 2",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "runs the prompt once in object() when runAsync() finds no config value in phase 2",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => {
+                promptCalls += 1;
+                return Promise.resolve("prompt-secret");
+              },
+            },
+          ),
+        });
+
+        const result = await runAsync(parser, {
+          programName: "test",
+          args: [],
+          contexts: [context],
+          load: () => ({ config, meta: undefined }),
+        });
+
+        assert.equal(result.apiKey, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    it("keeps non-config prompts available to other phase-two contexts", async () => {
+      let phase2Parsed: { readonly config: string } | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/prompt-phase-two"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed === undefined) {
+            return {};
+          }
+          phase2Parsed = parsed as { readonly config: string };
+          return {};
+        },
+      };
+      let promptCalls = 0;
+      const parser = object({
+        config: prompt(option("--config", string()), {
+          type: "input",
+          message: "Config path:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("prompt-config.json");
+          },
+        }),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: [],
+      });
+
+      assert.deepEqual(phase2Parsed, { config: "prompt-config.json" });
+      assert.deepEqual(result, { config: "prompt-config.json" });
+      assert.equal(promptCalls, 2);
+    });
+
+    it(
+      "hides deferred config-backed prompts from other phase-two contexts",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let phase2Parsed: { readonly apiKey?: string | undefined } | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/config-prompt-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed === undefined) {
+              return {};
+            }
+            phase2Parsed = parsed as {
+              readonly apiKey?: string | undefined;
+            };
+            return {};
+          },
+        };
+        const parser = object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        });
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
+        );
+
+        assert.deepEqual(phase2Parsed, { apiKey: undefined });
+        assert.deepEqual(result, { apiKey: "config-secret" });
+      },
+    );
+
+    it(
+      "hides top-level deferred prompts from other phase-two contexts",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let sawUndefined = false;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/top-level-config-prompt-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            sawUndefined = parsed === undefined;
+            return {};
+          },
+        };
+        const parser = prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => Promise.resolve("prompt-secret"),
+          },
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
+        );
+
+        assert.ok(sawUndefined);
+        assert.equal(result, "config-secret");
+      },
+    );
+
+    it(
+      "hides deferred prompt values inside non-plain phase-two context inputs",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        class ConfigInput {
+          constructor(readonly apiKey: string | undefined) {}
+        }
+
+        let phase2Parsed: ConfigInput | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/non-plain-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed !== undefined) {
+              phase2Parsed = parsed as ConfigInput;
+            }
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => new ConfigInput(value.apiKey),
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
+        );
+
+        assert.ok(phase2Parsed instanceof ConfigInput);
+        assert.equal(phase2Parsed.apiKey, undefined);
+        assert.ok(result instanceof ConfigInput);
+        assert.equal(result.apiKey, "config-secret");
+      },
+    );
+
+    it("hides deferred prompt values inside Set phase-two context inputs", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      let phase2Values: readonly unknown[] | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/set-phase-two"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed instanceof Set) {
+            phase2Values = [...parsed];
+          }
+          return {};
+        },
+      };
+
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => new Set([value.apiKey]),
+      );
+
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        load: () => ({
+          config: { apiKey: "config-secret" },
+          meta: undefined,
+        }),
+      });
+
+      assert.deepEqual(phase2Values, [undefined]);
+      assert.ok(result instanceof Set);
+      assert.deepEqual([...result], ["config-secret"]);
+    });
+
+    it(
+      "hides deferred prompt values in Set own properties during phase two",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        class BoxSet extends Set<string | undefined> {
+          apiKey: string | undefined;
+
+          constructor(value: string | undefined) {
+            super([value]);
+            this.apiKey = value;
+          }
+        }
+
+        let phase2WasBoxSet = false;
+        let phase2ApiKey: string | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/set-own-prop-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed instanceof BoxSet) {
+              phase2WasBoxSet = true;
+              phase2ApiKey = parsed.apiKey;
+            }
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => new BoxSet(value.apiKey),
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
+        );
+
+        assert.ok(phase2WasBoxSet);
+        assert.equal(phase2ApiKey, undefined);
+        assert.ok(result instanceof BoxSet);
+        assert.equal(result.apiKey, "config-secret");
+      },
+    );
+
+    it("keeps nested clean collection subclasses unproxied in phase two", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      class BoxSet extends Set<string> {}
+
+      const cleanSet = new BoxSet(["clean"]);
+      let phase2Set: BoxSet | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/nested-clean-collection-phase-two"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed != null && typeof parsed === "object") {
+            phase2Set = (parsed as { readonly clean: BoxSet }).clean;
+          }
+          return {};
+        },
+      };
+
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => ({ clean: cleanSet, apiKey: value.apiKey }),
+      );
+
+      const result = await runWith(
+        parser,
+        "test",
+        [dynamicContext, context],
+        {
+          args: [],
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      );
+
+      assert.ok(phase2Set instanceof BoxSet);
+      assert.equal(phase2Set, cleanSet);
+      assert.equal(result.clean, cleanSet);
+      assert.equal(result.apiKey, "config-secret");
+    });
+
+    it("keeps nested clean non-plain values unproxied in phase two", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      class CleanBox {
+        #value: string;
+
+        constructor(value: string) {
+          this.#value = value;
+        }
+
+        getValue(): string {
+          return this.#value;
+        }
+      }
+
+      const cleanBox = new CleanBox("clean");
+      let phase2Box: CleanBox | undefined;
+      let phase2Value: string | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/nested-clean-non-plain-phase-two"),
+        mode: "dynamic",
+        getAnnotations(parsed?: unknown) {
+          if (parsed != null && typeof parsed === "object") {
+            phase2Box = (parsed as { readonly clean: CleanBox }).clean;
+            phase2Value = phase2Box.getValue();
+          }
+          return {};
+        },
+      };
+
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => ({ clean: cleanBox, apiKey: value.apiKey }),
+      );
+
+      const result = await runWith(
+        parser,
+        "test",
+        [dynamicContext, context],
+        {
+          args: [],
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      );
+
+      assert.equal(phase2Box, cleanBox);
+      assert.equal(phase2Value, "clean");
+      assert.equal(result.clean, cleanBox);
+      assert.equal(result.apiKey, "config-secret");
+    });
+
+    it(
+      "hides deferred prompt values inside nested non-plain phase-two inputs",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+
+        class InnerInput {
+          constructor(readonly apiKey: string | undefined) {}
+        }
+
+        let phase2ApiKey: string | undefined;
+        const dynamicContext: SourceContext = {
+          id: Symbol.for("@test/nested-non-plain-phase-two"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed != null && typeof parsed === "object") {
+              phase2ApiKey = (
+                parsed as { readonly inner: InnerInput }
+              ).inner.apiKey;
+            }
+            return {};
+          },
+        };
+
+        const parser = map(
+          object({
+            apiKey: prompt(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              {
+                type: "password",
+                message: "API key:",
+                prompter: () => Promise.resolve("prompt-secret"),
+              },
+            ),
+          }),
+          (value) => ({ inner: new InnerInput(value.apiKey) }),
+        );
+
+        const result = await runWith(
+          parser,
+          "test",
+          [dynamicContext, context],
+          {
+            args: [],
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
+        );
+
+        assert.equal(phase2ApiKey, undefined);
+        assert.equal(result.inner.apiKey, "config-secret");
+      },
+    );
+
+    it("hides top-level deferred prompt values from config loaders", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let loaderParsed: string | undefined;
+      const parser = prompt(
+        bindConfig(option("--api-key", string()), {
+          context,
+          key: "apiKey",
+        }),
+        {
+          type: "password",
+          message: "API key:",
+          prompter: () => Promise.resolve("prompt-secret"),
+        },
+      );
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          loaderParsed = parsed as string | undefined;
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.equal(loaderParsed, undefined);
+      assert.equal(result, "config-secret");
+    });
+
+    it("hides deferred config-backed prompt values from config loaders", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let loaderParsed: { readonly apiKey?: string | undefined } | undefined;
+      const parser = object({
+        apiKey: prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => Promise.resolve("prompt-secret"),
+          },
+        ),
+      });
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          loaderParsed = parsed as { readonly apiKey?: string | undefined };
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.deepEqual(loaderParsed, { apiKey: undefined });
+      assert.deepEqual(result, { apiKey: "config-secret" });
+    });
+
+    it(
+      "reuses scrubbed phase-two parsed identity across contexts and loaders",
+      async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        const metadataByParsed = new WeakMap<object, string>();
+        const identityContext: SourceContext = {
+          id: Symbol.for("@test/scrubbed-phase-two-identity"),
+          mode: "dynamic",
+          getAnnotations(parsed?: unknown) {
+            if (parsed != null && typeof parsed === "object") {
+              metadataByParsed.set(parsed as object, "seen");
+            }
+            return {};
+          },
+        };
+        let loaderMetadata: string | undefined;
+        const parser = object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        });
+
+        const result = await runWith(
+          parser,
+          "test",
+          [identityContext, context],
+          {
+            args: [],
+            load: (parsed) => {
+              loaderMetadata = metadataByParsed.get(parsed as object);
+              return {
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              };
+            },
+          },
+        );
+
+        assert.equal(loaderMetadata, "seen");
+        assert.deepEqual(result, { apiKey: "config-secret" });
+      },
+    );
+
+    it("hides deferred prompt values inside Set loader inputs", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let loaderValues: readonly unknown[] | undefined;
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => new Set([value.apiKey]),
+      );
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          if (parsed instanceof Set) {
+            loaderValues = [...parsed];
+          }
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.deepEqual(loaderValues, [undefined]);
+      assert.ok(result instanceof Set);
+      assert.deepEqual([...result], ["config-secret"]);
+    });
+
+    it("hides deferred prompt values in Set own properties for config loaders", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      class BoxSet extends Set<string | undefined> {
+        apiKey: string | undefined;
+
+        constructor(value: string | undefined) {
+          super([value]);
+          this.apiKey = value;
+        }
+      }
+
+      let loaderApiKey: string | undefined;
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => new BoxSet(value.apiKey),
+      );
+
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+        load: (parsed) => {
+          if (parsed instanceof BoxSet) {
+            loaderApiKey = parsed.apiKey;
+          }
+          return {
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          };
+        },
+      });
+
+      assert.equal(loaderApiKey, undefined);
+      assert.ok(result instanceof BoxSet);
+      assert.equal(result.apiKey, "config-secret");
     });
   });
 
@@ -1758,7 +2650,7 @@ describe("prompt()", () => {
       );
     });
 
-    it("leaves primitive inner state unchanged when annotations are present", async () => {
+    it("leaves primitive inner states unchanged when annotations are present", async () => {
       const seenStates: unknown[] = [];
       const annotations = { source: "test" };
       const inner: Parser<"async", string, number> = {
@@ -1822,6 +2714,416 @@ describe("prompt()", () => {
 
       assert.equal(seenStates[0], -7);
       assert.equal(seenStates[1], -7);
+    });
+
+    it("preserves primitive state shape under annotations", async () => {
+      let seenStateType: string | undefined;
+      let promptCalls = 0;
+
+      const inner: Parser<"async", string, string | undefined> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly (string | undefined)[],
+        priority: 1,
+        usage: [],
+        initialState: undefined,
+        parse(context) {
+          const [head, ...rest] = context.buffer;
+          seenStateType = typeof context.state;
+          if (head == null) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`missing`,
+            });
+          }
+          return Promise.resolve({
+            success: true as const,
+            next: { ...context, buffer: rest, state: head },
+            consumed: [head],
+          });
+        },
+        complete(state) {
+          return Promise.resolve(
+            typeof state === "string" && state.length > 0
+              ? { success: true as const, value: state }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
+
+      const result = await parseAsync(parser, ["cli-value"], {
+        annotations: {
+          [Symbol.for("@test/prompt-primitive-shape")]: "annotated",
+        } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      assert.equal(result.value, "cli-value");
+      assert.equal(seenStateType, "undefined");
+      assert.equal(promptCalls, 0);
+    });
+
+    it(
+      "delegates to annotation-backed primitive wrapper states before prompting",
+      async () => {
+        const marker = Symbol.for("@test/prompt-primitive-wrapper-complete");
+        let promptCalls = 0;
+
+        const inner: Parser<"async", string, string | undefined> = {
+          $mode: "async",
+          $valueType: [] as readonly string[],
+          $stateType: [] as readonly (string | undefined)[],
+          priority: 1,
+          usage: [],
+          initialState: undefined,
+          parse(context) {
+            return Promise.resolve({
+              success: true as const,
+              next: {
+                ...context,
+                state: injectAnnotations(undefined, { [marker]: "annotated" }),
+              },
+              consumed: [],
+            });
+          },
+          complete(state) {
+            return Promise.resolve(
+              getAnnotations(state)?.[marker] === "annotated"
+                ? { success: true as const, value: "from-annotations" }
+                : { success: false as const, error: message`missing` },
+            );
+          },
+          suggest() {
+            return {
+              async *[Symbol.asyncIterator](): AsyncIterableIterator<
+                Suggestion
+              > {
+                yield* [];
+              },
+            };
+          },
+          getDocFragments(): DocFragments {
+            return { fragments: [] };
+          },
+        };
+
+        const parser = prompt(inner, {
+          type: "input",
+          message: "Enter value:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("prompted");
+          },
+        });
+
+        const result = await parseAsync(parser, [], {
+          annotations: { [marker]: "annotated" } satisfies Annotations,
+        });
+
+        assert.ok(result.success);
+        assert.equal(result.value, "from-annotations");
+        assert.equal(promptCalls, 0);
+      },
+    );
+
+    it("preserves annotations for non-plain inner states", async () => {
+      const marker = Symbol.for("@test/prompt-class-state");
+      let promptCalls = 0;
+
+      class AnnotatedState {
+        #value = "state";
+
+        read(): string {
+          return this.#value;
+        }
+      }
+
+      const inner: Parser<"async", string, AnnotatedState> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly AnnotatedState[],
+        priority: 1,
+        usage: [],
+        initialState: new AnnotatedState(),
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state) {
+          return Promise.resolve(
+            getAnnotations(state)?.[marker] === "annotated"
+              ? { success: true as const, value: state.read() }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
+
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "annotated" } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      assert.equal(result.value, "state");
+      assert.equal(promptCalls, 0);
+    });
+
+    it("keeps concurrent non-plain prompt annotations isolated", async () => {
+      const marker = Symbol.for("@test/prompt-concurrent-class-state");
+
+      class SharedState {}
+
+      let pendingCompletions = 0;
+      let releaseCompletions: (() => void) | undefined;
+      const completionGate = new Promise<void>((resolve) => {
+        releaseCompletions = resolve;
+      });
+
+      const inner: Parser<"async", string, SharedState> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly SharedState[],
+        priority: 1,
+        usage: [],
+        initialState: new SharedState(),
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        async complete(state) {
+          pendingCompletions += 1;
+          if (pendingCompletions === 2) {
+            releaseCompletions?.();
+          }
+          await completionGate;
+          return {
+            success: true as const,
+            value: getAnnotations(state)?.[marker] as string,
+          };
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => Promise.resolve("prompted"),
+      });
+
+      const [first, second] = await Promise.all([
+        parseAsync(parser, [], {
+          annotations: { [marker]: "first" } satisfies Annotations,
+        }),
+        parseAsync(parser, [], {
+          annotations: { [marker]: "second" } satisfies Annotations,
+        }),
+      ]);
+
+      assert.ok(first.success);
+      assert.ok(second.success);
+      if (first.success) {
+        assert.equal(first.value, "first");
+      }
+      if (second.success) {
+        assert.equal(second.value, "second");
+      }
+    });
+
+    it("preserves annotations for CLI-backed non-plain inner states", async () => {
+      const marker = Symbol.for("@test/prompt-cli-class-state");
+      let promptCalls = 0;
+
+      class MutableAnnotatedState {
+        #value: string | undefined;
+
+        setValue(value: string): void {
+          this.#value = value;
+        }
+
+        read(): string | undefined {
+          return this.#value;
+        }
+      }
+
+      const inner: Parser<"async", string, MutableAnnotatedState> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly MutableAnnotatedState[],
+        priority: 1,
+        usage: [],
+        initialState: new MutableAnnotatedState(),
+        parse(context) {
+          const [head, ...rest] = context.buffer;
+          if (head == null) {
+            return Promise.resolve({
+              success: false as const,
+              consumed: 0,
+              error: message`missing`,
+            });
+          }
+          context.state.setValue(head);
+          return Promise.resolve({
+            success: true as const,
+            next: { ...context, buffer: rest, state: context.state },
+            consumed: [head],
+          });
+        },
+        complete(state) {
+          const annotated = getAnnotations(state)?.[marker] === "annotated";
+          const value = state.read();
+          return Promise.resolve(
+            annotated && value != null
+              ? { success: true as const, value }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
+
+      const result = await parseAsync(parser, ["cli-value"], {
+        annotations: { [marker]: "annotated" } satisfies Annotations,
+      });
+
+      assert.ok(result.success);
+      assert.equal(result.value, "cli-value");
+      assert.equal(promptCalls, 0);
+    });
+
+    it("restores temporary annotations when inner parse throws", async () => {
+      const marker = Symbol.for("@test/prompt-throw-state");
+      let promptCalls = 0;
+
+      class ThrowingState {}
+
+      const inner: Parser<"async", string, ThrowingState> = {
+        $mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly ThrowingState[],
+        priority: 1,
+        usage: [],
+        initialState: new ThrowingState(),
+        parse(context) {
+          if (getAnnotations(context.state)?.[marker] === "annotated") {
+            throw new Error("boom");
+          }
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`missing`,
+          });
+        },
+        complete(state) {
+          return Promise.resolve(
+            getAnnotations(state)?.[marker] === "annotated"
+              ? { success: true as const, value: "annotated-state" }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
+
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
+
+      await assert.rejects(
+        async () => {
+          await parseAsync(parser, ["cli"], {
+            annotations: { [marker]: "annotated" } satisfies Annotations,
+          });
+        },
+        /boom/,
+      );
+
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "prompted");
+      assert.equal(promptCalls, 1);
     });
   });
 });
