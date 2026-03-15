@@ -694,6 +694,33 @@ export function prompt<M extends Mode, TValue, TState>(
     }
     | null = null;
 
+  function shouldAttemptInnerCompletion(
+    cliState: unknown,
+    state: unknown,
+  ): boolean {
+    if (
+      cliState == null || cliState instanceof PromptBindInitialStateClass
+    ) {
+      return false;
+    }
+    const cliStateHasAnnotations = typeof cliState === "object" &&
+      annotationKey in cliState;
+    if (cliStateHasAnnotations) {
+      return true;
+    }
+    if (getAnnotations(state) == null || typeof cliState !== "object") {
+      return false;
+    }
+    if ("hasCliValue" in cliState) {
+      return true;
+    }
+    if (Array.isArray(cliState)) {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(cliState);
+    return prototype !== Object.prototype && prototype !== null;
+  }
+
   /**
    * Executes the configured prompt and normalizes its result.
    *
@@ -992,29 +1019,11 @@ export function prompt<M extends Mode, TValue, TState>(
       // that is not evidence that complete() can satisfy the value without
       // prompting.
       const cliState = isPromptBindState(state) ? state.cliState : undefined;
-      const cliStateHasAnnotations = cliState != null &&
-        typeof cliState === "object" &&
-        annotationKey in (cliState as object);
       const cliStateIsInjectedAnnotationWrapper = cliState != null &&
         typeof cliState === "object" &&
         unwrapInjectedAnnotationWrapper(cliState) !== cliState;
-      const outerAnnotationsAvailable = getAnnotations(state) != null;
-      const cliStateIsNonPlainObject = cliState != null &&
-        typeof cliState === "object" &&
-        !Array.isArray(cliState) &&
-        Object.getPrototypeOf(cliState) !== Object.prototype &&
-        Object.getPrototypeOf(cliState) !== null;
-      const cliStateLooksLikeSourceState = cliState != null &&
-        typeof cliState === "object" &&
-        "hasCliValue" in cliState;
 
-      if (
-        cliState != null &&
-        !(cliState instanceof PromptBindInitialStateClass) &&
-        (cliStateHasAnnotations ||
-          (outerAnnotationsAvailable &&
-            (cliStateIsNonPlainObject || cliStateLooksLikeSourceState)))
-      ) {
+      if (shouldAttemptInnerCompletion(cliState, state)) {
         const useCompleteResultOrPrompt = (
           result: ValueParserResult<TValue>,
         ): Promise<ValueParserResult<TValue>> => {
