@@ -254,7 +254,9 @@ The [`withDefault()`](./concepts/modifiers.md#withdefault-parser) wrapper
 handles the case where no flags are provided, giving you a fallback behavior.
 This is different from the previous pattern because:
 
- -  *No validation*: Multiple flags can be provided (last one wins)
+ -  *Conflict detection*: If multiple flags are provided, the parser rejects
+    them with an error (e.g., `--mode-a` and `--mode-b` cannot be used
+    together)
  -  *Simpler structure*: Returns a simple string rather than an object
  -  *Default handling*: Has a meaningful fallback when no options are given
 

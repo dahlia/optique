@@ -142,6 +142,24 @@ describe("or", () => {
     }
   });
 
+  // Regression test for https://github.com/dahlia/optique/issues/181
+  it("should detect conflicts with withDefault(or(map(...))) pattern", () => {
+    const modeParser = withDefault(
+      or(
+        map(option("-a", "--mode-a"), () => "a" as const),
+        map(option("-b", "--mode-b"), () => "b" as const),
+        map(option("-c", "--mode-c"), () => "c" as const),
+      ),
+      "default" as const,
+    );
+
+    const result = parseSync(modeParser, ["--mode-a", "--mode-b"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assertErrorIncludes(result.error, "cannot be used together");
+    }
+  });
+
   it("should complete with successful parser result", () => {
     const parser1 = option("-a");
     const parser2 = option("-b");
