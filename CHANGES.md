@@ -103,6 +103,11 @@ To be released.
     annotation object).  This affects annotation-enabled parse/run paths,
     including `runWith()` and `runWithSync()`.  [[#146]]
 
+ -  Fixed `locale()` value parser's `format()` method dropping Unicode
+    extension subtags (e.g., `en-US-u-ca-buddhist` was formatted as `en-US`).
+    The method now uses `Intl.Locale.toString()` instead of `baseName` to
+    preserve the full locale identifier.  [[#317], [#565]]
+
  -  Extended `hidden` visibility controls from `boolean` to
     `boolean | "usage" | "doc" | "help"` across primitive parsers:
     `option()`, `flag()`, `argument()`, `command()`, and `passThrough()`.
@@ -337,6 +342,7 @@ To be released.
 [#242]: https://github.com/dahlia/optique/issues/242
 [#248]: https://github.com/dahlia/optique/issues/248
 [#310]: https://github.com/dahlia/optique/issues/310
+[#317]: https://github.com/dahlia/optique/issues/317
 [#332]: https://github.com/dahlia/optique/issues/332
 [#353]: https://github.com/dahlia/optique/issues/353
 [#363]: https://github.com/dahlia/optique/issues/363
@@ -364,6 +370,7 @@ To be released.
 [#553]: https://github.com/dahlia/optique/pull/553
 [#554]: https://github.com/dahlia/optique/pull/554
 [#555]: https://github.com/dahlia/optique/pull/555
+[#565]: https://github.com/dahlia/optique/pull/565
 
 ### @optique/config
 

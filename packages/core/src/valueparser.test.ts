@@ -9239,6 +9239,14 @@ describe("branch coverage regressions", () => {
     });
     assert.ok(!localeParser.parse("xyz-INVALID-123").success);
     assert.equal(localeParser.format(new Intl.Locale("en-US")), "en-US");
+    assert.equal(
+      localeParser.format(new Intl.Locale("en-US-u-ca-buddhist")),
+      "en-US-u-ca-buddhist",
+    );
+    assert.equal(
+      localeParser.format(new Intl.Locale("zh-Hant-TW-u-nu-hanidec")),
+      "zh-Hant-TW-u-nu-hanidec",
+    );
 
     const uuidParser = uuid({
       allowedVersions: [4],
