@@ -122,6 +122,16 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "debug");
   });
 
+  it("escapes literal term starting with period", () => {
+    const term: UsageTerm = { type: "literal", value: ".env" };
+    assert.equal(formatUsageTermAsRoff(term), "\\&.env");
+  });
+
+  it("escapes literal term starting with single quote", () => {
+    const term: UsageTerm = { type: "literal", value: "'quoted" };
+    assert.equal(formatUsageTermAsRoff(term), "\\&'quoted");
+  });
+
   it("formats passthrough term", () => {
     const term: UsageTerm = { type: "passthrough" };
     assert.equal(formatUsageTermAsRoff(term), "[...]");
@@ -401,6 +411,59 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes(".B myapp"));
     assert.ok(result.includes("\\fB\\-\\-verbose\\fR"));
     assert.ok(result.includes("\\fIFILE\\fR"));
+  });
+
+  it("escapes literal usage term starting with period in SYNOPSIS", () => {
+    const page: DocPage = {
+      usage: [{ type: "literal", value: ".env" }],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes(".SH SYNOPSIS"));
+    assert.ok(result.includes("\\&.env"));
+    assert.ok(!result.includes("\n.env\n"));
+  });
+
+  it("escapes literal doc entry term starting with period", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "literal", value: ".env" },
+              description: message`hidden env file`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes(".TP"));
+    assert.ok(result.includes("\\&.env"));
+    assert.ok(!result.split("\n").some((l) => l === ".env"));
+  });
+
+  it("escapes literal doc entry term starting with single quote", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "literal", value: "'quoted" },
+              description: message`quoted term`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes("\\&'quoted"));
   });
 
   it("generates DESCRIPTION section", () => {
