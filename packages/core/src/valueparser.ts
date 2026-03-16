@@ -662,6 +662,14 @@ export interface IntegerOptionsNumber {
     invalidInteger?: Message | ((input: string) => Message);
 
     /**
+     * Custom error message when integer is outside the safe integer range
+     * (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
+     * Can be a static message or a function that receives the input string.
+     * @since 1.0.0
+     */
+    unsafeInteger?: Message | ((input: string) => Message);
+
+    /**
      * Custom error message when integer is below minimum value.
      * Can be a static message or a function that receives the value and minimum.
      * @since 0.5.0
@@ -846,6 +854,25 @@ export function integer(
   }
   const metavar = options?.metavar ?? "INTEGER";
   ensureNonEmptyString(metavar);
+  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+  const minSafe = BigInt(Number.MIN_SAFE_INTEGER);
+  const unsafeIntegerError = options?.errors?.unsafeInteger;
+  function makeUnsafeIntegerError(
+    input: string,
+  ): ValueParserResult<number> {
+    return {
+      success: false,
+      error: unsafeIntegerError
+        ? (typeof unsafeIntegerError === "function"
+          ? unsafeIntegerError(input)
+          : unsafeIntegerError)
+        : message`Expected a safe integer between ${
+          text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
+        } and ${
+          text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
+        }, but got ${input}. Use type: "bigint" for large values.`,
+    };
+  }
   return {
     $mode: "sync",
     metavar,
@@ -860,7 +887,16 @@ export function integer(
             : message`Expected a valid integer, but got ${input}.`,
         };
       }
-      const value = Number.parseInt(input);
+      let n: bigint;
+      try {
+        n = BigInt(input);
+      } catch {
+        return makeUnsafeIntegerError(input);
+      }
+      if (n > maxSafe || n < minSafe) {
+        return makeUnsafeIntegerError(input);
+      }
+      const value = Number(input);
       if (options?.min != null && value < options.min) {
         return {
           success: false,

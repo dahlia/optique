@@ -130,9 +130,11 @@ const largeNumber = integer({
 
 The `integer()` parser provides detailed validation:
 
- -  *Format validation*: Ensures input contains only digits
+ -  *Format validation*: Ensures input contains only digits with an optional
+    leading `-`
  -  *Range validation*: Enforces minimum and maximum bounds
- -  *Overflow protection*: Prevents values outside safe ranges
+ -  *Safe integer protection*: Rejects values outside `Number.MIN_SAFE_INTEGER`
+    to `Number.MAX_SAFE_INTEGER` (use `type: "bigint"` for larger values)
 
 ~~~~ bash
 $ myapp --port "abc"
@@ -140,6 +142,11 @@ Error: Expected a valid integer, but got abc.
 
 $ myapp --port "99999"
 Error: Expected a value less than or equal to 65,535, but got 99999.
+
+$ myapp --count "9007199254740993"
+Error: Expected a safe integer between -9,007,199,254,740,991 and
+9,007,199,254,740,991, but got 9007199254740993.
+Use type: "bigint" for large values.
 ~~~~
 
 The parser uses `"INTEGER"` as its default metavar.

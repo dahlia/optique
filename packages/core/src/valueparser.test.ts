@@ -3982,10 +3982,83 @@ describe("integer edge cases", () => {
         assert.equal(result1.value, Number.MAX_SAFE_INTEGER);
       }
 
-      // Note: Values beyond MAX_SAFE_INTEGER may lose precision
-      const result2 = parser.parse("9007199254740993"); // MAX_SAFE_INTEGER + 2
-      assert.ok(result2.success);
-      // Precision may be lost
+      // MAX_SAFE_INTEGER + 1: exactly representable as a number, but outside
+      // the safe integer range
+      const result2 = parser.parse("9007199254740992"); // MAX_SAFE_INTEGER + 1
+      assert.ok(!result2.success);
+      if (!result2.success) {
+        assert.deepEqual(
+          result2.error,
+          message`Expected a safe integer between ${
+            text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
+          } and ${
+            text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
+          }, but got ${"9007199254740992"}. Use type: "bigint" for large values.`,
+        );
+      }
+
+      // MAX_SAFE_INTEGER + 2
+      const result3 = parser.parse("9007199254740993");
+      assert.ok(!result3.success);
+    });
+
+    it("should handle Number.MIN_SAFE_INTEGER boundary", () => {
+      const parser = integer({});
+
+      const result1 = parser.parse(Number.MIN_SAFE_INTEGER.toString());
+      assert.ok(result1.success);
+      if (result1.success) {
+        assert.equal(result1.value, Number.MIN_SAFE_INTEGER);
+      }
+
+      // MIN_SAFE_INTEGER - 1
+      const result2 = parser.parse("-9007199254740992");
+      assert.ok(!result2.success);
+
+      // MIN_SAFE_INTEGER - 2
+      const result3 = parser.parse("-9007199254740993");
+      assert.ok(!result3.success);
+    });
+
+    it("should reject very large integers in number mode", () => {
+      const parser = integer({});
+
+      const result = parser.parse("9999999999999999999999999999");
+      assert.ok(!result.success);
+    });
+
+    it("should use custom unsafeInteger function callback", () => {
+      const parser = integer({
+        errors: {
+          unsafeInteger: (input: string) => message`Unsafe value: ${input}.`,
+        },
+      });
+
+      const result = parser.parse("9007199254740993");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          message`Unsafe value: ${"9007199254740993"}.`,
+        );
+      }
+    });
+
+    it("should use custom unsafeInteger static message", () => {
+      const parser = integer({
+        errors: {
+          unsafeInteger: message`Value out of safe range.`,
+        },
+      });
+
+      const result = parser.parse("9007199254740993");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          message`Value out of safe range.`,
+        );
+      }
     });
 
     it("should accept negative integers", () => {
