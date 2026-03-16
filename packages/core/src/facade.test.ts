@@ -8629,9 +8629,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       { name: "TypeError", message: "private key is invalid." },
     );
 
-    // The method runs through both the facade and config proxies,
-    // but must not be retried by either.
-    assert.ok(callCount <= 2);
+    assert.equal(callCount, 1);
   });
 
   it("async method with private fields sees sanitized public state", async () => {
@@ -8727,7 +8725,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       { name: "TypeError", message: "Cannot access private endpoint." },
     );
 
-    assert.ok(callCount <= 2);
+    assert.equal(callCount, 1);
   });
 
   it("overlapping async private-field calls see sanitized state", async () => {
