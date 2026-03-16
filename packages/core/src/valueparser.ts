@@ -292,8 +292,7 @@ export function choice<const T extends string | number>(
   }
   if (choices.some((c) => c === "")) {
     throw new TypeError(
-      "Empty strings are not allowed as choices. " +
-        "Each choice must be a non-empty string.",
+      "Empty strings are not allowed as choices.",
     );
   }
   const metavar = options.metavar ?? "TYPE";
