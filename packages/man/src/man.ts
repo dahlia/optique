@@ -384,6 +384,8 @@ function formatDocSectionEntries(section: DocSection): string {
  * @param options The man page options.
  * @returns The complete man page in roff format.
  * @throws {TypeError} If the program name is empty.
+ * @throws {RangeError} If the section number is not a valid man page section
+ * (1–8).
  * @since 0.10.0
  */
 export function formatDocPageAsMan(
@@ -392,6 +394,15 @@ export function formatDocPageAsMan(
 ): string {
   if (options.name === "") {
     throw new TypeError("Program name must not be empty.");
+  }
+  if (
+    !Number.isInteger(options.section) ||
+    options.section < 1 ||
+    options.section > 8
+  ) {
+    throw new RangeError(
+      `Invalid man page section number: ${options.section}`,
+    );
   }
   const lines: string[] = [];
 

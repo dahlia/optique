@@ -1374,4 +1374,17 @@ describe("formatDocPageAsMan()", () => {
       TypeError,
     );
   });
+
+  it("rejects invalid section numbers", () => {
+    const page: DocPage = {
+      sections: [],
+    };
+
+    for (const section of [0, 9, -1, 99, 1.5] as never[]) {
+      assert.throws(
+        () => formatDocPageAsMan(page, { name: "myapp", section }),
+        RangeError,
+      );
+    }
+  });
 });
