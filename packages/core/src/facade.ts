@@ -516,10 +516,22 @@ function createSanitizedNonPlainContextView<T extends object>(
         return val;
       }
       // Accessor properties and prototype methods: resolved via Reflect.get.
-      // Only prototype methods (no own descriptor) are cached; accessor-
-      // returned functions are re-created on each access since the getter
-      // may return different functions based on backing state.
-      const isAccessor = descriptor != null && "get" in descriptor;
+      // Only prototype data methods are cached; accessor-returned functions
+      // are re-created on each access since the getter may return different
+      // functions based on backing state.  Walk the prototype chain to
+      // detect inherited getters, not just own accessors.
+      let isAccessor = false;
+      for (
+        let proto: object | null = target;
+        proto != null;
+        proto = Object.getPrototypeOf(proto)
+      ) {
+        const d = Object.getOwnPropertyDescriptor(proto, key);
+        if (d != null) {
+          isAccessor = "get" in d;
+          break;
+        }
+      }
       const result = Reflect.get(target, key, proxy);
       if (typeof result === "function") {
         if (!isAccessor) {

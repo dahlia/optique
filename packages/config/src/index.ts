@@ -375,7 +375,18 @@ function createSanitizedNonPlainView<T extends object>(
         }
         return val;
       }
-      const isAccessor = descriptor != null && "get" in descriptor;
+      let isAccessor = false;
+      for (
+        let proto: object | null = target;
+        proto != null;
+        proto = Object.getPrototypeOf(proto)
+      ) {
+        const d = Object.getOwnPropertyDescriptor(proto, key);
+        if (d != null) {
+          isAccessor = "get" in d;
+          break;
+        }
+      }
       const result = Reflect.get(target, key, proxy);
       if (typeof result === "function") {
         if (!isAccessor) {
