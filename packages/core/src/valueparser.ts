@@ -1017,6 +1017,15 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<number> {
+      const invalidNumber = (i: string): ValueParserResult<number> => ({
+        success: false,
+        error: options.errors?.invalidNumber
+          ? (typeof options.errors.invalidNumber === "function"
+            ? options.errors.invalidNumber(i)
+            : options.errors.invalidNumber)
+          : message`Expected a valid number, but got ${i}.`,
+      });
+
       let value: number;
       const lowerInput = input.toLowerCase();
 
@@ -1032,35 +1041,14 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
       } else if (floatRegex.test(input)) {
         value = Number(input);
         if (!Number.isFinite(value) && !options.allowInfinity) {
-          return {
-            success: false,
-            error: options.errors?.invalidNumber
-              ? (typeof options.errors.invalidNumber === "function"
-                ? options.errors.invalidNumber(input)
-                : options.errors.invalidNumber)
-              : message`Expected a valid number, but got ${input}.`,
-          };
+          return invalidNumber(input);
         }
         // This should not happen with our regex, but let's be safe
         if (Number.isNaN(value)) {
-          return {
-            success: false,
-            error: options.errors?.invalidNumber
-              ? (typeof options.errors.invalidNumber === "function"
-                ? options.errors.invalidNumber(input)
-                : options.errors.invalidNumber)
-              : message`Expected a valid number, but got ${input}.`,
-          };
+          return invalidNumber(input);
         }
       } else {
-        return {
-          success: false,
-          error: options.errors?.invalidNumber
-            ? (typeof options.errors.invalidNumber === "function"
-              ? options.errors.invalidNumber(input)
-              : options.errors.invalidNumber)
-            : message`Expected a valid number, but got ${input}.`,
-        };
+        return invalidNumber(input);
       }
 
       if (options.min != null && value < options.min) {
