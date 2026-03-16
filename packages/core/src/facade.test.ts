@@ -8260,4 +8260,61 @@ describe("branch coverage: facade.ts edge cases", () => {
       /arg-call rejected/,
     );
   });
+
+  it("sanitized non-plain parsed values preserve private field access", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // When a dynamic context receives a non-plain parsed value (class
+    // instance) that contains a deferred prompt value, the proxy must not
+    // break methods that access private fields.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class ParsedResult {
+      #secret: string;
+      deferred: unknown;
+      constructor(secret: string, deferred: unknown) {
+        this.#secret = secret;
+        this.deferred = deferred;
+      }
+      getSecret(): string {
+        return this.#secret;
+      }
+    }
+
+    let observedSecret: string | undefined;
+    let observedDeferred: unknown = "not-set";
+
+    const contextKey = Symbol.for("@test/private-field-sanitization");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const p = parsed as ParsedResult;
+        observedSecret = p.getSecret();
+        observedDeferred = p.deferred;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) =>
+        new ParsedResult(
+          value.name,
+          { [deferredPromptValueKey]: true },
+        ),
+    );
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(result instanceof ParsedResult);
+    assert.equal(observedSecret, "test");
+    assert.equal(observedDeferred, undefined);
+  });
 });

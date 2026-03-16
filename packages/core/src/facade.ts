@@ -321,16 +321,28 @@ function createSanitizedNonPlainContextView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
-  // FIXME: Proxying non-plain parsed values changes method receiver semantics,
-  // and method-only wrappers still need a safe way to expose scrubbed values.
+  // NOTE: Methods are bound to the original target so private field access
+  // works correctly.  Deferred prompt values behind private fields or
+  // wrapper methods still cannot be scrubbed.
   // See: https://github.com/dahlia/optique/issues/407
   const proxy = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
-        return stripDeferredPromptValuesForContexts(descriptor.value, seen);
+        const val = stripDeferredPromptValuesForContexts(
+          descriptor.value,
+          seen,
+        );
+        if (typeof val === "function") {
+          return val.bind(target);
+        }
+        return val;
       }
-      return Reflect.get(target, key, receiver);
+      const result = Reflect.get(target, key, receiver);
+      if (typeof result === "function") {
+        return result.bind(target);
+      }
+      return result;
     },
     getOwnPropertyDescriptor(target, key) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);

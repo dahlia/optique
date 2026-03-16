@@ -312,6 +312,11 @@ To be released.
     `bindConfig()` from resolving config values through wrapper combinators.
     [[#385], [#535]]
 
+ -  Fixed proxy-based sanitization of deferred prompt values breaking class
+    methods that access private fields.  Methods on non-plain objects are now
+    bound to the original instance so private field access works correctly
+    through the sanitized view.  [[#307], [#558]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -341,6 +346,7 @@ To be released.
 [#225]: https://github.com/dahlia/optique/issues/225
 [#242]: https://github.com/dahlia/optique/issues/242
 [#248]: https://github.com/dahlia/optique/issues/248
+[#307]: https://github.com/dahlia/optique/issues/307
 [#310]: https://github.com/dahlia/optique/issues/310
 [#317]: https://github.com/dahlia/optique/issues/317
 [#332]: https://github.com/dahlia/optique/issues/332
@@ -371,6 +377,7 @@ To be released.
 [#554]: https://github.com/dahlia/optique/pull/554
 [#555]: https://github.com/dahlia/optique/pull/555
 [#565]: https://github.com/dahlia/optique/pull/565
+[#558]: https://github.com/dahlia/optique/pull/558
 
 ### @optique/config
 
@@ -440,6 +447,11 @@ To be released.
     parsed values with deferred prompt placeholders normalized to
     `undefined`, while keeping the original parsed object identity when no
     sanitization is needed.  [[#177], [#490]]
+
+ -  Fixed proxy-based sanitization of deferred prompt values breaking class
+    methods that access private fields.  Methods on non-plain objects are now
+    bound to the original instance so private field access works correctly
+    through the sanitized view.  [[#307], [#558]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136

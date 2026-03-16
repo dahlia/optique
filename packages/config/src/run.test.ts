@@ -1253,4 +1253,84 @@ describe("run with config context", { concurrency: false }, () => {
       await rm(configPath, { force: true });
     }
   });
+
+  test("sanitized non-plain parsed values preserve private field access", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // When a non-plain object (class instance) containing a deferred prompt
+    // value is sanitized, the proxy must not break methods that access
+    // private fields.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class ConfigInput {
+      #apiKey: string;
+      deferred: unknown;
+      constructor(apiKey: string, deferred: unknown) {
+        this.#apiKey = apiKey;
+        this.deferred = deferred;
+      }
+      getApiKey(): string {
+        return this.#apiKey;
+      }
+    }
+
+    const schema = z.object({ token: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "test"),
+    });
+
+    // The load callback receives sanitized parsed values.  We use a custom
+    // SourceContext that injects a class instance with a deferred prompt
+    // value into the parsed result before the config context sees it.
+    let observedApiKey: string | undefined;
+    let observedDeferred: unknown = "not-set";
+
+    const injectContext: SourceContext = {
+      id: Symbol.for("@test/inject-class-instance"),
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        // Replace the parsed value with a class instance containing a
+        // deferred prompt value.  This simulates what happens when map()
+        // transforms a prompt-backed config field into a class instance.
+        return {};
+      },
+    };
+
+    const result = await runWith(parser, "test", [injectContext, context], {
+      args: [],
+      load(_parsed) {
+        return { config: undefined, meta: undefined };
+      },
+    });
+    assert.deepEqual(result, { name: "test" });
+
+    // Now test the sanitization directly through getAnnotations.
+    // getAnnotations is called by the runner with the parsed value.
+    // We call it manually with a class instance containing deferred values.
+    const instance = new ConfigInput(
+      "secret-key",
+      { [deferredPromptValueKey]: true },
+    );
+
+    const annotations = context.getAnnotations(instance, {
+      load(parsed: unknown) {
+        const sanitized = parsed as ConfigInput;
+        observedApiKey = sanitized.getApiKey();
+        observedDeferred = sanitized.deferred;
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    // If synchronous, check directly; if async, await it
+    if (annotations instanceof Promise) {
+      await annotations;
+    }
+
+    assert.equal(observedApiKey, "secret-key");
+    assert.equal(observedDeferred, undefined);
+  });
 });

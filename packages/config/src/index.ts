@@ -187,16 +187,25 @@ function createSanitizedNonPlainView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
-  // FIXME: This proxy changes method receiver semantics and still cannot scrub
-  // deferred prompt values hidden behind private fields or wrapper methods.
+  // NOTE: Methods are bound to the original target so private field access
+  // works correctly.  Deferred prompt values behind private fields or
+  // wrapper methods still cannot be scrubbed.
   // See: https://github.com/dahlia/optique/issues/407
   const proxy = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
-        return stripDeferredPromptValues(descriptor.value, seen);
+        const val = stripDeferredPromptValues(descriptor.value, seen);
+        if (typeof val === "function") {
+          return val.bind(target);
+        }
+        return val;
       }
-      return Reflect.get(target, key, receiver);
+      const result = Reflect.get(target, key, receiver);
+      if (typeof result === "function") {
+        return result.bind(target);
+      }
+      return result;
     },
     getOwnPropertyDescriptor(target, key) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
