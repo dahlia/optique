@@ -296,10 +296,28 @@ export function choice<const T extends string | number>(
   const isNumberChoice = choices.length > 0 && typeof choices[0] === "number";
 
   if (isNumberChoice) {
-    // Number choice implementation — deduplicate using Object.is to
-    // distinguish 0 and -0
-    const numberChoices: readonly number[] = (choices as readonly number[])
-      .filter((v, i, a) => a.findIndex((c) => Object.is(c, v)) === i);
+    // Number choice implementation — deduplicate in a single pass,
+    // using Object.is to distinguish 0 and -0
+    const numberChoices: readonly number[] = (() => {
+      const seen = new Set<number>();
+      let hasPositiveZero = false;
+      let hasNegativeZero = false;
+      const result: number[] = [];
+      for (const v of choices as readonly number[]) {
+        if (Object.is(v, -0)) {
+          if (hasNegativeZero) continue;
+          hasNegativeZero = true;
+        } else if (Object.is(v, 0)) {
+          if (hasPositiveZero) continue;
+          hasPositiveZero = true;
+        } else {
+          if (seen.has(v)) continue;
+          seen.add(v);
+        }
+        result.push(v);
+      }
+      return result;
+    })();
     const numberOptions = options as ChoiceOptionsNumber;
     const hasNaN = numberChoices.some((v) => Number.isNaN(v));
     const validNumberChoices = hasNaN
