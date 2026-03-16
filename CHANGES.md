@@ -427,9 +427,16 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     whose types add keys outside `RunOptions`, preserving the tighter
     direct-call checks introduced by this change set.  [[#160], [#163]]
 
+ -  Fixed `path()` extension validation for dotfiles (e.g., `.env`,
+    `.gitignore`) and multi-part extensions (e.g., `.tar.gz`, `.d.ts`).
+    Previously, `extname()` only returned the last extension segment, so
+    these cases were incorrectly rejected.  [[#309], [#530]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
+[#309]: https://github.com/dahlia/optique/issues/309
+[#530]: https://github.com/dahlia/optique/pull/530
 
 ### @optique/man
 

@@ -6,7 +6,7 @@ import {
 import type { Suggestion } from "@optique/core/parser";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { existsSync, statSync } from "node:fs";
-import { dirname, extname } from "node:path";
+import { basename, dirname, extname } from "node:path";
 
 /**
  * Custom error messages for path validation failures.
@@ -217,9 +217,9 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
     parse(input: string): ValueParserResult<string> {
       // Extension validation
       if (extensions && extensions.length > 0) {
-        const ext = extname(input);
-        if (!extensions.includes(ext)) {
-          const actualExt = ext || "no extension";
+        const base = basename(input);
+        if (!extensions.some((ext) => base.endsWith(ext))) {
+          const actualExt = extname(input) || "no extension";
           return {
             success: false,
             error: options.errors?.invalidExtension

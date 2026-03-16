@@ -426,6 +426,37 @@ describe("path", () => {
         );
       }
     });
+
+    it("should match dotfile-style extensions", () => {
+      const envParser = path({ extensions: [".env"] });
+      assert.equal(envParser.parse(".env").success, true);
+
+      const gitignoreParser = path({ extensions: [".gitignore"] });
+      assert.equal(gitignoreParser.parse(".gitignore").success, true);
+    });
+
+    it("should match multi-part extensions", () => {
+      const tarParser = path({ extensions: [".tar.gz"] });
+      assert.equal(tarParser.parse("archive.tar.gz").success, true);
+
+      const dtsParser = path({ extensions: [".d.ts"] });
+      assert.equal(dtsParser.parse("index.d.ts").success, true);
+
+      const userJsParser = path({ extensions: [".user.js"] });
+      assert.equal(userJsParser.parse("script.user.js").success, true);
+    });
+
+    it("should reject files not matching multi-part extension", () => {
+      const parser = path({ extensions: [".tar.gz"] });
+      const result = parser.parse("archive.gz");
+      assert.equal(result.success, false);
+    });
+
+    it("should not false-match on directory components", () => {
+      const parser = path({ extensions: [".json"] });
+      const result = parser.parse(".env/config");
+      assert.equal(result.success, false);
+    });
   });
 
   describe("combined validations", () => {
