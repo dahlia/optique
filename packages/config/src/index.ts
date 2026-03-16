@@ -342,6 +342,11 @@ function createSanitizedNonPlainView<T extends object>(
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
+        // Non-configurable non-writable properties must return the exact
+        // value to satisfy the proxy invariant.
+        if (!descriptor.configurable && !descriptor.writable) {
+          return descriptor.value;
+        }
         const val = stripDeferredPromptValues(descriptor.value, seen);
         if (typeof val === "function") {
           // For non-configurable non-writable properties, the proxy invariant
