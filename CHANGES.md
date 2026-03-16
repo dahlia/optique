@@ -612,6 +612,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     a `TypeError` when `name` is an empty string, instead of generating
     malformed man page output.  [[#286], [#556]]
 
+ -  `formatDocPageAsMan()` and the `generateManPage*()` functions now throw
+    a `RangeError` when `section` is not a valid man page section number
+    (1–8), instead of generating malformed man page output.  [[#287], [#557]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -622,6 +626,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#280]: https://github.com/dahlia/optique/issues/280
 [#283]: https://github.com/dahlia/optique/issues/283
 [#286]: https://github.com/dahlia/optique/issues/286
+[#287]: https://github.com/dahlia/optique/issues/287
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
@@ -632,6 +637,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#551]: https://github.com/dahlia/optique/pull/551
 [#552]: https://github.com/dahlia/optique/pull/552
 [#556]: https://github.com/dahlia/optique/pull/556
+[#557]: https://github.com/dahlia/optique/pull/557
 
 
 Version 0.10.7

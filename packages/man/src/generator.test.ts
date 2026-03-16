@@ -252,6 +252,16 @@ describe("generateManPageSync()", () => {
     );
   });
 
+  it("rejects invalid section numbers", () => {
+    const parser = object({});
+    for (const section of [0, 9, -1, 99, 1.5] as never[]) {
+      assert.throws(
+        () => generateManPageSync(parser, { name: "myapp", section }),
+        RangeError,
+      );
+    }
+  });
+
   it("falls back to empty doc page when getDocPageSync returns undefined", () => {
     const parser: Parser<"sync", string, null> = {
       $mode: "sync",
@@ -308,6 +318,16 @@ describe("generateManPageAsync()", () => {
       () => generateManPageAsync(parser, { name: "", section: 1 }),
       TypeError,
     );
+  });
+
+  it("rejects invalid section numbers", async () => {
+    const parser = object({});
+    for (const section of [0, 9, -1, 99, 1.5] as never[]) {
+      await assert.rejects(
+        () => generateManPageAsync(parser, { name: "myapp", section }),
+        RangeError,
+      );
+    }
   });
 
   it("falls back to empty doc page when getDocPageAsync returns undefined", async () => {
@@ -532,6 +552,29 @@ describe("Program-based API", () => {
       () => generateManPage(parser, { name: "", section: 1 }),
       TypeError,
     );
+  });
+
+  it("rejects invalid section numbers from parser options", () => {
+    const parser = object({});
+    for (const section of [0, 9, -1, 99, 1.5] as never[]) {
+      assert.throws(
+        () => generateManPage(parser, { name: "myapp", section }),
+        RangeError,
+      );
+    }
+  });
+
+  it("rejects invalid section numbers with Program input", () => {
+    const prog = defineProgram({
+      parser: object({}),
+      metadata: { name: "myapp" },
+    });
+    for (const section of [0, 9, -1, 99, 1.5] as never[]) {
+      assert.throws(
+        () => generateManPage(prog, { section }),
+        RangeError,
+      );
+    }
   });
 
   it("rejects empty name from Program metadata", () => {
