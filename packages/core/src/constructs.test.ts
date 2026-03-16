@@ -10391,6 +10391,7 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
     const mode = dependency(choice(["dev", "prod"] as const));
     const level = mode.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (value) =>
         choice(
           value === "dev"
@@ -10439,6 +10440,7 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
     const mode = dependency(choice(["dev", "prod"] as const));
     const level = mode.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (value) =>
         choice(
           value === "dev"
@@ -10492,6 +10494,7 @@ describe("merge()/concat() suggest with cross-parser dependencies", () => {
     const mode = dependency(choice(["dev", "prod"] as const));
     const level = mode.derive({
       metavar: "LEVEL",
+      mode: "sync",
       factory: (value) =>
         choice(
           value === "dev"

@@ -101,7 +101,7 @@ export interface DeriveOptions<S, T, FM extends Mode = Mode> {
    * @param sourceValue The value parsed from the dependency source.
    * @returns A {@link ValueParser} for the derived value.
    */
-  readonly factory: (sourceValue: S) => ValueParser<FM, T>;
+  readonly factory: (sourceValue: S) => ValueParser<NoInfer<FM>, T>;
 
   /**
    * Default value to use when the dependency source is not provided.
@@ -111,6 +111,15 @@ export interface DeriveOptions<S, T, FM extends Mode = Mode> {
    * @returns The default value for the dependency source.
    */
   readonly defaultValue: () => S;
+
+  /**
+   * The execution mode of the factory's returned parser.  This tells the
+   * runtime whether the factory returns a sync or async parser, avoiding
+   * the need to call the factory during parser construction.
+   *
+   * @since 1.0.0
+   */
+  readonly mode: FM;
 }
 
 /**
@@ -200,6 +209,7 @@ export interface DependencySource<M extends Mode = "sync", T = unknown>
    * @template FM The mode of the factory's returned parser.
    * @param options Configuration for the derived parser.
    * @returns A {@link DerivedValueParser} that depends on this source.
+   * @throws {TypeError} If the `mode` field is missing or invalid.
    */
   derive<U, FM extends Mode = "sync">(
     options: DeriveOptions<T, U, FM>,
@@ -321,7 +331,7 @@ export interface DeriveFromOptions<
    */
   readonly factory: (
     ...values: DependencyValues<Deps>
-  ) => ValueParser<FM, T>;
+  ) => ValueParser<NoInfer<FM>, T>;
 
   /**
    * Default values to use when the dependency sources are not provided.
@@ -330,6 +340,15 @@ export interface DeriveFromOptions<
    * @returns A tuple of default values for each dependency source.
    */
   readonly defaultValues: () => DependencyValues<Deps>;
+
+  /**
+   * The execution mode of the factory's returned parser.  This tells the
+   * runtime whether the factory returns a sync or async parser, avoiding
+   * the need to call the factory during parser construction.
+   *
+   * @since 1.0.0
+   */
+  readonly mode: FM;
 }
 
 /**
@@ -500,6 +519,7 @@ export interface DerivedValueParser<
  * // Create a derived parser that depends on the directory
  * const branchParser = cwdParser.derive({
  *   metavar: "BRANCH",
+ *   mode: "sync",
  *   factory: (dir) => gitBranch({ dir }),
  *   defaultValue: () => process.cwd(),
  * });
@@ -517,7 +537,12 @@ export function dependency<M extends Mode, T>(
     derive<U, FM extends Mode = "sync">(
       options: DeriveOptions<T, U, FM>,
     ): DerivedValueParser<CombineMode<M, FM>, U, T> {
-      return createDerivedValueParser(id, parser, options);
+      if (options.mode !== "sync" && options.mode !== "async") {
+        throw new TypeError(
+          'derive() requires an explicit mode field ("sync" or "async").',
+        );
+      }
+      return createDerivedValueParser(id, parser, options, options.mode);
     },
     deriveSync<U>(
       options: DeriveSyncOptions<T, U>,
@@ -593,6 +618,7 @@ export function isDerivedValueParser<M extends Mode, T>(
  *
  * const configParser = deriveFrom({
  *   metavar: "CONFIG",
+ *   mode: "sync",
  *   dependencies: [dirParser, modeParser] as const,
  *   factory: (dir, mode) =>
  *     choice(mode === "dev"
@@ -601,6 +627,7 @@ export function isDerivedValueParser<M extends Mode, T>(
  *   defaultValues: () => ["/config", "dev"],
  * });
  * ```
+ * @throws {TypeError} If the `mode` field is missing or invalid.
  * @since 0.10.0
  */
 export function deriveFrom<
@@ -614,49 +641,47 @@ export function deriveFrom<
   T,
   DependencyValues<Deps>
 > {
-  // Check if any dependency is async
+  if (options.mode !== "sync" && options.mode !== "async") {
+    throw new TypeError(
+      'deriveFrom() requires an explicit mode field ("sync" or "async").',
+    );
+  }
+
   const depsAsync = options.dependencies.some((dep) => dep.$mode === "async");
 
-  // Check if factory returns async parser
-  const factoryReturnsAsync = determineFactoryModeForDeriveFrom(options);
-
-  // Create a combined dependency ID (using the first dependency's ID for now)
-  // In a full implementation, we might want to track all dependency IDs
   const sourceId = options.dependencies.length > 0
     ? options.dependencies[0][dependencyId]
     : Symbol();
 
+  // Use the explicit mode to avoid calling the factory during
+  // parser construction.
+  const factoryReturnsAsync = options.mode === "async";
+
   const isAsync = depsAsync || factoryReturnsAsync;
+
+  type Result = DerivedValueParser<
+    CombineMode<CombinedDependencyMode<Deps>, FM>,
+    T,
+    DependencyValues<Deps>
+  >;
 
   if (isAsync) {
     if (factoryReturnsAsync) {
       return createAsyncDerivedFromParserFromAsyncFactory(
         sourceId,
         options as DeriveFromOptions<Deps, T, "async">,
-      ) as DerivedValueParser<
-        CombineMode<CombinedDependencyMode<Deps>, FM>,
-        T,
-        DependencyValues<Deps>
-      >;
+      ) as Result;
     }
     return createAsyncDerivedFromParserFromSyncFactory(
       sourceId,
       options as DeriveFromOptions<Deps, T, "sync">,
-    ) as DerivedValueParser<
-      CombineMode<CombinedDependencyMode<Deps>, FM>,
-      T,
-      DependencyValues<Deps>
-    >;
+    ) as Result;
   }
 
   return createSyncDerivedFromParser(
     sourceId,
     options as DeriveFromOptions<Deps, T, "sync">,
-  ) as DerivedValueParser<
-    CombineMode<CombinedDependencyMode<Deps>, FM>,
-    T,
-    DependencyValues<Deps>
-  >;
+  ) as Result;
 }
 
 /**
@@ -732,23 +757,6 @@ export function deriveFromAsync<
     : Symbol();
 
   return createAsyncDerivedFromParserFromAsyncFactory(sourceId, options);
-}
-
-/**
- * Determines if the factory returns an async parser for deriveFrom options.
- */
-function determineFactoryModeForDeriveFrom<
-  Deps extends readonly AnyDependencySource[],
-  T,
-  FM extends Mode,
->(
-  options: DeriveFromOptions<Deps, T, FM>,
-): boolean {
-  const defaultValues = options.defaultValues();
-  const parser = options.factory(
-    ...(defaultValues as DependencyValues<Deps>),
-  );
-  return parser.$mode === "async";
 }
 
 function isAsyncModeParser(parser: { readonly $mode: Mode }): boolean {
@@ -833,9 +841,13 @@ function createSyncDerivedFromParser<
       const derivedParser = options.factory(
         ...(sourceValues as DependencyValues<Deps>),
       );
-      if (derivedParser.suggest) {
-        yield* derivedParser.suggest(prefix);
+      if (
+        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        !derivedParser.suggest
+      ) {
+        return;
       }
+      yield* derivedParser.suggest(prefix);
     },
 
     *[suggestWithDependency](
@@ -858,9 +870,13 @@ function createSyncDerivedFromParser<
           return;
         }
       }
-      if (derivedParser.suggest) {
-        yield* derivedParser.suggest(prefix);
+      if (
+        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        !derivedParser.suggest
+      ) {
+        return;
       }
+      yield* derivedParser.suggest(prefix);
     },
   };
 }
@@ -1087,14 +1103,14 @@ function createDerivedValueParser<
   sourceId: symbol,
   sourceParser: ValueParser<M, S>,
   options: InternalDeriveOptions<S, T, FM>,
+  factoryMode: FM,
 ): DerivedValueParser<CombineMode<M, FM>, T, S> {
-  // Determine if the resulting parser should be async
-  // It's async if either the source is async OR the factory returns async parser
-  const factoryReturnsAsync = determineFactoryMode(options);
+  // Use the explicit mode to avoid calling the factory during
+  // parser construction.
+  const factoryReturnsAsync = factoryMode === "async";
   const isAsync = sourceParser.$mode === "async" || factoryReturnsAsync;
 
   if (isAsync) {
-    // Use the appropriate async parser based on factory mode
     if (factoryReturnsAsync) {
       return createAsyncDerivedParserFromAsyncFactory(
         sourceId,
@@ -1111,18 +1127,6 @@ function createDerivedValueParser<
     sourceId,
     options as InternalDeriveOptions<S, T, "sync">,
   ) as DerivedValueParser<CombineMode<M, FM>, T, S>;
-}
-
-/**
- * Determines if the factory returns an async parser by calling it with
- * the default value and checking the mode.
- */
-function determineFactoryMode<S, T, FM extends Mode>(
-  options: InternalDeriveOptions<S, T, FM>,
-): boolean {
-  const defaultValue = options.defaultValue();
-  const parser = options.factory(defaultValue);
-  return parser.$mode === "async";
 }
 
 function createSyncDerivedParser<S, T>(
@@ -1187,9 +1191,13 @@ function createSyncDerivedParser<S, T>(
     *suggest(prefix: string): Iterable<Suggestion> {
       const sourceValue = options.defaultValue();
       const derivedParser = options.factory(sourceValue);
-      if (derivedParser.suggest) {
-        yield* derivedParser.suggest(prefix);
+      if (
+        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        !derivedParser.suggest
+      ) {
+        return;
       }
+      yield* derivedParser.suggest(prefix);
     },
 
     *[suggestWithDependency](
@@ -1207,9 +1215,13 @@ function createSyncDerivedParser<S, T>(
           return;
         }
       }
-      if (derivedParser.suggest) {
-        yield* derivedParser.suggest(prefix);
+      if (
+        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        !derivedParser.suggest
+      ) {
+        return;
       }
+      yield* derivedParser.suggest(prefix);
     },
   };
 }

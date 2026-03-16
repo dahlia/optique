@@ -413,6 +413,7 @@ const modeParser = dependency(choice(["dev", "prod"] as const));
 // Create a derived parser whose valid values depend on mode
 const logLevelParser = modeParser.derive({
   metavar: "LEVEL",
+  mode: "sync",
   factory: (mode) =>
     choice(mode === "dev"
       ? ["debug", "info", "warn", "error"]
@@ -460,6 +461,7 @@ const regionParser = dependency(choice(["us", "eu", "asia"] as const));
 // Server names depend on both environment and region
 const serverParser = deriveFrom({
   metavar: "SERVER",
+  mode: "sync",
   dependencies: [envParser, regionParser] as const,
   factory: (env, region) =>
     choice(env === "local"
