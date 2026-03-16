@@ -1126,9 +1126,7 @@ export function prompt<M extends Mode, TValue, TState>(
             const completeState = parseResult.success
               ? parseResult.next.state
               : effectiveInitialState;
-            const completeR = parser.complete(
-              completeState as unknown as TState,
-            );
+            const completeR = parser.complete(completeState);
             if (completeR instanceof Promise) {
               return (completeR as Promise<ValueParserResult<TValue>>).then(
                 handleCompleteResult,
