@@ -319,7 +319,7 @@ export function choice<const T extends string | number>(
   }
   if (isNumber && (choices as readonly number[]).some((v) => Number.isNaN(v))) {
     throw new TypeError(
-      "NaN is not allowed as a choice.",
+      "NaN is not allowed in number choices.",
     );
   }
   const metavar = options.metavar ?? "TYPE";
