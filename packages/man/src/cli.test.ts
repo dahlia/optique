@@ -268,5 +268,45 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       assert.equal(result.exitCode, 3);
       assert.ok(result.stderr.includes("not a Program or Parser"));
     });
+
+    it("rejects empty --name", async () => {
+      const programFile = join(fixturesDir, "program.ts");
+      const result = await runCli([programFile, "-s", "1", "--name", ""]);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("Program name must not be empty"));
+    });
+
+    it("rejects empty --date", async () => {
+      const programFile = join(fixturesDir, "program.ts");
+      const result = await runCli([programFile, "-s", "1", "--date", ""]);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("Date must not be empty"));
+    });
+
+    it("rejects empty --version-string", async () => {
+      const programFile = join(fixturesDir, "program.ts");
+      const result = await runCli([
+        programFile,
+        "-s",
+        "1",
+        "--version-string",
+        "",
+      ]);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(
+        result.stderr.includes("Version string must not be empty"),
+      );
+    });
+
+    it("rejects empty --manual", async () => {
+      const programFile = join(fixturesDir, "program.ts");
+      const result = await runCli([programFile, "-s", "1", "--manual", ""]);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes("Manual name must not be empty"));
+    });
   });
 });

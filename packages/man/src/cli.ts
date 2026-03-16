@@ -75,30 +75,68 @@ is written to stdout.`,
       }),
     ),
     name: optional(
-      option("--name", string({ metavar: "NAME" }), {
-        description: message`Program name to use in the man page header.
+      option(
+        "--name",
+        string({
+          metavar: "NAME",
+          pattern: /.+/,
+          errors: {
+            patternMismatch: message`Program name must not be empty.`,
+          },
+        }),
+        {
+          description: message`Program name to use in the man page header.
 If not specified, inferred from the ${metavar("PROGRAM")} metadata
 or the input file name.`,
-      }),
+        },
+      ),
     ),
     date: optional(
-      option("--date", string({ metavar: "DATE" }), {
-        description: message`Date to display in the man page footer.
+      option(
+        "--date",
+        string({
+          metavar: "DATE",
+          pattern: /.+/,
+          errors: { patternMismatch: message`Date must not be empty.` },
+        }),
+        {
+          description: message`Date to display in the man page footer.
 Defaults to the current date.`,
-      }),
+        },
+      ),
     ),
     versionString: optional(
-      option("--version-string", string({ metavar: "VERSION" }), {
-        description: message`Version string for the man page footer
+      option(
+        "--version-string",
+        string({
+          metavar: "VERSION",
+          pattern: /.+/,
+          errors: {
+            patternMismatch: message`Version string must not be empty.`,
+          },
+        }),
+        {
+          description: message`Version string for the man page footer
 (e.g., ${"MyApp 1.0.0"}). Overrides the version from
 ${metavar("PROGRAM")} metadata if provided.`,
-      }),
+        },
+      ),
     ),
     manual: optional(
-      option("--manual", string({ metavar: "TITLE" }), {
-        description: message`Manual name for the man page header
+      option(
+        "--manual",
+        string({
+          metavar: "TITLE",
+          pattern: /.+/,
+          errors: {
+            patternMismatch: message`Manual name must not be empty.`,
+          },
+        }),
+        {
+          description: message`Manual name for the man page header
 (e.g., ${"User Commands"}).`,
-      }),
+        },
+      ),
     ),
   }),
   metadata: {
