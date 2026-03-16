@@ -286,12 +286,14 @@ To be released.
     `suggest()` to diverge.  [[#508], [#554]]
 
  -  Fixed several value parsers (`choice()`, `string()`, `uuid()`,
-    `email()`, `domain()`) to snapshot caller-owned mutable configuration
-    (arrays and options) at construction time.  Previously, mutating the
-    original config object or array after parser construction could silently
-    change parse semantics, suggestions, and error messages.  `choice()` now
-    also freezes its public `choices` property to prevent post-construction
-    mutation.  [[#507], [#555]]
+    `email()`, `domain()`, `url()`) to snapshot caller-owned mutable
+    configuration (arrays, error callbacks, and options) at construction
+    time.  Previously, mutating the original config object or array after
+    parser construction could silently change parse semantics, suggestions,
+    and error messages.  `choice()` now also freezes its public `choices`
+    property, and all snapshotted arrays (`allowedVersions`,
+    `allowedDomains`, `allowedTLDs`, `allowedProtocols`) are frozen to
+    prevent mutation through error callbacks.  [[#507], [#555]]
 
  -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
     config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
