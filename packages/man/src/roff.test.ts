@@ -156,6 +156,11 @@ describe("formatMessageAsRoff()", () => {
     assert.equal(formatMessageAsRoff(msg), '"path\\\\to\\\\file"');
   });
 
+  it("escapes double quotes inside value", () => {
+    const msg = [value('a"b')];
+    assert.equal(formatMessageAsRoff(msg), '"a\\(dqb"');
+  });
+
   it("formats values as space-separated quoted strings", () => {
     const msg = [values(["a", "b", "c"])];
     assert.equal(formatMessageAsRoff(msg), '"a" "b" "c"');
@@ -164,6 +169,11 @@ describe("formatMessageAsRoff()", () => {
   it("formats single values", () => {
     const msg = [values(["only"])];
     assert.equal(formatMessageAsRoff(msg), '"only"');
+  });
+
+  it("escapes double quotes inside values", () => {
+    const msg = [values(['a"b', 'c"d'])];
+    assert.equal(formatMessageAsRoff(msg), '"a\\(dqb" "c\\(dqd"');
   });
 
   it("formats empty values", () => {
