@@ -466,6 +466,63 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("\\&'quoted"));
   });
 
+  it("escapes backslashes in section titles", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "A\\B",
+          entries: [
+            {
+              term: { type: "argument", metavar: "FILE" },
+              description: message`desc`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes('.SH "A\\\\B"'));
+  });
+
+  it("escapes double quotes in section titles", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: 'say "hello"',
+          entries: [
+            {
+              term: { type: "argument", metavar: "FILE" },
+              description: message`desc`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes('.SH "SAY \\(dqHELLO\\(dq"'));
+  });
+
+  it("escapes combined backslashes and quotes in section titles", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: 'A\\B "quoted"',
+          entries: [
+            {
+              term: { type: "argument", metavar: "FILE" },
+              description: message`desc`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes('.SH "A\\\\B \\(dqQUOTED\\(dq"'));
+  });
+
   it("generates DESCRIPTION section", () => {
     const page: DocPage = {
       description: message`This is a detailed description of the application.`,
@@ -501,7 +558,7 @@ describe("formatDocPageAsMan()", () => {
 
     const result = formatDocPageAsMan(page, minimalOptions);
 
-    assert.ok(result.includes(".SH OPTIONS"));
+    assert.ok(result.includes('.SH "OPTIONS"'));
     assert.ok(result.includes(".TP"));
     assert.ok(result.includes("\\fB\\-\\-verbose\\fR, \\fB\\-v\\fR"));
     assert.ok(result.includes("Enable verbose output."));
@@ -532,7 +589,7 @@ describe("formatDocPageAsMan()", () => {
 
     const result = formatDocPageAsMan(page, minimalOptions);
 
-    assert.ok(result.includes(".SH COMMANDS"));
+    assert.ok(result.includes('.SH "COMMANDS"'));
     assert.ok(result.includes("\\fBbuild\\fR"));
     assert.ok(result.includes("Build the project."));
     assert.ok(result.includes("\\fBtest\\fR"));
@@ -551,7 +608,7 @@ describe("formatDocPageAsMan()", () => {
 
     const result = formatDocPageAsMan(page, minimalOptions);
 
-    assert.ok(!result.includes(".SH EMPTY"));
+    assert.ok(!result.includes('.SH "EMPTY"'));
   });
 
   it("generates AUTHOR section", () => {
@@ -782,7 +839,7 @@ describe("formatDocPageAsMan()", () => {
     };
 
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(result.includes(".SH OPTIONS"));
+    assert.ok(result.includes('.SH "OPTIONS"'));
     assert.ok(result.includes("\\fB\\-\\-mode\\fR \\fIMODE\\fR"));
     assert.ok(result.includes("[safe]"));
   });
@@ -806,7 +863,7 @@ describe("formatDocPageAsMan()", () => {
     };
 
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(result.includes(".SH EXAMPLES"));
+    assert.ok(result.includes('.SH "EXAMPLES"'));
     assert.ok(result.includes("[\\fIX\\fR]"));
     assert.ok(result.includes("Optional value."));
   });
@@ -864,7 +921,7 @@ describe("formatDocPageAsMan()", () => {
     const namePos = result.indexOf(".SH NAME");
     const synopsisPos = result.indexOf(".SH SYNOPSIS");
     const descPos = result.indexOf(".SH DESCRIPTION");
-    const optionsPos = result.indexOf(".SH OPTIONS");
+    const optionsPos = result.indexOf('.SH "OPTIONS"');
     const seeAlsoPos = result.indexOf(".SH SEE ALSO");
     const authorPos = result.indexOf(".SH AUTHOR");
 
@@ -1098,8 +1155,8 @@ describe("formatDocPageAsMan()", () => {
       section: 1,
     });
 
-    assert.ok(!result.includes(".SH SECRET"));
-    assert.ok(result.includes(".SH VISIBLE"));
+    assert.ok(!result.includes('.SH "SECRET"'));
+    assert.ok(result.includes('.SH "VISIBLE"'));
     assert.ok(result.includes("\\-\\-keep"));
   });
 
@@ -1184,7 +1241,7 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(synopsis.includes("\\-\\-doc\\-hidden"));
 
     // OPTIONS section should only contain the visible option
-    const optionsStart = result.indexOf(".SH OPTIONS");
+    const optionsStart = result.indexOf('.SH "OPTIONS"');
     assert.notEqual(optionsStart, -1);
     const optionsSection = result.slice(optionsStart);
     assert.ok(optionsSection.includes("\\-\\-visible"));
@@ -1235,7 +1292,7 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(synopsis.includes("\\fBdoc\\-hidden\\fR"));
 
     // COMMANDS section should only contain the visible command
-    const commandsStart = result.indexOf(".SH COMMANDS");
+    const commandsStart = result.indexOf('.SH "COMMANDS"');
     assert.notEqual(commandsStart, -1);
     const commandsSection = result.slice(commandsStart);
     assert.ok(commandsSection.includes("\\fBvisible\\fR"));
@@ -1281,7 +1338,7 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(synopsis.includes("\\fISECRET\\fR"));
 
     // ARGUMENTS section should only contain the visible argument
-    const argsStart = result.indexOf(".SH ARGUMENTS");
+    const argsStart = result.indexOf('.SH "ARGUMENTS"');
     assert.notEqual(argsStart, -1);
     const argsSection = result.slice(argsStart);
     assert.ok(argsSection.includes("\\fIVISIBLE\\fR"));

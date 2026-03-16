@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { escapeHyphens, escapeRoff, formatMessageAsRoff } from "./roff.ts";
+import {
+  escapeHyphens,
+  escapeQuotedValue,
+  escapeRoff,
+  formatMessageAsRoff,
+} from "./roff.ts";
 import {
   commandLine,
   envVar,
@@ -67,6 +72,28 @@ describe("escapeRoff()", () => {
   it("escapes period in the middle of text (not at line start)", () => {
     // Period in the middle should not be escaped
     assert.equal(escapeRoff("Hello. World"), "Hello. World");
+  });
+});
+
+describe("escapeQuotedValue()", () => {
+  it("returns empty string unchanged", () => {
+    assert.equal(escapeQuotedValue(""), "");
+  });
+
+  it("escapes backslashes", () => {
+    assert.equal(escapeQuotedValue("A\\B"), "A\\\\B");
+  });
+
+  it("escapes double quotes", () => {
+    assert.equal(escapeQuotedValue('"hello"'), "\\(dqhello\\(dq");
+  });
+
+  it("escapes both backslashes and double quotes", () => {
+    assert.equal(escapeQuotedValue('A\\B "quoted"'), "A\\\\B \\(dqquoted\\(dq");
+  });
+
+  it("leaves plain text unchanged", () => {
+    assert.equal(escapeQuotedValue("OPTIONS"), "OPTIONS");
   });
 });
 

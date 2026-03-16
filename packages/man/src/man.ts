@@ -6,7 +6,12 @@ import {
   type Usage,
   type UsageTerm,
 } from "@optique/core/usage";
-import { escapeHyphens, escapeRoff, formatMessageAsRoff } from "./roff.ts";
+import {
+  escapeHyphens,
+  escapeQuotedValue,
+  escapeRoff,
+  formatMessageAsRoff,
+} from "./roff.ts";
 
 /**
  * Valid man page section numbers.
@@ -480,7 +485,7 @@ export function formatDocPageAsMan(
     if (content === "") continue;
 
     const title = section.title?.toUpperCase() ?? "OPTIONS";
-    lines.push(`.SH ${title}`);
+    lines.push(`.SH "${escapeQuotedValue(title)}"`);
     lines.push(content);
   }
 

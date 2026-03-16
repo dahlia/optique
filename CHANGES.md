@@ -621,6 +621,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     were interpreted by roff as requests instead of visible text.
     [[#297], [#559]]
 
+ -  Fixed `formatDocPageAsMan()` emitting raw section titles into `.SH`
+    macros without escaping or quoting.  Backslashes and double quotes in
+    group labels are now escaped so they render literally in the man page.
+    [[#301], [#560]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -633,6 +638,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#286]: https://github.com/dahlia/optique/issues/286
 [#287]: https://github.com/dahlia/optique/issues/287
 [#297]: https://github.com/dahlia/optique/issues/297
+[#301]: https://github.com/dahlia/optique/issues/301
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
@@ -645,6 +651,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#556]: https://github.com/dahlia/optique/pull/556
 [#557]: https://github.com/dahlia/optique/pull/557
 [#559]: https://github.com/dahlia/optique/pull/559
+[#560]: https://github.com/dahlia/optique/pull/560
 
 
 Version 0.10.7

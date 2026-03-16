@@ -58,8 +58,9 @@ export function escapeRoff(text: string): string {
  *
  * @param text The raw value text.
  * @returns The escaped text safe for use inside roff double quotes.
+ * @since 1.0.0
  */
-function escapeQuotedValue(text: string): string {
+export function escapeQuotedValue(text: string): string {
   return escapeBackslashes(text).replace(/"/g, "\\(dq");
 }
 
