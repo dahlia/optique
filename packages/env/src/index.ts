@@ -464,5 +464,12 @@ export function bool(options: BoolOptions = {}): ValueParser<"sync", boolean> {
     format(value: boolean): string {
       return value ? "true" : "false";
     },
+    suggest(prefix: string) {
+      const allLiterals = [...TRUE_LITERALS, ...FALSE_LITERALS];
+      const normalizedPrefix = prefix.toLowerCase();
+      return allLiterals
+        .filter((lit) => lit.startsWith(normalizedPrefix))
+        .map((lit) => ({ kind: "literal" as const, text: lit }));
+    },
   };
 }
