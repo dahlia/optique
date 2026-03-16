@@ -2838,6 +2838,23 @@ describe("url", () => {
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
     });
+
+    it("should snapshot errors.disallowedProtocol at construction time", () => {
+      const errors: { disallowedProtocol: string } = {
+        disallowedProtocol: "original error",
+      };
+      const parser = url({
+        allowedProtocols: ["https:"],
+        errors: errors as never,
+      });
+      const result = parser.parse("http://example.com");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.disallowedProtocol = "mutated error";
+      const result2 = parser.parse("http://example.com");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
   });
 });
 
@@ -3698,6 +3715,28 @@ describe("uuid", () => {
       if (!result.success) assert.equal(result.error, "original error");
       errors.invalidUuid = "mutated error";
       const result2 = parser.parse("not-a-uuid");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.disallowedVersion at construction time", () => {
+      const errors: { disallowedVersion: string } = {
+        disallowedVersion: "original error",
+      };
+      const parser = uuid({
+        allowedVersions: [4],
+        errors: errors as never,
+      });
+      // v1 UUID triggers disallowedVersion
+      const result = parser.parse(
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      );
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.disallowedVersion = "mutated error";
+      const result2 = parser.parse(
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      );
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
     });
@@ -6420,6 +6459,23 @@ describe("email()", () => {
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
     });
+
+    it("should snapshot errors.domainNotAllowed at construction time", () => {
+      const errors: { domainNotAllowed: string } = {
+        domainNotAllowed: "original error",
+      };
+      const parser = email({
+        allowedDomains: ["example.com"],
+        errors: errors as never,
+      });
+      const result = parser.parse("a@other.com");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.domainNotAllowed = "mutated error";
+      const result2 = parser.parse("a@other.com");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
   });
 });
 
@@ -8008,6 +8064,40 @@ describe("domain()", () => {
       if (!result.success) assert.equal(result.error, "original error");
       errors.invalidDomain = "mutated error";
       const result2 = parser.parse("");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.tldNotAllowed at construction time", () => {
+      const errors: { tldNotAllowed: string } = {
+        tldNotAllowed: "original error",
+      };
+      const parser = domain({
+        allowedTLDs: ["com"],
+        errors: errors as never,
+      });
+      const result = parser.parse("example.org");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.tldNotAllowed = "mutated error";
+      const result2 = parser.parse("example.org");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.tooFewLabels at construction time", () => {
+      const errors: { tooFewLabels: string } = {
+        tooFewLabels: "original error",
+      };
+      const parser = domain({
+        minLabels: 3,
+        errors: errors as never,
+      });
+      const result = parser.parse("example.com");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.tooFewLabels = "mutated error";
+      const result2 = parser.parse("example.com");
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
     });
