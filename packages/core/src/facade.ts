@@ -345,7 +345,20 @@ function callWithSanitizedOwnProperties(
     for (const key of Reflect.ownKeys(target)) {
       const desc = Object.getOwnPropertyDescriptor(target, key);
       if (desc != null && "value" in desc) {
-        const stripped = strip(desc.value, seen);
+        let stripped: unknown;
+        try {
+          stripped = strip(desc.value, seen);
+        } catch {
+          // strip() failed; roll back and bail.
+          for (const [k, d] of saved) {
+            try {
+              Object.defineProperty(target, k, d);
+            } catch {
+              // Best-effort rollback.
+            }
+          }
+          return SANITIZE_FAILED;
+        }
         if (stripped !== desc.value) {
           try {
             Object.defineProperty(target, key, { ...desc, value: stripped });
