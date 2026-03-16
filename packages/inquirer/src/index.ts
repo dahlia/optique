@@ -1074,14 +1074,27 @@ export function prompt<M extends Mode, TValue, TState>(
           const cliState = parseResult.success && consumed === 0
             ? parseResult.next.state
             : undefined;
-          // shouldAttemptInnerCompletion detects annotation markers.
+          // Detect source-binding wrappers in the simulated parse state.
+          // shouldAttemptInnerCompletion checks annotation markers.
           // The hasCliValue fallback catches bindEnv without annotations
           // (it can still resolve via the active env source registry).
+          // When optional/withDefault wraps the inner state in an array
+          // (e.g., [envBindState]), unwrap it to check the inner element.
+          const hasSourceBindingMarker = (
+            s: unknown,
+          ): boolean =>
+            s != null &&
+            typeof s === "object" &&
+            "hasCliValue" in s;
           const isSourceBinding =
             shouldAttemptInnerCompletion(cliState, state) ||
-            (cliState != null &&
-              typeof cliState === "object" &&
-              "hasCliValue" in cliState);
+            hasSourceBindingMarker(cliState) ||
+            (Array.isArray(cliState) &&
+              cliState.length === 1 &&
+              (hasSourceBindingMarker(cliState[0]) ||
+                (typeof cliState[0] === "object" &&
+                  cliState[0] != null &&
+                  annotationKey in cliState[0])));
           if (isSourceBinding) {
             // Source-binding wrapper detected — complete from the state
             // produced by parse() (not from initialState) so that any

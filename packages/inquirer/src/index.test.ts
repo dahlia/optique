@@ -792,6 +792,75 @@ describe("prompt()", () => {
       assert.equal(result.value.name, "env-name");
     });
 
+    it("skips prompt for prompt(optional(bindEnv(...))) inside object()", async () => {
+      // Regression: optional wraps the inner bindEnv state in an array
+      // [envBindState].  The sentinel path must unwrap it to detect the
+      // source-binding marker so bindEnv can resolve the env value.
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-name" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = object({
+        name: prompt(
+          optional(
+            bindEnv(option("--name", string()), {
+              context,
+              key: "NAME",
+              parser: string(),
+            }),
+          ),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () =>
+              Promise.reject(new Error("Prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "env-name");
+    });
+
+    it("skips prompt for prompt(withDefault(bindEnv(...))) inside object()", async () => {
+      // Same as above but with withDefault wrapping bindEnv.
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-name" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = object({
+        name: prompt(
+          withDefault(
+            bindEnv(option("--name", string()), {
+              context,
+              key: "NAME",
+              parser: string(),
+            }),
+            "default",
+          ),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () =>
+              Promise.reject(new Error("Prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "env-name");
+    });
+
     it("prompts for inner parser that completes without CLI input (consistency with top level)", async () => {
       // A parser whose complete() always succeeds with a real value.
       // prompt() should still prompt because no CLI tokens were consumed —
