@@ -340,7 +340,7 @@ async function importModule(
   }
 
   const isTypeScript = /\.[mc]?ts$/.test(filePath);
-  const isJsx = /\.[jt]sx$/.test(filePath);
+  const isJsx = /\.[mc]?[jt]sx$/.test(filePath);
   const isDeno = "Deno" in globalThis;
   const isBun = "Bun" in globalThis;
 
