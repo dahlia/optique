@@ -244,6 +244,25 @@ describe("generateManPageSync()", () => {
     assert.ok(result.includes(".TH MYAPP 1"));
   });
 
+  it("rejects a malformed program-like object", () => {
+    const fakeProgram = {
+      parser: {},
+      metadata: { name: "x" },
+    };
+    assert.throws(
+      () => generateManPageSync(fakeProgram as never, { section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
+  it("rejects a malformed parser-like object", () => {
+    const fakeParser = {};
+    assert.throws(
+      () => generateManPageSync(fakeParser as never, { name: "x", section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
   it("rejects empty name", () => {
     const parser = object({});
     assert.throws(
@@ -310,6 +329,26 @@ describe("generateManPageAsync()", () => {
 
     assert.ok(typeof result === "string");
     assert.ok(result.includes(".TH MYAPP 1"));
+  });
+
+  it("rejects a malformed program-like object", async () => {
+    const fakeProgram = {
+      parser: {},
+      metadata: { name: "x" },
+    };
+    await assert.rejects(
+      () => generateManPageAsync(fakeProgram as never, { section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
+  it("rejects a malformed parser-like object", async () => {
+    const fakeParser = {};
+    await assert.rejects(
+      () =>
+        generateManPageAsync(fakeParser as never, { name: "x", section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
   });
 
   it("rejects empty name", async () => {
@@ -585,6 +624,25 @@ describe("Program-based API", () => {
     assert.throws(
       () => generateManPage(prog, { section: 1 }),
       TypeError,
+    );
+  });
+
+  it("rejects a malformed program-like object", () => {
+    const fakeProgram = {
+      parser: {},
+      metadata: { name: "x" },
+    };
+    assert.throws(
+      () => generateManPage(fakeProgram as never, { section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
+  it("rejects a malformed parser-like object", () => {
+    const fakeParser = {};
+    assert.throws(
+      () => generateManPage(fakeParser as never, { name: "x", section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
     );
   });
 

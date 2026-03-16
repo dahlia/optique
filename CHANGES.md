@@ -581,6 +581,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/man
 
+ -  `generateManPageSync()`, `generateManPageAsync()`, and `generateManPage()`
+    now validate that the input is a genuine Optique `Parser` or `Program`
+    up front, instead of accepting malformed objects and crashing with an
+    internal `getDocFragments is not a function` error.  [[#305]]
+
  -  Fixed `generateManPage()` leaving empty wrappers and dangling separators
     in SYNOPSIS when hidden terms are nested inside `optional`, `multiple`,
     or `exclusive` usage nodes.  Empty wrapper nodes are now collapsed and
@@ -668,6 +673,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#298]: https://github.com/dahlia/optique/issues/298
 [#301]: https://github.com/dahlia/optique/issues/301
 [#303]: https://github.com/dahlia/optique/issues/303
+[#305]: https://github.com/dahlia/optique/issues/305
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
