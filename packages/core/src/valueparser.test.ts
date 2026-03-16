@@ -1772,6 +1772,96 @@ describe("choice", () => {
       const parser = choice(["only"]);
       assert.deepEqual(parser.choices, ["only"]);
     });
+
+    it("should deduplicate string choices in metadata", () => {
+      const parser = choice(["json", "json", "yaml"]);
+      assert.deepEqual(parser.choices, ["json", "yaml"]);
+    });
+
+    it("should deduplicate number choices in metadata", () => {
+      const parser = choice([1, 1, 2]);
+      assert.deepEqual(parser.choices, [1, 2]);
+    });
+  });
+
+  describe("deduplication", () => {
+    it("should not produce duplicate string suggestions", () => {
+      const parser = choice(["json", "json", "yaml"]);
+      const suggestions = [...parser.suggest!("j")];
+      assert.deepEqual(suggestions, [
+        { kind: "literal", text: "json" },
+      ]);
+    });
+
+    it("should not produce duplicate number suggestions", () => {
+      const parser = choice([1, 1, 2]);
+      const suggestions = [...parser.suggest!("1")];
+      assert.deepEqual(suggestions, [
+        { kind: "literal", text: "1" },
+      ]);
+    });
+
+    it("should not include duplicates in string error messages", () => {
+      const parser = choice(["json", "json", "yaml"]);
+      const result = parser.parse("xml");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "json" },
+            { type: "text", text: " and " },
+            { type: "value", value: "yaml" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "xml" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should not include duplicates in number error messages", () => {
+      const parser = choice([1, 1, 2]);
+      const result = parser.parse("3");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Expected one of " },
+            { type: "value", value: "1" },
+            { type: "text", text: " and " },
+            { type: "value", value: "2" },
+            { type: "text", text: ", but got " },
+            { type: "value", value: "3" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should deduplicate case-insensitive string choices", () => {
+      const parser = choice(["JSON", "JSON", "yaml"], {
+        caseInsensitive: true,
+      });
+      assert.deepEqual(parser.choices, ["JSON", "yaml"]);
+      const suggestions = [...parser.suggest!("")];
+      assert.deepEqual(suggestions, [
+        { kind: "literal", text: "JSON" },
+        { kind: "literal", text: "yaml" },
+      ]);
+    });
+
+    it("should work with all-duplicate list", () => {
+      const parser = choice(["a", "a"]);
+      assert.deepEqual(parser.choices, ["a"]);
+      const result = parser.parse("a");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "a");
+      }
+    });
   });
 });
 

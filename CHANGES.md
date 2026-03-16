@@ -262,6 +262,10 @@ To be released.
     Previously `choice([])` created an unsatisfiable parser with a malformed
     error message.  [[#332], [#536]]
 
+ -  Fixed `choice()` to deduplicate identical values in the choices list.
+    Previously, duplicate entries appeared in suggestions, error messages,
+    and help text.  [[#353], [#537]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -293,6 +297,7 @@ To be released.
 [#248]: https://github.com/dahlia/optique/issues/248
 [#310]: https://github.com/dahlia/optique/issues/310
 [#332]: https://github.com/dahlia/optique/issues/332
+[#353]: https://github.com/dahlia/optique/issues/353
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
@@ -305,6 +310,7 @@ To be released.
 [#531]: https://github.com/dahlia/optique/pull/531
 [#533]: https://github.com/dahlia/optique/pull/533
 [#536]: https://github.com/dahlia/optique/pull/536
+[#537]: https://github.com/dahlia/optique/pull/537
 
 ### @optique/config
 
