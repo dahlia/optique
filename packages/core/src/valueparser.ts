@@ -296,8 +296,10 @@ export function choice<const T extends string | number>(
   const isNumberChoice = choices.length > 0 && typeof choices[0] === "number";
 
   if (isNumberChoice) {
-    // Number choice implementation
-    const numberChoices = choices as readonly number[];
+    // Number choice implementation — deduplicate using Object.is to
+    // distinguish 0 and -0
+    const numberChoices: readonly number[] = (choices as readonly number[])
+      .filter((v, i, a) => a.findIndex((c) => Object.is(c, v)) === i);
     const numberOptions = options as ChoiceOptionsNumber;
     const hasNaN = numberChoices.some((v) => Number.isNaN(v));
     const validNumberChoices = hasNaN
@@ -419,7 +421,10 @@ export function choice<const T extends string | number>(
   }
 
   // String choice implementation
-  const stringChoices = choices as readonly string[];
+  // String choice implementation — deduplicate identical values
+  const stringChoices: readonly string[] = [
+    ...new Set(choices as readonly string[]),
+  ];
   const stringOptions = options as ChoiceOptionsString;
   const normalizedValues = stringOptions.caseInsensitive
     ? stringChoices.map((v) => v.toLowerCase())
@@ -443,7 +448,7 @@ export function choice<const T extends string | number>(
   return {
     $mode: "sync",
     metavar,
-    choices: choices as readonly T[],
+    choices: stringChoices as readonly T[],
     parse(input: string): ValueParserResult<T> {
       const normalizedInput = stringOptions.caseInsensitive
         ? input.toLowerCase()
