@@ -273,9 +273,10 @@ To be released.
     defer interactive prompts until phase-two config resolution.
     [[#385], [#535]]
 
- -  Fixed `optional()` not propagating annotations from outer state into inner
-    parser elements during `complete()`, which prevented `bindConfig()` from
-    resolving config values through wrapper combinators.  [[#385], [#535]]
+ -  Fixed `optional()` and `withDefault()` not propagating annotations from
+    outer state into inner parser elements during `complete()`, which prevented
+    `bindConfig()` from resolving config values through wrapper combinators.
+    [[#385], [#535]]
 
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
