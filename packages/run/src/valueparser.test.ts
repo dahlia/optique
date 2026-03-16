@@ -52,6 +52,72 @@ describe("path", () => {
     });
   });
 
+  describe("empty path validation", () => {
+    it("should reject empty string with default error message", () => {
+      const parser = path();
+      const result = parser.parse("");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "Path must not be empty.",
+        );
+      }
+    });
+
+    it("should reject whitespace-only string", () => {
+      const parser = path();
+      const result = parser.parse("   ");
+      assert.ok(!result.success);
+    });
+
+    it("should reject tab and newline strings", () => {
+      const parser = path();
+      const result = parser.parse("\t\n");
+      assert.ok(!result.success);
+    });
+
+    it("should reject empty string with allowCreate", () => {
+      const parser = path({ allowCreate: true });
+      const result = parser.parse("");
+      assert.ok(!result.success);
+    });
+
+    it("should reject empty string with mustNotExist", () => {
+      const parser = path({ mustNotExist: true });
+      const result = parser.parse("");
+      assert.ok(!result.success);
+    });
+
+    it("should use custom static emptyPath error message", () => {
+      const parser = path({
+        errors: { emptyPath: message`Path must not be blank.` },
+      });
+      const result = parser.parse("");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "Path must not be blank.",
+        );
+      }
+    });
+
+    it("should use custom function-based emptyPath error message", () => {
+      const parser = path({
+        errors: { emptyPath: (_input) => message`Please provide a path.` },
+      });
+      const result = parser.parse("  ");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "Please provide a path.",
+        );
+      }
+    });
+  });
+
   describe("mustExist validation", () => {
     it("should pass when file exists", () => {
       const testDir = createTempDir();

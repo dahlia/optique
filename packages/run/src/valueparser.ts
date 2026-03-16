@@ -14,6 +14,13 @@ import { basename, dirname, extname } from "node:path";
  */
 export interface PathErrorOptions {
   /**
+   * Custom error message when the path is empty or contains only whitespace.
+   * Can be a static message or a function that receives the raw input string.
+   * @since 1.0.0
+   */
+  emptyPath?: Message | ((input: string) => Message);
+
+  /**
    * Custom error message when file extension is invalid.
    * Can be a static message or a function that receives input, expected
    * extensions, and actual extension.
@@ -226,6 +233,18 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<string> {
+      // Empty/whitespace-only path validation
+      if (input.trim() === "") {
+        return {
+          success: false,
+          error: options.errors?.emptyPath
+            ? (typeof options.errors.emptyPath === "function"
+              ? options.errors.emptyPath(input)
+              : options.errors.emptyPath)
+            : message`Path must not be empty.`,
+        };
+      }
+
       // Extension validation
       if (extensions && extensions.length > 0) {
         const base = /[/\\]$/.test(input) ? "" : basename(input);
