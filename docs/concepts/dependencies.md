@@ -68,10 +68,15 @@ const logLevelParser = modeParser.derive({
 });
 ~~~~
 
-The `derive()` method takes an options object with three properties:
+The `derive()` method takes an options object with four properties:
 
 `metavar`
 :   The metavariable name shown in help text (e.g., `"LEVEL"`).
+
+`mode`
+:   The mode of the parser returned by the factory: `"sync"` or `"async"`.
+    This determines whether the derived parser is synchronous or asynchronous,
+    without calling the factory at construction time.
 
 `factory`
 :   A function that receives the dependency's value and returns a value parser.
