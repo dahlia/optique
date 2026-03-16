@@ -244,6 +244,14 @@ describe("generateManPageSync()", () => {
     assert.ok(result.includes(".TH MYAPP 1"));
   });
 
+  it("rejects empty name", () => {
+    const parser = object({});
+    assert.throws(
+      () => generateManPageSync(parser, { name: "", section: 1 }),
+      TypeError,
+    );
+  });
+
   it("falls back to empty doc page when getDocPageSync returns undefined", () => {
     const parser: Parser<"sync", string, null> = {
       $mode: "sync",
@@ -292,6 +300,14 @@ describe("generateManPageAsync()", () => {
 
     assert.ok(typeof result === "string");
     assert.ok(result.includes(".TH MYAPP 1"));
+  });
+
+  it("rejects empty name", async () => {
+    const parser = object({});
+    await assert.rejects(
+      () => generateManPageAsync(parser, { name: "", section: 1 }),
+      TypeError,
+    );
   });
 
   it("falls back to empty doc page when getDocPageAsync returns undefined", async () => {
@@ -508,6 +524,25 @@ describe("Program-based API", () => {
 
     assert.ok(result.includes(".SH EXAMPLES"));
     assert.ok(result.includes("Basic usage:"));
+  });
+
+  it("rejects empty name from parser options", () => {
+    const parser = object({});
+    assert.throws(
+      () => generateManPage(parser, { name: "", section: 1 }),
+      TypeError,
+    );
+  });
+
+  it("rejects empty name from Program metadata", () => {
+    const prog = defineProgram({
+      parser: object({}),
+      metadata: { name: "" },
+    });
+    assert.throws(
+      () => generateManPage(prog, { section: 1 }),
+      TypeError,
+    );
   });
 
   it("keeps hidden: 'doc' option in SYNOPSIS but omits from OPTIONS", () => {
