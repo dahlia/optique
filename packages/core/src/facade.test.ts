@@ -8435,4 +8435,56 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedId, "test");
     assert.equal(observedHasToken, false);
   });
+
+  it("mixed private+public field method sees sanitized public state", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // A method that reads BOTH a private field and a scrubbed public field
+    // in the same call must observe the sanitized public value even when
+    // private field access forces fallback to the original target.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Mixed {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      hasToken(): boolean {
+        return this.#id !== "" && this.token !== undefined;
+      }
+    }
+
+    let observed: boolean | undefined;
+
+    const contextKey = Symbol.for("@test/mixed-access-sanitization");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        observed = (parsed as Mixed).hasToken();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) =>
+        new Mixed(
+          value.name,
+          { [deferredPromptValueKey]: true },
+        ),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.equal(observed, false);
+  });
 });

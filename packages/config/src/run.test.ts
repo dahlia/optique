@@ -1429,4 +1429,45 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(observedId, "abc");
     assert.equal(observedHasToken, false);
   });
+
+  test("mixed private+public field method sees sanitized public state", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // A method that reads BOTH a private field and a scrubbed public field
+    // in the same call must observe the sanitized public value even when
+    // private field access forces fallback to the original target.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Mixed {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      hasToken(): boolean {
+        return this.#id !== "" && this.token !== undefined;
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new Mixed(
+      "abc",
+      { [deferredPromptValueKey]: true },
+    );
+
+    let observed: boolean | undefined;
+
+    context.getAnnotations(instance, {
+      load(parsed: unknown) {
+        observed = (parsed as Mixed).hasToken();
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    assert.equal(observed, false);
+  });
 });

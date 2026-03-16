@@ -317,6 +317,33 @@ function finalizeParsedForContext(
   return { [phase2UndefinedParsedValueKey]: true };
 }
 
+function callWithSanitizedOwnProperties(
+  target: object,
+  fn: { apply(thisArg: unknown, args: unknown[]): unknown },
+  args: unknown[],
+  strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
+  seen: WeakMap<object, unknown>,
+): unknown {
+  const saved = new Map<PropertyKey, PropertyDescriptor>();
+  for (const key of Reflect.ownKeys(target)) {
+    const desc = Object.getOwnPropertyDescriptor(target, key);
+    if (desc != null && "value" in desc) {
+      const stripped = strip(desc.value, seen);
+      if (stripped !== desc.value) {
+        saved.set(key, desc);
+        Object.defineProperty(target, key, { ...desc, value: stripped });
+      }
+    }
+  }
+  try {
+    return strip(fn.apply(target, args), seen);
+  } finally {
+    for (const [key, desc] of saved) {
+      Object.defineProperty(target, key, desc);
+    }
+  }
+}
+
 function createSanitizedNonPlainContextView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
@@ -325,7 +352,8 @@ function createSanitizedNonPlainContextView<T extends object>(
   // reads inside the method body go through the sanitized get trap.  If the
   // method accesses private fields, that call throws a TypeError because
   // private fields are bound to the original instance, not the proxy; in
-  // that case we retry with the original target as receiver.
+  // that case we temporarily sanitize the target's own properties, retry
+  // with the target as receiver, and restore the original values afterward.
   // See: https://github.com/dahlia/optique/issues/407
   const proxy: T = new Proxy(value, {
     get(target, key, _receiver) {
@@ -344,8 +372,11 @@ function createSanitizedNonPlainContextView<T extends object>(
               );
             } catch (e) {
               if (e instanceof TypeError) {
-                return stripDeferredPromptValuesForContexts(
-                  val.apply(target, args),
+                return callWithSanitizedOwnProperties(
+                  target,
+                  val,
+                  args,
+                  stripDeferredPromptValuesForContexts,
                   seen,
                 );
               }
@@ -365,8 +396,11 @@ function createSanitizedNonPlainContextView<T extends object>(
             );
           } catch (e) {
             if (e instanceof TypeError) {
-              return stripDeferredPromptValuesForContexts(
-                result.apply(target, args),
+              return callWithSanitizedOwnProperties(
+                target,
+                result,
+                args,
+                stripDeferredPromptValuesForContexts,
                 seen,
               );
             }
