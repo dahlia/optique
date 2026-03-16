@@ -1915,6 +1915,71 @@ describe("choice", () => {
       assert.deepEqual([...parser.suggest!("f")], []);
     });
 
+    it("should snapshot choices array at construction time", () => {
+      const choices = ["a", "b", "c"];
+      const parser = choice(choices);
+      choices[0] = "z";
+      // Parser should still accept "a" (original value), not "z"
+      assert.ok(parser.parse("a").success);
+      assert.ok(!parser.parse("z").success);
+    });
+
+    it("should not allow mutation through the public choices property", () => {
+      const parser = choice(["a", "b", "c"]);
+      // The choices property should be frozen
+      assert.throws(() => {
+        (parser.choices as string[])[0] = "z";
+      }, TypeError);
+      // Parser should still work correctly
+      assert.ok(parser.parse("a").success);
+    });
+
+    it("should snapshot number choices array at construction time", () => {
+      const choices: number[] = [1, 2, 3];
+      const parser = choice(choices);
+      choices[0] = 99;
+      // Parser should still accept "1" (original value), not "99"
+      assert.ok(parser.parse("1").success);
+      assert.ok(!parser.parse("99").success);
+    });
+
+    it("should not allow mutation through the public number choices property", () => {
+      const parser = choice([1, 2, 3]);
+      assert.throws(() => {
+        (parser.choices as number[])[0] = 99;
+      }, TypeError);
+      assert.ok(parser.parse("1").success);
+    });
+
+    it("should snapshot errors.invalidChoice at construction time", () => {
+      const errors: { invalidChoice: string } = {
+        invalidChoice: "original error",
+      };
+      const parser = choice(["a", "b"], { errors: errors as never });
+      const result = parser.parse("z");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      // Mutate errors after construction
+      errors.invalidChoice = "mutated error";
+      const result2 = parser.parse("z");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.invalidChoice for number choices at construction time", () => {
+      const errors: { invalidChoice: string } = {
+        invalidChoice: "original error",
+      };
+      const parser = choice([1, 2], { errors: errors as never });
+      const result = parser.parse("99");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidChoice = "mutated error";
+      const result2 = parser.parse("99");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
     it("should work with all-duplicate list", () => {
       const parser = choice(["a", "a"]);
       assert.deepEqual(parser.choices, ["a"]);
@@ -2747,6 +2812,49 @@ describe("url", () => {
       const parser = url({});
       assert.equal(parser.metavar, "URL");
     });
+
+    it("should snapshot allowedProtocols at construction time", () => {
+      const protocols = ["https:"];
+      const parser = url({ allowedProtocols: protocols });
+      assert.ok(parser.parse("https://example.com").success);
+      assert.ok(!parser.parse("http://example.com").success);
+      // Mutate protocols after construction
+      protocols[0] = "http:";
+      // Parser should still accept https and reject http
+      assert.ok(parser.parse("https://example.com").success);
+      assert.ok(!parser.parse("http://example.com").success);
+    });
+
+    it("should snapshot errors.invalidUrl at construction time", () => {
+      const errors: { invalidUrl: string } = {
+        invalidUrl: "original error",
+      };
+      const parser = url({ errors: errors as never });
+      const result = parser.parse("not-a-url");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidUrl = "mutated error";
+      const result2 = parser.parse("not-a-url");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.disallowedProtocol at construction time", () => {
+      const errors: { disallowedProtocol: string } = {
+        disallowedProtocol: "original error",
+      };
+      const parser = url({
+        allowedProtocols: ["https:"],
+        errors: errors as never,
+      });
+      const result = parser.parse("http://example.com");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.disallowedProtocol = "mutated error";
+      const result2 = parser.parse("http://example.com");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
   });
 });
 
@@ -3574,6 +3682,64 @@ describe("uuid", () => {
       const result3 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"); // v1
       assert.ok(!result3.success);
     });
+
+    it("should snapshot allowedVersions at construction time", () => {
+      const versions: number[] = [4];
+      const parser = uuid({ allowedVersions: versions });
+      // v4 UUID should pass
+      assert.ok(
+        parser.parse("550e8400-e29b-41d4-a716-446655440000").success,
+      );
+      // v1 UUID should fail
+      assert.ok(
+        !parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success,
+      );
+      // Mutate versions after construction
+      versions[0] = 1;
+      // Parser should still accept v4 and reject v1
+      assert.ok(
+        parser.parse("550e8400-e29b-41d4-a716-446655440000").success,
+      );
+      assert.ok(
+        !parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success,
+      );
+    });
+
+    it("should snapshot errors.invalidUuid at construction time", () => {
+      const errors: { invalidUuid: string } = {
+        invalidUuid: "original error",
+      };
+      const parser = uuid({ errors: errors as never });
+      const result = parser.parse("not-a-uuid");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidUuid = "mutated error";
+      const result2 = parser.parse("not-a-uuid");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.disallowedVersion at construction time", () => {
+      const errors: { disallowedVersion: string } = {
+        disallowedVersion: "original error",
+      };
+      const parser = uuid({
+        allowedVersions: [4],
+        errors: errors as never,
+      });
+      // v1 UUID triggers disallowedVersion
+      const result = parser.parse(
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      );
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.disallowedVersion = "mutated error";
+      const result2 = parser.parse(
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      );
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
   });
 });
 
@@ -4133,6 +4299,35 @@ describe("string", () => {
         () => string({ pattern: 123 as never }),
         TypeError,
       );
+    });
+
+    it("should snapshot pattern at construction time", () => {
+      const options: { pattern: RegExp } = { pattern: /^a$/ };
+      const parser = string(options);
+      assert.ok(parser.parse("a").success);
+      assert.ok(!parser.parse("b").success);
+      // Mutate the options after construction
+      options.pattern = /^b$/;
+      // Parser should still use the original pattern
+      assert.ok(parser.parse("a").success);
+      assert.ok(!parser.parse("b").success);
+    });
+
+    it("should snapshot errors.patternMismatch at construction time", () => {
+      const errors: {
+        patternMismatch: string | ((i: string, p: RegExp) => string);
+      } = {
+        patternMismatch: "original error",
+      };
+      const parser = string({ pattern: /^a$/, errors: errors as never });
+      const result = parser.parse("b");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      // Mutate errors after construction
+      errors.patternMismatch = "mutated error";
+      const result2 = parser.parse("b");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
     });
   });
 });
@@ -6238,6 +6433,49 @@ describe("email()", () => {
         "user2@example.com",
       ]);
     });
+
+    it("should snapshot allowedDomains at construction time", () => {
+      const domains = ["example.com"];
+      const parser = email({ allowedDomains: domains });
+      assert.ok(parser.parse("a@example.com").success);
+      assert.ok(!parser.parse("a@other.com").success);
+      // Mutate domains after construction
+      domains[0] = "other.com";
+      // Parser should still accept example.com and reject other.com
+      assert.ok(parser.parse("a@example.com").success);
+      assert.ok(!parser.parse("a@other.com").success);
+    });
+
+    it("should snapshot errors.invalidEmail at construction time", () => {
+      const errors: { invalidEmail: string } = {
+        invalidEmail: "original error",
+      };
+      const parser = email({ errors: errors as never });
+      const result = parser.parse("not-an-email");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidEmail = "mutated error";
+      const result2 = parser.parse("not-an-email");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.domainNotAllowed at construction time", () => {
+      const errors: { domainNotAllowed: string } = {
+        domainNotAllowed: "original error",
+      };
+      const parser = email({
+        allowedDomains: ["example.com"],
+        errors: errors as never,
+      });
+      const result = parser.parse("a@other.com");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.domainNotAllowed = "mutated error";
+      const result2 = parser.parse("a@other.com");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
   });
 });
 
@@ -7802,6 +8040,66 @@ describe("domain()", () => {
       const result = parser.parse("API.Example.COM");
       assert.ok(result.success);
       assert.strictEqual(result.value, "api.example.com");
+    });
+
+    it("should snapshot allowedTLDs at construction time", () => {
+      const tlds = ["com"];
+      const parser = domain({ allowedTLDs: tlds });
+      assert.ok(parser.parse("example.com").success);
+      assert.ok(!parser.parse("example.org").success);
+      // Mutate tlds after construction
+      tlds[0] = "org";
+      // Parser should still accept .com and reject .org
+      assert.ok(parser.parse("example.com").success);
+      assert.ok(!parser.parse("example.org").success);
+    });
+
+    it("should snapshot errors.invalidDomain at construction time", () => {
+      const errors: { invalidDomain: string } = {
+        invalidDomain: "original error",
+      };
+      const parser = domain({ errors: errors as never });
+      const result = parser.parse("");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidDomain = "mutated error";
+      const result2 = parser.parse("");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.tldNotAllowed at construction time", () => {
+      const errors: { tldNotAllowed: string } = {
+        tldNotAllowed: "original error",
+      };
+      const parser = domain({
+        allowedTLDs: ["com"],
+        errors: errors as never,
+      });
+      const result = parser.parse("example.org");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.tldNotAllowed = "mutated error";
+      const result2 = parser.parse("example.org");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
+    it("should snapshot errors.tooFewLabels at construction time", () => {
+      const errors: { tooFewLabels: string } = {
+        tooFewLabels: "original error",
+      };
+      const parser = domain({
+        minLabels: 3,
+        errors: errors as never,
+      });
+      const result = parser.parse("example.com");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.tooFewLabels = "mutated error";
+      const result2 = parser.parse("example.com");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
     });
   });
 });

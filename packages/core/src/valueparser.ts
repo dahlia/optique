@@ -349,14 +349,16 @@ export function choice<const T extends string | number>(
       }
       return result;
     })();
-    const numberOptions = options as ChoiceOptionsNumber;
+    const numberInvalidChoice = (options as ChoiceOptionsNumber).errors
+      ?.invalidChoice;
     const numberStrings = numberChoices.map((v) =>
       Object.is(v, -0) ? "-0" : String(v)
     );
+    const frozenNumberChoices = Object.freeze(numberChoices) as readonly T[];
     return {
       $mode: "sync",
       metavar,
-      choices: numberChoices as readonly T[],
+      choices: frozenNumberChoices,
       parse(input: string): ValueParserResult<T> {
         // Exact match against canonical string representations
         // (String(value) for most values, "-0" for negative zero).
@@ -446,7 +448,7 @@ export function choice<const T extends string | number>(
             input,
             numberChoices,
             numberChoices,
-            numberOptions,
+            numberInvalidChoice,
           ),
         };
       },
@@ -464,9 +466,9 @@ export function choice<const T extends string | number>(
   }
 
   // String choice implementation — deduplicate identical values
-  const stringChoices: readonly string[] = [
+  const stringChoices: readonly string[] = Object.freeze([
     ...new Set(choices as readonly string[]),
-  ];
+  ]);
   const stringOptions = options as ChoiceOptionsString;
   if (
     stringOptions.caseInsensitive !== undefined &&
@@ -498,6 +500,7 @@ export function choice<const T extends string | number>(
       seen.set(nv, original);
     }
   }
+  const stringInvalidChoice = stringOptions.errors?.invalidChoice;
   return {
     $mode: "sync",
     metavar,
@@ -508,7 +511,11 @@ export function choice<const T extends string | number>(
       if (index < 0) {
         return {
           success: false,
-          error: formatStringChoiceError(input, stringChoices, stringOptions),
+          error: formatStringChoiceError(
+            input,
+            stringChoices,
+            stringInvalidChoice,
+          ),
         };
       }
       return { success: true, value: stringChoices[index] as T };
@@ -589,12 +596,15 @@ function normalizeDecimal(s: string): string {
 function formatStringChoiceError(
   input: string,
   choices: readonly string[],
-  options: ChoiceOptionsString,
+  invalidChoice:
+    | Message
+    | ((input: string, choices: readonly string[]) => Message)
+    | undefined,
 ): Message {
-  if (options.errors?.invalidChoice) {
-    return typeof options.errors.invalidChoice === "function"
-      ? options.errors.invalidChoice(input, choices)
-      : options.errors.invalidChoice;
+  if (invalidChoice) {
+    return typeof invalidChoice === "function"
+      ? invalidChoice(input, choices)
+      : invalidChoice;
   }
   return formatDefaultChoiceError(input, choices);
 }
@@ -606,12 +616,15 @@ function formatNumberChoiceError(
   input: string,
   validChoices: readonly number[],
   allChoices: readonly number[],
-  options: ChoiceOptionsNumber,
+  invalidChoice:
+    | Message
+    | ((input: string, choices: readonly number[]) => Message)
+    | undefined,
 ): Message {
-  if (options.errors?.invalidChoice) {
-    return typeof options.errors.invalidChoice === "function"
-      ? options.errors.invalidChoice(input, validChoices)
-      : options.errors.invalidChoice;
+  if (invalidChoice) {
+    return typeof invalidChoice === "function"
+      ? invalidChoice(input, validChoices)
+      : invalidChoice;
   }
   return formatDefaultChoiceError(input, allChoices);
 }
@@ -661,27 +674,30 @@ export function string(
   }
   const metavar = options.metavar ?? "STRING";
   ensureNonEmptyString(metavar);
+  // Snapshot pattern source/flags at construction time to prevent
+  // post-construction mutation, and avoid constructing an intermediate
+  // RegExp that would just be cloned again at parse time.
+  const patternSource = options.pattern?.source ?? null;
+  const patternFlags = options.pattern?.flags ?? null;
+  const patternMismatch = options.errors?.patternMismatch;
   return {
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<string> {
-      if (options.pattern != null) {
-        const pattern = new RegExp(
-          options.pattern.source,
-          options.pattern.flags,
-        );
+      if (patternSource != null && patternFlags != null) {
+        const pattern = new RegExp(patternSource, patternFlags);
         if (pattern.test(input)) {
           return { success: true, value: input };
         }
 
         return {
           success: false,
-          error: options.errors?.patternMismatch
-            ? (typeof options.errors.patternMismatch === "function"
-              ? options.errors.patternMismatch(input, options.pattern)
-              : options.errors.patternMismatch)
+          error: patternMismatch
+            ? (typeof patternMismatch === "function"
+              ? patternMismatch(input, pattern)
+              : patternMismatch)
             : message`Expected a string matching pattern ${
-              text(options.pattern.source)
+              text(patternSource)
             }, but got ${input}.`,
         };
       }
@@ -1212,11 +1228,18 @@ export interface UrlOptions {
  * @returns A {@link ValueParser} that converts string input to `URL` objects.
  */
 export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
-  const allowedProtocols = options.allowedProtocols?.map((p) =>
-    p.toLowerCase()
-  );
+  // Snapshot the original protocols for callback arguments (preserves casing),
+  // and a normalized copy for internal matching.
+  const originalProtocols = options.allowedProtocols != null
+    ? Object.freeze([...options.allowedProtocols])
+    : undefined;
+  const allowedProtocols = options.allowedProtocols != null
+    ? Object.freeze(options.allowedProtocols.map((p) => p.toLowerCase()))
+    : undefined;
   const metavar = options.metavar ?? "URL";
   ensureNonEmptyString(metavar);
+  const invalidUrl = options.errors?.invalidUrl;
+  const disallowedProtocol = options.errors?.disallowedProtocol;
   return {
     $mode: "sync",
     metavar,
@@ -1224,10 +1247,10 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
       if (!URL.canParse(input)) {
         return {
           success: false,
-          error: options.errors?.invalidUrl
-            ? (typeof options.errors.invalidUrl === "function"
-              ? options.errors.invalidUrl(input)
-              : options.errors.invalidUrl)
+          error: invalidUrl
+            ? (typeof invalidUrl === "function"
+              ? invalidUrl(input)
+              : invalidUrl)
             : message`Invalid URL: ${input}.`,
         };
       }
@@ -1237,13 +1260,13 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
       ) {
         return {
           success: false,
-          error: options.errors?.disallowedProtocol
-            ? (typeof options.errors.disallowedProtocol === "function"
-              ? options.errors.disallowedProtocol(
+          error: disallowedProtocol
+            ? (typeof disallowedProtocol === "function"
+              ? disallowedProtocol(
                 url.protocol,
-                options.allowedProtocols!,
+                originalProtocols!,
               )
-              : options.errors.disallowedProtocol)
+              : disallowedProtocol)
             : message`URL protocol ${url.protocol} is not allowed. Allowed protocols: ${
               allowedProtocols.join(", ")
             }.`,
@@ -1684,6 +1707,12 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const metavar = options.metavar ?? "UUID";
   ensureNonEmptyString(metavar);
+  // Snapshot mutable config at construction time
+  const allowedVersions = options.allowedVersions != null
+    ? Object.freeze([...options.allowedVersions])
+    : null;
+  const invalidUuid = options.errors?.invalidUuid;
+  const disallowedVersion = options.errors?.disallowedVersion;
 
   return {
     $mode: "sync",
@@ -1692,39 +1721,34 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
       if (!uuidRegex.test(input)) {
         return {
           success: false,
-          error: options.errors?.invalidUuid
-            ? (typeof options.errors.invalidUuid === "function"
-              ? options.errors.invalidUuid(input)
-              : options.errors.invalidUuid)
+          error: invalidUuid
+            ? (typeof invalidUuid === "function"
+              ? invalidUuid(input)
+              : invalidUuid)
             : message`Expected a valid UUID in format ${"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}, but got ${input}.`,
         };
       }
 
       // Check version if specified
-      if (
-        options.allowedVersions != null && options.allowedVersions.length > 0
-      ) {
+      if (allowedVersions != null && allowedVersions.length > 0) {
         // Extract version from the first character of the third group
         const versionChar = input.charAt(14); // Position of version digit
         const version = parseInt(versionChar, 16);
 
-        if (!options.allowedVersions.includes(version)) {
+        if (!allowedVersions.includes(version)) {
           return {
             success: false,
-            error: options.errors?.disallowedVersion
-              ? (typeof options.errors.disallowedVersion === "function"
-                ? options.errors.disallowedVersion(
-                  version,
-                  options.allowedVersions,
-                )
-                : options.errors.disallowedVersion)
+            error: disallowedVersion
+              ? (typeof disallowedVersion === "function"
+                ? disallowedVersion(version, allowedVersions)
+                : disallowedVersion)
               : (() => {
                 let expectedVersions = message``;
                 let i = 0;
-                for (const v of options.allowedVersions) {
+                for (const v of allowedVersions) {
                   expectedVersions = i < 1
                     ? message`${expectedVersions}${v.toLocaleString("en")}`
-                    : i + 1 >= options.allowedVersions.length
+                    : i + 1 >= allowedVersions.length
                     ? message`${expectedVersions}, or ${v.toLocaleString("en")}`
                     : message`${expectedVersions}, ${v.toLocaleString("en")}`;
                   i++;
@@ -2737,7 +2761,11 @@ export function email(
   const allowMultiple = options?.allowMultiple ?? false;
   const allowDisplayName = options?.allowDisplayName ?? false;
   const lowercase = options?.lowercase ?? false;
-  const allowedDomains = options?.allowedDomains;
+  const allowedDomains = options?.allowedDomains != null
+    ? Object.freeze([...options.allowedDomains])
+    : undefined;
+  const invalidEmail = options?.errors?.invalidEmail;
+  const domainNotAllowed = options?.errors?.domainNotAllowed;
 
   // Simplified RFC 5322: alphanumeric, dots, hyphens, underscores, plus signs
   const atextRegex = /^[a-zA-Z0-9._+-]+$/;
@@ -2866,7 +2894,7 @@ export function email(
         for (const email of emails) {
           const validated = validateEmail(email);
           if (validated === null) {
-            const errorMsg = options?.errors?.invalidEmail;
+            const errorMsg = invalidEmail;
             const msg = typeof errorMsg === "function"
               ? errorMsg(email)
               : errorMsg ??
@@ -2882,7 +2910,7 @@ export function email(
               domain === allowed.toLowerCase()
             );
             if (!isAllowed) {
-              const errorMsg = options?.errors?.domainNotAllowed;
+              const errorMsg = domainNotAllowed;
               if (typeof errorMsg === "function") {
                 return {
                   success: false,
@@ -2911,7 +2939,7 @@ export function email(
         // Parse single email
         const validated = validateEmail(input);
         if (validated === null) {
-          const errorMsg = options?.errors?.invalidEmail;
+          const errorMsg = invalidEmail;
           const msg = typeof errorMsg === "function"
             ? errorMsg(input)
             : errorMsg ??
@@ -2927,7 +2955,7 @@ export function email(
             domain === allowed.toLowerCase()
           );
           if (!isAllowed) {
-            const errorMsg = options?.errors?.domainNotAllowed;
+            const errorMsg = domainNotAllowed;
             if (typeof errorMsg === "function") {
               return {
                 success: false,
@@ -3928,10 +3956,15 @@ export function domain(
 ): ValueParser<"sync", string> {
   const metavar = options?.metavar ?? "DOMAIN";
   const allowSubdomains = options?.allowSubdomains ?? true;
-  const allowedTLDs = options?.allowedTLDs;
+  const allowedTLDs = options?.allowedTLDs != null
+    ? Object.freeze([...options.allowedTLDs])
+    : undefined;
   const minLabels = options?.minLabels ?? 2;
   const lowercase = options?.lowercase ?? false;
-  const errors = options?.errors;
+  const invalidDomain = options?.errors?.invalidDomain;
+  const tooFewLabels = options?.errors?.tooFewLabels;
+  const subdomainsNotAllowed = options?.errors?.subdomainsNotAllowed;
+  const tldNotAllowed = options?.errors?.tldNotAllowed;
 
   // Domain label regex: 1-63 alphanumeric characters and hyphens,
   // cannot start or end with hyphen
@@ -3943,7 +3976,7 @@ export function domain(
     parse(input: string): ValueParserResult<string> {
       // Basic validation
       if (input.length === 0 || input.startsWith(".") || input.endsWith(".")) {
-        const errorMsg = errors?.invalidDomain;
+        const errorMsg = invalidDomain;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
@@ -3957,7 +3990,7 @@ export function domain(
 
       // Check for consecutive dots
       if (input.includes("..")) {
-        const errorMsg = errors?.invalidDomain;
+        const errorMsg = invalidDomain;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
@@ -3975,7 +4008,7 @@ export function domain(
       // Validate each label
       for (const label of labels) {
         if (!labelRegex.test(label)) {
-          const errorMsg = errors?.invalidDomain;
+          const errorMsg = invalidDomain;
           if (typeof errorMsg === "function") {
             return { success: false, error: errorMsg(input) };
           }
@@ -3990,7 +4023,7 @@ export function domain(
 
       // Check minimum labels
       if (labels.length < minLabels) {
-        const errorMsg = errors?.tooFewLabels;
+        const errorMsg = tooFewLabels;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input, minLabels) };
         }
@@ -4007,7 +4040,7 @@ export function domain(
 
       // Check subdomain restriction
       if (!allowSubdomains && labels.length > 2) {
-        const errorMsg = errors?.subdomainsNotAllowed;
+        const errorMsg = subdomainsNotAllowed;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
@@ -4026,7 +4059,7 @@ export function domain(
         const allowedTLDsLower = allowedTLDs.map((t) => t.toLowerCase());
 
         if (!allowedTLDsLower.includes(tldLower)) {
-          const errorMsg = errors?.tldNotAllowed;
+          const errorMsg = tldNotAllowed;
           if (typeof errorMsg === "function") {
             return { success: false, error: errorMsg(tld, allowedTLDs) };
           }
