@@ -467,11 +467,17 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     Previously, `extname()` only returned the last extension segment, so
     these cases were incorrectly rejected.  [[#309], [#530]]
 
+ -  Fixed `path()` to reject empty and whitespace-only strings.
+    Previously, these were silently accepted as valid paths in
+    non-`mustExist` modes.  [[#343], [#538]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
 [#309]: https://github.com/dahlia/optique/issues/309
+[#343]: https://github.com/dahlia/optique/issues/343
 [#530]: https://github.com/dahlia/optique/pull/530
+[#538]: https://github.com/dahlia/optique/pull/538
 
 ### @optique/man
 
