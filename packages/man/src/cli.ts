@@ -291,8 +291,11 @@ function jsxLoaderRequiredError(filePath: string): never {
   const version = getNodeMajorMinor();
   const versionStr = version ? `${version[0]}.${version[1]}` : "unknown";
 
+  const isTsx = /\.[mc]?tsx$/.test(filePath);
+  const fileKind = isTsx ? "TSX" : "JSX";
+
   printError(
-    message`JSX file ${filePath} cannot be loaded on Node.js ${versionStr}.
+    message`${fileKind} file ${filePath} cannot be loaded on Node.js ${versionStr}.
 
 Install tsx as a dev dependency:
 
