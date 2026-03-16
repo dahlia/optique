@@ -217,7 +217,7 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
     parse(input: string): ValueParserResult<string> {
       // Extension validation
       if (extensions && extensions.length > 0) {
-        const base = basename(input);
+        const base = /[/\\]$/.test(input) ? "" : basename(input);
         if (!extensions.some((ext) => base.endsWith(ext))) {
           const actualExt = extname(input) || "no extension";
           return {

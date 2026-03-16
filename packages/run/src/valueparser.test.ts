@@ -452,6 +452,14 @@ describe("path", () => {
       assert.equal(result.success, false);
     });
 
+    it("should reject trailing-separator paths", () => {
+      const parser = path({ extensions: [".env"] });
+      assert.equal(parser.parse(".env/").success, false);
+
+      const tarParser = path({ extensions: [".tar.gz"] });
+      assert.equal(tarParser.parse("archive.tar.gz/").success, false);
+    });
+
     it("should not false-match on directory components", () => {
       const parser = path({ extensions: [".json"] });
       const result = parser.parse(".env/config");
