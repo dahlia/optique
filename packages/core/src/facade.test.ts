@@ -8833,4 +8833,55 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedResult, "test");
     assert.equal(sideEffectCount, 1);
   });
+
+  it("rebound prototype method respects caller-supplied receiver", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // Extracting a prototype method from a sanitized proxy and calling it
+    // with a different receiver via call/apply/bind must use the caller's
+    // this, not the proxy's target.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Base {
+      name: string;
+      deferred: unknown;
+      constructor(name: string, deferred: unknown) {
+        this.name = name;
+        this.deferred = deferred;
+      }
+      greet(): string {
+        return `hello ${this.name}`;
+      }
+    }
+
+    let observedGreeting: string | undefined;
+
+    const contextKey = Symbol.for("@test/rebound-receiver");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const b = parsed as Base;
+        const greetFn = b.greet;
+        // Call the extracted method with a different receiver
+        observedGreeting = greetFn.call({ name: "world" });
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) => new Base(value.name, { [deferredPromptValueKey]: true }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.equal(observedGreeting, "hello world");
+  });
 });

@@ -1765,4 +1765,40 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(observedResult, "abc");
     assert.equal(sideEffectCount, 1);
   });
+
+  test("rebound prototype method respects caller-supplied receiver", () => {
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Base {
+      name: string;
+      deferred: unknown;
+      constructor(name: string, deferred: unknown) {
+        this.name = name;
+        this.deferred = deferred;
+      }
+      greet(): string {
+        return `hello ${this.name}`;
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new Base("original", { [deferredPromptValueKey]: true });
+
+    let observedGreeting: string | undefined;
+
+    context.getAnnotations(instance, {
+      load(parsed: unknown) {
+        const b = parsed as Base;
+        const greetFn = b.greet;
+        observedGreeting = greetFn.call({ name: "world" });
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    assert.equal(observedGreeting, "hello world");
+  });
 });

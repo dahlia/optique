@@ -359,7 +359,15 @@ function createSanitizedNonPlainView<T extends object>(
       if (typeof result === "function") {
         // Prototype methods need the private-field fallback wrapper
         // because they access `this` which may include private fields.
+        // If the method is later rebound to a different receiver via
+        // call/apply/bind, respect the caller-supplied `this` instead.
         return function (this: unknown, ...args: unknown[]) {
+          if (this !== proxy) {
+            return stripDeferredPromptValues(
+              result.apply(this, args),
+              seen,
+            );
+          }
           return callMethodWithPrivateFieldFallback(
             result,
             proxy,
