@@ -416,7 +416,13 @@ async function registerTsx(
   try {
     const tsx = await import("tsx/esm/api");
     tsx.register();
-  } catch {
+  } catch (error: unknown) {
+    if (
+      !(error instanceof Error) ||
+      (error as NodeJS.ErrnoException).code !== "ERR_MODULE_NOT_FOUND"
+    ) {
+      throw error;
+    }
     if (isJsxOrTsx) {
       jsxLoaderRequiredError(filePath);
     } else {
