@@ -426,7 +426,8 @@ export function choice<const T extends string | number>(
       if (prev !== undefined && prev !== original) {
         throw new TypeError(
           `Ambiguous choices for case-insensitive matching: ` +
-            `multiple choices normalize to "${nv}".`,
+            `${JSON.stringify(prev)} and ${JSON.stringify(original)} ` +
+            `both normalize to ${JSON.stringify(nv)}.`,
         );
       }
       seen.set(nv, original);
