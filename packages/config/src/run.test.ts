@@ -1632,4 +1632,88 @@ describe("run with config context", { concurrency: false }, () => {
 
     assert.deepEqual(observedInfo, { id: "abc", hasToken: false });
   });
+
+  test("TypeError 'Cannot access private endpoint.' is not retried", () => {
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    let callCount = 0;
+
+    class EndpointValidator {
+      deferred: unknown;
+      constructor(deferred: unknown) {
+        this.deferred = deferred;
+      }
+      validate(): never {
+        callCount++;
+        throw new TypeError("Cannot access private endpoint.");
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new EndpointValidator({ [deferredPromptValueKey]: true });
+
+    assert.throws(
+      () => {
+        context.getAnnotations(instance, {
+          load(parsed: unknown) {
+            (parsed as EndpointValidator).validate();
+            return { config: undefined, meta: undefined };
+          },
+        });
+      },
+      { name: "TypeError", message: "Cannot access private endpoint." },
+    );
+
+    assert.equal(callCount, 1);
+  });
+
+  test("overlapping async private-field calls see sanitized state", async () => {
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Concurrent {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      async getInfo(): Promise<{ id: string; hasToken: boolean }> {
+        const id = this.#id;
+        await Promise.resolve();
+        return { id, hasToken: this.token !== undefined };
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new Concurrent(
+      "abc",
+      { [deferredPromptValueKey]: true },
+    );
+
+    let results: { id: string; hasToken: boolean }[] | undefined;
+
+    const annotations = context.getAnnotations(instance, {
+      async load(parsed: unknown) {
+        const c = parsed as Concurrent;
+        results = await Promise.all([c.getInfo(), c.getInfo()]);
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    if (annotations instanceof Promise) {
+      await annotations;
+    }
+
+    assert.ok(results);
+    assert.equal(results[0].hasToken, false);
+    assert.equal(results[1].hasToken, false);
+  });
 });

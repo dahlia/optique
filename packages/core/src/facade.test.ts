@@ -8682,4 +8682,102 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     assert.deepEqual(observedInfo, { id: "test", hasToken: false });
   });
+
+  it("TypeError 'Cannot access private endpoint.' is not retried", async () => {
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    let callCount = 0;
+
+    class EndpointValidator {
+      deferred: unknown;
+      constructor(deferred: unknown) {
+        this.deferred = deferred;
+      }
+      validate(): never {
+        callCount++;
+        throw new TypeError("Cannot access private endpoint.");
+      }
+    }
+
+    const contextKey = Symbol.for("@test/cannot-access-private-endpoint");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        (parsed as EndpointValidator).validate();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => new EndpointValidator({ [deferredPromptValueKey]: true }),
+    );
+
+    await assert.rejects(
+      () =>
+        runWith(parser, "test", [dynamicContext], {
+          args: [],
+        }),
+      { name: "TypeError", message: "Cannot access private endpoint." },
+    );
+
+    assert.ok(callCount <= 2);
+  });
+
+  it("overlapping async private-field calls see sanitized state", async () => {
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Concurrent {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      async getInfo(): Promise<{ id: string; hasToken: boolean }> {
+        const id = this.#id;
+        await Promise.resolve();
+        return { id, hasToken: this.token !== undefined };
+      }
+    }
+
+    let results:
+      | { id: string; hasToken: boolean }[]
+      | undefined;
+
+    const contextKey = Symbol.for("@test/overlapping-async");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      async getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const c = parsed as Concurrent;
+        results = await Promise.all([c.getInfo(), c.getInfo()]);
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) => new Concurrent(value.name, { [deferredPromptValueKey]: true }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(results);
+    assert.equal(results[0].hasToken, false);
+    assert.equal(results[1].hasToken, false);
+  });
 });

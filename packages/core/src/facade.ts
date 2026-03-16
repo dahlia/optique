@@ -324,10 +324,18 @@ function isPrivateFieldTypeError(e: unknown): boolean {
   // JavaScriptCore: "Cannot access private property"
   return e instanceof TypeError &&
     typeof e.message === "string" &&
-    /Cannot (?:read|access) private|can't access private/i.test(e.message);
+    /Cannot read private member|Cannot access private (?:property|method)|can't access private field/i
+      .test(e.message);
 }
 
 const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
+
+interface ActiveSanitization {
+  readonly saved: Map<PropertyKey, PropertyDescriptor>;
+  count: number;
+}
+
+const activeSanitizations = new WeakMap<object, ActiveSanitization>();
 
 function callWithSanitizedOwnProperties(
   target: object,
@@ -336,29 +344,43 @@ function callWithSanitizedOwnProperties(
   strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
   seen: WeakMap<object, unknown>,
 ): unknown | typeof SANITIZE_FAILED {
-  const saved = new Map<PropertyKey, PropertyDescriptor>();
-  for (const key of Reflect.ownKeys(target)) {
-    const desc = Object.getOwnPropertyDescriptor(target, key);
-    if (desc != null && "value" in desc) {
-      const stripped = strip(desc.value, seen);
-      if (stripped !== desc.value) {
-        try {
-          Object.defineProperty(target, key, { ...desc, value: stripped });
-          saved.set(key, desc);
-        } catch {
-          // Property is non-configurable or object is frozen; cannot
-          // safely call the method with unsanitized state.
-          for (const [k, d] of saved) {
-            Object.defineProperty(target, k, d);
+  let active = activeSanitizations.get(target);
+  if (active != null) {
+    // Properties are already sanitized by a concurrent call; just
+    // increment the reference count so we defer restoration.
+    active.count++;
+  } else {
+    const saved = new Map<PropertyKey, PropertyDescriptor>();
+    for (const key of Reflect.ownKeys(target)) {
+      const desc = Object.getOwnPropertyDescriptor(target, key);
+      if (desc != null && "value" in desc) {
+        const stripped = strip(desc.value, seen);
+        if (stripped !== desc.value) {
+          try {
+            Object.defineProperty(target, key, { ...desc, value: stripped });
+            saved.set(key, desc);
+          } catch {
+            // Property is non-configurable or object is frozen; cannot
+            // safely call the method with unsanitized state.
+            for (const [k, d] of saved) {
+              Object.defineProperty(target, k, d);
+            }
+            return SANITIZE_FAILED;
           }
-          return SANITIZE_FAILED;
         }
       }
     }
+    active = { saved, count: 1 };
+    activeSanitizations.set(target, active);
   }
-  function restore(): void {
-    for (const [key, desc] of saved) {
-      Object.defineProperty(target, key, desc);
+
+  function release(): void {
+    active!.count--;
+    if (active!.count === 0) {
+      activeSanitizations.delete(target);
+      for (const [key, desc] of active!.saved) {
+        Object.defineProperty(target, key, desc);
+      }
     }
   }
 
@@ -366,7 +388,7 @@ function callWithSanitizedOwnProperties(
   try {
     result = fn.apply(target, args);
   } catch (e) {
-    restore();
+    release();
     throw e;
   }
 
@@ -379,17 +401,17 @@ function callWithSanitizedOwnProperties(
   ) {
     return (result as Promise<unknown>).then(
       (v) => {
-        restore();
+        release();
         return strip(v, seen);
       },
       (e) => {
-        restore();
+        release();
         throw e;
       },
     );
   }
 
-  restore();
+  release();
   return strip(result, seen);
 }
 
