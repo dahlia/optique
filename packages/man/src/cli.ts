@@ -561,13 +561,14 @@ export async function main(): Promise<void> {
     inferNameFromPath(args.file);
 
   // Generate man page
+  const date = args.date ?? new Date();
   let manPage: string;
   try {
     if (isProgram(target)) {
       manPage = await generateManPageAsync(target, {
         section: args.section,
         name: args.name, // explicit override
-        date: args.date ?? new Date(),
+        date,
         version: args.versionString,
         manual: args.manual,
       });
@@ -575,7 +576,7 @@ export async function main(): Promise<void> {
       manPage = await generateManPageAsync(target, {
         name,
         section: args.section,
-        date: args.date ?? new Date(),
+        date,
         version: args.versionString,
         manual: args.manual,
       });
