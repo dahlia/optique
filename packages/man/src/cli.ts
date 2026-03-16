@@ -264,7 +264,7 @@ ${commandLine("command()")}, etc.).`,
 }
 
 /**
- * Error handler for missing tsx.
+ * Error handler for missing tsx for TypeScript files.
  */
 function tsxRequiredError(filePath: string): never {
   const version = getNodeMajorMinor();
@@ -278,6 +278,25 @@ Install tsx as a dev dependency:
   ${commandLine("npm install -D tsx")}
 
 Or upgrade to Node.js 25.2.0 or later, which supports TypeScript natively.
+
+Alternatively, use a pre-compiled JavaScript file instead.`,
+    { exitCode: EXIT_TSX_REQUIRED },
+  );
+}
+
+/**
+ * Error handler for missing tsx for JSX/TSX files.
+ */
+function jsxLoaderRequiredError(filePath: string): never {
+  const version = getNodeMajorMinor();
+  const versionStr = version ? `${version[0]}.${version[1]}` : "unknown";
+
+  printError(
+    message`JSX file ${filePath} cannot be loaded on Node.js ${versionStr}.
+
+Install tsx as a dev dependency:
+
+  ${commandLine("npm install -D tsx")}
 
 Alternatively, use a pre-compiled JavaScript file instead.`,
     { exitCode: EXIT_TSX_REQUIRED },
@@ -336,7 +355,11 @@ async function importModule(
       const tsx = await import("tsx/esm/api");
       tsx.register();
     } catch {
-      tsxRequiredError(filePath);
+      if (isJsx) {
+        jsxLoaderRequiredError(filePath);
+      } else {
+        tsxRequiredError(filePath);
+      }
     }
   }
 
