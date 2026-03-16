@@ -1294,7 +1294,7 @@ describe("completion module", () => {
       }
     });
 
-    it("should reject program names starting with non-alphanumeric characters", () => {
+    it("should reject program names starting with a hyphen or dot", () => {
       const invalidNames = ["-", ".", "..", "-flag", ".hidden"];
 
       for (const shell of shells) {

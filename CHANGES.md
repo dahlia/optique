@@ -164,10 +164,11 @@ To be released.
     prefix-filtering behavior for value suggestions and aligns with parse
     context (option name consumed ⇒ value expected).
 
- -  Tightened program name validation for shell completion to reject names
-    starting with a non-alphanumeric character (e.g., `-` or `.`).
-    Previously, running from stdin (`node -`, `deno eval`) could infer `-`
-    as the program name, producing broken completion scripts.  [[#235], [#568]]
+ -  Tightened program name validation for shell completion to require names
+    to start with an alphanumeric character or underscore, rejecting names
+    like `-` or `.`.  Previously, running from stdin (`node -`, `deno eval`)
+    could infer `-` as the program name, producing broken completion
+    scripts.  [[#235], [#568]]
 
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
