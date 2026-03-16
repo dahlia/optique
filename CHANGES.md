@@ -314,8 +314,9 @@ To be released.
 
  -  Fixed proxy-based sanitization of deferred prompt values breaking class
     methods that access private fields.  Methods on non-plain objects are now
-    bound to the original instance so private field access works correctly
-    through the sanitized view.  [[#307], [#558]]
+    invoked with temporarily sanitized own properties on the original instance,
+    allowing private field access to work correctly through the sanitized
+    view.  [[#307], [#558]]
 
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -376,8 +377,8 @@ To be released.
 [#553]: https://github.com/dahlia/optique/pull/553
 [#554]: https://github.com/dahlia/optique/pull/554
 [#555]: https://github.com/dahlia/optique/pull/555
-[#565]: https://github.com/dahlia/optique/pull/565
 [#558]: https://github.com/dahlia/optique/pull/558
+[#565]: https://github.com/dahlia/optique/pull/565
 
 ### @optique/config
 
@@ -450,8 +451,9 @@ To be released.
 
  -  Fixed proxy-based sanitization of deferred prompt values breaking class
     methods that access private fields.  Methods on non-plain objects are now
-    bound to the original instance so private field access works correctly
-    through the sanitized view.  [[#307], [#558]]
+    invoked with temporarily sanitized own properties on the original instance,
+    allowing private field access to work correctly through the sanitized
+    view.  [[#307], [#558]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136

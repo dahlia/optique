@@ -185,7 +185,7 @@ function containsDeferredPromptValuesForContexts(
 ): boolean {
   // FIXME: This only inspects own data properties, so deferred prompt values
   // hidden behind private fields or method-only wrapper DTOs are missed. See:
-  // https://github.com/dahlia/optique/issues/407
+  // https://github.com/dahlia/optique/issues/307
   if (isDeferredPromptValue(value)) {
     return true;
   }
@@ -446,7 +446,11 @@ function callMethodOnSanitizedTarget(
   // cannot be temporarily replaced.  Fall back to the proxy path, which
   // handles methods that don't access private fields.  Private-field
   // methods on frozen objects will propagate the TypeError.
-  return strip(fn.apply(proxy, args), seen);
+  const fallback = fn.apply(proxy, args);
+  if (fallback instanceof Promise) {
+    return (fallback as Promise<unknown>).then((v) => strip(v, seen));
+  }
+  return strip(fallback, seen);
 }
 
 function createSanitizedNonPlainContextView<T extends object>(
@@ -459,7 +463,7 @@ function createSanitizedNonPlainContextView<T extends object>(
   // private fields are bound to the original instance, not the proxy; in
   // that case we temporarily sanitize the target's own properties, retry
   // with the target as receiver, and restore the original values afterward.
-  // See: https://github.com/dahlia/optique/issues/407
+  // See: https://github.com/dahlia/optique/issues/307
   const methodCache = new Map<
     PropertyKey,
     { fn: unknown; wrapper: (...args: unknown[]) => unknown }
@@ -473,6 +477,11 @@ function createSanitizedNonPlainContextView<T extends object>(
           seen,
         );
         if (typeof val === "function") {
+          // For non-configurable non-writable properties, the proxy invariant
+          // requires returning the exact value.
+          if (!descriptor.configurable && !descriptor.writable) {
+            return val;
+          }
           // Own function-valued properties (class fields, constructor-
           // assigned methods) need the sanitized-target wrapper just like
           // prototype methods.  Cached and invalidated when the underlying

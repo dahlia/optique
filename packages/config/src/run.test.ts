@@ -1278,37 +1278,10 @@ describe("run with config context", { concurrency: false }, () => {
     const schema = z.object({ token: z.string().optional() }).optional();
     const context = createConfigContext({ schema });
 
-    const parser = object({
-      name: withDefault(option("--name", string()), "test"),
-    });
-
-    // The load callback receives sanitized parsed values.  We use a custom
-    // SourceContext that injects a class instance with a deferred prompt
-    // value into the parsed result before the config context sees it.
     let observedApiKey: string | undefined;
     let observedDeferred: unknown = "not-set";
 
-    const injectContext: SourceContext = {
-      id: Symbol.for("@test/inject-class-instance"),
-      mode: "dynamic",
-      getAnnotations(parsed?: unknown) {
-        if (parsed == null) return {};
-        // Replace the parsed value with a class instance containing a
-        // deferred prompt value.  This simulates what happens when map()
-        // transforms a prompt-backed config field into a class instance.
-        return {};
-      },
-    };
-
-    const result = await runWith(parser, "test", [injectContext, context], {
-      args: [],
-      load(_parsed) {
-        return { config: undefined, meta: undefined };
-      },
-    });
-    assert.deepEqual(result, { name: "test" });
-
-    // Now test the sanitization directly through getAnnotations.
+    // Test the sanitization directly through getAnnotations.
     // getAnnotations is called by the runner with the parsed value.
     // We call it manually with a class instance containing deferred values.
     const instance = new ConfigInput(
