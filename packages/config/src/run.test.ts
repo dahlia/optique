@@ -1380,4 +1380,53 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(observedSecret, "safe");
     assert.equal(observedToken, undefined);
   });
+
+  test("sanitized non-plain methods observe scrubbed public fields via this", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // Methods that derive results from sanitized public fields must observe
+    // the scrubbed values, not the original deferred sentinels.  For example,
+    // hasToken() { return this.token !== undefined; } must return false when
+    // the token field holds a deferred prompt value.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Cfg {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      getId(): string {
+        return this.#id;
+      }
+      hasToken(): boolean {
+        return this.token !== undefined;
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new Cfg(
+      "abc",
+      { [deferredPromptValueKey]: true },
+    );
+
+    let observedId: string | undefined;
+    let observedHasToken: boolean | undefined;
+
+    context.getAnnotations(instance, {
+      load(parsed: unknown) {
+        const c = parsed as Cfg;
+        observedId = c.getId();
+        observedHasToken = c.hasToken();
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    assert.equal(observedId, "abc");
+    assert.equal(observedHasToken, false);
+  });
 });

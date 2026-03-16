@@ -8376,4 +8376,63 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedSecret, "test");
     assert.equal(observedToken, undefined);
   });
+
+  it("sanitized non-plain methods observe scrubbed public fields via this", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // Methods that derive results from sanitized public fields must observe
+    // the scrubbed values, not the original deferred sentinels.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Cfg {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      getId(): string {
+        return this.#id;
+      }
+      hasToken(): boolean {
+        return this.token !== undefined;
+      }
+    }
+
+    let observedId: string | undefined;
+    let observedHasToken: boolean | undefined;
+
+    const contextKey = Symbol.for("@test/method-internal-consistency");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const c = parsed as Cfg;
+        observedId = c.getId();
+        observedHasToken = c.hasToken();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) =>
+        new Cfg(
+          value.name,
+          { [deferredPromptValueKey]: true },
+        ),
+    );
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(result instanceof Cfg);
+    assert.equal(observedId, "test");
+    assert.equal(observedHasToken, false);
+  });
 });

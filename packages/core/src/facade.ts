@@ -321,12 +321,14 @@ function createSanitizedNonPlainContextView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
-  // NOTE: Methods are invoked on the original target so private field access
-  // works correctly, and their return values are sanitized so deferred prompt
-  // sentinels cannot leak through wrapper methods over public fields.
+  // NOTE: Methods are invoked with the proxy as receiver so that property
+  // reads inside the method body go through the sanitized get trap.  If the
+  // method accesses private fields, that call throws a TypeError because
+  // private fields are bound to the original instance, not the proxy; in
+  // that case we retry with the original target as receiver.
   // See: https://github.com/dahlia/optique/issues/407
-  const proxy = new Proxy(value, {
-    get(target, key, receiver) {
+  const proxy: T = new Proxy(value, {
+    get(target, key, _receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
         const val = stripDeferredPromptValuesForContexts(
@@ -335,21 +337,41 @@ function createSanitizedNonPlainContextView<T extends object>(
         );
         if (typeof val === "function") {
           return function (this: unknown, ...args: unknown[]) {
-            return stripDeferredPromptValuesForContexts(
-              val.apply(target, args),
-              seen,
-            );
+            try {
+              return stripDeferredPromptValuesForContexts(
+                val.apply(proxy, args),
+                seen,
+              );
+            } catch (e) {
+              if (e instanceof TypeError) {
+                return stripDeferredPromptValuesForContexts(
+                  val.apply(target, args),
+                  seen,
+                );
+              }
+              throw e;
+            }
           };
         }
         return val;
       }
-      const result = Reflect.get(target, key, receiver);
+      const result = Reflect.get(target, key, proxy);
       if (typeof result === "function") {
         return function (this: unknown, ...args: unknown[]) {
-          return stripDeferredPromptValuesForContexts(
-            result.apply(target, args),
-            seen,
-          );
+          try {
+            return stripDeferredPromptValuesForContexts(
+              result.apply(proxy, args),
+              seen,
+            );
+          } catch (e) {
+            if (e instanceof TypeError) {
+              return stripDeferredPromptValuesForContexts(
+                result.apply(target, args),
+                seen,
+              );
+            }
+            throw e;
+          }
         };
       }
       return result;
