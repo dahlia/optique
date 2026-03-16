@@ -714,14 +714,11 @@ describe("choice", () => {
       assert.ok(!result4.success);
     });
 
-    it("should work with empty choice list", () => {
-      const parser = choice([]);
-
-      const result1 = parser.parse("anything");
-      assert.ok(!result1.success);
-
-      const result2 = parser.parse("");
-      assert.ok(!result2.success);
+    it("should throw TypeError for empty choice list", () => {
+      assert.throws(
+        () => choice([]),
+        TypeError,
+      );
     });
 
     it("should handle choices with special characters", () => {
@@ -945,22 +942,11 @@ describe("choice", () => {
       }
     });
 
-    it("should provide structured error messages for empty choice list", () => {
-      const parser = choice([]);
-      const result = parser.parse("anything");
-
-      assert.ok(!result.success);
-      if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "anything" },
-            { type: "text", text: "." },
-          ] as const,
-        );
-      }
+    it("should throw TypeError for empty choice list", () => {
+      assert.throws(
+        () => choice([] as string[]),
+        TypeError,
+      );
     });
 
     it("should provide structured error messages for case insensitive parser", () => {
@@ -1481,11 +1467,11 @@ describe("choice", () => {
       }
     });
 
-    it("should work with empty number choice list", () => {
-      const parser = choice([] as number[]);
-
-      const result = parser.parse("1");
-      assert.ok(!result.success);
+    it("should throw TypeError for empty number choice list", () => {
+      assert.throws(
+        () => choice([] as number[]),
+        TypeError,
+      );
     });
 
     it("should reject hex, binary, octal, and scientific notation", () => {
@@ -1775,9 +1761,11 @@ describe("choice", () => {
       assert.deepEqual(parser.choices, ["JSON", "YAML"]);
     });
 
-    it("should expose empty array for empty choices", () => {
-      const parser = choice([] as string[]);
-      assert.deepEqual(parser.choices, []);
+    it("should throw TypeError for empty choices", () => {
+      assert.throws(
+        () => choice([] as string[]),
+        TypeError,
+      );
     });
 
     it("should expose single-element array for single choice", () => {

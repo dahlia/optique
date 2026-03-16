@@ -258,6 +258,10 @@ To be released.
     and multiple choices normalize to the same lowercase value (e.g., `"JSON"`
     and `"json"`).  Previously the first match won silently.  [[#310], [#533]]
 
+ -  Changed `choice()` to throw `TypeError` when the choices array is empty.
+    Previously `choice([])` created an unsatisfiable parser with a malformed
+    error message.  [[#332], [#536]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -288,6 +292,7 @@ To be released.
 [#242]: https://github.com/dahlia/optique/issues/242
 [#248]: https://github.com/dahlia/optique/issues/248
 [#310]: https://github.com/dahlia/optique/issues/310
+[#332]: https://github.com/dahlia/optique/issues/332
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
@@ -299,6 +304,7 @@ To be released.
 [#528]: https://github.com/dahlia/optique/pull/528
 [#531]: https://github.com/dahlia/optique/pull/531
 [#533]: https://github.com/dahlia/optique/pull/533
+[#536]: https://github.com/dahlia/optique/pull/536
 
 ### @optique/config
 
