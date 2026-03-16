@@ -350,7 +350,7 @@ async function importModule(
   }
 
   const isPlainTs = /\.[mc]?ts$/.test(filePath);
-  const isJsx = jsxTsxPattern.test(filePath);
+  const isJsxOrTsx = jsxTsxPattern.test(filePath);
   const isDeno = "Deno" in globalThis;
   const isBun = "Bun" in globalThis;
 
@@ -359,9 +359,9 @@ async function importModule(
   // it on older Node versions without native type stripping.
   if (
     !isDeno && !isBun &&
-    (isJsx || (isPlainTs && !nodeSupportsNativeTypeScript()))
+    (isJsxOrTsx || (isPlainTs && !nodeSupportsNativeTypeScript()))
   ) {
-    await registerTsx(filePath, isJsx);
+    await registerTsx(filePath, isJsxOrTsx);
   } else if (!isDeno && !isBun && isPlainTs) {
     // On Node.js 25.2+ plain TS works natively, but transitive JSX/TSX
     // dependencies still need tsx.  Register it opportunistically so that
@@ -406,17 +406,17 @@ function extractPathFromExtensionError(message: string): string | null {
 /**
  * Registers the tsx loader for TypeScript/JSX support on Node.js.
  * @param filePath The file path being loaded (used for error messages).
- * @param isJsx Whether the file uses a JSX extension.
+ * @param isJsxOrTsx Whether the file uses a JSX or TSX extension.
  */
 async function registerTsx(
   filePath: string,
-  isJsx: boolean,
+  isJsxOrTsx: boolean,
 ): Promise<void> {
   try {
     const tsx = await import("tsx/esm/api");
     tsx.register();
   } catch {
-    if (isJsx) {
+    if (isJsxOrTsx) {
       jsxLoaderRequiredError(filePath);
     } else {
       tsxRequiredError(filePath);
