@@ -274,7 +274,7 @@ To be released.
  -  Changed `choice()` to reject non-boolean `caseInsensitive` option values
     at runtime.  Previously, truthy non-boolean values like `"no"` silently
     enabled case-insensitive matching due to JavaScript truthiness coercion.
-    [[#389]]
+    [[#389], [#548]]
 
  -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
     config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
@@ -338,6 +338,7 @@ To be released.
 [#536]: https://github.com/dahlia/optique/pull/536
 [#537]: https://github.com/dahlia/optique/pull/537
 [#546]: https://github.com/dahlia/optique/pull/546
+[#548]: https://github.com/dahlia/optique/pull/548
 
 ### @optique/config
 
