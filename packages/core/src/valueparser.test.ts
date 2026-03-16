@@ -2783,6 +2783,18 @@ describe("url", () => {
       const parser = url({});
       assert.equal(parser.metavar, "URL");
     });
+
+    it("should snapshot allowedProtocols at construction time", () => {
+      const protocols = ["https:"];
+      const parser = url({ allowedProtocols: protocols });
+      assert.ok(parser.parse("https://example.com").success);
+      assert.ok(!parser.parse("http://example.com").success);
+      // Mutate protocols after construction
+      protocols[0] = "http:";
+      // Parser should still accept https and reject http
+      assert.ok(parser.parse("https://example.com").success);
+      assert.ok(!parser.parse("http://example.com").success);
+    });
   });
 });
 
