@@ -1,6 +1,11 @@
 import type { DocPage, DocSection } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
-import type { Usage, UsageTerm } from "@optique/core/usage";
+import {
+  isDocHidden,
+  isUsageHidden,
+  type Usage,
+  type UsageTerm,
+} from "@optique/core/usage";
 import { escapeHyphens, formatMessageAsRoff } from "./roff.ts";
 
 /**
@@ -130,11 +135,12 @@ function escapeThField(value: string): string {
  *
  * @param term The usage term to format.
  * @returns The roff-formatted string.
+ * @throws {TypeError} If the term has an unknown type.
  * @since 0.10.0
  */
 export function formatUsageTermAsRoff(term: UsageTerm): string {
-  // Skip hidden terms
-  if ("hidden" in term && term.hidden) return "";
+  // Skip usage-hidden terms
+  if ("hidden" in term && isUsageHidden(term.hidden)) return "";
 
   switch (term.type) {
     case "argument":
@@ -153,11 +159,13 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
 
     case "optional": {
       const inner = formatUsageAsRoff(term.terms);
+      if (inner === "") return "";
       return `[${inner}]`;
     }
 
     case "multiple": {
       const inner = formatUsageAsRoff(term.terms);
+      if (inner === "") return "";
       if (term.min < 1) {
         return `[${inner} ...]`;
       }
@@ -167,8 +175,10 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
     case "exclusive": {
       const alternatives = term.terms
         .map((t) => formatUsageAsRoff(t))
-        .join(" | ");
-      return `(${alternatives})`;
+        .filter((s) => s !== "");
+      if (alternatives.length === 0) return "";
+      if (alternatives.length === 1) return alternatives[0];
+      return `(${alternatives.join(" | ")})`;
     }
 
     case "literal":
@@ -209,6 +219,9 @@ function formatUsageAsRoff(usage: Usage): string {
  * @returns The roff-formatted term string.
  */
 function formatDocEntryTerm(term: UsageTerm): string {
+  // Skip doc-hidden terms
+  if ("hidden" in term && isDocHidden(term.hidden)) return "";
+
   switch (term.type) {
     case "option": {
       const names = term.names
@@ -228,8 +241,85 @@ function formatDocEntryTerm(term: UsageTerm): string {
       return term.value;
 
     default:
-      return formatUsageTermAsRoff(term);
+      return formatDocUsageTermAsRoff(term);
   }
+}
+
+/**
+ * Formats a {@link UsageTerm} as roff markup for doc rendering, filtering
+ * doc-hidden terms instead of usage-hidden terms.
+ *
+ * @throws {TypeError} If the term has an unknown type.
+ */
+function formatDocUsageTermAsRoff(term: UsageTerm): string {
+  if ("hidden" in term && isDocHidden(term.hidden)) return "";
+
+  switch (term.type) {
+    case "optional": {
+      const inner = formatDocUsageAsRoff(term.terms);
+      if (inner === "") return "";
+      return `[${inner}]`;
+    }
+
+    case "multiple": {
+      const inner = formatDocUsageAsRoff(term.terms);
+      if (inner === "") return "";
+      if (term.min < 1) {
+        return `[${inner} ...]`;
+      }
+      return `${inner} ...`;
+    }
+
+    case "exclusive": {
+      const alternatives = term.terms
+        .map((t) => formatDocUsageAsRoff(t))
+        .filter((s) => s !== "");
+      if (alternatives.length === 0) return "";
+      if (alternatives.length === 1) return alternatives[0];
+      return `(${alternatives.join(" | ")})`;
+    }
+
+    case "argument":
+      return `\\fI${term.metavar}\\fR`;
+
+    case "option": {
+      const names = term.names
+        .map((name) => `\\fB${escapeHyphens(name)}\\fR`)
+        .join(", ");
+      const metavarPart = term.metavar ? ` \\fI${term.metavar}\\fR` : "";
+      return `${names}${metavarPart}`;
+    }
+
+    case "command":
+      return `\\fB${term.name}\\fR`;
+
+    case "literal":
+      return term.value;
+
+    case "passthrough":
+      return "[...]";
+
+    case "ellipsis":
+      return "...";
+
+    default: {
+      const _exhaustive: never = term;
+      throw new TypeError(
+        `Unknown usage term type: ${(_exhaustive as UsageTerm).type}.`,
+      );
+    }
+  }
+}
+
+/**
+ * Formats a {@link Usage} array as roff markup for doc rendering,
+ * filtering doc-hidden terms.
+ */
+function formatDocUsageAsRoff(usage: Usage): string {
+  return usage
+    .map(formatDocUsageTermAsRoff)
+    .filter((s) => s !== "")
+    .join(" ");
 }
 
 /**
@@ -242,8 +332,11 @@ function formatDocSectionEntries(section: DocSection): string {
   const lines: string[] = [];
 
   for (const entry of section.entries) {
+    const termStr = formatDocEntryTerm(entry.term);
+    if (termStr === "") continue;
+
     lines.push(".TP");
-    lines.push(formatDocEntryTerm(entry.term));
+    lines.push(termStr);
 
     if (entry.description) {
       let desc = formatMessageAsRoff(entry.description);
@@ -352,27 +445,39 @@ export function formatDocPageAsMan(
   for (const section of page.sections) {
     if (section.entries.length === 0) continue;
 
+    const content = formatDocSectionEntries(section);
+    if (content === "") continue;
+
     const title = section.title?.toUpperCase() ?? "OPTIONS";
     lines.push(`.SH ${title}`);
-    lines.push(formatDocSectionEntries(section));
+    lines.push(content);
   }
 
   // .SH ENVIRONMENT
   if (options.environment && options.environment.entries.length > 0) {
-    lines.push(".SH ENVIRONMENT");
-    lines.push(formatDocSectionEntries(options.environment));
+    const content = formatDocSectionEntries(options.environment);
+    if (content !== "") {
+      lines.push(".SH ENVIRONMENT");
+      lines.push(content);
+    }
   }
 
   // .SH FILES
   if (options.files && options.files.entries.length > 0) {
-    lines.push(".SH FILES");
-    lines.push(formatDocSectionEntries(options.files));
+    const content = formatDocSectionEntries(options.files);
+    if (content !== "") {
+      lines.push(".SH FILES");
+      lines.push(content);
+    }
   }
 
   // .SH EXIT STATUS
   if (options.exitStatus && options.exitStatus.entries.length > 0) {
-    lines.push(".SH EXIT STATUS");
-    lines.push(formatDocSectionEntries(options.exitStatus));
+    const content = formatDocSectionEntries(options.exitStatus);
+    if (content !== "") {
+      lines.push(".SH EXIT STATUS");
+      lines.push(content);
+    }
   }
 
   // .SH EXAMPLES
