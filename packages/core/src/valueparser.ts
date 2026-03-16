@@ -349,7 +349,8 @@ export function choice<const T extends string | number>(
       }
       return result;
     })();
-    const numberOptions = options as ChoiceOptionsNumber;
+    const numberInvalidChoice = (options as ChoiceOptionsNumber).errors
+      ?.invalidChoice;
     const numberStrings = numberChoices.map((v) =>
       Object.is(v, -0) ? "-0" : String(v)
     );
@@ -447,7 +448,7 @@ export function choice<const T extends string | number>(
             input,
             numberChoices,
             numberChoices,
-            numberOptions,
+            numberInvalidChoice,
           ),
         };
       },
@@ -499,6 +500,7 @@ export function choice<const T extends string | number>(
       seen.set(nv, original);
     }
   }
+  const stringInvalidChoice = stringOptions.errors?.invalidChoice;
   return {
     $mode: "sync",
     metavar,
@@ -509,7 +511,11 @@ export function choice<const T extends string | number>(
       if (index < 0) {
         return {
           success: false,
-          error: formatStringChoiceError(input, stringChoices, stringOptions),
+          error: formatStringChoiceError(
+            input,
+            stringChoices,
+            stringInvalidChoice,
+          ),
         };
       }
       return { success: true, value: stringChoices[index] as T };
@@ -590,12 +596,15 @@ function normalizeDecimal(s: string): string {
 function formatStringChoiceError(
   input: string,
   choices: readonly string[],
-  options: ChoiceOptionsString,
+  invalidChoice:
+    | Message
+    | ((input: string, choices: readonly string[]) => Message)
+    | undefined,
 ): Message {
-  if (options.errors?.invalidChoice) {
-    return typeof options.errors.invalidChoice === "function"
-      ? options.errors.invalidChoice(input, choices)
-      : options.errors.invalidChoice;
+  if (invalidChoice) {
+    return typeof invalidChoice === "function"
+      ? invalidChoice(input, choices)
+      : invalidChoice;
   }
   return formatDefaultChoiceError(input, choices);
 }
@@ -607,12 +616,15 @@ function formatNumberChoiceError(
   input: string,
   validChoices: readonly number[],
   allChoices: readonly number[],
-  options: ChoiceOptionsNumber,
+  invalidChoice:
+    | Message
+    | ((input: string, choices: readonly number[]) => Message)
+    | undefined,
 ): Message {
-  if (options.errors?.invalidChoice) {
-    return typeof options.errors.invalidChoice === "function"
-      ? options.errors.invalidChoice(input, validChoices)
-      : options.errors.invalidChoice;
+  if (invalidChoice) {
+    return typeof invalidChoice === "function"
+      ? invalidChoice(input, validChoices)
+      : invalidChoice;
   }
   return formatDefaultChoiceError(input, allChoices);
 }
