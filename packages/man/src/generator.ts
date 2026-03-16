@@ -44,6 +44,7 @@ function isParser(
       typeof (value as { parse?: unknown }).parse === "function" &&
       "$mode" in value &&
       "usage" in value &&
+      Array.isArray((value as { usage?: unknown }).usage) &&
       "getDocFragments" in value &&
       typeof (value as { getDocFragments?: unknown }).getDocFragments ===
         "function"

@@ -263,6 +263,21 @@ describe("generateManPageSync()", () => {
     );
   });
 
+  it("rejects a parser-like object with non-array usage", () => {
+    const fakeParser = {
+      parse() {},
+      $mode: "sync",
+      usage: {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    assert.throws(
+      () => generateManPageSync(fakeParser as never, { name: "x", section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
   it("rejects empty name", () => {
     const parser = object({});
     assert.throws(
