@@ -320,12 +320,18 @@ async function importModule(
     fileNotFoundError(filePath);
   }
 
-  const needsTsxLoader = /\.([mc]?ts|[jt]sx)$/.test(filePath);
+  const isTypeScript = /\.[mc]?ts$/.test(filePath);
+  const isJsx = /\.[jt]sx$/.test(filePath);
   const isDeno = "Deno" in globalThis;
   const isBun = "Bun" in globalThis;
 
-  // Node.js + TypeScript/JSX
-  if (!isDeno && !isBun && needsTsxLoader && !nodeSupportsNativeTypeScript()) {
+  // Node.js + TypeScript/JSX: JSX files always need tsx (Node's native type
+  // stripping does not handle JSX transform), while plain TS files only need
+  // it on older Node versions without native type stripping.
+  if (
+    !isDeno && !isBun &&
+    (isJsx || (isTypeScript && !nodeSupportsNativeTypeScript()))
+  ) {
     try {
       const tsx = await import("tsx/esm/api");
       tsx.register();
