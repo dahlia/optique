@@ -285,6 +285,14 @@ To be released.
     preventing post-construction option mutation from causing `parse()` and
     `suggest()` to diverge.  [[#508], [#554]]
 
+ -  Fixed several value parsers (`choice()`, `string()`, `uuid()`,
+    `email()`, `domain()`) to snapshot caller-owned mutable configuration
+    (arrays and options) at construction time.  Previously, mutating the
+    original config object or array after parser construction could silently
+    change parse semantics, suggestions, and error messages.  `choice()` now
+    also freezes its public `choices` property to prevent post-construction
+    mutation.  [[#507], [#555]]
+
  -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
     config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
     from inner parsers.  These combinators now forward the hook so that
@@ -335,6 +343,7 @@ To be released.
 [#388]: https://github.com/dahlia/optique/issues/388
 [#389]: https://github.com/dahlia/optique/issues/389
 [#490]: https://github.com/dahlia/optique/pull/490
+[#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
 [#512]: https://github.com/dahlia/optique/pull/512
 [#520]: https://github.com/dahlia/optique/pull/520
@@ -352,6 +361,7 @@ To be released.
 [#548]: https://github.com/dahlia/optique/pull/548
 [#553]: https://github.com/dahlia/optique/pull/553
 [#554]: https://github.com/dahlia/optique/pull/554
+[#555]: https://github.com/dahlia/optique/pull/555
 
 ### @optique/config
 

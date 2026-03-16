@@ -1915,6 +1915,42 @@ describe("choice", () => {
       assert.deepEqual([...parser.suggest!("f")], []);
     });
 
+    it("should snapshot choices array at construction time", () => {
+      const choices = ["a", "b", "c"];
+      const parser = choice(choices);
+      choices[0] = "z";
+      // Parser should still accept "a" (original value), not "z"
+      assert.ok(parser.parse("a").success);
+      assert.ok(!parser.parse("z").success);
+    });
+
+    it("should not allow mutation through the public choices property", () => {
+      const parser = choice(["a", "b", "c"]);
+      // The choices property should be frozen
+      assert.throws(() => {
+        (parser.choices as string[])[0] = "z";
+      });
+      // Parser should still work correctly
+      assert.ok(parser.parse("a").success);
+    });
+
+    it("should snapshot number choices array at construction time", () => {
+      const choices: number[] = [1, 2, 3];
+      const parser = choice(choices);
+      choices[0] = 99;
+      // Parser should still accept "1" (original value), not "99"
+      assert.ok(parser.parse("1").success);
+      assert.ok(!parser.parse("99").success);
+    });
+
+    it("should not allow mutation through the public number choices property", () => {
+      const parser = choice([1, 2, 3]);
+      assert.throws(() => {
+        (parser.choices as number[])[0] = 99;
+      });
+      assert.ok(parser.parse("1").success);
+    });
+
     it("should work with all-duplicate list", () => {
       const parser = choice(["a", "a"]);
       assert.deepEqual(parser.choices, ["a"]);
@@ -3574,6 +3610,28 @@ describe("uuid", () => {
       const result3 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"); // v1
       assert.ok(!result3.success);
     });
+
+    it("should snapshot allowedVersions at construction time", () => {
+      const versions: number[] = [4];
+      const parser = uuid({ allowedVersions: versions });
+      // v4 UUID should pass
+      assert.ok(
+        parser.parse("550e8400-e29b-41d4-a716-446655440000").success,
+      );
+      // v1 UUID should fail
+      assert.ok(
+        !parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success,
+      );
+      // Mutate versions after construction
+      versions[0] = 1;
+      // Parser should still accept v4 and reject v1
+      assert.ok(
+        parser.parse("550e8400-e29b-41d4-a716-446655440000").success,
+      );
+      assert.ok(
+        !parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success,
+      );
+    });
   });
 });
 
@@ -4133,6 +4191,18 @@ describe("string", () => {
         () => string({ pattern: 123 as never }),
         TypeError,
       );
+    });
+
+    it("should snapshot pattern at construction time", () => {
+      const options: { pattern: RegExp } = { pattern: /^a$/ };
+      const parser = string(options);
+      assert.ok(parser.parse("a").success);
+      assert.ok(!parser.parse("b").success);
+      // Mutate the options after construction
+      options.pattern = /^b$/;
+      // Parser should still use the original pattern
+      assert.ok(parser.parse("a").success);
+      assert.ok(!parser.parse("b").success);
     });
   });
 });
@@ -6238,6 +6308,18 @@ describe("email()", () => {
         "user2@example.com",
       ]);
     });
+
+    it("should snapshot allowedDomains at construction time", () => {
+      const domains = ["example.com"];
+      const parser = email({ allowedDomains: domains });
+      assert.ok(parser.parse("a@example.com").success);
+      assert.ok(!parser.parse("a@other.com").success);
+      // Mutate domains after construction
+      domains[0] = "other.com";
+      // Parser should still accept example.com and reject other.com
+      assert.ok(parser.parse("a@example.com").success);
+      assert.ok(!parser.parse("a@other.com").success);
+    });
   });
 });
 
@@ -7802,6 +7884,18 @@ describe("domain()", () => {
       const result = parser.parse("API.Example.COM");
       assert.ok(result.success);
       assert.strictEqual(result.value, "api.example.com");
+    });
+
+    it("should snapshot allowedTLDs at construction time", () => {
+      const tlds = ["com"];
+      const parser = domain({ allowedTLDs: tlds });
+      assert.ok(parser.parse("example.com").success);
+      assert.ok(!parser.parse("example.org").success);
+      // Mutate tlds after construction
+      tlds[0] = "org";
+      // Parser should still accept .com and reject .org
+      assert.ok(parser.parse("example.com").success);
+      assert.ok(!parser.parse("example.org").success);
     });
   });
 });

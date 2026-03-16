@@ -353,10 +353,11 @@ export function choice<const T extends string | number>(
     const numberStrings = numberChoices.map((v) =>
       Object.is(v, -0) ? "-0" : String(v)
     );
+    const frozenNumberChoices = Object.freeze(numberChoices) as readonly T[];
     return {
       $mode: "sync",
       metavar,
-      choices: numberChoices as readonly T[],
+      choices: frozenNumberChoices,
       parse(input: string): ValueParserResult<T> {
         // Exact match against canonical string representations
         // (String(value) for most values, "-0" for negative zero).
@@ -464,9 +465,9 @@ export function choice<const T extends string | number>(
   }
 
   // String choice implementation — deduplicate identical values
-  const stringChoices: readonly string[] = [
+  const stringChoices: readonly string[] = Object.freeze([
     ...new Set(choices as readonly string[]),
-  ];
+  ]);
   const stringOptions = options as ChoiceOptionsString;
   if (
     stringOptions.caseInsensitive !== undefined &&
@@ -661,27 +662,29 @@ export function string(
   }
   const metavar = options.metavar ?? "STRING";
   ensureNonEmptyString(metavar);
+  // Snapshot pattern at construction time to prevent post-construction mutation
+  const pattern = options.pattern != null
+    ? new RegExp(options.pattern.source, options.pattern.flags)
+    : null;
+  const patternMismatch = options.errors?.patternMismatch;
   return {
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<string> {
-      if (options.pattern != null) {
-        const pattern = new RegExp(
-          options.pattern.source,
-          options.pattern.flags,
-        );
-        if (pattern.test(input)) {
+      if (pattern != null) {
+        const testPattern = new RegExp(pattern.source, pattern.flags);
+        if (testPattern.test(input)) {
           return { success: true, value: input };
         }
 
         return {
           success: false,
-          error: options.errors?.patternMismatch
-            ? (typeof options.errors.patternMismatch === "function"
-              ? options.errors.patternMismatch(input, options.pattern)
-              : options.errors.patternMismatch)
+          error: patternMismatch
+            ? (typeof patternMismatch === "function"
+              ? patternMismatch(input, pattern)
+              : patternMismatch)
             : message`Expected a string matching pattern ${
-              text(options.pattern.source)
+              text(pattern.source)
             }, but got ${input}.`,
         };
       }
@@ -1241,7 +1244,7 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
             ? (typeof options.errors.disallowedProtocol === "function"
               ? options.errors.disallowedProtocol(
                 url.protocol,
-                options.allowedProtocols!,
+                allowedProtocols!,
               )
               : options.errors.disallowedProtocol)
             : message`URL protocol ${url.protocol} is not allowed. Allowed protocols: ${
@@ -1684,6 +1687,12 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const metavar = options.metavar ?? "UUID";
   ensureNonEmptyString(metavar);
+  // Snapshot mutable config at construction time
+  const allowedVersions = options.allowedVersions != null
+    ? [...options.allowedVersions]
+    : null;
+  const invalidUuid = options.errors?.invalidUuid;
+  const disallowedVersion = options.errors?.disallowedVersion;
 
   return {
     $mode: "sync",
@@ -1692,39 +1701,34 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
       if (!uuidRegex.test(input)) {
         return {
           success: false,
-          error: options.errors?.invalidUuid
-            ? (typeof options.errors.invalidUuid === "function"
-              ? options.errors.invalidUuid(input)
-              : options.errors.invalidUuid)
+          error: invalidUuid
+            ? (typeof invalidUuid === "function"
+              ? invalidUuid(input)
+              : invalidUuid)
             : message`Expected a valid UUID in format ${"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}, but got ${input}.`,
         };
       }
 
       // Check version if specified
-      if (
-        options.allowedVersions != null && options.allowedVersions.length > 0
-      ) {
+      if (allowedVersions != null && allowedVersions.length > 0) {
         // Extract version from the first character of the third group
         const versionChar = input.charAt(14); // Position of version digit
         const version = parseInt(versionChar, 16);
 
-        if (!options.allowedVersions.includes(version)) {
+        if (!allowedVersions.includes(version)) {
           return {
             success: false,
-            error: options.errors?.disallowedVersion
-              ? (typeof options.errors.disallowedVersion === "function"
-                ? options.errors.disallowedVersion(
-                  version,
-                  options.allowedVersions,
-                )
-                : options.errors.disallowedVersion)
+            error: disallowedVersion
+              ? (typeof disallowedVersion === "function"
+                ? disallowedVersion(version, allowedVersions)
+                : disallowedVersion)
               : (() => {
                 let expectedVersions = message``;
                 let i = 0;
-                for (const v of options.allowedVersions) {
+                for (const v of allowedVersions) {
                   expectedVersions = i < 1
                     ? message`${expectedVersions}${v.toLocaleString("en")}`
-                    : i + 1 >= options.allowedVersions.length
+                    : i + 1 >= allowedVersions.length
                     ? message`${expectedVersions}, or ${v.toLocaleString("en")}`
                     : message`${expectedVersions}, ${v.toLocaleString("en")}`;
                   i++;
@@ -2737,7 +2741,9 @@ export function email(
   const allowMultiple = options?.allowMultiple ?? false;
   const allowDisplayName = options?.allowDisplayName ?? false;
   const lowercase = options?.lowercase ?? false;
-  const allowedDomains = options?.allowedDomains;
+  const allowedDomains = options?.allowedDomains != null
+    ? [...options.allowedDomains]
+    : undefined;
 
   // Simplified RFC 5322: alphanumeric, dots, hyphens, underscores, plus signs
   const atextRegex = /^[a-zA-Z0-9._+-]+$/;
@@ -3928,7 +3934,9 @@ export function domain(
 ): ValueParser<"sync", string> {
   const metavar = options?.metavar ?? "DOMAIN";
   const allowSubdomains = options?.allowSubdomains ?? true;
-  const allowedTLDs = options?.allowedTLDs;
+  const allowedTLDs = options?.allowedTLDs != null
+    ? [...options.allowedTLDs]
+    : undefined;
   const minLabels = options?.minLabels ?? 2;
   const lowercase = options?.lowercase ?? false;
   const errors = options?.errors;
