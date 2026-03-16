@@ -99,7 +99,7 @@ describe("path", () => {
 
     it("should use custom function-based emptyPath error message", () => {
       const parser = path({
-        errors: { emptyPath: () => message`Please provide a path.` },
+        errors: { emptyPath: (_input) => message`Please provide a path.` },
       });
       const result = parser.parse("  ");
       assert.ok(!result.success);
