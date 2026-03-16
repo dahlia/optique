@@ -4124,18 +4124,15 @@ describe("float edge cases", () => {
     }
   });
 
-  // Note: Currently, numeric strings that overflow to Infinity are NOT rejected
-  // even when allowInfinity is false. This is the current behavior.
-  // Only literal "Infinity" strings are controlled by allowInfinity.
-  it("should accept values that overflow to Infinity (current behavior)", () => {
+  it("should reject values that overflow to Infinity by default", () => {
     const parser = float({});
 
     // 1e309 is beyond the range of a JavaScript number and becomes Infinity
-    const result = parser.parse("1e309");
-    assert.ok(result.success);
-    if (result.success) {
-      assert.equal(result.value, Infinity);
-    }
+    const result1 = parser.parse("1e309");
+    assert.ok(!result1.success);
+
+    const result2 = parser.parse("-1e309");
+    assert.ok(!result2.success);
   });
 
   it("should accept values that become Infinity when allowInfinity is true", () => {
