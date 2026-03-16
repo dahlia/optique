@@ -183,6 +183,29 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       }
     });
 
+    it("infers program name from extensionless input file", async () => {
+      const sourceFile = join(fixturesDir, "parser.ts");
+      const tempDir = await mkdtemp(
+        join(fixturesDir, "tmp-optique-man-extless-"),
+      );
+      const parserFile = join(tempDir, "myapp");
+
+      try {
+        await writeFile(parserFile, await readFile(sourceFile, "utf-8"));
+
+        const result = await runCli([
+          parserFile,
+          "-s",
+          "1",
+        ]);
+
+        assert.equal(result.exitCode, 0);
+        assert.ok(result.stdout.includes(".TH MYAPP 1"));
+      } finally {
+        await rm(tempDir, { recursive: true });
+      }
+    });
+
     it("generates man page from named export", async () => {
       const namedFile = join(fixturesDir, "named-export.ts");
       const result = await runCli([namedFile, "-s", "1", "-e", "myProgram"]);
