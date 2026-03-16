@@ -536,8 +536,13 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     characters (backslashes, line-start periods/quotes) in program names,
     command names, and `SEE ALSO` reference names.  [[#274], [#542]]
 
+ -  Fixed `formatMessageAsRoff()` not escaping double quotes inside
+    `value()` and `values()` terms, which produced malformed roff output.
+    [[#273], [#544]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
+[#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#280]: https://github.com/dahlia/optique/issues/280
 [#283]: https://github.com/dahlia/optique/issues/283
@@ -546,6 +551,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#532]: https://github.com/dahlia/optique/pull/532
 [#534]: https://github.com/dahlia/optique/pull/534
 [#542]: https://github.com/dahlia/optique/pull/542
+[#544]: https://github.com/dahlia/optique/pull/544
 
 
 Version 0.10.7

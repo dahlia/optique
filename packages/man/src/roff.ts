@@ -99,12 +99,14 @@ function formatTermAsRoff(term: MessageTerm): string {
 
     case "value":
       // Quoted value with escaped content
-      return `"${escapeBackslashes(term.value)}"`;
+      return `"${escapeBackslashes(term.value).replace(/"/g, "\\(dq")}"`;
 
     case "values":
       // Space-separated quoted values
       if (term.values.length === 0) return "";
-      return term.values.map((v) => `"${escapeBackslashes(v)}"`).join(" ");
+      return term.values
+        .map((v) => `"${escapeBackslashes(v).replace(/"/g, "\\(dq")}"`)
+        .join(" ");
 
     case "envVar":
       // Bold for environment variables
