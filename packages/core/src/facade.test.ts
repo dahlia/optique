@@ -8317,4 +8317,63 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(observedSecret, "test");
     assert.equal(observedDeferred, undefined);
   });
+
+  it("sanitized non-plain methods do not leak deferred values via public fields", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // Methods that wrap public fields must return sanitized values, not raw
+    // deferred prompt sentinels.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Wrapper {
+      #secret: string;
+      token: unknown;
+      constructor(secret: string, token: unknown) {
+        this.#secret = secret;
+        this.token = token;
+      }
+      getSecret(): string {
+        return this.#secret;
+      }
+      getToken(): unknown {
+        return this.token;
+      }
+    }
+
+    let observedSecret: string | undefined;
+    let observedToken: unknown = "not-set";
+
+    const contextKey = Symbol.for("@test/method-wrapper-leak");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const w = parsed as Wrapper;
+        observedSecret = w.getSecret();
+        observedToken = w.getToken();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) =>
+        new Wrapper(
+          value.name,
+          { [deferredPromptValueKey]: true },
+        ),
+    );
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(result instanceof Wrapper);
+    assert.equal(observedSecret, "test");
+    assert.equal(observedToken, undefined);
+  });
 });

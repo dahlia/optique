@@ -321,9 +321,9 @@ function createSanitizedNonPlainContextView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
-  // NOTE: Methods are bound to the original target so private field access
-  // works correctly.  Deferred prompt values behind private fields or
-  // wrapper methods still cannot be scrubbed.
+  // NOTE: Methods are invoked on the original target so private field access
+  // works correctly, and their return values are sanitized so deferred prompt
+  // sentinels cannot leak through wrapper methods over public fields.
   // See: https://github.com/dahlia/optique/issues/407
   const proxy = new Proxy(value, {
     get(target, key, receiver) {
@@ -334,13 +334,23 @@ function createSanitizedNonPlainContextView<T extends object>(
           seen,
         );
         if (typeof val === "function") {
-          return val.bind(target);
+          return function (this: unknown, ...args: unknown[]) {
+            return stripDeferredPromptValuesForContexts(
+              val.apply(target, args),
+              seen,
+            );
+          };
         }
         return val;
       }
       const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
-        return result.bind(target);
+        return function (this: unknown, ...args: unknown[]) {
+          return stripDeferredPromptValuesForContexts(
+            result.apply(target, args),
+            seen,
+          );
+        };
       }
       return result;
     },

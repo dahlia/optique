@@ -1333,4 +1333,51 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(observedApiKey, "secret-key");
     assert.equal(observedDeferred, undefined);
   });
+
+  test("sanitized non-plain methods do not leak deferred values via public fields", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // Methods that wrap public fields (e.g. getToken() { return this.token; })
+    // must return sanitized values, not raw deferred prompt sentinels.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Wrapper {
+      #secret: string;
+      token: unknown;
+      constructor(secret: string, token: unknown) {
+        this.#secret = secret;
+        this.token = token;
+      }
+      getSecret(): string {
+        return this.#secret;
+      }
+      getToken(): unknown {
+        return this.token;
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new Wrapper(
+      "safe",
+      { [deferredPromptValueKey]: true },
+    );
+
+    let observedSecret: string | undefined;
+    let observedToken: unknown = "not-set";
+
+    context.getAnnotations(instance, {
+      load(parsed: unknown) {
+        const w = parsed as Wrapper;
+        observedSecret = w.getSecret();
+        observedToken = w.getToken();
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    assert.equal(observedSecret, "safe");
+    assert.equal(observedToken, undefined);
+  });
 });
