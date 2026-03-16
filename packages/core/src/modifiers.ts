@@ -12,6 +12,7 @@ import {
 } from "./dependency.ts";
 import {
   annotateFreshArray,
+  getAnnotations,
   inheritAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
@@ -31,6 +32,10 @@ import type {
   Suggestion,
 } from "./parser.ts";
 import type { ValueParserResult } from "./valueparser.ts";
+
+const deferPromptUntilConfigResolvesKey = Symbol.for(
+  "@optique/config/deferPromptUntilResolved",
+);
 
 /**
  * Internal helper for optional-style parsing logic shared by optional()
@@ -199,6 +204,21 @@ export function optional<M extends Mode, TValue, TState>(
     ? wrappedDependencyMarker[wrappedDependencySourceMarker]
     : undefined;
 
+  // Forward config-prompt deferral hook from inner parser so that
+  // prompt(optional(bindConfig(...))) defers correctly.
+  const deferPromptHook = Reflect.get(
+    parser,
+    deferPromptUntilConfigResolvesKey,
+  );
+  const deferPromptMarker: {
+    [deferPromptUntilConfigResolvesKey]?: (state: unknown) => boolean;
+  } = typeof deferPromptHook === "function"
+    ? {
+      [deferPromptUntilConfigResolvesKey]: (state: unknown) =>
+        deferPromptHook(state),
+    }
+    : {};
+
   // Type cast needed due to TypeScript's conditional type limitations with generic M
   return {
     $mode: parser.$mode,
@@ -208,6 +228,7 @@ export function optional<M extends Mode, TValue, TState>(
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     ...wrappedDependencyMarker,
+    ...deferPromptMarker,
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
@@ -234,6 +255,39 @@ export function optional<M extends Mode, TValue, TState>(
                 [wrappedPendingState] as unknown as TState,
               ) as Promise<ValueParserResult<TValue | undefined>>,
           );
+        }
+        // Case 3: Inner parser has config-prompt deferral hook (e.g.,
+        // optional(bindConfig(...))). Delegate to inner parser so it can
+        // resolve from config during phase-two completion.
+        if (
+          typeof deferPromptHook === "function" &&
+          state != null &&
+          typeof state === "object"
+        ) {
+          const innerComplete = (): ModeValue<
+            M,
+            ValueParserResult<TValue | undefined>
+          > => {
+            const innerResult = dispatchByMode(
+              parser.$mode,
+              () => syncParser.complete(state as unknown as TState),
+              () =>
+                parser.complete(state as unknown as TState) as Promise<
+                  ValueParserResult<TValue | undefined>
+                >,
+            );
+            return mapModeValue(
+              parser.$mode,
+              innerResult,
+              (result) =>
+                result.success
+                  ? result
+                  : { success: true, value: undefined } as ValueParserResult<
+                    TValue | undefined
+                  >,
+            );
+          };
+          return innerComplete();
         }
         // Case 2: Inner parser is a direct dependency source (e.g., optional(option(..., dep)))
         // Return undefined and DON'T register dependency - derived parsers use their defaultValue
@@ -265,12 +319,18 @@ export function optional<M extends Mode, TValue, TState>(
         // Return undefined - the dependency is not provided
         return { success: true, value: undefined };
       }
+      // Propagate annotations from the outer array state into the inner
+      // element so that source-binding wrappers like bindConfig can read
+      // them during phase-two resolution.
+      const innerElement = getAnnotations(state) != null
+        ? inheritAnnotations(state, state[0])
+        : state[0];
       return dispatchByMode(
         parser.$mode,
-        () => syncParser.complete(state[0]),
+        () => syncParser.complete(innerElement as TState),
         // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
         () =>
-          parser.complete(state[0]) as Promise<
+          parser.complete(innerElement as TState) as Promise<
             ValueParserResult<TValue | undefined>
           >,
       );
@@ -487,6 +547,21 @@ export function withDefault<
     ? { [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker] }
     : {};
 
+  // Forward config-prompt deferral hook from inner parser so that
+  // prompt(withDefault(bindConfig(...), val)) defers correctly.
+  const deferPromptHookWD = Reflect.get(
+    parser,
+    deferPromptUntilConfigResolvesKey,
+  );
+  const deferPromptMarkerWD: {
+    [deferPromptUntilConfigResolvesKey]?: (state: unknown) => boolean;
+  } = typeof deferPromptHookWD === "function"
+    ? {
+      [deferPromptUntilConfigResolvesKey]: (state: unknown) =>
+        deferPromptHookWD(state),
+    }
+    : {};
+
   // Type cast needed due to TypeScript's conditional type limitations with generic M
   return {
     $mode: parser.$mode,
@@ -496,6 +571,7 @@ export function withDefault<
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     ...wrappedDependencyMarker,
+    ...deferPromptMarkerWD,
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
