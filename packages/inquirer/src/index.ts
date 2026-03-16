@@ -1006,6 +1006,8 @@ export function prompt<M extends Mode, TValue, TState>(
           deferPromptUntilConfigResolvesKey,
         ) === "function";
 
+        const annotations = getAnnotations(state);
+
         // When no config-prompt deferral hook and no annotations are
         // present, no source-binding wrapper (bindConfig, bindEnv) can
         // resolve a real value.  Prompt directly instead of delegating to
@@ -1017,7 +1019,6 @@ export function prompt<M extends Mode, TValue, TState>(
         // so any inner parser that succeeds with consumed: [] gets
         // hasCliValue=false, and the normal complete() path (below) falls
         // through to executePrompt().  The sentinel path must match.
-        const annotations = getAnnotations(state);
         if (!hasDeferHook && annotations == null) {
           const cachedResult = executePrompt();
           promptCache = { state, result: cachedResult };
@@ -1037,30 +1038,104 @@ export function prompt<M extends Mode, TValue, TState>(
             innerInitialState == null
           ? injectAnnotations(innerInitialState, annotations)
           : innerInitialState;
-        const r = withAnnotatedInnerState(
+        const annotatedR = withAnnotatedInnerState(
           state,
           effectiveInitialState,
           (annotatedInnerState) => parser.complete(annotatedInnerState),
         );
-        // When the inner parser has a deferral hook, treat
-        // { success: true, value: undefined } as "not resolved" so the
-        // prompt still fires.  This handles optional(bindConfig(...)) inside
-        // object() where optional returns undefined when config is absent.
-        const usePromptOrDeferSentinel = (
-          res: ValueParserResult<TValue>,
+
+        if (hasDeferHook) {
+          // When the inner parser has a deferral hook, treat
+          // { success: true, value: undefined } as "not resolved" so the
+          // prompt still fires.  This handles optional(bindConfig(...))
+          // inside object() where optional returns undefined when config
+          // is absent.
+          const usePromptOrDeferSentinel = (
+            res: ValueParserResult<TValue>,
+          ): Promise<ValueParserResult<TValue>> => {
+            if (res.success && res.value === undefined) {
+              return usePromptOrDefer(state, { success: false, error: [] });
+            }
+            return usePromptOrDefer(state, res);
+          };
+          const cachedResult = annotatedR instanceof Promise
+            ? (annotatedR as Promise<ValueParserResult<TValue>>).then(
+              usePromptOrDeferSentinel,
+            )
+            : usePromptOrDeferSentinel(
+              annotatedR as ValueParserResult<TValue>,
+            );
+          promptCache = { state, result: cachedResult };
+          return cachedResult;
+        }
+
+        // No defer hook but annotations present (e.g., a sibling field
+        // uses bindEnv/bindConfig).  Simulate a parse with an empty
+        // buffer — the same thing prompt().parse() does at top level —
+        // and inspect the resulting cliState.  Source-binding wrappers
+        // (bindEnv) inject annotationKey into their output state during
+        // parse, whereas pure combinators (optional, withDefault) don't.
+        // shouldAttemptInnerCompletion() uses this signal to decide.
+        const simParseR = withAnnotatedInnerState(
+          state,
+          effectiveInitialState,
+          (annotatedState) =>
+            parser.parse({
+              buffer: [],
+              state: annotatedState,
+              optionsTerminated: false,
+              usage: parser.usage,
+            }),
+        );
+        const decideFromParse = (
+          parseResult: ParserResult<TState>,
         ): Promise<ValueParserResult<TValue>> => {
-          if (
-            res.success && res.value === undefined
-          ) {
-            return usePromptOrDefer(state, { success: false, error: [] });
+          // Extract cliState the same way processResult does at top level.
+          const consumed = parseResult.success
+            ? parseResult.consumed.length
+            : 0;
+          const cliState = parseResult.success && consumed === 0
+            ? parseResult.next.state
+            : undefined;
+          if (shouldAttemptInnerCompletion(cliState, state)) {
+            // Source-binding wrapper detected — try inner complete, then
+            // mirror the top-level useCompleteResultOrPrompt logic:
+            // prompt when the value is undefined and the cliState is an
+            // injected annotation wrapper (handles optional()), but use
+            // the value otherwise (handles withDefault(), bindEnv()).
+            const cliStateIsInjected = cliState != null &&
+              typeof cliState === "object" &&
+              unwrapInjectedAnnotationWrapper(cliState) !== cliState;
+            const handleCompleteResult = (
+              res: ValueParserResult<TValue>,
+            ): Promise<ValueParserResult<TValue>> => {
+              if (
+                res.success && res.value === undefined && cliStateIsInjected
+              ) {
+                return executePrompt();
+              }
+              return usePromptOrDefer(state, res);
+            };
+            const completeR = withAnnotatedInnerState(
+              state,
+              effectiveInitialState,
+              (s) => parser.complete(s),
+            );
+            if (completeR instanceof Promise) {
+              return (completeR as Promise<ValueParserResult<TValue>>).then(
+                handleCompleteResult,
+              );
+            }
+            return handleCompleteResult(
+              completeR as ValueParserResult<TValue>,
+            );
           }
-          return usePromptOrDefer(state, res);
+          // Non-source-binding wrapper → prompt.
+          return executePrompt();
         };
-        const cachedResult = r instanceof Promise
-          ? (r as Promise<ValueParserResult<TValue>>).then(
-            usePromptOrDeferSentinel,
-          )
-          : usePromptOrDeferSentinel(r as ValueParserResult<TValue>);
+        const cachedResult = simParseR instanceof Promise
+          ? (simParseR as Promise<ParserResult<TState>>).then(decideFromParse)
+          : decideFromParse(simParseR as ParserResult<TState>);
         promptCache = { state, result: cachedResult };
         return cachedResult;
       }

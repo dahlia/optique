@@ -673,6 +673,91 @@ describe("prompt()", () => {
       assert.equal(result.value.name, "cli-value");
     });
 
+    it("prompts for prompt(optional(...)) inside annotated object()", async () => {
+      // Regression: when a sibling field uses bindEnv(), the object()
+      // carries annotations.  prompt(optional(...)) must still prompt
+      // even though annotations are present on the sentinel state.
+      const context = createEnvContext({
+        source: (key) => ({ APP_PORT: "8080" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      let namePromptCalls = 0;
+      const parser = object({
+        name: prompt(optional(option("--name", string())), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            namePromptCalls++;
+            return Promise.resolve("prompted");
+          },
+        }),
+        port: prompt(
+          bindEnv(option("--port", integer()), {
+            context,
+            key: "PORT",
+            parser: integer(),
+          }),
+          {
+            type: "number",
+            message: "Enter port:",
+            prompter: () =>
+              Promise.reject(new Error("Port prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "prompted");
+      assert.equal(namePromptCalls, 1);
+      assert.equal(result.value.port, 8080);
+    });
+
+    it("uses default for prompt(withDefault(...)) inside annotated object()", async () => {
+      // When annotations are present (from a sibling bindEnv field),
+      // prompt(withDefault(...)) uses the default value without prompting.
+      // This matches the top-level behavior: withDefault's non-undefined
+      // result suppresses the prompt even when annotations are present.
+      const context = createEnvContext({
+        source: (key) => ({ APP_PORT: "8080" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = object({
+        name: prompt(withDefault(option("--name", string()), "default"), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () =>
+            Promise.reject(new Error("Name prompt should not be called")),
+        }),
+        port: prompt(
+          bindEnv(option("--port", integer()), {
+            context,
+            key: "PORT",
+            parser: integer(),
+          }),
+          {
+            type: "number",
+            message: "Enter port:",
+            prompter: () =>
+              Promise.reject(new Error("Port prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "default");
+      assert.equal(result.value.port, 8080);
+    });
+
     it("prompts for inner parser that completes without CLI input (consistency with top level)", async () => {
       // A parser whose complete() always succeeds with a real value.
       // prompt() should still prompt because no CLI tokens were consumed —
