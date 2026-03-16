@@ -674,18 +674,19 @@ export function string(
   }
   const metavar = options.metavar ?? "STRING";
   ensureNonEmptyString(metavar);
-  // Snapshot pattern at construction time to prevent post-construction mutation
-  const pattern = options.pattern != null
-    ? new RegExp(options.pattern.source, options.pattern.flags)
-    : null;
+  // Snapshot pattern source/flags at construction time to prevent
+  // post-construction mutation, and avoid constructing an intermediate
+  // RegExp that would just be cloned again at parse time.
+  const patternSource = options.pattern?.source ?? null;
+  const patternFlags = options.pattern?.flags ?? null;
   const patternMismatch = options.errors?.patternMismatch;
   return {
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<string> {
-      if (pattern != null) {
-        const testPattern = new RegExp(pattern.source, pattern.flags);
-        if (testPattern.test(input)) {
+      if (patternSource != null && patternFlags != null) {
+        const pattern = new RegExp(patternSource, patternFlags);
+        if (pattern.test(input)) {
           return { success: true, value: input };
         }
 
@@ -696,7 +697,7 @@ export function string(
               ? patternMismatch(input, pattern)
               : patternMismatch)
             : message`Expected a string matching pattern ${
-              text(pattern.source)
+              text(patternSource)
             }, but got ${input}.`,
         };
       }
