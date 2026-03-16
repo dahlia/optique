@@ -275,6 +275,7 @@ export function choice<const T extends string>(
  *          specified values.
  * @throws {TypeError} If the choices array is empty.
  * @throws {TypeError} If any choice is not a number.
+ * @throws {TypeError} If any choice is `NaN`.
  * @throws {TypeError} If choices contain a mix of strings and numbers.
  * @since 0.9.0
  */
