@@ -8487,4 +8487,97 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     assert.equal(observed, false);
   });
+
+  it("non-private TypeError from method propagates without retry", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // A method that throws a TypeError for application reasons (not private
+    // field access) must propagate the error, not be silently retried.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Thrower {
+      deferred: unknown;
+      constructor(deferred: unknown) {
+        this.deferred = deferred;
+      }
+      boom(): never {
+        throw new TypeError("Application error.");
+      }
+    }
+
+    const contextKey = Symbol.for("@test/non-private-typeerror");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        (parsed as Thrower).boom();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => new Thrower({ [deferredPromptValueKey]: true }),
+    );
+
+    await assert.rejects(
+      () =>
+        runWith(parser, "test", [dynamicContext], {
+          args: [],
+        }),
+      { name: "TypeError", message: "Application error." },
+    );
+  });
+
+  it("frozen non-plain object with deferred fields does not throw", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // A frozen class instance with deferred prompt values must not cause
+    // Object.defineProperty to throw during the private-field fallback.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Frozen {
+      #id: string;
+      readonly token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+        Object.freeze(this);
+      }
+      getId(): string {
+        return this.#id;
+      }
+    }
+
+    let observedId: string | undefined;
+
+    const contextKey = Symbol.for("@test/frozen-instance");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        observedId = (parsed as Frozen).getId();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) => new Frozen(value.name, { [deferredPromptValueKey]: true }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.equal(observedId, "test");
+  });
 });

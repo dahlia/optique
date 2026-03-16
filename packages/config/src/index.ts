@@ -183,6 +183,12 @@ function containsDeferredPromptValues(
   return containsDeferredPromptValuesInOwnProperties(value, seen);
 }
 
+function isPrivateFieldTypeError(e: unknown): boolean {
+  return e instanceof TypeError &&
+    typeof e.message === "string" &&
+    /\bprivate\b/i.test(e.message);
+}
+
 function callWithSanitizedOwnProperties(
   target: object,
   fn: { apply(thisArg: unknown, args: unknown[]): unknown },
@@ -196,8 +202,12 @@ function callWithSanitizedOwnProperties(
     if (desc != null && "value" in desc) {
       const stripped = strip(desc.value, seen);
       if (stripped !== desc.value) {
-        saved.set(key, desc);
-        Object.defineProperty(target, key, { ...desc, value: stripped });
+        try {
+          Object.defineProperty(target, key, { ...desc, value: stripped });
+          saved.set(key, desc);
+        } catch {
+          // Property is non-configurable or object is frozen; skip.
+        }
       }
     }
   }
@@ -234,7 +244,7 @@ function createSanitizedNonPlainView<T extends object>(
                 seen,
               );
             } catch (e) {
-              if (e instanceof TypeError) {
+              if (isPrivateFieldTypeError(e)) {
                 return callWithSanitizedOwnProperties(
                   target,
                   val,

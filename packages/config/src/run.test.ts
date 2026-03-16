@@ -1470,4 +1470,78 @@ describe("run with config context", { concurrency: false }, () => {
 
     assert.equal(observed, false);
   });
+
+  test("non-private TypeError from method propagates without retry", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // A method that throws a TypeError for application reasons (not private
+    // field access) must propagate the error, not be silently retried.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Thrower {
+      deferred: unknown;
+      constructor(deferred: unknown) {
+        this.deferred = deferred;
+      }
+      boom(): never {
+        throw new TypeError("Application error.");
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new Thrower({ [deferredPromptValueKey]: true });
+
+    assert.throws(
+      () => {
+        context.getAnnotations(instance, {
+          load(parsed: unknown) {
+            (parsed as Thrower).boom();
+            return { config: undefined, meta: undefined };
+          },
+        });
+      },
+      { name: "TypeError", message: "Application error." },
+    );
+  });
+
+  test("frozen non-plain object with deferred fields does not throw", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // A frozen class instance with deferred prompt values in non-configurable
+    // fields must not cause Object.defineProperty to throw during fallback.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Frozen {
+      #id: string;
+      readonly token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+        Object.freeze(this);
+      }
+      getId(): string {
+        return this.#id;
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new Frozen("abc", { [deferredPromptValueKey]: true });
+
+    let observedId: string | undefined;
+
+    context.getAnnotations(instance, {
+      load(parsed: unknown) {
+        observedId = (parsed as Frozen).getId();
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    assert.equal(observedId, "abc");
+  });
 });
