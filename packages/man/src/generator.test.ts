@@ -564,7 +564,7 @@ describe("Program-based API", () => {
     }
   });
 
-  it("rejects invalid section numbers from Program metadata", () => {
+  it("rejects invalid section numbers with Program input", () => {
     const prog = defineProgram({
       parser: object({}),
       metadata: { name: "myapp" },
