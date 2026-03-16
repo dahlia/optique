@@ -245,8 +245,8 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
         };
       }
 
-      // Extension validation
-      if (extensions && extensions.length > 0) {
+      // Extension validation (skip for directory type)
+      if (type !== "directory" && extensions && extensions.length > 0) {
         const base = /[/\\]$/.test(input) ? "" : basename(input);
         if (!extensions.some((ext) => base.endsWith(ext))) {
           const ext = extname(input);

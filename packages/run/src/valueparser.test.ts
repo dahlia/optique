@@ -545,6 +545,41 @@ describe("path", () => {
     });
   });
 
+  describe("extensions skipped for directory type", () => {
+    it("should ignore extensions when type is directory", () => {
+      const parser = path({ type: "directory", extensions: [".json"] });
+      const result = parser.parse("/some/directory");
+      assert.ok(result.success);
+    });
+
+    it("should ignore extensions for mustExist directory", () => {
+      const dir = createTempDir();
+      try {
+        const parser = path({
+          mustExist: true,
+          type: "directory",
+          extensions: [".json"],
+        });
+        const result = parser.parse(dir);
+        assert.ok(result.success);
+      } finally {
+        cleanupDir(dir);
+      }
+    });
+
+    it("should still validate extensions when type is file", () => {
+      const parser = path({ type: "file", extensions: [".json"] });
+      const result = parser.parse("config.txt");
+      assert.ok(!result.success);
+    });
+
+    it("should still validate extensions when type is either", () => {
+      const parser = path({ type: "either", extensions: [".json"] });
+      const result = parser.parse("config.txt");
+      assert.ok(!result.success);
+    });
+  });
+
   describe("extensions input validation", () => {
     it("should throw on extension without leading dot", () => {
       assert.throws(
