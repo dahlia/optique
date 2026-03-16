@@ -401,7 +401,7 @@ export function formatDocPageAsMan(
     options.section > 8
   ) {
     throw new RangeError(
-      `Invalid man page section number: ${options.section}`,
+      `Invalid man page section number (must be 1–8): ${options.section}`,
     );
   }
   const lines: string[] = [];
