@@ -6,7 +6,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "@optique/core/usage";
-import { escapeHyphens, formatMessageAsRoff } from "./roff.ts";
+import { escapeHyphens, escapeRoff, formatMessageAsRoff } from "./roff.ts";
 
 /**
  * Valid man page section numbers.
@@ -130,6 +130,10 @@ function escapeThField(value: string): string {
     .replace(/"/g, '\\"');
 }
 
+function formatCommandNameAsRoff(name: string): string {
+  return `\\fB${escapeHyphens(escapeRoff(name))}\\fR`;
+}
+
 /**
  * Formats a single {@link UsageTerm} as roff markup for the SYNOPSIS section.
  *
@@ -155,7 +159,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${term.name}\\fR`;
+      return formatCommandNameAsRoff(term.name);
 
     case "optional": {
       const inner = formatUsageAsRoff(term.terms);
@@ -232,7 +236,7 @@ function formatDocEntryTerm(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${term.name}\\fR`;
+      return formatCommandNameAsRoff(term.name);
 
     case "argument":
       return `\\fI${term.metavar}\\fR`;
@@ -291,7 +295,7 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${term.name}\\fR`;
+      return formatCommandNameAsRoff(term.name);
 
     case "literal":
       return term.value;
@@ -389,7 +393,7 @@ export function formatDocPageAsMan(
 
   // .TH - Title heading
   const thParts = [
-    escapeThField(options.name.toUpperCase()),
+    escapeHyphens(escapeThField(options.name).toUpperCase()),
     options.section.toString(),
   ];
   // .TH format: name section [date [source [manual]]]
@@ -406,7 +410,9 @@ export function formatDocPageAsMan(
 
   if (hasVersion) {
     thParts.push(
-      `"${escapeThField(`${options.name} ${options.version}`)}"`,
+      `"${escapeHyphens(escapeThField(options.name))} ${
+        escapeThField(options.version)
+      }"`,
     );
   } else if (hasManual) {
     thParts.push('""');
@@ -420,15 +426,19 @@ export function formatDocPageAsMan(
   // .SH NAME
   lines.push(".SH NAME");
   if (page.brief) {
-    lines.push(`${options.name} \\- ${formatMessageAsRoff(page.brief)}`);
+    lines.push(
+      `${escapeHyphens(escapeRoff(options.name))} \\- ${
+        formatMessageAsRoff(page.brief)
+      }`,
+    );
   } else {
-    lines.push(options.name);
+    lines.push(escapeHyphens(escapeRoff(options.name)));
   }
 
   // .SH SYNOPSIS
   if (page.usage) {
     lines.push(".SH SYNOPSIS");
-    lines.push(`.B ${options.name}`);
+    lines.push(`.B ${escapeHyphens(escapeRoff(options.name))}`);
     const usageStr = formatUsageAsRoff(page.usage);
     if (usageStr) {
       lines.push(usageStr);
@@ -497,7 +507,9 @@ export function formatDocPageAsMan(
     lines.push(".SH SEE ALSO");
     const refs = options.seeAlso.map((ref, i) => {
       const suffix = i < options.seeAlso!.length - 1 ? "," : "";
-      return `.BR ${ref.name} (${ref.section})${suffix}`;
+      return `.BR ${
+        escapeHyphens(escapeRoff(ref.name))
+      } (${ref.section})${suffix}`;
     });
     lines.push(refs.join("\n"));
   }
