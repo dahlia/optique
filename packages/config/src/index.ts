@@ -429,6 +429,9 @@ function createSanitizedNonPlainView<T extends object>(
       if (descriptor == null || !("value" in descriptor)) {
         return descriptor;
       }
+      if (!descriptor.configurable && !descriptor.writable) {
+        return descriptor;
+      }
       return {
         ...descriptor,
         value: stripDeferredPromptValues(descriptor.value, seen),

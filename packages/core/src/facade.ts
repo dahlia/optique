@@ -589,6 +589,11 @@ function createSanitizedNonPlainContextView<T extends object>(
       if (descriptor == null || !("value" in descriptor)) {
         return descriptor;
       }
+      // Non-configurable non-writable properties must return the exact
+      // value to satisfy the proxy invariant.
+      if (!descriptor.configurable && !descriptor.writable) {
+        return descriptor;
+      }
       return {
         ...descriptor,
         value: stripDeferredPromptValuesForContexts(descriptor.value, seen),
