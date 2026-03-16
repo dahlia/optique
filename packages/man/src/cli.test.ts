@@ -216,6 +216,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("defaults --date to the current date", async () => {
       const programFile = join(fixturesDir, "program.ts");
+      const now = new Date();
       const result = await runCli([
         programFile,
         "-s",
@@ -223,7 +224,6 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       ]);
 
       assert.equal(result.exitCode, 0);
-      const now = new Date();
       const expectedDate = now.toLocaleDateString("en-US", {
         month: "long",
         year: "numeric",
