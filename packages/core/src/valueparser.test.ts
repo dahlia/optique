@@ -1148,11 +1148,15 @@ describe("choice", () => {
 
       const result1 = parser.parse("a");
       assert.ok(result1.success);
-      if (result1.success) assert.equal(result1.value, "a");
+      if (result1.success) {
+        assert.equal(result1.value, "a");
+      }
 
       const result2 = parser.parse("A");
       assert.ok(result2.success);
-      if (result2.success) assert.equal(result2.value, "A");
+      if (result2.success) {
+        assert.equal(result2.value, "A");
+      }
     });
 
     it("should allow non-colliding choices with caseInsensitive", () => {
@@ -1160,7 +1164,9 @@ describe("choice", () => {
 
       const result = parser.parse("JSON");
       assert.ok(result.success);
-      if (result.success) assert.equal(result.value, "json");
+      if (result.success) {
+        assert.equal(result.value, "json");
+      }
     });
 
     it("should allow exact duplicate choices with caseInsensitive", () => {
@@ -1170,7 +1176,9 @@ describe("choice", () => {
 
       const result = parser.parse("JSON");
       assert.ok(result.success);
-      if (result.success) assert.equal(result.value, "json");
+      if (result.success) {
+        assert.equal(result.value, "json");
+      }
     });
 
     it("should handle null-like string values", () => {
