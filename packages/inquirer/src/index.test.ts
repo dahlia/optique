@@ -363,6 +363,41 @@ describe("prompt()", () => {
     });
   });
 
+  describe("withDefault() wrapping under annotations", () => {
+    it("prompts for withDefault() under annotations at top level", async () => {
+      // At top level with annotations, prompt(withDefault(...)) still
+      // prompts: the cliState is a PromptBindInitialStateClass clone
+      // (injectAnnotations preserves the prototype), so
+      // shouldAttemptInnerCompletion returns false and the prompt fires.
+      // This test locks in the semantics so the sentinel path matches.
+      const context = createEnvContext({
+        source: () => undefined,
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      let promptCalls = 0;
+      const parser = prompt(
+        withDefault(option("--name", string()), "default"),
+        {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            promptCalls++;
+            return Promise.resolve("prompted");
+          },
+        },
+      );
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value, "prompted");
+      assert.equal(promptCalls, 1);
+    });
+  });
+
   describe("error handling", () => {
     it("keeps valid overrides working with unrelated invalid entries", async () => {
       await withPromptFunctionsOverride(
@@ -603,6 +638,323 @@ describe("prompt()", () => {
         "9090",
       ]);
       assert.ok(!result.success);
+    });
+
+    it("prompts for prompt(optional(...)) inside object() when CLI absent", async () => {
+      let promptCalled = false;
+      const parser = object({
+        name: prompt(optional(option("--name", string())), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            promptCalled = true;
+            return Promise.resolve("prompted");
+          },
+        }),
+      });
+
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "prompted");
+      assert.ok(promptCalled, "Prompt should have been called");
+    });
+
+    it("prompts for prompt(withDefault(...)) inside object() when CLI absent", async () => {
+      let promptCalled = false;
+      const parser = object({
+        name: prompt(withDefault(option("--name", string()), "default"), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            promptCalled = true;
+            return Promise.resolve("prompted");
+          },
+        }),
+      });
+
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "prompted");
+      assert.ok(promptCalled, "Prompt should have been called");
+    });
+
+    it("uses CLI value for prompt(optional(...)) inside object()", async () => {
+      const parser = object({
+        name: prompt(optional(option("--name", string())), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        }),
+      });
+
+      const result = await parseAsync(parser, ["--name", "cli-value"]);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "cli-value");
+    });
+
+    it("uses CLI value for prompt(withDefault(...)) inside object()", async () => {
+      const parser = object({
+        name: prompt(withDefault(option("--name", string()), "default"), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        }),
+      });
+
+      const result = await parseAsync(parser, ["--name", "cli-value"]);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "cli-value");
+    });
+
+    it("prompts for prompt(optional(...)) inside annotated object()", async () => {
+      // Regression: when a sibling field uses bindEnv(), the object()
+      // carries annotations.  prompt(optional(...)) must still prompt
+      // even though annotations are present on the sentinel state.
+      const context = createEnvContext({
+        source: (key) => ({ APP_PORT: "8080" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      let namePromptCalls = 0;
+      const parser = object({
+        name: prompt(optional(option("--name", string())), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            namePromptCalls++;
+            return Promise.resolve("prompted");
+          },
+        }),
+        port: prompt(
+          bindEnv(option("--port", integer()), {
+            context,
+            key: "PORT",
+            parser: integer(),
+          }),
+          {
+            type: "number",
+            message: "Enter port:",
+            prompter: () =>
+              Promise.reject(new Error("Port prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "prompted");
+      assert.equal(namePromptCalls, 1);
+      assert.equal(result.value.port, 8080);
+    });
+
+    it("prompts for prompt(withDefault(...)) inside annotated object()", async () => {
+      // When annotations are present (from a sibling bindEnv field),
+      // prompt(withDefault(...)) still prompts.  This matches the
+      // top-level behavior: the cliState is a pass-through of the
+      // annotation-injected initial state and shouldAttemptInnerCompletion
+      // returns false for it at top level, so the sentinel path must
+      // also prompt.
+      const context = createEnvContext({
+        source: (key) => ({ APP_PORT: "8080" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      let namePromptCalls = 0;
+      const parser = object({
+        name: prompt(withDefault(option("--name", string()), "default"), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            namePromptCalls++;
+            return Promise.resolve("prompted");
+          },
+        }),
+        port: prompt(
+          bindEnv(option("--port", integer()), {
+            context,
+            key: "PORT",
+            parser: integer(),
+          }),
+          {
+            type: "number",
+            message: "Enter port:",
+            prompter: () =>
+              Promise.reject(new Error("Port prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "prompted");
+      assert.equal(namePromptCalls, 1);
+      assert.equal(result.value.port, 8080);
+    });
+
+    it("skips prompt for prompt(bindEnv(...)) inside object() via active env source", async () => {
+      // Regression: bindEnv can resolve via getActiveEnvSource() even
+      // when annotations are not threaded through parseAsync().  The
+      // sentinel path must not short-circuit to executePrompt() and
+      // should still delegate to the inner parser's complete().
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-name" })[key],
+        prefix: "APP_",
+      });
+      // getAnnotations() registers the active env source globally.
+      context.getAnnotations();
+      const parser = object({
+        name: prompt(
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: string(),
+          }),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () =>
+              Promise.reject(new Error("Prompt should not be called")),
+          },
+        ),
+      });
+
+      // Note: annotations NOT passed to parseAsync — bindEnv resolves
+      // via the global active env source registry instead.
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "env-name");
+    });
+
+    it("skips prompt for prompt(optional(bindEnv(...))) inside object()", async () => {
+      // Regression: optional wraps the inner bindEnv state in an array
+      // [envBindState].  The sentinel path must unwrap it to detect the
+      // source-binding marker so bindEnv can resolve the env value.
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-name" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = object({
+        name: prompt(
+          optional(
+            bindEnv(option("--name", string()), {
+              context,
+              key: "NAME",
+              parser: string(),
+            }),
+          ),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () =>
+              Promise.reject(new Error("Prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "env-name");
+    });
+
+    it("skips prompt for prompt(withDefault(bindEnv(...))) inside object()", async () => {
+      // Same as above but with withDefault wrapping bindEnv.
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-name" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const parser = object({
+        name: prompt(
+          withDefault(
+            bindEnv(option("--name", string()), {
+              context,
+              key: "NAME",
+              parser: string(),
+            }),
+            "default",
+          ),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () =>
+              Promise.reject(new Error("Prompt should not be called")),
+          },
+        ),
+      });
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value.name, "env-name");
+    });
+
+    it("prompts for inner parser that completes without CLI input (consistency with top level)", async () => {
+      // A parser whose complete() always succeeds with a real value.
+      // prompt() should still prompt because no CLI tokens were consumed —
+      // this matches the top-level behavior where prompt() only suppresses
+      // the prompt when consumed.length > 0.
+      const alwaysCompletes: Parser<"sync", string, null> = {
+        $mode: "sync",
+        $valueType: [],
+        $stateType: [],
+        priority: 0,
+        usage: [],
+        initialState: null,
+        parse: (context) => ({
+          success: true,
+          next: { ...context, state: null },
+          consumed: [],
+        }),
+        complete: () => ({ success: true, value: "completed" }),
+        suggest: function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+      };
+
+      // Top level: prompts (consumed: [] → hasCliValue=false)
+      let topLevelPromptCalls = 0;
+      const topLevel = prompt(alwaysCompletes, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          topLevelPromptCalls++;
+          return Promise.resolve("prompted");
+        },
+      });
+      const topResult = await parseAsync(topLevel, []);
+      assert.ok(topResult.success);
+      assert.equal(topResult.value, "prompted");
+      assert.equal(topLevelPromptCalls, 1);
+
+      // Nested in object(): should also prompt (same semantics)
+      let nestedPromptCalls = 0;
+      const nested = object({
+        x: prompt(alwaysCompletes, {
+          type: "input",
+          message: "Enter value:",
+          prompter: () => {
+            nestedPromptCalls++;
+            return Promise.resolve("prompted");
+          },
+        }),
+      });
+      const nestedResult = await parseAsync(nested, []);
+      assert.ok(nestedResult.success);
+      assert.equal(nestedResult.value.x, "prompted");
+      assert.equal(nestedPromptCalls, 1);
     });
   });
 
