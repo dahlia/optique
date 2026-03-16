@@ -184,9 +184,13 @@ function containsDeferredPromptValues(
 }
 
 function isPrivateFieldTypeError(e: unknown): boolean {
+  // Match engine-generated private-field errors only:
+  // V8/Deno/Node: "Cannot read private member #foo from an object..."
+  // SpiderMonkey: "can't access private field or method: ..."
+  // JavaScriptCore: "Cannot access private property"
   return e instanceof TypeError &&
     typeof e.message === "string" &&
-    /\bprivate\b/i.test(e.message);
+    /Cannot (?:read|access) private|can't access private/i.test(e.message);
 }
 
 const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
@@ -218,13 +222,85 @@ function callWithSanitizedOwnProperties(
       }
     }
   }
-  try {
-    return strip(fn.apply(target, args), seen);
-  } finally {
+  function restore(): void {
     for (const [key, desc] of saved) {
       Object.defineProperty(target, key, desc);
     }
   }
+
+  let result: unknown;
+  try {
+    result = fn.apply(target, args);
+  } catch (e) {
+    restore();
+    throw e;
+  }
+
+  // If the method returns a thenable (async method), defer restoration
+  // until the promise settles so that awaited continuations still
+  // observe the sanitized property values.
+  if (
+    result != null &&
+    typeof (result as Record<string, unknown>).then === "function"
+  ) {
+    return (result as Promise<unknown>).then(
+      (v) => {
+        restore();
+        return strip(v, seen);
+      },
+      (e) => {
+        restore();
+        throw e;
+      },
+    );
+  }
+
+  restore();
+  return strip(result, seen);
+}
+
+function callMethodWithPrivateFieldFallback(
+  fn: { apply(thisArg: unknown, args: unknown[]): unknown },
+  proxy: object,
+  target: object,
+  args: unknown[],
+  strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
+  seen: WeakMap<object, unknown>,
+): unknown {
+  function fallback(e: unknown): unknown {
+    if (isPrivateFieldTypeError(e)) {
+      const result = callWithSanitizedOwnProperties(
+        target,
+        fn,
+        args,
+        strip,
+        seen,
+      );
+      if (result !== SANITIZE_FAILED) return result;
+    }
+    throw e;
+  }
+
+  let result: unknown;
+  try {
+    result = fn.apply(proxy, args);
+  } catch (e) {
+    return fallback(e);
+  }
+
+  // Async methods that access private fields before the first await
+  // reject the returned promise instead of throwing synchronously.
+  if (
+    result != null &&
+    typeof (result as Record<string, unknown>).then === "function"
+  ) {
+    return (result as Promise<unknown>).then(
+      (v) => strip(v, seen),
+      fallback,
+    );
+  }
+
+  return strip(result, seen);
 }
 
 function createSanitizedNonPlainView<T extends object>(
@@ -245,24 +321,14 @@ function createSanitizedNonPlainView<T extends object>(
         const val = stripDeferredPromptValues(descriptor.value, seen);
         if (typeof val === "function") {
           return function (this: unknown, ...args: unknown[]) {
-            try {
-              return stripDeferredPromptValues(
-                val.apply(proxy, args),
-                seen,
-              );
-            } catch (e) {
-              if (isPrivateFieldTypeError(e)) {
-                const result = callWithSanitizedOwnProperties(
-                  target,
-                  val,
-                  args,
-                  stripDeferredPromptValues,
-                  seen,
-                );
-                if (result !== SANITIZE_FAILED) return result;
-              }
-              throw e;
-            }
+            return callMethodWithPrivateFieldFallback(
+              val,
+              proxy,
+              target,
+              args,
+              stripDeferredPromptValues,
+              seen,
+            );
           };
         }
         return val;
@@ -270,24 +336,14 @@ function createSanitizedNonPlainView<T extends object>(
       const result = Reflect.get(target, key, proxy);
       if (typeof result === "function") {
         return function (this: unknown, ...args: unknown[]) {
-          try {
-            return stripDeferredPromptValues(
-              result.apply(proxy, args),
-              seen,
-            );
-          } catch (e) {
-            if (isPrivateFieldTypeError(e)) {
-              const fallback = callWithSanitizedOwnProperties(
-                target,
-                result,
-                args,
-                stripDeferredPromptValues,
-                seen,
-              );
-              if (fallback !== SANITIZE_FAILED) return fallback;
-            }
-            throw e;
-          }
+          return callMethodWithPrivateFieldFallback(
+            result,
+            proxy,
+            target,
+            args,
+            stripDeferredPromptValues,
+            seen,
+          );
         };
       }
       return result;

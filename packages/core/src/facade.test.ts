@@ -8581,4 +8581,105 @@ describe("branch coverage: facade.ts edge cases", () => {
       TypeError,
     );
   });
+
+  it("TypeError mentioning 'private' in user message is not retried", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // A user TypeError whose message happens to contain "private" must not
+    // be mistaken for an engine private-field error.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    let callCount = 0;
+
+    class KeyValidator {
+      deferred: unknown;
+      constructor(deferred: unknown) {
+        this.deferred = deferred;
+      }
+      validate(): never {
+        callCount++;
+        throw new TypeError("private key is invalid.");
+      }
+    }
+
+    const contextKey = Symbol.for("@test/user-private-typeerror");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        (parsed as KeyValidator).validate();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => new KeyValidator({ [deferredPromptValueKey]: true }),
+    );
+
+    await assert.rejects(
+      () =>
+        runWith(parser, "test", [dynamicContext], {
+          args: [],
+        }),
+      { name: "TypeError", message: "private key is invalid." },
+    );
+
+    // The method runs through both the facade and config proxies,
+    // but must not be retried by either.
+    assert.ok(callCount <= 2);
+  });
+
+  it("async method with private fields sees sanitized public state", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // An async method that accesses private fields and then reads a public
+    // field after an await must still observe the sanitized value.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class AsyncMixed {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      async getInfo(): Promise<{ id: string; hasToken: boolean }> {
+        const id = this.#id;
+        await Promise.resolve();
+        return { id, hasToken: this.token !== undefined };
+      }
+    }
+
+    let observedInfo: { id: string; hasToken: boolean } | undefined;
+
+    const contextKey = Symbol.for("@test/async-private-field");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      async getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        observedInfo = await (parsed as AsyncMixed).getInfo();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) => new AsyncMixed(value.name, { [deferredPromptValueKey]: true }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.deepEqual(observedInfo, { id: "test", hasToken: false });
+  });
 });

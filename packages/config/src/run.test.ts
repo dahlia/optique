@@ -1545,4 +1545,91 @@ describe("run with config context", { concurrency: false }, () => {
       TypeError,
     );
   });
+
+  test("TypeError mentioning 'private' in user message is not retried", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // A user TypeError whose message happens to contain the word "private"
+    // must not be mistaken for an engine private-field error.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    let callCount = 0;
+
+    class KeyValidator {
+      deferred: unknown;
+      constructor(deferred: unknown) {
+        this.deferred = deferred;
+      }
+      validate(): never {
+        callCount++;
+        throw new TypeError("private key is invalid.");
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new KeyValidator({ [deferredPromptValueKey]: true });
+
+    assert.throws(
+      () => {
+        context.getAnnotations(instance, {
+          load(parsed: unknown) {
+            (parsed as KeyValidator).validate();
+            return { config: undefined, meta: undefined };
+          },
+        });
+      },
+      { name: "TypeError", message: "private key is invalid." },
+    );
+
+    assert.equal(callCount, 1);
+  });
+
+  test("async method with private fields sees sanitized public state", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // An async method that accesses private fields and then reads a public
+    // field after an await must still observe the sanitized value.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class AsyncMixed {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      async getInfo(): Promise<{ id: string; hasToken: boolean }> {
+        const id = this.#id;
+        await Promise.resolve();
+        return { id, hasToken: this.token !== undefined };
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new AsyncMixed(
+      "abc",
+      { [deferredPromptValueKey]: true },
+    );
+
+    let observedInfo: { id: string; hasToken: boolean } | undefined;
+
+    const annotations = context.getAnnotations(instance, {
+      async load(parsed: unknown) {
+        observedInfo = await (parsed as AsyncMixed).getInfo();
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    if (annotations instanceof Promise) {
+      await annotations;
+    }
+
+    assert.deepEqual(observedInfo, { id: "abc", hasToken: false });
+  });
 });
