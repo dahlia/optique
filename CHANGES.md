@@ -271,6 +271,11 @@ To be released.
     invisible items in help text, error messages, and shell completions.
     [[#371], [#546]]
 
+ -  Changed `choice()` to reject non-boolean `caseInsensitive` option values
+    at runtime.  Previously, truthy non-boolean values like `"no"` silently
+    enabled case-insensitive matching due to JavaScript truthiness coercion.
+    [[#389], [#548]]
+
  -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
     config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
     from inner parsers.  These combinators now forward the hook so that
@@ -318,6 +323,7 @@ To be released.
 [#371]: https://github.com/dahlia/optique/issues/371
 [#385]: https://github.com/dahlia/optique/issues/385
 [#388]: https://github.com/dahlia/optique/issues/388
+[#389]: https://github.com/dahlia/optique/issues/389
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
 [#520]: https://github.com/dahlia/optique/pull/520
@@ -332,6 +338,7 @@ To be released.
 [#536]: https://github.com/dahlia/optique/pull/536
 [#537]: https://github.com/dahlia/optique/pull/537
 [#546]: https://github.com/dahlia/optique/pull/546
+[#548]: https://github.com/dahlia/optique/pull/548
 
 ### @optique/config
 

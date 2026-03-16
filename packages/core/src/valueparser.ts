@@ -251,6 +251,7 @@ export function isValueParser<M extends Mode, T>(
  *          specified values.
  * @throws {TypeError} If the choices array is empty.
  * @throws {TypeError} If any choice is an empty string.
+ * @throws {TypeError} If `caseInsensitive` is not a boolean.
  * @throws {TypeError} If `caseInsensitive` is `true` and multiple choices
  *         normalize to the same lowercase value.
  */
@@ -449,6 +450,16 @@ export function choice<const T extends string | number>(
     ...new Set(choices as readonly string[]),
   ];
   const stringOptions = options as ChoiceOptionsString;
+  if (
+    stringOptions.caseInsensitive !== undefined &&
+    typeof stringOptions.caseInsensitive !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected caseInsensitive to be a boolean, but got ` +
+        `${typeof stringOptions.caseInsensitive}: ` +
+        `${String(stringOptions.caseInsensitive)}.`,
+    );
+  }
   const normalizedValues = stringOptions.caseInsensitive
     ? stringChoices.map((v) => v.toLowerCase())
     : stringChoices;

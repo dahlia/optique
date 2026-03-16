@@ -1172,6 +1172,29 @@ describe("choice", () => {
       }
     });
 
+    it("should reject non-boolean caseInsensitive option", () => {
+      assert.throws(
+        () => choice(["JSON", "YAML"], { caseInsensitive: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => choice(["JSON", "YAML"], { caseInsensitive: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => choice(["JSON", "YAML"], { caseInsensitive: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => choice(["JSON", "YAML"], { caseInsensitive: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => choice(["JSON", "YAML"], { caseInsensitive: null as never }),
+        TypeError,
+      );
+    });
+
     it("should handle null-like string values", () => {
       const parser = choice(["null", "undefined", "NaN", "false"]);
 
