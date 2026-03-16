@@ -6323,10 +6323,7 @@ export function group<M extends Mode, TValue, TState>(
   const deferPromptMarker: {
     [deferPromptUntilConfigResolvesKey]?: (state: unknown) => boolean;
   } = typeof deferPromptHook === "function"
-    ? {
-      [deferPromptUntilConfigResolvesKey]: (state: unknown) =>
-        deferPromptHook(state),
-    }
+    ? { [deferPromptUntilConfigResolvesKey]: deferPromptHook }
     : {};
 
   return {

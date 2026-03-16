@@ -213,10 +213,7 @@ export function optional<M extends Mode, TValue, TState>(
   const deferPromptMarker: {
     [deferPromptUntilConfigResolvesKey]?: (state: unknown) => boolean;
   } = typeof deferPromptHook === "function"
-    ? {
-      [deferPromptUntilConfigResolvesKey]: (state: unknown) =>
-        deferPromptHook(state),
-    }
+    ? { [deferPromptUntilConfigResolvesKey]: deferPromptHook }
     : {};
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
@@ -560,10 +557,7 @@ export function withDefault<
   const deferPromptMarkerWD: {
     [deferPromptUntilConfigResolvesKey]?: (state: unknown) => boolean;
   } = typeof deferPromptHookWD === "function"
-    ? {
-      [deferPromptUntilConfigResolvesKey]: (state: unknown) =>
-        deferPromptHookWD(state),
-    }
+    ? { [deferPromptUntilConfigResolvesKey]: deferPromptHookWD }
     : {};
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
