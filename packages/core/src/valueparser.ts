@@ -320,10 +320,7 @@ export function choice<const T extends string | number>(
   const metavar = options.metavar ?? "TYPE";
   ensureNonEmptyString(metavar);
 
-  // Check if choices are numbers
-  const isNumberChoice = choices.length > 0 && typeof choices[0] === "number";
-
-  if (isNumberChoice) {
+  if (isNumber) {
     // Number choice implementation — deduplicate in a single pass,
     // using Object.is to distinguish 0 and -0
     const numberChoices: readonly number[] = (() => {
