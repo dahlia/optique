@@ -1,5 +1,5 @@
 import { describe, it } from "node:test";
-import { deepStrictEqual } from "node:assert/strict";
+import { deepStrictEqual, throws } from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -1291,6 +1291,22 @@ describe("completion module", () => {
           true,
           `${shell.name} should reject empty program name`,
         );
+      }
+    });
+
+    it("should reject program names starting with non-alphanumeric characters", () => {
+      const invalidNames = ["-", ".", "..", "-flag", ".hidden"];
+
+      for (const shell of shells) {
+        for (const name of invalidNames) {
+          throws(
+            () => shell.generateScript(name),
+            (e: unknown) =>
+              e instanceof Error &&
+              e.message.includes("Invalid program name"),
+            `${shell.name} should reject program name: ${name}`,
+          );
+        }
       }
     });
   });
