@@ -3941,7 +3941,10 @@ export function domain(
     : undefined;
   const minLabels = options?.minLabels ?? 2;
   const lowercase = options?.lowercase ?? false;
-  const errors = options?.errors;
+  const invalidDomain = options?.errors?.invalidDomain;
+  const tooFewLabels = options?.errors?.tooFewLabels;
+  const subdomainsNotAllowed = options?.errors?.subdomainsNotAllowed;
+  const tldNotAllowed = options?.errors?.tldNotAllowed;
 
   // Domain label regex: 1-63 alphanumeric characters and hyphens,
   // cannot start or end with hyphen
@@ -3953,7 +3956,7 @@ export function domain(
     parse(input: string): ValueParserResult<string> {
       // Basic validation
       if (input.length === 0 || input.startsWith(".") || input.endsWith(".")) {
-        const errorMsg = errors?.invalidDomain;
+        const errorMsg = invalidDomain;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
@@ -3967,7 +3970,7 @@ export function domain(
 
       // Check for consecutive dots
       if (input.includes("..")) {
-        const errorMsg = errors?.invalidDomain;
+        const errorMsg = invalidDomain;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
@@ -3985,7 +3988,7 @@ export function domain(
       // Validate each label
       for (const label of labels) {
         if (!labelRegex.test(label)) {
-          const errorMsg = errors?.invalidDomain;
+          const errorMsg = invalidDomain;
           if (typeof errorMsg === "function") {
             return { success: false, error: errorMsg(input) };
           }
@@ -4000,7 +4003,7 @@ export function domain(
 
       // Check minimum labels
       if (labels.length < minLabels) {
-        const errorMsg = errors?.tooFewLabels;
+        const errorMsg = tooFewLabels;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input, minLabels) };
         }
@@ -4017,7 +4020,7 @@ export function domain(
 
       // Check subdomain restriction
       if (!allowSubdomains && labels.length > 2) {
-        const errorMsg = errors?.subdomainsNotAllowed;
+        const errorMsg = subdomainsNotAllowed;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
@@ -4036,7 +4039,7 @@ export function domain(
         const allowedTLDsLower = allowedTLDs.map((t) => t.toLowerCase());
 
         if (!allowedTLDsLower.includes(tldLower)) {
-          const errorMsg = errors?.tldNotAllowed;
+          const errorMsg = tldNotAllowed;
           if (typeof errorMsg === "function") {
             return { success: false, error: errorMsg(tld, allowedTLDs) };
           }
