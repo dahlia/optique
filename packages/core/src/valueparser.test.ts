@@ -1784,7 +1784,7 @@ describe("choice", () => {
     });
   });
 
-  describe("duplicate deduplication", () => {
+  describe("deduplication", () => {
     it("should not produce duplicate string suggestions", () => {
       const parser = choice(["json", "json", "yaml"]);
       const suggestions = [...parser.suggest!("j")];
