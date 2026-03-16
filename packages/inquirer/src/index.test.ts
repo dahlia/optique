@@ -363,6 +363,41 @@ describe("prompt()", () => {
     });
   });
 
+  describe("withDefault() wrapping under annotations", () => {
+    it("prompts for withDefault() under annotations at top level", async () => {
+      // At top level with annotations, prompt(withDefault(...)) still
+      // prompts: the cliState is a PromptBindInitialStateClass clone
+      // (injectAnnotations preserves the prototype), so
+      // shouldAttemptInnerCompletion returns false and the prompt fires.
+      // This test locks in the semantics so the sentinel path matches.
+      const context = createEnvContext({
+        source: () => undefined,
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      let promptCalls = 0;
+      const parser = prompt(
+        withDefault(option("--name", string()), "default"),
+        {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            promptCalls++;
+            return Promise.resolve("prompted");
+          },
+        },
+      );
+
+      const result = await parseAsync(parser, [], { annotations });
+      assert.ok(result.success);
+      assert.equal(result.value, "prompted");
+      assert.equal(promptCalls, 1);
+    });
+  });
+
   describe("error handling", () => {
     it("keeps valid overrides working with unrelated invalid entries", async () => {
       await withPromptFunctionsOverride(
@@ -717,11 +752,13 @@ describe("prompt()", () => {
       assert.equal(result.value.port, 8080);
     });
 
-    it("uses default for prompt(withDefault(...)) inside annotated object()", async () => {
+    it("prompts for prompt(withDefault(...)) inside annotated object()", async () => {
       // When annotations are present (from a sibling bindEnv field),
-      // prompt(withDefault(...)) uses the default value without prompting.
-      // This matches the top-level behavior: withDefault's non-undefined
-      // result suppresses the prompt even when annotations are present.
+      // prompt(withDefault(...)) still prompts.  This matches the
+      // top-level behavior: the cliState is a pass-through of the
+      // annotation-injected initial state and shouldAttemptInnerCompletion
+      // returns false for it at top level, so the sentinel path must
+      // also prompt.
       const context = createEnvContext({
         source: (key) => ({ APP_PORT: "8080" })[key],
         prefix: "APP_",
@@ -730,12 +767,15 @@ describe("prompt()", () => {
       if (annotations instanceof Promise) {
         throw new TypeError("Expected synchronous annotations.");
       }
+      let namePromptCalls = 0;
       const parser = object({
         name: prompt(withDefault(option("--name", string()), "default"), {
           type: "input",
           message: "Enter name:",
-          prompter: () =>
-            Promise.reject(new Error("Name prompt should not be called")),
+          prompter: () => {
+            namePromptCalls++;
+            return Promise.resolve("prompted");
+          },
         }),
         port: prompt(
           bindEnv(option("--port", integer()), {
@@ -754,7 +794,8 @@ describe("prompt()", () => {
 
       const result = await parseAsync(parser, [], { annotations });
       assert.ok(result.success);
-      assert.equal(result.value.name, "default");
+      assert.equal(result.value.name, "prompted");
+      assert.equal(namePromptCalls, 1);
       assert.equal(result.value.port, 8080);
     });
 
