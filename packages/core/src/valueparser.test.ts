@@ -1897,6 +1897,24 @@ describe("choice", () => {
       ]);
     });
 
+    it("should not change behavior after post-construction caseInsensitive mutation", () => {
+      const options: { caseInsensitive: boolean } = {
+        caseInsensitive: false,
+      };
+      const parser = choice(["Foo", "Bar"], options);
+
+      // Before mutation: case-sensitive, "foo" doesn't match "Foo"
+      assert.ok(!parser.parse("foo").success);
+      assert.deepEqual([...parser.suggest!("f")], []);
+
+      // Mutate options after construction
+      options.caseInsensitive = true;
+
+      // After mutation: behavior should NOT change (still case-sensitive)
+      assert.ok(!parser.parse("foo").success);
+      assert.deepEqual([...parser.suggest!("f")], []);
+    });
+
     it("should work with all-duplicate list", () => {
       const parser = choice(["a", "a"]);
       assert.deepEqual(parser.choices, ["a"]);
