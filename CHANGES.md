@@ -446,8 +446,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
-[#526]: https://github.com/dahlia/optique/issues/526
-[#529]: https://github.com/dahlia/optique/issues/529
+[#526]: https://github.com/dahlia/optique/pull/526
+[#529]: https://github.com/dahlia/optique/pull/529
 
 
 Version 0.10.7
