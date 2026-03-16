@@ -498,7 +498,7 @@ function isParser(
 function inferNameFromPath(filePath: string): string {
   const base = basename(filePath);
   const ext = extname(base);
-  return base.slice(0, -ext.length);
+  return ext.length > 0 ? base.slice(0, -ext.length) : base;
 }
 
 /**

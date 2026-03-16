@@ -583,11 +583,16 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `value()` and `values()` terms, which produced malformed roff output.
     [[#273], [#544]]
 
+ -  Fixed `optique-man` inferring an empty program name for extensionless
+    input files.  `inferNameFromPath()` returned an empty string because
+    `base.slice(0, -0)` yields `""` in JavaScript.  [[#277], [#551]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#276]: https://github.com/dahlia/optique/issues/276
+[#277]: https://github.com/dahlia/optique/issues/277
 [#280]: https://github.com/dahlia/optique/issues/280
 [#283]: https://github.com/dahlia/optique/issues/283
 [#526]: https://github.com/dahlia/optique/pull/526
@@ -597,6 +602,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#542]: https://github.com/dahlia/optique/pull/542
 [#544]: https://github.com/dahlia/optique/pull/544
 [#547]: https://github.com/dahlia/optique/pull/547
+[#551]: https://github.com/dahlia/optique/pull/551
 
 
 Version 0.10.7
