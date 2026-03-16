@@ -380,6 +380,9 @@ function createSanitizedNonPlainView<T extends object>(
       }
       const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
+        if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
+          return result;
+        }
         if (!isAccessor) {
           const cached = methodCache.get(key);
           if (cached != null && cached.fn === result) return cached.wrapper;
@@ -419,7 +422,7 @@ function createSanitizedNonPlainView<T extends object>(
           );
         };
       }
-      return result;
+      return stripDeferredPromptValues(result, seen);
     },
     getOwnPropertyDescriptor(target, key) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);

@@ -537,6 +537,11 @@ function createSanitizedNonPlainContextView<T extends object>(
       }
       const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
+        // Class constructors are returned unwrapped since the wrapper
+        // would break new.target and prototype chain semantics.
+        if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
+          return result;
+        }
         if (!isAccessor) {
           const cached = methodCache.get(key);
           if (cached != null && cached.fn === result) return cached.wrapper;
@@ -577,7 +582,7 @@ function createSanitizedNonPlainContextView<T extends object>(
           );
         };
       }
-      return result;
+      return stripDeferredPromptValuesForContexts(result, seen);
     },
     getOwnPropertyDescriptor(target, key) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
