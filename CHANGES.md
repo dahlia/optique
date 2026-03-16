@@ -589,9 +589,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
  -  Fixed `optique-man` accepting malformed parser-like or program-like
     exports that pass shallow validation but crash later with internal
-    generation errors.  The `isParser()` and `isProgram()` guards now
-    check for `getDocFragments` method and `metadata.name` string
-    respectively.  [[#278], [#552]]
+    generation errors.  The `isParser()` guard now checks for the
+    `getDocFragments` method, and `isProgram()` now validates that
+    `metadata.name` is a string and that the nested `parser` passes
+    `isParser()`.  Both guards also catch exceptions from throwing
+    accessors.  [[#278], [#552]]
 
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
