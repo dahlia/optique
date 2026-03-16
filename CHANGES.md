@@ -608,6 +608,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `isParser()`.  Both guards also catch exceptions from throwing
     accessors.  [[#278], [#552]]
 
+ -  `formatDocPageAsMan()` and the `generateManPage*()` functions now throw
+    a `TypeError` when `name` is an empty string, instead of generating
+    malformed man page output.  [[#286], [#556]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -617,6 +621,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#278]: https://github.com/dahlia/optique/issues/278
 [#280]: https://github.com/dahlia/optique/issues/280
 [#283]: https://github.com/dahlia/optique/issues/283
+[#286]: https://github.com/dahlia/optique/issues/286
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
@@ -626,6 +631,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#547]: https://github.com/dahlia/optique/pull/547
 [#551]: https://github.com/dahlia/optique/pull/551
 [#552]: https://github.com/dahlia/optique/pull/552
+[#556]: https://github.com/dahlia/optique/pull/556
 
 
 Version 0.10.7

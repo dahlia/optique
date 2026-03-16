@@ -1363,4 +1363,15 @@ describe("formatDocPageAsMan()", () => {
 
     assert.ok(result.includes(".BR app\\\\bin (1)"));
   });
+
+  it("rejects empty name", () => {
+    const page: DocPage = {
+      sections: [],
+    };
+
+    assert.throws(
+      () => formatDocPageAsMan(page, { name: "", section: 1 }),
+      TypeError,
+    );
+  });
 });

@@ -383,12 +383,16 @@ function formatDocSectionEntries(section: DocSection): string {
  * @param page The documentation page to format.
  * @param options The man page options.
  * @returns The complete man page in roff format.
+ * @throws {TypeError} If the program name is empty.
  * @since 0.10.0
  */
 export function formatDocPageAsMan(
   page: DocPage,
   options: ManPageOptions,
 ): string {
+  if (options.name === "") {
+    throw new TypeError("Program name must not be empty.");
+  }
   const lines: string[] = [];
 
   // .TH - Title heading
