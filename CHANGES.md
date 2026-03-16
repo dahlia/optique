@@ -271,6 +271,11 @@ To be released.
     invisible items in help text, error messages, and shell completions.
     [[#371], [#546]]
 
+ -  Changed `choice()` to reject non-boolean `caseInsensitive` option values
+    at runtime.  Previously, truthy non-boolean values like `"no"` silently
+    enabled case-insensitive matching due to JavaScript truthiness coercion.
+    [[#389]]
+
  -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
     config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
     from inner parsers.  These combinators now forward the hook so that
