@@ -2919,7 +2919,7 @@ export function email(
         // Parse single email
         const validated = validateEmail(input);
         if (validated === null) {
-          const errorMsg = options?.errors?.invalidEmail;
+          const errorMsg = invalidEmail;
           const msg = typeof errorMsg === "function"
             ? errorMsg(input)
             : errorMsg ??
@@ -2935,7 +2935,7 @@ export function email(
             domain === allowed.toLowerCase()
           );
           if (!isAllowed) {
-            const errorMsg = options?.errors?.domainNotAllowed;
+            const errorMsg = domainNotAllowed;
             if (typeof errorMsg === "function") {
               return {
                 success: false,
