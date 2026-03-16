@@ -101,7 +101,7 @@ export interface DeriveOptions<S, T, FM extends Mode = Mode> {
    * @param sourceValue The value parsed from the dependency source.
    * @returns A {@link ValueParser} for the derived value.
    */
-  readonly factory: (sourceValue: S) => ValueParser<FM, T>;
+  readonly factory: (sourceValue: S) => ValueParser<NoInfer<FM>, T>;
 
   /**
    * Default value to use when the dependency source is not provided.
@@ -331,7 +331,7 @@ export interface DeriveFromOptions<
    */
   readonly factory: (
     ...values: DependencyValues<Deps>
-  ) => ValueParser<FM, T>;
+  ) => ValueParser<NoInfer<FM>, T>;
 
   /**
    * Default values to use when the dependency sources are not provided.
