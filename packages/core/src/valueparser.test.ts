@@ -1951,6 +1951,21 @@ describe("choice", () => {
       assert.ok(parser.parse("1").success);
     });
 
+    it("should snapshot errors.invalidChoice at construction time", () => {
+      const errors: { invalidChoice: string } = {
+        invalidChoice: "original error",
+      };
+      const parser = choice(["a", "b"], { errors: errors as never });
+      const result = parser.parse("z");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      // Mutate errors after construction
+      errors.invalidChoice = "mutated error";
+      const result2 = parser.parse("z");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
     it("should work with all-duplicate list", () => {
       const parser = choice(["a", "a"]);
       assert.deepEqual(parser.choices, ["a"]);
@@ -2794,6 +2809,20 @@ describe("url", () => {
       // Parser should still accept https and reject http
       assert.ok(parser.parse("https://example.com").success);
       assert.ok(!parser.parse("http://example.com").success);
+    });
+
+    it("should snapshot errors.invalidUrl at construction time", () => {
+      const errors: { invalidUrl: string } = {
+        invalidUrl: "original error",
+      };
+      const parser = url({ errors: errors as never });
+      const result = parser.parse("not-a-url");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidUrl = "mutated error";
+      const result2 = parser.parse("not-a-url");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
     });
   });
 });
@@ -3644,6 +3673,20 @@ describe("uuid", () => {
         !parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success,
       );
     });
+
+    it("should snapshot errors.invalidUuid at construction time", () => {
+      const errors: { invalidUuid: string } = {
+        invalidUuid: "original error",
+      };
+      const parser = uuid({ errors: errors as never });
+      const result = parser.parse("not-a-uuid");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidUuid = "mutated error";
+      const result2 = parser.parse("not-a-uuid");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
   });
 });
 
@@ -4215,6 +4258,23 @@ describe("string", () => {
       // Parser should still use the original pattern
       assert.ok(parser.parse("a").success);
       assert.ok(!parser.parse("b").success);
+    });
+
+    it("should snapshot errors.patternMismatch at construction time", () => {
+      const errors: {
+        patternMismatch: string | ((i: string, p: RegExp) => string);
+      } = {
+        patternMismatch: "original error",
+      };
+      const parser = string({ pattern: /^a$/, errors: errors as never });
+      const result = parser.parse("b");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      // Mutate errors after construction
+      errors.patternMismatch = "mutated error";
+      const result2 = parser.parse("b");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
     });
   });
 });
@@ -6332,6 +6392,20 @@ describe("email()", () => {
       assert.ok(parser.parse("a@example.com").success);
       assert.ok(!parser.parse("a@other.com").success);
     });
+
+    it("should snapshot errors.invalidEmail at construction time", () => {
+      const errors: { invalidEmail: string } = {
+        invalidEmail: "original error",
+      };
+      const parser = email({ errors: errors as never });
+      const result = parser.parse("not-an-email");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidEmail = "mutated error";
+      const result2 = parser.parse("not-an-email");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
   });
 });
 
@@ -7908,6 +7982,20 @@ describe("domain()", () => {
       // Parser should still accept .com and reject .org
       assert.ok(parser.parse("example.com").success);
       assert.ok(!parser.parse("example.org").success);
+    });
+
+    it("should snapshot errors.invalidDomain at construction time", () => {
+      const errors: { invalidDomain: string } = {
+        invalidDomain: "original error",
+      };
+      const parser = domain({ errors: errors as never });
+      const result = parser.parse("");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidDomain = "mutated error";
+      const result2 = parser.parse("");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
     });
   });
 });
