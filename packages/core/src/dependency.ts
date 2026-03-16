@@ -536,6 +536,11 @@ export function dependency<M extends Mode, T>(
     derive<U, FM extends Mode = "sync">(
       options: DeriveOptions<T, U, FM>,
     ): DerivedValueParser<CombineMode<M, FM>, U, T> {
+      if (options.mode !== "sync" && options.mode !== "async") {
+        throw new TypeError(
+          'derive() requires an explicit mode field ("sync" or "async").',
+        );
+      }
       return createDerivedValueParser(id, parser, options, options.mode);
     },
     deriveSync<U>(
@@ -633,6 +638,12 @@ export function deriveFrom<
   T,
   DependencyValues<Deps>
 > {
+  if (options.mode !== "sync" && options.mode !== "async") {
+    throw new TypeError(
+      'deriveFrom() requires an explicit mode field ("sync" or "async").',
+    );
+  }
+
   const depsAsync = options.dependencies.some((dep) => dep.$mode === "async");
 
   const sourceId = options.dependencies.length > 0

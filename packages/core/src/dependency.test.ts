@@ -3775,6 +3775,48 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
     assert.deepEqual(result.value, { a: "safe", b: 1, value: "ok" });
   });
 
+  test("derive() throws TypeError when mode is omitted at runtime", () => {
+    const source = dependency(choice(["a", "b"] as const));
+    assert.throws(
+      () => {
+        // Simulate a JavaScript caller that omits mode:
+        source.derive(
+          {
+            metavar: "VALUE",
+            factory: () => choice(["x"] as const),
+            defaultValue: () => "a" as const,
+            // deno-lint-ignore no-explicit-any
+          } as any,
+        );
+      },
+      (err: unknown) =>
+        err instanceof TypeError &&
+        err.message.includes("derive()") &&
+        err.message.includes("mode"),
+    );
+  });
+
+  test("deriveFrom() throws TypeError when mode is omitted at runtime", () => {
+    assert.throws(
+      () => {
+        // Simulate a JavaScript caller that omits mode:
+        deriveFrom(
+          {
+            metavar: "VALUE",
+            dependencies: [] as const,
+            factory: () => choice(["x"] as const),
+            defaultValues: () => [] as const,
+            // deno-lint-ignore no-explicit-any
+          } as any,
+        );
+      },
+      (err: unknown) =>
+        err instanceof TypeError &&
+        err.message.includes("deriveFrom()") &&
+        err.message.includes("mode"),
+    );
+  });
+
   test("derive() does not call factory during construction", () => {
     // derive() should not call the factory during construction.
     // Even if the factory throws for the default value, construction succeeds.
