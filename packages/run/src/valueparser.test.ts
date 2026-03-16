@@ -429,47 +429,47 @@ describe("path", () => {
 
     it("should match dotfile-style extensions", () => {
       const envParser = path({ extensions: [".env"] });
-      assert.equal(envParser.parse(".env").success, true);
+      assert.ok(envParser.parse(".env").success);
 
       const gitignoreParser = path({ extensions: [".gitignore"] });
-      assert.equal(gitignoreParser.parse(".gitignore").success, true);
+      assert.ok(gitignoreParser.parse(".gitignore").success);
     });
 
     it("should match multi-part extensions", () => {
       const tarParser = path({ extensions: [".tar.gz"] });
-      assert.equal(tarParser.parse("archive.tar.gz").success, true);
+      assert.ok(tarParser.parse("archive.tar.gz").success);
 
       const dtsParser = path({ extensions: [".d.ts"] });
-      assert.equal(dtsParser.parse("index.d.ts").success, true);
+      assert.ok(dtsParser.parse("index.d.ts").success);
 
       const userJsParser = path({ extensions: [".user.js"] });
-      assert.equal(userJsParser.parse("script.user.js").success, true);
+      assert.ok(userJsParser.parse("script.user.js").success);
     });
 
     it("should reject files not matching multi-part extension", () => {
       const parser = path({ extensions: [".tar.gz"] });
       const result = parser.parse("archive.gz");
-      assert.equal(result.success, false);
+      assert.ok(!result.success);
     });
 
     it("should reject trailing-separator paths", () => {
       const parser = path({ extensions: [".env"] });
-      assert.equal(parser.parse(".env/").success, false);
+      assert.ok(!parser.parse(".env/").success);
 
       const tarParser = path({ extensions: [".tar.gz"] });
-      assert.equal(tarParser.parse("archive.tar.gz/").success, false);
+      assert.ok(!tarParser.parse("archive.tar.gz/").success);
     });
 
     it("should not false-match on directory components", () => {
       const parser = path({ extensions: [".json"] });
       const result = parser.parse(".env/config");
-      assert.equal(result.success, false);
+      assert.ok(!result.success);
     });
 
     it("should show dotfile name in error message", () => {
       const parser = path({ extensions: [".env"] });
       const result = parser.parse(".gitignore");
-      assert.equal(result.success, false);
+      assert.ok(!result.success);
       if (!result.success) {
         assert.match(
           formatMessage(result.error),

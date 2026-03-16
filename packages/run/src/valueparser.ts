@@ -174,6 +174,8 @@ export type PathOptions =
  *
  * @param options Configuration options for path validation.
  * @returns A ValueParser that validates and returns string paths.
+ * @throws {TypeError} If any entry in {@link PathOptionsBase.extensions} does
+ *   not start with a dot (e.g., `"json"` instead of `".json"`).
  *
  * @example
  * ```typescript
