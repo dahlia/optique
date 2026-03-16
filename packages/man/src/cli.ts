@@ -432,24 +432,21 @@ async function registerTsx(
 }
 
 /**
- * Tries to register the tsx loader, silently ignoring only "not installed".
+ * Tries to register the tsx loader, silently ignoring all failures.
  * Used on Node.js for entries that may have transitive JSX/TSX dependencies.
- * @throws If tsx is installed but fails to initialize (e.g., incompatible
- *         runtime), the error is rethrown so the real cause is visible.
+ *
+ * All errors are suppressed because this is a best-effort preload: the
+ * entry file itself does not require tsx, and failing here would be a
+ * regression for environments where tsx is absent, incompatible, or
+ * broken.  If a transitive JSX/TSX dependency is later encountered
+ * without a loader, the caller's catch block produces a helpful error.
  */
 async function tryRegisterTsx(): Promise<void> {
   try {
     const tsx = await import("tsx/esm/api");
     tsx.register();
-  } catch (error: unknown) {
-    // Only suppress "module not found" (tsx not installed).  Rethrow
-    // anything else so genuine loader failures are not hidden.
-    if (
-      !(error instanceof Error) ||
-      (error as NodeJS.ErrnoException).code !== "ERR_MODULE_NOT_FOUND"
-    ) {
-      throw error;
-    }
+  } catch {
+    // Intentionally empty — see JSDoc above.
   }
 }
 
