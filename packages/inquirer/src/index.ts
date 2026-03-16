@@ -1001,21 +1001,34 @@ export function prompt<M extends Mode, TValue, TState>(
           return cached;
         }
         // First call: try inner parser, fall back to prompt if it fails.
-        // When parser.initialState is null/undefined (e.g., optional()), inject
-        // annotations directly so wrapper combinators can forward them to inner
-        // source-binding parsers like bindConfig during phase-two resolution.
-        const innerInitialState = parser.initialState;
-        const annotations = getAnnotations(state);
-        // When the inner parser has a config-prompt deferral hook and its
-        // initialState is null/undefined (e.g., optional(bindConfig(...))),
-        // inject annotations so the inner parser can resolve from config.
         const hasDeferHook = typeof Reflect.get(
           parser,
           deferPromptUntilConfigResolvesKey,
         ) === "function";
+
+        // When no config-prompt deferral hook and no annotations are
+        // present, the inner parser can only return optional/withDefault
+        // defaults — not values from real sources like bindConfig or
+        // bindEnv.  Prompt directly instead of delegating to the inner
+        // parser whose defaults would suppress the prompt.
+        const annotations = getAnnotations(state);
+        if (!hasDeferHook && annotations == null) {
+          const cachedResult = executePrompt();
+          promptCache = { state, result: cachedResult };
+          return cachedResult;
+        }
+
+        // Has defer hook or annotations — try inner parser first, fall
+        // back to prompt.
+        // When parser.initialState is null/undefined (e.g., optional()), inject
+        // annotations directly so wrapper combinators can forward them to inner
+        // source-binding parsers like bindConfig during phase-two resolution.
+        const innerInitialState = parser.initialState;
+        // When the inner parser has a config-prompt deferral hook and its
+        // initialState is null/undefined (e.g., optional(bindConfig(...))),
+        // inject annotations so the inner parser can resolve from config.
         const effectiveInitialState = annotations != null &&
-            innerInitialState == null &&
-            hasDeferHook
+            innerInitialState == null
           ? injectAnnotations(innerInitialState, annotations)
           : innerInitialState;
         const r = withAnnotatedInnerState(
@@ -1031,7 +1044,7 @@ export function prompt<M extends Mode, TValue, TState>(
           res: ValueParserResult<TValue>,
         ): Promise<ValueParserResult<TValue>> => {
           if (
-            hasDeferHook && res.success && res.value === undefined
+            res.success && res.value === undefined
           ) {
             return usePromptOrDefer(state, { success: false, error: [] });
           }

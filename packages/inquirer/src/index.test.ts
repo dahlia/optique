@@ -604,6 +604,74 @@ describe("prompt()", () => {
       ]);
       assert.ok(!result.success);
     });
+
+    it("prompts for prompt(optional(...)) inside object() when CLI absent", async () => {
+      let promptCalled = false;
+      const parser = object({
+        name: prompt(optional(option("--name", string())), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            promptCalled = true;
+            return Promise.resolve("prompted");
+          },
+        }),
+      });
+
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "prompted");
+      assert.ok(promptCalled, "Prompt should have been called");
+    });
+
+    it("prompts for prompt(withDefault(...)) inside object() when CLI absent", async () => {
+      let promptCalled = false;
+      const parser = object({
+        name: prompt(withDefault(option("--name", string()), "default"), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () => {
+            promptCalled = true;
+            return Promise.resolve("prompted");
+          },
+        }),
+      });
+
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "prompted");
+      assert.ok(promptCalled, "Prompt should have been called");
+    });
+
+    it("uses CLI value for prompt(optional(...)) inside object()", async () => {
+      const parser = object({
+        name: prompt(optional(option("--name", string())), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        }),
+      });
+
+      const result = await parseAsync(parser, ["--name", "cli-value"]);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "cli-value");
+    });
+
+    it("uses CLI value for prompt(withDefault(...)) inside object()", async () => {
+      const parser = object({
+        name: prompt(withDefault(option("--name", string()), "default"), {
+          type: "input",
+          message: "Enter name:",
+          prompter: () =>
+            Promise.reject(new Error("Prompt should not be called")),
+        }),
+      });
+
+      const result = await parseAsync(parser, ["--name", "cli-value"]);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "cli-value");
+    });
   });
 
   describe("usage", () => {

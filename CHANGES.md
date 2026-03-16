@@ -449,9 +449,15 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `complete()` so that config values propagate through wrapper combinators
     like `optional(bindConfig(...))`.  [[#385], [#535]]
 
+ -  Fixed `prompt(optional(...))` and `prompt(withDefault(...))` inside
+    `object()` silently skipping the prompt and returning the
+    optional/default value instead.  [[#288], [#540]]
+
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137
 [#151]: https://github.com/dahlia/optique/issues/151
+[#288]: https://github.com/dahlia/optique/issues/288
+[#540]: https://github.com/dahlia/optique/pull/540
 
 ### @optique/run
 
