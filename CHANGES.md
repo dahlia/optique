@@ -522,12 +522,18 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `--version-string`, and `--manual` options instead of generating malformed
     `.TH` header lines.  [[#283], [#532]]
 
+ -  Fixed `optique-man` not recognizing `.tsx` and `.jsx` input files as
+    needing the `tsx` loader on Node.js, causing `ERR_UNKNOWN_FILE_EXTENSION`
+    errors instead of the intended TypeScript-handling flow.  [[#280], [#534]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
+[#280]: https://github.com/dahlia/optique/issues/280
 [#283]: https://github.com/dahlia/optique/issues/283
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
+[#534]: https://github.com/dahlia/optique/pull/534
 
 
 Version 0.10.7

@@ -27,6 +27,9 @@ import { generateManPageAsync } from "./generator.ts";
 // @ts-ignore: JSON import
 import denoJson from "../deno.json" with { type: "json" };
 
+// Pattern matching JSX/TSX file extensions (including module-prefixed variants)
+const jsxTsxPattern = /\.[mc]?[jt]sx$/;
+
 // Exit codes
 const EXIT_FILE_NOT_FOUND = 1;
 const EXIT_EXPORT_NOT_FOUND = 2;
@@ -264,7 +267,7 @@ ${commandLine("command()")}, etc.).`,
 }
 
 /**
- * Error handler for missing tsx.
+ * Error handler for missing tsx for TypeScript files.
  */
 function tsxRequiredError(filePath: string): never {
   const version = getNodeMajorMinor();
@@ -278,6 +281,28 @@ Install tsx as a dev dependency:
   ${commandLine("npm install -D tsx")}
 
 Or upgrade to Node.js 25.2.0 or later, which supports TypeScript natively.
+
+Alternatively, use a pre-compiled JavaScript file instead.`,
+    { exitCode: EXIT_TSX_REQUIRED },
+  );
+}
+
+/**
+ * Error handler for missing tsx for JSX/TSX files.
+ */
+function jsxLoaderRequiredError(filePath: string): never {
+  const version = getNodeMajorMinor();
+  const versionStr = version ? `${version[0]}.${version[1]}` : "unknown";
+
+  const isTsx = /\.[mc]?tsx$/.test(filePath);
+  const fileKind = isTsx ? "TSX" : "JSX";
+
+  printError(
+    message`${fileKind} file ${filePath} cannot be loaded on Node.js ${versionStr}.
+
+Install tsx as a dev dependency:
+
+  ${commandLine("npm install -D tsx")}
 
 Alternatively, use a pre-compiled JavaScript file instead.`,
     { exitCode: EXIT_TSX_REQUIRED },
@@ -308,7 +333,11 @@ Make sure you have write permission and the parent directory exists.`,
 
 /**
  * Imports a module from the given file path.
- * Handles TypeScript files on Node.js by using tsx if needed.
+ * Handles TypeScript and JSX files on Node.js by using tsx if needed.
+ * @param filePath The path to the module file.
+ * @returns The imported module's exports.
+ * @throws If the module fails to import for reasons other than a missing
+ *         tsx loader (which causes the process to exit instead).
  */
 async function importModule(
   filePath: string,
@@ -320,23 +349,115 @@ async function importModule(
     fileNotFoundError(filePath);
   }
 
-  const isTypeScript = /\.[mc]?ts$/.test(filePath);
+  const isPlainTs = /\.[mc]?ts$/.test(filePath);
+  const isJsxOrTsx = jsxTsxPattern.test(filePath);
   const isDeno = "Deno" in globalThis;
   const isBun = "Bun" in globalThis;
 
-  // Node.js + TypeScript
-  if (!isDeno && !isBun && isTypeScript && !nodeSupportsNativeTypeScript()) {
-    try {
-      const tsx = await import("tsx/esm/api");
-      tsx.register();
-    } catch {
-      tsxRequiredError(filePath);
-    }
+  // Node.js + TypeScript/JSX: JSX files always need tsx (Node's native type
+  // stripping does not handle JSX transform), while plain TS files only need
+  // it on older Node versions without native type stripping.
+  if (
+    !isDeno && !isBun &&
+    (isJsxOrTsx || (isPlainTs && !nodeSupportsNativeTypeScript()))
+  ) {
+    await registerTsx(filePath, isJsxOrTsx);
+  } else if (!isDeno && !isBun) {
+    // Any Node.js entry (including .js and .ts on Node 25.2+) may have
+    // transitive JSX/TSX dependencies that need tsx.  Register it
+    // opportunistically so the loader is in place before the first
+    // import — Node's ESM loader caches failed module jobs, so a
+    // post-failure retry would not work.
+    await tryRegisterTsx();
   }
 
   // Use file URL for proper import on all platforms
   const fileUrl = pathToFileURL(absolutePath).href;
-  return await import(fileUrl);
+  try {
+    return await import(fileUrl);
+  } catch (error: unknown) {
+    // If the import failed with ERR_UNKNOWN_FILE_EXTENSION for a JSX/TSX
+    // dependency and tsx is not installed, show a helpful error message
+    // instead of the raw Node.js error.
+    if (
+      !isDeno && !isBun &&
+      isNodeError(error) &&
+      error.code === "ERR_UNKNOWN_FILE_EXTENSION"
+    ) {
+      const failedPath = extractPathFromExtensionError(error.message);
+      if (failedPath != null && jsxTsxPattern.test(failedPath)) {
+        jsxLoaderRequiredError(failedPath);
+      }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Checks whether an error is a Node.js system error with a string `code`.
+ * @param error The value to check.
+ * @returns `true` if the error has a string `code` property.
+ */
+function isNodeError(error: unknown): error is Error & { code: string } {
+  return error instanceof Error && "code" in error &&
+    typeof (error as { code: unknown }).code === "string";
+}
+
+/**
+ * Extracts the file path from a Node.js `ERR_UNKNOWN_FILE_EXTENSION` error
+ * message, which has the format `Unknown file extension ".ext" for /path`.
+ * @param message The error message string.
+ * @returns The file path, or null if the message format is unexpected.
+ */
+function extractPathFromExtensionError(message: string): string | null {
+  const match = /^Unknown file extension "\.[^"]*" for (.+)$/.exec(message);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Registers the tsx loader for TypeScript/JSX/TSX support on Node.js.
+ * @param filePath The file path being loaded (used for error messages).
+ * @param isJsxOrTsx Whether the file uses a JSX or TSX extension.
+ */
+async function registerTsx(
+  filePath: string,
+  isJsxOrTsx: boolean,
+): Promise<void> {
+  try {
+    const tsx = await import("tsx/esm/api");
+    tsx.register();
+  } catch (error: unknown) {
+    if (
+      !isNodeError(error) ||
+      error.code !== "ERR_MODULE_NOT_FOUND"
+    ) {
+      throw error;
+    }
+    if (isJsxOrTsx) {
+      jsxLoaderRequiredError(filePath);
+    } else {
+      tsxRequiredError(filePath);
+    }
+  }
+}
+
+/**
+ * Tries to register the tsx loader, silently ignoring all failures.
+ * Used on Node.js for entries that may have transitive JSX/TSX dependencies.
+ *
+ * All errors are suppressed because this is a best-effort preload: the
+ * entry file itself does not require tsx, and failing here would be a
+ * regression for environments where tsx is absent, incompatible, or
+ * broken.  If a transitive JSX/TSX dependency is later encountered
+ * without a loader, the caller's catch block produces a helpful error.
+ */
+async function tryRegisterTsx(): Promise<void> {
+  try {
+    const tsx = await import("tsx/esm/api");
+    tsx.register();
+  } catch {
+    // Intentionally empty — see JSDoc above.
+  }
 }
 
 /**
