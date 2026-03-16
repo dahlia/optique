@@ -317,6 +317,11 @@ export function choice<const T extends string | number>(
       );
     }
   }
+  if (isNumber && (choices as readonly number[]).some((v) => Number.isNaN(v))) {
+    throw new TypeError(
+      "NaN is not allowed as a choice.",
+    );
+  }
   const metavar = options.metavar ?? "TYPE";
   ensureNonEmptyString(metavar);
 
@@ -344,24 +349,18 @@ export function choice<const T extends string | number>(
       return result;
     })();
     const numberOptions = options as ChoiceOptionsNumber;
-    const hasNaN = numberChoices.some((v) => Number.isNaN(v));
-    const validNumberChoices = hasNaN
-      ? numberChoices.filter((v) => !Number.isNaN(v))
-      : numberChoices;
     const numberStrings = numberChoices.map((v) =>
       Object.is(v, -0) ? "-0" : String(v)
     );
     return {
       $mode: "sync",
       metavar,
-      choices: (hasNaN ? validNumberChoices : numberChoices) as readonly T[],
+      choices: numberChoices as readonly T[],
       parse(input: string): ValueParserResult<T> {
         // Exact match against canonical string representations
         // (String(value) for most values, "-0" for negative zero).
-        // NaN is never a valid CLI literal (consistent with float()
-        // requiring explicit allowNaN), so skip NaN entries.
         const index = numberStrings.indexOf(input);
-        if (index >= 0 && !Number.isNaN(numberChoices[index])) {
+        if (index >= 0) {
           return { success: true, value: numberChoices[index] as T };
         }
         // Fall back to strict decimal parsing for alternate spellings
@@ -444,7 +443,7 @@ export function choice<const T extends string | number>(
           success: false,
           error: formatNumberChoiceError(
             input,
-            validNumberChoices,
+            numberChoices,
             numberChoices,
             numberOptions,
           ),

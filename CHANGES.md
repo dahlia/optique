@@ -276,6 +276,11 @@ To be released.
     enabled case-insensitive matching due to JavaScript truthiness coercion.
     [[#389], [#548]]
 
+ -  Changed `choice()` to throw `TypeError` when `NaN` is included in the
+    number choices array.  Previously, `NaN` was silently filtered out but
+    still advertised in suggestions and help output, creating an unsatisfiable
+    parser with contradictory diagnostics.  [[#363], [#553]]
+
  -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
     config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
     from inner parsers.  These combinators now forward the hook so that
@@ -320,6 +325,7 @@ To be released.
 [#310]: https://github.com/dahlia/optique/issues/310
 [#332]: https://github.com/dahlia/optique/issues/332
 [#353]: https://github.com/dahlia/optique/issues/353
+[#363]: https://github.com/dahlia/optique/issues/363
 [#371]: https://github.com/dahlia/optique/issues/371
 [#385]: https://github.com/dahlia/optique/issues/385
 [#388]: https://github.com/dahlia/optique/issues/388
@@ -339,6 +345,7 @@ To be released.
 [#537]: https://github.com/dahlia/optique/pull/537
 [#546]: https://github.com/dahlia/optique/pull/546
 [#548]: https://github.com/dahlia/optique/pull/548
+[#553]: https://github.com/dahlia/optique/pull/553
 
 ### @optique/config
 

@@ -1769,22 +1769,10 @@ describe("choice", () => {
       }
     });
 
-    it("should reject NaN even when it appears in the choice list", () => {
-      const parser = choice([NaN, 1, 2]);
-
-      const result = parser.parse("NaN");
-      assert.ok(!result.success);
-
-      // No hidden literal should parse to NaN
-      const nul = parser.parse("\0");
-      assert.ok(!nul.success);
-
-      // Other values should still work
-      const result2 = parser.parse("1");
-      assert.ok(result2.success);
-
-      // NaN should be excluded from choices metadata
-      assert.deepEqual(parser.choices, [1, 2]);
+    it("should reject NaN at construction time", () => {
+      assert.throws(() => choice([NaN]), TypeError);
+      assert.throws(() => choice([NaN, 1, 2]), TypeError);
+      assert.throws(() => choice([1, NaN, 2]), TypeError);
     });
 
     it("should handle duplicate number values", () => {
