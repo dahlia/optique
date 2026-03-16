@@ -266,6 +266,18 @@ To be released.
     Previously, duplicate entries appeared in suggestions, error messages,
     and help text.  [[#353], [#537]]
 
+ -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
+    config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
+    from inner parsers.  These combinators now forward the hook so that
+    `prompt(optional(bindConfig(...)))` and similar compositions correctly
+    defer interactive prompts until phase-two config resolution.
+    [[#385], [#535]]
+
+ -  Fixed `optional()` and `withDefault()` not propagating annotations from
+    outer state into inner parser elements during `complete()`, which prevented
+    `bindConfig()` from resolving config values through wrapper combinators.
+    [[#385], [#535]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -298,6 +310,7 @@ To be released.
 [#310]: https://github.com/dahlia/optique/issues/310
 [#332]: https://github.com/dahlia/optique/issues/332
 [#353]: https://github.com/dahlia/optique/issues/353
+[#385]: https://github.com/dahlia/optique/issues/385
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
@@ -309,6 +322,7 @@ To be released.
 [#528]: https://github.com/dahlia/optique/pull/528
 [#531]: https://github.com/dahlia/optique/pull/531
 [#533]: https://github.com/dahlia/optique/pull/533
+[#535]: https://github.com/dahlia/optique/pull/535
 [#536]: https://github.com/dahlia/optique/pull/536
 [#537]: https://github.com/dahlia/optique/pull/537
 
@@ -428,6 +442,12 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     Inquirer prompt with <kbd>^C</kbd>.  Prompt cancellation is now converted
     into a normal parse failure (`Prompt cancelled.`) instead of surfacing as
     an unhandled promise rejection.  [[#151]]
+
+ -  Fixed `prompt()` not attempting inner parser completion when the CLI state
+    is wrapped by `optional()` (array form).  When the inner parser carries a
+    config-prompt deferral hook, `prompt()` now delegates to the inner parser's
+    `complete()` so that config values propagate through wrapper combinators
+    like `optional(bindConfig(...))`.  [[#385], [#535]]
 
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137

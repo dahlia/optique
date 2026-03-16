@@ -6,7 +6,7 @@ import {
   getAnnotations,
   injectAnnotations,
 } from "@optique/core/annotations";
-import { object } from "@optique/core/constructs";
+import { group, object } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
 import { runWith } from "@optique/core/facade";
@@ -18,7 +18,7 @@ import {
   type Suggestion,
 } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
-import { map, multiple, optional } from "@optique/core/modifiers";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
@@ -1649,6 +1649,361 @@ describe("prompt()", () => {
       assert.ok(result instanceof BoxSet);
       assert.equal(result.apiKey, "config-secret");
     });
+  });
+
+  describe("prompt deferral through wrapper combinators", () => {
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "optional(bindConfig(...)): skips the prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "optional(bindConfig(...)): runs the prompt when config is absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = prompt(
+          optional(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+          ),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompt-secret");
+            },
+          },
+        );
+
+        const result = await runWith(parser, "test", [context], {
+          load: () => ({ config, meta: undefined }),
+          args: [],
+        });
+
+        assert.equal(result, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "group(bindConfig(...)): skips the prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "group(bindConfig(...)): runs the prompt when config is absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = prompt(
+          group(
+            "Auth",
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+          ),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompt-secret");
+            },
+          },
+        );
+
+        const result = await runWith(parser, "test", [context], {
+          load: () => ({ config, meta: undefined }),
+          args: [],
+        });
+
+        assert.equal(result, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "map(bindConfig(...)): skips the prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "CONFIG-SECRET",
+          0,
+        ],
+        [
+          "map(bindConfig(...)): runs the prompt when config is absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = prompt(
+          map(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            (v) => v.toUpperCase(),
+          ),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompt-secret");
+            },
+          },
+        );
+
+        const result = await runWith(parser, "test", [context], {
+          load: () => ({ config, meta: undefined }),
+          args: [],
+        });
+
+        assert.equal(result, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "withDefault(bindConfig(...)): skips the prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "withDefault(bindConfig(...)): runs the prompt when config is absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = prompt(
+          withDefault(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            "fallback-default",
+          ),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompt-secret");
+            },
+          },
+        );
+
+        const result = await runWith(parser, "test", [context], {
+          load: () => ({ config, meta: undefined }),
+          args: [],
+        });
+
+        assert.equal(result, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "object() + optional(bindConfig(...)): skips prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "object() + optional(bindConfig(...)): runs prompt when config absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = object({
+          apiKey: prompt(
+            optional(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+            ),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => {
+                promptCalls += 1;
+                return Promise.resolve("prompt-secret");
+              },
+            },
+          ),
+        });
+
+        const result = await runAsync(parser, {
+          programName: "test",
+          args: [],
+          contexts: [context],
+          load: () => ({ config, meta: undefined }),
+        });
+
+        assert.equal(result.apiKey, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "object() + group(bindConfig(...)): skips prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "object() + group(bindConfig(...)): runs prompt when config absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = object({
+          apiKey: prompt(
+            group(
+              "Auth",
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+            ),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => {
+                promptCalls += 1;
+                return Promise.resolve("prompt-secret");
+              },
+            },
+          ),
+        });
+
+        const result = await runAsync(parser, {
+          programName: "test",
+          args: [],
+          contexts: [context],
+          load: () => ({ config, meta: undefined }),
+        });
+
+        assert.equal(result.apiKey, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "object() + withDefault(bindConfig(...)): skips prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "object() + withDefault(bindConfig(...)): runs prompt when config absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = object({
+          apiKey: prompt(
+            withDefault(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              "fallback-default",
+            ),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => {
+                promptCalls += 1;
+                return Promise.resolve("prompt-secret");
+              },
+            },
+          ),
+        });
+
+        const result = await runAsync(parser, {
+          programName: "test",
+          args: [],
+          contexts: [context],
+          load: () => ({ config, meta: undefined }),
+        });
+
+        assert.equal(result.apiKey, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
   });
 
   describe("prompt config default", () => {

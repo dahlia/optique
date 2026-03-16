@@ -59,6 +59,10 @@ const inheritParentAnnotationsKey = Symbol.for(
   "@optique/core/inheritParentAnnotations",
 );
 
+const deferPromptUntilConfigResolvesKey = Symbol.for(
+  "@optique/config/deferPromptUntilResolved",
+);
+
 /**
  * Helper type to combine modes from a tuple of parsers.
  * Returns "async" if any parser is async, otherwise "sync".
@@ -6310,6 +6314,18 @@ export function group<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   options: GroupOptions = {},
 ): Parser<M, TValue, TState> {
+  // Forward config-prompt deferral hook from inner parser so that
+  // prompt(group("label", bindConfig(...))) defers correctly.
+  const deferPromptHook = Reflect.get(
+    parser,
+    deferPromptUntilConfigResolvesKey,
+  );
+  const deferPromptMarker: {
+    [deferPromptUntilConfigResolvesKey]?: (state: unknown) => boolean;
+  } = typeof deferPromptHook === "function"
+    ? { [deferPromptUntilConfigResolvesKey]: deferPromptHook }
+    : {};
+
   return {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
@@ -6317,6 +6333,7 @@ export function group<M extends Mode, TValue, TState>(
     priority: parser.priority,
     usage: applyHiddenToUsage(parser.usage, options.hidden),
     initialState: parser.initialState,
+    ...deferPromptMarker,
     parse: (context) => parser.parse(context),
     complete: (state) => parser.complete(state),
     suggest: (context, prefix) => {

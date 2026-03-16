@@ -21,6 +21,7 @@ import {
   type Annotations,
   getAnnotations,
   inheritAnnotations,
+  injectAnnotations,
   unwrapInjectedAnnotationWrapper,
 } from "@optique/core/annotations";
 import type {
@@ -143,9 +144,6 @@ class DeferredPromptValue {
   readonly [deferredPromptValueKey] = true as const;
 }
 
-// FIXME: Wrapped config-bound parsers such as optional(bindConfig(...)) and
-// group(..., bindConfig(...)) currently drop this hook. See:
-// https://github.com/dahlia/optique/issues/385
 function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
   state: unknown,
@@ -715,7 +713,14 @@ export function prompt<M extends Mode, TValue, TState>(
       return true;
     }
     if (Array.isArray(cliState)) {
-      return false;
+      // Arrays from optional() normally mean "no inner completion needed".
+      // However, when the parser carries a config-prompt deferral hook
+      // (e.g., optional(bindConfig(...))), the inner parser still needs a
+      // chance to resolve from config during phase-two completion.
+      return typeof Reflect.get(
+        parser,
+        deferPromptUntilConfigResolvesKey,
+      ) === "function";
     }
     const prototype = Object.getPrototypeOf(cliState);
     return prototype !== Object.prototype && prototype !== null;
@@ -996,16 +1001,47 @@ export function prompt<M extends Mode, TValue, TState>(
           return cached;
         }
         // First call: try inner parser, fall back to prompt if it fails.
+        // When parser.initialState is null/undefined (e.g., optional()), inject
+        // annotations directly so wrapper combinators can forward them to inner
+        // source-binding parsers like bindConfig during phase-two resolution.
+        const innerInitialState = parser.initialState;
+        const annotations = getAnnotations(state);
+        // When the inner parser has a config-prompt deferral hook and its
+        // initialState is null/undefined (e.g., optional(bindConfig(...))),
+        // inject annotations so the inner parser can resolve from config.
+        const hasDeferHook = typeof Reflect.get(
+          parser,
+          deferPromptUntilConfigResolvesKey,
+        ) === "function";
+        const effectiveInitialState = annotations != null &&
+            innerInitialState == null &&
+            hasDeferHook
+          ? injectAnnotations(innerInitialState, annotations)
+          : innerInitialState;
         const r = withAnnotatedInnerState(
           state,
-          parser.initialState,
+          effectiveInitialState,
           (annotatedInnerState) => parser.complete(annotatedInnerState),
         );
+        // When the inner parser has a deferral hook, treat
+        // { success: true, value: undefined } as "not resolved" so the
+        // prompt still fires.  This handles optional(bindConfig(...)) inside
+        // object() where optional returns undefined when config is absent.
+        const usePromptOrDeferSentinel = (
+          res: ValueParserResult<TValue>,
+        ): Promise<ValueParserResult<TValue>> => {
+          if (
+            hasDeferHook && res.success && res.value === undefined
+          ) {
+            return usePromptOrDefer(state, { success: false, error: [] });
+          }
+          return usePromptOrDefer(state, res);
+        };
         const cachedResult = r instanceof Promise
-          ? (r as Promise<ValueParserResult<TValue>>).then((res) =>
-            usePromptOrDefer(state, res)
+          ? (r as Promise<ValueParserResult<TValue>>).then(
+            usePromptOrDeferSentinel,
           )
-          : usePromptOrDefer(state, r as ValueParserResult<TValue>);
+          : usePromptOrDeferSentinel(r as ValueParserResult<TValue>);
         promptCache = { state, result: cachedResult };
         return cachedResult;
       }
