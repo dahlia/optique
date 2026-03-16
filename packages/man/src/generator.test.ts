@@ -528,13 +528,16 @@ describe("Program-based API", () => {
 
     // SYNOPSIS should contain both options
     const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
     const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    assert.notEqual(nextSection, -1);
     const synopsis = result.slice(synopsisStart, nextSection);
     assert.ok(synopsis.includes("\\-\\-visible"));
     assert.ok(synopsis.includes("\\-\\-doc\\-hidden"));
 
     // OPTIONS section should only contain the visible option
     const optionsStart = result.indexOf(".SH OPTIONS");
+    assert.notEqual(optionsStart, -1);
     const optionsSection = result.slice(optionsStart);
     assert.ok(optionsSection.includes("\\-\\-visible"));
     assert.ok(optionsSection.includes("A visible option."));
