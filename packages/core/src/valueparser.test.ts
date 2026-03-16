@@ -1155,6 +1155,16 @@ describe("choice", () => {
       if (result.success) assert.equal(result.value, "json");
     });
 
+    it("should allow exact duplicate choices with caseInsensitive", () => {
+      const parser = choice(["json", "json", "yaml"], {
+        caseInsensitive: true,
+      });
+
+      const result = parser.parse("JSON");
+      assert.ok(result.success);
+      if (result.success) assert.equal(result.value, "json");
+    });
+
     it("should handle null-like string values", () => {
       const parser = choice(["null", "undefined", "NaN", "false"]);
 

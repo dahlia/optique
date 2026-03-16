@@ -418,15 +418,18 @@ export function choice<const T extends string | number>(
     ? stringChoices.map((v) => v.toLowerCase())
     : stringChoices;
   if (stringOptions.caseInsensitive) {
-    const seen = new Set<string>();
-    for (const nv of normalizedValues) {
-      if (seen.has(nv)) {
+    const seen = new Map<string, string>();
+    for (let i = 0; i < stringChoices.length; i++) {
+      const nv = normalizedValues[i];
+      const original = stringChoices[i];
+      const prev = seen.get(nv);
+      if (prev !== undefined && prev !== original) {
         throw new TypeError(
           `Ambiguous choices for case-insensitive matching: ` +
             `multiple choices normalize to "${nv}".`,
         );
       }
-      seen.add(nv);
+      seen.set(nv, original);
     }
   }
   return {
