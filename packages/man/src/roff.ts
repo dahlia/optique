@@ -52,6 +52,18 @@ export function escapeRoff(text: string): string {
 }
 
 /**
+ * Escapes roff-sensitive characters inside a quoted value.
+ * Handles backslashes and double quotes so the value can be safely
+ * placed between literal `"` delimiters in roff output.
+ *
+ * @param text The raw value text.
+ * @returns The escaped text safe for use inside roff double quotes.
+ */
+function escapeQuotedValue(text: string): string {
+  return escapeBackslashes(text).replace(/"/g, "\\(dq");
+}
+
+/**
  * Escapes hyphens in option names to prevent line breaks.
  *
  * In roff, a regular hyphen (`-`) can be used as a line break point.
@@ -99,13 +111,13 @@ function formatTermAsRoff(term: MessageTerm): string {
 
     case "value":
       // Quoted value with escaped content
-      return `"${escapeBackslashes(term.value).replace(/"/g, "\\(dq")}"`;
+      return `"${escapeQuotedValue(term.value)}"`;
 
     case "values":
       // Space-separated quoted values
       if (term.values.length === 0) return "";
       return term.values
-        .map((v) => `"${escapeBackslashes(v).replace(/"/g, "\\(dq")}"`)
+        .map((v) => `"${escapeQuotedValue(v)}"`)
         .join(" ");
 
     case "envVar":
