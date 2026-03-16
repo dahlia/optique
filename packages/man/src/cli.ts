@@ -354,21 +354,49 @@ async function importModule(
     !isDeno && !isBun &&
     (isJsx || (isTypeScript && !nodeSupportsNativeTypeScript()))
   ) {
-    try {
-      const tsx = await import("tsx/esm/api");
-      tsx.register();
-    } catch {
-      if (isJsx) {
-        jsxLoaderRequiredError(filePath);
-      } else {
-        tsxRequiredError(filePath);
-      }
-    }
+    await registerTsx(filePath, isJsx);
   }
 
   // Use file URL for proper import on all platforms
   const fileUrl = pathToFileURL(absolutePath).href;
-  return await import(fileUrl);
+  try {
+    return await import(fileUrl);
+  } catch (error: unknown) {
+    // On Node.js 25.2+ a plain .ts entry can import .tsx/.jsx files that
+    // Node's native type stripping cannot handle.  Detect this and fall
+    // back to the tsx loader.
+    if (
+      !isDeno && !isBun &&
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ERR_UNKNOWN_FILE_EXTENSION"
+    ) {
+      await registerTsx(filePath, true);
+      return await import(fileUrl);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Registers the tsx loader for TypeScript/JSX support on Node.js.
+ * @param filePath The file path being loaded (used for error messages).
+ * @param isJsx Whether the file uses a JSX extension.
+ */
+async function registerTsx(
+  filePath: string,
+  isJsx: boolean,
+): Promise<void> {
+  try {
+    const tsx = await import("tsx/esm/api");
+    tsx.register();
+  } catch {
+    if (isJsx) {
+      jsxLoaderRequiredError(filePath);
+    } else {
+      tsxRequiredError(filePath);
+    }
+  }
 }
 
 /**
