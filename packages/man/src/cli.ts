@@ -410,7 +410,7 @@ function isNodeError(error: unknown): error is Error & { code: string } {
  * @returns The file path, or null if the message format is unexpected.
  */
 function extractPathFromExtensionError(message: string): string | null {
-  const match = /^Unknown file extension ".[^"]*" for (.+)$/.exec(message);
+  const match = /^Unknown file extension "\.[^"]*" for (.+)$/.exec(message);
   return match?.[1] ?? null;
 }
 
