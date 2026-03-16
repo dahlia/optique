@@ -1023,11 +1023,25 @@ export function prompt<M extends Mode, TValue, TState>(
           effectiveInitialState,
           (annotatedInnerState) => parser.complete(annotatedInnerState),
         );
+        // When the inner parser has a deferral hook, treat
+        // { success: true, value: undefined } as "not resolved" so the
+        // prompt still fires.  This handles optional(bindConfig(...)) inside
+        // object() where optional returns undefined when config is absent.
+        const usePromptOrDeferSentinel = (
+          res: ValueParserResult<TValue>,
+        ): Promise<ValueParserResult<TValue>> => {
+          if (
+            hasDeferHook && res.success && res.value === undefined
+          ) {
+            return usePromptOrDefer(state, { success: false, error: [] });
+          }
+          return usePromptOrDefer(state, res);
+        };
         const cachedResult = r instanceof Promise
-          ? (r as Promise<ValueParserResult<TValue>>).then((res) =>
-            usePromptOrDefer(state, res)
+          ? (r as Promise<ValueParserResult<TValue>>).then(
+            usePromptOrDeferSentinel,
           )
-          : usePromptOrDefer(state, r as ValueParserResult<TValue>);
+          : usePromptOrDeferSentinel(r as ValueParserResult<TValue>);
         promptCache = { state, result: cachedResult };
         return cachedResult;
       }
