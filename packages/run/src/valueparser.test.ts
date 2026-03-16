@@ -1166,6 +1166,30 @@ describe("path", () => {
     });
   });
 
+  describe("invalid type option", () => {
+    it("should throw TypeError for unsupported type values", () => {
+      assert.throws(
+        () => path({ type: "files" as never }),
+        {
+          name: "TypeError",
+          message: 'Unsupported path type: "files". ' +
+            'Expected "file", "directory", or "either".',
+        },
+      );
+    });
+
+    it("should throw TypeError for empty string type", () => {
+      assert.throws(
+        () => path({ type: "" as never }),
+        {
+          name: "TypeError",
+          message: 'Unsupported path type: "". ' +
+            'Expected "file", "directory", or "either".',
+        },
+      );
+    });
+  });
+
   describe("mutually exclusive options", () => {
     it("should throw TypeError when both mustExist and mustNotExist are set", () => {
       assert.throws(

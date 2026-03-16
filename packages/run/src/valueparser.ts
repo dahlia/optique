@@ -181,6 +181,8 @@ export type PathOptions =
  *
  * @param options Configuration options for path validation.
  * @returns A ValueParser that validates and returns string paths.
+ * @throws {TypeError} If {@link PathOptionsBase.type} is not one of
+ *   `"file"`, `"directory"`, or `"either"`.
  * @throws {TypeError} If any entry in {@link PathOptionsBase.extensions} does
  *   not start with a dot (e.g., `"json"` instead of `".json"`).
  * @throws {TypeError} If both {@link PathOptionsMustExist.mustExist} and
@@ -219,6 +221,12 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
     extensions,
   } = options;
   ensureNonEmptyString(metavar);
+  if (type !== "file" && type !== "directory" && type !== "either") {
+    throw new TypeError(
+      `Unsupported path type: ${JSON.stringify(type)}. ` +
+        `Expected "file", "directory", or "either".`,
+    );
+  }
   if (extensions) {
     for (const ext of extensions) {
       if (!ext.startsWith(".")) {
