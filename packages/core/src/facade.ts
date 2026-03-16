@@ -185,7 +185,7 @@ function containsDeferredPromptValuesForContexts(
 ): boolean {
   // FIXME: This only inspects own data properties, so deferred prompt values
   // hidden behind private fields or method-only wrapper DTOs are missed. See:
-  // https://github.com/dahlia/optique/issues/407
+  // https://github.com/dahlia/optique/issues/307
   if (isDeferredPromptValue(value)) {
     return true;
   }
@@ -317,24 +317,298 @@ function finalizeParsedForContext(
   return { [phase2UndefinedParsedValueKey]: true };
 }
 
+const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
+
+interface ActiveSanitization {
+  readonly saved: Map<PropertyKey, PropertyDescriptor>;
+  readonly sanitizedValues: Map<PropertyKey, unknown>;
+  count: number;
+}
+
+const activeSanitizations = new WeakMap<object, ActiveSanitization>();
+
+function callWithSanitizedOwnProperties(
+  target: object,
+  fn: { apply(thisArg: unknown, args: unknown[]): unknown },
+  args: unknown[],
+  strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
+  seen: WeakMap<object, unknown>,
+): unknown | typeof SANITIZE_FAILED {
+  let active = activeSanitizations.get(target);
+  if (active != null) {
+    // Properties are already sanitized by a concurrent call; just
+    // increment the reference count so we defer restoration.
+    active.count++;
+  } else {
+    const saved = new Map<PropertyKey, PropertyDescriptor>();
+    const sanitizedValues = new Map<PropertyKey, unknown>();
+    for (const key of Reflect.ownKeys(target)) {
+      const desc = Object.getOwnPropertyDescriptor(target, key);
+      if (desc != null && "value" in desc) {
+        let stripped: unknown;
+        try {
+          stripped = strip(desc.value, seen);
+        } catch {
+          // strip() failed; roll back and bail.
+          for (const [k, d] of saved) {
+            try {
+              Object.defineProperty(target, k, d);
+            } catch {
+              // Best-effort rollback.
+            }
+          }
+          return SANITIZE_FAILED;
+        }
+        if (stripped !== desc.value) {
+          try {
+            Object.defineProperty(target, key, { ...desc, value: stripped });
+            saved.set(key, desc);
+            sanitizedValues.set(key, stripped);
+          } catch {
+            // Property is non-configurable or object is frozen; cannot
+            // safely call the method with unsanitized state.
+            for (const [k, d] of saved) {
+              try {
+                Object.defineProperty(target, k, d);
+              } catch {
+                // Best-effort rollback.
+              }
+            }
+            return SANITIZE_FAILED;
+          }
+        }
+      }
+    }
+    active = { saved, sanitizedValues, count: 1 };
+    activeSanitizations.set(target, active);
+  }
+
+  function release(): void {
+    active!.count--;
+    if (active!.count === 0) {
+      activeSanitizations.delete(target);
+      for (const [key, desc] of active!.saved) {
+        try {
+          // Only restore if the method did not mutate or delete the
+          // property.  Compare against the exact sanitized value that was
+          // set, not a re-computed strip() which would create a new clone.
+          const current = Object.getOwnPropertyDescriptor(target, key);
+          if (current == null) continue; // method deleted the property
+          if (
+            "value" in current &&
+            current.value !== active!.sanitizedValues.get(key)
+          ) {
+            continue; // method wrote a new value
+          }
+          Object.defineProperty(target, key, desc);
+        } catch {
+          // The method may have frozen, sealed, or redefined this
+          // property; best-effort restoration.
+        }
+      }
+    }
+  }
+
+  let result: unknown;
+  try {
+    result = fn.apply(target, args);
+  } catch (e) {
+    release();
+    throw e;
+  }
+
+  // If the method returns a real Promise (async method), defer restoration
+  // until the promise settles so that awaited continuations still observe
+  // the sanitized property values.  Custom thenables are not assimilated
+  // to avoid coercing non-Promise return types.
+  if (result instanceof Promise) {
+    return (result as Promise<unknown>).then(
+      (v) => {
+        release();
+        return strip(v, seen);
+      },
+      (e) => {
+        release();
+        throw e;
+      },
+    );
+  }
+
+  release();
+  return strip(result, seen);
+}
+
+function callMethodOnSanitizedTarget(
+  fn: { apply(thisArg: unknown, args: unknown[]): unknown },
+  proxy: object,
+  target: object,
+  args: unknown[],
+  strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
+  seen: WeakMap<object, unknown>,
+): unknown {
+  // All methods are called on the target with temporarily sanitized own
+  // properties.  This handles private fields (which require target as
+  // receiver), Promise-returning methods, and native async methods
+  // uniformly, without retrying or detecting function types.
+  const result = callWithSanitizedOwnProperties(
+    target,
+    fn,
+    args,
+    strip,
+    seen,
+  );
+  if (result !== SANITIZE_FAILED) return result;
+
+  // SANITIZE_FAILED means the target is frozen/sealed and its properties
+  // cannot be temporarily replaced.  Fall back to the proxy path, which
+  // handles methods that don't access private fields.  Private-field
+  // methods on frozen objects will propagate the TypeError.
+  const fallback = fn.apply(proxy, args);
+  if (fallback instanceof Promise) {
+    return (fallback as Promise<unknown>).then((v) => strip(v, seen));
+  }
+  return strip(fallback, seen);
+}
+
 function createSanitizedNonPlainContextView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
-  // FIXME: Proxying non-plain parsed values changes method receiver semantics,
-  // and method-only wrappers still need a safe way to expose scrubbed values.
-  // See: https://github.com/dahlia/optique/issues/407
-  const proxy = new Proxy(value, {
+  // NOTE: Methods are invoked on the original target with temporarily
+  // sanitized own properties via callMethodOnSanitizedTarget().  This
+  // allows private field access (which requires the real instance as
+  // receiver) while ensuring public deferred-value fields are scrubbed.
+  // If the target is frozen/sealed, methods fall back to the proxy path.
+  // See: https://github.com/dahlia/optique/issues/307
+  const methodCache = new Map<
+    PropertyKey,
+    { fn: unknown; wrapper: (...args: unknown[]) => unknown }
+  >();
+  const proxy: T = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
-        return stripDeferredPromptValuesForContexts(descriptor.value, seen);
+        // Non-configurable non-writable properties must return the exact
+        // value to satisfy the proxy invariant.
+        if (!descriptor.configurable && !descriptor.writable) {
+          return descriptor.value;
+        }
+        const val = stripDeferredPromptValuesForContexts(
+          descriptor.value,
+          seen,
+        );
+        if (typeof val === "function") {
+          // For non-configurable non-writable properties, the proxy invariant
+          // requires returning the exact value.  Class constructors are also
+          // returned unwrapped since the wrapper would break new.target and
+          // prototype chain semantics when invoked with `new`.
+          if (
+            (!descriptor.configurable && !descriptor.writable) ||
+            /^class[\s{]/.test(Function.prototype.toString.call(val))
+          ) {
+            return val;
+          }
+          // Own function-valued properties (class fields, constructor-
+          // assigned methods) need the sanitized-target wrapper just like
+          // prototype methods.  Cached and invalidated when the underlying
+          // function changes.
+          const cached = methodCache.get(key);
+          if (cached != null && cached.fn === val) return cached.wrapper;
+          const wrapper = function (this: unknown, ...args: unknown[]) {
+            if (this !== proxy) {
+              return stripDeferredPromptValuesForContexts(
+                val.apply(this, args),
+                seen,
+              );
+            }
+            return callMethodOnSanitizedTarget(
+              val,
+              proxy,
+              target,
+              args,
+              stripDeferredPromptValuesForContexts,
+              seen,
+            );
+          };
+          methodCache.set(key, { fn: val, wrapper });
+          return wrapper;
+        }
+        return val;
       }
-      return Reflect.get(target, key, receiver);
+      // Accessor properties and prototype methods: resolved via Reflect.get.
+      // Only prototype data methods are cached; accessor-returned functions
+      // are re-created on each access since the getter may return different
+      // functions based on backing state.  Walk the prototype chain to
+      // detect inherited getters, not just own accessors.
+      let isAccessor = false;
+      for (
+        let proto: object | null = target;
+        proto != null;
+        proto = Object.getPrototypeOf(proto)
+      ) {
+        const d = Object.getOwnPropertyDescriptor(proto, key);
+        if (d != null) {
+          isAccessor = "get" in d;
+          break;
+        }
+      }
+      const result = Reflect.get(target, key, receiver);
+      if (typeof result === "function") {
+        // Class constructors are returned unwrapped since the wrapper
+        // would break new.target and prototype chain semantics.
+        if (/^class[\s{]/.test(Function.prototype.toString.call(result))) {
+          return result;
+        }
+        if (!isAccessor) {
+          const cached = methodCache.get(key);
+          if (cached != null && cached.fn === result) return cached.wrapper;
+          const wrapper = function (this: unknown, ...args: unknown[]) {
+            if (this !== proxy) {
+              return stripDeferredPromptValuesForContexts(
+                result.apply(this, args),
+                seen,
+              );
+            }
+            return callMethodOnSanitizedTarget(
+              result,
+              proxy,
+              target,
+              args,
+              stripDeferredPromptValuesForContexts,
+              seen,
+            );
+          };
+          methodCache.set(key, { fn: result, wrapper });
+          return wrapper;
+        }
+        // Accessor-returned function: wrap without caching.
+        return function (this: unknown, ...args: unknown[]) {
+          if (this !== proxy) {
+            return stripDeferredPromptValuesForContexts(
+              result.apply(this, args),
+              seen,
+            );
+          }
+          return callMethodOnSanitizedTarget(
+            result,
+            proxy,
+            target,
+            args,
+            stripDeferredPromptValuesForContexts,
+            seen,
+          );
+        };
+      }
+      return stripDeferredPromptValuesForContexts(result, seen);
     },
     getOwnPropertyDescriptor(target, key) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor == null || !("value" in descriptor)) {
+        return descriptor;
+      }
+      // Non-configurable non-writable properties must return the exact
+      // value to satisfy the proxy invariant.
+      if (!descriptor.configurable && !descriptor.writable) {
         return descriptor;
       }
       return {
