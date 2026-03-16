@@ -643,6 +643,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     sequences like `\T` as escapes, corrupting the rendered man page.
     [[#298], [#563]]
 
+ -  Fixed `formatDocPageAsMan()` treating empty `date`, `version`, and
+    `manual` strings as present values, producing malformed `.TH` headers
+    with empty quoted fields.  Empty strings are now treated as absent.
+    [[#303], [#564]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -657,6 +662,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#297]: https://github.com/dahlia/optique/issues/297
 [#298]: https://github.com/dahlia/optique/issues/298
 [#301]: https://github.com/dahlia/optique/issues/301
+[#303]: https://github.com/dahlia/optique/issues/303
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
@@ -671,6 +677,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#559]: https://github.com/dahlia/optique/pull/559
 [#560]: https://github.com/dahlia/optique/pull/560
 [#563]: https://github.com/dahlia/optique/pull/563
+[#564]: https://github.com/dahlia/optique/pull/564
 
 
 Version 0.10.7

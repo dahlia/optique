@@ -430,9 +430,9 @@ export function formatDocPageAsMan(
   ];
   // .TH format: name section [date [source [manual]]]
   // Earlier positional args must be present (as "") if later ones are used.
-  const hasDate = options.date != null;
-  const hasVersion = options.version != null;
-  const hasManual = options.manual != null;
+  const hasDate = options.date != null && options.date !== "";
+  const hasVersion = options.version != null && options.version !== "";
+  const hasManual = options.manual != null && options.manual !== "";
 
   if (hasDate) {
     thParts.push(`"${escapeThField(formatDateForMan(options.date)!)}"`);

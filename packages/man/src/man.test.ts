@@ -399,6 +399,19 @@ describe("formatDocPageAsMan()", () => {
     );
   });
 
+  it("treats empty header strings as absent", () => {
+    const page: DocPage = { sections: [] };
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+      date: "",
+      version: "",
+      manual: "",
+    });
+    const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
+    assert.equal(thLine, ".TH MYAPP 1");
+  });
+
   it("uses brief in NAME section", () => {
     const page: DocPage = {
       brief: message`A sample CLI application`,
