@@ -495,15 +495,21 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `type: "directory"` is set.  Extensions are now skipped for
     directory-type paths.  [[#257], [#539]]
 
+ -  Fixed `path()` to reject configurations where both `mustExist` and
+    `mustNotExist` are set.  Previously, the contradictory configuration
+    was silently accepted.  [[#358], [#541]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
 [#257]: https://github.com/dahlia/optique/issues/257
 [#309]: https://github.com/dahlia/optique/issues/309
 [#343]: https://github.com/dahlia/optique/issues/343
+[#358]: https://github.com/dahlia/optique/issues/358
 [#530]: https://github.com/dahlia/optique/pull/530
 [#538]: https://github.com/dahlia/optique/pull/538
 [#539]: https://github.com/dahlia/optique/pull/539
+[#541]: https://github.com/dahlia/optique/pull/541
 
 ### @optique/man
 

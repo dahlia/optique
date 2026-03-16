@@ -183,6 +183,8 @@ export type PathOptions =
  * @returns A ValueParser that validates and returns string paths.
  * @throws {TypeError} If any entry in {@link PathOptionsBase.extensions} does
  *   not start with a dot (e.g., `"json"` instead of `".json"`).
+ * @throws {TypeError} If both {@link PathOptionsMustExist.mustExist} and
+ *   {@link PathOptionsMustNotExist.mustNotExist} are `true`.
  *
  * @example
  * ```typescript
@@ -228,6 +230,11 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
   }
   const mustExist = "mustExist" in options ? options.mustExist : false;
   const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;
+  if (mustExist && mustNotExist) {
+    throw new TypeError(
+      "Options mustExist and mustNotExist are mutually exclusive.",
+    );
+  }
 
   return {
     $mode: "sync",
