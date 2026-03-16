@@ -187,10 +187,11 @@ function isPrivateFieldTypeError(e: unknown): boolean {
   // Match engine-generated private-field errors only:
   // V8/Deno/Node: "Cannot read private member #foo from an object..."
   // SpiderMonkey: "can't access private field or method: ..."
-  // JavaScriptCore: "Cannot access private property"
+  // JavaScriptCore/Bun: "Cannot access invalid private field"
+  //                  or "Cannot access private property"
   return e instanceof TypeError &&
     typeof e.message === "string" &&
-    /Cannot read private member|Cannot access private (?:property|method)|can't access private field/i
+    /Cannot (?:read private member|access (?:private (?:property|method)|invalid private field))|can't access private field/i
       .test(e.message);
 }
 
@@ -245,7 +246,12 @@ function callWithSanitizedOwnProperties(
     if (active!.count === 0) {
       activeSanitizations.delete(target);
       for (const [key, desc] of active!.saved) {
-        Object.defineProperty(target, key, desc);
+        try {
+          Object.defineProperty(target, key, desc);
+        } catch {
+          // The method may have frozen, sealed, or redefined this
+          // property; best-effort restoration.
+        }
       }
     }
   }
@@ -344,23 +350,15 @@ function createSanitizedNonPlainView<T extends object>(
     get(target, key, _receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
-        const val = stripDeferredPromptValues(descriptor.value, seen);
-        if (typeof val === "function") {
-          return function (this: unknown, ...args: unknown[]) {
-            return callMethodWithPrivateFieldFallback(
-              val,
-              proxy,
-              target,
-              args,
-              stripDeferredPromptValues,
-              seen,
-            );
-          };
-        }
-        return val;
+        // Own function-valued properties (callbacks, handlers) are
+        // returned after stripping without wrapping, preserving normal
+        // JavaScript call semantics and caller-supplied receivers.
+        return stripDeferredPromptValues(descriptor.value, seen);
       }
       const result = Reflect.get(target, key, proxy);
       if (typeof result === "function") {
+        // Prototype methods need the private-field fallback wrapper
+        // because they access `this` which may include private fields.
         return function (this: unknown, ...args: unknown[]) {
           return callMethodWithPrivateFieldFallback(
             result,
