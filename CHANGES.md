@@ -237,6 +237,11 @@ To be released.
     customizing the error message.  Use `type: "bigint"` for values beyond
     this range.  [[#248], [#525]]
 
+ -  Fixed `float()` to reject numeric strings that overflow to `Infinity`
+    (e.g., `1e309`) when `allowInfinity` is `false` (the default).
+    Previously, only literal `"Infinity"` strings were rejected.
+    [[#242], [#528]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -262,6 +267,7 @@ To be released.
 [#178]: https://github.com/dahlia/optique/issues/178
 [#186]: https://github.com/dahlia/optique/issues/186
 [#225]: https://github.com/dahlia/optique/issues/225
+[#242]: https://github.com/dahlia/optique/issues/242
 [#248]: https://github.com/dahlia/optique/issues/248
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
@@ -269,6 +275,7 @@ To be released.
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
 [#525]: https://github.com/dahlia/optique/pull/525
+[#528]: https://github.com/dahlia/optique/pull/528
 
 ### @optique/config
 

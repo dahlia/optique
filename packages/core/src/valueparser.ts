@@ -1031,6 +1031,16 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
         value = -Infinity;
       } else if (floatRegex.test(input)) {
         value = Number(input);
+        if (!Number.isFinite(value) && !options.allowInfinity) {
+          return {
+            success: false,
+            error: options.errors?.invalidNumber
+              ? (typeof options.errors.invalidNumber === "function"
+                ? options.errors.invalidNumber(input)
+                : options.errors.invalidNumber)
+              : message`Expected a valid number, but got ${input}.`,
+          };
+        }
         // This should not happen with our regex, but let's be safe
         if (Number.isNaN(value)) {
           return {
