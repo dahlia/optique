@@ -145,7 +145,7 @@ function extractParserAndOptions<M extends Mode>(
  * console.log(manPage);
  * ```
  *
- * @param parser The parser to generate documentation from.
+ * @param parserOrProgram The parser or program to generate documentation from.
  * @param options The man page generation options.
  * @returns The complete man page in roff format.
  * @throws {TypeError} If the input is not a valid Parser or Program.
@@ -194,7 +194,7 @@ export function generateManPageSync(
  * });
  * ```
  *
- * @param parser The parser to generate documentation from.
+ * @param parserOrProgram The parser or program to generate documentation from.
  * @param options The man page generation options.
  * @returns A promise that resolves to the complete man page in roff format.
  * @throws {TypeError} If the input is not a valid Parser or Program.
