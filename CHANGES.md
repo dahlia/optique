@@ -544,6 +544,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     needing the `tsx` loader on Node.js, causing `ERR_UNKNOWN_FILE_EXTENSION`
     errors instead of the intended TypeScript-handling flow.  [[#280], [#534]]
 
+ -  Fixed `optique-man` CLI not defaulting `--date` to the current date when
+    omitted.  The help text documented “defaults to the current date” but
+    `undefined` was passed through, producing an empty date field in the `.TH`
+    header.  [[#276], [#547]]
+
  -  Fixed `formatDocPageAsMan()` not escaping hyphens and roff special
     characters (backslashes, line-start periods/quotes) in program names,
     command names, and `SEE ALSO` reference names.  [[#274], [#542]]
@@ -556,6 +561,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
+[#276]: https://github.com/dahlia/optique/issues/276
 [#280]: https://github.com/dahlia/optique/issues/280
 [#283]: https://github.com/dahlia/optique/issues/283
 [#526]: https://github.com/dahlia/optique/pull/526
@@ -564,6 +570,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#534]: https://github.com/dahlia/optique/pull/534
 [#542]: https://github.com/dahlia/optique/pull/542
 [#544]: https://github.com/dahlia/optique/pull/544
+[#547]: https://github.com/dahlia/optique/pull/547
 
 
 Version 0.10.7

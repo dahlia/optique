@@ -214,6 +214,28 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       }
     });
 
+    it("defaults --date to the current date", async () => {
+      const programFile = join(fixturesDir, "program.ts");
+      const result = await runCli([
+        programFile,
+        "-s",
+        "1",
+      ]);
+
+      assert.equal(result.exitCode, 0);
+      const now = new Date();
+      const expectedDate = now.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      });
+      assert.ok(
+        result.stdout.includes(`"${expectedDate}"`),
+        `Expected .TH to contain "${expectedDate}", got: ${
+          result.stdout.split("\n")[0]
+        }`,
+      );
+    });
+
     it("accepts --date option", async () => {
       const programFile = join(fixturesDir, "program.ts");
       const result = await runCli([

@@ -567,7 +567,7 @@ export async function main(): Promise<void> {
       manPage = await generateManPageAsync(target, {
         section: args.section,
         name: args.name, // explicit override
-        date: args.date,
+        date: args.date ?? new Date(),
         version: args.versionString,
         manual: args.manual,
       });
@@ -575,7 +575,7 @@ export async function main(): Promise<void> {
       manPage = await generateManPageAsync(target, {
         name,
         section: args.section,
-        date: args.date,
+        date: args.date ?? new Date(),
         version: args.versionString,
         manual: args.manual,
       });
