@@ -235,6 +235,14 @@ function callWithSanitizedOwnProperties(
       activeSanitizations.delete(target);
       for (const [key, desc] of active!.saved) {
         try {
+          const current = Object.getOwnPropertyDescriptor(target, key);
+          if (current == null) continue;
+          if (
+            "value" in current &&
+            current.value !== strip(desc.value, seen)
+          ) {
+            continue;
+          }
           Object.defineProperty(target, key, desc);
         } catch {
           // The method may have frozen, sealed, or redefined this
@@ -308,7 +316,7 @@ function createSanitizedNonPlainView<T extends object>(
   // See: https://github.com/dahlia/optique/issues/407
   const methodCache = new Map<PropertyKey, (...args: unknown[]) => unknown>();
   const proxy: T = new Proxy(value, {
-    get(target, key, _receiver) {
+    get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
         const val = stripDeferredPromptValues(descriptor.value, seen);
@@ -349,7 +357,7 @@ function createSanitizedNonPlainView<T extends object>(
           break;
         }
       }
-      const result = Reflect.get(target, key, proxy);
+      const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
         if (!isAccessor) {
           let wrapper = methodCache.get(key);
