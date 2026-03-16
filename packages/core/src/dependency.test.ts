@@ -313,6 +313,43 @@ describe("derive()", () => {
 
     assert.equal(derived.format("test.txt"), "test.txt");
   });
+
+  test("format() should not throw when factory throws on default value", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.derive<string>({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("derive sync factory exploded");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    assert.equal(derived.format("x"), "x");
+  });
+
+  test("suggest() should not throw when factory throws on default value", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.derive<string>({
+      metavar: "VALUE",
+      mode: "sync",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("derive sync factory exploded");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    const suggestions = [...derived.suggest!("")];
+    assert.equal(suggestions.length, 0);
+  });
 });
 
 describe("isDerivedValueParser()", () => {
@@ -944,6 +981,46 @@ describe("derive() with async factory", () => {
     const result = await derived.parse("quiet");
     assert.ok(!result.success);
   });
+
+  test("format() should not throw when factory throws on default value", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "VALUE",
+      mode: "async",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("derive async factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    assert.equal(derived.format("x"), "x");
+  });
+
+  test("suggest() should not throw when factory throws on default value", async () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.derive({
+      metavar: "VALUE",
+      mode: "async",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("derive async factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    const suggestions: Suggestion[] = [];
+    for await (const s of derived.suggest!("")) {
+      suggestions.push(s);
+    }
+    assert.equal(suggestions.length, 0);
+  });
 });
 
 describe("deriveSync()", () => {
@@ -1001,6 +1078,66 @@ describe("deriveSync()", () => {
     assert.ok(!("then" in result));
     assert.ok(result.success);
   });
+
+  test("format() should not throw when factory throws on default value", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "VALUE",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("deriveSync default factory exploded");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    // Should fall back to String(value)
+    assert.equal(derived.format("x"), "x");
+  });
+
+  test("suggest() should not throw when factory throws on default value", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "VALUE",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("deriveSync default factory exploded");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    // Should not throw; should yield empty suggestions
+    assert.doesNotThrow(() => {
+      const suggestions = [...derived.suggest!("")];
+      assert.equal(suggestions.length, 0);
+    });
+  });
+
+  test("format() should still propagate errors from the derived parser's formatter", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "VALUE",
+      factory: (_value: "safe" | "broken"): ValueParser<"sync", string> => ({
+        $mode: "sync",
+        metavar: "VALUE" as NonEmptyString,
+        parse: (input: string) => ({ success: true, value: input }),
+        format(_value: string): string {
+          throw new Error("formatter error");
+        },
+      }),
+      defaultValue: () => "safe" as const,
+    });
+
+    // Factory succeeds, but the derived parser's format() throws — that
+    // exception must not be swallowed.
+    assert.throws(() => derived.format("x"), { message: "formatter error" });
+  });
 });
 
 describe("deriveAsync()", () => {
@@ -1057,6 +1194,44 @@ describe("deriveAsync()", () => {
     if (result.success) {
       assert.equal(result.value, "verbose");
     }
+  });
+
+  test("format() should not throw when factory throws on default value", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.deriveAsync({
+      metavar: "VALUE",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("deriveAsync default factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    assert.equal(derived.format("x"), "x");
+  });
+
+  test("suggest() should not throw when factory throws on default value", async () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.deriveAsync({
+      metavar: "VALUE",
+      factory: (value: "safe" | "broken") => {
+        if (value === "broken") {
+          throw new Error("deriveAsync default factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValue: () => "broken" as const,
+    });
+
+    const suggestions: Suggestion[] = [];
+    for await (const s of derived.suggest!("")) {
+      suggestions.push(s);
+    }
+    assert.equal(suggestions.length, 0);
   });
 });
 
@@ -1121,6 +1296,50 @@ describe("deriveFrom() with async factory", () => {
     const resolved = await result;
     assert.ok(resolved.success);
   });
+
+  test("format() should not throw when factory throws on default values", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      mode: "async",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "safe" | "broken") => {
+        if (mode === "broken") {
+          throw new Error("deriveFrom async factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValues: () => ["/config", "broken"] as const,
+    });
+
+    assert.equal(derived.format("x"), "x");
+  });
+
+  test("suggest() should not throw when factory throws on default values", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = deriveFrom({
+      metavar: "VALUE",
+      mode: "async",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "safe" | "broken") => {
+        if (mode === "broken") {
+          throw new Error("deriveFrom async factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValues: () => ["/config", "broken"] as const,
+    });
+
+    const suggestions: Suggestion[] = [];
+    for await (const s of derived.suggest!("")) {
+      suggestions.push(s);
+    }
+    assert.equal(suggestions.length, 0);
+  });
 });
 
 describe("deriveFromSync()", () => {
@@ -1153,6 +1372,45 @@ describe("deriveFromSync()", () => {
 
     // Async source makes it async even with sync factory
     assert.equal(derived.$mode, "async");
+  });
+
+  test("format() should not throw when factory throws on default values", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "safe" | "broken") => {
+        if (mode === "broken") {
+          throw new Error("deriveFromSync default factory exploded");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValues: () => ["/config", "broken"] as const,
+    });
+
+    assert.equal(derived.format("x"), "x");
+  });
+
+  test("suggest() should not throw when factory throws on default values", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = deriveFromSync({
+      metavar: "VALUE",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "safe" | "broken") => {
+        if (mode === "broken") {
+          throw new Error("deriveFromSync default factory exploded");
+        }
+        return string({ metavar: "VALUE" });
+      },
+      defaultValues: () => ["/config", "broken"] as const,
+    });
+
+    const suggestions = [...derived.suggest!("")];
+    assert.equal(suggestions.length, 0);
   });
 });
 
@@ -1193,6 +1451,49 @@ describe("deriveFromAsync()", () => {
     if (result.success) {
       assert.equal(result.value, "verbose");
     }
+  });
+
+  test("format() should not throw when factory throws on default values", () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "safe" | "broken") => {
+        if (mode === "broken") {
+          throw new Error("deriveFromAsync default factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValues: () => ["/config", "broken"] as const,
+    });
+
+    assert.equal(derived.format("x"), "x");
+  });
+
+  test("suggest() should not throw when factory throws on default values", async () => {
+    const dirParser = dependency(string({ metavar: "DIR" }));
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = deriveFromAsync({
+      metavar: "VALUE",
+      dependencies: [dirParser, modeParser] as const,
+      factory: (_dir: string, mode: "safe" | "broken") => {
+        if (mode === "broken") {
+          throw new Error("deriveFromAsync default factory exploded");
+        }
+        return asyncChoice(["a", "b"]);
+      },
+      defaultValues: () => ["/config", "broken"] as const,
+    });
+
+    // Should not throw; should yield empty suggestions
+    const suggestions: Suggestion[] = [];
+    for await (const s of derived.suggest!("")) {
+      suggestions.push(s);
+    }
+    assert.equal(suggestions.length, 0);
   });
 });
 
