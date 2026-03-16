@@ -457,7 +457,7 @@ export function choice<const T extends string | number>(
     throw new TypeError(
       `Expected caseInsensitive to be a boolean, but got ` +
         `${typeof stringOptions.caseInsensitive}: ` +
-        `${JSON.stringify(stringOptions.caseInsensitive)}.`,
+        `${String(stringOptions.caseInsensitive)}.`,
     );
   }
   const normalizedValues = stringOptions.caseInsensitive
