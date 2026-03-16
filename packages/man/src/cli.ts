@@ -362,11 +362,12 @@ async function importModule(
     (isJsxOrTsx || (isPlainTs && !nodeSupportsNativeTypeScript()))
   ) {
     await registerTsx(filePath, isJsxOrTsx);
-  } else if (!isDeno && !isBun && isPlainTs) {
-    // On Node.js 25.2+ plain TS works natively, but transitive JSX/TSX
-    // dependencies still need tsx.  Register it opportunistically so that
-    // the loader is in place before the first import — Node's ESM loader
-    // caches failed module jobs, so a post-failure retry would not work.
+  } else if (!isDeno && !isBun) {
+    // Any Node.js entry (including .js and .ts on Node 25.2+) may have
+    // transitive JSX/TSX dependencies that need tsx.  Register it
+    // opportunistically so the loader is in place before the first
+    // import — Node's ESM loader caches failed module jobs, so a
+    // post-failure retry would not work.
     await tryRegisterTsx();
   }
 
