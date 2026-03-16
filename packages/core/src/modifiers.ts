@@ -321,8 +321,12 @@ export function optional<M extends Mode, TValue, TState>(
       }
       // Propagate annotations from the outer array state into the inner
       // element so that source-binding wrappers like bindConfig can read
-      // them during phase-two resolution.
-      const innerElement = getAnnotations(state) != null
+      // them during phase-two resolution.  Only propagate when the inner
+      // element is an object; primitive states would be wrapped in an
+      // internal annotation object that inner parsers cannot understand.
+      const innerElement = getAnnotations(state) != null &&
+          state[0] != null &&
+          typeof state[0] === "object"
         ? inheritAnnotations(state, state[0])
         : state[0];
       return dispatchByMode(
@@ -797,8 +801,12 @@ export function withDefault<
       }
       // Propagate annotations from the outer array state into the inner
       // element so that source-binding wrappers like bindConfig can read
-      // them during phase-two resolution.
-      const innerElement = getAnnotations(state) != null
+      // them during phase-two resolution.  Only propagate when the inner
+      // element is an object; primitive states would be wrapped in an
+      // internal annotation object that inner parsers cannot understand.
+      const innerElement = getAnnotations(state) != null &&
+          state[0] != null &&
+          typeof state[0] === "object"
         ? inheritAnnotations(state, state[0])
         : state[0];
       return dispatchByMode(
