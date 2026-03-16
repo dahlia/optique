@@ -130,6 +130,24 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       assert.ok(result.stdout.includes("Input file to process."));
     });
 
+    it("generates man page from .tsx input", async () => {
+      const tsxFile = join(fixturesDir, "program.tsx");
+      const result = await runCli([tsxFile, "-s", "1"]);
+
+      assert.equal(result.exitCode, 0);
+      assert.ok(result.stdout.includes(".TH GREET 1"));
+      assert.ok(result.stdout.includes(".SH NAME"));
+    });
+
+    it("generates man page from .jsx input", async () => {
+      const jsxFile = join(fixturesDir, "program.jsx");
+      const result = await runCli([jsxFile, "-s", "1"]);
+
+      assert.equal(result.exitCode, 0);
+      assert.ok(result.stdout.includes(".TH GREET 1"));
+      assert.ok(result.stdout.includes(".SH NAME"));
+    });
+
     it("generates man page when input path contains #", async () => {
       const sourceFile = join(fixturesDir, "parser.ts");
       const tempDir = await mkdtemp(

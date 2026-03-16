@@ -308,7 +308,7 @@ Make sure you have write permission and the parent directory exists.`,
 
 /**
  * Imports a module from the given file path.
- * Handles TypeScript files on Node.js by using tsx if needed.
+ * Handles TypeScript and JSX files on Node.js by using tsx if needed.
  */
 async function importModule(
   filePath: string,
@@ -320,12 +320,12 @@ async function importModule(
     fileNotFoundError(filePath);
   }
 
-  const isTypeScript = /\.[mc]?ts$/.test(filePath);
+  const needsTsxLoader = /\.([mc]?ts|[jt]sx)$/.test(filePath);
   const isDeno = "Deno" in globalThis;
   const isBun = "Bun" in globalThis;
 
-  // Node.js + TypeScript
-  if (!isDeno && !isBun && isTypeScript && !nodeSupportsNativeTypeScript()) {
+  // Node.js + TypeScript/JSX
+  if (!isDeno && !isBun && needsTsxLoader && !nodeSupportsNativeTypeScript()) {
     try {
       const tsx = await import("tsx/esm/api");
       tsx.register();
