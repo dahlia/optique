@@ -77,6 +77,23 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "\\fBcmd\\\\arg\\fR");
   });
 
+  it("escapes backslashes in argument metavar", () => {
+    const term: UsageTerm = { type: "argument", metavar: "C:\\TMP" };
+    assert.equal(formatUsageTermAsRoff(term), "\\fIC:\\\\TMP\\fR");
+  });
+
+  it("escapes backslashes in option metavar", () => {
+    const term: UsageTerm = {
+      type: "option",
+      names: ["--dir"],
+      metavar: "C:\\TMP",
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-dir\\fR \\fIC:\\\\TMP\\fR]",
+    );
+  });
+
   it("formats optional term", () => {
     const term: UsageTerm = {
       type: "optional",
@@ -464,6 +481,69 @@ describe("formatDocPageAsMan()", () => {
     const result = formatDocPageAsMan(page, minimalOptions);
 
     assert.ok(result.includes("\\&'quoted"));
+  });
+
+  it("escapes backslashes in argument metavar in SYNOPSIS", () => {
+    const page: DocPage = {
+      usage: [{ type: "argument", metavar: "C:\\TMP" }],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes("\\fIC:\\\\TMP\\fR"));
+    assert.ok(!result.includes("\\fIC:\\TMP\\fR"));
+  });
+
+  it("escapes backslashes in option metavar in SYNOPSIS", () => {
+    const page: DocPage = {
+      usage: [{ type: "option", names: ["--dir"], metavar: "C:\\TMP" }],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes("\\fIC:\\\\TMP\\fR"));
+  });
+
+  it("escapes backslashes in argument metavar in doc entry", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "argument", metavar: "C:\\TMP" },
+              description: message`a path`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes(".TP"));
+    assert.ok(result.includes("\\fIC:\\\\TMP\\fR"));
+  });
+
+  it("escapes backslashes in option metavar in doc entry", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--dir"], metavar: "C:\\TMP" },
+              description: message`a path`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes(".TP"));
+    assert.ok(result.includes("\\fIC:\\\\TMP\\fR"));
   });
 
   it("escapes backslashes in section titles", () => {

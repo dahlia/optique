@@ -153,13 +153,15 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
 
   switch (term.type) {
     case "argument":
-      return `\\fI${term.metavar}\\fR`;
+      return `\\fI${escapeRoff(term.metavar)}\\fR`;
 
     case "option": {
       const names = term.names
         .map((name) => `\\fB${escapeHyphens(name)}\\fR`)
         .join(" | ");
-      const metavarPart = term.metavar ? ` \\fI${term.metavar}\\fR` : "";
+      const metavarPart = term.metavar
+        ? ` \\fI${escapeRoff(term.metavar)}\\fR`
+        : "";
       return `[${names}${metavarPart}]`;
     }
 
@@ -236,7 +238,9 @@ function formatDocEntryTerm(term: UsageTerm): string {
       const names = term.names
         .map((name) => `\\fB${escapeHyphens(name)}\\fR`)
         .join(", ");
-      const metavarPart = term.metavar ? ` \\fI${term.metavar}\\fR` : "";
+      const metavarPart = term.metavar
+        ? ` \\fI${escapeRoff(term.metavar)}\\fR`
+        : "";
       return `${names}${metavarPart}`;
     }
 
@@ -244,7 +248,7 @@ function formatDocEntryTerm(term: UsageTerm): string {
       return formatCommandNameAsRoff(term.name);
 
     case "argument":
-      return `\\fI${term.metavar}\\fR`;
+      return `\\fI${escapeRoff(term.metavar)}\\fR`;
 
     case "literal":
       return escapeRoff(term.value);
@@ -289,13 +293,15 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "argument":
-      return `\\fI${term.metavar}\\fR`;
+      return `\\fI${escapeRoff(term.metavar)}\\fR`;
 
     case "option": {
       const names = term.names
         .map((name) => `\\fB${escapeHyphens(name)}\\fR`)
         .join(", ");
-      const metavarPart = term.metavar ? ` \\fI${term.metavar}\\fR` : "";
+      const metavarPart = term.metavar
+        ? ` \\fI${escapeRoff(term.metavar)}\\fR`
+        : "";
       return `${names}${metavarPart}`;
     }
 

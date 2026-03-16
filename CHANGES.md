@@ -638,6 +638,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     group labels are now escaped so they render literally in the man page.
     [[#301], [#560]]
 
+ -  Fixed `formatUsageTermAsRoff()` and `formatDocPageAsMan()` dropping
+    backslashes from metavar values in usage and doc terms.  Roff consumed
+    sequences like `\T` as escapes, corrupting the rendered man page.
+    [[#298], [#563]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -650,6 +655,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#286]: https://github.com/dahlia/optique/issues/286
 [#287]: https://github.com/dahlia/optique/issues/287
 [#297]: https://github.com/dahlia/optique/issues/297
+[#298]: https://github.com/dahlia/optique/issues/298
 [#301]: https://github.com/dahlia/optique/issues/301
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
@@ -664,6 +670,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#557]: https://github.com/dahlia/optique/pull/557
 [#559]: https://github.com/dahlia/optique/pull/559
 [#560]: https://github.com/dahlia/optique/pull/560
+[#563]: https://github.com/dahlia/optique/pull/563
 
 
 Version 0.10.7
