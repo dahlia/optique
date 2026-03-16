@@ -1058,4 +1058,161 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("\\fB\\-v\\fR, \\fB\\-\\-verbose\\fR"));
     assert.ok(!result.includes(" | "));
   });
+
+  it("keeps hidden: 'doc' option in SYNOPSIS but omits from doc section", () => {
+    const page: DocPage = {
+      usage: [
+        { type: "option", names: ["--visible"], metavar: "VISIBLE" },
+        {
+          type: "option",
+          names: ["--doc-hidden"],
+          metavar: "SECRET",
+          hidden: "doc",
+        },
+      ],
+      sections: [
+        {
+          title: "OPTIONS",
+          entries: [
+            {
+              term: {
+                type: "option",
+                names: ["--visible"],
+                metavar: "VISIBLE",
+              },
+              description: message`A visible option`,
+            },
+            {
+              term: {
+                type: "option",
+                names: ["--doc-hidden"],
+                metavar: "SECRET",
+                hidden: "doc",
+              },
+              description: message`A doc-hidden option`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    // SYNOPSIS should contain both options
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    assert.notEqual(nextSection, -1);
+    const synopsis = result.slice(synopsisStart, nextSection);
+    assert.ok(synopsis.includes("\\-\\-visible"));
+    assert.ok(synopsis.includes("\\-\\-doc\\-hidden"));
+
+    // OPTIONS section should only contain the visible option
+    const optionsStart = result.indexOf(".SH OPTIONS");
+    assert.notEqual(optionsStart, -1);
+    const optionsSection = result.slice(optionsStart);
+    assert.ok(optionsSection.includes("\\-\\-visible"));
+    assert.ok(!optionsSection.includes("\\-\\-doc\\-hidden"));
+    assert.ok(!optionsSection.includes("A doc-hidden option"));
+  });
+
+  it("keeps hidden: 'doc' command in SYNOPSIS but omits from doc section", () => {
+    const page: DocPage = {
+      usage: [
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "command", name: "visible" }],
+            [{ type: "command", name: "doc-hidden", hidden: "doc" }],
+          ],
+        },
+      ],
+      sections: [
+        {
+          title: "COMMANDS",
+          entries: [
+            {
+              term: { type: "command", name: "visible" },
+              description: message`A visible command`,
+            },
+            {
+              term: { type: "command", name: "doc-hidden", hidden: "doc" },
+              description: message`A doc-hidden command`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    // SYNOPSIS should contain both commands
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    assert.notEqual(nextSection, -1);
+    const synopsis = result.slice(synopsisStart, nextSection);
+    assert.ok(synopsis.includes("\\fBvisible\\fR"));
+    assert.ok(synopsis.includes("\\fBdoc-hidden\\fR"));
+
+    // COMMANDS section should only contain the visible command
+    const commandsStart = result.indexOf(".SH COMMANDS");
+    assert.notEqual(commandsStart, -1);
+    const commandsSection = result.slice(commandsStart);
+    assert.ok(commandsSection.includes("\\fBvisible\\fR"));
+    assert.ok(!commandsSection.includes("\\fBdoc-hidden\\fR"));
+    assert.ok(!commandsSection.includes("A doc-hidden command"));
+  });
+
+  it("keeps hidden: 'doc' argument in SYNOPSIS but omits from doc section", () => {
+    const page: DocPage = {
+      usage: [
+        { type: "argument", metavar: "VISIBLE" },
+        { type: "argument", metavar: "SECRET", hidden: "doc" },
+      ],
+      sections: [
+        {
+          title: "ARGUMENTS",
+          entries: [
+            {
+              term: { type: "argument", metavar: "VISIBLE" },
+              description: message`A visible argument`,
+            },
+            {
+              term: { type: "argument", metavar: "SECRET", hidden: "doc" },
+              description: message`A doc-hidden argument`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    // SYNOPSIS should contain both arguments
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    assert.notEqual(nextSection, -1);
+    const synopsis = result.slice(synopsisStart, nextSection);
+    assert.ok(synopsis.includes("\\fIVISIBLE\\fR"));
+    assert.ok(synopsis.includes("\\fISECRET\\fR"));
+
+    // ARGUMENTS section should only contain the visible argument
+    const argsStart = result.indexOf(".SH ARGUMENTS");
+    assert.notEqual(argsStart, -1);
+    const argsSection = result.slice(argsStart);
+    assert.ok(argsSection.includes("\\fIVISIBLE\\fR"));
+    assert.ok(!argsSection.includes("\\fISECRET\\fR"));
+    assert.ok(!argsSection.includes("A doc-hidden argument"));
+  });
 });
