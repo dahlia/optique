@@ -130,6 +130,10 @@ function escapeThField(value: string): string {
     .replace(/"/g, '\\"');
 }
 
+function formatCommandNameAsRoff(name: string): string {
+  return `\\fB${escapeHyphens(escapeRoff(name))}\\fR`;
+}
+
 /**
  * Formats a single {@link UsageTerm} as roff markup for the SYNOPSIS section.
  *
@@ -155,7 +159,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${escapeHyphens(escapeRoff(term.name))}\\fR`;
+      return formatCommandNameAsRoff(term.name);
 
     case "optional": {
       const inner = formatUsageAsRoff(term.terms);
@@ -232,7 +236,7 @@ function formatDocEntryTerm(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${escapeHyphens(escapeRoff(term.name))}\\fR`;
+      return formatCommandNameAsRoff(term.name);
 
     case "argument":
       return `\\fI${term.metavar}\\fR`;
@@ -291,7 +295,7 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${escapeHyphens(escapeRoff(term.name))}\\fR`;
+      return formatCommandNameAsRoff(term.name);
 
     case "literal":
       return term.value;
