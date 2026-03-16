@@ -1010,8 +1010,8 @@ export function prompt<M extends Mode, TValue, TState>(
 
         // When parser.initialState is null/undefined (e.g., optional()),
         // inject annotations directly so wrapper combinators can forward
-        // them to inner source-binding parsers like bindConfig during
-        // phase-two resolution.
+        // them to inner source-binding parsers like bindConfig/bindEnv
+        // during phase-two resolution and simulated-parse detection.
         const innerInitialState = parser.initialState;
         const effectiveInitialState = annotations != null &&
             innerInitialState == null
@@ -1080,12 +1080,17 @@ export function prompt<M extends Mode, TValue, TState>(
           // (it can still resolve via the active env source registry).
           // When optional/withDefault wraps the inner state in an array
           // (e.g., [envBindState]), unwrap it to check the inner element.
+          // Source-binding wrappers (bindEnv) brand their state with a
+          // Symbol key plus a hasCliValue flag.  Check for both to avoid
+          // false positives from unrelated objects that happen to have a
+          // hasCliValue property.
           const hasSourceBindingMarker = (
             s: unknown,
           ): boolean =>
             s != null &&
             typeof s === "object" &&
-            "hasCliValue" in s;
+            "hasCliValue" in s &&
+            Object.getOwnPropertySymbols(s).length > 0;
           const isSourceBinding =
             shouldAttemptInnerCompletion(cliState, state) ||
             hasSourceBindingMarker(cliState) ||
