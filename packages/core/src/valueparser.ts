@@ -1689,7 +1689,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   ensureNonEmptyString(metavar);
   // Snapshot mutable config at construction time
   const allowedVersions = options.allowedVersions != null
-    ? [...options.allowedVersions]
+    ? Object.freeze([...options.allowedVersions])
     : null;
   const invalidUuid = options.errors?.invalidUuid;
   const disallowedVersion = options.errors?.disallowedVersion;
@@ -2742,7 +2742,7 @@ export function email(
   const allowDisplayName = options?.allowDisplayName ?? false;
   const lowercase = options?.lowercase ?? false;
   const allowedDomains = options?.allowedDomains != null
-    ? [...options.allowedDomains]
+    ? Object.freeze([...options.allowedDomains])
     : undefined;
 
   // Simplified RFC 5322: alphanumeric, dots, hyphens, underscores, plus signs
@@ -3935,7 +3935,7 @@ export function domain(
   const metavar = options?.metavar ?? "DOMAIN";
   const allowSubdomains = options?.allowSubdomains ?? true;
   const allowedTLDs = options?.allowedTLDs != null
-    ? [...options.allowedTLDs]
+    ? Object.freeze([...options.allowedTLDs])
     : undefined;
   const minLabels = options?.minLabels ?? 2;
   const lowercase = options?.lowercase ?? false;
