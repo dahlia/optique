@@ -1929,7 +1929,7 @@ describe("choice", () => {
       // The choices property should be frozen
       assert.throws(() => {
         (parser.choices as string[])[0] = "z";
-      });
+      }, TypeError);
       // Parser should still work correctly
       assert.ok(parser.parse("a").success);
     });
@@ -1947,7 +1947,7 @@ describe("choice", () => {
       const parser = choice([1, 2, 3]);
       assert.throws(() => {
         (parser.choices as number[])[0] = 99;
-      });
+      }, TypeError);
       assert.ok(parser.parse("1").success);
     });
 
