@@ -6,6 +6,16 @@ import {
   type NonEmptyString,
 } from "@optique/core/nonempty";
 
+function ensureTemporal(): void {
+  if (typeof globalThis.Temporal === "undefined") {
+    throw new TypeError(
+      "Temporal API is not available. " +
+        "Use a runtime with Temporal support or install a polyfill " +
+        "like @js-temporal/polyfill.",
+    );
+  }
+}
+
 /**
  * IANA Time Zone Database identifier.
  *
@@ -272,6 +282,8 @@ export interface TimeZoneOptions {
  *
  * @param options Configuration options for the instant parser.
  * @returns A ValueParser that parses strings into Temporal.Instant values.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function instant(
   options: InstantOptions = {},
@@ -282,6 +294,7 @@ export function instant(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.Instant> {
+      ensureTemporal();
       try {
         const value = Temporal.Instant.from(input);
         return { success: true, value };
@@ -313,6 +326,8 @@ export function instant(
  *
  * @param options Configuration options for the duration parser.
  * @returns A ValueParser that parses strings into Temporal.Duration values.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function duration(
   options: DurationOptions = {},
@@ -323,6 +338,7 @@ export function duration(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.Duration> {
+      ensureTemporal();
       try {
         const value = Temporal.Duration.from(input);
         return { success: true, value };
@@ -353,6 +369,8 @@ export function duration(
  *
  * @param options Configuration options for the zoned datetime parser.
  * @returns A ValueParser that parses strings into Temporal.ZonedDateTime values.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function zonedDateTime(
   options: ZonedDateTimeOptions = {},
@@ -363,6 +381,7 @@ export function zonedDateTime(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.ZonedDateTime> {
+      ensureTemporal();
       try {
         const value = Temporal.ZonedDateTime.from(input);
         return { success: true, value };
@@ -393,6 +412,8 @@ export function zonedDateTime(
  *
  * @param options Configuration options for the plain date parser.
  * @returns A ValueParser that parses strings into Temporal.PlainDate values.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function plainDate(
   options: PlainDateOptions = {},
@@ -403,6 +424,7 @@ export function plainDate(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainDate> {
+      ensureTemporal();
       try {
         const value = Temporal.PlainDate.from(input);
         return { success: true, value };
@@ -433,6 +455,8 @@ export function plainDate(
  *
  * @param options Configuration options for the plain time parser.
  * @returns A ValueParser that parses strings into Temporal.PlainTime values.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function plainTime(
   options: PlainTimeOptions = {},
@@ -443,6 +467,7 @@ export function plainTime(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainTime> {
+      ensureTemporal();
       try {
         const value = Temporal.PlainTime.from(input);
         return { success: true, value };
@@ -473,6 +498,8 @@ export function plainTime(
  *
  * @param options Configuration options for the plain datetime parser.
  * @returns A ValueParser that parses strings into Temporal.PlainDateTime values.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function plainDateTime(
   options: PlainDateTimeOptions = {},
@@ -483,6 +510,7 @@ export function plainDateTime(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainDateTime> {
+      ensureTemporal();
       try {
         const value = Temporal.PlainDateTime.from(input);
         return { success: true, value };
@@ -513,6 +541,8 @@ export function plainDateTime(
  *
  * @param options Configuration options for the plain year-month parser.
  * @returns A ValueParser that parses strings into Temporal.PlainYearMonth values.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function plainYearMonth(
   options: PlainYearMonthOptions = {},
@@ -523,6 +553,7 @@ export function plainYearMonth(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainYearMonth> {
+      ensureTemporal();
       try {
         const value = Temporal.PlainYearMonth.from(input);
         return { success: true, value };
@@ -553,6 +584,8 @@ export function plainYearMonth(
  *
  * @param options Configuration options for the plain month-day parser.
  * @returns A ValueParser that parses strings into Temporal.PlainMonthDay values.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function plainMonthDay(
   options: PlainMonthDayOptions = {},
@@ -563,6 +596,7 @@ export function plainMonthDay(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<Temporal.PlainMonthDay> {
+      ensureTemporal();
       try {
         const value = Temporal.PlainMonthDay.from(input);
         return { success: true, value };
@@ -595,6 +629,8 @@ export function plainMonthDay(
  *
  * @param options Configuration options for the timezone parser.
  * @returns A ValueParser that parses and validates timezone identifiers.
+ * @throws {TypeError} (from `parse()`) If the Temporal API is not available
+ *   at runtime.
  */
 export function timeZone(
   options: TimeZoneOptions = {},
@@ -605,6 +641,7 @@ export function timeZone(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<TimeZone> {
+      ensureTemporal();
       try {
         // Validate by creating a ZonedDateTime with this timezone
         // This will throw if the timezone is invalid
