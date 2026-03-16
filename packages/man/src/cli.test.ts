@@ -382,6 +382,33 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       assert.ok(result.stderr.includes("not a Program or Parser"));
     });
 
+    it("fails with exit code 3 for malformed parser-like export", async () => {
+      const malformedFile = join(fixturesDir, "malformed-parser.ts");
+      const result = await runCli([malformedFile, "-s", "1"]);
+
+      assert.equal(result.exitCode, 3);
+      assert.ok(result.stderr.includes("not a Program or Parser"));
+    });
+
+    it("fails with exit code 3 for malformed program with bad parser", async () => {
+      const malformedFile = join(fixturesDir, "malformed-program.ts");
+      const result = await runCli([malformedFile, "-s", "1"]);
+
+      assert.equal(result.exitCode, 3);
+      assert.ok(result.stderr.includes("not a Program or Parser"));
+    });
+
+    it("fails with exit code 3 for program with missing metadata name", async () => {
+      const malformedFile = join(
+        fixturesDir,
+        "malformed-program-metadata.ts",
+      );
+      const result = await runCli([malformedFile, "-s", "1"]);
+
+      assert.equal(result.exitCode, 3);
+      assert.ok(result.stderr.includes("not a Program or Parser"));
+    });
+
     it("rejects empty --name", async () => {
       const programFile = join(fixturesDir, "program.ts");
       const result = await runCli([programFile, "-s", "1", "--name", ""]);

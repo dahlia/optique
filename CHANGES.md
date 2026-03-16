@@ -587,12 +587,19 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     input files.  `inferNameFromPath()` returned an empty string because
     `base.slice(0, -0)` yields `""` in JavaScript.  [[#277], [#551]]
 
+ -  Fixed `optique-man` accepting malformed parser-like or program-like
+    exports that pass shallow validation but crash later with internal
+    generation errors.  The `isParser()` and `isProgram()` guards now
+    check for `getDocFragments` method and `metadata.name` string
+    respectively.  [[#278], [#552]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#276]: https://github.com/dahlia/optique/issues/276
 [#277]: https://github.com/dahlia/optique/issues/277
+[#278]: https://github.com/dahlia/optique/issues/278
 [#280]: https://github.com/dahlia/optique/issues/280
 [#283]: https://github.com/dahlia/optique/issues/283
 [#526]: https://github.com/dahlia/optique/pull/526
@@ -603,6 +610,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#544]: https://github.com/dahlia/optique/pull/544
 [#547]: https://github.com/dahlia/optique/pull/547
 [#551]: https://github.com/dahlia/optique/pull/551
+[#552]: https://github.com/dahlia/optique/pull/552
 
 
 Version 0.10.7

@@ -472,7 +472,9 @@ function isProgram(
     "parser" in value &&
     "metadata" in value &&
     typeof (value as Program<Mode, unknown>).metadata === "object" &&
-    (value as Program<Mode, unknown>).metadata != null
+    (value as Program<Mode, unknown>).metadata != null &&
+    typeof (value as Program<Mode, unknown>).metadata.name === "string" &&
+    isParser((value as Program<Mode, unknown>).parser)
   );
 }
 
@@ -488,7 +490,10 @@ function isParser(
     "parse" in value &&
     typeof (value as { parse?: unknown }).parse === "function" &&
     "$mode" in value &&
-    "usage" in value
+    "usage" in value &&
+    "getDocFragments" in value &&
+    typeof (value as { getDocFragments?: unknown }).getDocFragments ===
+      "function"
   );
 }
 
