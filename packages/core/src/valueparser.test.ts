@@ -4874,6 +4874,18 @@ describe("port", () => {
       assert.ok(!result3.success);
     });
 
+    it("should reject non-decimal literals and whitespace", () => {
+      const parser = port({ type: "bigint" });
+
+      assert.ok(!parser.parse("").success);
+      assert.ok(!parser.parse("   ").success);
+      assert.ok(!parser.parse("+1").success);
+      assert.ok(!parser.parse("0x50").success);
+      assert.ok(!parser.parse("0b10").success);
+      assert.ok(!parser.parse("0o10").success);
+      assert.ok(!parser.parse(" 8080 ").success);
+    });
+
     it("should enforce bigint minimum constraint", () => {
       const parser = port({ type: "bigint", min: 1024n });
 
