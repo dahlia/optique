@@ -841,9 +841,13 @@ function createSyncDerivedFromParser<
       const derivedParser = options.factory(
         ...(sourceValues as DependencyValues<Deps>),
       );
-      if (derivedParser.suggest) {
-        yield* derivedParser.suggest(prefix);
+      if (
+        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        !derivedParser.suggest
+      ) {
+        return;
       }
+      yield* derivedParser.suggest(prefix);
     },
 
     *[suggestWithDependency](
@@ -866,9 +870,13 @@ function createSyncDerivedFromParser<
           return;
         }
       }
-      if (derivedParser.suggest) {
-        yield* derivedParser.suggest(prefix);
+      if (
+        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        !derivedParser.suggest
+      ) {
+        return;
       }
+      yield* derivedParser.suggest(prefix);
     },
   };
 }
@@ -1183,9 +1191,13 @@ function createSyncDerivedParser<S, T>(
     *suggest(prefix: string): Iterable<Suggestion> {
       const sourceValue = options.defaultValue();
       const derivedParser = options.factory(sourceValue);
-      if (derivedParser.suggest) {
-        yield* derivedParser.suggest(prefix);
+      if (
+        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        !derivedParser.suggest
+      ) {
+        return;
       }
+      yield* derivedParser.suggest(prefix);
     },
 
     *[suggestWithDependency](
@@ -1203,9 +1215,13 @@ function createSyncDerivedParser<S, T>(
           return;
         }
       }
-      if (derivedParser.suggest) {
-        yield* derivedParser.suggest(prefix);
+      if (
+        isAsyncModeParser(derivedParser as { readonly $mode: Mode }) ||
+        !derivedParser.suggest
+      ) {
+        return;
       }
+      yield* derivedParser.suggest(prefix);
     },
   };
 }

@@ -2647,6 +2647,14 @@ describe("Error cases with dependencies", () => {
 
     // The factory error should surface at parse time, not construction time
     assert.ok(derived);
+    const result = derived.parse("anything");
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(
+        result.error,
+        message`Derived parser error: ${"Factory error"}`,
+      );
+    }
   });
 
   test("invalid value for derived parser shows appropriate error", async () => {
