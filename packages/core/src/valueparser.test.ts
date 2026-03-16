@@ -1034,6 +1034,34 @@ describe("choice", () => {
       );
     });
 
+    it("should reject unsupported types like boolean", () => {
+      assert.throws(
+        () => choice([true] as never),
+        TypeError,
+      );
+    });
+
+    it("should reject unsupported types like object", () => {
+      assert.throws(
+        () => choice([{}] as never),
+        TypeError,
+      );
+    });
+
+    it("should reject mixed string and number choices (number first)", () => {
+      assert.throws(
+        () => choice([1, "2"] as never),
+        TypeError,
+      );
+    });
+
+    it("should reject mixed string and number choices (string first)", () => {
+      assert.throws(
+        () => choice(["a", 1] as never),
+        TypeError,
+      );
+    });
+
     it("should handle choices with unicode characters", () => {
       const parser = choice(["🔴", "🟢", "🔵", "α", "β", "γ"]);
 
