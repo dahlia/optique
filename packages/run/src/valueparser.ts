@@ -6,7 +6,7 @@ import {
 import type { Suggestion } from "@optique/core/parser";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { existsSync, statSync } from "node:fs";
-import { dirname, extname } from "node:path";
+import { basename, dirname, extname } from "node:path";
 
 /**
  * Custom error messages for path validation failures.
@@ -174,6 +174,8 @@ export type PathOptions =
  *
  * @param options Configuration options for path validation.
  * @returns A ValueParser that validates and returns string paths.
+ * @throws {TypeError} If any entry in {@link PathOptionsBase.extensions} does
+ *   not start with a dot (e.g., `"json"` instead of `".json"`).
  *
  * @example
  * ```typescript
@@ -208,6 +210,15 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
     extensions,
   } = options;
   ensureNonEmptyString(metavar);
+  if (extensions) {
+    for (const ext of extensions) {
+      if (!ext.startsWith(".")) {
+        throw new TypeError(
+          `Each extension must start with a dot, got: ${JSON.stringify(ext)}`,
+        );
+      }
+    }
+  }
   const mustExist = "mustExist" in options ? options.mustExist : false;
   const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;
 
@@ -217,9 +228,11 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
     parse(input: string): ValueParserResult<string> {
       // Extension validation
       if (extensions && extensions.length > 0) {
-        const ext = extname(input);
-        if (!extensions.includes(ext)) {
-          const actualExt = ext || "no extension";
+        const base = /[/\\]$/.test(input) ? "" : basename(input);
+        if (!extensions.some((ext) => base.endsWith(ext))) {
+          const ext = extname(input);
+          const actualExt = ext ||
+            (base.startsWith(".") ? base : "no extension");
           return {
             success: false,
             error: options.errors?.invalidExtension

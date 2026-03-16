@@ -426,6 +426,73 @@ describe("path", () => {
         );
       }
     });
+
+    it("should match dotfile-style extensions", () => {
+      const envParser = path({ extensions: [".env"] });
+      assert.ok(envParser.parse(".env").success);
+
+      const gitignoreParser = path({ extensions: [".gitignore"] });
+      assert.ok(gitignoreParser.parse(".gitignore").success);
+    });
+
+    it("should match multi-part extensions", () => {
+      const tarParser = path({ extensions: [".tar.gz"] });
+      assert.ok(tarParser.parse("archive.tar.gz").success);
+
+      const dtsParser = path({ extensions: [".d.ts"] });
+      assert.ok(dtsParser.parse("index.d.ts").success);
+
+      const userJsParser = path({ extensions: [".user.js"] });
+      assert.ok(userJsParser.parse("script.user.js").success);
+    });
+
+    it("should reject files not matching multi-part extension", () => {
+      const parser = path({ extensions: [".tar.gz"] });
+      const result = parser.parse("archive.gz");
+      assert.ok(!result.success);
+    });
+
+    it("should reject trailing-separator paths", () => {
+      const parser = path({ extensions: [".env"] });
+      assert.ok(!parser.parse(".env/").success);
+
+      const tarParser = path({ extensions: [".tar.gz"] });
+      assert.ok(!tarParser.parse("archive.tar.gz/").success);
+    });
+
+    it("should not false-match on directory components", () => {
+      const parser = path({ extensions: [".json"] });
+      const result = parser.parse(".env/config");
+      assert.ok(!result.success);
+    });
+
+    it("should show dotfile name in error message", () => {
+      const parser = path({ extensions: [".env"] });
+      const result = parser.parse(".gitignore");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.match(
+          formatMessage(result.error),
+          /got \.gitignore/,
+        );
+      }
+    });
+  });
+
+  describe("extensions input validation", () => {
+    it("should throw on extension without leading dot", () => {
+      assert.throws(
+        () => path({ extensions: ["json"] }),
+        { name: "TypeError" },
+      );
+    });
+
+    it("should throw on empty string extension", () => {
+      assert.throws(
+        () => path({ extensions: [""] }),
+        { name: "TypeError" },
+      );
+    });
   });
 
   describe("combined validations", () => {
