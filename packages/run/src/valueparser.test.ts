@@ -1144,6 +1144,26 @@ describe("path", () => {
       assert.ok(Array.isArray(regularSuggestions));
       assert.ok(Array.isArray(dotSuggestions));
     });
+
+    it("should include hidden files when basename starts with dot", () => {
+      const parser = path();
+
+      const dot = Array.from(parser.suggest!("."))[0];
+      assert.equal(dot.kind, "file");
+      assert.equal(dot.kind === "file" && dot.includeHidden, true);
+
+      const nested = Array.from(parser.suggest!("src/."))[0];
+      assert.equal(nested.kind, "file");
+      assert.equal(nested.kind === "file" && nested.includeHidden, true);
+
+      const deep = Array.from(parser.suggest!("nested/path/."))[0];
+      assert.equal(deep.kind, "file");
+      assert.equal(deep.kind === "file" && deep.includeHidden, true);
+
+      const regular = Array.from(parser.suggest!("src/config"))[0];
+      assert.equal(regular.kind, "file");
+      assert.equal(regular.kind === "file" && regular.includeHidden, false);
+    });
   });
 
   describe("mutually exclusive options", () => {
