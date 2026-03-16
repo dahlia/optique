@@ -274,7 +274,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([programFile, "-s", "1", "--name", ""]);
 
       assert.notEqual(result.exitCode, 0);
-      assert.ok(result.stderr.length > 0);
+      assert.ok(result.stderr.includes("Program name must not be empty"));
     });
 
     it("rejects empty --date", async () => {
@@ -282,7 +282,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([programFile, "-s", "1", "--date", ""]);
 
       assert.notEqual(result.exitCode, 0);
-      assert.ok(result.stderr.length > 0);
+      assert.ok(result.stderr.includes("Date must not be empty"));
     });
 
     it("rejects empty --version-string", async () => {
@@ -296,7 +296,9 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       ]);
 
       assert.notEqual(result.exitCode, 0);
-      assert.ok(result.stderr.length > 0);
+      assert.ok(
+        result.stderr.includes("Version string must not be empty"),
+      );
     });
 
     it("rejects empty --manual", async () => {
@@ -304,7 +306,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([programFile, "-s", "1", "--manual", ""]);
 
       assert.notEqual(result.exitCode, 0);
-      assert.ok(result.stderr.length > 0);
+      assert.ok(result.stderr.includes("Manual name must not be empty"));
     });
   });
 });
