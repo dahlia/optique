@@ -1966,6 +1966,20 @@ describe("choice", () => {
       if (!result2.success) assert.equal(result2.error, "original error");
     });
 
+    it("should snapshot errors.invalidChoice for number choices at construction time", () => {
+      const errors: { invalidChoice: string } = {
+        invalidChoice: "original error",
+      };
+      const parser = choice([1, 2], { errors: errors as never });
+      const result = parser.parse("99");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidChoice = "mutated error";
+      const result2 = parser.parse("99");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+
     it("should work with all-duplicate list", () => {
       const parser = choice(["a", "a"]);
       assert.deepEqual(parser.choices, ["a"]);
