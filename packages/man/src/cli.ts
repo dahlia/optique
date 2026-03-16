@@ -466,16 +466,20 @@ async function tryRegisterTsx(): Promise<void> {
 function isProgram(
   value: unknown,
 ): value is Program<Mode, unknown> {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    "parser" in value &&
-    "metadata" in value &&
-    typeof (value as Program<Mode, unknown>).metadata === "object" &&
-    (value as Program<Mode, unknown>).metadata != null &&
-    typeof (value as Program<Mode, unknown>).metadata.name === "string" &&
-    isParser((value as Program<Mode, unknown>).parser)
-  );
+  try {
+    return (
+      value != null &&
+      typeof value === "object" &&
+      "parser" in value &&
+      "metadata" in value &&
+      typeof (value as Program<Mode, unknown>).metadata === "object" &&
+      (value as Program<Mode, unknown>).metadata != null &&
+      typeof (value as Program<Mode, unknown>).metadata.name === "string" &&
+      isParser((value as Program<Mode, unknown>).parser)
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**

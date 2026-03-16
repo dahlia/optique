@@ -409,6 +409,17 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       assert.ok(result.stderr.includes("not a Program or Parser"));
     });
 
+    it("fails with exit code 3 for program with throwing parser getter", async () => {
+      const malformedFile = join(
+        fixturesDir,
+        "throwing-getter-program.ts",
+      );
+      const result = await runCli([malformedFile, "-s", "1"]);
+
+      assert.equal(result.exitCode, 3);
+      assert.ok(result.stderr.includes("not a Program or Parser"));
+    });
+
     it("rejects empty --name", async () => {
       const programFile = join(fixturesDir, "program.ts");
       const result = await runCli([programFile, "-s", "1", "--name", ""]);
