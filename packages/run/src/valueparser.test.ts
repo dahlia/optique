@@ -465,6 +465,34 @@ describe("path", () => {
       const result = parser.parse(".env/config");
       assert.equal(result.success, false);
     });
+
+    it("should show dotfile name in error message", () => {
+      const parser = path({ extensions: [".env"] });
+      const result = parser.parse(".gitignore");
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.match(
+          formatMessage(result.error),
+          /got \.gitignore/,
+        );
+      }
+    });
+  });
+
+  describe("extensions input validation", () => {
+    it("should throw on extension without leading dot", () => {
+      assert.throws(
+        () => path({ extensions: ["json"] }),
+        { name: "TypeError" },
+      );
+    });
+
+    it("should throw on empty string extension", () => {
+      assert.throws(
+        () => path({ extensions: [""] }),
+        { name: "TypeError" },
+      );
+    });
   });
 
   describe("combined validations", () => {

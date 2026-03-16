@@ -208,6 +208,15 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
     extensions,
   } = options;
   ensureNonEmptyString(metavar);
+  if (extensions) {
+    for (const ext of extensions) {
+      if (!ext.startsWith(".")) {
+        throw new TypeError(
+          `Each extension must start with a dot, got: ${JSON.stringify(ext)}`,
+        );
+      }
+    }
+  }
   const mustExist = "mustExist" in options ? options.mustExist : false;
   const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;
 
@@ -219,7 +228,9 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
       if (extensions && extensions.length > 0) {
         const base = /[/\\]$/.test(input) ? "" : basename(input);
         if (!extensions.some((ext) => base.endsWith(ext))) {
-          const actualExt = extname(input) || "no extension";
+          const ext = extname(input);
+          const actualExt = ext ||
+            (base.startsWith(".") ? base : "no extension");
           return {
             success: false,
             error: options.errors?.invalidExtension
