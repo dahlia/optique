@@ -438,7 +438,6 @@ export function choice<const T extends string | number>(
     };
   }
 
-  // String choice implementation
   // String choice implementation — deduplicate identical values
   const stringChoices: readonly string[] = [
     ...new Set(choices as readonly string[]),
