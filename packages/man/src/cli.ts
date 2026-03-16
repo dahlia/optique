@@ -381,8 +381,8 @@ async function importModule(
     // instead of the raw Node.js error.
     if (
       !isDeno && !isBun &&
-      error instanceof Error &&
-      (error as NodeJS.ErrnoException).code === "ERR_UNKNOWN_FILE_EXTENSION"
+      isNodeError(error) &&
+      error.code === "ERR_UNKNOWN_FILE_EXTENSION"
     ) {
       const failedPath = extractPathFromExtensionError(error.message);
       if (failedPath != null && jsxTsxPattern.test(failedPath)) {
@@ -391,6 +391,16 @@ async function importModule(
     }
     throw error;
   }
+}
+
+/**
+ * Checks whether an error is a Node.js system error with a string `code`.
+ * @param error The value to check.
+ * @returns `true` if the error has a string `code` property.
+ */
+function isNodeError(error: unknown): error is Error & { code: string } {
+  return error instanceof Error && "code" in error &&
+    typeof (error as { code: unknown }).code === "string";
 }
 
 /**
@@ -418,8 +428,8 @@ async function registerTsx(
     tsx.register();
   } catch (error: unknown) {
     if (
-      !(error instanceof Error) ||
-      (error as NodeJS.ErrnoException).code !== "ERR_MODULE_NOT_FOUND"
+      !isNodeError(error) ||
+      error.code !== "ERR_MODULE_NOT_FOUND"
     ) {
       throw error;
     }
