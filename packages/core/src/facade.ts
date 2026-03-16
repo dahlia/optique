@@ -317,18 +317,6 @@ function finalizeParsedForContext(
   return { [phase2UndefinedParsedValueKey]: true };
 }
 
-function isPrivateFieldTypeError(e: unknown): boolean {
-  // Match engine-generated private-field errors only:
-  // V8/Deno/Node: "Cannot read private member #foo from an object..."
-  // SpiderMonkey: "can't access private field or method: ..."
-  // JavaScriptCore/Bun: "Cannot access invalid private field"
-  //                  or "Cannot access private property"
-  return e instanceof TypeError &&
-    typeof e.message === "string" &&
-    /Cannot (?:read private member|access (?:private (?:property|method)|invalid private field))|can't access private field/i
-      .test(e.message);
-}
-
 const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
 
 interface ActiveSanitization {
@@ -419,7 +407,7 @@ function callWithSanitizedOwnProperties(
   return strip(result, seen);
 }
 
-function callMethodWithPrivateFieldFallback(
+function callMethodOnSanitizedTarget(
   fn: { apply(thisArg: unknown, args: unknown[]): unknown },
   proxy: object,
   target: object,
@@ -427,44 +415,24 @@ function callMethodWithPrivateFieldFallback(
   strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
   seen: WeakMap<object, unknown>,
 ): unknown {
-  // Async methods are routed directly to the sanitized-target path so
-  // that private-field access works without retrying.  Retrying an async
-  // method after a rejection would re-execute any side effects that ran
-  // before the private-field access point.
-  if (
-    fn.constructor != null &&
-    (fn.constructor as { name?: string }).name === "AsyncFunction"
-  ) {
-    const result = callWithSanitizedOwnProperties(
-      target,
-      fn,
-      args,
-      strip,
-      seen,
-    );
-    if (result !== SANITIZE_FAILED) return result;
-    // SANITIZE_FAILED means frozen object; fall through to proxy path
-    // which will propagate the private-field error if one occurs.
-  }
+  // All methods are called on the target with temporarily sanitized own
+  // properties.  This handles private fields (which require target as
+  // receiver), Promise-returning methods, and native async methods
+  // uniformly, without retrying or detecting function types.
+  const result = callWithSanitizedOwnProperties(
+    target,
+    fn,
+    args,
+    strip,
+    seen,
+  );
+  if (result !== SANITIZE_FAILED) return result;
 
-  let result: unknown;
-  try {
-    result = fn.apply(proxy, args);
-  } catch (e) {
-    if (isPrivateFieldTypeError(e)) {
-      const fallbackResult = callWithSanitizedOwnProperties(
-        target,
-        fn,
-        args,
-        strip,
-        seen,
-      );
-      if (fallbackResult !== SANITIZE_FAILED) return fallbackResult;
-    }
-    throw e;
-  }
-
-  return strip(result, seen);
+  // SANITIZE_FAILED means the target is frozen/sealed and its properties
+  // cannot be temporarily replaced.  Fall back to the proxy path, which
+  // handles methods that don't access private fields.  Private-field
+  // methods on frozen objects will propagate the TypeError.
+  return strip(fn.apply(proxy, args), seen);
 }
 
 function createSanitizedNonPlainContextView<T extends object>(
@@ -500,7 +468,7 @@ function createSanitizedNonPlainContextView<T extends object>(
                   seen,
                 );
               }
-              return callMethodWithPrivateFieldFallback(
+              return callMethodOnSanitizedTarget(
                 val,
                 proxy,
                 target,
@@ -544,7 +512,7 @@ function createSanitizedNonPlainContextView<T extends object>(
                   seen,
                 );
               }
-              return callMethodWithPrivateFieldFallback(
+              return callMethodOnSanitizedTarget(
                 result,
                 proxy,
                 target,
@@ -565,7 +533,7 @@ function createSanitizedNonPlainContextView<T extends object>(
               seen,
             );
           }
-          return callMethodWithPrivateFieldFallback(
+          return callMethodOnSanitizedTarget(
             result,
             proxy,
             target,

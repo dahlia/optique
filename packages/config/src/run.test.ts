@@ -1834,4 +1834,49 @@ describe("run with config context", { concurrency: false }, () => {
 
     assert.ok(methodIdentityHeld);
   });
+
+  test("Promise-returning non-async method with private fields works", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // Methods that return Promise without being native async functions
+    // (e.g., return Promise.resolve().then(() => this.#id)) must also
+    // work correctly through the sanitized proxy.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class PromiseReturner {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      getId(): Promise<string> {
+        return Promise.resolve().then(() => this.#id);
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new PromiseReturner(
+      "abc",
+      { [deferredPromptValueKey]: true },
+    );
+
+    let observedId: string | undefined;
+
+    const annotations = context.getAnnotations(instance, {
+      async load(parsed: unknown) {
+        observedId = await (parsed as PromiseReturner).getId();
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    if (annotations instanceof Promise) {
+      await annotations;
+    }
+
+    assert.equal(observedId, "abc");
+  });
 });
