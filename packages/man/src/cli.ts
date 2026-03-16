@@ -331,6 +331,10 @@ Make sure you have write permission and the parent directory exists.`,
 /**
  * Imports a module from the given file path.
  * Handles TypeScript and JSX files on Node.js by using tsx if needed.
+ * @param filePath The path to the module file.
+ * @returns The imported module's exports.
+ * @throws If the module fails to import for reasons other than a missing
+ *         tsx loader (which causes the process to exit instead).
  */
 async function importModule(
   filePath: string,
