@@ -235,6 +235,12 @@ To be released.
     `mode: "async"` or use `deriveAsync()`/`deriveFromAsync()`.
     [[#223], [#527]]
 
+ -  Fixed `deriveSync()`, `deriveFromSync()`, and `deriveFromAsync()` so
+    that `format()` and `suggest()` no longer throw when the factory
+    throws on the default dependency value.  `format()` now falls back to
+    `String(value)` and `suggest()` yields empty suggestions instead of
+    propagating the exception.  [[#224], [#531]]
+
  -  The `integer()` parser in number mode now rejects values outside the safe
     integer range (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
     Previously, such values were silently rounded, losing precision.  A new
@@ -272,6 +278,7 @@ To be released.
 [#178]: https://github.com/dahlia/optique/issues/178
 [#186]: https://github.com/dahlia/optique/issues/186
 [#223]: https://github.com/dahlia/optique/issues/223
+[#224]: https://github.com/dahlia/optique/issues/224
 [#225]: https://github.com/dahlia/optique/issues/225
 [#242]: https://github.com/dahlia/optique/issues/242
 [#248]: https://github.com/dahlia/optique/issues/248
@@ -284,6 +291,7 @@ To be released.
 [#525]: https://github.com/dahlia/optique/pull/525
 [#527]: https://github.com/dahlia/optique/pull/527
 [#528]: https://github.com/dahlia/optique/pull/528
+[#531]: https://github.com/dahlia/optique/pull/531
 
 ### @optique/config
 
