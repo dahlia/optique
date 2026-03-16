@@ -442,27 +442,39 @@ export function formatDocPageAsMan(
   for (const section of page.sections) {
     if (section.entries.length === 0) continue;
 
+    const content = formatDocSectionEntries(section);
+    if (content === "") continue;
+
     const title = section.title?.toUpperCase() ?? "OPTIONS";
     lines.push(`.SH ${title}`);
-    lines.push(formatDocSectionEntries(section));
+    lines.push(content);
   }
 
   // .SH ENVIRONMENT
   if (options.environment && options.environment.entries.length > 0) {
-    lines.push(".SH ENVIRONMENT");
-    lines.push(formatDocSectionEntries(options.environment));
+    const content = formatDocSectionEntries(options.environment);
+    if (content !== "") {
+      lines.push(".SH ENVIRONMENT");
+      lines.push(content);
+    }
   }
 
   // .SH FILES
   if (options.files && options.files.entries.length > 0) {
-    lines.push(".SH FILES");
-    lines.push(formatDocSectionEntries(options.files));
+    const content = formatDocSectionEntries(options.files);
+    if (content !== "") {
+      lines.push(".SH FILES");
+      lines.push(content);
+    }
   }
 
   // .SH EXIT STATUS
   if (options.exitStatus && options.exitStatus.entries.length > 0) {
-    lines.push(".SH EXIT STATUS");
-    lines.push(formatDocSectionEntries(options.exitStatus));
+    const content = formatDocSectionEntries(options.exitStatus);
+    if (content !== "") {
+      lines.push(".SH EXIT STATUS");
+      lines.push(content);
+    }
   }
 
   // .SH EXAMPLES

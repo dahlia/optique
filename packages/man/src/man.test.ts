@@ -870,6 +870,44 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("A wrapped usage-hidden term"));
   });
 
+  it("omits section header when all entries are doc-hidden", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "SECRET",
+          entries: [
+            {
+              term: { type: "option", names: ["--a"], hidden: "doc" },
+              description: message`Hidden A`,
+            },
+            {
+              term: { type: "option", names: ["--b"], hidden: true },
+              description: message`Hidden B`,
+            },
+          ],
+        },
+        {
+          title: "VISIBLE",
+          entries: [
+            {
+              term: { type: "option", names: ["--keep"] },
+              description: message`Kept`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    assert.ok(!result.includes(".SH SECRET"));
+    assert.ok(result.includes(".SH VISIBLE"));
+    assert.ok(result.includes("\\-\\-keep"));
+  });
+
   it("uses comma separator for nested option names in doc wrappers", () => {
     const page: DocPage = {
       sections: [
