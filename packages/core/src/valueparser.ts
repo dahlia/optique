@@ -251,6 +251,8 @@ export function isValueParser<M extends Mode, T>(
  *          specified values.
  * @throws {TypeError} If the choices array is empty.
  * @throws {TypeError} If any choice is an empty string.
+ * @throws {TypeError} If any choice is not a string.
+ * @throws {TypeError} If choices contain a mix of strings and numbers.
  * @throws {TypeError} If `caseInsensitive` is not a boolean.
  * @throws {TypeError} If `caseInsensitive` is `true` and multiple choices
  *         normalize to the same lowercase value.
@@ -272,6 +274,8 @@ export function choice<const T extends string>(
  * @returns A {@link ValueParser} that checks if the input matches one of the
  *          specified values.
  * @throws {TypeError} If the choices array is empty.
+ * @throws {TypeError} If any choice is not a number.
+ * @throws {TypeError} If choices contain a mix of strings and numbers.
  * @since 0.9.0
  */
 export function choice<const T extends number>(
@@ -295,6 +299,23 @@ export function choice<const T extends string | number>(
     throw new TypeError(
       "Empty strings are not allowed as choices.",
     );
+  }
+  for (const c of choices) {
+    if (typeof c !== "string" && typeof c !== "number") {
+      throw new TypeError(
+        `Expected every choice to be a string or number, but got ${typeof c}.`,
+      );
+    }
+  }
+  const isNumber = typeof choices[0] === "number";
+  for (const c of choices) {
+    if (isNumber ? typeof c !== "number" : typeof c !== "string") {
+      throw new TypeError(
+        `Expected every choice to be the same type, but got both ${
+          isNumber ? "number" : "string"
+        } and ${typeof c}.`,
+      );
+    }
   }
   const metavar = options.metavar ?? "TYPE";
   ensureNonEmptyString(metavar);
