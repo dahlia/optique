@@ -503,6 +503,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     dotfile prefixes like `src/.` or `nested/path/.`.  Previously, only bare
     dot prefixes (e.g., `.`) set `includeHidden`.  [[#258], [#543]]
 
+ -  Fixed `path()` to reject invalid runtime `type` values.  Previously,
+    unsupported values like `"files"` were silently accepted, causing
+    inconsistent behavior between parsing and suggestions.  [[#361], [#545]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
@@ -511,11 +515,13 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#309]: https://github.com/dahlia/optique/issues/309
 [#343]: https://github.com/dahlia/optique/issues/343
 [#358]: https://github.com/dahlia/optique/issues/358
+[#361]: https://github.com/dahlia/optique/issues/361
 [#530]: https://github.com/dahlia/optique/pull/530
 [#538]: https://github.com/dahlia/optique/pull/538
 [#539]: https://github.com/dahlia/optique/pull/539
 [#541]: https://github.com/dahlia/optique/pull/541
 [#543]: https://github.com/dahlia/optique/pull/543
+[#545]: https://github.com/dahlia/optique/pull/545
 
 ### @optique/man
 
