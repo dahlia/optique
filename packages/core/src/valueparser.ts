@@ -1215,11 +1215,13 @@ export interface UrlOptions {
  * @returns A {@link ValueParser} that converts string input to `URL` objects.
  */
 export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
-  const allowedProtocols = options.allowedProtocols?.map((p) =>
-    p.toLowerCase()
-  );
+  const allowedProtocols = options.allowedProtocols != null
+    ? Object.freeze(options.allowedProtocols.map((p) => p.toLowerCase()))
+    : undefined;
   const metavar = options.metavar ?? "URL";
   ensureNonEmptyString(metavar);
+  const invalidUrl = options.errors?.invalidUrl;
+  const disallowedProtocol = options.errors?.disallowedProtocol;
   return {
     $mode: "sync",
     metavar,
@@ -1227,10 +1229,10 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
       if (!URL.canParse(input)) {
         return {
           success: false,
-          error: options.errors?.invalidUrl
-            ? (typeof options.errors.invalidUrl === "function"
-              ? options.errors.invalidUrl(input)
-              : options.errors.invalidUrl)
+          error: invalidUrl
+            ? (typeof invalidUrl === "function"
+              ? invalidUrl(input)
+              : invalidUrl)
             : message`Invalid URL: ${input}.`,
         };
       }
@@ -1240,13 +1242,13 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
       ) {
         return {
           success: false,
-          error: options.errors?.disallowedProtocol
-            ? (typeof options.errors.disallowedProtocol === "function"
-              ? options.errors.disallowedProtocol(
+          error: disallowedProtocol
+            ? (typeof disallowedProtocol === "function"
+              ? disallowedProtocol(
                 url.protocol,
-                allowedProtocols!,
+                allowedProtocols,
               )
-              : options.errors.disallowedProtocol)
+              : disallowedProtocol)
             : message`URL protocol ${url.protocol} is not allowed. Allowed protocols: ${
               allowedProtocols.join(", ")
             }.`,
