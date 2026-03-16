@@ -1951,6 +1951,59 @@ describe("prompt()", () => {
         assert.equal(promptCalls, expectedPromptCalls);
       });
     }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "object() + withDefault(bindConfig(...)): skips prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "object() + withDefault(bindConfig(...)): runs prompt when config absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = object({
+          apiKey: prompt(
+            withDefault(
+              bindConfig(option("--api-key", string()), {
+                context,
+                key: "apiKey",
+              }),
+              "fallback-default",
+            ),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => {
+                promptCalls += 1;
+                return Promise.resolve("prompt-secret");
+              },
+            },
+          ),
+        });
+
+        const result = await runAsync(parser, {
+          programName: "test",
+          args: [],
+          contexts: [context],
+          load: () => ({ config, meta: undefined }),
+        });
+
+        assert.equal(result.apiKey, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
   });
 
   describe("prompt config default", () => {

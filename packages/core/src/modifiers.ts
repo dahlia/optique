@@ -237,7 +237,7 @@ export function optional<M extends Mode, TValue, TState>(
       // If state was not wrapped (inner parser didn't match) and this
       // optional wraps a dependency source:
       if (!Array.isArray(state)) {
-        // Case 1: Inner parser has a wrapped dependency source (e.g., optional(withDefault(...)))
+        // Inner parser has a wrapped dependency source (e.g., optional(withDefault(...)))
         // Delegate to inner parser which will provide its default value and register dependency
         if (innerHasWrappedDependency && wrappedPendingState) {
           // Delegate to inner parser with the pending state wrapped in array
@@ -253,7 +253,7 @@ export function optional<M extends Mode, TValue, TState>(
               ) as Promise<ValueParserResult<TValue | undefined>>,
           );
         }
-        // Case 3: Inner parser has config-prompt deferral hook (e.g.,
+        // Inner parser has config-prompt deferral hook (e.g.,
         // optional(bindConfig(...))). Delegate to inner parser so it can
         // resolve from config during phase-two completion.
         if (
@@ -286,7 +286,7 @@ export function optional<M extends Mode, TValue, TState>(
           };
           return innerComplete();
         }
-        // Case 2: Inner parser is a direct dependency source (e.g., optional(option(..., dep)))
+        // Inner parser is a direct dependency source (e.g., optional(option(..., dep)))
         // Return undefined and DON'T register dependency - derived parsers use their defaultValue
         return { success: true, value: undefined };
       }
@@ -550,14 +550,14 @@ export function withDefault<
 
   // Forward config-prompt deferral hook from inner parser so that
   // prompt(withDefault(bindConfig(...), val)) defers correctly.
-  const deferPromptHookWD = Reflect.get(
+  const deferPromptHookDefault = Reflect.get(
     parser,
     deferPromptUntilConfigResolvesKey,
   );
-  const deferPromptMarkerWD: {
+  const deferPromptMarkerDefault: {
     [deferPromptUntilConfigResolvesKey]?: (state: unknown) => boolean;
-  } = typeof deferPromptHookWD === "function"
-    ? { [deferPromptUntilConfigResolvesKey]: deferPromptHookWD }
+  } = typeof deferPromptHookDefault === "function"
+    ? { [deferPromptUntilConfigResolvesKey]: deferPromptHookDefault }
     : {};
 
   // Type cast needed due to TypeScript's conditional type limitations with generic M
@@ -569,7 +569,7 @@ export function withDefault<
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     ...wrappedDependencyMarker,
-    ...deferPromptMarkerWD,
+    ...deferPromptMarkerDefault,
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
         parser.$mode,
@@ -664,7 +664,7 @@ export function withDefault<
         // withDefault(bindConfig(...), val)). Delegate to inner parser so
         // it can resolve from config during phase-two completion.
         if (
-          typeof deferPromptHookWD === "function" &&
+          typeof deferPromptHookDefault === "function" &&
           state != null &&
           typeof state === "object"
         ) {
@@ -676,26 +676,15 @@ export function withDefault<
                 ValueParserResult<TValue>
               >,
           );
-          return mapModeValue(
-            parser.$mode,
-            innerResult,
-            (result): ValueParserResult<TValue | TDefault> => {
-              if (result.success) return result;
-              try {
-                const value = typeof defaultValue === "function"
-                  ? (defaultValue as () => TDefault)()
-                  : defaultValue;
-                return { success: true, value };
-              } catch (error) {
-                return {
-                  success: false,
-                  error: error instanceof WithDefaultError
-                    ? error.errorMessage
-                    : message`${text(String(error))}`,
-                };
-              }
-            },
-          );
+          // Propagate the inner result as-is.  When wrapping
+          // bindConfig(), success means config resolved; failure means
+          // config is absent.  In both cases, prompt() needs to see the
+          // raw result so it can defer in phase 1 and prompt in phase 2
+          // instead of having the default value suppress the prompt.
+          return innerResult as ModeValue<
+            M,
+            ValueParserResult<TValue | TDefault>
+          >;
         }
         // No wrapped dependency source - just return the default value.
         try {
