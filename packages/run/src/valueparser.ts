@@ -368,7 +368,7 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
         pattern: prefix,
         type: type === "either" ? "any" : type,
         extensions,
-        includeHidden: prefix.startsWith("."),
+        includeHidden: basename(prefix).startsWith("."),
         description: type === "directory"
           ? message`Directory`
           : type === "file"

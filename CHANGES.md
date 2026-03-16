@@ -499,10 +499,15 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `mustNotExist` are set.  Previously, the contradictory configuration
     was silently accepted.  [[#358], [#541]]
 
+ -  Fixed `path().suggest()` not enabling hidden-file completion for nested
+    dotfile prefixes like `src/.` or `nested/path/.`.  Previously, only bare
+    dot prefixes (e.g., `.`) set `includeHidden`.  [[#258], [#543]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
 [#257]: https://github.com/dahlia/optique/issues/257
+[#258]: https://github.com/dahlia/optique/issues/258
 [#309]: https://github.com/dahlia/optique/issues/309
 [#343]: https://github.com/dahlia/optique/issues/343
 [#358]: https://github.com/dahlia/optique/issues/358
@@ -510,6 +515,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#538]: https://github.com/dahlia/optique/pull/538
 [#539]: https://github.com/dahlia/optique/pull/539
 [#541]: https://github.com/dahlia/optique/pull/541
+[#543]: https://github.com/dahlia/optique/pull/543
 
 ### @optique/man
 
