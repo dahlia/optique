@@ -53,10 +53,16 @@ describe("path", () => {
   });
 
   describe("empty path validation", () => {
-    it("should reject empty string", () => {
+    it("should reject empty string with default error message", () => {
       const parser = path();
       const result = parser.parse("");
       assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "Path must not be empty.",
+        );
+      }
     });
 
     it("should reject whitespace-only string", () => {
