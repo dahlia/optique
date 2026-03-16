@@ -282,7 +282,7 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
     case "option": {
       const names = term.names
         .map((name) => `\\fB${escapeHyphens(name)}\\fR`)
-        .join(" | ");
+        .join(", ");
       const metavarPart = term.metavar ? ` \\fI${term.metavar}\\fR` : "";
       return `${names}${metavarPart}`;
     }

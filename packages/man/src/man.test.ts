@@ -869,4 +869,33 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("INTERNAL"));
     assert.ok(result.includes("A wrapped usage-hidden term"));
   });
+
+  it("uses comma separator for nested option names in doc wrappers", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "OPTIONS",
+          entries: [
+            {
+              term: {
+                type: "optional",
+                terms: [
+                  { type: "option", names: ["-v", "--verbose"] },
+                ],
+              },
+              description: message`Verbose output`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    assert.ok(result.includes("\\fB\\-v\\fR, \\fB\\-\\-verbose\\fR"));
+    assert.ok(!result.includes(" | "));
+  });
 });
