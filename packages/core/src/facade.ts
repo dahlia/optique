@@ -482,8 +482,13 @@ function createSanitizedNonPlainContextView<T extends object>(
         );
         if (typeof val === "function") {
           // For non-configurable non-writable properties, the proxy invariant
-          // requires returning the exact value.
-          if (!descriptor.configurable && !descriptor.writable) {
+          // requires returning the exact value.  Class constructors are also
+          // returned unwrapped since the wrapper would break new.target and
+          // prototype chain semantics when invoked with `new`.
+          if (
+            (!descriptor.configurable && !descriptor.writable) ||
+            /^class[\s{]/.test(Function.prototype.toString.call(val))
+          ) {
             return val;
           }
           // Own function-valued properties (class fields, constructor-
