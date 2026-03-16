@@ -52,12 +52,18 @@ export function escapeRoff(text: string): string {
 }
 
 /**
- * Escapes roff-sensitive characters inside a quoted value.
+ * Escapes roff-sensitive characters inside a quoted value in body text.
  * Handles backslashes and double quotes so the value can be safely
- * placed between literal `"` delimiters in roff output.
+ * placed between literal `"` delimiters in roff text output (e.g.,
+ * `value()` / `values()` message terms).
+ *
+ * This function is *not* safe for roff request arguments such as
+ * `.SH "..."`, where groff performs an extra level of escape
+ * interpretation.  Use {@link escapeRequestArg} for that purpose.
  *
  * @param text The raw value text.
- * @returns The escaped text safe for use inside roff double quotes.
+ * @returns The escaped text safe for use inside roff double quotes
+ *   in body text.
  * @since 1.0.0
  */
 export function escapeQuotedValue(text: string): string {
