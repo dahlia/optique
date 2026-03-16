@@ -2228,6 +2228,14 @@ Released on January 6, 2026.
  -  All temporal value parsers now validate that `metavar` is non-empty,
     throwing a `TypeError` if an empty string is provided.  [[#63]]
 
+ -  Temporal parsers now throw a `TypeError` when `globalThis.Temporal` is
+    unavailable, instead of silently returning an “invalid format” error.
+    This makes it clear that the runtime lacks Temporal support and a polyfill
+    is needed.  [[#282], [#561]]
+
+[#282]: https://github.com/dahlia/optique/issues/282
+[#561]: https://github.com/dahlia/optique/pull/561
+
 ### @optique/git
 
 The *@optique/git* package was introduced in this release, providing

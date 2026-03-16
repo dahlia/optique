@@ -1136,3 +1136,40 @@ describe("async mode integration", () => {
     });
   });
 });
+
+describe("Temporal API unavailability", () => {
+  for (
+    const [name, factory, sample] of [
+      ["instant", instant, "2020-01-23T17:04:36Z"],
+      ["duration", duration, "PT1H"],
+      [
+        "zonedDateTime",
+        zonedDateTime,
+        "2020-01-23T17:04:36+01:00[Europe/Paris]",
+      ],
+      ["plainDate", plainDate, "2020-01-23"],
+      ["plainTime", plainTime, "17:04:36"],
+      ["plainDateTime", plainDateTime, "2020-01-23T17:04:36"],
+      ["plainYearMonth", plainYearMonth, "2020-01"],
+      ["plainMonthDay", plainMonthDay, "--01-23"],
+      ["timeZone", timeZone, "UTC"],
+    ] as const
+  ) {
+    it(`${name}().parse() should throw TypeError when Temporal is unavailable`, () => {
+      const saved = globalThis.Temporal;
+      (globalThis as Record<string, unknown>).Temporal = undefined;
+      try {
+        const parser = factory();
+        assert.throws(
+          () => parser.parse(sample),
+          {
+            name: "TypeError",
+            message: /Temporal API is not available/,
+          },
+        );
+      } finally {
+        globalThis.Temporal = saved;
+      }
+    });
+  }
+});
