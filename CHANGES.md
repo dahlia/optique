@@ -616,6 +616,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     a `RangeError` when `section` is not a valid man page section number
     (1–8), instead of generating malformed man page output.  [[#287], [#557]]
 
+ -  Fixed `formatDocPageAsMan()` emitting `literal` usage/doc terms without
+    roff line-start escaping.  Values starting with `.` or `'` (e.g., `.env`)
+    were interpreted by roff as requests instead of visible text.
+    [[#297], [#559]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -627,6 +632,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#283]: https://github.com/dahlia/optique/issues/283
 [#286]: https://github.com/dahlia/optique/issues/286
 [#287]: https://github.com/dahlia/optique/issues/287
+[#297]: https://github.com/dahlia/optique/issues/297
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
@@ -638,6 +644,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#552]: https://github.com/dahlia/optique/pull/552
 [#556]: https://github.com/dahlia/optique/pull/556
 [#557]: https://github.com/dahlia/optique/pull/557
+[#559]: https://github.com/dahlia/optique/pull/559
 
 
 Version 0.10.7

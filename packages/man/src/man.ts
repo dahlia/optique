@@ -186,7 +186,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "literal":
-      return term.value;
+      return escapeRoff(term.value);
 
     case "passthrough":
       return "[...]";
@@ -242,7 +242,7 @@ function formatDocEntryTerm(term: UsageTerm): string {
       return `\\fI${term.metavar}\\fR`;
 
     case "literal":
-      return term.value;
+      return escapeRoff(term.value);
 
     default:
       return formatDocUsageTermAsRoff(term);
@@ -298,7 +298,7 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
       return formatCommandNameAsRoff(term.name);
 
     case "literal":
-      return term.value;
+      return escapeRoff(term.value);
 
     case "passthrough":
       return "[...]";
