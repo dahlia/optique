@@ -478,10 +478,11 @@ export function choice<const T extends string | number>(
         `${String(stringOptions.caseInsensitive)}.`,
     );
   }
-  const normalizedValues = stringOptions.caseInsensitive
+  const caseInsensitive = stringOptions.caseInsensitive ?? false;
+  const normalizedValues = caseInsensitive
     ? stringChoices.map((v) => v.toLowerCase())
     : stringChoices;
-  if (stringOptions.caseInsensitive) {
+  if (caseInsensitive) {
     const seen = new Map<string, string>();
     for (let i = 0; i < stringChoices.length; i++) {
       const nv = normalizedValues[i];
@@ -502,9 +503,7 @@ export function choice<const T extends string | number>(
     metavar,
     choices: stringChoices as readonly T[],
     parse(input: string): ValueParserResult<T> {
-      const normalizedInput = stringOptions.caseInsensitive
-        ? input.toLowerCase()
-        : input;
+      const normalizedInput = caseInsensitive ? input.toLowerCase() : input;
       const index = normalizedValues.indexOf(normalizedInput);
       if (index < 0) {
         return {
@@ -518,15 +517,11 @@ export function choice<const T extends string | number>(
       return String(value);
     },
     suggest(prefix: string) {
-      const normalizedPrefix = stringOptions.caseInsensitive
-        ? prefix.toLowerCase()
-        : prefix;
+      const normalizedPrefix = caseInsensitive ? prefix.toLowerCase() : prefix;
 
       return stringChoices
         .filter((value) => {
-          const normalizedValue = stringOptions.caseInsensitive
-            ? value.toLowerCase()
-            : value;
+          const normalizedValue = caseInsensitive ? value.toLowerCase() : value;
           return normalizedValue.startsWith(normalizedPrefix);
         })
         .map((value) => ({ kind: "literal" as const, text: value }));
