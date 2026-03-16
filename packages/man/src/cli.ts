@@ -415,7 +415,7 @@ function extractPathFromExtensionError(message: string): string | null {
 }
 
 /**
- * Registers the tsx loader for TypeScript/JSX support on Node.js.
+ * Registers the tsx loader for TypeScript/JSX/TSX support on Node.js.
  * @param filePath The file path being loaded (used for error messages).
  * @param isJsxOrTsx Whether the file uses a JSX or TSX extension.
  */
