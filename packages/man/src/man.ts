@@ -400,8 +400,14 @@ export function formatDocPageAsMan(
     options.section < 1 ||
     options.section > 8
   ) {
+    let repr: string;
+    try {
+      repr = JSON.stringify(options.section);
+    } catch {
+      repr = String(typeof options.section);
+    }
     throw new RangeError(
-      `Invalid man page section number (must be 1–8): ${options.section}`,
+      `Invalid man page section number (must be 1–8): ${repr}`,
     );
   }
   const lines: string[] = [];
