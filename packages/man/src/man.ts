@@ -135,6 +135,7 @@ function escapeThField(value: string): string {
  *
  * @param term The usage term to format.
  * @returns The roff-formatted string.
+ * @throws {TypeError} If the term has an unknown type.
  * @since 0.10.0
  */
 export function formatUsageTermAsRoff(term: UsageTerm): string {
@@ -247,6 +248,8 @@ function formatDocEntryTerm(term: UsageTerm): string {
 /**
  * Formats a {@link UsageTerm} as roff markup for doc rendering, filtering
  * doc-hidden terms instead of usage-hidden terms.
+ *
+ * @throws {TypeError} If the term has an unknown type.
  */
 function formatDocUsageTermAsRoff(term: UsageTerm): string {
   if ("hidden" in term && isDocHidden(term.hidden)) return "";
