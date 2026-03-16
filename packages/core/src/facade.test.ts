@@ -8533,10 +8533,11 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
-  it("frozen non-plain object with deferred fields does not throw", async () => {
+  it("frozen non-plain object with deferred fields propagates private-field error", async () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
-    // A frozen class instance with deferred prompt values must not cause
-    // Object.defineProperty to throw during the private-field fallback.
+    // A frozen class instance with deferred prompt values cannot have its
+    // properties temporarily sanitized, so private-field methods must
+    // propagate the TypeError rather than returning unsanitized data.
     const deferredPromptValueKey = Symbol.for(
       "@optique/inquirer/deferredPromptValue",
     );
@@ -8554,15 +8555,13 @@ describe("branch coverage: facade.ts edge cases", () => {
       }
     }
 
-    let observedId: string | undefined;
-
     const contextKey = Symbol.for("@test/frozen-instance");
     const dynamicContext: SourceContext = {
       id: contextKey,
       mode: "dynamic",
       getAnnotations(parsed?: unknown) {
         if (parsed == null) return {};
-        observedId = (parsed as Frozen).getId();
+        (parsed as Frozen).getId();
         return {};
       },
     };
@@ -8574,10 +8573,12 @@ describe("branch coverage: facade.ts edge cases", () => {
       (value) => new Frozen(value.name, { [deferredPromptValueKey]: true }),
     );
 
-    await runWith(parser, "test", [dynamicContext], {
-      args: [],
-    });
-
-    assert.equal(observedId, "test");
+    await assert.rejects(
+      () =>
+        runWith(parser, "test", [dynamicContext], {
+          args: [],
+        }),
+      TypeError,
+    );
   });
 });

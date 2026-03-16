@@ -323,13 +323,15 @@ function isPrivateFieldTypeError(e: unknown): boolean {
     /\bprivate\b/i.test(e.message);
 }
 
+const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
+
 function callWithSanitizedOwnProperties(
   target: object,
   fn: { apply(thisArg: unknown, args: unknown[]): unknown },
   args: unknown[],
   strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
   seen: WeakMap<object, unknown>,
-): unknown {
+): unknown | typeof SANITIZE_FAILED {
   const saved = new Map<PropertyKey, PropertyDescriptor>();
   for (const key of Reflect.ownKeys(target)) {
     const desc = Object.getOwnPropertyDescriptor(target, key);
@@ -340,7 +342,12 @@ function callWithSanitizedOwnProperties(
           Object.defineProperty(target, key, { ...desc, value: stripped });
           saved.set(key, desc);
         } catch {
-          // Property is non-configurable or object is frozen; skip.
+          // Property is non-configurable or object is frozen; cannot
+          // safely call the method with unsanitized state.
+          for (const [k, d] of saved) {
+            Object.defineProperty(target, k, d);
+          }
+          return SANITIZE_FAILED;
         }
       }
     }
@@ -382,13 +389,14 @@ function createSanitizedNonPlainContextView<T extends object>(
               );
             } catch (e) {
               if (isPrivateFieldTypeError(e)) {
-                return callWithSanitizedOwnProperties(
+                const result = callWithSanitizedOwnProperties(
                   target,
                   val,
                   args,
                   stripDeferredPromptValuesForContexts,
                   seen,
                 );
+                if (result !== SANITIZE_FAILED) return result;
               }
               throw e;
             }
@@ -405,14 +413,15 @@ function createSanitizedNonPlainContextView<T extends object>(
               seen,
             );
           } catch (e) {
-            if (e instanceof TypeError) {
-              return callWithSanitizedOwnProperties(
+            if (isPrivateFieldTypeError(e)) {
+              const fallback = callWithSanitizedOwnProperties(
                 target,
                 result,
                 args,
                 stripDeferredPromptValuesForContexts,
                 seen,
               );
+              if (fallback !== SANITIZE_FAILED) return fallback;
             }
             throw e;
           }

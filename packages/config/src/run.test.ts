@@ -1507,7 +1507,7 @@ describe("run with config context", { concurrency: false }, () => {
     );
   });
 
-  test("frozen non-plain object with deferred fields does not throw", () => {
+  test("frozen non-plain object with deferred fields propagates private-field error", () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // A frozen class instance with deferred prompt values in non-configurable
     // fields must not cause Object.defineProperty to throw during fallback.
@@ -1533,15 +1533,16 @@ describe("run with config context", { concurrency: false }, () => {
 
     const instance = new Frozen("abc", { [deferredPromptValueKey]: true });
 
-    let observedId: string | undefined;
-
-    context.getAnnotations(instance, {
-      load(parsed: unknown) {
-        observedId = (parsed as Frozen).getId();
-        return { config: undefined, meta: undefined };
+    assert.throws(
+      () => {
+        context.getAnnotations(instance, {
+          load(parsed: unknown) {
+            (parsed as Frozen).getId();
+            return { config: undefined, meta: undefined };
+          },
+        });
       },
-    });
-
-    assert.equal(observedId, "abc");
+      TypeError,
+    );
   });
 });
