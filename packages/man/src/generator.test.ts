@@ -509,4 +509,36 @@ describe("Program-based API", () => {
     assert.ok(result.includes(".SH EXAMPLES"));
     assert.ok(result.includes("Basic usage:"));
   });
+
+  it("keeps hidden: 'doc' option in SYNOPSIS but omits from OPTIONS", () => {
+    const parser = object({
+      visible: option("--visible", string({ metavar: "VISIBLE" }), {
+        description: message`A visible option.`,
+      }),
+      docHidden: option("--doc-hidden", string({ metavar: "SECRET" }), {
+        hidden: "doc",
+        description: message`A doc-hidden option.`,
+      }),
+    });
+
+    const result = generateManPage(parser, {
+      name: "repro",
+      section: 1,
+    });
+
+    // SYNOPSIS should contain both options
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    const synopsis = result.slice(synopsisStart, nextSection);
+    assert.ok(synopsis.includes("\\-\\-visible"));
+    assert.ok(synopsis.includes("\\-\\-doc\\-hidden"));
+
+    // OPTIONS section should only contain the visible option
+    const optionsStart = result.indexOf(".SH OPTIONS");
+    const optionsSection = result.slice(optionsStart);
+    assert.ok(optionsSection.includes("\\-\\-visible"));
+    assert.ok(optionsSection.includes("A visible option."));
+    assert.ok(!optionsSection.includes("\\-\\-doc\\-hidden"));
+    assert.ok(!optionsSection.includes("A doc-hidden option."));
+  });
 });
