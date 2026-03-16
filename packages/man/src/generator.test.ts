@@ -36,7 +36,7 @@ describe("generateManPage()", () => {
 
     assert.ok(result.includes(".TH MYAPP 1"));
     assert.ok(result.includes(".SH NAME"));
-    assert.ok(result.includes(".SH OPTIONS"));
+    assert.ok(result.includes('.SH "OPTIONS"'));
     assert.ok(result.includes("\\fB\\-\\-verbose\\fR"));
     assert.ok(result.includes("\\fB\\-\\-port\\fR"));
     assert.ok(result.includes("Enable verbose output."));
@@ -218,7 +218,7 @@ describe("generateManPage()", () => {
     assert.ok(result.includes(".TH MYAPP 1"));
     assert.ok(result.includes(".SH NAME"));
     assert.ok(result.includes(".SH SYNOPSIS"));
-    assert.ok(result.includes(".SH OPTIONS"));
+    assert.ok(result.includes('.SH "OPTIONS"'));
     assert.ok(result.includes(".SH SEE ALSO"));
     assert.ok(result.includes(".SH AUTHOR"));
 
@@ -614,7 +614,7 @@ describe("Program-based API", () => {
     assert.ok(synopsis.includes("\\-\\-doc\\-hidden"));
 
     // OPTIONS section should only contain the visible option
-    const optionsStart = result.indexOf(".SH OPTIONS");
+    const optionsStart = result.indexOf('.SH "OPTIONS"');
     assert.notEqual(optionsStart, -1);
     const optionsSection = result.slice(optionsStart);
     assert.ok(optionsSection.includes("\\-\\-visible"));

@@ -36,7 +36,13 @@
  */
 
 // Re-export from roff.ts
-export { escapeHyphens, escapeRoff, formatMessageAsRoff } from "./roff.ts";
+export {
+  escapeHyphens,
+  escapeQuotedValue,
+  escapeRequestArg,
+  escapeRoff,
+  formatMessageAsRoff,
+} from "./roff.ts";
 
 // Re-export from man.ts
 export {

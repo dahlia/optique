@@ -52,15 +52,44 @@ export function escapeRoff(text: string): string {
 }
 
 /**
- * Escapes roff-sensitive characters inside a quoted value.
+ * Escapes roff-sensitive characters inside a quoted value in body text.
  * Handles backslashes and double quotes so the value can be safely
- * placed between literal `"` delimiters in roff output.
+ * placed between literal `"` delimiters in roff text output (e.g.,
+ * `value()` / `values()` message terms).
+ *
+ * This function is *not* safe for roff request arguments such as
+ * `.SH "..."`, where groff performs an extra level of escape
+ * interpretation.  Use {@link escapeRequestArg} for that purpose.
  *
  * @param text The raw value text.
- * @returns The escaped text safe for use inside roff double quotes.
+ * @returns The escaped text safe for use inside roff double quotes
+ *   in body text.
+ * @since 1.0.0
  */
-function escapeQuotedValue(text: string): string {
+export function escapeQuotedValue(text: string): string {
   return escapeBackslashes(text).replace(/"/g, "\\(dq");
+}
+
+/**
+ * Escapes roff-sensitive characters inside a quoted roff request argument
+ * (e.g., `.SH "..."`).  Unlike {@link escapeQuotedValue}, this function
+ * replaces backslashes with the `\(rs` glyph instead of `\\`, because
+ * groff performs an extra level of escape interpretation on request
+ * arguments — `\\` would still be parsed as an escape prefix.
+ *
+ * Line breaks (`\r\n`, `\r`, `\n`) are normalized to spaces because a
+ * raw newline would split the request line and cause the remainder to be
+ * parsed as new roff input.
+ *
+ * @param text The raw argument text.
+ * @returns The escaped text safe for use inside a quoted roff request.
+ * @since 1.0.0
+ */
+export function escapeRequestArg(text: string): string {
+  return text.replace(/\r\n|\r|\n/g, " ").replace(/\\/g, "\\(rs").replace(
+    /"/g,
+    "\\(dq",
+  );
 }
 
 /**

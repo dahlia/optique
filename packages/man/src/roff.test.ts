@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { escapeHyphens, escapeRoff, formatMessageAsRoff } from "./roff.ts";
+import {
+  escapeHyphens,
+  escapeQuotedValue,
+  escapeRequestArg,
+  escapeRoff,
+  formatMessageAsRoff,
+} from "./roff.ts";
 import {
   commandLine,
   envVar,
@@ -67,6 +73,65 @@ describe("escapeRoff()", () => {
   it("escapes period in the middle of text (not at line start)", () => {
     // Period in the middle should not be escaped
     assert.equal(escapeRoff("Hello. World"), "Hello. World");
+  });
+});
+
+describe("escapeQuotedValue()", () => {
+  it("returns empty string unchanged", () => {
+    assert.equal(escapeQuotedValue(""), "");
+  });
+
+  it("escapes backslashes", () => {
+    assert.equal(escapeQuotedValue("A\\B"), "A\\\\B");
+  });
+
+  it("escapes double quotes", () => {
+    assert.equal(escapeQuotedValue('"hello"'), "\\(dqhello\\(dq");
+  });
+
+  it("escapes both backslashes and double quotes", () => {
+    assert.equal(escapeQuotedValue('A\\B "quoted"'), "A\\\\B \\(dqquoted\\(dq");
+  });
+
+  it("leaves plain text unchanged", () => {
+    assert.equal(escapeQuotedValue("OPTIONS"), "OPTIONS");
+  });
+});
+
+describe("escapeRequestArg()", () => {
+  it("returns empty string unchanged", () => {
+    assert.equal(escapeRequestArg(""), "");
+  });
+
+  it("replaces backslashes with \\(rs glyph", () => {
+    assert.equal(escapeRequestArg("A\\B"), "A\\(rsB");
+  });
+
+  it("escapes double quotes", () => {
+    assert.equal(escapeRequestArg('"hello"'), "\\(dqhello\\(dq");
+  });
+
+  it("escapes both backslashes and double quotes", () => {
+    assert.equal(
+      escapeRequestArg('A\\B "quoted"'),
+      "A\\(rsB \\(dqquoted\\(dq",
+    );
+  });
+
+  it("leaves plain text unchanged", () => {
+    assert.equal(escapeRequestArg("OPTIONS"), "OPTIONS");
+  });
+
+  it("normalizes newlines to spaces", () => {
+    assert.equal(escapeRequestArg("LINE1\nLINE2"), "LINE1 LINE2");
+  });
+
+  it("normalizes carriage returns to spaces", () => {
+    assert.equal(escapeRequestArg("LINE1\rLINE2"), "LINE1 LINE2");
+  });
+
+  it("normalizes CRLF to a single space", () => {
+    assert.equal(escapeRequestArg("LINE1\r\nLINE2"), "LINE1 LINE2");
   });
 });
 
