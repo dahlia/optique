@@ -381,8 +381,7 @@ async function importModule(
     if (
       !isDeno && !isBun &&
       error instanceof Error &&
-      "code" in error &&
-      error.code === "ERR_UNKNOWN_FILE_EXTENSION"
+      (error as NodeJS.ErrnoException).code === "ERR_UNKNOWN_FILE_EXTENSION"
     ) {
       const failedPath = extractPathFromExtensionError(error.message);
       if (failedPath != null && jsxTsxPattern.test(failedPath)) {
