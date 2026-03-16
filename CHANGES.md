@@ -526,14 +526,19 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     needing the `tsx` loader on Node.js, causing `ERR_UNKNOWN_FILE_EXTENSION`
     errors instead of the intended TypeScript-handling flow.  [[#280], [#534]]
 
+ -  Fixed `formatDocPageAsMan()` not escaping hyphens in program names,
+    command names, and `SEE ALSO` reference names.  [[#274], [#542]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
+[#274]: https://github.com/dahlia/optique/issues/274
 [#280]: https://github.com/dahlia/optique/issues/280
 [#283]: https://github.com/dahlia/optique/issues/283
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
 [#534]: https://github.com/dahlia/optique/pull/534
+[#542]: https://github.com/dahlia/optique/pull/542
 
 
 Version 0.10.7

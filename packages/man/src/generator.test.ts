@@ -326,7 +326,7 @@ describe("generateManPageAsync()", () => {
       name: "fallback-async",
       section: 1,
     });
-    assert.ok(result.includes(".TH FALLBACK-ASYNC 1"));
+    assert.ok(result.includes(".TH FALLBACK\\-ASYNC 1"));
     assert.ok(result.includes(".SH NAME"));
   });
 });

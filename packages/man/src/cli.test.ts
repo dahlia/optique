@@ -187,7 +187,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([namedFile, "-s", "1", "-e", "myProgram"]);
 
       assert.equal(result.exitCode, 0);
-      assert.ok(result.stdout.includes(".TH NAMED-APP 1"));
+      assert.ok(result.stdout.includes(".TH NAMED\\-APP 1"));
       assert.ok(result.stdout.includes("Configuration file path."));
     });
 

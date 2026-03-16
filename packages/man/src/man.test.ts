@@ -67,6 +67,11 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "\\fBbuild\\fR");
   });
 
+  it("escapes hyphens in command term name", () => {
+    const term: UsageTerm = { type: "command", name: "dry-run" };
+    assert.equal(formatUsageTermAsRoff(term), "\\fBdry\\-run\\fR");
+  });
+
   it("formats optional term", () => {
     const term: UsageTerm = {
       type: "optional",
@@ -751,7 +756,7 @@ describe("formatDocPageAsMan()", () => {
     const page: DocPage = { sections: [] };
 
     const result = formatDocPageAsMan(page, { name: "my-app", section: 1 });
-    assert.ok(result.includes(".TH MY-APP 1"));
+    assert.ok(result.includes(".TH MY\\-APP 1"));
   });
 
   it("generates complete man page with all sections", () => {
@@ -1159,14 +1164,14 @@ describe("formatDocPageAsMan()", () => {
     assert.notEqual(nextSection, -1);
     const synopsis = result.slice(synopsisStart, nextSection);
     assert.ok(synopsis.includes("\\fBvisible\\fR"));
-    assert.ok(synopsis.includes("\\fBdoc-hidden\\fR"));
+    assert.ok(synopsis.includes("\\fBdoc\\-hidden\\fR"));
 
     // COMMANDS section should only contain the visible command
     const commandsStart = result.indexOf(".SH COMMANDS");
     assert.notEqual(commandsStart, -1);
     const commandsSection = result.slice(commandsStart);
     assert.ok(commandsSection.includes("\\fBvisible\\fR"));
-    assert.ok(!commandsSection.includes("\\fBdoc-hidden\\fR"));
+    assert.ok(!commandsSection.includes("\\fBdoc\\-hidden\\fR"));
     assert.ok(!commandsSection.includes("A doc-hidden command"));
   });
 
@@ -1214,5 +1219,88 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(argsSection.includes("\\fIVISIBLE\\fR"));
     assert.ok(!argsSection.includes("\\fISECRET\\fR"));
     assert.ok(!argsSection.includes("A doc-hidden argument"));
+  });
+
+  it("escapes hyphens in program name", () => {
+    const page: DocPage = {
+      brief: message`A test app.`,
+      usage: [{ type: "argument", metavar: "FILE" }],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "my-app",
+      section: 1,
+      version: "1.0",
+    });
+
+    assert.ok(result.includes(".TH MY\\-APP 1"));
+    assert.ok(result.includes("my\\-app \\- A test app."));
+    assert.ok(result.includes(".B my\\-app"));
+    assert.ok(result.includes('"my\\-app 1.0"'));
+  });
+
+  it("escapes hyphens in program name without brief", () => {
+    const page: DocPage = {
+      usage: [{ type: "argument", metavar: "FILE" }],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "my-app",
+      section: 1,
+    });
+
+    const nameStart = result.indexOf(".SH NAME");
+    const nextSection = result.indexOf(".SH", nameStart + 1);
+    const nameSection = result.slice(nameStart, nextSection);
+    assert.ok(nameSection.includes("my\\-app"));
+    assert.ok(!nameSection.includes("my-app"));
+  });
+
+  it("escapes hyphens in command entry terms", () => {
+    const page: DocPage = {
+      usage: [{ type: "command", name: "dry-run" }],
+      sections: [
+        {
+          title: "Commands",
+          entries: [
+            {
+              term: { type: "command", name: "dry-run" },
+              description: message`Dry run.`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "test",
+      section: 1,
+    });
+
+    assert.ok(result.includes("\\fBdry\\-run\\fR"));
+    assert.ok(!result.includes("\\fBdry-run\\fR"));
+  });
+
+  it("escapes hyphens in SEE ALSO references", () => {
+    const page: DocPage = {
+      usage: [],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "test",
+      section: 1,
+      seeAlso: [
+        { name: "git-fast", section: 1 },
+        { name: "git-log", section: 1 },
+      ],
+    });
+
+    assert.ok(result.includes(".BR git\\-fast (1),"));
+    assert.ok(result.includes(".BR git\\-log (1)"));
+    assert.ok(!result.includes(".BR git-fast"));
+    assert.ok(!result.includes(".BR git-log"));
   });
 });

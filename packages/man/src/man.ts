@@ -155,7 +155,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${term.name}\\fR`;
+      return `\\fB${escapeHyphens(term.name)}\\fR`;
 
     case "optional": {
       const inner = formatUsageAsRoff(term.terms);
@@ -232,7 +232,7 @@ function formatDocEntryTerm(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${term.name}\\fR`;
+      return `\\fB${escapeHyphens(term.name)}\\fR`;
 
     case "argument":
       return `\\fI${term.metavar}\\fR`;
@@ -291,7 +291,7 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${term.name}\\fR`;
+      return `\\fB${escapeHyphens(term.name)}\\fR`;
 
     case "literal":
       return term.value;
@@ -389,7 +389,7 @@ export function formatDocPageAsMan(
 
   // .TH - Title heading
   const thParts = [
-    escapeThField(options.name.toUpperCase()),
+    escapeHyphens(escapeThField(options.name).toUpperCase()),
     options.section.toString(),
   ];
   // .TH format: name section [date [source [manual]]]
@@ -406,7 +406,9 @@ export function formatDocPageAsMan(
 
   if (hasVersion) {
     thParts.push(
-      `"${escapeThField(`${options.name} ${options.version}`)}"`,
+      `"${escapeHyphens(escapeThField(options.name))} ${
+        escapeThField(options.version)
+      }"`,
     );
   } else if (hasManual) {
     thParts.push('""');
@@ -420,15 +422,17 @@ export function formatDocPageAsMan(
   // .SH NAME
   lines.push(".SH NAME");
   if (page.brief) {
-    lines.push(`${options.name} \\- ${formatMessageAsRoff(page.brief)}`);
+    lines.push(
+      `${escapeHyphens(options.name)} \\- ${formatMessageAsRoff(page.brief)}`,
+    );
   } else {
-    lines.push(options.name);
+    lines.push(escapeHyphens(options.name));
   }
 
   // .SH SYNOPSIS
   if (page.usage) {
     lines.push(".SH SYNOPSIS");
-    lines.push(`.B ${options.name}`);
+    lines.push(`.B ${escapeHyphens(options.name)}`);
     const usageStr = formatUsageAsRoff(page.usage);
     if (usageStr) {
       lines.push(usageStr);
@@ -497,7 +501,7 @@ export function formatDocPageAsMan(
     lines.push(".SH SEE ALSO");
     const refs = options.seeAlso.map((ref, i) => {
       const suffix = i < options.seeAlso!.length - 1 ? "," : "";
-      return `.BR ${ref.name} (${ref.section})${suffix}`;
+      return `.BR ${escapeHyphens(ref.name)} (${ref.section})${suffix}`;
     });
     lines.push(refs.join("\n"));
   }
