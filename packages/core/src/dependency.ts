@@ -829,15 +829,16 @@ function createSyncDerivedFromParser<
     },
 
     format(value: T): string {
+      let derivedParser;
       try {
         const sourceValues = options.defaultValues();
-        const derivedParser = options.factory(
+        derivedParser = options.factory(
           ...(sourceValues as DependencyValues<Deps>),
         );
-        return derivedParser.format(value);
       } catch {
         return String(value);
       }
+      return derivedParser.format(value);
     },
 
     *suggest(prefix: string): Iterable<Suggestion> {
@@ -952,15 +953,16 @@ function createAsyncDerivedFromParserFromAsyncFactory<
     },
 
     format(value: T): string {
+      let derivedParser;
       try {
         const sourceValues = options.defaultValues();
-        const derivedParser = options.factory(
+        derivedParser = options.factory(
           ...(sourceValues as DependencyValues<Deps>),
         );
-        return derivedParser.format(value);
       } catch {
         return String(value);
       }
+      return derivedParser.format(value);
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1068,15 +1070,16 @@ function createAsyncDerivedFromParserFromSyncFactory<
     },
 
     format(value: T): string {
+      let derivedParser;
       try {
         const sourceValues = options.defaultValues();
-        const derivedParser = options.factory(
+        derivedParser = options.factory(
           ...(sourceValues as DependencyValues<Deps>),
         );
-        return derivedParser.format(value);
       } catch {
         return String(value);
       }
+      return derivedParser.format(value);
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1210,13 +1213,14 @@ function createSyncDerivedParser<S, T>(
     },
 
     format(value: T): string {
+      let derivedParser;
       try {
         const sourceValue = options.defaultValue();
-        const derivedParser = options.factory(sourceValue);
-        return derivedParser.format(value);
+        derivedParser = options.factory(sourceValue);
       } catch {
         return String(value);
       }
+      return derivedParser.format(value);
     },
 
     *suggest(prefix: string): Iterable<Suggestion> {
@@ -1312,13 +1316,14 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
     },
 
     format(value: T): string {
+      let derivedParser;
       try {
         const sourceValue = options.defaultValue();
-        const derivedParser = options.factory(sourceValue);
-        return derivedParser.format(value);
+        derivedParser = options.factory(sourceValue);
       } catch {
         return String(value);
       }
+      return derivedParser.format(value);
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1407,13 +1412,14 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
     },
 
     format(value: T): string {
+      let derivedParser;
       try {
         const sourceValue = options.defaultValue();
-        const derivedParser = options.factory(sourceValue);
-        return derivedParser.format(value);
+        derivedParser = options.factory(sourceValue);
       } catch {
         return String(value);
       }
+      return derivedParser.format(value);
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {

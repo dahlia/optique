@@ -1040,6 +1040,27 @@ describe("deriveSync()", () => {
       assert.equal(suggestions.length, 0);
     });
   });
+
+  test("format() should still propagate errors from the derived parser's formatter", () => {
+    const modeParser = dependency(choice(["safe", "broken"] as const));
+
+    const derived = modeParser.deriveSync({
+      metavar: "VALUE",
+      factory: (_value: "safe" | "broken"): ValueParser<"sync", string> => ({
+        $mode: "sync",
+        metavar: "VALUE" as NonEmptyString,
+        parse: (input: string) => ({ success: true, value: input }),
+        format(_value: string): string {
+          throw new Error("formatter error");
+        },
+      }),
+      defaultValue: () => "safe" as const,
+    });
+
+    // Factory succeeds, but the derived parser's format() throws — that
+    // exception must not be swallowed.
+    assert.throws(() => derived.format("x"), { message: "formatter error" });
+  });
 });
 
 describe("deriveAsync()", () => {
