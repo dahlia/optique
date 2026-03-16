@@ -249,6 +249,7 @@ export function isValueParser<M extends Mode, T>(
  * @param options Configuration options for the choice parser.
  * @returns A {@link ValueParser} that checks if the input matches one of the
  *          specified values.
+ * @throws {TypeError} If the choices array is empty.
  * @throws {TypeError} If `caseInsensitive` is `true` and multiple choices
  *         normalize to the same lowercase value.
  */
@@ -268,6 +269,7 @@ export function choice<const T extends string>(
  * @param options Configuration options for the choice parser.
  * @returns A {@link ValueParser} that checks if the input matches one of the
  *          specified values.
+ * @throws {TypeError} If the choices array is empty.
  * @since 0.9.0
  */
 export function choice<const T extends number>(
@@ -282,6 +284,11 @@ export function choice<const T extends string | number>(
   choices: readonly T[],
   options: ChoiceOptionsString | ChoiceOptionsNumber = {},
 ): ValueParser<"sync", T> {
+  if (choices.length < 1) {
+    throw new TypeError(
+      "Expected at least one choice, but got an empty array.",
+    );
+  }
   const metavar = options.metavar ?? "TYPE";
   ensureNonEmptyString(metavar);
 
