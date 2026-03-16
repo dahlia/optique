@@ -1008,23 +1008,6 @@ export function prompt<M extends Mode, TValue, TState>(
 
         const annotations = getAnnotations(state);
 
-        // When no config-prompt deferral hook and no annotations are
-        // present, no source-binding wrapper (bindConfig, bindEnv) can
-        // resolve a real value.  Prompt directly instead of delegating to
-        // the inner parser, whose complete() would return defaults from
-        // optional()/withDefault() that suppress the prompt.
-        //
-        // This is consistent with the top-level (non-object()) path:
-        // prompt().parse() sets hasCliValue only when consumed.length > 0,
-        // so any inner parser that succeeds with consumed: [] gets
-        // hasCliValue=false, and the normal complete() path (below) falls
-        // through to executePrompt().  The sentinel path must match.
-        if (!hasDeferHook && annotations == null) {
-          const cachedResult = executePrompt();
-          promptCache = { state, result: cachedResult };
-          return cachedResult;
-        }
-
         // When parser.initialState is null/undefined (e.g., optional()),
         // inject annotations directly so wrapper combinators can forward
         // them to inner source-binding parsers like bindConfig during
@@ -1065,13 +1048,11 @@ export function prompt<M extends Mode, TValue, TState>(
           return cachedResult;
         }
 
-        // No defer hook but annotations present (e.g., a sibling field
-        // uses bindEnv/bindConfig).  Simulate a parse with an empty
-        // buffer — the same thing prompt().parse() does at top level —
-        // and inspect the resulting cliState.  Source-binding wrappers
-        // (bindEnv) inject annotationKey into their output state during
+        // No defer hook — simulate a parse with an empty buffer (the
+        // same thing prompt().parse() does at top level) and inspect the
+        // resulting cliState.  Source-binding wrappers (bindEnv) inject
+        // hasCliValue or annotationKey into their output state during
         // parse, whereas pure combinators (optional, withDefault) don't.
-        // shouldAttemptInnerCompletion() uses this signal to decide.
         const simParseR = withAnnotatedInnerState(
           state,
           effectiveInitialState,
@@ -1093,7 +1074,15 @@ export function prompt<M extends Mode, TValue, TState>(
           const cliState = parseResult.success && consumed === 0
             ? parseResult.next.state
             : undefined;
-          if (shouldAttemptInnerCompletion(cliState, state)) {
+          // shouldAttemptInnerCompletion detects annotation markers.
+          // The hasCliValue fallback catches bindEnv without annotations
+          // (it can still resolve via the active env source registry).
+          const isSourceBinding =
+            shouldAttemptInnerCompletion(cliState, state) ||
+            (cliState != null &&
+              typeof cliState === "object" &&
+              "hasCliValue" in cliState);
+          if (isSourceBinding) {
             // Source-binding wrapper detected — complete from the state
             // produced by parse() (not from initialState) so that any
             // derived state the inner parser built during parse is

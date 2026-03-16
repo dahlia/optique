@@ -758,6 +758,40 @@ describe("prompt()", () => {
       assert.equal(result.value.port, 8080);
     });
 
+    it("skips prompt for prompt(bindEnv(...)) inside object() via active env source", async () => {
+      // Regression: bindEnv can resolve via getActiveEnvSource() even
+      // when annotations are not threaded through parseAsync().  The
+      // sentinel path must not short-circuit to executePrompt() and
+      // should still delegate to the inner parser's complete().
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-name" })[key],
+        prefix: "APP_",
+      });
+      // getAnnotations() registers the active env source globally.
+      context.getAnnotations();
+      const parser = object({
+        name: prompt(
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: string(),
+          }),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () =>
+              Promise.reject(new Error("Prompt should not be called")),
+          },
+        ),
+      });
+
+      // Note: annotations NOT passed to parseAsync — bindEnv resolves
+      // via the global active env source registry instead.
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "env-name");
+    });
+
     it("prompts for inner parser that completes without CLI input (consistency with top level)", async () => {
       // A parser whose complete() always succeeds with a real value.
       // prompt() should still prompt because no CLI tokens were consumed —
