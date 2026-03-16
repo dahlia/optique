@@ -461,12 +461,11 @@ function createSanitizedNonPlainContextView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
-  // NOTE: Methods are invoked with the proxy as receiver so that property
-  // reads inside the method body go through the sanitized get trap.  If the
-  // method accesses private fields, that call throws a TypeError because
-  // private fields are bound to the original instance, not the proxy; in
-  // that case we temporarily sanitize the target's own properties, retry
-  // with the target as receiver, and restore the original values afterward.
+  // NOTE: Methods are invoked on the original target with temporarily
+  // sanitized own properties via callMethodOnSanitizedTarget().  This
+  // allows private field access (which requires the real instance as
+  // receiver) while ensuring public deferred-value fields are scrubbed.
+  // If the target is frozen/sealed, methods fall back to the proxy path.
   // See: https://github.com/dahlia/optique/issues/307
   const methodCache = new Map<
     PropertyKey,
