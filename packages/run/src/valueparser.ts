@@ -228,6 +228,11 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
   }
   const mustExist = "mustExist" in options ? options.mustExist : false;
   const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;
+  if (mustExist && mustNotExist) {
+    throw new TypeError(
+      "Options mustExist and mustNotExist are mutually exclusive.",
+    );
+  }
 
   return {
     $mode: "sync",

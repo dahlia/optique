@@ -1146,6 +1146,18 @@ describe("path", () => {
     });
   });
 
+  describe("mutually exclusive options", () => {
+    it("should throw TypeError when both mustExist and mustNotExist are set", () => {
+      assert.throws(
+        () => path({ mustExist: true, mustNotExist: true } as never),
+        {
+          name: "TypeError",
+          message: "Options mustExist and mustNotExist are mutually exclusive.",
+        },
+      );
+    });
+  });
+
   describe("metavar validation", () => {
     it("should throw TypeError when metavar is empty string", () => {
       assert.throws(
