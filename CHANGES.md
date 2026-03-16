@@ -458,11 +458,16 @@ environment variable integration via source contexts.  [[#86], [#135]]
  -  Added `bool()` value parser for common environment Boolean literals
     (`true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`).
 
+ -  `bool()` now provides value completion suggestions for all accepted
+    literals, not just the canonical `true`/`false`.  [[#268], [#562]]
+
  -  Added support for env-only values via `bindEnv(fail<T>(), ...)` when a
     value should not be exposed as a CLI option.
 
 [#86]: https://github.com/dahlia/optique/issues/86
 [#135]: https://github.com/dahlia/optique/pull/135
+[#268]: https://github.com/dahlia/optique/issues/268
+[#562]: https://github.com/dahlia/optique/pull/562
 
 ### @optique/inquirer
 
