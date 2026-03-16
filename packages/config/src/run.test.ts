@@ -1716,4 +1716,53 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(results[0].hasToken, false);
     assert.equal(results[1].hasToken, false);
   });
+
+  test("async method with private fields after await is not retried", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // An async method that performs side effects before accessing a private
+    // field after an await must not be re-executed by the fallback path.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    let sideEffectCount = 0;
+
+    class AsyncSideEffect {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      async process(): Promise<string> {
+        sideEffectCount++;
+        await Promise.resolve();
+        return this.#id;
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new AsyncSideEffect(
+      "abc",
+      { [deferredPromptValueKey]: true },
+    );
+
+    let observedResult: string | undefined;
+
+    const annotations = context.getAnnotations(instance, {
+      async load(parsed: unknown) {
+        observedResult = await (parsed as AsyncSideEffect).process();
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    if (annotations instanceof Promise) {
+      await annotations;
+    }
+
+    assert.equal(observedResult, "abc");
+    assert.equal(sideEffectCount, 1);
+  });
 });

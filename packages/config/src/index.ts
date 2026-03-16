@@ -289,37 +289,41 @@ function callMethodWithPrivateFieldFallback(
   strip: <V>(value: V, seen: WeakMap<object, unknown>) => V,
   seen: WeakMap<object, unknown>,
 ): unknown {
-  function fallback(e: unknown): unknown {
-    if (isPrivateFieldTypeError(e)) {
-      const result = callWithSanitizedOwnProperties(
-        target,
-        fn,
-        args,
-        strip,
-        seen,
-      );
-      if (result !== SANITIZE_FAILED) return result;
-    }
-    throw e;
+  // Async methods are routed directly to the sanitized-target path so
+  // that private-field access works without retrying.  Retrying an async
+  // method after a rejection would re-execute any side effects that ran
+  // before the private-field access point.
+  if (
+    fn.constructor != null &&
+    (fn.constructor as { name?: string }).name === "AsyncFunction"
+  ) {
+    const result = callWithSanitizedOwnProperties(
+      target,
+      fn,
+      args,
+      strip,
+      seen,
+    );
+    if (result !== SANITIZE_FAILED) return result;
+    // SANITIZE_FAILED means frozen object; fall through to proxy path
+    // which will propagate the private-field error if one occurs.
   }
 
   let result: unknown;
   try {
     result = fn.apply(proxy, args);
   } catch (e) {
-    return fallback(e);
-  }
-
-  // Async methods that access private fields before the first await
-  // reject the returned promise instead of throwing synchronously.
-  if (
-    result != null &&
-    typeof (result as Record<string, unknown>).then === "function"
-  ) {
-    return (result as Promise<unknown>).then(
-      (v) => strip(v, seen),
-      fallback,
-    );
+    if (isPrivateFieldTypeError(e)) {
+      const fallbackResult = callWithSanitizedOwnProperties(
+        target,
+        fn,
+        args,
+        strip,
+        seen,
+      );
+      if (fallbackResult !== SANITIZE_FAILED) return fallbackResult;
+    }
+    throw e;
   }
 
   return strip(result, seen);

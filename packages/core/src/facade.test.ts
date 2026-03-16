@@ -8780,4 +8780,57 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(results[0].hasToken, false);
     assert.equal(results[1].hasToken, false);
   });
+
+  it("async method with private fields after await is not retried", async () => {
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    let sideEffectCount = 0;
+
+    class AsyncSideEffect {
+      #id: string;
+      token: unknown;
+      constructor(id: string, token: unknown) {
+        this.#id = id;
+        this.token = token;
+      }
+      async process(): Promise<string> {
+        sideEffectCount++;
+        await Promise.resolve();
+        return this.#id;
+      }
+    }
+
+    let observedResult: string | undefined;
+
+    const contextKey = Symbol.for("@test/async-no-retry");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      async getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        observedResult = await (parsed as AsyncSideEffect).process();
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (value) =>
+        new AsyncSideEffect(
+          value.name,
+          { [deferredPromptValueKey]: true },
+        ),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.equal(observedResult, "test");
+    assert.equal(sideEffectCount, 1);
+  });
 });
