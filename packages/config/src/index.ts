@@ -219,7 +219,11 @@ function callWithSanitizedOwnProperties(
             sanitizedValues.set(key, stripped);
           } catch {
             for (const [k, d] of saved) {
-              Object.defineProperty(target, k, d);
+              try {
+                Object.defineProperty(target, k, d);
+              } catch {
+                // Best-effort rollback.
+              }
             }
             return SANITIZE_FAILED;
           }
