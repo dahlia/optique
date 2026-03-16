@@ -2744,6 +2744,8 @@ export function email(
   const allowedDomains = options?.allowedDomains != null
     ? Object.freeze([...options.allowedDomains])
     : undefined;
+  const invalidEmail = options?.errors?.invalidEmail;
+  const domainNotAllowed = options?.errors?.domainNotAllowed;
 
   // Simplified RFC 5322: alphanumeric, dots, hyphens, underscores, plus signs
   const atextRegex = /^[a-zA-Z0-9._+-]+$/;
@@ -2872,7 +2874,7 @@ export function email(
         for (const email of emails) {
           const validated = validateEmail(email);
           if (validated === null) {
-            const errorMsg = options?.errors?.invalidEmail;
+            const errorMsg = invalidEmail;
             const msg = typeof errorMsg === "function"
               ? errorMsg(email)
               : errorMsg ??
@@ -2888,7 +2890,7 @@ export function email(
               domain === allowed.toLowerCase()
             );
             if (!isAllowed) {
-              const errorMsg = options?.errors?.domainNotAllowed;
+              const errorMsg = domainNotAllowed;
               if (typeof errorMsg === "function") {
                 return {
                   success: false,
