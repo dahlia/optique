@@ -119,7 +119,7 @@ describe("bool()", () => {
 
     it("suggests all accepted literals for empty prefix", () => {
       const parser = bool();
-      assert.deepEqual(parser.suggest?.(""), [
+      assert.deepEqual([...parser.suggest?.("") ?? []], [
         { kind: "literal", text: "true" },
         { kind: "literal", text: "1" },
         { kind: "literal", text: "yes" },
@@ -133,21 +133,21 @@ describe("bool()", () => {
 
     it("filters suggestions by prefix", () => {
       const parser = bool();
-      assert.deepEqual(parser.suggest?.("t"), [
+      assert.deepEqual([...parser.suggest?.("t") ?? []], [
         { kind: "literal", text: "true" },
       ]);
     });
 
     it("filters suggestions case-insensitively", () => {
       const parser = bool();
-      assert.deepEqual(parser.suggest?.("T"), [
+      assert.deepEqual([...parser.suggest?.("T") ?? []], [
         { kind: "literal", text: "true" },
       ]);
     });
 
     it("matches multiple suggestions with shared prefix", () => {
       const parser = bool();
-      assert.deepEqual(parser.suggest?.("o"), [
+      assert.deepEqual([...parser.suggest?.("o") ?? []], [
         { kind: "literal", text: "on" },
         { kind: "literal", text: "off" },
       ]);
@@ -155,7 +155,7 @@ describe("bool()", () => {
 
     it("returns empty array for unmatched prefix", () => {
       const parser = bool();
-      assert.deepEqual(parser.suggest?.("xyz"), []);
+      assert.deepEqual([...parser.suggest?.("xyz") ?? []], []);
     });
 
     it("rejects an empty metavar", () => {
