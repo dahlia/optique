@@ -27,6 +27,9 @@ import { generateManPageAsync } from "./generator.ts";
 // @ts-ignore: JSON import
 import denoJson from "../deno.json" with { type: "json" };
 
+// Pattern matching JSX/TSX file extensions (including module-prefixed variants)
+const jsxTsxPattern = /\.[mc]?[jt]sx$/;
+
 // Exit codes
 const EXIT_FILE_NOT_FOUND = 1;
 const EXIT_EXPORT_NOT_FOUND = 2;
@@ -347,7 +350,7 @@ async function importModule(
   }
 
   const isPlainTs = /\.[mc]?ts$/.test(filePath);
-  const isJsx = /\.[mc]?[jt]sx$/.test(filePath);
+  const isJsx = jsxTsxPattern.test(filePath);
   const isDeno = "Deno" in globalThis;
   const isBun = "Bun" in globalThis;
 
@@ -382,7 +385,7 @@ async function importModule(
       error.code === "ERR_UNKNOWN_FILE_EXTENSION"
     ) {
       const failedPath = extractPathFromExtensionError(error.message);
-      if (failedPath != null && /\.[mc]?[jt]sx$/.test(failedPath)) {
+      if (failedPath != null && jsxTsxPattern.test(failedPath)) {
         jsxLoaderRequiredError(failedPath);
       }
     }
