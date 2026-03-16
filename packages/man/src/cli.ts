@@ -466,14 +466,20 @@ async function tryRegisterTsx(): Promise<void> {
 function isProgram(
   value: unknown,
 ): value is Program<Mode, unknown> {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    "parser" in value &&
-    "metadata" in value &&
-    typeof (value as Program<Mode, unknown>).metadata === "object" &&
-    (value as Program<Mode, unknown>).metadata != null
-  );
+  try {
+    return (
+      value != null &&
+      typeof value === "object" &&
+      "parser" in value &&
+      "metadata" in value &&
+      typeof (value as Program<Mode, unknown>).metadata === "object" &&
+      (value as Program<Mode, unknown>).metadata != null &&
+      typeof (value as Program<Mode, unknown>).metadata.name === "string" &&
+      isParser((value as Program<Mode, unknown>).parser)
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -482,14 +488,21 @@ function isProgram(
 function isParser(
   value: unknown,
 ): value is Parser<Mode, unknown, unknown> {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    "parse" in value &&
-    typeof (value as { parse?: unknown }).parse === "function" &&
-    "$mode" in value &&
-    "usage" in value
-  );
+  try {
+    return (
+      value != null &&
+      typeof value === "object" &&
+      "parse" in value &&
+      typeof (value as { parse?: unknown }).parse === "function" &&
+      "$mode" in value &&
+      "usage" in value &&
+      "getDocFragments" in value &&
+      typeof (value as { getDocFragments?: unknown }).getDocFragments ===
+        "function"
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
