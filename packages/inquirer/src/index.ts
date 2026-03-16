@@ -1007,10 +1007,16 @@ export function prompt<M extends Mode, TValue, TState>(
         ) === "function";
 
         // When no config-prompt deferral hook and no annotations are
-        // present, the inner parser can only return optional/withDefault
-        // defaults — not values from real sources like bindConfig or
-        // bindEnv.  Prompt directly instead of delegating to the inner
-        // parser whose defaults would suppress the prompt.
+        // present, no source-binding wrapper (bindConfig, bindEnv) can
+        // resolve a real value.  Prompt directly instead of delegating to
+        // the inner parser, whose complete() would return defaults from
+        // optional()/withDefault() that suppress the prompt.
+        //
+        // This is consistent with the top-level (non-object()) path:
+        // prompt().parse() sets hasCliValue only when consumed.length > 0,
+        // so any inner parser that succeeds with consumed: [] gets
+        // hasCliValue=false, and the normal complete() path (below) falls
+        // through to executePrompt().  The sentinel path must match.
         const annotations = getAnnotations(state);
         if (!hasDeferHook && annotations == null) {
           const cachedResult = executePrompt();

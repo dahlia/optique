@@ -672,6 +672,61 @@ describe("prompt()", () => {
       assert.ok(result.success);
       assert.equal(result.value.name, "cli-value");
     });
+
+    it("prompts for inner parser that completes without CLI input (consistency with top level)", async () => {
+      // A parser whose complete() always succeeds with a real value.
+      // prompt() should still prompt because no CLI tokens were consumed —
+      // this matches the top-level behavior where prompt() only suppresses
+      // the prompt when consumed.length > 0.
+      const alwaysCompletes: Parser<"sync", string, null> = {
+        $mode: "sync",
+        $valueType: [],
+        $stateType: [],
+        priority: 0,
+        usage: [],
+        initialState: null,
+        parse: (context) => ({
+          success: true,
+          next: { ...context, state: null },
+          consumed: [],
+        }),
+        complete: () => ({ success: true, value: "completed" }),
+        suggest: function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+      };
+
+      // Top level: prompts (consumed: [] → hasCliValue=false)
+      let topLevelPromptCalls = 0;
+      const topLevel = prompt(alwaysCompletes, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          topLevelPromptCalls++;
+          return Promise.resolve("prompted");
+        },
+      });
+      const topResult = await parseAsync(topLevel, []);
+      assert.ok(topResult.success);
+      assert.equal(topResult.value, "prompted");
+      assert.equal(topLevelPromptCalls, 1);
+
+      // Nested in object(): should also prompt (same semantics)
+      let nestedPromptCalls = 0;
+      const nested = object({
+        x: prompt(alwaysCompletes, {
+          type: "input",
+          message: "Enter value:",
+          prompter: () => {
+            nestedPromptCalls++;
+            return Promise.resolve("prompted");
+          },
+        }),
+      });
+      const nestedResult = await parseAsync(nested, []);
+      assert.ok(nestedResult.success);
+      assert.equal(nestedResult.value.x, "prompted");
+      assert.equal(nestedPromptCalls, 1);
+    });
   });
 
   describe("usage", () => {
