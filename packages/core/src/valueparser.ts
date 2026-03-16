@@ -1228,6 +1228,11 @@ export interface UrlOptions {
  * @returns A {@link ValueParser} that converts string input to `URL` objects.
  */
 export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
+  // Snapshot the original protocols for callback arguments (preserves casing),
+  // and a normalized copy for internal matching.
+  const originalProtocols = options.allowedProtocols != null
+    ? Object.freeze([...options.allowedProtocols])
+    : undefined;
   const allowedProtocols = options.allowedProtocols != null
     ? Object.freeze(options.allowedProtocols.map((p) => p.toLowerCase()))
     : undefined;
@@ -1259,7 +1264,7 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
             ? (typeof disallowedProtocol === "function"
               ? disallowedProtocol(
                 url.protocol,
-                allowedProtocols,
+                originalProtocols!,
               )
               : disallowedProtocol)
             : message`URL protocol ${url.protocol} is not allowed. Allowed protocols: ${
