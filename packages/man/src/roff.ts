@@ -71,12 +71,19 @@ export function escapeQuotedValue(text: string): string {
  * groff performs an extra level of escape interpretation on request
  * arguments — `\\` would still be parsed as an escape prefix.
  *
+ * Line breaks (`\r\n`, `\r`, `\n`) are normalized to spaces because a
+ * raw newline would split the request line and cause the remainder to be
+ * parsed as new roff input.
+ *
  * @param text The raw argument text.
  * @returns The escaped text safe for use inside a quoted roff request.
  * @since 1.0.0
  */
 export function escapeRequestArg(text: string): string {
-  return text.replace(/\\/g, "\\(rs").replace(/"/g, "\\(dq");
+  return text.replace(/\r\n|\r|\n/g, " ").replace(/\\/g, "\\(rs").replace(
+    /"/g,
+    "\\(dq",
+  );
 }
 
 /**

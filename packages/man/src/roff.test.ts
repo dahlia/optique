@@ -121,6 +121,18 @@ describe("escapeRequestArg()", () => {
   it("leaves plain text unchanged", () => {
     assert.equal(escapeRequestArg("OPTIONS"), "OPTIONS");
   });
+
+  it("normalizes newlines to spaces", () => {
+    assert.equal(escapeRequestArg("LINE1\nLINE2"), "LINE1 LINE2");
+  });
+
+  it("normalizes carriage returns to spaces", () => {
+    assert.equal(escapeRequestArg("LINE1\rLINE2"), "LINE1 LINE2");
+  });
+
+  it("normalizes CRLF to a single space", () => {
+    assert.equal(escapeRequestArg("LINE1\r\nLINE2"), "LINE1 LINE2");
+  });
 });
 
 describe("escapeHyphens()", () => {
