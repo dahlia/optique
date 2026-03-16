@@ -349,39 +349,74 @@ function createSanitizedNonPlainView<T extends object>(
     get(target, key, _receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
-        // Own function-valued properties (callbacks, handlers) are
-        // returned after stripping without wrapping, preserving normal
-        // JavaScript call semantics and caller-supplied receivers.
-        return stripDeferredPromptValues(descriptor.value, seen);
-      }
-      const result = Reflect.get(target, key, proxy);
-      if (typeof result === "function") {
-        // Prototype methods need the private-field fallback wrapper
-        // because they access `this` which may include private fields.
-        // Cached per key so that parsed.method === parsed.method holds.
-        let wrapper = methodCache.get(key);
-        if (wrapper == null) {
-          wrapper = function (this: unknown, ...args: unknown[]) {
-            // If the method is later rebound to a different receiver via
-            // call/apply/bind, respect the caller-supplied `this` instead.
-            if (this !== proxy) {
-              return stripDeferredPromptValues(
-                result.apply(this, args),
+        const val = stripDeferredPromptValues(descriptor.value, seen);
+        if (typeof val === "function") {
+          let wrapper = methodCache.get(key);
+          if (wrapper == null) {
+            wrapper = function (this: unknown, ...args: unknown[]) {
+              if (this !== proxy) {
+                return stripDeferredPromptValues(
+                  val.apply(this, args),
+                  seen,
+                );
+              }
+              return callMethodWithPrivateFieldFallback(
+                val,
+                proxy,
+                target,
+                args,
+                stripDeferredPromptValues,
                 seen,
               );
-            }
-            return callMethodWithPrivateFieldFallback(
-              result,
-              proxy,
-              target,
-              args,
-              stripDeferredPromptValues,
+            };
+            methodCache.set(key, wrapper);
+          }
+          return wrapper;
+        }
+        return val;
+      }
+      const isAccessor = descriptor != null && "get" in descriptor;
+      const result = Reflect.get(target, key, proxy);
+      if (typeof result === "function") {
+        if (!isAccessor) {
+          let wrapper = methodCache.get(key);
+          if (wrapper == null) {
+            wrapper = function (this: unknown, ...args: unknown[]) {
+              if (this !== proxy) {
+                return stripDeferredPromptValues(
+                  result.apply(this, args),
+                  seen,
+                );
+              }
+              return callMethodWithPrivateFieldFallback(
+                result,
+                proxy,
+                target,
+                args,
+                stripDeferredPromptValues,
+                seen,
+              );
+            };
+            methodCache.set(key, wrapper);
+          }
+          return wrapper;
+        }
+        return function (this: unknown, ...args: unknown[]) {
+          if (this !== proxy) {
+            return stripDeferredPromptValues(
+              result.apply(this, args),
               seen,
             );
-          };
-          methodCache.set(key, wrapper);
-        }
-        return wrapper;
+          }
+          return callMethodWithPrivateFieldFallback(
+            result,
+            proxy,
+            target,
+            args,
+            stripDeferredPromptValues,
+            seen,
+          );
+        };
       }
       return result;
     },

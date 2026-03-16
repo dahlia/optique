@@ -483,42 +483,85 @@ function createSanitizedNonPlainContextView<T extends object>(
     get(target, key, _receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
-        // Own function-valued properties (callbacks, handlers) are
-        // returned after stripping without wrapping, preserving normal
-        // JavaScript call semantics and caller-supplied receivers.
-        return stripDeferredPromptValuesForContexts(
+        const val = stripDeferredPromptValuesForContexts(
           descriptor.value,
           seen,
         );
-      }
-      const result = Reflect.get(target, key, proxy);
-      if (typeof result === "function") {
-        // Prototype methods need the private-field fallback wrapper
-        // because they access `this` which may include private fields.
-        // Cached per key so that parsed.method === parsed.method holds.
-        let wrapper = methodCache.get(key);
-        if (wrapper == null) {
-          wrapper = function (this: unknown, ...args: unknown[]) {
-            // If the method is later rebound to a different receiver via
-            // call/apply/bind, respect the caller-supplied `this` instead.
-            if (this !== proxy) {
-              return stripDeferredPromptValuesForContexts(
-                result.apply(this, args),
+        if (typeof val === "function") {
+          // Own function-valued properties (class fields, constructor-
+          // assigned methods) need the private-field fallback wrapper
+          // just like prototype methods.  Cached since own data is stable.
+          let wrapper = methodCache.get(key);
+          if (wrapper == null) {
+            wrapper = function (this: unknown, ...args: unknown[]) {
+              if (this !== proxy) {
+                return stripDeferredPromptValuesForContexts(
+                  val.apply(this, args),
+                  seen,
+                );
+              }
+              return callMethodWithPrivateFieldFallback(
+                val,
+                proxy,
+                target,
+                args,
+                stripDeferredPromptValuesForContexts,
                 seen,
               );
-            }
-            return callMethodWithPrivateFieldFallback(
-              result,
-              proxy,
-              target,
-              args,
-              stripDeferredPromptValuesForContexts,
+            };
+            methodCache.set(key, wrapper);
+          }
+          return wrapper;
+        }
+        return val;
+      }
+      // Accessor properties and prototype methods: resolved via Reflect.get.
+      // Only prototype methods (no own descriptor) are cached; accessor-
+      // returned functions are re-created on each access since the getter
+      // may return different functions based on backing state.
+      const isAccessor = descriptor != null && "get" in descriptor;
+      const result = Reflect.get(target, key, proxy);
+      if (typeof result === "function") {
+        if (!isAccessor) {
+          let wrapper = methodCache.get(key);
+          if (wrapper == null) {
+            wrapper = function (this: unknown, ...args: unknown[]) {
+              if (this !== proxy) {
+                return stripDeferredPromptValuesForContexts(
+                  result.apply(this, args),
+                  seen,
+                );
+              }
+              return callMethodWithPrivateFieldFallback(
+                result,
+                proxy,
+                target,
+                args,
+                stripDeferredPromptValuesForContexts,
+                seen,
+              );
+            };
+            methodCache.set(key, wrapper);
+          }
+          return wrapper;
+        }
+        // Accessor-returned function: wrap without caching.
+        return function (this: unknown, ...args: unknown[]) {
+          if (this !== proxy) {
+            return stripDeferredPromptValuesForContexts(
+              result.apply(this, args),
               seen,
             );
-          };
-          methodCache.set(key, wrapper);
-        }
-        return wrapper;
+          }
+          return callMethodWithPrivateFieldFallback(
+            result,
+            proxy,
+            target,
+            args,
+            stripDeferredPromptValuesForContexts,
+            seen,
+          );
+        };
       }
       return result;
     },
