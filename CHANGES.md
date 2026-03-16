@@ -235,11 +235,12 @@ To be released.
     `mode: "async"` or use `deriveAsync()`/`deriveFromAsync()`.
     [[#223], [#527]]
 
- -  Fixed `deriveSync()`, `deriveFromSync()`, and `deriveFromAsync()` so
-    that `format()` and `suggest()` no longer throw when the factory
-    throws on the default dependency value.  `format()` now falls back to
-    `String(value)` and `suggest()` yields empty suggestions instead of
-    propagating the exception.  [[#224], [#531]]
+ -  Fixed `derive()`, `deriveSync()`, `deriveAsync()`, `deriveFrom()`,
+    `deriveFromSync()`, and `deriveFromAsync()` so that `format()` and
+    `suggest()` no longer throw when the factory throws on the default
+    dependency value.  `format()` now falls back to `String(value)` and
+    `suggest()` yields empty suggestions instead of propagating the
+    exception.  [[#224], [#531]]
 
  -  The `integer()` parser in number mode now rejects values outside the safe
     integer range (`Number.MIN_SAFE_INTEGER` to `Number.MAX_SAFE_INTEGER`).
