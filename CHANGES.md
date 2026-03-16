@@ -323,6 +323,7 @@ To be released.
 [#371]: https://github.com/dahlia/optique/issues/371
 [#385]: https://github.com/dahlia/optique/issues/385
 [#388]: https://github.com/dahlia/optique/issues/388
+[#389]: https://github.com/dahlia/optique/issues/389
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
 [#520]: https://github.com/dahlia/optique/pull/520
