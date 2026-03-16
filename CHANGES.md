@@ -369,6 +369,10 @@ To be released.
     “CLI-provided”, which was causing `bindEnv(bindConfig(…))` to skip the
     environment-variable fallback even when the CLI option was absent.
 
+ -  Fixed `bindConfig()` silently swallowing exceptions thrown by `key`
+    callbacks.  Errors now propagate to the caller instead of being
+    treated as a missing config value.  [[#259], [#549]]
+
  -  Added config-source metadata support for `bindConfig()` key accessors.
     Accessor callbacks now receive a second `meta` argument, and single-file
     mode now provides default `ConfigMeta` values (`configPath`, `configDir`)
@@ -405,6 +409,8 @@ To be released.
 [#161]: https://github.com/dahlia/optique/issues/161
 [#162]: https://github.com/dahlia/optique/pull/162
 [#164]: https://github.com/dahlia/optique/pull/164
+[#259]: https://github.com/dahlia/optique/issues/259
+[#549]: https://github.com/dahlia/optique/pull/549
 
 ### @optique/env
 

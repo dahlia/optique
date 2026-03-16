@@ -905,11 +905,7 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
   if (configData !== undefined && configData !== null) {
     // Extract value from config
     if (typeof options.key === "function") {
-      try {
-        configValue = options.key(configData, configMeta);
-      } catch {
-        configValue = undefined;
-      }
+      configValue = options.key(configData, configMeta);
     } else {
       configValue = configData[options.key] as TValue;
     }

@@ -982,7 +982,7 @@ describe("createConfigContext error paths", () => {
     }
   });
 
-  test("key accessor function that throws falls through to default", () => {
+  test("key accessor function that throws propagates the error", () => {
     const schema = z.object({
       nested: z.object({
         value: z.string(),
@@ -1002,9 +1002,34 @@ describe("createConfigContext error paths", () => {
       [context.id]: { data: { nested: undefined } },
     };
 
-    const result = parse(parser, [], { annotations });
-    assert.ok(result.success);
-    assert.equal(result.value, "fallback");
+    assert.throws(
+      () => parse(parser, [], { annotations }),
+      TypeError,
+    );
+  });
+
+  test("key callback exceptions are not swallowed", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--host", string()), {
+      context,
+      key: () => {
+        throw new Error("Custom error from key callback.");
+      },
+      default: "fallback",
+    });
+
+    const annotations: Annotations = {
+      [context.id]: { data: { host: "example.com" } },
+    };
+
+    assert.throws(
+      () => parse(parser, [], { annotations }),
+      (err: Error) => {
+        assert.ok(err.message.includes("Custom error from key callback."));
+        return true;
+      },
+    );
   });
 
   test("Symbol.dispose clears active config registry", () => {
