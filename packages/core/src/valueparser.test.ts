@@ -1121,21 +1121,63 @@ describe("choice", () => {
       }
     });
 
-    it("should handle boundary values correctly with case insensitive", () => {
-      const parser = choice(["a", "A"], { caseInsensitive: true });
+    it("should throw TypeError for case-insensitive choices with normalized duplicates", () => {
+      assert.throws(
+        () => choice(["JSON", "json", "Yaml"], { caseInsensitive: true }),
+        {
+          name: "TypeError",
+          message:
+            /Ambiguous choices for case-insensitive matching:.*"JSON".*"json".*normalize to.*"json"/,
+        },
+      );
+    });
+
+    it("should throw TypeError for case-insensitive choices like ['a', 'A']", () => {
+      assert.throws(
+        () => choice(["a", "A"], { caseInsensitive: true }),
+        {
+          name: "TypeError",
+          message:
+            /Ambiguous choices for case-insensitive matching:.*"a".*"A".*normalize to.*"a"/,
+        },
+      );
+    });
+
+    it("should allow ['a', 'A'] without caseInsensitive", () => {
+      const parser = choice(["a", "A"]);
 
       const result1 = parser.parse("a");
       assert.ok(result1.success);
       if (result1.success) {
-        // Should return the first match in the original array
         assert.equal(result1.value, "a");
       }
 
       const result2 = parser.parse("A");
       assert.ok(result2.success);
       if (result2.success) {
-        // Should return the first match in the original array
-        assert.equal(result2.value, "a");
+        assert.equal(result2.value, "A");
+      }
+    });
+
+    it("should allow non-colliding choices with caseInsensitive", () => {
+      const parser = choice(["json", "yaml"], { caseInsensitive: true });
+
+      const result = parser.parse("JSON");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "json");
+      }
+    });
+
+    it("should allow exact duplicate choices with caseInsensitive", () => {
+      const parser = choice(["json", "json", "yaml"], {
+        caseInsensitive: true,
+      });
+
+      const result = parser.parse("JSON");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "json");
       }
     });
 

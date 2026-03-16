@@ -254,6 +254,10 @@ To be released.
     Previously, only literal `"Infinity"` strings were rejected.
     [[#242], [#528]]
 
+ -  Changed `choice()` to throw `TypeError` when `caseInsensitive` is `true`
+    and multiple choices normalize to the same lowercase value (e.g., `"JSON"`
+    and `"json"`).  Previously the first match won silently.  [[#310], [#533]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -283,6 +287,7 @@ To be released.
 [#225]: https://github.com/dahlia/optique/issues/225
 [#242]: https://github.com/dahlia/optique/issues/242
 [#248]: https://github.com/dahlia/optique/issues/248
+[#310]: https://github.com/dahlia/optique/issues/310
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
 [#512]: https://github.com/dahlia/optique/pull/512
@@ -293,6 +298,7 @@ To be released.
 [#527]: https://github.com/dahlia/optique/pull/527
 [#528]: https://github.com/dahlia/optique/pull/528
 [#531]: https://github.com/dahlia/optique/pull/531
+[#533]: https://github.com/dahlia/optique/pull/533
 
 ### @optique/config
 

@@ -249,6 +249,8 @@ export function isValueParser<M extends Mode, T>(
  * @param options Configuration options for the choice parser.
  * @returns A {@link ValueParser} that checks if the input matches one of the
  *          specified values.
+ * @throws {TypeError} If `caseInsensitive` is `true` and multiple choices
+ *         normalize to the same lowercase value.
  */
 export function choice<const T extends string>(
   choices: readonly T[],
@@ -415,6 +417,22 @@ export function choice<const T extends string | number>(
   const normalizedValues = stringOptions.caseInsensitive
     ? stringChoices.map((v) => v.toLowerCase())
     : stringChoices;
+  if (stringOptions.caseInsensitive) {
+    const seen = new Map<string, string>();
+    for (let i = 0; i < stringChoices.length; i++) {
+      const nv = normalizedValues[i];
+      const original = stringChoices[i];
+      const prev = seen.get(nv);
+      if (prev !== undefined && prev !== original) {
+        throw new TypeError(
+          `Ambiguous choices for case-insensitive matching: ` +
+            `${JSON.stringify(prev)} and ${JSON.stringify(original)} ` +
+            `both normalize to ${JSON.stringify(nv)}.`,
+        );
+      }
+      seen.set(nv, original);
+    }
+  }
   return {
     $mode: "sync",
     metavar,
