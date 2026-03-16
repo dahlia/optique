@@ -266,6 +266,11 @@ To be released.
     Previously, duplicate entries appeared in suggestions, error messages,
     and help text.  [[#353], [#537]]
 
+ -  Changed `choice()` to reject empty strings in the choices array.
+    Previously, empty-string choices were silently accepted but produced
+    invisible items in help text, error messages, and shell completions.
+    [[#371], [#546]]
+
  -  Fixed `optional()`, `withDefault()`, and `group()` dropping the
     config-prompt deferral hook (`@optique/config/deferPromptUntilResolved`)
     from inner parsers.  These combinators now forward the hook so that
@@ -310,6 +315,7 @@ To be released.
 [#310]: https://github.com/dahlia/optique/issues/310
 [#332]: https://github.com/dahlia/optique/issues/332
 [#353]: https://github.com/dahlia/optique/issues/353
+[#371]: https://github.com/dahlia/optique/issues/371
 [#385]: https://github.com/dahlia/optique/issues/385
 [#388]: https://github.com/dahlia/optique/issues/388
 [#490]: https://github.com/dahlia/optique/pull/490
@@ -325,6 +331,7 @@ To be released.
 [#535]: https://github.com/dahlia/optique/pull/535
 [#536]: https://github.com/dahlia/optique/pull/536
 [#537]: https://github.com/dahlia/optique/pull/537
+[#546]: https://github.com/dahlia/optique/pull/546
 
 ### @optique/config
 
