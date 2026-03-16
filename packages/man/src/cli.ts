@@ -359,6 +359,12 @@ async function importModule(
     (isJsx || (isTypeScript && !nodeSupportsNativeTypeScript()))
   ) {
     await registerTsx(filePath, isJsx);
+  } else if (!isDeno && !isBun && isTypeScript) {
+    // On Node.js 25.2+ plain TS works natively, but transitive JSX/TSX
+    // dependencies still need tsx.  Register it opportunistically so that
+    // the loader is in place before the first import — Node's ESM loader
+    // caches failed module jobs, so a post-failure retry would not work.
+    await tryRegisterTsx();
   }
 
   // Use file URL for proper import on all platforms
@@ -366,10 +372,9 @@ async function importModule(
   try {
     return await import(fileUrl);
   } catch (error: unknown) {
-    // On Node.js 25.2+ a plain .ts entry can import .tsx/.jsx files that
-    // Node's native type stripping cannot handle.  Extract the failing
-    // file path from the error message and only retry for JSX/TSX
-    // extensions so that unrelated extension errors are not swallowed.
+    // If the import failed with ERR_UNKNOWN_FILE_EXTENSION for a JSX/TSX
+    // dependency and tsx is not installed, show a helpful error message
+    // instead of the raw Node.js error.
     if (
       !isDeno && !isBun &&
       error instanceof Error &&
@@ -378,8 +383,7 @@ async function importModule(
     ) {
       const failedPath = extractPathFromExtensionError(error.message);
       if (failedPath != null && /\.[mc]?[jt]sx$/.test(failedPath)) {
-        await registerTsx(failedPath, true);
-        return await import(fileUrl);
+        jsxLoaderRequiredError(failedPath);
       }
     }
     throw error;
@@ -415,6 +419,22 @@ async function registerTsx(
     } else {
       tsxRequiredError(filePath);
     }
+  }
+}
+
+/**
+ * Tries to register the tsx loader, silently ignoring failure.
+ * Used on Node.js 25.2+ for plain TS entries that may have transitive
+ * JSX/TSX dependencies.
+ */
+async function tryRegisterTsx(): Promise<void> {
+  try {
+    const tsx = await import("tsx/esm/api");
+    tsx.register();
+  } catch {
+    // tsx not installed — fine for plain TS; if a transitive JSX/TSX
+    // dependency is encountered, the import will fail with a helpful
+    // error message from the caller.
   }
 }
 
