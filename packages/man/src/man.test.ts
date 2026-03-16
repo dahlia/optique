@@ -208,6 +208,62 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(formatUsageTermAsRoff(term), "");
   });
+
+  it("collapses optional wrapping hidden: 'usage' terms", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "argument", metavar: "S", hidden: "usage" }],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("collapses multiple wrapping hidden: 'usage' terms", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{ type: "argument", metavar: "S", hidden: "usage" }],
+      min: 0,
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("removes hidden: 'usage' branches from exclusive terms", () => {
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [
+        [{ type: "command", name: "shown" }],
+        [{ type: "command", name: "secret", hidden: "usage" }],
+      ],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "\\fBshown\\fR");
+  });
+
+  it("collapses optional wrapping hidden: 'help' terms", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "argument", metavar: "S", hidden: "help" }],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("collapses multiple wrapping hidden: 'help' terms", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{ type: "argument", metavar: "S", hidden: "help" }],
+      min: 1,
+    };
+    assert.equal(formatUsageTermAsRoff(term), "");
+  });
+
+  it("removes hidden: 'help' branches from exclusive terms", () => {
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [
+        [{ type: "command", name: "shown" }],
+        [{ type: "command", name: "secret", hidden: "help" }],
+      ],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "\\fBshown\\fR");
+  });
 });
 
 describe("formatDocPageAsMan()", () => {
@@ -807,6 +863,72 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(!result.includes("SECRET"));
     assert.ok(!result.includes("A wrapped secret"));
     assert.ok(result.includes("\\-\\-keep"));
+  });
+
+  it("collapses multiple wrapping doc-hidden terms in doc sections", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "OPTIONS",
+          entries: [
+            {
+              term: {
+                type: "multiple",
+                terms: [
+                  { type: "argument", metavar: "SECRET", hidden: "doc" },
+                ],
+                min: 0,
+              },
+              description: message`A repeated secret`,
+            },
+            {
+              term: { type: "option", names: ["--keep"] },
+              description: message`Kept`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    assert.ok(!result.includes("SECRET"));
+    assert.ok(!result.includes("A repeated secret"));
+    assert.ok(result.includes("\\-\\-keep"));
+  });
+
+  it("removes doc-hidden branches from exclusive in doc sections", () => {
+    const page: DocPage = {
+      sections: [
+        {
+          title: "COMMANDS",
+          entries: [
+            {
+              term: {
+                type: "exclusive",
+                terms: [
+                  [{ type: "command", name: "public" }],
+                  [{ type: "command", name: "internal", hidden: "doc" }],
+                ],
+              },
+              description: message`A command group`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "myapp",
+      section: 1,
+    });
+
+    assert.ok(result.includes("public"));
+    assert.ok(!result.includes("internal"));
+    assert.ok(!result.includes(" | "));
   });
 
   it("keeps hidden: 'usage' terms visible in doc sections", () => {
