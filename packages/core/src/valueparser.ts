@@ -1359,7 +1359,7 @@ export function locale(
       return { success: true, value: locale };
     },
     format(value: Intl.Locale): string {
-      return value.baseName;
+      return value.toString();
     },
     *suggest(prefix: string): Iterable<Suggestion> {
       // Since Intl.supportedValuesOf doesn't support 'locale', we use a curated list
