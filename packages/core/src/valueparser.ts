@@ -250,6 +250,7 @@ export function isValueParser<M extends Mode, T>(
  * @returns A {@link ValueParser} that checks if the input matches one of the
  *          specified values.
  * @throws {TypeError} If the choices array is empty.
+ * @throws {TypeError} If any choice is an empty string.
  * @throws {TypeError} If `caseInsensitive` is `true` and multiple choices
  *         normalize to the same lowercase value.
  */
@@ -287,6 +288,11 @@ export function choice<const T extends string | number>(
   if (choices.length < 1) {
     throw new TypeError(
       "Expected at least one choice, but got an empty array.",
+    );
+  }
+  if (choices.some((c) => c === "")) {
+    throw new TypeError(
+      "Empty strings are not allowed as choices.",
     );
   }
   const metavar = options.metavar ?? "TYPE";

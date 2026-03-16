@@ -1013,20 +1013,25 @@ describe("choice", () => {
       assert.ok(!result3.success);
     });
 
-    it("should handle empty string as a valid choice", () => {
-      const parser = choice(["", "value"]);
+    it("should reject empty string in choices", () => {
+      assert.throws(
+        () => choice(["", "value"]),
+        TypeError,
+      );
+    });
 
-      const result1 = parser.parse("");
-      assert.ok(result1.success);
-      if (result1.success) {
-        assert.equal(result1.value, "");
-      }
+    it("should reject a single empty string choice", () => {
+      assert.throws(
+        () => choice([""]),
+        TypeError,
+      );
+    });
 
-      const result2 = parser.parse("value");
-      assert.ok(result2.success);
-
-      const result3 = parser.parse("other");
-      assert.ok(!result3.success);
+    it("should reject all-empty-string choices", () => {
+      assert.throws(
+        () => choice(["", ""]),
+        TypeError,
+      );
     });
 
     it("should handle choices with unicode characters", () => {
