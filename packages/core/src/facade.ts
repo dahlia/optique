@@ -321,6 +321,7 @@ const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
 
 interface ActiveSanitization {
   readonly saved: Map<PropertyKey, PropertyDescriptor>;
+  readonly sanitizedValues: Map<PropertyKey, unknown>;
   count: number;
 }
 
@@ -340,6 +341,7 @@ function callWithSanitizedOwnProperties(
     active.count++;
   } else {
     const saved = new Map<PropertyKey, PropertyDescriptor>();
+    const sanitizedValues = new Map<PropertyKey, unknown>();
     for (const key of Reflect.ownKeys(target)) {
       const desc = Object.getOwnPropertyDescriptor(target, key);
       if (desc != null && "value" in desc) {
@@ -348,6 +350,7 @@ function callWithSanitizedOwnProperties(
           try {
             Object.defineProperty(target, key, { ...desc, value: stripped });
             saved.set(key, desc);
+            sanitizedValues.set(key, stripped);
           } catch {
             // Property is non-configurable or object is frozen; cannot
             // safely call the method with unsanitized state.
@@ -359,7 +362,7 @@ function callWithSanitizedOwnProperties(
         }
       }
     }
-    active = { saved, count: 1 };
+    active = { saved, sanitizedValues, count: 1 };
     activeSanitizations.set(target, active);
   }
 
@@ -370,14 +373,13 @@ function callWithSanitizedOwnProperties(
       for (const [key, desc] of active!.saved) {
         try {
           // Only restore if the method did not mutate or delete the
-          // property.  If the current value still equals the sanitized
-          // replacement, the method did not touch it and we restore the
-          // original.  Otherwise the method's own write takes precedence.
+          // property.  Compare against the exact sanitized value that was
+          // set, not a re-computed strip() which would create a new clone.
           const current = Object.getOwnPropertyDescriptor(target, key);
           if (current == null) continue; // method deleted the property
           if (
             "value" in current &&
-            current.value !== strip(desc.value, seen)
+            current.value !== active!.sanitizedValues.get(key)
           ) {
             continue; // method wrote a new value
           }
@@ -458,7 +460,10 @@ function createSanitizedNonPlainContextView<T extends object>(
   // that case we temporarily sanitize the target's own properties, retry
   // with the target as receiver, and restore the original values afterward.
   // See: https://github.com/dahlia/optique/issues/407
-  const methodCache = new Map<PropertyKey, (...args: unknown[]) => unknown>();
+  const methodCache = new Map<
+    PropertyKey,
+    { fn: unknown; wrapper: (...args: unknown[]) => unknown }
+  >();
   const proxy: T = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
@@ -469,28 +474,28 @@ function createSanitizedNonPlainContextView<T extends object>(
         );
         if (typeof val === "function") {
           // Own function-valued properties (class fields, constructor-
-          // assigned methods) need the private-field fallback wrapper
-          // just like prototype methods.  Cached since own data is stable.
-          let wrapper = methodCache.get(key);
-          if (wrapper == null) {
-            wrapper = function (this: unknown, ...args: unknown[]) {
-              if (this !== proxy) {
-                return stripDeferredPromptValuesForContexts(
-                  val.apply(this, args),
-                  seen,
-                );
-              }
-              return callMethodOnSanitizedTarget(
-                val,
-                proxy,
-                target,
-                args,
-                stripDeferredPromptValuesForContexts,
+          // assigned methods) need the sanitized-target wrapper just like
+          // prototype methods.  Cached and invalidated when the underlying
+          // function changes.
+          const cached = methodCache.get(key);
+          if (cached != null && cached.fn === val) return cached.wrapper;
+          const wrapper = function (this: unknown, ...args: unknown[]) {
+            if (this !== proxy) {
+              return stripDeferredPromptValuesForContexts(
+                val.apply(this, args),
                 seen,
               );
-            };
-            methodCache.set(key, wrapper);
-          }
+            }
+            return callMethodOnSanitizedTarget(
+              val,
+              proxy,
+              target,
+              args,
+              stripDeferredPromptValuesForContexts,
+              seen,
+            );
+          };
+          methodCache.set(key, { fn: val, wrapper });
           return wrapper;
         }
         return val;
@@ -515,26 +520,25 @@ function createSanitizedNonPlainContextView<T extends object>(
       const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
         if (!isAccessor) {
-          let wrapper = methodCache.get(key);
-          if (wrapper == null) {
-            wrapper = function (this: unknown, ...args: unknown[]) {
-              if (this !== proxy) {
-                return stripDeferredPromptValuesForContexts(
-                  result.apply(this, args),
-                  seen,
-                );
-              }
-              return callMethodOnSanitizedTarget(
-                result,
-                proxy,
-                target,
-                args,
-                stripDeferredPromptValuesForContexts,
+          const cached = methodCache.get(key);
+          if (cached != null && cached.fn === result) return cached.wrapper;
+          const wrapper = function (this: unknown, ...args: unknown[]) {
+            if (this !== proxy) {
+              return stripDeferredPromptValuesForContexts(
+                result.apply(this, args),
                 seen,
               );
-            };
-            methodCache.set(key, wrapper);
-          }
+            }
+            return callMethodOnSanitizedTarget(
+              result,
+              proxy,
+              target,
+              args,
+              stripDeferredPromptValuesForContexts,
+              seen,
+            );
+          };
+          methodCache.set(key, { fn: result, wrapper });
           return wrapper;
         }
         // Accessor-returned function: wrap without caching.

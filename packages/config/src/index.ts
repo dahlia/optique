@@ -187,6 +187,7 @@ const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
 
 interface ActiveSanitization {
   readonly saved: Map<PropertyKey, PropertyDescriptor>;
+  readonly sanitizedValues: Map<PropertyKey, unknown>;
   count: number;
 }
 
@@ -206,6 +207,7 @@ function callWithSanitizedOwnProperties(
     active.count++;
   } else {
     const saved = new Map<PropertyKey, PropertyDescriptor>();
+    const sanitizedValues = new Map<PropertyKey, unknown>();
     for (const key of Reflect.ownKeys(target)) {
       const desc = Object.getOwnPropertyDescriptor(target, key);
       if (desc != null && "value" in desc) {
@@ -214,9 +216,8 @@ function callWithSanitizedOwnProperties(
           try {
             Object.defineProperty(target, key, { ...desc, value: stripped });
             saved.set(key, desc);
+            sanitizedValues.set(key, stripped);
           } catch {
-            // Property is non-configurable or object is frozen; cannot
-            // safely call the method with unsanitized state.
             for (const [k, d] of saved) {
               Object.defineProperty(target, k, d);
             }
@@ -225,7 +226,7 @@ function callWithSanitizedOwnProperties(
         }
       }
     }
-    active = { saved, count: 1 };
+    active = { saved, sanitizedValues, count: 1 };
     activeSanitizations.set(target, active);
   }
 
@@ -239,7 +240,7 @@ function callWithSanitizedOwnProperties(
           if (current == null) continue;
           if (
             "value" in current &&
-            current.value !== strip(desc.value, seen)
+            current.value !== active!.sanitizedValues.get(key)
           ) {
             continue;
           }
@@ -314,33 +315,35 @@ function createSanitizedNonPlainView<T extends object>(
   // that case we temporarily sanitize the target's own properties, retry
   // with the target as receiver, and restore the original values afterward.
   // See: https://github.com/dahlia/optique/issues/407
-  const methodCache = new Map<PropertyKey, (...args: unknown[]) => unknown>();
+  const methodCache = new Map<
+    PropertyKey,
+    { fn: unknown; wrapper: (...args: unknown[]) => unknown }
+  >();
   const proxy: T = new Proxy(value, {
     get(target, key, receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (descriptor != null && "value" in descriptor) {
         const val = stripDeferredPromptValues(descriptor.value, seen);
         if (typeof val === "function") {
-          let wrapper = methodCache.get(key);
-          if (wrapper == null) {
-            wrapper = function (this: unknown, ...args: unknown[]) {
-              if (this !== proxy) {
-                return stripDeferredPromptValues(
-                  val.apply(this, args),
-                  seen,
-                );
-              }
-              return callMethodOnSanitizedTarget(
-                val,
-                proxy,
-                target,
-                args,
-                stripDeferredPromptValues,
+          const cached = methodCache.get(key);
+          if (cached != null && cached.fn === val) return cached.wrapper;
+          const wrapper = function (this: unknown, ...args: unknown[]) {
+            if (this !== proxy) {
+              return stripDeferredPromptValues(
+                val.apply(this, args),
                 seen,
               );
-            };
-            methodCache.set(key, wrapper);
-          }
+            }
+            return callMethodOnSanitizedTarget(
+              val,
+              proxy,
+              target,
+              args,
+              stripDeferredPromptValues,
+              seen,
+            );
+          };
+          methodCache.set(key, { fn: val, wrapper });
           return wrapper;
         }
         return val;
@@ -360,26 +363,25 @@ function createSanitizedNonPlainView<T extends object>(
       const result = Reflect.get(target, key, receiver);
       if (typeof result === "function") {
         if (!isAccessor) {
-          let wrapper = methodCache.get(key);
-          if (wrapper == null) {
-            wrapper = function (this: unknown, ...args: unknown[]) {
-              if (this !== proxy) {
-                return stripDeferredPromptValues(
-                  result.apply(this, args),
-                  seen,
-                );
-              }
-              return callMethodOnSanitizedTarget(
-                result,
-                proxy,
-                target,
-                args,
-                stripDeferredPromptValues,
+          const cached = methodCache.get(key);
+          if (cached != null && cached.fn === result) return cached.wrapper;
+          const wrapper = function (this: unknown, ...args: unknown[]) {
+            if (this !== proxy) {
+              return stripDeferredPromptValues(
+                result.apply(this, args),
                 seen,
               );
-            };
-            methodCache.set(key, wrapper);
-          }
+            }
+            return callMethodOnSanitizedTarget(
+              result,
+              proxy,
+              target,
+              args,
+              stripDeferredPromptValues,
+              seen,
+            );
+          };
+          methodCache.set(key, { fn: result, wrapper });
           return wrapper;
         }
         return function (this: unknown, ...args: unknown[]) {
