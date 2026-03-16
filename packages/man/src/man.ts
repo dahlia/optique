@@ -8,7 +8,7 @@ import {
 } from "@optique/core/usage";
 import {
   escapeHyphens,
-  escapeQuotedValue,
+  escapeRequestArg,
   escapeRoff,
   formatMessageAsRoff,
 } from "./roff.ts";
@@ -485,7 +485,7 @@ export function formatDocPageAsMan(
     if (content === "") continue;
 
     const title = section.title?.toUpperCase() ?? "OPTIONS";
-    lines.push(`.SH "${escapeQuotedValue(title)}"`);
+    lines.push(`.SH "${escapeRequestArg(title)}"`);
     lines.push(content);
   }
 

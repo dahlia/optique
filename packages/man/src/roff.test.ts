@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   escapeHyphens,
   escapeQuotedValue,
+  escapeRequestArg,
   escapeRoff,
   formatMessageAsRoff,
 } from "./roff.ts";
@@ -94,6 +95,31 @@ describe("escapeQuotedValue()", () => {
 
   it("leaves plain text unchanged", () => {
     assert.equal(escapeQuotedValue("OPTIONS"), "OPTIONS");
+  });
+});
+
+describe("escapeRequestArg()", () => {
+  it("returns empty string unchanged", () => {
+    assert.equal(escapeRequestArg(""), "");
+  });
+
+  it("replaces backslashes with \\(rs glyph", () => {
+    assert.equal(escapeRequestArg("A\\B"), "A\\(rsB");
+  });
+
+  it("escapes double quotes", () => {
+    assert.equal(escapeRequestArg('"hello"'), "\\(dqhello\\(dq");
+  });
+
+  it("escapes both backslashes and double quotes", () => {
+    assert.equal(
+      escapeRequestArg('A\\B "quoted"'),
+      "A\\(rsB \\(dqquoted\\(dq",
+    );
+  });
+
+  it("leaves plain text unchanged", () => {
+    assert.equal(escapeRequestArg("OPTIONS"), "OPTIONS");
   });
 });
 

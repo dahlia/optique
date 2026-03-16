@@ -39,6 +39,7 @@
 export {
   escapeHyphens,
   escapeQuotedValue,
+  escapeRequestArg,
   escapeRoff,
   formatMessageAsRoff,
 } from "./roff.ts";

@@ -65,6 +65,21 @@ export function escapeQuotedValue(text: string): string {
 }
 
 /**
+ * Escapes roff-sensitive characters inside a quoted roff request argument
+ * (e.g., `.SH "..."`).  Unlike {@link escapeQuotedValue}, this function
+ * replaces backslashes with the `\(rs` glyph instead of `\\`, because
+ * groff performs an extra level of escape interpretation on request
+ * arguments — `\\` would still be parsed as an escape prefix.
+ *
+ * @param text The raw argument text.
+ * @returns The escaped text safe for use inside a quoted roff request.
+ * @since 1.0.0
+ */
+export function escapeRequestArg(text: string): string {
+  return text.replace(/\\/g, "\\(rs").replace(/"/g, "\\(dq");
+}
+
+/**
  * Escapes hyphens in option names to prevent line breaks.
  *
  * In roff, a regular hyphen (`-`) can be used as a line break point.

@@ -482,7 +482,7 @@ describe("formatDocPageAsMan()", () => {
     };
 
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(result.includes('.SH "A\\\\B"'));
+    assert.ok(result.includes('.SH "A\\(rsB"'));
   });
 
   it("escapes double quotes in section titles", () => {
@@ -520,7 +520,7 @@ describe("formatDocPageAsMan()", () => {
     };
 
     const result = formatDocPageAsMan(page, minimalOptions);
-    assert.ok(result.includes('.SH "A\\\\B \\(dqQUOTED\\(dq"'));
+    assert.ok(result.includes('.SH "A\\(rsB \\(dqQUOTED\\(dq"'));
   });
 
   it("generates DESCRIPTION section", () => {
