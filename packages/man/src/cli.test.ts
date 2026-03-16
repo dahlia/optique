@@ -246,6 +246,34 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       );
     });
 
+    it("defaults --date to the current date for Parser export", async () => {
+      const parserFile = join(fixturesDir, "parser.ts");
+      const result = await runCli([
+        parserFile,
+        "-s",
+        "1",
+        "--name",
+        "myapp",
+      ]);
+
+      assert.equal(result.exitCode, 0);
+      const thLine = result.stdout.split("\n")[0];
+      const thMatch = thLine.match(
+        /^\.TH\s+\S+\s+\S+\s+"([^"]*)"/,
+      );
+      assert.ok(thMatch, `Expected .TH header, got: ${thLine}`);
+      const dateField = thMatch[1];
+      assert.ok(
+        dateField.length > 0,
+        `Expected non-empty date field in .TH header, got: ${thLine}`,
+      );
+      assert.match(
+        dateField,
+        /^[A-Z][a-z]+ \d{4}$/,
+        `Expected date in "Month Year" format, got: "${dateField}"`,
+      );
+    });
+
     it("accepts --date option", async () => {
       const programFile = join(fixturesDir, "program.ts");
       const result = await runCli([
