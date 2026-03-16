@@ -367,19 +367,34 @@ async function importModule(
     return await import(fileUrl);
   } catch (error: unknown) {
     // On Node.js 25.2+ a plain .ts entry can import .tsx/.jsx files that
-    // Node's native type stripping cannot handle.  Detect this and fall
-    // back to the tsx loader.
+    // Node's native type stripping cannot handle.  Extract the failing
+    // file path from the error message and only retry for JSX/TSX
+    // extensions so that unrelated extension errors are not swallowed.
     if (
       !isDeno && !isBun &&
       error instanceof Error &&
       "code" in error &&
       error.code === "ERR_UNKNOWN_FILE_EXTENSION"
     ) {
-      await registerTsx(filePath, true);
-      return await import(fileUrl);
+      const failedPath = extractPathFromExtensionError(error.message);
+      if (failedPath != null && /\.[mc]?[jt]sx$/.test(failedPath)) {
+        await registerTsx(failedPath, true);
+        return await import(fileUrl);
+      }
     }
     throw error;
   }
+}
+
+/**
+ * Extracts the file path from a Node.js `ERR_UNKNOWN_FILE_EXTENSION` error
+ * message, which has the format `Unknown file extension ".ext" for /path`.
+ * @param message The error message string.
+ * @returns The file path, or null if the message format is unexpected.
+ */
+function extractPathFromExtensionError(message: string): string | null {
+  const match = /^Unknown file extension ".[^"]*" for (.+)$/.exec(message);
+  return match?.[1] ?? null;
 }
 
 /**
