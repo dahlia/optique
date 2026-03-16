@@ -452,10 +452,16 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     (`hidden: true`, `"usage"`, `"help"`) are now suppressed.
     [[#221], [#222], [#526], [#529]]
 
+ -  The `optique-man` CLI now rejects empty strings for `--name`, `--date`,
+    `--version-string`, and `--manual` options instead of generating malformed
+    `.TH` header lines.  [[#283], [#532]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
+[#283]: https://github.com/dahlia/optique/issues/283
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
+[#532]: https://github.com/dahlia/optique/pull/532
 
 
 Version 0.10.7
