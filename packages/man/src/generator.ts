@@ -43,8 +43,11 @@ function isParser(
       "parse" in value &&
       typeof (value as { parse?: unknown }).parse === "function" &&
       "$mode" in value &&
+      ((value as { $mode?: unknown }).$mode === "sync" ||
+        (value as { $mode?: unknown }).$mode === "async") &&
       "usage" in value &&
       Array.isArray((value as { usage?: unknown }).usage) &&
+      "initialState" in value &&
       "getDocFragments" in value &&
       typeof (value as { getDocFragments?: unknown }).getDocFragments ===
         "function"
