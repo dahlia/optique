@@ -6,7 +6,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "@optique/core/usage";
-import { escapeHyphens, formatMessageAsRoff } from "./roff.ts";
+import { escapeHyphens, escapeRoff, formatMessageAsRoff } from "./roff.ts";
 
 /**
  * Valid man page section numbers.
@@ -155,7 +155,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${escapeHyphens(term.name)}\\fR`;
+      return `\\fB${escapeHyphens(escapeRoff(term.name))}\\fR`;
 
     case "optional": {
       const inner = formatUsageAsRoff(term.terms);
@@ -232,7 +232,7 @@ function formatDocEntryTerm(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${escapeHyphens(term.name)}\\fR`;
+      return `\\fB${escapeHyphens(escapeRoff(term.name))}\\fR`;
 
     case "argument":
       return `\\fI${term.metavar}\\fR`;
@@ -291,7 +291,7 @@ function formatDocUsageTermAsRoff(term: UsageTerm): string {
     }
 
     case "command":
-      return `\\fB${escapeHyphens(term.name)}\\fR`;
+      return `\\fB${escapeHyphens(escapeRoff(term.name))}\\fR`;
 
     case "literal":
       return term.value;
@@ -423,16 +423,18 @@ export function formatDocPageAsMan(
   lines.push(".SH NAME");
   if (page.brief) {
     lines.push(
-      `${escapeHyphens(options.name)} \\- ${formatMessageAsRoff(page.brief)}`,
+      `${escapeHyphens(escapeRoff(options.name))} \\- ${
+        formatMessageAsRoff(page.brief)
+      }`,
     );
   } else {
-    lines.push(escapeHyphens(options.name));
+    lines.push(escapeHyphens(escapeRoff(options.name)));
   }
 
   // .SH SYNOPSIS
   if (page.usage) {
     lines.push(".SH SYNOPSIS");
-    lines.push(`.B ${escapeHyphens(options.name)}`);
+    lines.push(`.B ${escapeHyphens(escapeRoff(options.name))}`);
     const usageStr = formatUsageAsRoff(page.usage);
     if (usageStr) {
       lines.push(usageStr);
@@ -501,7 +503,9 @@ export function formatDocPageAsMan(
     lines.push(".SH SEE ALSO");
     const refs = options.seeAlso.map((ref, i) => {
       const suffix = i < options.seeAlso!.length - 1 ? "," : "";
-      return `.BR ${escapeHyphens(ref.name)} (${ref.section})${suffix}`;
+      return `.BR ${
+        escapeHyphens(escapeRoff(ref.name))
+      } (${ref.section})${suffix}`;
     });
     lines.push(refs.join("\n"));
   }

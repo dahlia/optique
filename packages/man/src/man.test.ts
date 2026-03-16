@@ -72,6 +72,11 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "\\fBdry\\-run\\fR");
   });
 
+  it("escapes roff special characters in command term name", () => {
+    const term: UsageTerm = { type: "command", name: "cmd\\arg" };
+    assert.equal(formatUsageTermAsRoff(term), "\\fBcmd\\\\arg\\fR");
+  });
+
   it("formats optional term", () => {
     const term: UsageTerm = {
       type: "optional",
@@ -1302,5 +1307,60 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes(".BR git\\-log (1)"));
     assert.ok(!result.includes(".BR git-fast"));
     assert.ok(!result.includes(".BR git-log"));
+  });
+
+  it("escapes roff special characters in program name", () => {
+    const page: DocPage = {
+      brief: message`A test app.`,
+      usage: [{ type: "argument", metavar: "FILE" }],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "app\\bin",
+      section: 1,
+    });
+
+    assert.ok(result.includes("app\\\\bin \\-"));
+    assert.ok(result.includes(".B app\\\\bin"));
+  });
+
+  it("escapes roff special characters in command entry terms", () => {
+    const page: DocPage = {
+      usage: [{ type: "command", name: "cmd\\arg" }],
+      sections: [
+        {
+          title: "Commands",
+          entries: [
+            {
+              term: { type: "command", name: "cmd\\arg" },
+              description: message`Run command.`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "test",
+      section: 1,
+    });
+
+    assert.ok(result.includes("\\fBcmd\\\\arg\\fR"));
+  });
+
+  it("escapes roff special characters in SEE ALSO references", () => {
+    const page: DocPage = {
+      usage: [],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "test",
+      section: 1,
+      seeAlso: [{ name: "app\\bin", section: 1 }],
+    });
+
+    assert.ok(result.includes(".BR app\\\\bin (1)"));
   });
 });
