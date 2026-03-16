@@ -18,7 +18,7 @@ import {
   type Suggestion,
 } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
-import { map, multiple, optional } from "@optique/core/modifiers";
+import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
@@ -1777,6 +1777,55 @@ describe("prompt()", () => {
               key: "apiKey",
             }),
             (v) => v.toUpperCase(),
+          ),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompt-secret");
+            },
+          },
+        );
+
+        const result = await runWith(parser, "test", [context], {
+          load: () => ({ config, meta: undefined }),
+          args: [],
+        });
+
+        assert.equal(result, expectedValue);
+        assert.equal(promptCalls, expectedPromptCalls);
+      });
+    }
+
+    for (
+      const [label, config, expectedValue, expectedPromptCalls] of [
+        [
+          "withDefault(bindConfig(...)): skips the prompt when config resolves",
+          { apiKey: "config-secret" } satisfies PromptConfigData,
+          "config-secret",
+          0,
+        ],
+        [
+          "withDefault(bindConfig(...)): runs the prompt when config is absent",
+          {} satisfies PromptConfigData,
+          "prompt-secret",
+          1,
+        ],
+      ] as const
+    ) {
+      it(label, async () => {
+        const context = createConfigContext({
+          schema: createPromptConfigSchema(),
+        });
+        let promptCalls = 0;
+        const parser = prompt(
+          withDefault(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            "fallback-default",
           ),
           {
             type: "password",

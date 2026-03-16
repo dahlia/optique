@@ -662,6 +662,43 @@ export function withDefault<
             };
           }
         }
+        // Case: Inner parser has config-prompt deferral hook (e.g.,
+        // withDefault(bindConfig(...), val)). Delegate to inner parser so
+        // it can resolve from config during phase-two completion.
+        if (
+          typeof deferPromptHookWD === "function" &&
+          state != null &&
+          typeof state === "object"
+        ) {
+          const innerResult = dispatchByMode(
+            parser.$mode,
+            () => syncParser.complete(state as unknown as TState),
+            () =>
+              parser.complete(state as unknown as TState) as Promise<
+                ValueParserResult<TValue>
+              >,
+          );
+          return mapModeValue(
+            parser.$mode,
+            innerResult,
+            (result): ValueParserResult<TValue | TDefault> => {
+              if (result.success) return result;
+              try {
+                const value = typeof defaultValue === "function"
+                  ? (defaultValue as () => TDefault)()
+                  : defaultValue;
+                return { success: true, value };
+              } catch (error) {
+                return {
+                  success: false,
+                  error: error instanceof WithDefaultError
+                    ? error.errorMessage
+                    : message`${text(String(error))}`,
+                };
+              }
+            },
+          );
+        }
         // No wrapped dependency source - just return the default value.
         try {
           const value = typeof defaultValue === "function"
@@ -758,12 +795,18 @@ export function withDefault<
           };
         }
       }
+      // Propagate annotations from the outer array state into the inner
+      // element so that source-binding wrappers like bindConfig can read
+      // them during phase-two resolution.
+      const innerElement = getAnnotations(state) != null
+        ? inheritAnnotations(state, state[0])
+        : state[0];
       return dispatchByMode(
         parser.$mode,
-        () => syncParser.complete(state[0]),
+        () => syncParser.complete(innerElement as TState),
         // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
         () =>
-          parser.complete(state[0]) as Promise<
+          parser.complete(innerElement as TState) as Promise<
             ValueParserResult<TValue | TDefault>
           >,
       );
