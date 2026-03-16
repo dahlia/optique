@@ -346,7 +346,7 @@ async function importModule(
     fileNotFoundError(filePath);
   }
 
-  const isTypeScript = /\.[mc]?ts$/.test(filePath);
+  const isPlainTs = /\.[mc]?ts$/.test(filePath);
   const isJsx = /\.[mc]?[jt]sx$/.test(filePath);
   const isDeno = "Deno" in globalThis;
   const isBun = "Bun" in globalThis;
@@ -356,10 +356,10 @@ async function importModule(
   // it on older Node versions without native type stripping.
   if (
     !isDeno && !isBun &&
-    (isJsx || (isTypeScript && !nodeSupportsNativeTypeScript()))
+    (isJsx || (isPlainTs && !nodeSupportsNativeTypeScript()))
   ) {
     await registerTsx(filePath, isJsx);
-  } else if (!isDeno && !isBun && isTypeScript) {
+  } else if (!isDeno && !isBun && isPlainTs) {
     // On Node.js 25.2+ plain TS works natively, but transitive JSX/TSX
     // dependencies still need tsx.  Register it opportunistically so that
     // the loader is in place before the first import — Node's ESM loader
