@@ -1801,4 +1801,37 @@ describe("run with config context", { concurrency: false }, () => {
 
     assert.equal(observedGreeting, "hello world");
   });
+
+  test("wrapped prototype method has stable identity", () => {
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Identifiable {
+      deferred: unknown;
+      constructor(deferred: unknown) {
+        this.deferred = deferred;
+      }
+      doWork(): string {
+        return "done";
+      }
+    }
+
+    const schema = z.object({ v: z.string().optional() }).optional();
+    const context = createConfigContext({ schema });
+
+    const instance = new Identifiable({ [deferredPromptValueKey]: true });
+
+    let methodIdentityHeld = false;
+
+    context.getAnnotations(instance, {
+      load(parsed: unknown) {
+        const p = parsed as Identifiable;
+        methodIdentityHeld = p.doWork === p.doWork;
+        return { config: undefined, meta: undefined };
+      },
+    });
+
+    assert.ok(methodIdentityHeld);
+  });
 });

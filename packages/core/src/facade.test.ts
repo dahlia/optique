@@ -8884,4 +8884,50 @@ describe("branch coverage: facade.ts edge cases", () => {
 
     assert.equal(observedGreeting, "hello world");
   });
+
+  it("wrapped prototype method has stable identity", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/307
+    // parsed.method === parsed.method must hold so that consumers can
+    // cache or compare method references.
+    const deferredPromptValueKey = Symbol.for(
+      "@optique/inquirer/deferredPromptValue",
+    );
+
+    class Identifiable {
+      deferred: unknown;
+      constructor(deferred: unknown) {
+        this.deferred = deferred;
+      }
+      doWork(): string {
+        return "done";
+      }
+    }
+
+    let methodIdentityHeld = false;
+
+    const contextKey = Symbol.for("@test/method-identity");
+    const dynamicContext: SourceContext = {
+      id: contextKey,
+      mode: "dynamic",
+      getAnnotations(parsed?: unknown) {
+        if (parsed == null) return {};
+        const p = parsed as Identifiable;
+        methodIdentityHeld = p.doWork === p.doWork;
+        return {};
+      },
+    };
+
+    const parser = map(
+      object({
+        name: withDefault(option("--name", string()), "test"),
+      }),
+      (_value) => new Identifiable({ [deferredPromptValueKey]: true }),
+    );
+
+    await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
+
+    assert.ok(methodIdentityHeld);
+  });
 });

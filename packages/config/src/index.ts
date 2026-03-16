@@ -264,13 +264,11 @@ function callWithSanitizedOwnProperties(
     throw e;
   }
 
-  // If the method returns a thenable (async method), defer restoration
-  // until the promise settles so that awaited continuations still
-  // observe the sanitized property values.
-  if (
-    result != null &&
-    typeof (result as Record<string, unknown>).then === "function"
-  ) {
+  // If the method returns a real Promise (async method), defer restoration
+  // until the promise settles so that awaited continuations still observe
+  // the sanitized property values.  Custom thenables are not assimilated
+  // to avoid coercing non-Promise return types.
+  if (result instanceof Promise) {
     return (result as Promise<unknown>).then(
       (v) => {
         release();
@@ -346,6 +344,7 @@ function createSanitizedNonPlainView<T extends object>(
   // that case we temporarily sanitize the target's own properties, retry
   // with the target as receiver, and restore the original values afterward.
   // See: https://github.com/dahlia/optique/issues/407
+  const methodCache = new Map<PropertyKey, (...args: unknown[]) => unknown>();
   const proxy: T = new Proxy(value, {
     get(target, key, _receiver) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
@@ -359,24 +358,30 @@ function createSanitizedNonPlainView<T extends object>(
       if (typeof result === "function") {
         // Prototype methods need the private-field fallback wrapper
         // because they access `this` which may include private fields.
-        // If the method is later rebound to a different receiver via
-        // call/apply/bind, respect the caller-supplied `this` instead.
-        return function (this: unknown, ...args: unknown[]) {
-          if (this !== proxy) {
-            return stripDeferredPromptValues(
-              result.apply(this, args),
+        // Cached per key so that parsed.method === parsed.method holds.
+        let wrapper = methodCache.get(key);
+        if (wrapper == null) {
+          wrapper = function (this: unknown, ...args: unknown[]) {
+            // If the method is later rebound to a different receiver via
+            // call/apply/bind, respect the caller-supplied `this` instead.
+            if (this !== proxy) {
+              return stripDeferredPromptValues(
+                result.apply(this, args),
+                seen,
+              );
+            }
+            return callMethodWithPrivateFieldFallback(
+              result,
+              proxy,
+              target,
+              args,
+              stripDeferredPromptValues,
               seen,
             );
-          }
-          return callMethodWithPrivateFieldFallback(
-            result,
-            proxy,
-            target,
-            args,
-            stripDeferredPromptValues,
-            seen,
-          );
-        };
+          };
+          methodCache.set(key, wrapper);
+        }
+        return wrapper;
       }
       return result;
     },
