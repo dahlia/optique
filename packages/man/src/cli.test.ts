@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import process from "node:process";
+import { formatDateForMan } from "./man.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, "..", "test", "fixtures");
@@ -212,6 +213,68 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       } finally {
         await rm(tempDir, { recursive: true });
       }
+    });
+
+    it("defaults --date to the current date", async () => {
+      const programFile = join(fixturesDir, "program.ts");
+      const before = new Date();
+      const result = await runCli([
+        programFile,
+        "-s",
+        "1",
+      ]);
+      const after = new Date();
+
+      assert.equal(result.exitCode, 0);
+      const thLine = result.stdout.split("\n")[0];
+      const thMatch = thLine.match(
+        /^\.TH\s+\S+\s+\S+\s+"([^"]*)"\s+"([^"]*)"/,
+      );
+      assert.ok(thMatch, `Expected .TH header, got: ${thLine}`);
+      const dateField = thMatch[1];
+      // Accept the formatted date for either the before or after
+      // snapshot to tolerate month/year boundary crossings.
+      const allowed = new Set([
+        formatDateForMan(before),
+        formatDateForMan(after),
+      ]);
+      assert.ok(
+        allowed.has(dateField),
+        `Expected date to be one of ${
+          JSON.stringify([...allowed])
+        }, got: "${dateField}"`,
+      );
+    });
+
+    it("defaults --date to the current date for Parser export", async () => {
+      const parserFile = join(fixturesDir, "parser.ts");
+      const before = new Date();
+      const result = await runCli([
+        parserFile,
+        "-s",
+        "1",
+        "--name",
+        "myapp",
+      ]);
+      const after = new Date();
+
+      assert.equal(result.exitCode, 0);
+      const thLine = result.stdout.split("\n")[0];
+      const thMatch = thLine.match(
+        /^\.TH\s+\S+\s+\S+\s+"([^"]*)"/,
+      );
+      assert.ok(thMatch, `Expected .TH header, got: ${thLine}`);
+      const dateField = thMatch[1];
+      const allowed = new Set([
+        formatDateForMan(before),
+        formatDateForMan(after),
+      ]);
+      assert.ok(
+        allowed.has(dateField),
+        `Expected date to be one of ${
+          JSON.stringify([...allowed])
+        }, got: "${dateField}"`,
+      );
     });
 
     it("accepts --date option", async () => {
