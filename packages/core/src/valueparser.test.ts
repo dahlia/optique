@@ -1124,14 +1124,22 @@ describe("choice", () => {
     it("should throw TypeError for case-insensitive choices with normalized duplicates", () => {
       assert.throws(
         () => choice(["JSON", "json", "Yaml"], { caseInsensitive: true }),
-        TypeError,
+        {
+          name: "TypeError",
+          message:
+            /Ambiguous choices for case-insensitive matching:.*"JSON".*"json".*normalize to.*"json"/,
+        },
       );
     });
 
     it("should throw TypeError for case-insensitive choices like ['a', 'A']", () => {
       assert.throws(
         () => choice(["a", "A"], { caseInsensitive: true }),
-        TypeError,
+        {
+          name: "TypeError",
+          message:
+            /Ambiguous choices for case-insensitive matching:.*"a".*"A".*normalize to.*"a"/,
+        },
       );
     });
 
