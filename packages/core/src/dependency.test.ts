@@ -3054,7 +3054,7 @@ describe("Async combinations with dependencies", () => {
 describe("suggestWithDependency double factory failure", () => {
   test("does not throw when factory fails for both dependency and default values", () => {
     const modeParser = dependency(choice(["dev", "prod"] as const));
-    // Factory that always fails to simulate transient failures.
+    // Factory that always throws regardless of the dependency value.
     const derived = modeParser.derive({
       metavar: "VALUE",
       mode: "sync",

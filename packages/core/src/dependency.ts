@@ -209,6 +209,7 @@ export interface DependencySource<M extends Mode = "sync", T = unknown>
    * @template FM The mode of the factory's returned parser.
    * @param options Configuration for the derived parser.
    * @returns A {@link DerivedValueParser} that depends on this source.
+   * @throws {TypeError} If the `mode` field is missing or invalid.
    */
   derive<U, FM extends Mode = "sync">(
     options: DeriveOptions<T, U, FM>,
@@ -617,6 +618,7 @@ export function isDerivedValueParser<M extends Mode, T>(
  *
  * const configParser = deriveFrom({
  *   metavar: "CONFIG",
+ *   mode: "sync",
  *   dependencies: [dirParser, modeParser] as const,
  *   factory: (dir, mode) =>
  *     choice(mode === "dev"
@@ -625,6 +627,7 @@ export function isDerivedValueParser<M extends Mode, T>(
  *   defaultValues: () => ["/config", "dev"],
  * });
  * ```
+ * @throws {TypeError} If the `mode` field is missing or invalid.
  * @since 0.10.0
  */
 export function deriveFrom<
