@@ -79,6 +79,7 @@ export interface GitParserOptions {
   /**
    * Maximum number of recent commits to include in shell completion suggestions.
    * Only applies to `gitCommit()` and `gitRef()` parsers.
+   * Must be a positive integer.
    * Defaults to 15.
    *
    * @since 0.9.0
@@ -247,6 +248,19 @@ function createAsyncValueParser(
   ) => AsyncIterable<Suggestion>,
 ): ValueParser<"async", string> {
   ensureNonEmptyString(metavar);
+  if (options?.suggestionDepth !== undefined) {
+    if (
+      !Number.isInteger(options.suggestionDepth) ||
+      options.suggestionDepth < 1
+    ) {
+      throw new RangeError(
+        `Invalid suggestionDepth (must be a positive integer): ${
+          JSON.stringify(options.suggestionDepth) ??
+            String(options.suggestionDepth)
+        }`,
+      );
+    }
+  }
 
   return {
     $mode: "async",
@@ -276,6 +290,7 @@ function createAsyncValueParser(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing branch names.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  *
  * @example
@@ -346,6 +361,7 @@ export function gitBranch(
  * @param remote The remote name to validate against.
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing remote branch names.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  *
  * @example
@@ -418,6 +434,7 @@ export function gitRemoteBranch(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing tag names.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  */
 export function gitTag(
@@ -476,6 +493,7 @@ export function gitTag(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing remote names.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  */
 export function gitRemote(
@@ -538,6 +556,7 @@ export function gitRemote(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing commit SHAs.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  */
 export function gitCommit(
@@ -622,6 +641,7 @@ export function gitCommit(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts any git reference.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  */
 export function gitRef(
