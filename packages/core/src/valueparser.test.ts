@@ -642,6 +642,30 @@ describe("integer", () => {
       assert.ok(!result6.success);
     });
   });
+
+  describe("contradictory min > max", () => {
+    it("should throw RangeError for number mode when min > max", () => {
+      assert.throws(
+        () => integer({ min: 10, max: 5 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError for bigint mode when min > max", () => {
+      assert.throws(
+        () => integer({ type: "bigint", min: 10n, max: 5n }),
+        RangeError,
+      );
+    });
+
+    it("should not throw when min equals max (number mode)", () => {
+      assert.doesNotThrow(() => integer({ min: 5, max: 5 }));
+    });
+
+    it("should not throw when min equals max (bigint mode)", () => {
+      assert.doesNotThrow(() => integer({ type: "bigint", min: 5n, max: 5n }));
+    });
+  });
 });
 
 describe("choice", () => {
@@ -2534,6 +2558,19 @@ describe("float", () => {
     it("should use default metavar when not provided", () => {
       const parser = float({});
       assert.equal(parser.metavar, "NUMBER");
+    });
+  });
+
+  describe("contradictory min > max", () => {
+    it("should throw RangeError when min > max", () => {
+      assert.throws(
+        () => float({ min: 10, max: 5 }),
+        RangeError,
+      );
+    });
+
+    it("should not throw when min equals max", () => {
+      assert.doesNotThrow(() => float({ min: 5, max: 5 }));
     });
   });
 });
@@ -5703,6 +5740,32 @@ describe("port", () => {
       });
     });
   });
+
+  describe("contradictory min > max", () => {
+    it("should throw RangeError for number mode when min > max", () => {
+      assert.throws(
+        () => port({ min: 1000, max: 100 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError for bigint mode when min > max", () => {
+      assert.throws(
+        () => port({ type: "bigint", min: 1000n, max: 100n }),
+        RangeError,
+      );
+    });
+
+    it("should not throw when min equals max (number mode)", () => {
+      assert.doesNotThrow(() => port({ min: 8080, max: 8080 }));
+    });
+
+    it("should not throw when min equals max (bigint mode)", () => {
+      assert.doesNotThrow(
+        () => port({ type: "bigint", min: 8080n, max: 8080n }),
+      );
+    });
+  });
 });
 
 describe("hostname()", () => {
@@ -7145,6 +7208,32 @@ describe("portRange()", () => {
       assert.ok(portRange({ separator: " to " }));
       assert.ok(portRange({ separator: ".." }));
       assert.ok(portRange({ separator: "-" }));
+    });
+  });
+
+  describe("contradictory min > max", () => {
+    it("should throw RangeError for number mode when min > max", () => {
+      assert.throws(
+        () => portRange({ min: 9000, max: 1000 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError for bigint mode when min > max", () => {
+      assert.throws(
+        () => portRange({ type: "bigint", min: 9000n, max: 1000n }),
+        RangeError,
+      );
+    });
+
+    it("should not throw when min equals max (number mode)", () => {
+      assert.doesNotThrow(() => portRange({ min: 8080, max: 8080 }));
+    });
+
+    it("should not throw when min equals max (bigint mode)", () => {
+      assert.doesNotThrow(
+        () => portRange({ type: "bigint", min: 8080n, max: 8080n }),
+      );
     });
   });
 });
@@ -9223,6 +9312,19 @@ describe("cidr()", () => {
     it("should return custom metavar", () => {
       const parser = cidr({ metavar: "IP_CIDR" });
       assert.strictEqual(parser.metavar, "IP_CIDR");
+    });
+  });
+
+  describe("contradictory minPrefix > maxPrefix", () => {
+    it("should throw RangeError when minPrefix > maxPrefix", () => {
+      assert.throws(
+        () => cidr({ minPrefix: 30, maxPrefix: 20 }),
+        RangeError,
+      );
+    });
+
+    it("should not throw when minPrefix equals maxPrefix", () => {
+      assert.doesNotThrow(() => cidr({ minPrefix: 24, maxPrefix: 24 }));
     });
   });
 });
