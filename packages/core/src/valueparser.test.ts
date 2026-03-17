@@ -9397,6 +9397,27 @@ describe("cidr()", () => {
         RangeError,
       );
     });
+
+    it("should throw RangeError when minPrefix is negative", () => {
+      assert.throws(
+        () => cidr({ minPrefix: -5 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when maxPrefix exceeds IPv4 max", () => {
+      assert.throws(
+        () => cidr({ version: 4, maxPrefix: 33 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when maxPrefix exceeds IPv6 max", () => {
+      assert.throws(
+        () => cidr({ version: 6, maxPrefix: 200 }),
+        RangeError,
+      );
+    });
   });
 });
 

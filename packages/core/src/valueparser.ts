@@ -4897,17 +4897,24 @@ export function cidr(
   }
   const version = options?.version ?? "both";
   const maxPrefixForVersion = version === 4 ? 32 : version === 6 ? 128 : 128;
-  if (options?.minPrefix != null && options.minPrefix > maxPrefixForVersion) {
+  if (
+    options?.minPrefix != null &&
+    (options.minPrefix < 0 || options.minPrefix > maxPrefixForVersion)
+  ) {
     throw new RangeError(
-      `Expected minPrefix to be at most ${maxPrefixForVersion} for IPv${
+      `Expected minPrefix to be between 0 and ${maxPrefixForVersion} for IPv${
         version === "both" ? "4/6" : version
       }, but got minPrefix: ${options.minPrefix}.`,
     );
   }
-  if (options?.maxPrefix != null && options.maxPrefix < 0) {
+  if (
+    options?.maxPrefix != null &&
+    (options.maxPrefix < 0 || options.maxPrefix > maxPrefixForVersion)
+  ) {
     throw new RangeError(
-      `Expected maxPrefix to be at least 0, but got ` +
-        `maxPrefix: ${options.maxPrefix}.`,
+      `Expected maxPrefix to be between 0 and ${maxPrefixForVersion} for IPv${
+        version === "both" ? "4/6" : version
+      }, but got maxPrefix: ${options.maxPrefix}.`,
     );
   }
   const minPrefix = options?.minPrefix;
