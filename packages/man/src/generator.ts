@@ -31,13 +31,66 @@ export interface GenerateManPageProgramOptions
     Pick<ManPageOptions, "section"> {}
 
 /**
+ * Checks if the given value looks like a {@link Parser} at runtime.
+ */
+function isParser(
+  value: unknown,
+): value is Parser<Mode, unknown, unknown> {
+  try {
+    if (value == null || typeof value !== "object") {
+      return false;
+    }
+    const p = value as Record<string, unknown>;
+    return (
+      "parse" in p &&
+      typeof p.parse === "function" &&
+      "complete" in p &&
+      typeof p.complete === "function" &&
+      "$mode" in p &&
+      (p.$mode === "sync" || p.$mode === "async") &&
+      "usage" in p &&
+      Array.isArray(p.usage) &&
+      "initialState" in p &&
+      "suggest" in p &&
+      typeof p.suggest === "function" &&
+      "getDocFragments" in p &&
+      typeof p.getDocFragments === "function"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Checks if the given value is a {@link Program} object.
  */
 function isProgram<M extends Mode, T>(
   value: Parser<M, T, unknown> | Program<M, T>,
 ): value is Program<M, T> {
-  return typeof value === "object" && value !== null &&
-    "parser" in value && "metadata" in value;
+  try {
+    return typeof value === "object" && value !== null &&
+      "parser" in value && "metadata" in value &&
+      typeof value.metadata === "object" && value.metadata !== null &&
+      "name" in value.metadata && typeof value.metadata.name === "string";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validates that the extracted parser is a genuine Optique parser.
+ * @throws {TypeError} If the value is not a valid Parser.
+ */
+function validateParser(value: unknown): asserts value is Parser<
+  Mode,
+  unknown,
+  unknown
+> {
+  if (!isParser(value)) {
+    throw new TypeError(
+      "The given value is not a valid Parser or Program.",
+    );
+  }
 }
 
 /**
@@ -48,6 +101,7 @@ function extractParserAndOptions<M extends Mode>(
   options: GenerateManPageOptions | GenerateManPageProgramOptions,
 ): { parser: Parser<M, unknown, unknown>; mergedOptions: ManPageOptions } {
   if (isProgram(parserOrProgram)) {
+    validateParser(parserOrProgram.parser);
     const { metadata } = parserOrProgram;
     const programOptions = options as GenerateManPageProgramOptions;
     return {
@@ -68,6 +122,7 @@ function extractParserAndOptions<M extends Mode>(
       },
     };
   }
+  validateParser(parserOrProgram);
   return {
     parser: parserOrProgram,
     mergedOptions: options as ManPageOptions,
@@ -100,9 +155,10 @@ function extractParserAndOptions<M extends Mode>(
  * console.log(manPage);
  * ```
  *
- * @param parser The parser to generate documentation from.
+ * @param parserOrProgram The parser or program to generate documentation from.
  * @param options The man page generation options.
  * @returns The complete man page in roff format.
+ * @throws {TypeError} If the input is not a valid Parser or Program.
  * @since 0.10.0
  */
 export function generateManPageSync<T>(
@@ -148,9 +204,10 @@ export function generateManPageSync(
  * });
  * ```
  *
- * @param parser The parser to generate documentation from.
+ * @param parserOrProgram The parser or program to generate documentation from.
  * @param options The man page generation options.
  * @returns A promise that resolves to the complete man page in roff format.
+ * @throws {TypeError} If the input is not a valid Parser or Program.
  * @since 0.10.0
  */
 export async function generateManPageAsync<M extends Mode, T>(
@@ -236,6 +293,7 @@ export async function generateManPageAsync<M extends Mode>(
  * @param parserOrProgram The parser or program to generate documentation from.
  * @param options The man page generation options.
  * @returns The complete man page in roff format, or a Promise for async parsers.
+ * @throws {TypeError} If the input is not a valid Parser or Program.
  * @since 0.10.0
  */
 // Overload: Program with sync parser
