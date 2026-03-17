@@ -1726,14 +1726,15 @@ describe("git parsers", () => {
         BigInt(2),
       ] as never[]
     ) {
-      it(`gitCommit() rejects suggestionDepth: ${String(depth)}`, () => {
+      const label = `${typeof depth} ${String(depth)}`;
+      it(`gitCommit() rejects suggestionDepth: ${label}`, () => {
         assert.throws(
           () => gitCommit({ suggestionDepth: depth }),
           RangeError,
         );
       });
 
-      it(`gitRef() rejects suggestionDepth: ${String(depth)}`, () => {
+      it(`gitRef() rejects suggestionDepth: ${label}`, () => {
         assert.throws(
           () => gitRef({ suggestionDepth: depth }),
           RangeError,
