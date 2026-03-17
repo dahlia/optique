@@ -1016,13 +1016,12 @@ describe("git parsers", () => {
       }
     });
 
-    it("should only compute short OIDs for prefix-matched commits", async () => {
+    it("should not yield commits when prefix is non-hex", async () => {
       const testRepoDir = await createTestRepo();
       try {
         const parser = gitRef({ dir: testRepoDir });
-        // Use a prefix that won't match any commit OID (hex only) but
-        // will match the "main" branch, ensuring non-matching commits
-        // are skipped without yielding.
+        // "main" is not a valid hex prefix, so no commit OIDs can match;
+        // only the "main" branch should be suggested.
         const suggestions: Suggestion[] = [];
         for await (const s of parser.suggest!("main")) {
           suggestions.push(s);
