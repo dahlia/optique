@@ -958,6 +958,39 @@ describe("git parsers", () => {
       }
     });
 
+    it("should not suggest duplicates when branch and tag share a name", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const oid = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "main",
+        });
+        await isomorphicGit.tag({
+          fs,
+          dir: testRepoDir,
+          ref: "main",
+          object: oid,
+        });
+
+        const parser = gitRef({ dir: testRepoDir });
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!("mai")) {
+          suggestions.push(s);
+        }
+        const mainSuggestions = suggestions.filter(
+          (s) => s.kind === "literal" && s.text === "main",
+        );
+        assert.equal(
+          mainSuggestions.length,
+          1,
+          "Should suggest 'main' only once",
+        );
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should suggest commits for gitRef", async () => {
       const testRepoDir = await createTestRepo();
       try {
