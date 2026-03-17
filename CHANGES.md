@@ -402,6 +402,11 @@ To be released.
     (e.g., `NaN`, `Infinity`, `-Infinity`).  Previously, these values
     silently disabled or distorted range validation.  [[#362], [#587]]
 
+ -  Numeric parsers `integer()`, `port()`, and `portRange()` now reject
+    invalid runtime `type` discriminant values at construction time.
+    Previously, unsupported values silently fell back to number mode.
+    [[#368], [#589]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -447,6 +452,7 @@ To be released.
 [#353]: https://github.com/dahlia/optique/issues/353
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
+[#368]: https://github.com/dahlia/optique/issues/368
 [#370]: https://github.com/dahlia/optique/issues/370
 [#371]: https://github.com/dahlia/optique/issues/371
 [#378]: https://github.com/dahlia/optique/issues/378
@@ -490,6 +496,7 @@ To be released.
 [#585]: https://github.com/dahlia/optique/pull/585
 [#587]: https://github.com/dahlia/optique/pull/587
 [#588]: https://github.com/dahlia/optique/pull/588
+[#589]: https://github.com/dahlia/optique/pull/589
 
 ### @optique/config
 

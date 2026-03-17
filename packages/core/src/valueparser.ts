@@ -892,6 +892,17 @@ export function integer(
 export function integer(
   options?: IntegerOptionsNumber | IntegerOptionsBigInt,
 ): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
+  if (
+    options?.type !== undefined &&
+    options.type !== "number" &&
+    options.type !== "bigint"
+  ) {
+    throw new TypeError(
+      `Expected type to be "number" or "bigint", but got: ${
+        JSON.stringify(options.type)
+      }.`,
+    );
+  }
   if (options?.type !== "bigint") {
     if (options?.min != null && !Number.isFinite(options.min)) {
       throw new RangeError(
@@ -2015,6 +2026,17 @@ export function port(
       `Expected disallowWellKnown to be a boolean, but got ` +
         `${typeof options.disallowWellKnown}: ` +
         `${String(options.disallowWellKnown)}.`,
+    );
+  }
+  if (
+    options?.type !== undefined &&
+    options.type !== "number" &&
+    options.type !== "bigint"
+  ) {
+    throw new TypeError(
+      `Expected type to be "number" or "bigint", but got: ${
+        JSON.stringify(options.type)
+      }.`,
     );
   }
   if (options?.type === "bigint") {
@@ -3599,6 +3621,17 @@ export function portRange(
       `Expected allowSingle to be a boolean, but got ` +
         `${typeof options.allowSingle}: ` +
         `${String(options.allowSingle)}.`,
+    );
+  }
+  if (
+    options?.type !== undefined &&
+    options.type !== "number" &&
+    options.type !== "bigint"
+  ) {
+    throw new TypeError(
+      `Expected type to be "number" or "bigint", but got: ${
+        JSON.stringify(options.type)
+      }.`,
     );
   }
   const separator = options?.separator ?? "-";
