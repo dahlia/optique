@@ -253,11 +253,14 @@ function createAsyncValueParser(
       !Number.isInteger(options.suggestionDepth) ||
       options.suggestionDepth < 1
     ) {
+      let repr: string;
+      try {
+        repr = JSON.stringify(options.suggestionDepth);
+      } catch {
+        repr = String(typeof options.suggestionDepth);
+      }
       throw new RangeError(
-        `Invalid suggestionDepth (must be a positive integer): ${
-          JSON.stringify(options.suggestionDepth) ??
-            String(options.suggestionDepth)
-        }`,
+        `Invalid suggestionDepth (must be a positive integer): ${repr}`,
       );
     }
   }

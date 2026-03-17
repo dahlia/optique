@@ -1723,16 +1723,17 @@ describe("git parsers", () => {
         -Infinity,
         "2",
         "foo",
+        BigInt(2),
       ] as never[]
     ) {
-      it(`gitCommit() rejects suggestionDepth: ${JSON.stringify(depth)}`, () => {
+      it(`gitCommit() rejects suggestionDepth: ${String(depth)}`, () => {
         assert.throws(
           () => gitCommit({ suggestionDepth: depth }),
           RangeError,
         );
       });
 
-      it(`gitRef() rejects suggestionDepth: ${JSON.stringify(depth)}`, () => {
+      it(`gitRef() rejects suggestionDepth: ${String(depth)}`, () => {
         assert.throws(
           () => gitRef({ suggestionDepth: depth }),
           RangeError,
