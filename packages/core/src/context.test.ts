@@ -1,5 +1,10 @@
 import type { Annotations } from "@optique/core/annotations";
-import { isStaticContext, type SourceContext } from "@optique/core/context";
+import {
+  isPlaceholderValue,
+  isStaticContext,
+  placeholder,
+  type SourceContext,
+} from "@optique/core/context";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as fc from "fast-check";
@@ -253,6 +258,95 @@ describe("SourceContext", () => {
         source: "context2",
         priority: 2,
       });
+    });
+  });
+
+  describe("getInternalAnnotations", () => {
+    it("should allow a context to provide internal annotations", () => {
+      const key = Symbol("@test/internal");
+      const internalKey = Symbol("@test/internal-extra");
+      const context: SourceContext = {
+        id: key,
+        getAnnotations() {
+          return { [key]: { value: "primary" } };
+        },
+        getInternalAnnotations(_parsed, _annotations) {
+          return { [internalKey]: { value: "internal" } };
+        },
+      };
+
+      const annotations = context.getAnnotations() as Annotations;
+      const internal = context.getInternalAnnotations?.(undefined, annotations);
+      assert.ok(internal != null);
+      assert.deepEqual(internal[internalKey], { value: "internal" });
+    });
+
+    it("should be optional on SourceContext", () => {
+      const key = Symbol("@test/no-internal");
+      const context: SourceContext = {
+        id: key,
+        getAnnotations() {
+          return { [key]: { value: "only" } };
+        },
+      };
+
+      assert.equal(context.getInternalAnnotations, undefined);
+    });
+  });
+
+  describe("finalizeParsed", () => {
+    it("should allow a context to transform parsed values", () => {
+      const key = Symbol("@test/finalize");
+      const marker = Symbol("undefined-marker");
+      const context: SourceContext = {
+        id: key,
+        getAnnotations() {
+          return {};
+        },
+        finalizeParsed(parsed) {
+          return parsed === undefined ? { [marker]: true } : parsed;
+        },
+      };
+
+      assert.deepEqual(
+        context.finalizeParsed?.(undefined),
+        { [marker]: true },
+      );
+      assert.equal(context.finalizeParsed?.("hello"), "hello");
+    });
+
+    it("should be optional on SourceContext", () => {
+      const key = Symbol("@test/no-finalize");
+      const context: SourceContext = {
+        id: key,
+        getAnnotations() {
+          return {};
+        },
+      };
+
+      assert.equal(context.finalizeParsed, undefined);
+    });
+  });
+
+  describe("placeholder values", () => {
+    it("should detect objects carrying the placeholder", () => {
+      const sentinel = { [placeholder]: true };
+
+      assert.ok(isPlaceholderValue(sentinel));
+      assert.ok(!isPlaceholderValue({}));
+      assert.ok(!isPlaceholderValue("string"));
+      assert.ok(!isPlaceholderValue(null));
+      assert.ok(!isPlaceholderValue(undefined));
+      assert.ok(!isPlaceholderValue(42));
+    });
+
+    it("should work with class instances", () => {
+      class MyPlaceholder {
+        readonly [placeholder] = true;
+      }
+
+      assert.ok(isPlaceholderValue(new MyPlaceholder()));
+      assert.ok(!isPlaceholderValue({ unrelated: true }));
     });
   });
 

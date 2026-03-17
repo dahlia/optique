@@ -5,7 +5,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
-import type { SourceContext } from "@optique/core/context";
+import { placeholder, type SourceContext } from "@optique/core/context";
 import { flag, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { withDefault } from "@optique/core/modifiers";
@@ -17,6 +17,8 @@ import {
   getActiveConfigMeta,
 } from "./index.ts";
 import type { ConfigMeta } from "./index.ts";
+
+const testPlaceholderKey = placeholder;
 
 const TEST_DIR = join(import.meta.dirname ?? ".", "test-configs");
 
@@ -1323,9 +1325,6 @@ describe("run with config context", { concurrency: false }, () => {
     // When a non-plain object (class instance) containing a deferred prompt
     // value is sanitized, the proxy must not break methods that access
     // private fields.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class ConfigInput {
       #apiKey: string;
@@ -1350,7 +1349,7 @@ describe("run with config context", { concurrency: false }, () => {
     // We call it manually with a class instance containing deferred values.
     const instance = new ConfigInput(
       "secret-key",
-      { [deferredPromptValueKey]: true },
+      { [testPlaceholderKey]: true },
     );
 
     const annotations = context.getAnnotations(instance, {
@@ -1375,9 +1374,6 @@ describe("run with config context", { concurrency: false }, () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // Methods that wrap public fields (e.g. getToken() { return this.token; })
     // must return sanitized values, not raw deferred prompt sentinels.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Wrapper {
       #secret: string;
@@ -1399,7 +1395,7 @@ describe("run with config context", { concurrency: false }, () => {
 
     const instance = new Wrapper(
       "safe",
-      { [deferredPromptValueKey]: true },
+      { [testPlaceholderKey]: true },
     );
 
     let observedSecret: string | undefined;
@@ -1424,9 +1420,6 @@ describe("run with config context", { concurrency: false }, () => {
     // the scrubbed values, not the original deferred sentinels.  For example,
     // hasToken() { return this.token !== undefined; } must return false when
     // the token field holds a deferred prompt value.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Cfg {
       #id: string;
@@ -1448,7 +1441,7 @@ describe("run with config context", { concurrency: false }, () => {
 
     const instance = new Cfg(
       "abc",
-      { [deferredPromptValueKey]: true },
+      { [testPlaceholderKey]: true },
     );
 
     let observedId: string | undefined;
@@ -1472,9 +1465,6 @@ describe("run with config context", { concurrency: false }, () => {
     // A method that reads BOTH a private field and a scrubbed public field
     // in the same call must observe the sanitized public value even when
     // private field access forces fallback to the original target.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Mixed {
       #id: string;
@@ -1493,7 +1483,7 @@ describe("run with config context", { concurrency: false }, () => {
 
     const instance = new Mixed(
       "abc",
-      { [deferredPromptValueKey]: true },
+      { [testPlaceholderKey]: true },
     );
 
     let observed: boolean | undefined;
@@ -1512,9 +1502,6 @@ describe("run with config context", { concurrency: false }, () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // A method that throws a TypeError for application reasons (not private
     // field access) must propagate the error, not be silently retried.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Thrower {
       deferred: unknown;
@@ -1529,7 +1516,7 @@ describe("run with config context", { concurrency: false }, () => {
     const schema = z.object({ v: z.string().optional() }).optional();
     const context = createConfigContext({ schema });
 
-    const instance = new Thrower({ [deferredPromptValueKey]: true });
+    const instance = new Thrower({ [testPlaceholderKey]: true });
 
     assert.throws(
       () => {
@@ -1548,9 +1535,6 @@ describe("run with config context", { concurrency: false }, () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // A frozen class instance with deferred prompt values in non-configurable
     // fields must not cause Object.defineProperty to throw during fallback.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Frozen {
       #id: string;
@@ -1568,7 +1552,7 @@ describe("run with config context", { concurrency: false }, () => {
     const schema = z.object({ v: z.string().optional() }).optional();
     const context = createConfigContext({ schema });
 
-    const instance = new Frozen("abc", { [deferredPromptValueKey]: true });
+    const instance = new Frozen("abc", { [testPlaceholderKey]: true });
 
     assert.throws(
       () => {
@@ -1587,9 +1571,6 @@ describe("run with config context", { concurrency: false }, () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // A user TypeError whose message happens to contain the word "private"
     // must not be mistaken for an engine private-field error.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     let callCount = 0;
 
@@ -1607,7 +1588,7 @@ describe("run with config context", { concurrency: false }, () => {
     const schema = z.object({ v: z.string().optional() }).optional();
     const context = createConfigContext({ schema });
 
-    const instance = new KeyValidator({ [deferredPromptValueKey]: true });
+    const instance = new KeyValidator({ [testPlaceholderKey]: true });
 
     assert.throws(
       () => {
@@ -1628,9 +1609,6 @@ describe("run with config context", { concurrency: false }, () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // An async method that accesses private fields and then reads a public
     // field after an await must still observe the sanitized value.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class AsyncMixed {
       #id: string;
@@ -1651,7 +1629,7 @@ describe("run with config context", { concurrency: false }, () => {
 
     const instance = new AsyncMixed(
       "abc",
-      { [deferredPromptValueKey]: true },
+      { [testPlaceholderKey]: true },
     );
 
     let observedInfo: { id: string; hasToken: boolean } | undefined;
@@ -1671,10 +1649,6 @@ describe("run with config context", { concurrency: false }, () => {
   });
 
   test("TypeError 'Cannot access private endpoint.' is not retried", () => {
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
-
     let callCount = 0;
 
     class EndpointValidator {
@@ -1691,7 +1665,7 @@ describe("run with config context", { concurrency: false }, () => {
     const schema = z.object({ v: z.string().optional() }).optional();
     const context = createConfigContext({ schema });
 
-    const instance = new EndpointValidator({ [deferredPromptValueKey]: true });
+    const instance = new EndpointValidator({ [testPlaceholderKey]: true });
 
     assert.throws(
       () => {
@@ -1709,10 +1683,6 @@ describe("run with config context", { concurrency: false }, () => {
   });
 
   test("overlapping async private-field calls see sanitized state", async () => {
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
-
     class Concurrent {
       #id: string;
       token: unknown;
@@ -1732,7 +1702,7 @@ describe("run with config context", { concurrency: false }, () => {
 
     const instance = new Concurrent(
       "abc",
-      { [deferredPromptValueKey]: true },
+      { [testPlaceholderKey]: true },
     );
 
     let results: { id: string; hasToken: boolean }[] | undefined;
@@ -1758,9 +1728,6 @@ describe("run with config context", { concurrency: false }, () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // An async method that performs side effects before accessing a private
     // field after an await must not be re-executed by the fallback path.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     let sideEffectCount = 0;
 
@@ -1783,7 +1750,7 @@ describe("run with config context", { concurrency: false }, () => {
 
     const instance = new AsyncSideEffect(
       "abc",
-      { [deferredPromptValueKey]: true },
+      { [testPlaceholderKey]: true },
     );
 
     let observedResult: string | undefined;
@@ -1804,10 +1771,6 @@ describe("run with config context", { concurrency: false }, () => {
   });
 
   test("rebound prototype method respects caller-supplied receiver", () => {
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
-
     class Base {
       name: string;
       deferred: unknown;
@@ -1823,7 +1786,7 @@ describe("run with config context", { concurrency: false }, () => {
     const schema = z.object({ v: z.string().optional() }).optional();
     const context = createConfigContext({ schema });
 
-    const instance = new Base("original", { [deferredPromptValueKey]: true });
+    const instance = new Base("original", { [testPlaceholderKey]: true });
 
     let observedGreeting: string | undefined;
 
@@ -1840,10 +1803,6 @@ describe("run with config context", { concurrency: false }, () => {
   });
 
   test("wrapped prototype method has stable identity", () => {
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
-
     class Identifiable {
       deferred: unknown;
       constructor(deferred: unknown) {
@@ -1857,7 +1816,7 @@ describe("run with config context", { concurrency: false }, () => {
     const schema = z.object({ v: z.string().optional() }).optional();
     const context = createConfigContext({ schema });
 
-    const instance = new Identifiable({ [deferredPromptValueKey]: true });
+    const instance = new Identifiable({ [testPlaceholderKey]: true });
 
     let methodIdentityHeld = false;
 
@@ -1877,9 +1836,6 @@ describe("run with config context", { concurrency: false }, () => {
     // Methods that return Promise without being native async functions
     // (e.g., return Promise.resolve().then(() => this.#id)) must also
     // work correctly through the sanitized proxy.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class PromiseReturner {
       #id: string;
@@ -1898,7 +1854,7 @@ describe("run with config context", { concurrency: false }, () => {
 
     const instance = new PromiseReturner(
       "abc",
-      { [deferredPromptValueKey]: true },
+      { [testPlaceholderKey]: true },
     );
 
     let observedId: string | undefined;

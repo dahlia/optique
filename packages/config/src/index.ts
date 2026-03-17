@@ -18,20 +18,12 @@ import type {
 } from "@optique/core/context";
 import type { Parser, ParserResult, Result } from "@optique/core/parser";
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
+import { isPlaceholderValue } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 
-const deferPromptUntilConfigResolvesKey = Symbol.for(
-  "@optique/config/deferPromptUntilResolved",
-);
-const phase1ConfigAnnotationsKey = Symbol.for(
-  "@optique/config/phase1PromptAnnotations",
-);
-const phase2UndefinedParsedValueKey = Symbol.for(
+const phase2UndefinedParsedValueKey = Symbol(
   "@optique/config/phase2UndefinedParsedValue",
-);
-const deferredPromptValueKey = Symbol.for(
-  "@optique/inquirer/deferredPromptValue",
 );
 
 /**
@@ -69,9 +61,7 @@ const phase1ConfigAnnotationMarker = Symbol(
 );
 
 function isDeferredPromptValue(value: unknown): boolean {
-  return value != null &&
-    typeof value === "object" &&
-    deferredPromptValueKey in value;
+  return isPlaceholderValue(value);
 }
 
 function isPhase2UndefinedParsedValue(value: unknown): boolean {
@@ -767,22 +757,22 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   // Create a unique ID for this context instance
   const contextId = Symbol(`@optique/config:${Math.random()}`);
 
-  const context: ConfigContext<T, TConfigMeta> & {
-    readonly [phase1ConfigAnnotationsKey]: (
-      parsed: unknown,
-      annotations: Annotations,
-    ) => Annotations | undefined;
-  } = {
+  const context: ConfigContext<T, TConfigMeta> = {
     id: contextId,
     schema: options.schema,
     mode: "dynamic",
-    [phase1ConfigAnnotationsKey](parsed: unknown, annotations: Annotations) {
+    getInternalAnnotations(parsed: unknown, annotations: Annotations) {
       if (parsed === undefined) {
         return { [contextId]: phase1ConfigAnnotationMarker };
       }
       return Object.getOwnPropertySymbols(annotations).includes(contextId)
         ? undefined
         : { [contextId]: undefined };
+    },
+    finalizeParsed(parsed: unknown) {
+      return parsed === undefined
+        ? { [phase2UndefinedParsedValueKey]: true }
+        : parsed;
     },
 
     getAnnotations(
@@ -1014,9 +1004,7 @@ export function bindConfig<
     return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
   }
 
-  const boundParser: Parser<M, TValue, TState> & {
-    readonly [deferPromptUntilConfigResolvesKey]: (state: unknown) => boolean;
-  } = {
+  const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
@@ -1106,7 +1094,7 @@ export function bindConfig<
     },
 
     suggest: parser.suggest,
-    [deferPromptUntilConfigResolvesKey]: shouldDeferPromptUntilConfigResolves,
+    shouldDeferCompletion: shouldDeferPromptUntilConfigResolves,
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
       return parser.getDocFragments(state, defaultValue);

@@ -1,6 +1,6 @@
 import { group, merge, object, or } from "@optique/core/constructs";
 import { getAnnotations } from "@optique/core/annotations";
-import type { SourceContext } from "@optique/core/context";
+import { placeholder, type SourceContext } from "@optique/core/context";
 import type { DocSection } from "@optique/core/doc";
 import type { Parser } from "@optique/core/parser";
 import {
@@ -24,6 +24,8 @@ import type { Program } from "@optique/core/program";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+
+const testPlaceholderKey = placeholder;
 
 type AssertNever<T extends never> = T;
 
@@ -8425,9 +8427,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // When a dynamic context receives a non-plain parsed value (class
     // instance) that contains a deferred prompt value, the proxy must not
     // break methods that access private fields.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class ParsedResult {
       #secret: string;
@@ -8464,7 +8463,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       (value) =>
         new ParsedResult(
           value.name,
-          { [deferredPromptValueKey]: true },
+          { [testPlaceholderKey]: true },
         ),
     );
 
@@ -8481,9 +8480,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // Methods that wrap public fields must return sanitized values, not raw
     // deferred prompt sentinels.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Wrapper {
       #secret: string;
@@ -8523,7 +8519,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       (value) =>
         new Wrapper(
           value.name,
-          { [deferredPromptValueKey]: true },
+          { [testPlaceholderKey]: true },
         ),
     );
 
@@ -8540,9 +8536,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // Methods that derive results from sanitized public fields must observe
     // the scrubbed values, not the original deferred sentinels.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Cfg {
       #id: string;
@@ -8582,7 +8575,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       (value) =>
         new Cfg(
           value.name,
-          { [deferredPromptValueKey]: true },
+          { [testPlaceholderKey]: true },
         ),
     );
 
@@ -8600,9 +8593,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // A method that reads BOTH a private field and a scrubbed public field
     // in the same call must observe the sanitized public value even when
     // private field access forces fallback to the original target.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Mixed {
       #id: string;
@@ -8636,7 +8626,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       (value) =>
         new Mixed(
           value.name,
-          { [deferredPromptValueKey]: true },
+          { [testPlaceholderKey]: true },
         ),
     );
 
@@ -8651,9 +8641,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // A method that throws a TypeError for application reasons (not private
     // field access) must propagate the error, not be silently retried.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Thrower {
       deferred: unknown;
@@ -8680,7 +8667,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       object({
         name: withDefault(option("--name", string()), "test"),
       }),
-      (_value) => new Thrower({ [deferredPromptValueKey]: true }),
+      (_value) => new Thrower({ [testPlaceholderKey]: true }),
     );
 
     await assert.rejects(
@@ -8697,9 +8684,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // A frozen class instance with deferred prompt values cannot have its
     // properties temporarily sanitized, so private-field methods must
     // propagate the TypeError rather than returning unsanitized data.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Frozen {
       #id: string;
@@ -8729,7 +8713,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       object({
         name: withDefault(option("--name", string()), "test"),
       }),
-      (value) => new Frozen(value.name, { [deferredPromptValueKey]: true }),
+      (value) => new Frozen(value.name, { [testPlaceholderKey]: true }),
     );
 
     await assert.rejects(
@@ -8745,9 +8729,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // A user TypeError whose message happens to contain "private" must not
     // be mistaken for an engine private-field error.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     let callCount = 0;
 
@@ -8777,7 +8758,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       object({
         name: withDefault(option("--name", string()), "test"),
       }),
-      (_value) => new KeyValidator({ [deferredPromptValueKey]: true }),
+      (_value) => new KeyValidator({ [testPlaceholderKey]: true }),
     );
 
     await assert.rejects(
@@ -8795,9 +8776,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // An async method that accesses private fields and then reads a public
     // field after an await must still observe the sanitized value.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class AsyncMixed {
       #id: string;
@@ -8830,7 +8808,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       object({
         name: withDefault(option("--name", string()), "test"),
       }),
-      (value) => new AsyncMixed(value.name, { [deferredPromptValueKey]: true }),
+      (value) => new AsyncMixed(value.name, { [testPlaceholderKey]: true }),
     );
 
     await runWith(parser, "test", [dynamicContext], {
@@ -8841,10 +8819,6 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   it("TypeError 'Cannot access private endpoint.' is not retried", async () => {
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
-
     let callCount = 0;
 
     class EndpointValidator {
@@ -8873,7 +8847,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       object({
         name: withDefault(option("--name", string()), "test"),
       }),
-      (_value) => new EndpointValidator({ [deferredPromptValueKey]: true }),
+      (_value) => new EndpointValidator({ [testPlaceholderKey]: true }),
     );
 
     await assert.rejects(
@@ -8888,10 +8862,6 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   it("overlapping async private-field calls see sanitized state", async () => {
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
-
     class Concurrent {
       #id: string;
       token: unknown;
@@ -8926,7 +8896,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       object({
         name: withDefault(option("--name", string()), "test"),
       }),
-      (value) => new Concurrent(value.name, { [deferredPromptValueKey]: true }),
+      (value) => new Concurrent(value.name, { [testPlaceholderKey]: true }),
     );
 
     await runWith(parser, "test", [dynamicContext], {
@@ -8939,10 +8909,6 @@ describe("branch coverage: facade.ts edge cases", () => {
   });
 
   it("async method with private fields after await is not retried", async () => {
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
-
     let sideEffectCount = 0;
 
     class AsyncSideEffect {
@@ -8979,7 +8945,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       (value) =>
         new AsyncSideEffect(
           value.name,
-          { [deferredPromptValueKey]: true },
+          { [testPlaceholderKey]: true },
         ),
     );
 
@@ -8996,9 +8962,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Extracting a prototype method from a sanitized proxy and calling it
     // with a different receiver via call/apply/bind must use the caller's
     // this, not the proxy's target.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Base {
       name: string;
@@ -9032,7 +8995,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       object({
         name: withDefault(option("--name", string()), "test"),
       }),
-      (value) => new Base(value.name, { [deferredPromptValueKey]: true }),
+      (value) => new Base(value.name, { [testPlaceholderKey]: true }),
     );
 
     await runWith(parser, "test", [dynamicContext], {
@@ -9046,9 +9009,6 @@ describe("branch coverage: facade.ts edge cases", () => {
     // Regression test for https://github.com/dahlia/optique/issues/307
     // parsed.method === parsed.method must hold so that consumers can
     // cache or compare method references.
-    const deferredPromptValueKey = Symbol.for(
-      "@optique/inquirer/deferredPromptValue",
-    );
 
     class Identifiable {
       deferred: unknown;
@@ -9078,7 +9038,7 @@ describe("branch coverage: facade.ts edge cases", () => {
       object({
         name: withDefault(option("--name", string()), "test"),
       }),
-      (_value) => new Identifiable({ [deferredPromptValueKey]: true }),
+      (_value) => new Identifiable({ [testPlaceholderKey]: true }),
     );
 
     await runWith(parser, "test", [dynamicContext], {

@@ -673,12 +673,20 @@ API reference
 
     Members:
 
-     -  `id: symbol` - Unique identifier for the context
-     -  `mode?: SourceContextMode` - Optional hint declaring whether this
+     -  `id: symbol` — Unique identifier for the context
+     -  `mode?: SourceContextMode` — Optional hint declaring whether this
         context is `"static"` or `"dynamic"`. When set, `isStaticContext()`
         uses this field directly instead of probing `getAnnotations()`.
-     -  `getAnnotations(parsed?: unknown): Promise<Annotations> | Annotations` -
-        Returns annotations to inject into parsing
+     -  `getAnnotations(parsed?, options?): Promise<Annotations> | Annotations`
+        — Returns annotations to inject into parsing
+     -  `getInternalAnnotations?(parsed, annotations): Annotations | undefined`
+        — Optional hook called after `getAnnotations()` to inject additional
+        internal annotations (e.g., phase-specific markers).  Returns
+        additional annotations to merge, or `undefined` to add nothing.
+     -  `finalizeParsed?(parsed): unknown` — Optional hook to transform the
+        parsed value before it is passed to `getAnnotations()` during phase-2
+        annotation collection.  This allows contexts to distinguish between
+        “parsed value was `undefined`” and “no parse happened yet.”
 
     Use `ParserValuePlaceholder` in `TRequiredOptions` when the options depend
     on the parser's result type.
@@ -715,6 +723,26 @@ API reference
     const annotations = getAnnotations(state);
     const myData = annotations?.[myKey];
     ~~~~
+
+`placeholder`
+:   Unique symbol exported from `@optique/core/context`.  Packages that produce
+    placeholder values (sentinel objects representing values to be resolved
+    later) should set this symbol as a property on their sentinel objects.
+    Core's `isPlaceholderValue()` detects values carrying this symbol, and
+    `runWith()` strips them from parsed results before phase-2 annotation
+    collection.  `map()` also skips transformation for placeholder values.
+
+    ~~~~ typescript twoslash
+    import { placeholder } from "@optique/core/context";
+
+    class MyPlaceholder {
+      readonly [placeholder] = true;
+    }
+    ~~~~
+
+`isPlaceholderValue(value: unknown): boolean`
+:   Tests whether a value is a placeholder by checking for the `placeholder`
+    symbol property.
 
 `isStaticContext(context: SourceContext): boolean`
 :   Checks whether a context is static (returns non-empty annotations without
