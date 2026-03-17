@@ -132,6 +132,7 @@ export interface GitParsers {
    * Creates a value parser that validates local branch names.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing branch names.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   branch(options?: GitParserOptions): ValueParser<"async", string>;
 
@@ -140,6 +141,7 @@ export interface GitParsers {
    * @param remote The remote name to validate against.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing remote branch names.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   remoteBranch(
     remote: string,
@@ -150,6 +152,7 @@ export interface GitParsers {
    * Creates a value parser that validates tag names.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing tag names.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   tag(options?: GitParserOptions): ValueParser<"async", string>;
 
@@ -157,6 +160,7 @@ export interface GitParsers {
    * Creates a value parser that validates remote names.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing remote names.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   remote(options?: GitParserOptions): ValueParser<"async", string>;
 
@@ -164,6 +168,7 @@ export interface GitParsers {
    * Creates a value parser that validates commit SHAs.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing commit SHAs.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   commit(options?: GitParserOptions): ValueParser<"async", string>;
 
@@ -172,6 +177,7 @@ export interface GitParsers {
    * Accepts branch names, tag names, or commit SHAs.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts any git reference.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   ref(options?: GitParserOptions): ValueParser<"async", string>;
 }
