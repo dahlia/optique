@@ -1866,4 +1866,64 @@ describe("formatDocPageAsMan()", () => {
       );
     }
   });
+
+  it("respects static usageLine override on command term in SYNOPSIS", () => {
+    const page: DocPage = {
+      usage: [
+        {
+          type: "command",
+          name: "serve",
+          usageLine: [{ type: "literal", value: "serve-custom" }],
+        },
+        { type: "option", names: ["--host"], metavar: "HOST" },
+      ],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    const synopsis = nextSection === -1
+      ? result.slice(synopsisStart)
+      : result.slice(synopsisStart, nextSection);
+
+    // Should contain the command name and the overridden usage
+    assert.ok(synopsis.includes("\\fBserve\\fR"));
+    assert.ok(synopsis.includes("serve-custom"));
+    // Should NOT contain the default --host option (replaced by usageLine)
+    assert.ok(!synopsis.includes("\\-\\-host"));
+  });
+
+  it("respects function usageLine override on command term in SYNOPSIS", () => {
+    const page: DocPage = {
+      usage: [
+        {
+          type: "command",
+          name: "deploy",
+          usageLine: (defaultUsage) => [
+            { type: "literal", value: "CUSTOM" },
+            ...defaultUsage,
+          ],
+        },
+        { type: "option", names: ["--force"] },
+      ],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    const synopsis = nextSection === -1
+      ? result.slice(synopsisStart)
+      : result.slice(synopsisStart, nextSection);
+
+    // Should contain the command name, the custom literal, and the default option
+    assert.ok(synopsis.includes("\\fBdeploy\\fR"));
+    assert.ok(synopsis.includes("CUSTOM"));
+    assert.ok(synopsis.includes("\\-\\-force"));
+  });
 });

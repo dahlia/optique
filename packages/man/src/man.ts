@@ -3,6 +3,7 @@ import type { Message } from "@optique/core/message";
 import {
   isDocHidden,
   isUsageHidden,
+  normalizeUsage,
   type Usage,
   type UsageTerm,
 } from "@optique/core/usage";
@@ -302,10 +303,27 @@ function formatUsageAsRoffInternal(
   usage: Usage,
   insideBrackets: boolean,
 ): string {
-  return usage
-    .map((term) => formatUsageTermAsRoffInternal(term, insideBrackets))
-    .filter((s) => s !== "")
-    .join(" ");
+  const parts: string[] = [];
+  for (let i = 0; i < usage.length; i++) {
+    const term = usage[i];
+    if (term.type === "command" && term.usageLine != null) {
+      const cmdPart = formatUsageTermAsRoffInternal(term, insideBrackets);
+      if (cmdPart) parts.push(cmdPart);
+      const defaultUsageLine = usage.slice(i + 1);
+      const customUsageLine = typeof term.usageLine === "function"
+        ? term.usageLine(defaultUsageLine)
+        : term.usageLine;
+      const customStr = formatUsageAsRoffInternal(
+        normalizeUsage(customUsageLine),
+        insideBrackets,
+      );
+      if (customStr) parts.push(customStr);
+      break;
+    }
+    const s = formatUsageTermAsRoffInternal(term, insideBrackets);
+    if (s) parts.push(s);
+  }
+  return parts.join(" ");
 }
 
 /**
