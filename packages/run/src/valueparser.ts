@@ -185,6 +185,11 @@ export type PathOptions =
  *   `"file"`, `"directory"`, or `"either"`.
  * @throws {TypeError} If any entry in {@link PathOptionsBase.extensions} does
  *   not start with a dot (e.g., `"json"` instead of `".json"`).
+ * @throws {TypeError} If {@link PathOptionsMustExist.mustExist} is not a
+ *   boolean.
+ * @throws {TypeError} If {@link PathOptionsMustNotExist.mustNotExist} is not a
+ *   boolean.
+ * @throws {TypeError} If {@link PathOptionsBase.allowCreate} is not a boolean.
  * @throws {TypeError} If both {@link PathOptionsMustExist.mustExist} and
  *   {@link PathOptionsMustNotExist.mustNotExist} are `true`.
  *
@@ -235,6 +240,39 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
         );
       }
     }
+  }
+  if (
+    options.allowCreate !== undefined &&
+    typeof options.allowCreate !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowCreate to be a boolean, but got ` +
+        `${typeof options.allowCreate}: ` +
+        `${String(options.allowCreate)}.`,
+    );
+  }
+  const rawOptions = options as Record<string, unknown>;
+  if (
+    "mustExist" in options &&
+    rawOptions.mustExist !== undefined &&
+    typeof rawOptions.mustExist !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected mustExist to be a boolean, but got ` +
+        `${typeof rawOptions.mustExist}: ` +
+        `${String(rawOptions.mustExist)}.`,
+    );
+  }
+  if (
+    "mustNotExist" in options &&
+    rawOptions.mustNotExist !== undefined &&
+    typeof rawOptions.mustNotExist !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected mustNotExist to be a boolean, but got ` +
+        `${typeof rawOptions.mustNotExist}: ` +
+        `${String(rawOptions.mustNotExist)}.`,
+    );
   }
   const mustExist = "mustExist" in options ? options.mustExist : false;
   const mustNotExist = "mustNotExist" in options ? options.mustNotExist : false;

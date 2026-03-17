@@ -1202,6 +1202,77 @@ describe("path", () => {
     });
   });
 
+  describe("boolean option validation", () => {
+    it("should reject non-boolean mustExist option", () => {
+      assert.throws(
+        () => path({ mustExist: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ mustExist: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ mustExist: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ mustExist: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ mustExist: null as never }),
+        TypeError,
+      );
+    });
+
+    it("should reject non-boolean mustNotExist option", () => {
+      assert.throws(
+        () => path({ mustNotExist: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ mustNotExist: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ mustNotExist: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ mustNotExist: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ mustNotExist: null as never }),
+        TypeError,
+      );
+    });
+
+    it("should reject non-boolean allowCreate option", () => {
+      assert.throws(
+        () => path({ allowCreate: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ allowCreate: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ allowCreate: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ allowCreate: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => path({ allowCreate: null as never }),
+        TypeError,
+      );
+    });
+  });
+
   describe("metavar validation", () => {
     it("should throw TypeError when metavar is empty string", () => {
       assert.throws(
