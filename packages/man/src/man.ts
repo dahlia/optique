@@ -153,6 +153,24 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
   return formatUsageTermAsRoffInternal(term, false);
 }
 
+/**
+ * Returns whether every visible term in a usage list produces its own
+ * brackets.  When true, a parent wrapper can safely skip adding redundant
+ * brackets around these terms.
+ */
+function allTermsBracketed(terms: Usage): boolean {
+  const visible = terms.filter(
+    (t) => !("hidden" in t && isUsageHidden(t.hidden)),
+  );
+  if (visible.length === 0) return false;
+  return visible.every((t) =>
+    t.type === "option" ||
+    t.type === "optional" ||
+    (t.type === "multiple" && t.min < 1) ||
+    t.type === "passthrough"
+  );
+}
+
 function formatUsageTermAsRoffInternal(
   term: UsageTerm,
   insideBrackets: boolean,
@@ -179,16 +197,24 @@ function formatUsageTermAsRoffInternal(
       return formatCommandNameAsRoff(term.name);
 
     case "optional": {
+      const skipBrackets = insideBrackets && allTermsBracketed(term.terms);
       const inner = formatUsageAsRoffInternal(term.terms, true);
       if (inner === "") return "";
+      if (skipBrackets) return inner;
       return `[${inner}]`;
     }
 
     case "multiple": {
       const wrapInBrackets = term.min < 1;
-      const inner = formatUsageAsRoffInternal(term.terms, wrapInBrackets);
+      const skipBrackets = insideBrackets && wrapInBrackets &&
+        allTermsBracketed(term.terms);
+      const inner = formatUsageAsRoffInternal(
+        term.terms,
+        insideBrackets || wrapInBrackets,
+      );
       if (inner === "") return "";
       if (wrapInBrackets) {
+        if (skipBrackets) return `${inner} ...`;
         return `[${inner} ...]`;
       }
       return `${inner} ...`;

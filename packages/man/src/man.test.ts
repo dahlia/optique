@@ -181,6 +181,36 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
+  it("avoids double brackets for optional(multiple(option(...)))", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{
+        type: "multiple",
+        terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
+        min: 0,
+      }],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-tag\\fR \\fISTRING\\fR ...]",
+    );
+  });
+
+  it("avoids double brackets for multiple(optional(option(...)))", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{
+        type: "optional",
+        terms: [{ type: "option", names: ["--flag"] }],
+      }],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-flag\\fR ...]",
+    );
+  });
+
   it("formats multiple term with min 0", () => {
     const term: UsageTerm = {
       type: "multiple",
