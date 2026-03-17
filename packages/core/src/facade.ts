@@ -3205,8 +3205,7 @@ export interface RunWithOptions<THelp, TError>
 export type ContextOptionsParam<
   TContexts extends readonly SourceContext<unknown>[],
   TValue,
-> = [unknown] extends [ExtractRequiredOptions<TContexts, TValue>] ? unknown
-  : keyof ExtractRequiredOptions<TContexts, TValue> extends never ? unknown
+> = keyof ExtractRequiredOptions<TContexts, TValue> extends never ? unknown
   : Record<string, never> extends ExtractRequiredOptions<TContexts, TValue>
     ? { readonly contextOptions?: ExtractRequiredOptions<TContexts, TValue> }
   : { readonly contextOptions: ExtractRequiredOptions<TContexts, TValue> };
