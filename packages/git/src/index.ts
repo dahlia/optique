@@ -255,9 +255,11 @@ function createAsyncValueParser(
       options.suggestionDepth < 1
     ) {
       const depth = options.suggestionDepth;
-      const repr = typeof depth === "string"
+      const repr = typeof depth === "number"
+        ? String(depth)
+        : typeof depth === "string"
         ? JSON.stringify(depth)
-        : String(depth);
+        : `${typeof depth} ${String(depth)}`;
       throw new RangeError(
         `Invalid suggestionDepth (must be a positive integer): ${repr}`,
       );
