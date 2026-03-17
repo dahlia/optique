@@ -3120,9 +3120,6 @@ export interface SocketAddressOptions {
 export function socketAddress(
   options?: SocketAddressOptions,
 ): ValueParser<"sync", SocketAddressValue> {
-  const metavar: NonEmptyString = options?.metavar ?? "HOST:PORT";
-  ensureNonEmptyString(metavar);
-
   const separator = options?.separator ?? ":";
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
@@ -3131,6 +3128,9 @@ export function socketAddress(
       }.`,
     );
   }
+  const metavar: NonEmptyString = options?.metavar ??
+    `HOST${separator}PORT` as NonEmptyString;
+  ensureNonEmptyString(metavar);
   const defaultPort = options?.defaultPort;
   const requirePort = options?.requirePort ?? false;
   const hostType = options?.host?.type ?? "both";
@@ -3542,9 +3542,6 @@ export function portRange(
         `${String(options.allowSingle)}.`,
     );
   }
-  const metavar: NonEmptyString = options?.metavar ?? "PORT-PORT";
-  ensureNonEmptyString(metavar);
-
   const separator = options?.separator ?? "-";
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
@@ -3553,6 +3550,9 @@ export function portRange(
       }.`,
     );
   }
+  const metavar: NonEmptyString = options?.metavar ??
+    `PORT${separator}PORT` as NonEmptyString;
+  ensureNonEmptyString(metavar);
   const allowSingle = options?.allowSingle ?? false;
   const isBigInt = options?.type === "bigint";
 
