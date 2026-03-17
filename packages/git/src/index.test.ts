@@ -1711,4 +1711,51 @@ describe("git parsers", () => {
       }
     });
   });
+
+  describe("suggestionDepth validation", () => {
+    for (
+      const depth of [
+        0,
+        -1,
+        1.5,
+        NaN,
+        Infinity,
+        -Infinity,
+        "2",
+        "foo",
+      ] as never[]
+    ) {
+      it(`gitCommit() rejects suggestionDepth: ${JSON.stringify(depth)}`, () => {
+        assert.throws(
+          () => gitCommit({ suggestionDepth: depth }),
+          RangeError,
+        );
+      });
+
+      it(`gitRef() rejects suggestionDepth: ${JSON.stringify(depth)}`, () => {
+        assert.throws(
+          () => gitRef({ suggestionDepth: depth }),
+          RangeError,
+        );
+      });
+    }
+
+    for (const depth of [1, 2, 15, 100]) {
+      it(`gitCommit() accepts suggestionDepth: ${depth}`, () => {
+        assert.doesNotThrow(() => gitCommit({ suggestionDepth: depth }));
+      });
+
+      it(`gitRef() accepts suggestionDepth: ${depth}`, () => {
+        assert.doesNotThrow(() => gitRef({ suggestionDepth: depth }));
+      });
+    }
+
+    it("gitCommit() accepts omitted suggestionDepth", () => {
+      assert.doesNotThrow(() => gitCommit());
+    });
+
+    it("gitRef() accepts omitted suggestionDepth", () => {
+      assert.doesNotThrow(() => gitRef());
+    });
+  });
 });
