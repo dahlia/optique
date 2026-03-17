@@ -368,6 +368,12 @@ To be released.
  -  `formatDocPage()` now throws `TypeError` when `programName` or a section
     title contains a CR or LF character.  [[#429], [#580]]
 
+ -  Numeric parsers (`integer()`, `float()`, `port()`, `portRange()`,
+    `cidr()`) now throw `RangeError` at construction time when given
+    contradictory range configurations (e.g., `min > max`).  Previously,
+    these parsers silently created unsatisfiable parsers that rejected every
+    input.  [[#349], [#583]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -408,6 +414,7 @@ To be released.
 [#317]: https://github.com/dahlia/optique/issues/317
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
+[#349]: https://github.com/dahlia/optique/issues/349
 [#353]: https://github.com/dahlia/optique/issues/353
 [#363]: https://github.com/dahlia/optique/issues/363
 [#370]: https://github.com/dahlia/optique/issues/370
@@ -449,6 +456,7 @@ To be released.
 [#579]: https://github.com/dahlia/optique/pull/579
 [#580]: https://github.com/dahlia/optique/pull/580
 [#581]: https://github.com/dahlia/optique/pull/581
+[#583]: https://github.com/dahlia/optique/pull/583
 
 ### @optique/config
 

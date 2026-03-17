@@ -892,6 +892,14 @@ export function integer(
 export function integer(
   options?: IntegerOptionsNumber | IntegerOptionsBigInt,
 ): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
+  if (
+    options?.min != null && options?.max != null && options.min > options.max
+  ) {
+    throw new RangeError(
+      `Expected min to be less than or equal to max, but got ` +
+        `min: ${options.min} and max: ${options.max}.`,
+    );
+  }
   if (options?.type === "bigint") {
     const metavar = options.metavar ?? "INTEGER";
     ensureNonEmptyString(metavar);
@@ -1094,6 +1102,14 @@ export interface FloatOptions {
  *          numbers.
  */
 export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
+  if (
+    options.min != null && options.max != null && options.min > options.max
+  ) {
+    throw new RangeError(
+      `Expected min to be less than or equal to max, but got ` +
+        `min: ${options.min} and max: ${options.max}.`,
+    );
+  }
   // Regular expression to match valid floating-point numbers
   // Matches: integers, decimals, scientific notation
   // Does not match: empty strings, whitespace-only, hex/bin/oct numbers
@@ -1984,6 +2000,12 @@ export function port(
     ensureNonEmptyString(metavar);
     const min = options.min ?? 1n;
     const max = options.max ?? 65535n;
+    if (min > max) {
+      throw new RangeError(
+        `Expected min to be less than or equal to max, but got ` +
+          `min: ${min} and max: ${max}.`,
+      );
+    }
 
     return {
       $mode: "sync",
@@ -2052,6 +2074,12 @@ export function port(
   ensureNonEmptyString(metavar);
   const min = options?.min ?? 1;
   const max = options?.max ?? 65535;
+  if (min > max) {
+    throw new RangeError(
+      `Expected min to be less than or equal to max, but got ` +
+        `min: ${min} and max: ${max}.`,
+    );
+  }
 
   return {
     $mode: "sync",
@@ -4858,7 +4886,37 @@ export interface CidrOptions {
 export function cidr(
   options?: CidrOptions,
 ): ValueParser<"sync", CidrValue> {
+  if (
+    options?.minPrefix != null && options?.maxPrefix != null &&
+    options.minPrefix > options.maxPrefix
+  ) {
+    throw new RangeError(
+      `Expected minPrefix to be less than or equal to maxPrefix, but got ` +
+        `minPrefix: ${options.minPrefix} and maxPrefix: ${options.maxPrefix}.`,
+    );
+  }
   const version = options?.version ?? "both";
+  const maxPrefixForVersion = version === 4 ? 32 : version === 6 ? 128 : 128;
+  if (
+    options?.minPrefix != null &&
+    (options.minPrefix < 0 || options.minPrefix > maxPrefixForVersion)
+  ) {
+    throw new RangeError(
+      `Expected minPrefix to be between 0 and ${maxPrefixForVersion} for IPv${
+        version === "both" ? "4/6" : version
+      }, but got minPrefix: ${options.minPrefix}.`,
+    );
+  }
+  if (
+    options?.maxPrefix != null &&
+    (options.maxPrefix < 0 || options.maxPrefix > maxPrefixForVersion)
+  ) {
+    throw new RangeError(
+      `Expected maxPrefix to be between 0 and ${maxPrefixForVersion} for IPv${
+        version === "both" ? "4/6" : version
+      }, but got maxPrefix: ${options.maxPrefix}.`,
+    );
+  }
   const minPrefix = options?.minPrefix;
   const maxPrefix = options?.maxPrefix;
   const errors = options?.errors;
