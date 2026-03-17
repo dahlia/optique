@@ -888,10 +888,23 @@ export function integer(
  * @param options Configuration options specifying the type and constraints.
  * @returns A {@link ValueParser} that converts string input to the specified
  *          integer type.
+ * @throws {TypeError} If `options.type` is provided but is neither `"number"`
+ *   nor `"bigint"`.
  */
 export function integer(
   options?: IntegerOptionsNumber | IntegerOptionsBigInt,
 ): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
+  if (
+    options?.type !== undefined &&
+    options.type !== "number" &&
+    options.type !== "bigint"
+  ) {
+    throw new TypeError(
+      `Expected type to be "number" or "bigint", but got: ${
+        String(options.type)
+      }.`,
+    );
+  }
   if (options?.type !== "bigint") {
     if (options?.min != null && !Number.isFinite(options.min)) {
       throw new RangeError(
@@ -2002,6 +2015,8 @@ export function port(
  *
  * @param options Configuration options specifying the type and constraints.
  * @returns A {@link ValueParser} that converts string input to port numbers.
+ * @throws {TypeError} If `options.type` is provided but is neither `"number"`
+ *   nor `"bigint"`.
  * @since 0.10.0
  */
 export function port(
@@ -2015,6 +2030,17 @@ export function port(
       `Expected disallowWellKnown to be a boolean, but got ` +
         `${typeof options.disallowWellKnown}: ` +
         `${String(options.disallowWellKnown)}.`,
+    );
+  }
+  if (
+    options?.type !== undefined &&
+    options.type !== "number" &&
+    options.type !== "bigint"
+  ) {
+    throw new TypeError(
+      `Expected type to be "number" or "bigint", but got: ${
+        String(options.type)
+      }.`,
     );
   }
   if (options?.type === "bigint") {
@@ -3551,6 +3577,8 @@ export interface PortRangeOptionsBigInt {
  *
  * @param options - Options for port range validation.
  * @returns A value parser for port ranges.
+ * @throws {TypeError} If `options.type` is provided but is neither `"number"`
+ *   nor `"bigint"`.
  * @throws {TypeError} If `separator` contains digit characters, since digits
  *   in the separator would cause ambiguous splitting of numeric port input.
  * @since 0.10.0
@@ -3599,6 +3627,17 @@ export function portRange(
       `Expected allowSingle to be a boolean, but got ` +
         `${typeof options.allowSingle}: ` +
         `${String(options.allowSingle)}.`,
+    );
+  }
+  if (
+    options?.type !== undefined &&
+    options.type !== "number" &&
+    options.type !== "bigint"
+  ) {
+    throw new TypeError(
+      `Expected type to be "number" or "bigint", but got: ${
+        String(options.type)
+      }.`,
     );
   }
   const separator = options?.separator ?? "-";

@@ -710,6 +710,33 @@ describe("integer", () => {
       );
     });
   });
+
+  describe("type discriminant validation", () => {
+    it("should reject invalid type discriminant", () => {
+      assert.throws(
+        () => integer({ type: "num" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => integer({ type: 123 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => integer({ type: null as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => integer({ type: "" as never }),
+        TypeError,
+      );
+    });
+
+    it("should accept valid type discriminant", () => {
+      assert.ok(integer({ type: "number" }));
+      assert.ok(integer({ type: "bigint" }));
+      assert.ok(integer());
+    });
+  });
 });
 
 describe("choice", () => {
@@ -5400,6 +5427,33 @@ describe("port", () => {
     });
   });
 
+  describe("type discriminant validation", () => {
+    it("should reject invalid type discriminant", () => {
+      assert.throws(
+        () => port({ type: "num" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ type: 123 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ type: null as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ type: "" as never }),
+        TypeError,
+      );
+    });
+
+    it("should accept valid type discriminant", () => {
+      assert.ok(port({ type: "number" }));
+      assert.ok(port({ type: "bigint" }));
+      assert.ok(port());
+    });
+  });
+
   describe("ipv4()", () => {
     describe("basic validation", () => {
       it("should accept valid IPv4 addresses", () => {
@@ -7319,6 +7373,33 @@ describe("portRange()", () => {
         () => portRange({ type: "bigint", allowSingle: null as never }),
         TypeError,
       );
+    });
+  });
+
+  describe("type discriminant validation", () => {
+    it("should reject invalid type discriminant", () => {
+      assert.throws(
+        () => portRange({ type: "num" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: 123 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: null as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "" as never }),
+        TypeError,
+      );
+    });
+
+    it("should accept valid type discriminant", () => {
+      assert.ok(portRange({ type: "number" }));
+      assert.ok(portRange({ type: "bigint" }));
+      assert.ok(portRange());
     });
   });
 
