@@ -177,6 +177,12 @@ export function generateManPageSync(
     parserOrProgram,
     options,
   );
+  if ((parser as { readonly $mode: string }).$mode === "async") {
+    throw new TypeError(
+      "Cannot use an async parser with generateManPageSync(). " +
+        "Use generateManPageAsync() or generateManPage() instead.",
+    );
+  }
   const docPage = getDocPageSync(parser) ?? { sections: [] };
   return formatDocPageAsMan(docPage, mergedOptions);
 }

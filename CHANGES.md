@@ -805,6 +805,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     spaces, backslashes, or quotes were corrupted by the renderer because
     roff parsed them as macro syntax.  [[#302], [#574]]
 
+ -  `generateManPageSync()` now throws `TypeError` at runtime when given an
+    async parser or program.  Previously it silently produced output; now
+    callers must use `generateManPageAsync()` or `generateManPage()` for async
+    parsers.  [[#291], [#584]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -816,6 +821,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#283]: https://github.com/dahlia/optique/issues/283
 [#286]: https://github.com/dahlia/optique/issues/286
 [#287]: https://github.com/dahlia/optique/issues/287
+[#291]: https://github.com/dahlia/optique/issues/291
 [#297]: https://github.com/dahlia/optique/issues/297
 [#298]: https://github.com/dahlia/optique/issues/298
 [#301]: https://github.com/dahlia/optique/issues/301
@@ -841,6 +847,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#567]: https://github.com/dahlia/optique/pull/567
 [#574]: https://github.com/dahlia/optique/pull/574
 [#578]: https://github.com/dahlia/optique/pull/578
+[#584]: https://github.com/dahlia/optique/pull/584
 
 
 Version 0.10.7
