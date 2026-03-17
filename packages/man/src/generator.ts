@@ -37,20 +37,20 @@ function isParser(
   value: unknown,
 ): value is Parser<Mode, unknown, unknown> {
   try {
+    if (value == null || typeof value !== "object") {
+      return false;
+    }
+    const p = value as Record<string, unknown>;
     return (
-      value != null &&
-      typeof value === "object" &&
-      "parse" in value &&
-      typeof (value as { parse?: unknown }).parse === "function" &&
-      "$mode" in value &&
-      ((value as { $mode?: unknown }).$mode === "sync" ||
-        (value as { $mode?: unknown }).$mode === "async") &&
-      "usage" in value &&
-      Array.isArray((value as { usage?: unknown }).usage) &&
-      "initialState" in value &&
-      "getDocFragments" in value &&
-      typeof (value as { getDocFragments?: unknown }).getDocFragments ===
-        "function"
+      "parse" in p &&
+      typeof p.parse === "function" &&
+      "$mode" in p &&
+      (p.$mode === "sync" || p.$mode === "async") &&
+      "usage" in p &&
+      Array.isArray(p.usage) &&
+      "initialState" in p &&
+      "getDocFragments" in p &&
+      typeof p.getDocFragments === "function"
     );
   } catch {
     return false;
