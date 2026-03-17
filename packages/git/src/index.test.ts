@@ -1759,5 +1759,19 @@ describe("git parsers", () => {
     it("gitRef() accepts omitted suggestionDepth", () => {
       assert.doesNotThrow(() => gitRef());
     });
+
+    it("gitBranch() rejects invalid suggestionDepth", () => {
+      assert.throws(
+        () => gitBranch({ suggestionDepth: 0 as never }),
+        RangeError,
+      );
+    });
+
+    it("createGitParsers() propagates validation to methods", () => {
+      const parsers = createGitParsers({ suggestionDepth: -1 as never });
+      assert.throws(() => parsers.commit(), RangeError);
+      assert.throws(() => parsers.ref(), RangeError);
+      assert.throws(() => parsers.branch(), RangeError);
+    });
   });
 });
