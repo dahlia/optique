@@ -287,6 +287,16 @@ To be released.
     enabled case-insensitive matching due to JavaScript truthiness coercion.
     [[#389], [#548]]
 
+ -  Changed `port()` to reject non-boolean `disallowWellKnown` option values
+    at runtime.  Previously, truthy non-boolean values like `"no"` silently
+    enabled well-known port restrictions due to JavaScript truthiness coercion.
+    [[#370], [#573]]
+
+ -  Changed `portRange()` to reject non-boolean `disallowWellKnown` and
+    `allowSingle` option values at runtime.  Previously, truthy non-boolean
+    values like `"no"` silently enabled those behaviors due to JavaScript
+    truthiness coercion.  [[#370], [#573]]
+
  -  Changed `choice()` to throw `TypeError` when `NaN` is included in the
     number choices array.  Previously, `NaN` was silently filtered out but
     still advertised in suggestions and help output, creating an unsatisfiable
@@ -377,6 +387,7 @@ To be released.
 [#332]: https://github.com/dahlia/optique/issues/332
 [#353]: https://github.com/dahlia/optique/issues/353
 [#363]: https://github.com/dahlia/optique/issues/363
+[#370]: https://github.com/dahlia/optique/issues/370
 [#371]: https://github.com/dahlia/optique/issues/371
 [#385]: https://github.com/dahlia/optique/issues/385
 [#388]: https://github.com/dahlia/optique/issues/388
@@ -407,6 +418,7 @@ To be released.
 [#566]: https://github.com/dahlia/optique/pull/566
 [#568]: https://github.com/dahlia/optique/pull/568
 [#572]: https://github.com/dahlia/optique/pull/572
+[#573]: https://github.com/dahlia/optique/pull/573
 
 ### @optique/config
 
