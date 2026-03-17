@@ -163,6 +163,35 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
+  it("preserves option brackets in mixed optional group", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [
+        { type: "argument", metavar: "FILE" },
+        { type: "option", names: ["--flag"] },
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fIFILE\\fR [\\fB\\-\\-flag\\fR]]",
+    );
+  });
+
+  it("preserves option brackets in mixed multiple(min=0) group", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [
+        { type: "argument", metavar: "FILE" },
+        { type: "option", names: ["--recursive"] },
+      ],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fIFILE\\fR [\\fB\\-\\-recursive\\fR] ...]",
+    );
+  });
+
   it("preserves inner brackets for nested multiple(min=0) with siblings", () => {
     const term: UsageTerm = {
       type: "optional",

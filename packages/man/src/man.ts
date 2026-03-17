@@ -197,8 +197,12 @@ function formatUsageTermAsRoffInternal(
       return formatCommandNameAsRoff(term.name);
 
     case "optional": {
-      const skipBrackets = insideBrackets && allTermsBracketed(term.terms);
-      const inner = formatUsageAsRoffInternal(term.terms, true);
+      const childrenBracketed = allTermsBracketed(term.terms);
+      const skipBrackets = insideBrackets && childrenBracketed;
+      const inner = formatUsageAsRoffInternal(
+        term.terms,
+        skipBrackets || childrenBracketed,
+      );
       if (inner === "") return "";
       if (skipBrackets) return inner;
       return `[${inner}]`;
@@ -206,11 +210,14 @@ function formatUsageTermAsRoffInternal(
 
     case "multiple": {
       const wrapInBrackets = term.min < 1;
+      const childrenBracketed = allTermsBracketed(term.terms);
       const skipBrackets = insideBrackets && wrapInBrackets &&
-        allTermsBracketed(term.terms);
+        childrenBracketed;
+      const innerBracketed = (skipBrackets || wrapInBrackets) &&
+        childrenBracketed;
       const inner = formatUsageAsRoffInternal(
         term.terms,
-        insideBrackets || wrapInBrackets,
+        innerBracketed,
       );
       if (inner === "") return "";
       if (wrapInBrackets) {
