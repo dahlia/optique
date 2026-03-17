@@ -1538,6 +1538,16 @@ describe("formatDocPage", () => {
       TypeError,
     );
   });
+
+  it("should not throw for newline in title of empty section", () => {
+    const page: DocPage = {
+      sections: [{
+        title: "bad\nsection",
+        entries: [],
+      }],
+    };
+    assert.doesNotThrow(() => formatDocPage("myapp", page));
+  });
 });
 
 describe("branch coverage: doc.ts edge cases", () => {
