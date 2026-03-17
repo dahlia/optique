@@ -591,7 +591,10 @@ export function gitCommit(
         const commits = await git.log({ fs: gitFs, dir, depth });
         for (const commit of commits) {
           if (commit.oid.startsWith(prefix)) {
-            const shortOid = commit.oid.slice(0, 7);
+            const shortOid = commit.oid.slice(
+              0,
+              Math.max(7, prefix.length),
+            );
             const firstLine = commit.commit.message.split("\n")[0];
             yield {
               kind: "literal" as const,
@@ -692,7 +695,10 @@ export function gitRef(
 
         for (const commit of commits) {
           if (commit.oid.startsWith(prefix)) {
-            const shortOid = commit.oid.slice(0, 7);
+            const shortOid = commit.oid.slice(
+              0,
+              Math.max(7, prefix.length),
+            );
             if (seen.has(shortOid)) continue;
             seen.add(shortOid);
             const firstLine = commit.commit.message.split("\n")[0];

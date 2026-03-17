@@ -581,6 +581,40 @@ describe("git parsers", () => {
       }
     });
 
+    it("should suggest commit OIDs at least as long as the prefix", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const oid = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "main",
+        });
+        const longPrefix = oid.slice(0, 10);
+        const parser = gitCommit({ dir: testRepoDir });
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!(longPrefix)) {
+          suggestions.push(s);
+        }
+        const literals = suggestions.filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+        );
+        assert.ok(literals.length > 0, "Should suggest at least one commit");
+        for (const s of literals) {
+          assert.ok(
+            s.text.length >= longPrefix.length,
+            `Suggestion '${s.text}' should be at least as long as ` +
+              `prefix '${longPrefix}'`,
+          );
+          assert.ok(
+            s.text.startsWith(longPrefix),
+            `Suggestion '${s.text}' should start with prefix '${longPrefix}'`,
+          );
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should report ambiguous abbreviated commit SHAs", async () => {
       const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
       try {
@@ -1011,6 +1045,43 @@ describe("git parsers", () => {
           literals.some((s) => s.text.length === 7),
           "Should suggest short commit SHAs",
         );
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should suggest commit OIDs at least as long as the prefix", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const oid = await isomorphicGit.resolveRef({
+          fs,
+          dir: testRepoDir,
+          ref: "main",
+        });
+        // Use a prefix longer than 7 characters
+        const longPrefix = oid.slice(0, 10);
+        const parser = gitRef({ dir: testRepoDir });
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!(longPrefix)) {
+          suggestions.push(s);
+        }
+        const literals = suggestions.filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+        );
+        assert.ok(
+          literals.length > 0,
+          "Should suggest at least one commit",
+        );
+        for (const s of literals) {
+          assert.ok(
+            s.text.length >= longPrefix.length,
+            `Suggestion '${s.text}' should be at least as long as prefix '${longPrefix}'`,
+          );
+          assert.ok(
+            s.text.startsWith(longPrefix),
+            `Suggestion '${s.text}' should start with prefix '${longPrefix}'`,
+          );
+        }
       } finally {
         await cleanupTestRepo(testRepoDir);
       }
