@@ -617,11 +617,17 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `object()` silently skipping the prompt and returning the
     optional/default value instead.  [[#288], [#540]]
 
+ -  Fixed `prompt()` double-wrapping already-optional inner parsers, which
+    caused help usage to render `[[--name STRING]]` instead of
+    `[--name STRING]`.  [[#289], [#582]]
+
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137
 [#151]: https://github.com/dahlia/optique/issues/151
 [#288]: https://github.com/dahlia/optique/issues/288
+[#289]: https://github.com/dahlia/optique/issues/289
 [#540]: https://github.com/dahlia/optique/pull/540
+[#582]: https://github.com/dahlia/optique/pull/582
 
 ### @optique/temporal
 
