@@ -34,7 +34,7 @@ describe("generateManPage()", () => {
       section: 1,
     });
 
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
     assert.ok(result.includes(".SH NAME"));
     assert.ok(result.includes('.SH "OPTIONS"'));
     assert.ok(result.includes("\\fB\\-\\-verbose\\fR"));
@@ -85,7 +85,7 @@ describe("generateManPage()", () => {
     });
 
     assert.ok(result.includes(".SH SYNOPSIS"));
-    assert.ok(result.includes(".B myapp"));
+    assert.ok(result.includes('.B "myapp"'));
     assert.ok(result.includes("\\fB\\-\\-output\\fR"));
     assert.ok(result.includes("\\fIINPUT\\fR"));
   });
@@ -111,7 +111,7 @@ describe("generateManPage()", () => {
       section: 1,
     });
 
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
     assert.ok(result.includes("\\fBbuild\\fR"));
     assert.ok(result.includes("Build the project"));
   });
@@ -142,8 +142,8 @@ describe("generateManPage()", () => {
     });
 
     assert.ok(result.includes(".SH SEE ALSO"));
-    assert.ok(result.includes(".BR git (1)"));
-    assert.ok(result.includes(".BR make (1)"));
+    assert.ok(result.includes('.BR "git" (1)'));
+    assert.ok(result.includes('.BR "make" (1)'));
   });
 
   it("includes examples", () => {
@@ -215,7 +215,7 @@ describe("generateManPage()", () => {
     });
 
     // Check all major sections
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
     assert.ok(result.includes(".SH NAME"));
     assert.ok(result.includes(".SH SYNOPSIS"));
     assert.ok(result.includes('.SH "OPTIONS"'));
@@ -241,7 +241,7 @@ describe("generateManPageSync()", () => {
     });
 
     assert.ok(typeof result === "string");
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
   });
 
   it("rejects a malformed program-like object", () => {
@@ -382,7 +382,7 @@ describe("generateManPageSync()", () => {
       name: "fallback",
       section: 1,
     });
-    assert.ok(result.includes(".TH FALLBACK 1"));
+    assert.ok(result.includes('.TH "FALLBACK" 1'));
     assert.ok(result.includes(".SH NAME"));
   });
 });
@@ -399,7 +399,7 @@ describe("generateManPageAsync()", () => {
     });
 
     assert.ok(typeof result === "string");
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
   });
 
   it("rejects a malformed program-like object", async () => {
@@ -472,7 +472,7 @@ describe("generateManPageAsync()", () => {
       name: "fallback-async",
       section: 1,
     });
-    assert.ok(result.includes(".TH FALLBACK\\-ASYNC 1"));
+    assert.ok(result.includes('.TH "FALLBACK\\-ASYNC" 1'));
     assert.ok(result.includes(".SH NAME"));
   });
 });
@@ -510,7 +510,7 @@ describe("generateManPage() mode dispatch", () => {
       name: "dispatch",
       section: 1,
     });
-    assert.ok(result.includes(".TH DISPATCH 1"));
+    assert.ok(result.includes('.TH "DISPATCH" 1'));
   });
 });
 
@@ -532,7 +532,7 @@ describe("Program-based API", () => {
 
     const result = generateManPage(prog, { section: 1 });
 
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
     assert.ok(result.includes('"myapp 1.0.0"'));
     assert.ok(result.includes(".SH AUTHOR"));
     assert.ok(result.includes("Hong Minhee"));
@@ -557,7 +557,7 @@ describe("Program-based API", () => {
       author: message`Override Author`,
     });
 
-    assert.ok(result.includes(".TH OVERRIDDEN 1"));
+    assert.ok(result.includes('.TH "OVERRIDDEN" 1'));
     assert.ok(result.includes('"overridden 2.0.0"'));
     assert.ok(result.includes("Override Author"));
     assert.ok(!result.includes("Original Author"));
@@ -582,7 +582,7 @@ describe("Program-based API", () => {
     assert.ok(result.includes('"January 2026"'));
     assert.ok(result.includes('"User Commands"'));
     assert.ok(result.includes(".SH SEE ALSO"));
-    assert.ok(result.includes(".BR git (1)"));
+    assert.ok(result.includes('.BR "git" (1)'));
   });
 
   it("works with generateManPageSync()", () => {
@@ -599,7 +599,7 @@ describe("Program-based API", () => {
     const result = generateManPageSync(prog, { section: 1 });
 
     assert.ok(typeof result === "string");
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
     assert.ok(result.includes('"myapp 1.0.0"'));
   });
 
@@ -617,7 +617,7 @@ describe("Program-based API", () => {
     const result = await generateManPageAsync(prog, { section: 1 });
 
     assert.ok(typeof result === "string");
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
     assert.ok(result.includes('"myapp 1.0.0"'));
   });
 
@@ -628,7 +628,7 @@ describe("Program-based API", () => {
     });
 
     const result = generateManPageSync(prog, { section: 1 });
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
   });
 
   it("falls back to empty doc page for Program in generateManPageAsync()", async () => {
@@ -638,7 +638,7 @@ describe("Program-based API", () => {
     });
 
     const result = await generateManPageAsync(prog, { section: 1 });
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
   });
 
   it("includes examples from metadata", () => {

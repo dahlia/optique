@@ -737,6 +737,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     with empty quoted fields.  Empty strings are now treated as absent.
     [[#303], [#564]]
 
+ -  Fixed `formatDocPageAsMan()` emitting raw program and `SEE ALSO` names
+    into roff macros (`.TH`, `.B`, `.BR`) without quoting.  Names containing
+    spaces, backslashes, or quotes were corrupted by the renderer because
+    roff parsed them as macro syntax.  [[#302], [#574]]
+
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -751,6 +756,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#297]: https://github.com/dahlia/optique/issues/297
 [#298]: https://github.com/dahlia/optique/issues/298
 [#301]: https://github.com/dahlia/optique/issues/301
+[#302]: https://github.com/dahlia/optique/issues/302
 [#303]: https://github.com/dahlia/optique/issues/303
 [#305]: https://github.com/dahlia/optique/issues/305
 [#526]: https://github.com/dahlia/optique/pull/526
@@ -769,6 +775,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#563]: https://github.com/dahlia/optique/pull/563
 [#564]: https://github.com/dahlia/optique/pull/564
 [#567]: https://github.com/dahlia/optique/pull/567
+[#574]: https://github.com/dahlia/optique/pull/574
 
 
 Version 0.10.7

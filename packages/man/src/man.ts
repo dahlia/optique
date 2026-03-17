@@ -425,7 +425,7 @@ export function formatDocPageAsMan(
 
   // .TH - Title heading
   const thParts = [
-    escapeHyphens(escapeThField(options.name).toUpperCase()),
+    `"${escapeHyphens(escapeThField(options.name).toUpperCase())}"`,
     options.section.toString(),
   ];
   // .TH format: name section [date [source [manual]]]
@@ -470,7 +470,7 @@ export function formatDocPageAsMan(
   // .SH SYNOPSIS
   if (page.usage) {
     lines.push(".SH SYNOPSIS");
-    lines.push(`.B ${escapeHyphens(escapeRoff(options.name))}`);
+    lines.push(`.B "${escapeHyphens(escapeRequestArg(options.name))}"`);
     const usageStr = formatUsageAsRoff(page.usage);
     if (usageStr) {
       lines.push(usageStr);
@@ -539,9 +539,9 @@ export function formatDocPageAsMan(
     lines.push(".SH SEE ALSO");
     const refs = options.seeAlso.map((ref, i) => {
       const suffix = i < options.seeAlso!.length - 1 ? "," : "";
-      return `.BR ${
-        escapeHyphens(escapeRoff(ref.name))
-      } (${ref.section})${suffix}`;
+      return `.BR "${
+        escapeHyphens(escapeRequestArg(ref.name))
+      }" (${ref.section})${suffix}`;
     });
     lines.push(refs.join("\n"));
   }
