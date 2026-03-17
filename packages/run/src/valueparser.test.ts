@@ -1203,73 +1203,42 @@ describe("path", () => {
   });
 
   describe("boolean option validation", () => {
+    const invalidBooleanValues = ["no", 1, "true", 0, null] as const;
+
     it("should reject non-boolean mustExist option", () => {
-      assert.throws(
-        () => path({ mustExist: "no" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ mustExist: 1 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ mustExist: "true" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ mustExist: 0 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ mustExist: null as never }),
-        TypeError,
-      );
+      for (const value of invalidBooleanValues) {
+        assert.throws(
+          // @ts-expect-error intentional runtime validation test
+          () => path({ mustExist: value }),
+          { name: "TypeError", message: /Expected mustExist to be a boolean/ },
+        );
+      }
     });
 
     it("should reject non-boolean mustNotExist option", () => {
-      assert.throws(
-        () => path({ mustNotExist: "no" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ mustNotExist: 1 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ mustNotExist: "true" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ mustNotExist: 0 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ mustNotExist: null as never }),
-        TypeError,
-      );
+      for (const value of invalidBooleanValues) {
+        assert.throws(
+          // @ts-expect-error intentional runtime validation test
+          () => path({ mustNotExist: value }),
+          {
+            name: "TypeError",
+            message: /Expected mustNotExist to be a boolean/,
+          },
+        );
+      }
     });
 
     it("should reject non-boolean allowCreate option", () => {
-      assert.throws(
-        () => path({ allowCreate: "no" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ allowCreate: 1 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ allowCreate: "true" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ allowCreate: 0 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => path({ allowCreate: null as never }),
-        TypeError,
-      );
+      for (const value of invalidBooleanValues) {
+        assert.throws(
+          // @ts-expect-error intentional runtime validation test
+          () => path({ allowCreate: value }),
+          {
+            name: "TypeError",
+            message: /Expected allowCreate to be a boolean/,
+          },
+        );
+      }
     });
   });
 
