@@ -138,6 +138,38 @@ function processOptionalStyleResult<TState>(
  * @returns A {@link Parser} that produces either the result of the wrapped parser
  *          or `undefined` if the wrapped parser fails to match.
  */
+
+/**
+ * Creates a `shouldDeferCompletion` adapter that unwraps the outer state
+ * shape (`[TState] | undefined`) used by {@link optional} and
+ * {@link withDefault} before delegating to the inner parser's hook.
+ *
+ * When state is an array, the adapter unwraps `state[0]` and propagates
+ * annotations from the outer array.  Non-array objects (e.g., PromptBindState
+ * from `prompt()`) are passed through directly.  `undefined` returns `false`
+ * without calling the inner hook.
+ *
+ * @internal
+ */
+function adaptShouldDeferCompletion<TState>(
+  innerCheck: (state: TState) => boolean,
+): (state: [TState] | undefined) => boolean {
+  return (state: [TState] | undefined): boolean => {
+    if (Array.isArray(state)) {
+      const inner = getAnnotations(state) != null &&
+          state[0] != null &&
+          typeof state[0] === "object"
+        ? inheritAnnotations(state, state[0]) as TState
+        : state[0];
+      return innerCheck(inner);
+    }
+    if (state != null && typeof state === "object") {
+      return innerCheck(state as unknown as TState);
+    }
+    return false;
+  };
+}
+
 export function optional<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
 ): Parser<M, TValue | undefined, [TState] | undefined> {
@@ -212,28 +244,11 @@ export function optional<M extends Mode, TValue, TState>(
     ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
-    // When state is an array, unwraps and propagates annotations from
-    // the outer array to the inner element before delegating.  When
-    // state is a non-array object (e.g., PromptBindState from prompt()),
-    // delegates directly so annotation-based checks still work.
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
-        shouldDeferCompletion(state: [TState] | undefined): boolean {
-          if (Array.isArray(state)) {
-            const inner = getAnnotations(state) != null &&
-                state[0] != null &&
-                typeof state[0] === "object"
-              ? inheritAnnotations(state, state[0]) as TState
-              : state[0];
-            return parser.shouldDeferCompletion!(inner);
-          }
-          if (state != null && typeof state === "object") {
-            return parser.shouldDeferCompletion!(
-              state as unknown as TState,
-            );
-          }
-          return false;
-        },
+        shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
+          parser.shouldDeferCompletion.bind(parser),
+        ),
       }
       : {}),
     parse(context: ParserContext<[TState] | undefined>) {
@@ -569,28 +584,11 @@ export function withDefault<
     ...wrappedDependencyMarker,
     // Forward completion deferral hook from inner parser, adapting the
     // outer state shape ([TState] | undefined) to the inner TState.
-    // When state is an array, unwraps and propagates annotations from
-    // the outer array to the inner element before delegating.  When
-    // state is a non-array object (e.g., PromptBindState from prompt()),
-    // delegates directly so annotation-based checks still work.
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
-        shouldDeferCompletion(state: [TState] | undefined): boolean {
-          if (Array.isArray(state)) {
-            const inner = getAnnotations(state) != null &&
-                state[0] != null &&
-                typeof state[0] === "object"
-              ? inheritAnnotations(state, state[0]) as TState
-              : state[0];
-            return parser.shouldDeferCompletion!(inner);
-          }
-          if (state != null && typeof state === "object") {
-            return parser.shouldDeferCompletion!(
-              state as unknown as TState,
-            );
-          }
-          return false;
-        },
+        shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
+          parser.shouldDeferCompletion.bind(parser),
+        ),
       }
       : {}),
     parse(context: ParserContext<[TState] | undefined>) {
