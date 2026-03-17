@@ -4706,6 +4706,42 @@ describe("runWith", () => {
 
       assert.deepEqual(result, { name: "default" });
     });
+
+    it("should not require contextOptions when all keys are optional", async () => {
+      let receivedOptions: unknown;
+      const key = Symbol.for("@test/all-optional-context");
+
+      const context: SourceContext<{ profile?: string }> = {
+        id: key,
+        getAnnotations(_parsed?: unknown, options?: unknown) {
+          receivedOptions = options;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      // This must compile without contextOptions
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { name: "default" });
+
+      // But contextOptions can still be provided for type-safe optional values
+      await runWith(parser, "test", [context], {
+        args: [],
+        contextOptions: { profile: "dev" },
+      });
+
+      assert.ok(receivedOptions != null);
+      assert.equal(
+        (receivedOptions as Record<string, unknown>).profile,
+        "dev",
+      );
+    });
   });
 });
 
