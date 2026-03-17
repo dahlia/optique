@@ -1296,7 +1296,9 @@ describe("prompt()", () => {
           programName: "test",
           args: [],
           contexts: [context],
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
         });
 
         assert.equal(result.apiKey, expectedValue);
@@ -2243,7 +2245,9 @@ describe("prompt()", () => {
           programName: "test",
           args: [],
           contexts: [context],
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
         });
 
         assert.equal(result.apiKey, expectedValue);
@@ -2296,7 +2300,9 @@ describe("prompt()", () => {
           programName: "test",
           args: [],
           contexts: [context],
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
         });
 
         assert.equal(result.apiKey, expectedValue);
@@ -2349,7 +2355,9 @@ describe("prompt()", () => {
           programName: "test",
           args: [],
           contexts: [context],
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
         });
 
         assert.equal(result.apiKey, expectedValue);

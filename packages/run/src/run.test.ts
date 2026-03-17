@@ -1462,6 +1462,68 @@ describe("run with contexts", () => {
     assert.ok(receivedOptions !== undefined);
   });
 
+  it("should forward contextOptions to contexts without collision", async () => {
+    let receivedOptions: unknown;
+    const key = Symbol.for("@test/run-context-options-collision");
+
+    const context: SourceContext<{ help: string }> = {
+      id: key,
+      getAnnotations(_parsed?: unknown, options?: unknown) {
+        receivedOptions = options;
+        return {};
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    await run(parser, {
+      args: [],
+      programName: "test",
+      help: "option",
+      contexts: [context],
+      contextOptions: { help: "from-context" },
+    });
+
+    // The context should receive "from-context", not the runner's help config
+    assert.ok(receivedOptions != null);
+    assert.equal(
+      (receivedOptions as Record<string, unknown>).help,
+      "from-context",
+    );
+  });
+
+  it("should forward contextOptions in runSync without collision", () => {
+    let receivedOptions: unknown;
+    const key = Symbol.for("@test/runsync-context-options-collision");
+
+    const context: SourceContext<{ programName: string }> = {
+      id: key,
+      getAnnotations(_parsed?: unknown, options?: unknown) {
+        receivedOptions = options;
+        return {};
+      },
+    };
+
+    const parser = object({
+      name: withDefault(option("--name", string()), "default"),
+    });
+
+    runSync(parser, {
+      args: [],
+      programName: "runner-name",
+      contexts: [context],
+      contextOptions: { programName: "context-name" },
+    });
+
+    assert.ok(receivedOptions != null);
+    assert.equal(
+      (receivedOptions as Record<string, unknown>).programName,
+      "context-name",
+    );
+  });
+
   it("should dispose contexts via run()", async () => {
     let disposed = false;
     const key = Symbol.for("@test/run-dispose");
@@ -1693,17 +1755,21 @@ describe("run with contexts", () => {
       | Promise<{ config: string; host: string }> = run(program, {
         args: [],
         contexts: emptyContexts,
-        getPath: (parsed) => parsed.config,
+        contextOptions: {
+          getPath: (parsed) => parsed.config,
+        },
       });
     const filledResult:
       | { config: string; host: string }
       | Promise<{ config: string; host: string }> = run(program, {
         args: [],
         contexts: filledContexts,
-        getPath: (parsed) => {
-          // @ts-expect-error - parsed must not be any.
-          void parsed.nonexistent;
-          return parsed.config;
+        contextOptions: {
+          getPath: (parsed) => {
+            // @ts-expect-error - parsed must not be any.
+            void parsed.nonexistent;
+            return parsed.config;
+          },
         },
       });
 
@@ -1723,7 +1789,9 @@ describe("run with contexts", () => {
     const syncResult: { config: string; host: string } = run(program, {
       args: [],
       contexts: filledContexts,
-      getPath: (parsed) => parsed.config,
+      contextOptions: {
+        getPath: (parsed) => parsed.config,
+      },
     });
     void syncResult;
   });
@@ -1797,10 +1865,12 @@ describe("run with contexts", () => {
     const result = run(program, {
       args: [],
       contexts: [context],
-      getPath: (parsed) => {
-        // @ts-expect-error - parsed must not be any.
-        void parsed.nonexistent;
-        return parsed.config;
+      contextOptions: {
+        getPath: (parsed) => {
+          // @ts-expect-error - parsed must not be any.
+          void parsed.nonexistent;
+          return parsed.config;
+        },
       },
     });
 
@@ -1839,14 +1909,20 @@ describe("run with contexts", () => {
     const contexts: readonly ProgramPathContext[] = [context];
     const options: RunOptions & {
       readonly contexts: readonly ProgramPathContext[];
-      readonly getPath: (parsed: { config: string; host: string }) => string;
+      readonly contextOptions: {
+        readonly getPath: (
+          parsed: { config: string; host: string },
+        ) => string;
+      };
     } = {
       args: [],
       contexts,
-      getPath: (parsed) => {
-        // @ts-expect-error - parsed must not be any.
-        void parsed.nonexistent;
-        return parsed.config;
+      contextOptions: {
+        getPath: (parsed) => {
+          // @ts-expect-error - parsed must not be any.
+          void parsed.nonexistent;
+          return parsed.config;
+        },
       },
     };
 
@@ -1985,10 +2061,7 @@ describe("runSync with contexts", () => {
       {
         args: [],
         contexts: [context],
-        envName: "dev",
-      } as RunOptions & {
-        readonly contexts: readonly [SourceContext];
-        readonly envName: string;
+        contextOptions: { envName: "dev" },
       },
     );
 
@@ -2127,10 +2200,12 @@ describe("runSync with contexts", () => {
     const result: { config: string; host: string } = runSync(program, {
       args: [],
       contexts: [context],
-      getPath: (parsed) => {
-        // @ts-expect-error - parsed must not be any.
-        void parsed.nonexistent;
-        return parsed.config;
+      contextOptions: {
+        getPath: (parsed) => {
+          // @ts-expect-error - parsed must not be any.
+          void parsed.nonexistent;
+          return parsed.config;
+        },
       },
     });
 
@@ -2172,9 +2247,11 @@ describe("runSync with contexts", () => {
         args: [],
         programName: "test",
         contexts: [context],
-        getConfigPath: (
-          parsed: { readonly config: string },
-        ) => parsed.config,
+        contextOptions: {
+          getConfigPath: (
+            parsed: { readonly config: string },
+          ) => parsed.config,
+        },
       });
 
       assert.deepEqual(result, {
@@ -2220,9 +2297,11 @@ describe("runSync with contexts", () => {
         args: ["--host", "cli.example.com"],
         programName: "test",
         contexts: [context],
-        getConfigPath: (
-          parsed: { readonly config: string },
-        ) => parsed.config,
+        contextOptions: {
+          getConfigPath: (
+            parsed: { readonly config: string },
+          ) => parsed.config,
+        },
       });
 
       assert.deepEqual(result, {
@@ -2304,8 +2383,8 @@ describe("runAsync with contexts", () => {
         args: [],
         programName: "test",
         contexts: [context],
-        profile: "local",
-      } as RunOptions & { readonly profile: string },
+        contextOptions: { profile: "local" },
+      },
     );
 
     assert.deepEqual(result, { name: "default" });
@@ -2348,10 +2427,12 @@ describe("runAsync with contexts", () => {
     const result = runAsync(program, {
       args: [],
       contexts: [context],
-      getPath: (parsed) => {
-        // @ts-expect-error - parsed must not be any.
-        void parsed.nonexistent;
-        return parsed.config;
+      contextOptions: {
+        getPath: (parsed) => {
+          // @ts-expect-error - parsed must not be any.
+          void parsed.nonexistent;
+          return parsed.config;
+        },
       },
     });
 
