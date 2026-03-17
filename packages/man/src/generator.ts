@@ -63,8 +63,12 @@ function isParser(
 function isProgram<M extends Mode, T>(
   value: Parser<M, T, unknown> | Program<M, T>,
 ): value is Program<M, T> {
-  return typeof value === "object" && value !== null &&
-    "parser" in value && "metadata" in value;
+  try {
+    return typeof value === "object" && value !== null &&
+      "parser" in value && "metadata" in value;
+  } catch {
+    return false;
+  }
 }
 
 /**
