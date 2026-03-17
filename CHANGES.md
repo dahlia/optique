@@ -297,6 +297,11 @@ To be released.
     values like `"no"` silently enabled those behaviors due to JavaScript
     truthiness coercion.  [[#370], [#573]]
 
+ -  Changed `portRange()` and `socketAddress()` to reject `separator` values
+    that contain digit characters.  Digit-containing separators caused ambiguous
+    splitting of numeric port input, silently reinterpreting single ports as
+    ranges.  [[#378]]
+
  -  Changed `choice()` to throw `TypeError` when `NaN` is included in the
     number choices array.  Previously, `NaN` was silently filtered out but
     still advertised in suggestions and help output, creating an unsatisfiable
@@ -389,6 +394,7 @@ To be released.
 [#363]: https://github.com/dahlia/optique/issues/363
 [#370]: https://github.com/dahlia/optique/issues/370
 [#371]: https://github.com/dahlia/optique/issues/371
+[#378]: https://github.com/dahlia/optique/issues/378
 [#385]: https://github.com/dahlia/optique/issues/385
 [#388]: https://github.com/dahlia/optique/issues/388
 [#389]: https://github.com/dahlia/optique/issues/389
