@@ -3200,6 +3200,8 @@ export interface RunWithOptions<THelp, TError>
  * When all context option keys are optional, `contextOptions` itself becomes
  * optional so callers are not forced to pass an empty wrapper.
  *
+ * @template TContexts The tuple/array type of source contexts.
+ * @template TValue The parser value type for placeholder substitution.
  * @since 1.0.0
  */
 export type ContextOptionsParam<
