@@ -9,6 +9,9 @@ import {
 import type { DocPage, DocSection } from "@optique/core/doc";
 import type { Usage, UsageTerm } from "@optique/core/usage";
 import { message } from "@optique/core/message";
+import { command, constant } from "@optique/core/primitives";
+import { or } from "@optique/core/constructs";
+import { getDocPage } from "@optique/core/parser";
 
 describe("formatDateForMan()", () => {
   it("formats Date object to 'Month Year' format", () => {
@@ -1925,5 +1928,38 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(synopsis.includes("\\fBdeploy\\fR"));
     assert.ok(synopsis.includes("CUSTOM"));
     assert.ok(synopsis.includes("\\-\\-force"));
+  });
+
+  it("does not double-apply usageLine callback on getDocPage() output", async () => {
+    const parser = command(
+      "config",
+      or(
+        command("get", constant("get")),
+        command("set", constant("set")),
+      ),
+      {
+        usageLine: (defaultUsage) => [
+          { type: "literal", value: "SUBCOMMAND" },
+          ...defaultUsage,
+        ],
+      },
+    );
+
+    const page = await getDocPage(parser, ["config"]);
+    assert.ok(page);
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    const synopsis = nextSection === -1
+      ? result.slice(synopsisStart)
+      : result.slice(synopsisStart, nextSection);
+
+    // "SUBCOMMAND" should appear exactly once (not duplicated)
+    const firstIdx = synopsis.indexOf("SUBCOMMAND");
+    assert.notEqual(firstIdx, -1, "SUBCOMMAND should appear in SYNOPSIS");
+    const secondIdx = synopsis.indexOf("SUBCOMMAND", firstIdx + 1);
+    assert.equal(secondIdx, -1, "SUBCOMMAND should not appear twice");
   });
 });

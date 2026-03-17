@@ -1028,6 +1028,10 @@ function buildDocPage(
       usage.length - (usageIndex + 1),
       ...normalizedCustomUsageLine,
     );
+    // Strip the usageLine from the command term so downstream formatters
+    // (e.g., man page SYNOPSIS) do not re-apply it:
+    const { usageLine: _, ...stripped } = term;
+    usage[usageIndex] = stripped as UsageTerm;
   };
   let i = 0;
   for (let argIndex = 0; argIndex < args.length; argIndex++) {
