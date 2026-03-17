@@ -374,6 +374,10 @@ To be released.
     these parsers silently created unsatisfiable parsers that rejected every
     input.  [[#349], [#583]]
 
+ -  Fixed `map()` applying transforms to deferred prompt placeholders during
+    phase-one parsing.  `map(prompt(bindConfig(…)), fn)` no longer throws
+    before config resolution runs.  [[#296], [#585]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -408,6 +412,7 @@ To be released.
 [#245]: https://github.com/dahlia/optique/issues/245
 [#248]: https://github.com/dahlia/optique/issues/248
 [#249]: https://github.com/dahlia/optique/issues/249
+[#296]: https://github.com/dahlia/optique/issues/296
 [#307]: https://github.com/dahlia/optique/issues/307
 [#310]: https://github.com/dahlia/optique/issues/310
 [#315]: https://github.com/dahlia/optique/issues/315
@@ -457,6 +462,7 @@ To be released.
 [#580]: https://github.com/dahlia/optique/pull/580
 [#581]: https://github.com/dahlia/optique/pull/581
 [#583]: https://github.com/dahlia/optique/pull/583
+[#585]: https://github.com/dahlia/optique/pull/585
 
 ### @optique/config
 
