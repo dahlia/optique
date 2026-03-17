@@ -171,9 +171,7 @@ function formatUsageTermAsRoffInternal(
       const metavarPart = term.metavar
         ? ` \\fI${escapeRoff(term.metavar)}\\fR`
         : "";
-      if (insideBrackets && term.names.length < 2) {
-        return `${names}${metavarPart}`;
-      }
+      if (insideBrackets) return `${names}${metavarPart}`;
       return `[${names}${metavarPart}]`;
     }
 

@@ -121,7 +121,18 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-debug\\fR]");
   });
 
-  it("preserves alias grouping for optional wrapping aliased options", () => {
+  it("avoids double brackets for optional wrapping aliased option", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "option", names: ["--verbose", "-v"] }],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR]",
+    );
+  });
+
+  it("avoids double brackets for optional wrapping aliased options", () => {
     const term: UsageTerm = {
       type: "optional",
       terms: [
@@ -131,7 +142,7 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(
       formatUsageTermAsRoff(term),
-      "[[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR] [\\fB\\-\\-output\\fR | \\fB\\-o\\fR \\fIFILE\\fR]]",
+      "[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR \\fB\\-\\-output\\fR | \\fB\\-o\\fR \\fIFILE\\fR]",
     );
   });
 
