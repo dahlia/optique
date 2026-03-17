@@ -332,6 +332,11 @@ To be released.
     allowing private field access to work correctly through the sanitized
     view.  [[#307], [#558]]
 
+ -  Fixed `integer({ type: "bigint" })` and `port({ type: "bigint" })` to
+    reject empty strings, whitespace, signed-plus strings, and non-decimal
+    literals (`0x`, `0b`, `0o`) that the `BigInt()` constructor would
+    otherwise accept.  [[#245], [#566]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -361,6 +366,7 @@ To be released.
 [#225]: https://github.com/dahlia/optique/issues/225
 [#235]: https://github.com/dahlia/optique/issues/235
 [#242]: https://github.com/dahlia/optique/issues/242
+[#245]: https://github.com/dahlia/optique/issues/245
 [#248]: https://github.com/dahlia/optique/issues/248
 [#307]: https://github.com/dahlia/optique/issues/307
 [#310]: https://github.com/dahlia/optique/issues/310
@@ -396,6 +402,7 @@ To be released.
 [#555]: https://github.com/dahlia/optique/pull/555
 [#558]: https://github.com/dahlia/optique/pull/558
 [#565]: https://github.com/dahlia/optique/pull/565
+[#566]: https://github.com/dahlia/optique/pull/566
 [#568]: https://github.com/dahlia/optique/pull/568
 
 ### @optique/config

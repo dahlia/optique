@@ -899,22 +899,17 @@ export function integer(
       $mode: "sync",
       metavar,
       parse(input: string): ValueParserResult<bigint> {
-        let value: bigint;
-        try {
-          value = BigInt(input);
-        } catch (e) {
-          if (e instanceof SyntaxError) {
-            return {
-              success: false,
-              error: options.errors?.invalidInteger
-                ? (typeof options.errors.invalidInteger === "function"
-                  ? options.errors.invalidInteger(input)
-                  : options.errors.invalidInteger)
-                : message`Expected a valid integer, but got ${input}.`,
-            };
-          }
-          throw e;
+        if (!input.match(/^-?\d+$/)) {
+          return {
+            success: false,
+            error: options.errors?.invalidInteger
+              ? (typeof options.errors.invalidInteger === "function"
+                ? options.errors.invalidInteger(input)
+                : options.errors.invalidInteger)
+              : message`Expected a valid integer, but got ${input}.`,
+          };
         }
+        const value = BigInt(input);
         if (options.min != null && value < options.min) {
           return {
             success: false,
@@ -1984,22 +1979,17 @@ export function port(
       $mode: "sync",
       metavar,
       parse(input: string): ValueParserResult<bigint> {
-        let value: bigint;
-        try {
-          value = BigInt(input);
-        } catch (e) {
-          if (e instanceof SyntaxError) {
-            return {
-              success: false,
-              error: options.errors?.invalidPort
-                ? (typeof options.errors.invalidPort === "function"
-                  ? options.errors.invalidPort(input)
-                  : options.errors.invalidPort)
-                : message`Expected a valid port number, but got ${input}.`,
-            };
-          }
-          throw e;
+        if (!input.match(/^-?\d+$/)) {
+          return {
+            success: false,
+            error: options.errors?.invalidPort
+              ? (typeof options.errors.invalidPort === "function"
+                ? options.errors.invalidPort(input)
+                : options.errors.invalidPort)
+              : message`Expected a valid port number, but got ${input}.`,
+          };
         }
+        const value = BigInt(input);
 
         if (value < min) {
           return {

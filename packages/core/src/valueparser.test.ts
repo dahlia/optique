@@ -301,6 +301,31 @@ describe("integer", () => {
       assert.ok(!result5.success);
     });
 
+    it("should reject non-decimal literals and whitespace", () => {
+      const parser = integer({ type: "bigint" });
+
+      // Empty string
+      assert.ok(!parser.parse("").success);
+
+      // Whitespace-only
+      assert.ok(!parser.parse("   ").success);
+
+      // Signed-plus
+      assert.ok(!parser.parse("+1").success);
+
+      // Hex literal
+      assert.ok(!parser.parse("0x10").success);
+
+      // Binary literal
+      assert.ok(!parser.parse("0b10").success);
+
+      // Octal literal
+      assert.ok(!parser.parse("0o10").success);
+
+      // Whitespace-padded
+      assert.ok(!parser.parse(" 42 ").success);
+    });
+
     it("should enforce minimum constraint for BigInt", () => {
       const parser = integer({ type: "bigint", min: 10n });
 
@@ -555,19 +580,13 @@ describe("integer", () => {
         assert.equal(result4.value, 0n);
       }
 
-      // Test empty string for BigInt (should succeed as 0n)
+      // Test empty string for BigInt (should fail)
       const result5 = bigintParser.parse("");
-      assert.ok(result5.success);
-      if (result5.success) {
-        assert.equal(result5.value, 0n);
-      }
+      assert.ok(!result5.success);
 
-      // Test whitespace-only string for BigInt (should succeed as 0n)
+      // Test whitespace-only string for BigInt (should fail)
       const result6 = bigintParser.parse("   ");
-      assert.ok(result6.success);
-      if (result6.success) {
-        assert.equal(result6.value, 0n);
-      }
+      assert.ok(!result6.success);
     });
 
     it("should handle boundary values correctly", () => {
@@ -4853,6 +4872,18 @@ describe("port", () => {
 
       const result3 = parser.parse("1e4");
       assert.ok(!result3.success);
+    });
+
+    it("should reject non-decimal literals and whitespace", () => {
+      const parser = port({ type: "bigint" });
+
+      assert.ok(!parser.parse("").success);
+      assert.ok(!parser.parse("   ").success);
+      assert.ok(!parser.parse("+1").success);
+      assert.ok(!parser.parse("0x50").success);
+      assert.ok(!parser.parse("0b10").success);
+      assert.ok(!parser.parse("0o10").success);
+      assert.ok(!parser.parse(" 8080 ").success);
     });
 
     it("should enforce bigint minimum constraint", () => {
