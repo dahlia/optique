@@ -3124,7 +3124,7 @@ export function socketAddress(
   ensureNonEmptyString(metavar);
 
   const separator = options?.separator ?? ":";
-  if (/\d/.test(separator)) {
+  if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
       `Expected separator to not contain digits, but got: ${
         JSON.stringify(separator)
@@ -3546,7 +3546,7 @@ export function portRange(
   ensureNonEmptyString(metavar);
 
   const separator = options?.separator ?? "-";
-  if (/\d/.test(separator)) {
+  if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
       `Expected separator to not contain digits, but got: ${
         JSON.stringify(separator)

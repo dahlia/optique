@@ -7101,6 +7101,16 @@ describe("portRange()", () => {
         () => portRange({ separator: "a1b" }),
         TypeError,
       );
+      // Unicode digits (Arabic-Indic)
+      assert.throws(
+        () => portRange({ separator: "\u0661" }),
+        TypeError,
+      );
+      // Unicode digits (Devanagari)
+      assert.throws(
+        () => portRange({ separator: "\u0967" }),
+        TypeError,
+      );
     });
 
     it("should reject separator containing digits (bigint)", () => {
@@ -7497,6 +7507,11 @@ describe("socketAddress()", () => {
       );
       assert.throws(
         () => socketAddress({ separator: "123", defaultPort: 80 }),
+        TypeError,
+      );
+      // Unicode digits (Arabic-Indic)
+      assert.throws(
+        () => socketAddress({ separator: "\u0661", defaultPort: 80 }),
         TypeError,
       );
     });

@@ -298,9 +298,10 @@ To be released.
     truthiness coercion.  [[#370], [#573]]
 
  -  Changed `portRange()` and `socketAddress()` to reject `separator` values
-    that contain digit characters.  Digit-containing separators caused ambiguous
-    splitting of numeric port input, silently reinterpreting single ports as
-    ranges.  [[#378]]
+    that contain digit characters (including Unicode decimal digits such as
+    Arabic-Indic `١`).  Digit-containing separators caused ambiguous splitting
+    of numeric port input, silently reinterpreting single ports as ranges.
+    [[#378], [#576]]
 
  -  Changed `choice()` to throw `TypeError` when `NaN` is included in the
     number choices array.  Previously, `NaN` was silently filtered out but
@@ -425,6 +426,7 @@ To be released.
 [#568]: https://github.com/dahlia/optique/pull/568
 [#572]: https://github.com/dahlia/optique/pull/572
 [#573]: https://github.com/dahlia/optique/pull/573
+[#576]: https://github.com/dahlia/optique/pull/576
 
 ### @optique/config
 
