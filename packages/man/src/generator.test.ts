@@ -385,6 +385,78 @@ describe("generateManPageSync()", () => {
     assert.ok(result.includes('.TH "FALLBACK" 1'));
     assert.ok(result.includes(".SH NAME"));
   });
+
+  it("rejects an async parser at runtime", () => {
+    const asyncParser: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`stop.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    assert.throws(
+      () =>
+        generateManPageSync(asyncParser as never, {
+          name: "myapp",
+          section: 1,
+        }),
+      { name: "TypeError", message: /async/ },
+    );
+  });
+
+  it("rejects an async program at runtime", () => {
+    const asyncParser: Parser<"async", string, null> = {
+      $mode: "async",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly null[],
+      priority: 0,
+      usage: [],
+      initialState: null,
+      parse() {
+        return Promise.resolve({
+          success: false as const,
+          consumed: 0,
+          error: message`stop.`,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true as const, value: "ok" });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const asyncProgram = defineProgram({
+      parser: asyncParser,
+      metadata: { name: "myapp" },
+    });
+
+    assert.throws(
+      () =>
+        generateManPageSync(asyncProgram as never, {
+          section: 1,
+        }),
+      { name: "TypeError", message: /async/ },
+    );
+  });
 });
 
 describe("generateManPageAsync()", () => {
