@@ -6320,7 +6320,9 @@ export function group<M extends Mode, TValue, TState>(
     // Forward completion deferral hook from inner parser so that
     // prompt(group("label", bindConfig(...))) defers correctly.
     ...(parser.shouldDeferCompletion != null
-      ? { shouldDeferCompletion: parser.shouldDeferCompletion }
+      ? {
+        shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
+      }
       : {}),
     parse: (context) => parser.parse(context),
     complete: (state) => parser.complete(state),

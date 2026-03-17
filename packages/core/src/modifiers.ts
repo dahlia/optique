@@ -213,7 +213,9 @@ export function optional<M extends Mode, TValue, TState>(
     // Forward completion deferral hook from inner parser so that
     // prompt(optional(bindConfig(...))) defers correctly.
     ...(parser.shouldDeferCompletion != null
-      ? { shouldDeferCompletion: parser.shouldDeferCompletion }
+      ? {
+        shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
+      }
       : {}),
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(
@@ -549,7 +551,9 @@ export function withDefault<
     // Forward completion deferral hook from inner parser so that
     // prompt(withDefault(bindConfig(...), val)) defers correctly.
     ...(parser.shouldDeferCompletion != null
-      ? { shouldDeferCompletion: parser.shouldDeferCompletion }
+      ? {
+        shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
+      }
       : {}),
     parse(context: ParserContext<[TState] | undefined>) {
       return dispatchByMode(

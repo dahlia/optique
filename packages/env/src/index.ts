@@ -318,7 +318,9 @@ export function bindEnv<
 
     suggest: parser.suggest,
     ...(deferPromptUntilConfigResolves != null
-      ? { shouldDeferCompletion: deferPromptUntilConfigResolves }
+      ? {
+        shouldDeferCompletion: deferPromptUntilConfigResolves.bind(parser),
+      }
       : {}),
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
