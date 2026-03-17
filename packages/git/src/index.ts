@@ -263,6 +263,7 @@ function createAsyncValueParser(
       );
     }
   }
+  const validatedDepth = options?.suggestionDepth ?? DEFAULT_SUGGESTION_DEPTH;
 
   return {
     $mode: "async",
@@ -277,8 +278,7 @@ function createAsyncValueParser(
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       const dir = getRepoDir(options?.dir);
       if (suggestFn) {
-        const depth = options?.suggestionDepth ?? DEFAULT_SUGGESTION_DEPTH;
-        yield* suggestFn(dir, prefix, depth);
+        yield* suggestFn(dir, prefix, validatedDepth);
       }
     },
   };
