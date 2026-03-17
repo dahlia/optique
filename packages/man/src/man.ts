@@ -304,10 +304,26 @@ function formatUsageAsRoffInternal(
   insideBrackets: boolean,
   applyUsageLine: boolean = false,
 ): string {
+  // Only the last (resolved) command term may have its usageLine applied;
+  // ancestor command terms are rendered as plain names.
+  let usageLineTarget = -1;
+  if (applyUsageLine) {
+    for (let i = usage.length - 1; i >= 0; i--) {
+      if (usage[i].type === "command") {
+        usageLineTarget = i;
+        break;
+      }
+    }
+  }
+
   const parts: string[] = [];
   for (let i = 0; i < usage.length; i++) {
     const term = usage[i];
-    if (applyUsageLine && term.type === "command" && term.usageLine != null) {
+    if (
+      i === usageLineTarget &&
+      term.type === "command" &&
+      term.usageLine != null
+    ) {
       const cmdPart = formatUsageTermAsRoffInternal(term, insideBrackets);
       if (cmdPart) parts.push(cmdPart);
       const defaultUsageLine = usage.slice(i + 1);

@@ -2049,4 +2049,41 @@ describe("formatDocPageAsMan()", () => {
       "nested command's usageLine should not be expanded",
     );
   });
+
+  it("skips ancestor usageLine on subcommand man pages", async () => {
+    // When generating a man page for "config get", the ancestor "config"
+    // command's usageLine must NOT be applied — only the resolved
+    // subcommand's own usageLine (if any) should take effect.
+    const parser = command(
+      "config",
+      or(
+        command("get", constant("get")),
+        command("set", constant("set")),
+      ),
+      {
+        usageLine: [{ type: "ellipsis" }],
+      },
+    );
+
+    const page = await getDocPage(parser, ["config", "get"]);
+    assert.ok(page);
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    const synopsis = nextSection === -1
+      ? result.slice(synopsisStart)
+      : result.slice(synopsisStart, nextSection);
+
+    // The resolved subcommand "get" should appear
+    assert.ok(synopsis.includes("\\fBget\\fR"));
+    // The ancestor "config" should appear as a plain name
+    assert.ok(synopsis.includes("\\fBconfig\\fR"));
+    // The ancestor's usageLine (ellipsis) should NOT replace the child
+    assert.ok(
+      !synopsis.includes("..."),
+      "ancestor usageLine should not be applied on subcommand page",
+    );
+  });
 });
