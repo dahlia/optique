@@ -909,22 +909,7 @@ export function integer(
               : message`Expected a valid integer, but got ${input}.`,
           };
         }
-        let value: bigint;
-        try {
-          value = BigInt(input);
-        } catch (e) {
-          if (e instanceof SyntaxError) {
-            return {
-              success: false,
-              error: options.errors?.invalidInteger
-                ? (typeof options.errors.invalidInteger === "function"
-                  ? options.errors.invalidInteger(input)
-                  : options.errors.invalidInteger)
-                : message`Expected a valid integer, but got ${input}.`,
-            };
-          }
-          throw e;
-        }
+        const value = BigInt(input);
         if (options.min != null && value < options.min) {
           return {
             success: false,
