@@ -899,7 +899,7 @@ export function integer(
   ) {
     throw new TypeError(
       `Expected type to be "number" or "bigint", but got: ${
-        JSON.stringify(options.type)
+        String(options.type)
       }.`,
     );
   }
@@ -2035,7 +2035,7 @@ export function port(
   ) {
     throw new TypeError(
       `Expected type to be "number" or "bigint", but got: ${
-        JSON.stringify(options.type)
+        String(options.type)
       }.`,
     );
   }
@@ -3630,7 +3630,7 @@ export function portRange(
   ) {
     throw new TypeError(
       `Expected type to be "number" or "bigint", but got: ${
-        JSON.stringify(options.type)
+        String(options.type)
       }.`,
     );
   }
