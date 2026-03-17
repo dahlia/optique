@@ -290,6 +290,14 @@ To be released.
     preventing post-construction option mutation from causing `parse()` and
     `suggest()` to diverge.  [[#508], [#554]]
 
+ -  Fixed number `choice()` accepting hex (`0x10`), binary (`0b10`), octal
+    (`0o10`), scientific notation (`2e0`), empty strings, and whitespace-only
+    strings via JavaScript's `Number()` coercion.  Number choices now accept
+    the canonical string representation and equivalent decimal spellings
+    (e.g., `"8.0"` for `8`).  Alternate scientific-notation spellings are
+    only accepted for values whose canonical form uses scientific notation
+    (e.g., `"1e21"` for `1e+21`).  [[#315], [#523]]
+
  -  Fixed several value parsers (`choice()`, `string()`, `uuid()`,
     `email()`, `domain()`, `url()`) to snapshot caller-owned mutable
     configuration (arrays, error callbacks, and options) at construction
@@ -349,6 +357,7 @@ To be released.
 [#248]: https://github.com/dahlia/optique/issues/248
 [#307]: https://github.com/dahlia/optique/issues/307
 [#310]: https://github.com/dahlia/optique/issues/310
+[#315]: https://github.com/dahlia/optique/issues/315
 [#317]: https://github.com/dahlia/optique/issues/317
 [#332]: https://github.com/dahlia/optique/issues/332
 [#353]: https://github.com/dahlia/optique/issues/353
@@ -363,6 +372,7 @@ To be released.
 [#512]: https://github.com/dahlia/optique/pull/512
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
+[#523]: https://github.com/dahlia/optique/pull/523
 [#524]: https://github.com/dahlia/optique/pull/524
 [#525]: https://github.com/dahlia/optique/pull/525
 [#527]: https://github.com/dahlia/optique/pull/527
@@ -546,6 +556,16 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#151]: https://github.com/dahlia/optique/issues/151
 [#288]: https://github.com/dahlia/optique/issues/288
 [#540]: https://github.com/dahlia/optique/pull/540
+
+### @optique/temporal
+
+ -  Temporal parsers now throw a `TypeError` when `globalThis.Temporal` is
+    unavailable, instead of silently returning an “invalid format” error.
+    This makes it clear that the runtime lacks Temporal support and a polyfill
+    is needed.  [[#282], [#561]]
+
+[#282]: https://github.com/dahlia/optique/issues/282
+[#561]: https://github.com/dahlia/optique/pull/561
 
 ### @optique/run
 
@@ -1109,14 +1129,6 @@ Released on February 15, 2026.
       zsh:  ${commandLine(`eval "$(mycli completion zsh)"`)}`;
     ~~~~
 
- -  Fixed number `choice()` accepting hex (`0x10`), binary (`0b10`), octal
-    (`0o10`), scientific notation (`2e0`), empty strings, and whitespace-only
-    strings via JavaScript's `Number()` coercion.  Number choices now accept
-    the canonical string representation and equivalent decimal spellings
-    (e.g., `"8.0"` for `8`).  Alternate scientific-notation spellings are
-    only accepted for values whose canonical form uses scientific notation
-    (e.g., `"1e21"` for `1e+21`).  [[#315], [#523]]
-
  -  Added `@optique/core/program` module with `Program` and `ProgramMetadata`
     interfaces. These provide a structured way to bundle a parser with its
     metadata (name, version, description, etc.), creating a single source of
@@ -1585,8 +1597,6 @@ Released on February 15, 2026.
 [#99]: https://github.com/dahlia/optique/issues/99
 [#106]: https://github.com/dahlia/optique/issues/106
 [#107]: https://github.com/dahlia/optique/issues/107
-[#315]: https://github.com/dahlia/optique/issues/315
-[#523]: https://github.com/dahlia/optique/pull/523
 
 ### @optique/config
 
@@ -2291,14 +2301,6 @@ Released on January 6, 2026.
 
  -  All temporal value parsers now validate that `metavar` is non-empty,
     throwing a `TypeError` if an empty string is provided.  [[#63]]
-
- -  Temporal parsers now throw a `TypeError` when `globalThis.Temporal` is
-    unavailable, instead of silently returning an “invalid format” error.
-    This makes it clear that the runtime lacks Temporal support and a polyfill
-    is needed.  [[#282], [#561]]
-
-[#282]: https://github.com/dahlia/optique/issues/282
-[#561]: https://github.com/dahlia/optique/pull/561
 
 ### @optique/git
 
