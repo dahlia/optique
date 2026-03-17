@@ -51,6 +51,8 @@ function isParser(
       "usage" in p &&
       Array.isArray(p.usage) &&
       "initialState" in p &&
+      "suggest" in p &&
+      typeof p.suggest === "function" &&
       "getDocFragments" in p &&
       typeof p.getDocFragments === "function"
     );
