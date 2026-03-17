@@ -1236,7 +1236,9 @@ const parser = object({
 
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
 
@@ -1244,7 +1246,7 @@ When `contexts` is provided, the runner delegates to `runWith()` (or
 `runWithSync()` for sync parsers) from `@optique/core/facade`, which handles
 static and dynamic contexts automatically and performs two-phase parsing only
 when needed.  Context-specific options like `getConfigPath` are passed through
-to the contexts.
+to the contexts via the `contextOptions` property.
 
 For more details on config file integration, see the
 [config file integration guide](../integrations/config.md).

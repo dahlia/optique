@@ -25,6 +25,11 @@ To be released.
     `runWith()` and `runWithSync()` call dispose on all contexts in a
     `finally` block.  [[#110]]
 
+ -  Context-required options passed to `runWith()`, `runWithSync()`, and
+    `runWithAsync()` must now be wrapped in a `contextOptions` property
+    instead of being passed as top-level keys.  This prevents name collisions
+    with runner options such as `args`, `help`, and `colors`.  [[#240], [#575]]
+
  -  Added `fail<T>()` parser: always fails without consuming input, declared
     to produce a value of type `T`.  Its primary use is as the inner parser
     for `bindConfig(fail<T>(), { … })` when a value should come only from a
@@ -382,6 +387,7 @@ To be released.
 [#224]: https://github.com/dahlia/optique/issues/224
 [#225]: https://github.com/dahlia/optique/issues/225
 [#235]: https://github.com/dahlia/optique/issues/235
+[#240]: https://github.com/dahlia/optique/issues/240
 [#242]: https://github.com/dahlia/optique/issues/242
 [#245]: https://github.com/dahlia/optique/issues/245
 [#248]: https://github.com/dahlia/optique/issues/248
@@ -426,6 +432,7 @@ To be released.
 [#568]: https://github.com/dahlia/optique/pull/568
 [#572]: https://github.com/dahlia/optique/pull/572
 [#573]: https://github.com/dahlia/optique/pull/573
+[#575]: https://github.com/dahlia/optique/pull/575
 [#576]: https://github.com/dahlia/optique/pull/576
 
 ### @optique/config
@@ -664,6 +671,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  Fixed `path()` to reject invalid runtime `type` values.  Previously,
     unsupported values like `"files"` were silently accepted, causing
     inconsistent behavior between parsing and suggestions.  [[#361], [#545]]
+
+ -  Context-required options passed to `run()`, `runSync()`, and `runAsync()`
+    must now be wrapped in a `contextOptions` property instead of being
+    passed as top-level keys.  This prevents name collisions with runner
+    options such as `help`, `programName`, and `version`.  [[#240], [#575]]
 
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160

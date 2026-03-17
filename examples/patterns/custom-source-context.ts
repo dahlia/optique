@@ -115,10 +115,12 @@ const result = await runWith(
   {
     args: Deno.args,
     help: { option: true },
-    // getConfigPath is required because configContext declares ConfigContextOptions.
-    // The `parsed` parameter is automatically typed as:
-    //   { config?: string; host: string; port: number }
-    getConfigPath: (parsed) => parsed.config,
+    contextOptions: {
+      // getConfigPath is required because configContext declares ConfigContextOptions.
+      // The `parsed` parameter is automatically typed as:
+      //   { config?: string; host: string; port: number }
+      getConfigPath: (parsed) => parsed.config,
+    },
   },
 );
 

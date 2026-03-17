@@ -3,7 +3,7 @@ import type { SourceContext } from "@optique/core/context";
 import { runParser, runWith, runWithSync } from "@optique/core/facade";
 import type {
   CommandSubConfig,
-  ExtractRequiredOptions,
+  ContextOptionsParam,
   OptionSubConfig,
   RunOptions as CoreRunOptions,
 } from "@optique/core/facade";
@@ -285,6 +285,16 @@ export interface RunOptions {
    * @since 1.0.0
    */
   readonly contexts?: readonly SourceContext<unknown>[];
+
+  /**
+   * Options to forward to source contexts.  When contexts declare
+   * required options (via `$requiredOptions`), pass them here to
+   * avoid name collisions with runner-level options such as `help`,
+   * `programName`, or `version`.
+   *
+   * @since 1.0.0
+   */
+  readonly contextOptions?: Record<string, unknown>;
 }
 
 type ProgramHelpMetadata = {
@@ -472,7 +482,7 @@ export function run<
   options:
     & RunOptions
     & { readonly contexts: TContexts }
-    & ExtractRequiredOptions<TContexts, InferValue<T>>,
+    & ContextOptionsParam<TContexts, InferValue<T>>,
 ): Promise<InferValue<T>>;
 
 // Overload: parser with dynamic non-empty-or-empty contexts
@@ -485,7 +495,7 @@ export function run<
     & RunOptions
     & { readonly contexts: TContexts }
     & RejectEmptyContexts<TContexts>
-    & ExtractRequiredOptions<TContexts, InferValue<T>>,
+    & ContextOptionsParam<TContexts, InferValue<T>>,
 ): ModeValue<InferMode<T>, InferValue<T>> | Promise<InferValue<T>>;
 
 // Overload: Program with statically non-empty contexts — returns Promise
@@ -498,7 +508,7 @@ export function run<
   options:
     & RunOptions
     & { readonly contexts: TContexts }
-    & ExtractRequiredOptions<TContexts, T>,
+    & ContextOptionsParam<TContexts, T>,
 ): Promise<T>;
 
 // Overload: sync Program with dynamic non-empty-or-empty contexts
@@ -511,7 +521,7 @@ export function run<
     & RunOptions
     & { readonly contexts: TContexts }
     & RejectEmptyContexts<TContexts>
-    & ExtractRequiredOptions<TContexts, T>,
+    & ContextOptionsParam<TContexts, T>,
 ): T | Promise<T>;
 
 // Overload: async Program with dynamic non-empty-or-empty contexts
@@ -524,7 +534,7 @@ export function run<
     & RunOptions
     & { readonly contexts: TContexts }
     & RejectEmptyContexts<TContexts>
-    & ExtractRequiredOptions<TContexts, T>,
+    & ContextOptionsParam<TContexts, T>,
 ): Promise<T>;
 
 // Overload: Program with sync parser
@@ -607,7 +617,7 @@ export function runSync<
   options:
     & RunOptions
     & { readonly contexts: TContexts }
-    & ExtractRequiredOptions<TContexts, InferValue<T>>,
+    & ContextOptionsParam<TContexts, InferValue<T>>,
 ): InferValue<T>;
 
 // Overload: Program with contexts
@@ -620,7 +630,7 @@ export function runSync<
     & RunOptions
     & { readonly contexts: TContexts }
     & RejectEmptyContexts<TContexts>
-    & ExtractRequiredOptions<TContexts, T>,
+    & ContextOptionsParam<TContexts, T>,
 ): T;
 
 // Overload: Program with sync parser
@@ -667,17 +677,9 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
       programMetadata,
     );
 
-    // Extract context-required options
-    const contextOptions: Record<string, unknown> = {};
-    for (const key of Object.keys(options)) {
-      if (!knownRunOptionsKeys.has(key)) {
-        contextOptions[key] = (options as Record<string, unknown>)[key];
-      }
-    }
-
     const runWithOptions = {
       ...coreOptions,
-      ...contextOptions,
+      contextOptions: options.contextOptions,
       args,
     };
 
@@ -714,7 +716,7 @@ export function runAsync<
   options:
     & RunOptions
     & { readonly contexts: TContexts }
-    & ExtractRequiredOptions<TContexts, InferValue<T>>,
+    & ContextOptionsParam<TContexts, InferValue<T>>,
 ): Promise<InferValue<T>>;
 
 // Overload: Program with contexts
@@ -728,7 +730,7 @@ export function runAsync<
     & RunOptions
     & { readonly contexts: TContexts }
     & RejectEmptyContexts<TContexts>
-    & ExtractRequiredOptions<TContexts, T>,
+    & ContextOptionsParam<TContexts, T>,
 ): Promise<T>;
 
 // Overload: Program with sync parser
@@ -918,8 +920,9 @@ const knownRunOptionsKeyList = [
   "bugs",
   "footer",
   "contexts",
-  // Keep this list exhaustive with RunOptions so context option extraction
-  // does not silently forward new runner options into source contexts.
+  "contextOptions",
+  // Keep this list exhaustive with RunOptions so that the compile-time
+  // exhaustiveness check below catches missing entries.
 ] as const satisfies readonly (keyof RunOptions)[];
 
 type MissingKnownRunOptionsKeys = Exclude<
@@ -929,8 +932,6 @@ type MissingKnownRunOptionsKeys = Exclude<
 const _knownRunOptionsKeysAreExhaustive: MissingKnownRunOptionsKeys extends
   never ? true : never = true;
 void _knownRunOptionsKeysAreExhaustive;
-
-const knownRunOptionsKeys = new Set<string>(knownRunOptionsKeyList);
 
 function runImpl<T extends Parser<Mode, unknown, unknown>>(
   parserOrProgram: T | Program<Mode, unknown>,
@@ -948,18 +949,10 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
       programMetadata,
     );
 
-    // Extract context-required options (anything not in knownRunOptionsKeys)
-    const contextOptions: Record<string, unknown> = {};
-    for (const key of Object.keys(options)) {
-      if (!knownRunOptionsKeys.has(key)) {
-        contextOptions[key] = (options as Record<string, unknown>)[key];
-      }
-    }
-
-    // Build RunWithOptions = CoreRunOptions + { args }
+    // Build RunWithOptions = CoreRunOptions + { args, contextOptions }
     const runWithOptions = {
       ...coreOptions,
-      ...contextOptions,
+      contextOptions: options.contextOptions,
       args,
     };
 

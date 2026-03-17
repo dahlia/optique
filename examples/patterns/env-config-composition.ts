@@ -80,7 +80,9 @@ const parser = object({
 // Run with both contexts
 const result = await runAsync(parser, {
   contexts: [envContext, configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
   args: Deno.args,
 });
 

@@ -137,7 +137,9 @@ import { runAsync } from "@optique/run";
 
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 
 console.log(`Connecting to ${result.host}:${result.port}`);
@@ -239,7 +241,9 @@ import { runAsync } from "@optique/run";
 
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
   help: "option",
   version: "1.0.0",
   completion: "option",
@@ -413,7 +417,9 @@ const parser = object({
 
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 
 console.log(`Timeout: ${result.timeout}s`);
@@ -480,7 +486,9 @@ const parser = object({
 
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
 
@@ -534,35 +542,37 @@ const parser = object({
 
 const result = await runAsync(parser, {
   contexts: [configContext],
-  load: async (parsed) => {
-    // Load multiple config files with different error handling
-    const tryLoad = async (path: string) => {
-      try {
-        return JSON.parse(await readFile(path, "utf-8"));
-      } catch {
-        return {}; // Silent skip on error
-      }
-    };
+  contextOptions: {
+    load: async (parsed) => {
+      // Load multiple config files with different error handling
+      const tryLoad = async (path: string) => {
+        try {
+          return JSON.parse(await readFile(path, "utf-8"));
+        } catch {
+          return {}; // Silent skip on error
+        }
+      };
 
-    const system = await tryLoad("/etc/myapp/config.json");
-    const user = await tryLoad(`${process.env.HOME}/.config/myapp/config.json`);
-    const project = await tryLoad("./.myapp.json");
+      const system = await tryLoad("/etc/myapp/config.json");
+      const user = await tryLoad(`${process.env.HOME}/.config/myapp/config.json`);
+      const project = await tryLoad("./.myapp.json");
 
-    // Load custom config file if specified (throws on error)
-    const custom = parsed.config
-      ? JSON.parse(await readFile(parsed.config, "utf-8"))
-      : {};
+      // Load custom config file if specified (throws on error)
+      const custom = parsed.config
+        ? JSON.parse(await readFile(parsed.config, "utf-8"))
+        : {};
 
-    const customPath = resolve(parsed.config ?? "./.myapp.json");
+      const customPath = resolve(parsed.config ?? "./.myapp.json");
 
-    // Merge with priority: custom > project > user > system
-    return {
-      config: deepMerge(system, user, project, custom),
-      meta: {
-        configPath: customPath,
-        configDir: dirname(customPath),
-      },
-    };
+      // Merge with priority: custom > project > user > system
+      return {
+        config: deepMerge(system, user, project, custom),
+        meta: {
+          configPath: customPath,
+          configDir: dirname(customPath),
+        },
+      };
+    },
   },
 });
 ~~~~
@@ -661,7 +671,9 @@ import { runAsync } from "@optique/run";
 // Combine config with other sources (e.g., environment variables)
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,  // Typed from parser result!
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,  // Typed from parser result!
+  },
 });
 ~~~~
 
@@ -691,7 +703,9 @@ import { runWith } from "@optique/core/facade";
 
 const result = await runWith(parser, "myapp", [configContext], {
   args: process.argv.slice(2),
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
 
@@ -728,7 +742,9 @@ const parser = object({
 // Config file not found or not specified - uses default
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
   args: [],
 });
 
@@ -756,7 +772,9 @@ import { runAsync } from "@optique/run";
 try {
   const result = await runAsync(parser, {
     contexts: [configContext],
-    getConfigPath: (parsed) => "/path/to/invalid-config.json",
+    contextOptions: {
+      getConfigPath: (parsed) => "/path/to/invalid-config.json",
+    },
     args: [],
   });
 } catch (error) {
@@ -903,7 +921,9 @@ const parser = object({
 // Run with config support
 const config = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 
 if (config.verbose) {

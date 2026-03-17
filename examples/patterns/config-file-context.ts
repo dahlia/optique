@@ -60,7 +60,9 @@ const parser = object({
 // Two-pass parsing: 1) extract config path, 2) parse with config data
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
   args: Deno.args,
 });
 

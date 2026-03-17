@@ -1170,7 +1170,9 @@ const parser = object({
 // Run with config file support via contexts
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 
 // result.host: CLI > config.json > "localhost"
@@ -1208,8 +1210,10 @@ const parser = object({
 
 const result = await runAsync(parser, {
   contexts: [configContext],
-  // `parsed` is typed as { configFile?: string; host: string }
-  getConfigPath: (parsed) => parsed.configFile,
+  contextOptions: {
+    // `parsed` is typed as { configFile?: string; host: string }
+    getConfigPath: (parsed) => parsed.configFile,
+  },
 });
 ~~~~
 
@@ -1289,7 +1293,9 @@ const parser = object({
 
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
 
@@ -1340,7 +1346,9 @@ const parser = object({
 
 const result = await runAsync(parser, {
   contexts: [envContext, configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
 

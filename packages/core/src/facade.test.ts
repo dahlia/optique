@@ -4616,10 +4616,15 @@ describe("runWith", () => {
 
       await runWith(parser, "test", [context], {
         args: [],
+        contextOptions: { custom: "value" },
       });
 
-      // The options object (minus args) is passed through as-is
-      assert.ok(receivedOptions !== undefined);
+      // contextOptions are forwarded to getAnnotations
+      assert.ok(receivedOptions != null);
+      assert.equal(
+        (receivedOptions as Record<string, unknown>).custom,
+        "value",
+      );
     });
 
     it("should pass options to getAnnotations in both phases", async () => {
@@ -4641,10 +4646,101 @@ describe("runWith", () => {
 
       await runWith(parser, "test", [context], {
         args: [],
+        contextOptions: { tag: "both-phases" },
       });
 
       // Should have been called twice (phase 1 and phase 2)
       assert.equal(receivedOptionsPerCall.length, 2);
+      for (const opts of receivedOptionsPerCall) {
+        assert.deepEqual(opts, { tag: "both-phases" });
+      }
+    });
+
+    it("should forward contextOptions without collision with RunWithOptions keys", async () => {
+      let receivedOptions: unknown;
+      const key = Symbol.for("@test/contextOptions-collision");
+
+      const context: SourceContext<{ args: string[] }> = {
+        id: key,
+        getAnnotations(_parsed?: unknown, options?: unknown) {
+          receivedOptions = options;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      await runWith(parser, "test", [context], {
+        args: ["--name", "Alice"],
+        contextOptions: { args: ["context-args"] },
+      });
+
+      // Context should receive { args: ["context-args"] }, not the runner's args
+      assert.ok(receivedOptions != null);
+      assert.deepEqual(
+        (receivedOptions as Record<string, unknown>).args,
+        ["context-args"],
+      );
+    });
+
+    it("should not require contextOptions for SourceContext<{}>", async () => {
+      const key = Symbol.for("@test/empty-object-context");
+
+      const context: SourceContext<Record<never, never>> = {
+        id: key,
+        getAnnotations() {
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      // This must compile without contextOptions
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { name: "default" });
+    });
+
+    it("should not require contextOptions when all keys are optional", async () => {
+      let receivedOptions: unknown;
+      const key = Symbol.for("@test/all-optional-context");
+
+      const context: SourceContext<{ profile?: string }> = {
+        id: key,
+        getAnnotations(_parsed?: unknown, options?: unknown) {
+          receivedOptions = options;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      // This must compile without contextOptions
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { name: "default" });
+
+      // But contextOptions can still be provided for type-safe optional values
+      await runWith(parser, "test", [context], {
+        args: [],
+        contextOptions: { profile: "dev" },
+      });
+
+      assert.ok(receivedOptions != null);
+      assert.equal(
+        (receivedOptions as Record<string, unknown>).profile,
+        "dev",
+      );
     });
   });
 });
@@ -5150,10 +5246,15 @@ describe("runWithSync", () => {
 
       runWithSync(parser, "test", [context], {
         args: [],
+        contextOptions: { custom: "sync-value" },
       });
 
-      // The options object is passed through to getAnnotations
-      assert.ok(receivedOptions !== undefined);
+      // contextOptions are forwarded to getAnnotations
+      assert.ok(receivedOptions != null);
+      assert.equal(
+        (receivedOptions as Record<string, unknown>).custom,
+        "sync-value",
+      );
     });
   });
 });
