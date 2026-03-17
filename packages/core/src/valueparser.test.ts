@@ -666,6 +666,50 @@ describe("integer", () => {
       assert.doesNotThrow(() => integer({ type: "bigint", min: 5n, max: 5n }));
     });
   });
+
+  describe("non-finite bounds", () => {
+    it("should throw RangeError when min is NaN", () => {
+      assert.throws(
+        () => integer({ min: NaN as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is NaN", () => {
+      assert.throws(
+        () => integer({ max: NaN as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when min is Infinity", () => {
+      assert.throws(
+        () => integer({ min: Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when min is -Infinity", () => {
+      assert.throws(
+        () => integer({ min: -Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is Infinity", () => {
+      assert.throws(
+        () => integer({ max: Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is -Infinity", () => {
+      assert.throws(
+        () => integer({ max: -Infinity as never }),
+        RangeError,
+      );
+    });
+  });
 });
 
 describe("choice", () => {
@@ -2571,6 +2615,36 @@ describe("float", () => {
 
     it("should not throw when min equals max", () => {
       assert.doesNotThrow(() => float({ min: 5, max: 5 }));
+    });
+  });
+
+  describe("non-finite bounds", () => {
+    it("should throw RangeError when min is NaN", () => {
+      assert.throws(
+        () => float({ min: NaN as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is NaN", () => {
+      assert.throws(
+        () => float({ max: NaN as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when min is Infinity", () => {
+      assert.throws(
+        () => float({ min: Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is -Infinity", () => {
+      assert.throws(
+        () => float({ max: -Infinity as never }),
+        RangeError,
+      );
     });
   });
 });
@@ -5790,6 +5864,36 @@ describe("port", () => {
     it("should throw RangeError when bigint max is below default min", () => {
       assert.throws(
         () => port({ type: "bigint", max: 0n }),
+        RangeError,
+      );
+    });
+  });
+
+  describe("non-finite bounds", () => {
+    it("should throw RangeError when min is NaN", () => {
+      assert.throws(
+        () => port({ min: NaN as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is NaN", () => {
+      assert.throws(
+        () => port({ max: NaN as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when min is -Infinity", () => {
+      assert.throws(
+        () => port({ min: -Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is Infinity", () => {
+      assert.throws(
+        () => port({ max: Infinity as never }),
         RangeError,
       );
     });
@@ -9415,6 +9519,20 @@ describe("cidr()", () => {
     it("should throw RangeError when maxPrefix exceeds IPv6 max", () => {
       assert.throws(
         () => cidr({ version: 6, maxPrefix: 200 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when minPrefix is NaN", () => {
+      assert.throws(
+        () => cidr({ minPrefix: NaN as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when maxPrefix is NaN", () => {
+      assert.throws(
+        () => cidr({ maxPrefix: NaN as never }),
         RangeError,
       );
     });
