@@ -44,7 +44,9 @@ export interface ManPageOptions {
 
   /**
    * The date to display in the man page footer.
-   * If a Date object is provided, it will be formatted as "Month Year".
+   * If a `Date` object is provided, it will be formatted as `"Month Year"`
+   * using the host's local timezone.  For timezone-independent output (e.g.,
+   * in CI), pass a pre-formatted string instead.
    * If a string is provided, it will be used as-is.
    */
   readonly date?: string | Date;
@@ -100,6 +102,12 @@ export interface ManPageOptions {
 
 /**
  * Formats a date for use in man pages.
+ *
+ * When a `Date` object is given, the month and year are extracted using
+ * the host's local timezone (`getMonth()` / `getFullYear()`).  This means
+ * the same `Date` instant may produce different output on machines in
+ * different timezones.  Pass a pre-formatted string (e.g., `"January 2026"`)
+ * if you need timezone-independent output.
  *
  * @param date The date to format, or undefined.
  * @returns The formatted date string, or undefined.
