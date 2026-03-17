@@ -4685,6 +4685,35 @@ describe("runWith", () => {
       );
     });
 
+    it("should forward contextOptions.help without collision with runner help config", async () => {
+      let receivedOptions: unknown;
+      const key = Symbol.for("@test/contextOptions-help-collision");
+
+      const context: SourceContext<{ help: string; programName: string }> = {
+        id: key,
+        getAnnotations(_parsed?: unknown, options?: unknown) {
+          receivedOptions = options;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      await runWith(parser, "test", [context], {
+        args: [],
+        help: { option: true, onShow: () => undefined },
+        contextOptions: { help: "from-context", programName: "my-program" },
+      });
+
+      // Context should receive contextOptions, not runner help config
+      assert.ok(receivedOptions != null);
+      const opts = receivedOptions as Record<string, unknown>;
+      assert.equal(opts.help, "from-context");
+      assert.equal(opts.programName, "my-program");
+    });
+
     it("should not require contextOptions for SourceContext<{}>", async () => {
       const key = Symbol.for("@test/empty-object-context");
 
@@ -5255,6 +5284,35 @@ describe("runWithSync", () => {
         (receivedOptions as Record<string, unknown>).custom,
         "sync-value",
       );
+    });
+
+    it("should forward contextOptions without collision with runner option keys", () => {
+      let receivedOptions: unknown;
+      const key = Symbol.for("@test/sync-contextOptions-collision");
+
+      const context: SourceContext<{ help: string; programName: string }> = {
+        id: key,
+        getAnnotations(_parsed?: unknown, options?: unknown) {
+          receivedOptions = options;
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      runWithSync(parser, "test", [context], {
+        args: [],
+        help: { option: true, onShow: () => undefined },
+        contextOptions: { help: "ctx-help", programName: "ctx-program" },
+      });
+
+      // Context should receive contextOptions, not runner options
+      assert.ok(receivedOptions != null);
+      const opts = receivedOptions as Record<string, unknown>;
+      assert.equal(opts.help, "ctx-help");
+      assert.equal(opts.programName, "ctx-program");
     });
   });
 });

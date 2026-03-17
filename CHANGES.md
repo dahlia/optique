@@ -28,7 +28,8 @@ To be released.
  -  Context-required options passed to `runWith()`, `runWithSync()`, and
     `runWithAsync()` must now be wrapped in a `contextOptions` property
     instead of being passed as top-level keys.  This prevents name collisions
-    with runner options such as `args`, `help`, and `colors`.  [[#240], [#575]]
+    with runner options such as `args`, `help`, and `colors`.
+    [[#240], [#241], [#575], [#581]]
 
  -  Added `fail<T>()` parser: always fails without consuming input, declared
     to produce a value of type `T`.  Its primary use is as the inner parser
@@ -393,6 +394,7 @@ To be released.
 [#225]: https://github.com/dahlia/optique/issues/225
 [#235]: https://github.com/dahlia/optique/issues/235
 [#240]: https://github.com/dahlia/optique/issues/240
+[#241]: https://github.com/dahlia/optique/issues/241
 [#242]: https://github.com/dahlia/optique/issues/242
 [#245]: https://github.com/dahlia/optique/issues/245
 [#248]: https://github.com/dahlia/optique/issues/248
@@ -441,6 +443,7 @@ To be released.
 [#575]: https://github.com/dahlia/optique/pull/575
 [#576]: https://github.com/dahlia/optique/pull/576
 [#579]: https://github.com/dahlia/optique/pull/579
+[#581]: https://github.com/dahlia/optique/pull/581
 
 ### @optique/config
 
@@ -682,7 +685,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
  -  Context-required options passed to `run()`, `runSync()`, and `runAsync()`
     must now be wrapped in a `contextOptions` property instead of being
     passed as top-level keys.  This prevents name collisions with runner
-    options such as `help`, `programName`, and `version`.  [[#240], [#575]]
+    options such as `help`, `programName`, and `version`.
+    [[#240], [#241], [#575], [#581]]
 
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
