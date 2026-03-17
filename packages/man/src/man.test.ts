@@ -1663,4 +1663,22 @@ describe("formatDocPageAsMan()", () => {
       );
     }
   });
+
+  it("rejects invalid seeAlso section numbers", () => {
+    const page: DocPage = {
+      sections: [],
+    };
+
+    for (const section of [0, 9, -1, 99, 1.5] as never[]) {
+      assert.throws(
+        () =>
+          formatDocPageAsMan(page, {
+            name: "myapp",
+            section: 1,
+            seeAlso: [{ name: "git", section }],
+          }),
+        RangeError,
+      );
+    }
+  });
 });
