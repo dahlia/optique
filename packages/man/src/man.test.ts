@@ -102,6 +102,50 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "[\\fIOUTPUT\\fR]");
   });
 
+  it("avoids double brackets for optional wrapping option with metavar", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "option", names: ["--host"], metavar: "STRING" }],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-host\\fR \\fISTRING\\fR]",
+    );
+  });
+
+  it("avoids double brackets for optional wrapping boolean option", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "option", names: ["--debug"] }],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-debug\\fR]");
+  });
+
+  it("avoids double brackets for optional wrapping multiple options", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [
+        { type: "option", names: ["--verbose", "-v"] },
+        { type: "option", names: ["--output", "-o"], metavar: "FILE" },
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR \\fB\\-\\-output\\fR | \\fB\\-o\\fR \\fIFILE\\fR]",
+    );
+  });
+
+  it("avoids double brackets for nested optional wrapping option", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{
+        type: "optional",
+        terms: [{ type: "option", names: ["--flag"] }],
+      }],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-flag\\fR]");
+  });
+
   it("formats multiple term with min 0", () => {
     const term: UsageTerm = {
       type: "multiple",
@@ -109,6 +153,18 @@ describe("formatUsageTermAsRoff()", () => {
       min: 0,
     };
     assert.equal(formatUsageTermAsRoff(term), "[\\fIFILE\\fR ...]");
+  });
+
+  it("avoids double brackets for multiple(min=0) wrapping option", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{ type: "option", names: ["--include"], metavar: "PATTERN" }],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-include\\fR \\fIPATTERN\\fR ...]",
+    );
   });
 
   it("formats multiple term with min 1", () => {
