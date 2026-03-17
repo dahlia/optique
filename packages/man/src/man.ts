@@ -129,12 +129,6 @@ export function formatDateForMan(
   return `${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-function escapeThField(value: string): string {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"');
-}
-
 function formatCommandNameAsRoff(name: string): string {
   return `\\fB${escapeHyphens(escapeRoff(name))}\\fR`;
 }
@@ -425,7 +419,7 @@ export function formatDocPageAsMan(
 
   // .TH - Title heading
   const thParts = [
-    `"${escapeHyphens(escapeThField(options.name).toUpperCase())}"`,
+    `"${escapeHyphens(escapeRequestArg(options.name.toUpperCase()))}"`,
     options.section.toString(),
   ];
   // .TH format: name section [date [source [manual]]]
@@ -435,15 +429,15 @@ export function formatDocPageAsMan(
   const hasManual = options.manual != null && options.manual !== "";
 
   if (hasDate) {
-    thParts.push(`"${escapeThField(formatDateForMan(options.date)!)}"`);
+    thParts.push(`"${escapeRequestArg(formatDateForMan(options.date)!)}"`);
   } else if (hasVersion || hasManual) {
     thParts.push('""');
   }
 
   if (hasVersion) {
     thParts.push(
-      `"${escapeHyphens(escapeThField(options.name))} ${
-        escapeThField(options.version)
+      `"${escapeHyphens(escapeRequestArg(options.name))} ${
+        escapeRequestArg(options.version)
       }"`,
     );
   } else if (hasManual) {
@@ -451,7 +445,7 @@ export function formatDocPageAsMan(
   }
 
   if (hasManual) {
-    thParts.push(`"${escapeThField(options.manual)}"`);
+    thParts.push(`"${escapeRequestArg(options.manual)}"`);
   }
   lines.push(`.TH ${thParts.join(" ")}`);
 

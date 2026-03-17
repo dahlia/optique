@@ -395,7 +395,7 @@ describe("formatDocPageAsMan()", () => {
 
     assert.equal(
       thLine,
-      '.TH "MY\\"APP" 1 "" "my\\"app 1.0\\"beta" "User \\"Commands\\""',
+      '.TH "MY\\(dqAPP" 1 "" "my\\(dqapp 1.0\\(dqbeta" "User \\(dqCommands\\(dq"',
     );
   });
 
@@ -1536,6 +1536,9 @@ describe("formatDocPageAsMan()", () => {
 
     assert.ok(result.includes("app\\\\bin \\-"));
     assert.ok(result.includes('.B "app\\(rsbin"'));
+    // .TH is also a request argument context, so backslash → \(rs
+    const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
+    assert.ok(thLine.startsWith('.TH "APP\\(rsBIN"'));
   });
 
   it("escapes roff special characters in command entry terms", () => {
