@@ -3195,8 +3195,8 @@ export interface RunWithOptions<THelp, TError>
 
 /**
  * When contexts require options, demands a `contextOptions` property
- * typed to those requirements.  When no context needs options,
- * resolves to `unknown` (intersection no-op).
+ * typed to those requirements.  When no context needs options
+ * (`void`, `unknown`, or `{}`), resolves to `unknown` (intersection no-op).
  *
  * @since 1.0.0
  */
@@ -3204,6 +3204,7 @@ export type ContextOptionsParam<
   TContexts extends readonly SourceContext<unknown>[],
   TValue,
 > = [unknown] extends [ExtractRequiredOptions<TContexts, TValue>] ? unknown
+  : keyof ExtractRequiredOptions<TContexts, TValue> extends never ? unknown
   : { readonly contextOptions: ExtractRequiredOptions<TContexts, TValue> };
 
 /**

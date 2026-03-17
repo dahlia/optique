@@ -4684,6 +4684,28 @@ describe("runWith", () => {
         ["context-args"],
       );
     });
+
+    it("should not require contextOptions for SourceContext<{}>", async () => {
+      const key = Symbol.for("@test/empty-object-context");
+
+      const context: SourceContext<Record<never, never>> = {
+        id: key,
+        getAnnotations() {
+          return {};
+        },
+      };
+
+      const parser = object({
+        name: withDefault(option("--name", string()), "default"),
+      });
+
+      // This must compile without contextOptions
+      const result = await runWith(parser, "test", [context], {
+        args: [],
+      });
+
+      assert.deepEqual(result, { name: "default" });
+    });
   });
 });
 
