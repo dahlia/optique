@@ -2304,10 +2304,18 @@ remotes) using [isomorphic-git].  [[#71], [#72]]
  -  Added `GitParserOptions` interface for parser configuration.
  -  Added automatic shell completion suggestions for branches, tags, remotes,
     and commits.
+ -  Fixed `gitRef()` emitting duplicate completion suggestions when a branch
+    and tag share the same name.  [[#284], [#569]]
+ -  Fixed `gitCommit()` and `gitRef()` suggesting abbreviated commit SHAs
+    shorter than the typed prefix, which caused shell completion frontends
+    to drop the suggestions.  Suggested OIDs are now at least as long as
+    the prefix.  [[#569]]
 
 [isomorphic-git]: https://github.com/isomorphic-git/isomorphic-git
 [#71]: https://github.com/dahlia/optique/issues/71
 [#72]: https://github.com/dahlia/optique/pull/72
+[#284]: https://github.com/dahlia/optique/issues/284
+[#569]: https://github.com/dahlia/optique/pull/569
 
 
 Version 0.8.16

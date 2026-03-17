@@ -591,7 +591,10 @@ export function gitCommit(
         const commits = await git.log({ fs: gitFs, dir, depth });
         for (const commit of commits) {
           if (commit.oid.startsWith(prefix)) {
-            const shortOid = commit.oid.slice(0, 7);
+            const shortOid = commit.oid.slice(
+              0,
+              Math.max(7, prefix.length),
+            );
             const firstLine = commit.commit.message.split("\n")[0];
             yield {
               kind: "literal" as const,
@@ -674,21 +677,30 @@ export function gitRef(
           git.log({ fs: gitFs, dir, depth }),
         ]);
 
+        const seen = new Set<string>();
+
         for (const branch of branches) {
-          if (branch.startsWith(prefix)) {
+          if (branch.startsWith(prefix) && !seen.has(branch)) {
+            seen.add(branch);
             yield { kind: "literal" as const, text: branch };
           }
         }
 
         for (const tag of tags) {
-          if (tag.startsWith(prefix)) {
+          if (tag.startsWith(prefix) && !seen.has(tag)) {
+            seen.add(tag);
             yield { kind: "literal" as const, text: tag };
           }
         }
 
         for (const commit of commits) {
           if (commit.oid.startsWith(prefix)) {
-            const shortOid = commit.oid.slice(0, 7);
+            const shortOid = commit.oid.slice(
+              0,
+              Math.max(7, prefix.length),
+            );
+            if (seen.has(shortOid)) continue;
+            seen.add(shortOid);
             const firstLine = commit.commit.message.split("\n")[0];
             yield {
               kind: "literal" as const,
