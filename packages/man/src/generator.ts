@@ -68,7 +68,8 @@ function isProgram<M extends Mode, T>(
   try {
     return typeof value === "object" && value !== null &&
       "parser" in value && "metadata" in value &&
-      typeof value.metadata === "object" && value.metadata !== null;
+      typeof value.metadata === "object" && value.metadata !== null &&
+      "name" in value.metadata && typeof value.metadata.name === "string";
   } catch {
     return false;
   }
