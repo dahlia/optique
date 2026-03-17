@@ -5227,6 +5227,54 @@ describe("port", () => {
     });
   });
 
+  describe("boolean option validation", () => {
+    it("should reject non-boolean disallowWellKnown option", () => {
+      assert.throws(
+        () => port({ disallowWellKnown: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ disallowWellKnown: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ disallowWellKnown: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ disallowWellKnown: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ disallowWellKnown: null as never }),
+        TypeError,
+      );
+    });
+
+    it("should reject non-boolean disallowWellKnown option (bigint)", () => {
+      assert.throws(
+        () => port({ type: "bigint", disallowWellKnown: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ type: "bigint", disallowWellKnown: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ type: "bigint", disallowWellKnown: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ type: "bigint", disallowWellKnown: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => port({ type: "bigint", disallowWellKnown: null as never }),
+        TypeError,
+      );
+    });
+  });
+
   describe("ipv4()", () => {
     describe("basic validation", () => {
       it("should accept valid IPv4 addresses", () => {
@@ -6938,6 +6986,100 @@ describe("portRange()", () => {
       // Well-known port rejected
       const result3 = parser.parse("80-443");
       assert.ok(!result3.success);
+    });
+  });
+
+  describe("boolean option validation", () => {
+    it("should reject non-boolean disallowWellKnown option", () => {
+      assert.throws(
+        () => portRange({ disallowWellKnown: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ disallowWellKnown: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ disallowWellKnown: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ disallowWellKnown: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ disallowWellKnown: null as never }),
+        TypeError,
+      );
+    });
+
+    it("should reject non-boolean disallowWellKnown option (bigint)", () => {
+      assert.throws(
+        () => portRange({ type: "bigint", disallowWellKnown: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", disallowWellKnown: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", disallowWellKnown: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", disallowWellKnown: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", disallowWellKnown: null as never }),
+        TypeError,
+      );
+    });
+
+    it("should reject non-boolean allowSingle option", () => {
+      assert.throws(
+        () => portRange({ allowSingle: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ allowSingle: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ allowSingle: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ allowSingle: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ allowSingle: null as never }),
+        TypeError,
+      );
+    });
+
+    it("should reject non-boolean allowSingle option (bigint)", () => {
+      assert.throws(
+        () => portRange({ type: "bigint", allowSingle: "no" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", allowSingle: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", allowSingle: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", allowSingle: 0 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", allowSingle: null as never }),
+        TypeError,
+      );
     });
   });
 });

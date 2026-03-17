@@ -1969,6 +1969,16 @@ export function port(
 export function port(
   options?: PortOptionsNumber | PortOptionsBigInt,
 ): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
+  if (
+    options?.disallowWellKnown !== undefined &&
+    typeof options.disallowWellKnown !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected disallowWellKnown to be a boolean, but got ` +
+        `${typeof options.disallowWellKnown}: ` +
+        `${String(options.disallowWellKnown)}.`,
+    );
+  }
   if (options?.type === "bigint") {
     const metavar = options.metavar ?? "PORT";
     ensureNonEmptyString(metavar);
@@ -3501,6 +3511,26 @@ export function portRange(
 export function portRange(
   options?: PortRangeOptionsNumber | PortRangeOptionsBigInt,
 ): ValueParser<"sync", PortRangeValueNumber | PortRangeValueBigInt> {
+  if (
+    options?.disallowWellKnown !== undefined &&
+    typeof options.disallowWellKnown !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected disallowWellKnown to be a boolean, but got ` +
+        `${typeof options.disallowWellKnown}: ` +
+        `${String(options.disallowWellKnown)}.`,
+    );
+  }
+  if (
+    options?.allowSingle !== undefined &&
+    typeof options.allowSingle !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowSingle to be a boolean, but got ` +
+        `${typeof options.allowSingle}: ` +
+        `${String(options.allowSingle)}.`,
+    );
+  }
   const metavar: NonEmptyString = options?.metavar ?? "PORT-PORT";
   ensureNonEmptyString(metavar);
 
