@@ -4913,3 +4913,138 @@ describe("branch coverage: modifiers edge cases", () => {
     }
   });
 });
+
+describe("shouldDeferCompletion forwarding", () => {
+  // Helper: create a sync parser with shouldDeferCompletion that records
+  // received state and returns a configurable value.
+  function createDeferrableParser(
+    deferResult: boolean | ((state: unknown) => boolean),
+  ) {
+    const receivedStates: unknown[] = [];
+    const base = option("--val", string());
+    const parser = {
+      ...base,
+      receivedStates,
+      shouldDeferCompletion(
+        state: ValueParserResult<string> | undefined,
+      ): boolean {
+        receivedStates.push(state);
+        return typeof deferResult === "function"
+          ? deferResult(state)
+          : deferResult;
+      },
+    };
+    return parser;
+  }
+
+  describe("optional() shouldDeferCompletion", () => {
+    it("should unwrap outer state before delegating to inner hook", () => {
+      const inner = createDeferrableParser(true);
+      const outer = optional(inner);
+
+      assert.ok(typeof outer.shouldDeferCompletion === "function");
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "hello",
+      };
+      // Outer state shape is [TState] | undefined
+      outer.shouldDeferCompletion!([innerState]);
+
+      // Inner hook should receive the unwrapped inner state, not the array
+      assert.equal(inner.receivedStates.length, 1);
+      assert.deepEqual(inner.receivedStates[0], innerState);
+    });
+
+    it("should return false when outer state is undefined", () => {
+      const inner = createDeferrableParser(true);
+      const outer = optional(inner);
+
+      const result = outer.shouldDeferCompletion!(undefined);
+      assert.equal(result, false);
+      // Inner hook should NOT have been called
+      assert.equal(inner.receivedStates.length, 0);
+    });
+
+    it("should propagate inner hook's return value", () => {
+      const inner = createDeferrableParser(false);
+      const outer = optional(inner);
+
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "test",
+      };
+      const result = outer.shouldDeferCompletion!([innerState]);
+      assert.equal(result, false);
+    });
+
+    it("should delegate non-array objects to inner hook", () => {
+      const inner = createDeferrableParser(true);
+      const outer = optional(inner);
+
+      // When called with a non-array object (e.g., PromptBindState),
+      // the hook should delegate directly to the inner hook.
+      const otherState = { someKey: "value" };
+      const result = outer.shouldDeferCompletion!(
+        otherState as unknown as
+          | [ValueParserResult<string> | undefined]
+          | undefined,
+      );
+      assert.equal(result, true);
+      assert.equal(inner.receivedStates.length, 1);
+      assert.deepEqual(inner.receivedStates[0], otherState);
+    });
+  });
+
+  describe("withDefault() shouldDeferCompletion", () => {
+    it("should unwrap outer state before delegating to inner hook", () => {
+      const inner = createDeferrableParser(true);
+      const outer = withDefault(inner, "fallback");
+
+      assert.ok(typeof outer.shouldDeferCompletion === "function");
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "hello",
+      };
+      outer.shouldDeferCompletion!([innerState]);
+
+      assert.equal(inner.receivedStates.length, 1);
+      assert.deepEqual(inner.receivedStates[0], innerState);
+    });
+
+    it("should return false when outer state is undefined", () => {
+      const inner = createDeferrableParser(true);
+      const outer = withDefault(inner, "fallback");
+
+      const result = outer.shouldDeferCompletion!(undefined);
+      assert.equal(result, false);
+      assert.equal(inner.receivedStates.length, 0);
+    });
+
+    it("should propagate inner hook's return value", () => {
+      const inner = createDeferrableParser(false);
+      const outer = withDefault(inner, "fallback");
+
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "test",
+      };
+      const result = outer.shouldDeferCompletion!([innerState]);
+      assert.equal(result, false);
+    });
+
+    it("should delegate non-array objects to inner hook", () => {
+      const inner = createDeferrableParser(true);
+      const outer = withDefault(inner, "fallback");
+
+      const otherState = { someKey: "value" };
+      const result = outer.shouldDeferCompletion!(
+        otherState as unknown as
+          | [ValueParserResult<string> | undefined]
+          | undefined,
+      );
+      assert.equal(result, true);
+      assert.equal(inner.receivedStates.length, 1);
+      assert.deepEqual(inner.receivedStates[0], otherState);
+    });
+  });
+});

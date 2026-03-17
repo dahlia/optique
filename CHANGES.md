@@ -362,6 +362,13 @@ To be released.
     defer interactive prompts until phase-two config resolution.
     [[#385], [#535]]
 
+ -  Fixed `shouldDeferCompletion` forwarding in `optional()` and
+    `withDefault()`: the forwarded hook now unwraps the outer state
+    (`[TState] | undefined`) to the inner `TState` before delegating to
+    the inner parser's hook, and propagates annotations from the outer
+    array to the inner element so annotation-based checks work correctly.
+    [[#590], [#592]]
+
  -  Fixed `optional()` and `withDefault()` not propagating annotations from
     outer state into inner parser elements during `complete()`, which prevented
     `bindConfig()` from resolving config values through wrapper combinators.
@@ -497,6 +504,8 @@ To be released.
 [#587]: https://github.com/dahlia/optique/pull/587
 [#588]: https://github.com/dahlia/optique/pull/588
 [#589]: https://github.com/dahlia/optique/pull/589
+[#590]: https://github.com/dahlia/optique/issues/590
+[#592]: https://github.com/dahlia/optique/pull/592
 
 ### @optique/config
 
