@@ -1537,6 +1537,19 @@ describe("formatDocPage", () => {
       () => formatDocPage("myapp", crPage),
       TypeError,
     );
+    const crlfPage: DocPage = {
+      sections: [{
+        title: "bad\r\nsection",
+        entries: [{
+          term: { type: "argument", metavar: "X" },
+          description: [{ type: "text", text: "desc" }],
+        }],
+      }],
+    };
+    assert.throws(
+      () => formatDocPage("myapp", crlfPage),
+      TypeError,
+    );
   });
 
   it("should not throw for newline in title of empty section", () => {
