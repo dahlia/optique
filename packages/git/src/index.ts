@@ -78,7 +78,9 @@ export interface GitParserOptions {
 
   /**
    * Maximum number of recent commits to include in shell completion suggestions.
-   * Only applies to `gitCommit()` and `gitRef()` parsers.
+   * Only affects suggestions from `gitCommit()` and `gitRef()` parsers, but
+   * is validated by all git parser functions.
+   * Must be a positive integer.
    * Defaults to 15.
    *
    * @since 0.9.0
@@ -130,6 +132,7 @@ export interface GitParsers {
    * Creates a value parser that validates local branch names.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing branch names.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   branch(options?: GitParserOptions): ValueParser<"async", string>;
 
@@ -138,6 +141,7 @@ export interface GitParsers {
    * @param remote The remote name to validate against.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing remote branch names.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   remoteBranch(
     remote: string,
@@ -148,6 +152,7 @@ export interface GitParsers {
    * Creates a value parser that validates tag names.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing tag names.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   tag(options?: GitParserOptions): ValueParser<"async", string>;
 
@@ -155,6 +160,7 @@ export interface GitParsers {
    * Creates a value parser that validates remote names.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing remote names.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   remote(options?: GitParserOptions): ValueParser<"async", string>;
 
@@ -162,6 +168,7 @@ export interface GitParsers {
    * Creates a value parser that validates commit SHAs.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing commit SHAs.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   commit(options?: GitParserOptions): ValueParser<"async", string>;
 
@@ -170,6 +177,7 @@ export interface GitParsers {
    * Accepts branch names, tag names, or commit SHAs.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts any git reference.
+   * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   ref(options?: GitParserOptions): ValueParser<"async", string>;
 }
@@ -247,6 +255,23 @@ function createAsyncValueParser(
   ) => AsyncIterable<Suggestion>,
 ): ValueParser<"async", string> {
   ensureNonEmptyString(metavar);
+  if (options?.suggestionDepth !== undefined) {
+    if (
+      !Number.isInteger(options.suggestionDepth) ||
+      options.suggestionDepth < 1
+    ) {
+      const depth = options.suggestionDepth;
+      const repr = typeof depth === "number"
+        ? String(depth)
+        : typeof depth === "string"
+        ? JSON.stringify(depth)
+        : `${typeof depth} ${String(depth)}`;
+      throw new RangeError(
+        `Invalid suggestionDepth (must be a positive integer): ${repr}`,
+      );
+    }
+  }
+  const validatedDepth = options?.suggestionDepth ?? DEFAULT_SUGGESTION_DEPTH;
 
   return {
     $mode: "async",
@@ -261,8 +286,7 @@ function createAsyncValueParser(
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
       const dir = getRepoDir(options?.dir);
       if (suggestFn) {
-        const depth = options?.suggestionDepth ?? DEFAULT_SUGGESTION_DEPTH;
-        yield* suggestFn(dir, prefix, depth);
+        yield* suggestFn(dir, prefix, validatedDepth);
       }
     },
   };
@@ -276,6 +300,7 @@ function createAsyncValueParser(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing branch names.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  *
  * @example
@@ -346,6 +371,7 @@ export function gitBranch(
  * @param remote The remote name to validate against.
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing remote branch names.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  *
  * @example
@@ -418,6 +444,7 @@ export function gitRemoteBranch(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing tag names.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  */
 export function gitTag(
@@ -476,6 +503,7 @@ export function gitTag(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing remote names.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  */
 export function gitRemote(
@@ -538,6 +566,7 @@ export function gitRemote(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing commit SHAs.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  */
 export function gitCommit(
@@ -622,6 +651,7 @@ export function gitCommit(
  *
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts any git reference.
+ * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  */
 export function gitRef(
@@ -724,7 +754,9 @@ export function gitRef(
  * Creates a set of git parsers with shared configuration.
  *
  * @param options Shared configuration for the parsers.
- * @returns An object containing git parsers.
+ * @returns An object containing git parsers.  Each returned method may throw
+ *   a {@link RangeError} if the merged `suggestionDepth` is not a positive
+ *   integer.
  * @since 0.9.0
  */
 export function createGitParsers(options?: GitParserOptions): GitParsers {

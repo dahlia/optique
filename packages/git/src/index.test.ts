@@ -1711,4 +1711,67 @@ describe("git parsers", () => {
       }
     });
   });
+
+  describe("suggestionDepth validation", () => {
+    for (
+      const depth of [
+        0,
+        -1,
+        1.5,
+        NaN,
+        Infinity,
+        -Infinity,
+        "2",
+        "foo",
+        BigInt(2),
+      ] as never[]
+    ) {
+      const label = `${typeof depth} ${String(depth)}`;
+      it(`gitCommit() rejects suggestionDepth: ${label}`, () => {
+        assert.throws(
+          () => gitCommit({ suggestionDepth: depth }),
+          RangeError,
+        );
+      });
+
+      it(`gitRef() rejects suggestionDepth: ${label}`, () => {
+        assert.throws(
+          () => gitRef({ suggestionDepth: depth }),
+          RangeError,
+        );
+      });
+    }
+
+    for (const depth of [1, 2, 15, 100]) {
+      it(`gitCommit() accepts suggestionDepth: ${depth}`, () => {
+        assert.doesNotThrow(() => gitCommit({ suggestionDepth: depth }));
+      });
+
+      it(`gitRef() accepts suggestionDepth: ${depth}`, () => {
+        assert.doesNotThrow(() => gitRef({ suggestionDepth: depth }));
+      });
+    }
+
+    it("gitCommit() accepts omitted suggestionDepth", () => {
+      assert.doesNotThrow(() => gitCommit());
+    });
+
+    it("gitRef() accepts omitted suggestionDepth", () => {
+      assert.doesNotThrow(() => gitRef());
+    });
+
+    it("gitBranch() rejects invalid suggestionDepth", () => {
+      assert.throws(
+        () => gitBranch({ suggestionDepth: 0 as never }),
+        RangeError,
+      );
+    });
+
+    it("createGitParsers() propagates validation to methods", () => {
+      const parsers = createGitParsers({ suggestionDepth: -1 as never });
+      assert.throws(() => parsers.commit(), RangeError);
+      assert.throws(() => parsers.ref(), RangeError);
+      assert.throws(() => parsers.branch(), RangeError);
+    });
+  });
 });
