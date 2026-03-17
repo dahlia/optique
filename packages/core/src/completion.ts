@@ -5,16 +5,17 @@ import type { Suggestion } from "./parser.ts";
  * A regular expression pattern for valid program names that can be safely
  * interpolated into shell scripts.
  *
- * This pattern allows:
+ * The first character must be alphanumeric or underscore.  Subsequent
+ * characters may also include hyphens and dots:
  * - Letters (a-z, A-Z)
  * - Numbers (0-9)
  * - Underscore (_)
- * - Hyphen (-)
- * - Dot (.)
+ * - Hyphen (-) — not as the first character
+ * - Dot (.) — not as the first character
  *
  * @internal
  */
-const SAFE_PROGRAM_NAME_PATTERN = /^[a-zA-Z0-9_.-]+$/;
+const SAFE_PROGRAM_NAME_PATTERN = /^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$/;
 
 /**
  * Validates a program name for safe use in shell scripts.
@@ -31,7 +32,8 @@ function validateProgramName(programName: string): void {
   if (!SAFE_PROGRAM_NAME_PATTERN.test(programName)) {
     throw new Error(
       `Invalid program name for shell completion: "${programName}". ` +
-        "Program names must contain only alphanumeric characters, " +
+        "Program names must start with an alphanumeric character or " +
+        "underscore, and contain only alphanumeric characters, " +
         "underscores, hyphens, and dots.",
     );
   }
