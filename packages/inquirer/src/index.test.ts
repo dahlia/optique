@@ -988,6 +988,37 @@ describe("prompt()", () => {
       assert.deepEqual(terms, []);
       // NOSONAR: The cast above uses 'unknown' as an intermediate for intentional narrowing.
     });
+
+    it("does not double-wrap already-optional inner parser", () => {
+      const parser = prompt(optional(option("--name", string())), {
+        type: "input",
+        message: "Enter name:",
+        prompter: () => Promise.resolve(""),
+      });
+
+      const usage = parser.usage;
+      assert.equal(usage.length, 1);
+      assert.equal((usage[0] as { type: string }).type, "optional");
+      // The inner terms should be the option itself, not another optional wrapper
+      const terms = (usage[0] as unknown as { terms: unknown[] }).terms;
+      assert.equal(terms.length, 1);
+      assert.equal((terms[0] as { type: string }).type, "option");
+    });
+
+    it("does not double-wrap withDefault inner parser", () => {
+      const parser = prompt(withDefault(option("--name", string()), "def"), {
+        type: "input",
+        message: "Enter name:",
+        prompter: () => Promise.resolve(""),
+      });
+
+      const usage = parser.usage;
+      assert.equal(usage.length, 1);
+      assert.equal((usage[0] as { type: string }).type, "optional");
+      const terms = (usage[0] as unknown as { terms: unknown[] }).terms;
+      assert.equal(terms.length, 1);
+      assert.equal((terms[0] as { type: string }).type, "option");
+    });
   });
 
   describe("consumed-token detection", () => {
