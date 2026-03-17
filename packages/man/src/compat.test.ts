@@ -134,8 +134,8 @@ It supports multiple options and arguments, and can be used as a reference for t
       author: message`Hong Minhee <hong@minhee.org>`,
       bugs: message`Report bugs at https://github.com/dahlia/optique/issues`,
       seeAlso: [
-        { name: "git", section: 1 },
-        { name: "make", section: 1 },
+        { name: "git", section: 1 as const },
+        { name: "make", section: 1 as const },
       ],
     };
 

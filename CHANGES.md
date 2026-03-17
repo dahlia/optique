@@ -675,6 +675,12 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/man
 
+ -  Changed `ManPageOptions.seeAlso[].section` type from `number` to
+    `ManPageSection` and added runtime validation that rejects invalid section
+    numbers (must be integers 1–8).  Previously, fractional or negative numbers
+    were silently serialized into malformed `.BR` cross-references.
+    [[#380], [#578]]
+
  -  `generateManPageSync()`, `generateManPageAsync()`, and `generateManPage()`
     now validate that the input is a genuine Optique `Parser` or `Program`
     up front, instead of accepting malformed objects and crashing with an
@@ -774,6 +780,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#302]: https://github.com/dahlia/optique/issues/302
 [#303]: https://github.com/dahlia/optique/issues/303
 [#305]: https://github.com/dahlia/optique/issues/305
+[#380]: https://github.com/dahlia/optique/issues/380
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532
@@ -791,6 +798,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#564]: https://github.com/dahlia/optique/pull/564
 [#567]: https://github.com/dahlia/optique/pull/567
 [#574]: https://github.com/dahlia/optique/pull/574
+[#578]: https://github.com/dahlia/optique/pull/578
 
 
 Version 0.10.7

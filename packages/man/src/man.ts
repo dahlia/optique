@@ -81,7 +81,7 @@ export interface ManPageOptions {
    * Cross-references to include in the SEE ALSO section.
    */
   readonly seeAlso?: ReadonlyArray<
-    { readonly name: string; readonly section: number }
+    { readonly name: string; readonly section: ManPageSection }
   >;
 
   /**
@@ -397,8 +397,8 @@ function formatDocSectionEntries(section: DocSection): string {
  * @param options The man page options.
  * @returns The complete man page in roff format.
  * @throws {TypeError} If the program name is empty.
- * @throws {RangeError} If the section number is not a valid man page section
- * (1–8).
+ * @throws {RangeError} If the section number or any `seeAlso` entry's section
+ * number is not a valid man page section (1–8).
  * @since 0.10.0
  */
 export function formatDocPageAsMan(
@@ -538,6 +538,24 @@ export function formatDocPageAsMan(
 
   // .SH SEE ALSO
   if (options.seeAlso && options.seeAlso.length > 0) {
+    for (const ref of options.seeAlso) {
+      if (
+        !Number.isInteger(ref.section) ||
+        ref.section < 1 ||
+        ref.section > 8
+      ) {
+        let repr: string;
+        try {
+          repr = JSON.stringify(ref.section);
+        } catch {
+          repr = String(typeof ref.section);
+        }
+        throw new RangeError(
+          `Invalid man page section number for seeAlso entry ` +
+            `${JSON.stringify(ref.name)} (must be 1–8): ${repr}`,
+        );
+      }
+    }
     lines.push(".SH SEE ALSO");
     const refs = options.seeAlso.map((ref, i) => {
       const suffix = i < options.seeAlso!.length - 1 ? "," : "";
