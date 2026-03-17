@@ -1015,6 +1015,27 @@ describe("git parsers", () => {
         await cleanupTestRepo(testRepoDir);
       }
     });
+
+    it("should only compute short OIDs for prefix-matched commits", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const parser = gitRef({ dir: testRepoDir });
+        // Use a prefix that won't match any commit OID (hex only) but
+        // will match the "main" branch, ensuring non-matching commits
+        // are skipped without yielding.
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!("main")) {
+          suggestions.push(s);
+        }
+        const literals = suggestions.filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+        );
+        assert.equal(literals.length, 1, "Should only suggest 'main' branch");
+        assert.equal(literals[0].text, "main");
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
   });
 
   describe("non-existent directory", () => {

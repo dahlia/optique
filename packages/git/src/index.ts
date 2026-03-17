@@ -691,8 +691,9 @@ export function gitRef(
         }
 
         for (const commit of commits) {
-          const shortOid = commit.oid.slice(0, 7);
-          if (commit.oid.startsWith(prefix) && !seen.has(shortOid)) {
+          if (commit.oid.startsWith(prefix)) {
+            const shortOid = commit.oid.slice(0, 7);
+            if (seen.has(shortOid)) continue;
             seen.add(shortOid);
             const firstLine = commit.commit.message.split("\n")[0];
             yield {
