@@ -3,7 +3,7 @@ import type { SourceContext } from "@optique/core/context";
 import { runParser, runWith, runWithSync } from "@optique/core/facade";
 import type {
   CommandSubConfig,
-  ExtractRequiredOptions,
+  ContextOptionsParam,
   OptionSubConfig,
   RunOptions as CoreRunOptions,
 } from "@optique/core/facade";
@@ -351,17 +351,6 @@ type RejectUnknownRunOptionKeys<TOptions> = [TOptions] extends [undefined]
   : never;
 
 /**
- * When contexts require options, demands a `contextOptions` property
- * typed to those requirements.  When no context needs options,
- * resolves to `unknown` (intersection no-op).
- */
-type ContextOptionsParam<
-  TContexts extends readonly SourceContext<unknown>[],
-  TValue,
-> = [unknown] extends [ExtractRequiredOptions<TContexts, TValue>] ? unknown
-  : { readonly contextOptions: ExtractRequiredOptions<TContexts, TValue> };
-
-/**
  * Accepts only values typed exactly as `RunOptions`, which are widened to the
  * conservative fallback overloads because they may hide context presence.
  */
@@ -688,12 +677,9 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
       programMetadata,
     );
 
-    // Extract context-required options from the dedicated namespace
-    const contextOptions = options.contextOptions ?? {};
-
     const runWithOptions = {
       ...coreOptions,
-      ...contextOptions,
+      contextOptions: options.contextOptions,
       args,
     };
 
@@ -963,13 +949,10 @@ function runImpl<T extends Parser<Mode, unknown, unknown>>(
       programMetadata,
     );
 
-    // Extract context-required options from the dedicated namespace
-    const contextOptions = options.contextOptions ?? {};
-
-    // Build RunWithOptions = CoreRunOptions + { args }
+    // Build RunWithOptions = CoreRunOptions + { args, contextOptions }
     const runWithOptions = {
       ...coreOptions,
-      ...contextOptions,
+      contextOptions: options.contextOptions,
       args,
     };
 

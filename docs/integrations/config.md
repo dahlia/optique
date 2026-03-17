@@ -703,7 +703,9 @@ import { runWith } from "@optique/core/facade";
 
 const result = await runWith(parser, "myapp", [configContext], {
   args: process.argv.slice(2),
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
 

@@ -3181,7 +3181,30 @@ export interface RunWithOptions<THelp, TError>
    * `process.argv.slice(2)` on Node.js/Bun or `Deno.args` on Deno.
    */
   readonly args?: readonly string[];
+
+  /**
+   * Options to forward to source contexts.  When contexts declare
+   * required options (via `$requiredOptions`), pass them here to
+   * avoid name collisions with runner-level options such as `args`,
+   * `help`, or `colors`.
+   *
+   * @since 1.0.0
+   */
+  readonly contextOptions?: Record<string, unknown>;
 }
+
+/**
+ * When contexts require options, demands a `contextOptions` property
+ * typed to those requirements.  When no context needs options,
+ * resolves to `unknown` (intersection no-op).
+ *
+ * @since 1.0.0
+ */
+export type ContextOptionsParam<
+  TContexts extends readonly SourceContext<unknown>[],
+  TValue,
+> = [unknown] extends [ExtractRequiredOptions<TContexts, TValue>] ? unknown
+  : { readonly contextOptions: ExtractRequiredOptions<TContexts, TValue> };
 
 /**
  * Runs a parser with multiple source contexts.
@@ -3242,7 +3265,7 @@ export async function runWith<
   contexts: TContexts,
   options:
     & RunWithOptions<THelp, TError>
-    & ExtractRequiredOptions<TContexts, InferValue<TParser>>,
+    & ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): Promise<InferValue<TParser>> {
   const args = options?.args ?? [];
 
@@ -3272,11 +3295,12 @@ export async function runWith<
 
   try {
     // Phase 1: Collect initial annotations
+    const ctxOptions = options?.contextOptions;
     const {
       annotations: phase1Annotations,
       annotationsList: phase1AnnotationsList,
       hasDynamic: needsTwoPhase,
-    } = await collectPhase1Annotations(contexts, options);
+    } = await collectPhase1Annotations(contexts, ctxOptions);
 
     if (!needsTwoPhase) {
       // All static contexts - single pass is sufficient
@@ -3365,7 +3389,7 @@ export async function runWith<
     const { annotationsList: phase2AnnotationsList } = await collectAnnotations(
       contexts,
       firstPassResult,
-      options,
+      ctxOptions,
     );
 
     // Final parse with merged annotations
@@ -3422,7 +3446,7 @@ export function runWithSync<
   contexts: TContexts,
   options:
     & RunWithOptions<THelp, TError>
-    & ExtractRequiredOptions<TContexts, InferValue<TParser>>,
+    & ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): InferValue<TParser> {
   const args = options?.args ?? [];
 
@@ -3438,11 +3462,12 @@ export function runWithSync<
 
   try {
     // Phase 1: Collect initial annotations
+    const ctxOptions = options?.contextOptions;
     const {
       annotations: phase1Annotations,
       annotationsList: phase1AnnotationsList,
       hasDynamic: needsTwoPhase,
-    } = collectPhase1AnnotationsSync(contexts, options);
+    } = collectPhase1AnnotationsSync(contexts, ctxOptions);
 
     if (!needsTwoPhase) {
       // All static contexts - single pass is sufficient
@@ -3478,7 +3503,7 @@ export function runWithSync<
     const { annotationsList: phase2AnnotationsList } = collectAnnotationsSync(
       contexts,
       firstPassResult,
-      options,
+      ctxOptions,
     );
 
     // Final parse with merged annotations
@@ -3524,7 +3549,7 @@ export function runWithAsync<
   contexts: TContexts,
   options:
     & RunWithOptions<THelp, TError>
-    & ExtractRequiredOptions<TContexts, InferValue<TParser>>,
+    & ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): Promise<InferValue<TParser>> {
   return runWith(parser, programName, contexts, options);
 }

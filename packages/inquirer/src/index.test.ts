@@ -1111,10 +1111,12 @@ describe("prompt()", () => {
         "test",
         [envContext, configContext],
         {
-          load: () => ({
-            config: { apiKey: "config-secret" },
-            meta: undefined,
-          }),
+          contextOptions: {
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
           args: [],
         },
       );
@@ -1245,7 +1247,9 @@ describe("prompt()", () => {
         );
 
         const result = await runWith(parser, "test", [context], {
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
           args: [],
         });
 
@@ -1380,10 +1384,12 @@ describe("prompt()", () => {
           [dynamicContext, context],
           {
             args: [],
-            load: () => ({
-              config: { apiKey: "config-secret" },
-              meta: undefined,
-            }),
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
           },
         );
 
@@ -1425,10 +1431,12 @@ describe("prompt()", () => {
           [dynamicContext, context],
           {
             args: [],
-            load: () => ({
-              config: { apiKey: "config-secret" },
-              meta: undefined,
-            }),
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
           },
         );
 
@@ -1483,10 +1491,12 @@ describe("prompt()", () => {
           [dynamicContext, context],
           {
             args: [],
-            load: () => ({
-              config: { apiKey: "config-secret" },
-              meta: undefined,
-            }),
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
           },
         );
 
@@ -1533,10 +1543,12 @@ describe("prompt()", () => {
 
       const result = await runWith(parser, "test", [dynamicContext, context], {
         args: [],
-        load: () => ({
-          config: { apiKey: "config-secret" },
-          meta: undefined,
-        }),
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
       });
 
       assert.deepEqual(phase2Values, [undefined]);
@@ -1597,10 +1609,12 @@ describe("prompt()", () => {
           [dynamicContext, context],
           {
             args: [],
-            load: () => ({
-              config: { apiKey: "config-secret" },
-              meta: undefined,
-            }),
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
           },
         );
 
@@ -1654,10 +1668,12 @@ describe("prompt()", () => {
         [dynamicContext, context],
         {
           args: [],
-          load: () => ({
-            config: { apiKey: "config-secret" },
-            meta: undefined,
-          }),
+          contextOptions: {
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
         },
       );
 
@@ -1722,10 +1738,12 @@ describe("prompt()", () => {
         [dynamicContext, context],
         {
           args: [],
-          load: () => ({
-            config: { apiKey: "config-secret" },
-            meta: undefined,
-          }),
+          contextOptions: {
+            load: () => ({
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            }),
+          },
         },
       );
 
@@ -1783,10 +1801,12 @@ describe("prompt()", () => {
           [dynamicContext, context],
           {
             args: [],
-            load: () => ({
-              config: { apiKey: "config-secret" },
-              meta: undefined,
-            }),
+            contextOptions: {
+              load: () => ({
+                config: { apiKey: "config-secret" },
+                meta: undefined,
+              }),
+            },
           },
         );
 
@@ -1814,12 +1834,14 @@ describe("prompt()", () => {
 
       const result = await runWith(parser, "test", [context], {
         args: [],
-        load: (parsed) => {
-          loaderParsed = parsed as string | undefined;
-          return {
-            config: { apiKey: "config-secret" },
-            meta: undefined,
-          };
+        contextOptions: {
+          load: (parsed) => {
+            loaderParsed = parsed as string | undefined;
+            return {
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            };
+          },
         },
       });
 
@@ -1848,12 +1870,14 @@ describe("prompt()", () => {
 
       const result = await runWith(parser, "test", [context], {
         args: [],
-        load: (parsed) => {
-          loaderParsed = parsed as { readonly apiKey?: string | undefined };
-          return {
-            config: { apiKey: "config-secret" },
-            meta: undefined,
-          };
+        contextOptions: {
+          load: (parsed) => {
+            loaderParsed = parsed as { readonly apiKey?: string | undefined };
+            return {
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            };
+          },
         },
       });
 
@@ -1899,12 +1923,14 @@ describe("prompt()", () => {
           [identityContext, context],
           {
             args: [],
-            load: (parsed) => {
-              loaderMetadata = metadataByParsed.get(parsed as object);
-              return {
-                config: { apiKey: "config-secret" },
-                meta: undefined,
-              };
+            contextOptions: {
+              load: (parsed) => {
+                loaderMetadata = metadataByParsed.get(parsed as object);
+                return {
+                  config: { apiKey: "config-secret" },
+                  meta: undefined,
+                };
+              },
             },
           },
         );
@@ -1938,14 +1964,16 @@ describe("prompt()", () => {
 
       const result = await runWith(parser, "test", [context], {
         args: [],
-        load: (parsed) => {
-          if (parsed instanceof Set) {
-            loaderValues = [...parsed];
-          }
-          return {
-            config: { apiKey: "config-secret" },
-            meta: undefined,
-          };
+        contextOptions: {
+          load: (parsed) => {
+            if (parsed instanceof Set) {
+              loaderValues = [...parsed];
+            }
+            return {
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            };
+          },
         },
       });
 
@@ -1988,14 +2016,16 @@ describe("prompt()", () => {
 
       const result = await runWith(parser, "test", [context], {
         args: [],
-        load: (parsed) => {
-          if (parsed instanceof BoxSet) {
-            loaderApiKey = parsed.apiKey;
-          }
-          return {
-            config: { apiKey: "config-secret" },
-            meta: undefined,
-          };
+        contextOptions: {
+          load: (parsed) => {
+            if (parsed instanceof BoxSet) {
+              loaderApiKey = parsed.apiKey;
+            }
+            return {
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            };
+          },
         },
       });
 
@@ -2045,7 +2075,9 @@ describe("prompt()", () => {
         );
 
         const result = await runWith(parser, "test", [context], {
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
           args: [],
         });
 
@@ -2094,7 +2126,9 @@ describe("prompt()", () => {
         );
 
         const result = await runWith(parser, "test", [context], {
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
           args: [],
         });
 
@@ -2143,7 +2177,9 @@ describe("prompt()", () => {
         );
 
         const result = await runWith(parser, "test", [context], {
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
           args: [],
         });
 
@@ -2192,7 +2228,9 @@ describe("prompt()", () => {
         );
 
         const result = await runWith(parser, "test", [context], {
-          load: () => ({ config, meta: undefined }),
+          contextOptions: {
+            load: () => ({ config, meta: undefined }),
+          },
           args: [],
         });
 

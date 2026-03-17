@@ -1456,10 +1456,15 @@ describe("run with contexts", () => {
       args: [],
       programName: "test",
       contexts: [context],
+      contextOptions: { custom: "value" },
     });
 
-    // Options should be passed through (minus known RunOptions keys)
-    assert.ok(receivedOptions !== undefined);
+    // contextOptions should be forwarded to contexts
+    assert.ok(receivedOptions != null);
+    assert.equal(
+      (receivedOptions as Record<string, unknown>).custom,
+      "value",
+    );
   });
 
   it("should forward contextOptions to contexts without collision", async () => {

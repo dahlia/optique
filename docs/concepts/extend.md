@@ -669,7 +669,7 @@ API reference
 `SourceContext<TRequiredOptions = void>`
 :   Interface for data sources that provide annotations. The `TRequiredOptions`
     type parameter specifies additional options that `runWith()` must provide
-    when this context is used.
+    via `contextOptions` when this context is used.
 
     Members:
 
@@ -729,16 +729,18 @@ API reference
 :   Runs a parser with multiple source contexts. Automatically handles
     static and dynamic contexts with two-phase parsing when needed.
 
-    The `options` parameter must include any options required by the contexts.
-    For example, if a context specifies `TRequiredOptions` with
-    `ParserValuePlaceholder`, you must provide that option with the correct
-    parser result type:
+    The `options` parameter accepts a `contextOptions` property for any options
+    required by the contexts.  For example, if a context specifies
+    `TRequiredOptions` with `ParserValuePlaceholder`, you must provide that
+    option inside `contextOptions`:
 
     ~~~~ typescript
     // If configContext requires getConfigPath
     const result = await runWith(parser, "myapp", [configContext], {
       args: process.argv.slice(2),
-      getConfigPath: (parsed) => parsed.config,  // typed from parser!
+      contextOptions: {
+        getConfigPath: (parsed) => parsed.config,  // typed from parser!
+      },
     });
     ~~~~
 
@@ -1127,8 +1129,8 @@ export function createConfigContext(): ConfigContext {
 }
 ~~~~
 
-Now when using `runWith()`, TypeScript *requires* the `getConfigPath` option
-and infers the correct type for the `parsed` parameter:
+Now when using `runWith()`, TypeScript *requires* `contextOptions` with
+`getConfigPath` and infers the correct type for the `parsed` parameter:
 
 ~~~~ typescript
 import { runWith } from "@optique/core/facade";
@@ -1145,14 +1147,16 @@ const parser = object({
 
 const configContext = createConfigContext();
 
-// TypeScript requires getConfigPath and types `parsed` from the parser
+// TypeScript requires contextOptions with getConfigPath
 const result = await runWith(parser, "myapp", [configContext], {
   args: process.argv.slice(2),
-  getConfigPath: (parsed) => parsed.config,  // parsed is typed!
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,  // parsed is typed!
+  },
 });
 ~~~~
 
-If you omit `getConfigPath`, TypeScript reports an error. The `parsed`
+If you omit `contextOptions`, TypeScript reports an error. The `parsed`
 parameter is automatically typed as
 `{ config?: string; host: string; input: string }`, providing full type safety
 and autocompletion.
