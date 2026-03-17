@@ -3012,8 +3012,8 @@ export interface SocketAddressValue {
  */
 export interface SocketAddressOptions {
   /**
-   * The metavariable name for this parser.
-   * @default "HOST:PORT"
+   * The metavariable name for this parser.  If not specified, it is derived
+   * from the {@link separator} (e.g., `"HOST:PORT"` for `":"`).
    */
   readonly metavar?: NonEmptyString;
 
@@ -3305,8 +3305,8 @@ export interface PortRangeOptionsNumber {
   readonly type?: "number";
 
   /**
-   * The metavariable name for this parser.
-   * @default "PORT-PORT"
+   * The metavariable name for this parser.  If not specified, it is derived
+   * from the {@link separator} (e.g., `"PORT-PORT"` for `"-"`).
    */
   readonly metavar?: NonEmptyString;
 
@@ -3398,8 +3398,8 @@ export interface PortRangeOptionsBigInt {
   readonly type: "bigint";
 
   /**
-   * The metavariable name for this parser.
-   * @default "PORT-PORT"
+   * The metavariable name for this parser.  If not specified, it is derived
+   * from the {@link separator} (e.g., `"PORT-PORT"` for `"-"`).
    */
   readonly metavar?: NonEmptyString;
 
