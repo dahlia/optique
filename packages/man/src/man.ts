@@ -309,7 +309,11 @@ function formatUsageAsRoffInternal(
   let usageLineTarget = -1;
   if (applyUsageLine) {
     for (let i = usage.length - 1; i >= 0; i--) {
-      if (usage[i].type === "command") {
+      const t = usage[i];
+      if (
+        t.type === "command" &&
+        !("hidden" in t && isUsageHidden(t.hidden))
+      ) {
         usageLineTarget = i;
         break;
       }

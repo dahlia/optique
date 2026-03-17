@@ -2086,4 +2086,44 @@ describe("formatDocPageAsMan()", () => {
       "ancestor usageLine should not be applied on subcommand page",
     );
   });
+
+  it("skips usage-hidden commands when choosing usageLine target", () => {
+    const page: DocPage = {
+      usage: [
+        {
+          type: "command",
+          name: "visible",
+          usageLine: [{ type: "literal", value: "CUSTOM" }],
+        },
+        {
+          type: "command",
+          name: "hidden-cmd",
+          hidden: "usage",
+          usageLine: [{ type: "ellipsis" }],
+        },
+        { type: "option", names: ["--flag"] },
+      ],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    const synopsis = nextSection === -1
+      ? result.slice(synopsisStart)
+      : result.slice(synopsisStart, nextSection);
+
+    // The visible command's usageLine should be applied
+    assert.ok(synopsis.includes("\\fBvisible\\fR"));
+    assert.ok(synopsis.includes("CUSTOM"));
+    // The hidden command's ellipsis override should NOT leak into SYNOPSIS
+    assert.ok(
+      !synopsis.includes("..."),
+      "hidden command's usageLine should not be applied",
+    );
+    // The --flag option should be replaced by visible's usageLine
+    assert.ok(!synopsis.includes("\\-\\-flag"));
+  });
 });
