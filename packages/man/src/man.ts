@@ -3,7 +3,6 @@ import type { Message } from "@optique/core/message";
 import {
   isDocHidden,
   isUsageHidden,
-  normalizeUsage,
   type Usage,
   type UsageTerm,
 } from "@optique/core/usage";
@@ -296,55 +295,17 @@ function formatUsageTermAsRoffInternal(
  * @returns The roff-formatted string.
  */
 function formatUsageAsRoff(usage: Usage): string {
-  return formatUsageAsRoffInternal(usage, false, true);
+  return formatUsageAsRoffInternal(usage, false);
 }
 
 function formatUsageAsRoffInternal(
   usage: Usage,
   insideBrackets: boolean,
-  applyUsageLine: boolean = false,
 ): string {
-  // Only the last (resolved) command term may have its usageLine applied;
-  // ancestor command terms are rendered as plain names.
-  let usageLineTarget = -1;
-  if (applyUsageLine) {
-    for (let i = usage.length - 1; i >= 0; i--) {
-      const t = usage[i];
-      if (
-        t.type === "command" &&
-        !("hidden" in t && isUsageHidden(t.hidden))
-      ) {
-        usageLineTarget = i;
-        break;
-      }
-    }
-  }
-
-  const parts: string[] = [];
-  for (let i = 0; i < usage.length; i++) {
-    const term = usage[i];
-    if (
-      i === usageLineTarget &&
-      term.type === "command" &&
-      term.usageLine != null
-    ) {
-      const cmdPart = formatUsageTermAsRoffInternal(term, insideBrackets);
-      if (cmdPart) parts.push(cmdPart);
-      const defaultUsageLine = usage.slice(i + 1);
-      const customUsageLine = typeof term.usageLine === "function"
-        ? term.usageLine(defaultUsageLine)
-        : term.usageLine;
-      const customStr = formatUsageAsRoffInternal(
-        normalizeUsage(customUsageLine),
-        insideBrackets,
-      );
-      if (customStr) parts.push(customStr);
-      break;
-    }
-    const s = formatUsageTermAsRoffInternal(term, insideBrackets);
-    if (s) parts.push(s);
-  }
-  return parts.join(" ");
+  return usage
+    .map((term) => formatUsageTermAsRoffInternal(term, insideBrackets))
+    .filter((s) => s !== "")
+    .join(" ");
 }
 
 /**

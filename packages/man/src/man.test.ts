@@ -1870,19 +1870,21 @@ describe("formatDocPageAsMan()", () => {
     }
   });
 
-  it("respects static usageLine override on command term in SYNOPSIS", () => {
-    const page: DocPage = {
-      usage: [
-        {
-          type: "command",
-          name: "serve",
-          usageLine: [{ type: "literal", value: "serve-custom" }],
-        },
-        { type: "option", names: ["--host"], metavar: "HOST" },
-      ],
-      sections: [],
-    };
+  it("renders static usageLine override via getDocPage() in SYNOPSIS", async () => {
+    const parser = command(
+      "serve",
+      or(
+        command("start", constant("start")),
+        command("stop", constant("stop")),
+      ),
+      {
+        usageLine: [{ type: "literal", value: "serve-custom" }],
+      },
+    );
 
+    // No args — getDocPage resolves usageLine for the top-level command.
+    const page = await getDocPage(parser);
+    assert.ok(page);
     const result = formatDocPageAsMan(page, minimalOptions);
 
     const synopsisStart = result.indexOf(".SH SYNOPSIS");
@@ -1892,45 +1894,11 @@ describe("formatDocPageAsMan()", () => {
       ? result.slice(synopsisStart)
       : result.slice(synopsisStart, nextSection);
 
-    // Should contain the command name and the overridden usage
     assert.ok(synopsis.includes("\\fBserve\\fR"));
     assert.ok(synopsis.includes("serve-custom"));
-    // Should NOT contain the default --host option (replaced by usageLine)
-    assert.ok(!synopsis.includes("\\-\\-host"));
   });
 
-  it("respects function usageLine override on command term in SYNOPSIS", () => {
-    const page: DocPage = {
-      usage: [
-        {
-          type: "command",
-          name: "deploy",
-          usageLine: (defaultUsage) => [
-            { type: "literal", value: "CUSTOM" },
-            ...defaultUsage,
-          ],
-        },
-        { type: "option", names: ["--force"] },
-      ],
-      sections: [],
-    };
-
-    const result = formatDocPageAsMan(page, minimalOptions);
-
-    const synopsisStart = result.indexOf(".SH SYNOPSIS");
-    assert.notEqual(synopsisStart, -1);
-    const nextSection = result.indexOf(".SH", synopsisStart + 1);
-    const synopsis = nextSection === -1
-      ? result.slice(synopsisStart)
-      : result.slice(synopsisStart, nextSection);
-
-    // Should contain the command name, the custom literal, and the default option
-    assert.ok(synopsis.includes("\\fBdeploy\\fR"));
-    assert.ok(synopsis.includes("CUSTOM"));
-    assert.ok(synopsis.includes("\\-\\-force"));
-  });
-
-  it("does not double-apply usageLine callback on getDocPage() output", async () => {
+  it("renders function usageLine override via getDocPage() in SYNOPSIS", async () => {
     const parser = command(
       "config",
       or(
@@ -1945,6 +1913,7 @@ describe("formatDocPageAsMan()", () => {
       },
     );
 
+    // With args — getDocPage resolves usageLine for navigated command.
     const page = await getDocPage(parser, ["config"]);
     assert.ok(page);
     const result = formatDocPageAsMan(page, minimalOptions);
@@ -1956,104 +1925,15 @@ describe("formatDocPageAsMan()", () => {
       ? result.slice(synopsisStart)
       : result.slice(synopsisStart, nextSection);
 
+    assert.ok(synopsis.includes("\\fBconfig\\fR"));
+    assert.ok(synopsis.includes("SUBCOMMAND"));
     // "SUBCOMMAND" should appear exactly once (not duplicated)
     const firstIdx = synopsis.indexOf("SUBCOMMAND");
-    assert.notEqual(firstIdx, -1, "SUBCOMMAND should appear in SYNOPSIS");
     const secondIdx = synopsis.indexOf("SUBCOMMAND", firstIdx + 1);
     assert.equal(secondIdx, -1, "SUBCOMMAND should not appear twice");
   });
 
-  it("does not expand usageLine for subcommands in parent exclusive", () => {
-    // Parent page listing subcommands: usageLine should NOT be applied
-    // because these commands are unresolved choices, not the current page's
-    // own command.
-    const page: DocPage = {
-      usage: [
-        {
-          type: "exclusive",
-          terms: [
-            [
-              {
-                type: "command",
-                name: "config",
-                usageLine: [{ type: "ellipsis" }],
-              },
-              { type: "option", names: ["--key"], metavar: "KEY" },
-            ],
-            [{ type: "command", name: "run" }],
-          ],
-        },
-      ],
-      sections: [],
-    };
-
-    const result = formatDocPageAsMan(page, minimalOptions);
-
-    const synopsisStart = result.indexOf(".SH SYNOPSIS");
-    assert.notEqual(synopsisStart, -1);
-    const nextSection = result.indexOf(".SH", synopsisStart + 1);
-    const synopsis = nextSection === -1
-      ? result.slice(synopsisStart)
-      : result.slice(synopsisStart, nextSection);
-
-    // Both subcommand names should appear
-    assert.ok(synopsis.includes("\\fBconfig\\fR"));
-    assert.ok(synopsis.includes("\\fBrun\\fR"));
-    // The --key option should still appear (not replaced by ellipsis)
-    assert.ok(
-      synopsis.includes("\\-\\-key"),
-      "parent page should show original subcommand options, not usageLine",
-    );
-  });
-
-  it("does not over-expand nested command terms from usageLine", () => {
-    // When a command's usageLine callback returns command terms that
-    // themselves have usageLine, the formatter must NOT expand those
-    // nested overrides — it should only apply the current command's
-    // usageLine and render the result literally.
-    const page: DocPage = {
-      usage: [
-        {
-          type: "command",
-          name: "config",
-          usageLine: [
-            {
-              type: "command",
-              name: "get",
-              usageLine: [{ type: "ellipsis" }],
-            },
-          ],
-        },
-        { type: "option", names: ["--key"], metavar: "KEY" },
-      ],
-      sections: [],
-    };
-
-    const result = formatDocPageAsMan(page, minimalOptions);
-
-    const synopsisStart = result.indexOf(".SH SYNOPSIS");
-    assert.notEqual(synopsisStart, -1);
-    const nextSection = result.indexOf(".SH", synopsisStart + 1);
-    const synopsis = nextSection === -1
-      ? result.slice(synopsisStart)
-      : result.slice(synopsisStart, nextSection);
-
-    // "config" and "get" should both appear
-    assert.ok(synopsis.includes("\\fBconfig\\fR"));
-    assert.ok(synopsis.includes("\\fBget\\fR"));
-    // "get"'s usageLine (ellipsis) should NOT be expanded —
-    // the --key option was already replaced by config's usageLine,
-    // but "get"'s own ellipsis override must not also be applied
-    assert.ok(
-      !synopsis.includes("..."),
-      "nested command's usageLine should not be expanded",
-    );
-  });
-
   it("skips ancestor usageLine on subcommand man pages", async () => {
-    // When generating a man page for "config get", the ancestor "config"
-    // command's usageLine must NOT be applied — only the resolved
-    // subcommand's own usageLine (if any) should take effect.
     const parser = command(
       "config",
       or(
@@ -2076,54 +1956,11 @@ describe("formatDocPageAsMan()", () => {
       ? result.slice(synopsisStart)
       : result.slice(synopsisStart, nextSection);
 
-    // The resolved subcommand "get" should appear
     assert.ok(synopsis.includes("\\fBget\\fR"));
-    // The ancestor "config" should appear as a plain name
     assert.ok(synopsis.includes("\\fBconfig\\fR"));
-    // The ancestor's usageLine (ellipsis) should NOT replace the child
     assert.ok(
       !synopsis.includes("..."),
       "ancestor usageLine should not be applied on subcommand page",
     );
-  });
-
-  it("skips usage-hidden commands when choosing usageLine target", () => {
-    const page: DocPage = {
-      usage: [
-        {
-          type: "command",
-          name: "visible",
-          usageLine: [{ type: "literal", value: "CUSTOM" }],
-        },
-        {
-          type: "command",
-          name: "hidden-cmd",
-          hidden: "usage",
-          usageLine: [{ type: "ellipsis" }],
-        },
-        { type: "option", names: ["--flag"] },
-      ],
-      sections: [],
-    };
-
-    const result = formatDocPageAsMan(page, minimalOptions);
-
-    const synopsisStart = result.indexOf(".SH SYNOPSIS");
-    assert.notEqual(synopsisStart, -1);
-    const nextSection = result.indexOf(".SH", synopsisStart + 1);
-    const synopsis = nextSection === -1
-      ? result.slice(synopsisStart)
-      : result.slice(synopsisStart, nextSection);
-
-    // The visible command's usageLine should be applied
-    assert.ok(synopsis.includes("\\fBvisible\\fR"));
-    assert.ok(synopsis.includes("CUSTOM"));
-    // The hidden command's ellipsis override should NOT leak into SYNOPSIS
-    assert.ok(
-      !synopsis.includes("..."),
-      "hidden command's usageLine should not be applied",
-    );
-    // The --flag option should be replaced by visible's usageLine
-    assert.ok(!synopsis.includes("\\-\\-flag"));
   });
 });
