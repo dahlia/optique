@@ -37,6 +37,16 @@ const deferPromptUntilConfigResolvesKey = Symbol.for(
   "@optique/config/deferPromptUntilResolved",
 );
 
+const deferredPromptValueKey: unique symbol = Symbol.for(
+  "@optique/inquirer/deferredPromptValue",
+);
+
+function isDeferredPromptValue(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    deferredPromptValueKey in value;
+}
+
 /**
  * Internal helper for optional-style parsing logic shared by optional()
  * and withDefault(). Handles the common pattern of:
@@ -895,7 +905,9 @@ export function map<M extends Mode, T, U, TState>(
       parser.complete(state),
       (result) =>
         result.success
-          ? { success: true, value: transform(result.value) }
+          ? isDeferredPromptValue(result.value)
+            ? (result as unknown as { success: true; value: U })
+            : { success: true, value: transform(result.value) }
           : result,
     );
   };
