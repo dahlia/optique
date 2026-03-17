@@ -140,8 +140,23 @@ const inheritParentAnnotationsKey = Symbol.for(
   "@optique/core/inheritParentAnnotations",
 );
 
+const deferredPromptRegistryKey = Symbol.for(
+  "@optique/inquirer/deferredPromptRegistry",
+);
+
+function getDeferredPromptRegistry(): WeakSet<object> {
+  const g = globalThis as unknown as Record<symbol, unknown>;
+  if (!(g[deferredPromptRegistryKey] instanceof WeakSet)) {
+    g[deferredPromptRegistryKey] = new WeakSet();
+  }
+  return g[deferredPromptRegistryKey] as WeakSet<object>;
+}
+
 class DeferredPromptValue {
   readonly [deferredPromptValueKey] = true as const;
+  constructor() {
+    getDeferredPromptRegistry().add(this);
+  }
 }
 
 function shouldDeferPrompt(

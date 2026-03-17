@@ -37,14 +37,12 @@ const deferPromptUntilConfigResolvesKey = Symbol.for(
   "@optique/config/deferPromptUntilResolved",
 );
 
-const deferredPromptValueKey: unique symbol = Symbol.for(
-  "@optique/inquirer/deferredPromptValue",
-);
-
 function isDeferredPromptValue(value: unknown): boolean {
-  return value != null &&
-    typeof value === "object" &&
-    deferredPromptValueKey in value;
+  if (value == null || typeof value !== "object") return false;
+  const registry = (globalThis as unknown as Record<symbol, unknown>)[
+    Symbol.for("@optique/inquirer/deferredPromptRegistry")
+  ];
+  return registry instanceof WeakSet && registry.has(value);
 }
 
 /**
