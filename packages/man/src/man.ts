@@ -296,17 +296,18 @@ function formatUsageTermAsRoffInternal(
  * @returns The roff-formatted string.
  */
 function formatUsageAsRoff(usage: Usage): string {
-  return formatUsageAsRoffInternal(usage, false);
+  return formatUsageAsRoffInternal(usage, false, true);
 }
 
 function formatUsageAsRoffInternal(
   usage: Usage,
   insideBrackets: boolean,
+  applyUsageLine: boolean = false,
 ): string {
   const parts: string[] = [];
   for (let i = 0; i < usage.length; i++) {
     const term = usage[i];
-    if (term.type === "command" && term.usageLine != null) {
+    if (applyUsageLine && term.type === "command" && term.usageLine != null) {
       const cmdPart = formatUsageTermAsRoffInternal(term, insideBrackets);
       if (cmdPart) parts.push(cmdPart);
       const defaultUsageLine = usage.slice(i + 1);

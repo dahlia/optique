@@ -1962,4 +1962,47 @@ describe("formatDocPageAsMan()", () => {
     const secondIdx = synopsis.indexOf("SUBCOMMAND", firstIdx + 1);
     assert.equal(secondIdx, -1, "SUBCOMMAND should not appear twice");
   });
+
+  it("does not expand usageLine for subcommands in parent exclusive", () => {
+    // Parent page listing subcommands: usageLine should NOT be applied
+    // because these commands are unresolved choices, not the current page's
+    // own command.
+    const page: DocPage = {
+      usage: [
+        {
+          type: "exclusive",
+          terms: [
+            [
+              {
+                type: "command",
+                name: "config",
+                usageLine: [{ type: "ellipsis" }],
+              },
+              { type: "option", names: ["--key"], metavar: "KEY" },
+            ],
+            [{ type: "command", name: "run" }],
+          ],
+        },
+      ],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    const synopsis = nextSection === -1
+      ? result.slice(synopsisStart)
+      : result.slice(synopsisStart, nextSection);
+
+    // Both subcommand names should appear
+    assert.ok(synopsis.includes("\\fBconfig\\fR"));
+    assert.ok(synopsis.includes("\\fBrun\\fR"));
+    // The --key option should still appear (not replaced by ellipsis)
+    assert.ok(
+      synopsis.includes("\\-\\-key"),
+      "parent page should show original subcommand options, not usageLine",
+    );
+  });
 });
