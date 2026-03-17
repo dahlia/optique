@@ -268,6 +268,7 @@ describe("generateManPageSync()", () => {
       parse() {},
       $mode: "sync",
       usage: {},
+      initialState: null,
       getDocFragments() {
         return { fragments: [] };
       },
