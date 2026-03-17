@@ -240,6 +240,63 @@ function listFailureMessage(
 /** Default depth for commit suggestions. */
 const DEFAULT_SUGGESTION_DEPTH = 15;
 
+/**
+ * Computes the shortest unique short OID for each given full OID, starting
+ * from a minimum length.  When two or more OIDs share the same short prefix,
+ * their prefixes are lengthened until each is unique (up to the full 40-char
+ * OID).
+ * @param oids The full OIDs to shorten.
+ * @param minLength The minimum short OID length.
+ * @returns A map from full OID to its shortest unique short OID.
+ * @internal
+ * @since 1.0.0
+ */
+export function uniqueShortOids(
+  oids: readonly string[],
+  minLength: number,
+): Map<string, string> {
+  const result = new Map<string, string>();
+  // Track current length for each OID
+  const lengths = new Map<string, number>();
+  for (const oid of oids) {
+    lengths.set(oid, minLength);
+  }
+  let remaining = new Set(oids);
+  while (remaining.size > 0) {
+    // Group by current short prefix
+    const groups = new Map<string, string[]>();
+    for (const oid of remaining) {
+      const len = lengths.get(oid)!;
+      const short = oid.slice(0, len);
+      const group = groups.get(short);
+      if (group != null) {
+        group.push(oid);
+      } else {
+        groups.set(short, [oid]);
+      }
+    }
+    const nextRemaining = new Set<string>();
+    for (const [short, group] of groups) {
+      if (group.length === 1) {
+        result.set(group[0], short);
+      } else {
+        for (const oid of group) {
+          const currentLen = lengths.get(oid)!;
+          if (currentLen >= oid.length) {
+            // Already at full length; just use the full OID
+            result.set(oid, oid);
+          } else {
+            lengths.set(oid, currentLen + 1);
+            nextRemaining.add(oid);
+          }
+        }
+      }
+    }
+    remaining = nextRemaining;
+  }
+  return result;
+}
+
 function createAsyncValueParser(
   options: GitParserOptions | undefined,
   metavar: NonEmptyString,
@@ -618,19 +675,20 @@ export function gitCommit(
     async function* suggestCommit(dir, prefix, depth) {
       try {
         const commits = await git.log({ fs: gitFs, dir, depth });
-        for (const commit of commits) {
-          if (commit.oid.startsWith(prefix)) {
-            const shortOid = commit.oid.slice(
-              0,
-              Math.max(7, prefix.length),
-            );
-            const firstLine = commit.commit.message.split("\n")[0];
-            yield {
-              kind: "literal" as const,
-              text: shortOid,
-              description: message`${firstLine}`,
-            };
-          }
+        const matching = commits.filter((c) => c.oid.startsWith(prefix));
+        const minLen = Math.max(7, prefix.length);
+        const shortOids = uniqueShortOids(
+          matching.map((c) => c.oid),
+          minLen,
+        );
+        for (const commit of matching) {
+          const shortOid = shortOids.get(commit.oid)!;
+          const firstLine = commit.commit.message.split("\n")[0];
+          yield {
+            kind: "literal" as const,
+            text: shortOid,
+            description: message`${firstLine}`,
+          };
         }
       } catch (error) {
         logger.debug("Failed to list commits for suggestions.", {
@@ -723,21 +781,22 @@ export function gitRef(
           }
         }
 
-        for (const commit of commits) {
-          if (commit.oid.startsWith(prefix)) {
-            const shortOid = commit.oid.slice(
-              0,
-              Math.max(7, prefix.length),
-            );
-            if (seen.has(shortOid)) continue;
-            seen.add(shortOid);
-            const firstLine = commit.commit.message.split("\n")[0];
-            yield {
-              kind: "literal" as const,
-              text: shortOid,
-              description: message`${firstLine}`,
-            };
-          }
+        const matching = commits.filter((c) => c.oid.startsWith(prefix));
+        const minLen = Math.max(7, prefix.length);
+        const shortOids = uniqueShortOids(
+          matching.map((c) => c.oid),
+          minLen,
+        );
+        for (const commit of matching) {
+          const shortOid = shortOids.get(commit.oid)!;
+          if (seen.has(shortOid)) continue;
+          seen.add(shortOid);
+          const firstLine = commit.commit.message.split("\n")[0];
+          yield {
+            kind: "literal" as const,
+            text: shortOid,
+            description: message`${firstLine}`,
+          };
         }
       } catch (error) {
         logger.debug("Failed to list refs for suggestions.", {
