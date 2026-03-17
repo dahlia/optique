@@ -132,7 +132,7 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
-  it("avoids double brackets for optional wrapping aliased options", () => {
+  it("keeps child brackets for optional wrapping multiple options", () => {
     const term: UsageTerm = {
       type: "optional",
       terms: [
@@ -142,7 +142,7 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(
       formatUsageTermAsRoff(term),
-      "[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR \\fB\\-\\-output\\fR | \\fB\\-o\\fR \\fIFILE\\fR]",
+      "[[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR] [\\fB\\-\\-output\\fR | \\fB\\-o\\fR \\fIFILE\\fR]]",
     );
   });
 
