@@ -2005,4 +2005,48 @@ describe("formatDocPageAsMan()", () => {
       "parent page should show original subcommand options, not usageLine",
     );
   });
+
+  it("does not over-expand nested command terms from usageLine", () => {
+    // When a command's usageLine callback returns command terms that
+    // themselves have usageLine, the formatter must NOT expand those
+    // nested overrides — it should only apply the current command's
+    // usageLine and render the result literally.
+    const page: DocPage = {
+      usage: [
+        {
+          type: "command",
+          name: "config",
+          usageLine: [
+            {
+              type: "command",
+              name: "get",
+              usageLine: [{ type: "ellipsis" }],
+            },
+          ],
+        },
+        { type: "option", names: ["--key"], metavar: "KEY" },
+      ],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    const synopsisStart = result.indexOf(".SH SYNOPSIS");
+    assert.notEqual(synopsisStart, -1);
+    const nextSection = result.indexOf(".SH", synopsisStart + 1);
+    const synopsis = nextSection === -1
+      ? result.slice(synopsisStart)
+      : result.slice(synopsisStart, nextSection);
+
+    // "config" and "get" should both appear
+    assert.ok(synopsis.includes("\\fBconfig\\fR"));
+    assert.ok(synopsis.includes("\\fBget\\fR"));
+    // "get"'s usageLine (ellipsis) should NOT be expanded —
+    // the --key option was already replaced by config's usageLine,
+    // but "get"'s own ellipsis override must not also be applied
+    assert.ok(
+      !synopsis.includes("..."),
+      "nested command's usageLine should not be expanded",
+    );
+  });
 });
