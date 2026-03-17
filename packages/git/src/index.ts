@@ -754,7 +754,9 @@ export function gitRef(
  * Creates a set of git parsers with shared configuration.
  *
  * @param options Shared configuration for the parsers.
- * @returns An object containing git parsers.
+ * @returns An object containing git parsers.  Each returned method may throw
+ *   a {@link RangeError} if the merged `suggestionDepth` is not a positive
+ *   integer.
  * @since 0.9.0
  */
 export function createGitParsers(options?: GitParserOptions): GitParsers {
