@@ -65,7 +65,8 @@ function isProgram<M extends Mode, T>(
 ): value is Program<M, T> {
   try {
     return typeof value === "object" && value !== null &&
-      "parser" in value && "metadata" in value;
+      "parser" in value && "metadata" in value &&
+      typeof value.metadata === "object" && value.metadata !== null;
   } catch {
     return false;
   }

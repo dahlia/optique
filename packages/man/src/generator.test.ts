@@ -255,6 +255,18 @@ describe("generateManPageSync()", () => {
     );
   });
 
+  it("rejects a program-like object with null metadata", () => {
+    const parser = object({});
+    const fakeProgram = {
+      parser,
+      metadata: null,
+    };
+    assert.throws(
+      () => generateManPageSync(fakeProgram as never, { section: 1 }),
+      { name: "TypeError", message: /not a valid.*Parser/ },
+    );
+  });
+
   it("rejects a malformed parser-like object", () => {
     const fakeParser = {};
     assert.throws(
