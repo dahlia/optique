@@ -126,7 +126,7 @@ export function formatDateForMan(
     "December",
   ];
 
-  return `${months[date.getMonth()]} ${date.getFullYear()}`;
+  return `${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }
 
 function formatCommandNameAsRoff(name: string): string {

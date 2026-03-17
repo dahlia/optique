@@ -675,6 +675,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/man
 
+ -  Fixed `formatDateForMan()` using local-time getters (`getMonth()`,
+    `getFullYear()`), which caused the same `Date` to format differently
+    depending on the host timezone.  Now uses UTC getters so the output is
+    deterministic.  [[#312]]
+
  -  `generateManPageSync()`, `generateManPageAsync()`, and `generateManPage()`
     now validate that the input is a genuine Optique `Parser` or `Program`
     up front, instead of accepting malformed objects and crashing with an
@@ -774,6 +779,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#302]: https://github.com/dahlia/optique/issues/302
 [#303]: https://github.com/dahlia/optique/issues/303
 [#305]: https://github.com/dahlia/optique/issues/305
+[#312]: https://github.com/dahlia/optique/issues/312
 [#526]: https://github.com/dahlia/optique/pull/526
 [#529]: https://github.com/dahlia/optique/pull/529
 [#532]: https://github.com/dahlia/optique/pull/532

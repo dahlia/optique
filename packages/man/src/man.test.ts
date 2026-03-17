@@ -12,13 +12,19 @@ import { message } from "@optique/core/message";
 
 describe("formatDateForMan()", () => {
   it("formats Date object to 'Month Year' format", () => {
-    const date = new Date(2026, 0, 22); // January 22, 2026
+    const date = new Date("2026-01-22T12:00:00.000Z");
     assert.equal(formatDateForMan(date), "January 2026");
   });
 
   it("handles different months", () => {
-    assert.equal(formatDateForMan(new Date(2026, 5, 15)), "June 2026");
-    assert.equal(formatDateForMan(new Date(2025, 11, 1)), "December 2025");
+    assert.equal(
+      formatDateForMan(new Date("2026-06-15T12:00:00.000Z")),
+      "June 2026",
+    );
+    assert.equal(
+      formatDateForMan(new Date("2025-12-01T12:00:00.000Z")),
+      "December 2025",
+    );
   });
 
   it("returns string date as-is", () => {
@@ -28,6 +34,13 @@ describe("formatDateForMan()", () => {
 
   it("returns undefined for undefined input", () => {
     assert.equal(formatDateForMan(undefined), undefined);
+  });
+
+  it("uses UTC getters so output is timezone-independent", () => {
+    // UTC midnight on Jan 1 would be Dec 31 in negative-offset timezones
+    // if local-time getters were used
+    const date = new Date("2026-01-01T00:00:00.000Z");
+    assert.equal(formatDateForMan(date), "January 2026");
   });
 });
 
