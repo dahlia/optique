@@ -365,6 +365,9 @@ To be released.
     now defaults to `PORT:PORT` instead of always using `PORT-PORT`).
     [[#323], [#579]]
 
+ -  `formatDocPage()` now throws `TypeError` when `programName` or a section
+    title contains a newline character.  [[#429], [#580]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -413,6 +416,7 @@ To be released.
 [#385]: https://github.com/dahlia/optique/issues/385
 [#388]: https://github.com/dahlia/optique/issues/388
 [#389]: https://github.com/dahlia/optique/issues/389
+[#429]: https://github.com/dahlia/optique/issues/429
 [#490]: https://github.com/dahlia/optique/pull/490
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
@@ -443,6 +447,7 @@ To be released.
 [#575]: https://github.com/dahlia/optique/pull/575
 [#576]: https://github.com/dahlia/optique/pull/576
 [#579]: https://github.com/dahlia/optique/pull/579
+[#580]: https://github.com/dahlia/optique/pull/580
 [#581]: https://github.com/dahlia/optique/pull/581
 
 ### @optique/config

@@ -330,6 +330,8 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @param page The documentation page to format
  * @param options Formatting options to customize the output
  * @returns A formatted string representation of the documentation page
+ * @throws {TypeError} If `programName` or any section title contains a newline
+ * character.
  *
  * @example
  * ```typescript
@@ -354,6 +356,14 @@ export function formatDocPage(
   page: DocPage,
   options: DocPageFormatOptions = {},
 ): string {
+  if (programName.includes("\n")) {
+    throw new TypeError("Program name must not contain newlines.");
+  }
+  for (const section of page.sections) {
+    if (section.title != null && section.title.includes("\n")) {
+      throw new TypeError("Section title must not contain newlines.");
+    }
+  }
   const termIndent = options.termIndent ?? 2;
   const termWidth = options.termWidth ?? 26;
   let output = "";

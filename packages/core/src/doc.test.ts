@@ -1493,6 +1493,30 @@ describe("formatDocPage", () => {
       }
     });
   });
+
+  it("should throw TypeError when programName contains a newline", () => {
+    const page: DocPage = { sections: [] };
+    assert.throws(
+      () => formatDocPage("bad\nname", page),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError when section title contains a newline", () => {
+    const page: DocPage = {
+      sections: [{
+        title: "bad\nsection",
+        entries: [{
+          term: { type: "argument", metavar: "X" },
+          description: [{ type: "text", text: "desc" }],
+        }],
+      }],
+    };
+    assert.throws(
+      () => formatDocPage("myapp", page),
+      TypeError,
+    );
+  });
 });
 
 describe("branch coverage: doc.ts edge cases", () => {
