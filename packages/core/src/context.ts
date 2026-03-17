@@ -244,7 +244,7 @@ export interface SourceContext<TRequiredOptions = void> {
  *
  * @since 1.0.0
  */
-export const placeholder: unique symbol = Symbol(
+export const placeholder: unique symbol = Symbol.for(
   "@optique/core/placeholder",
 );
 
