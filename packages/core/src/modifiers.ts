@@ -37,6 +37,14 @@ const deferPromptUntilConfigResolvesKey = Symbol.for(
   "@optique/config/deferPromptUntilResolved",
 );
 
+function isDeferredPromptValue(value: unknown): boolean {
+  if (value == null || typeof value !== "object") return false;
+  const registry = (globalThis as unknown as Record<symbol, unknown>)[
+    Symbol.for("@optique/inquirer/deferredPromptRegistry")
+  ];
+  return registry instanceof WeakSet && registry.has(value);
+}
+
 /**
  * Internal helper for optional-style parsing logic shared by optional()
  * and withDefault(). Handles the common pattern of:
@@ -895,7 +903,9 @@ export function map<M extends Mode, T, U, TState>(
       parser.complete(state),
       (result) =>
         result.success
-          ? { success: true, value: transform(result.value) }
+          ? isDeferredPromptValue(result.value)
+            ? (result as unknown as { success: true; value: U })
+            : { success: true, value: transform(result.value) }
           : result,
     );
   };

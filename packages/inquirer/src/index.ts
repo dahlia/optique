@@ -140,8 +140,23 @@ const inheritParentAnnotationsKey = Symbol.for(
   "@optique/core/inheritParentAnnotations",
 );
 
+const deferredPromptRegistryKey = Symbol.for(
+  "@optique/inquirer/deferredPromptRegistry",
+);
+
+function getDeferredPromptRegistry(): WeakSet<object> {
+  const g = globalThis as unknown as Record<symbol, unknown>;
+  if (!(g[deferredPromptRegistryKey] instanceof WeakSet)) {
+    g[deferredPromptRegistryKey] = new WeakSet();
+  }
+  return g[deferredPromptRegistryKey] as WeakSet<object>;
+}
+
 class DeferredPromptValue {
   readonly [deferredPromptValueKey] = true as const;
+  constructor() {
+    getDeferredPromptRegistry().add(this);
+  }
 }
 
 function shouldDeferPrompt(
@@ -156,9 +171,6 @@ function shouldDeferPrompt(
     maybeShouldDefer(state) === true;
 }
 
-// TODO: Avoid surfacing DeferredPromptValue as a successful TValue result in
-// outer combinators during phase one. See:
-// https://github.com/dahlia/optique/issues/296
 function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
   return {
     success: true,
