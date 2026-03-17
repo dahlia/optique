@@ -6612,6 +6612,31 @@ describe("portRange()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should reject non-decimal literals in ranges", () => {
+      const parser = portRange({ type: "bigint" });
+
+      // Plus-signed
+      assert.ok(!parser.parse("+80-81").success);
+
+      // Hex literals
+      assert.ok(!parser.parse("0x50-0x51").success);
+
+      // Binary literals
+      assert.ok(!parser.parse("0b1010000-0b1010001").success);
+
+      // Octal literals
+      assert.ok(!parser.parse("0o120-0o121").success);
+    });
+
+    it("should reject non-decimal literals in single port mode", () => {
+      const parser = portRange({ type: "bigint", allowSingle: true });
+
+      assert.ok(!parser.parse("+80").success);
+      assert.ok(!parser.parse("0x50").success);
+      assert.ok(!parser.parse("0b1010000").success);
+      assert.ok(!parser.parse("0o120").success);
+    });
   });
 
   describe("allowSingle option", () => {
