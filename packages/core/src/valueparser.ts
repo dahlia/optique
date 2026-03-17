@@ -888,6 +888,8 @@ export function integer(
  * @param options Configuration options specifying the type and constraints.
  * @returns A {@link ValueParser} that converts string input to the specified
  *          integer type.
+ * @throws {TypeError} If `options.type` is provided but is neither `"number"`
+ *   nor `"bigint"`.
  */
 export function integer(
   options?: IntegerOptionsNumber | IntegerOptionsBigInt,
@@ -2013,6 +2015,8 @@ export function port(
  *
  * @param options Configuration options specifying the type and constraints.
  * @returns A {@link ValueParser} that converts string input to port numbers.
+ * @throws {TypeError} If `options.type` is provided but is neither `"number"`
+ *   nor `"bigint"`.
  * @since 0.10.0
  */
 export function port(
@@ -3573,6 +3577,8 @@ export interface PortRangeOptionsBigInt {
  *
  * @param options - Options for port range validation.
  * @returns A value parser for port ranges.
+ * @throws {TypeError} If `options.type` is provided but is neither `"number"`
+ *   nor `"bigint"`.
  * @throws {TypeError} If `separator` contains digit characters, since digits
  *   in the separator would cause ambiguous splitting of numeric port input.
  * @since 0.10.0
