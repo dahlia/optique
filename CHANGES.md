@@ -378,6 +378,11 @@ To be released.
     phase-one parsing.  `map(prompt(bindConfig(…)), fn)` no longer throws
     before config resolution runs.  [[#296], [#585]]
 
+ -  Numeric parsers (`integer()`, `float()`, `port()`, `cidr()`) now throw
+    `RangeError` at construction time when given non-finite bound values
+    (e.g., `NaN`, `Infinity`, `-Infinity`).  Previously, these values
+    silently disabled or distorted range validation.  [[#362], [#587]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -421,6 +426,7 @@ To be released.
 [#332]: https://github.com/dahlia/optique/issues/332
 [#349]: https://github.com/dahlia/optique/issues/349
 [#353]: https://github.com/dahlia/optique/issues/353
+[#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
 [#370]: https://github.com/dahlia/optique/issues/370
 [#371]: https://github.com/dahlia/optique/issues/371
@@ -463,6 +469,7 @@ To be released.
 [#581]: https://github.com/dahlia/optique/pull/581
 [#583]: https://github.com/dahlia/optique/pull/583
 [#585]: https://github.com/dahlia/optique/pull/585
+[#587]: https://github.com/dahlia/optique/pull/587
 
 ### @optique/config
 
