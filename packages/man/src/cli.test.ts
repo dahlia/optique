@@ -110,7 +110,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([programFile, "-s", "1"]);
 
       assert.equal(result.exitCode, 0);
-      assert.ok(result.stdout.includes(".TH GREET 1"));
+      assert.ok(result.stdout.includes('.TH "GREET" 1'));
       assert.ok(result.stdout.includes(".SH NAME"));
       assert.ok(result.stdout.includes(".SH SYNOPSIS"));
       assert.ok(result.stdout.includes("The name to greet."));
@@ -127,7 +127,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       ]);
 
       assert.equal(result.exitCode, 0);
-      assert.ok(result.stdout.includes(".TH MYPARSER 1"));
+      assert.ok(result.stdout.includes('.TH "MYPARSER" 1'));
       assert.ok(result.stdout.includes("Input file to process."));
     });
 
@@ -136,7 +136,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([tsxFile, "-s", "1"]);
 
       assert.equal(result.exitCode, 0);
-      assert.ok(result.stdout.includes(".TH GREET 1"));
+      assert.ok(result.stdout.includes('.TH "GREET" 1'));
       assert.ok(result.stdout.includes(".SH NAME"));
     });
 
@@ -145,7 +145,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([jsxFile, "-s", "1"]);
 
       assert.equal(result.exitCode, 0);
-      assert.ok(result.stdout.includes(".TH GREET 1"));
+      assert.ok(result.stdout.includes('.TH "GREET" 1'));
       assert.ok(result.stdout.includes(".SH NAME"));
     });
 
@@ -154,7 +154,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([tsFile, "-s", "1"]);
 
       assert.equal(result.exitCode, 0);
-      assert.ok(result.stdout.includes(".TH GREET 1"));
+      assert.ok(result.stdout.includes('.TH "GREET" 1'));
       assert.ok(result.stdout.includes(".SH NAME"));
     });
 
@@ -177,7 +177,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
         ]);
 
         assert.equal(result.exitCode, 0);
-        assert.ok(result.stdout.includes(".TH HASHPARSER 1"));
+        assert.ok(result.stdout.includes('.TH "HASHPARSER" 1'));
       } finally {
         await rm(tempDir, { recursive: true });
       }
@@ -200,7 +200,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
         ]);
 
         assert.equal(result.exitCode, 0);
-        assert.ok(result.stdout.includes(".TH MYAPP 1"));
+        assert.ok(result.stdout.includes('.TH "MYAPP" 1'));
       } finally {
         await rm(tempDir, { recursive: true });
       }
@@ -211,7 +211,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const result = await runCli([namedFile, "-s", "1", "-e", "myProgram"]);
 
       assert.equal(result.exitCode, 0);
-      assert.ok(result.stdout.includes(".TH NAMED\\-APP 1"));
+      assert.ok(result.stdout.includes('.TH "NAMED\\-APP" 1'));
       assert.ok(result.stdout.includes("Configuration file path."));
     });
 
@@ -232,7 +232,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
         assert.equal(result.exitCode, 0);
 
         const content = await readFile(outputFile, "utf-8");
-        assert.ok(content.includes(".TH GREET 1"));
+        assert.ok(content.includes('.TH "GREET" 1'));
       } finally {
         await rm(tempDir, { recursive: true });
       }
@@ -251,7 +251,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       assert.equal(result.exitCode, 0);
       const thLine = result.stdout.split("\n")[0];
       const thMatch = thLine.match(
-        /^\.TH\s+\S+\s+\S+\s+"([^"]*)"\s+"([^"]*)"/,
+        /^\.TH\s+"[^"]+"\s+\S+\s+"([^"]*)"\s+"([^"]*)"/,
       );
       assert.ok(thMatch, `Expected .TH header, got: ${thLine}`);
       const dateField = thMatch[1];
@@ -284,7 +284,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       assert.equal(result.exitCode, 0);
       const thLine = result.stdout.split("\n")[0];
       const thMatch = thLine.match(
-        /^\.TH\s+\S+\s+\S+\s+"([^"]*)"/,
+        /^\.TH\s+"[^"]+"\s+\S+\s+"([^"]*)"/,
       );
       assert.ok(thMatch, `Expected .TH header, got: ${thLine}`);
       const dateField = thMatch[1];

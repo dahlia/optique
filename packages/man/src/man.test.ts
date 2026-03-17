@@ -316,7 +316,7 @@ describe("formatDocPageAsMan()", () => {
 
     const result = formatDocPageAsMan(page, minimalOptions);
 
-    assert.ok(result.includes(".TH MYAPP 1"));
+    assert.ok(result.includes('.TH "MYAPP" 1'));
     assert.ok(result.includes(".SH NAME"));
     assert.ok(result.includes("myapp"));
   });
@@ -340,7 +340,7 @@ describe("formatDocPageAsMan()", () => {
 
     assert.equal(
       thLine,
-      '.TH MYAPP 1 "" "myapp 1.0.0" "User Commands"',
+      '.TH "MYAPP" 1 "" "myapp 1.0.0" "User Commands"',
     );
   });
 
@@ -395,7 +395,7 @@ describe("formatDocPageAsMan()", () => {
 
     assert.equal(
       thLine,
-      '.TH MY\\"APP 1 "" "my\\"app 1.0\\"beta" "User \\"Commands\\""',
+      '.TH "MY\\(dqAPP" 1 "" "my\\(dqapp 1.0\\(dqbeta" "User \\(dqCommands\\(dq"',
     );
   });
 
@@ -409,7 +409,7 @@ describe("formatDocPageAsMan()", () => {
       manual: "",
     });
     const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
-    assert.equal(thLine, ".TH MYAPP 1");
+    assert.equal(thLine, '.TH "MYAPP" 1');
   });
 
   it("uses brief in NAME section", () => {
@@ -438,7 +438,7 @@ describe("formatDocPageAsMan()", () => {
     const result = formatDocPageAsMan(page, minimalOptions);
 
     assert.ok(result.includes(".SH SYNOPSIS"));
-    assert.ok(result.includes(".B myapp"));
+    assert.ok(result.includes('.B "myapp"'));
     assert.ok(result.includes("\\fB\\-\\-verbose\\fR"));
     assert.ok(result.includes("\\fIFILE\\fR"));
   });
@@ -772,8 +772,8 @@ describe("formatDocPageAsMan()", () => {
     const result = formatDocPageAsMan(page, options);
 
     assert.ok(result.includes(".SH SEE ALSO"));
-    assert.ok(result.includes(".BR git (1),"));
-    assert.ok(result.includes(".BR make (1)"));
+    assert.ok(result.includes('.BR "git" (1),'));
+    assert.ok(result.includes('.BR "make" (1)'));
   });
 
   it("generates ENVIRONMENT section", () => {
@@ -966,7 +966,7 @@ describe("formatDocPageAsMan()", () => {
 
     for (const section of [1, 2, 3, 4, 5, 6, 7, 8] as const) {
       const result = formatDocPageAsMan(page, { name: "myapp", section });
-      assert.ok(result.includes(`.TH MYAPP ${section}`));
+      assert.ok(result.includes(`.TH "MYAPP" ${section}`));
     }
   });
 
@@ -974,7 +974,7 @@ describe("formatDocPageAsMan()", () => {
     const page: DocPage = { sections: [] };
 
     const result = formatDocPageAsMan(page, { name: "my-app", section: 1 });
-    assert.ok(result.includes(".TH MY\\-APP 1"));
+    assert.ok(result.includes('.TH "MY\\-APP" 1'));
   });
 
   it("generates complete man page with all sections", () => {
@@ -1452,9 +1452,9 @@ describe("formatDocPageAsMan()", () => {
       version: "1.0",
     });
 
-    assert.ok(result.includes(".TH MY\\-APP 1"));
+    assert.ok(result.includes('.TH "MY\\-APP" 1'));
     assert.ok(result.includes("my\\-app \\- A test app."));
-    assert.ok(result.includes(".B my\\-app"));
+    assert.ok(result.includes('.B "my\\-app"'));
     assert.ok(result.includes('"my\\-app 1.0"'));
   });
 
@@ -1516,8 +1516,8 @@ describe("formatDocPageAsMan()", () => {
       ],
     });
 
-    assert.ok(result.includes(".BR git\\-fast (1),"));
-    assert.ok(result.includes(".BR git\\-log (1)"));
+    assert.ok(result.includes('.BR "git\\-fast" (1),'));
+    assert.ok(result.includes('.BR "git\\-log" (1)'));
     assert.ok(!result.includes(".BR git-fast"));
     assert.ok(!result.includes(".BR git-log"));
   });
@@ -1535,7 +1535,10 @@ describe("formatDocPageAsMan()", () => {
     });
 
     assert.ok(result.includes("app\\\\bin \\-"));
-    assert.ok(result.includes(".B app\\\\bin"));
+    assert.ok(result.includes('.B "app\\(rsbin"'));
+    // .TH is also a request argument context, so backslash → \(rs
+    const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
+    assert.ok(thLine.startsWith('.TH "APP\\(rsBIN"'));
   });
 
   it("escapes roff special characters in command entry terms", () => {
@@ -1574,7 +1577,67 @@ describe("formatDocPageAsMan()", () => {
       seeAlso: [{ name: "app\\bin", section: 1 }],
     });
 
-    assert.ok(result.includes(".BR app\\\\bin (1)"));
+    assert.ok(result.includes('.BR "app\\(rsbin" (1)'));
+  });
+
+  it("quotes program name with spaces in .TH and SYNOPSIS", () => {
+    const page: DocPage = {
+      brief: message`A test app.`,
+      usage: [{ type: "argument", metavar: "FILE" }],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "my app",
+      section: 1,
+    });
+
+    const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
+    assert.ok(thLine.startsWith('.TH "MY APP" 1'));
+    assert.ok(result.includes('.B "my app"'));
+    assert.ok(result.includes("my app \\-"));
+  });
+
+  it("escapes quotes in .B program name", () => {
+    const page: DocPage = {
+      usage: [{ type: "argument", metavar: "FILE" }],
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: 'my"app',
+      section: 1,
+    });
+
+    assert.ok(result.includes('.B "my\\(dqapp"'));
+  });
+
+  it("quotes SEE ALSO names with spaces", () => {
+    const page: DocPage = {
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "test",
+      section: 1,
+      seeAlso: [{ name: "my app", section: 1 }],
+    });
+
+    assert.ok(result.includes('.BR "my app" (1)'));
+  });
+
+  it("escapes quotes in SEE ALSO names", () => {
+    const page: DocPage = {
+      sections: [],
+    };
+
+    const result = formatDocPageAsMan(page, {
+      name: "test",
+      section: 1,
+      seeAlso: [{ name: 'my"app', section: 1 }],
+    });
+
+    assert.ok(result.includes('.BR "my\\(dqapp" (1)'));
   });
 
   it("rejects empty name", () => {
