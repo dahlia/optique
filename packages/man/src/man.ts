@@ -150,6 +150,44 @@ function formatCommandNameAsRoff(name: string): string {
  * @since 0.10.0
  */
 export function formatUsageTermAsRoff(term: UsageTerm): string {
+  return formatUsageTermAsRoffInternal(term, false);
+}
+
+/**
+ * Returns whether a usage list contains exactly one visible term that
+ * produces its own brackets.  When true, a parent wrapper can safely elide
+ * its own brackets to avoid redundant nesting.  Multiple bracket-producing
+ * siblings must keep their individual brackets for disambiguation.
+ */
+function hasSingleBracketedTerm(terms: Usage): boolean {
+  const visible = terms.filter(
+    (t) => !("hidden" in t && isUsageHidden(t.hidden)),
+  );
+  if (visible.length !== 1) return false;
+  const t = visible[0];
+  return t.type === "option" ||
+    t.type === "optional" ||
+    (t.type === "multiple" && t.min < 1) ||
+    t.type === "passthrough";
+}
+
+/**
+ * Returns whether a usage list's single visible term has the given type.
+ */
+function hasSingleVisibleTermOfType(
+  terms: Usage,
+  type: UsageTerm["type"],
+): boolean {
+  const visible = terms.filter(
+    (t) => !("hidden" in t && isUsageHidden(t.hidden)),
+  );
+  return visible.length === 1 && visible[0].type === type;
+}
+
+function formatUsageTermAsRoffInternal(
+  term: UsageTerm,
+  insideBrackets: boolean,
+): string {
   // Skip usage-hidden terms
   if ("hidden" in term && isUsageHidden(term.hidden)) return "";
 
@@ -164,6 +202,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
       const metavarPart = term.metavar
         ? ` \\fI${escapeRoff(term.metavar)}\\fR`
         : "";
+      if (insideBrackets) return `${names}${metavarPart}`;
       return `[${names}${metavarPart}]`;
     }
 
@@ -171,15 +210,52 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
       return formatCommandNameAsRoff(term.name);
 
     case "optional": {
-      const inner = formatUsageAsRoff(term.terms);
+      const childrenBracketed = hasSingleBracketedTerm(term.terms);
+
+      // Don't elide when the child is a multiple, to preserve
+      // the grouping boundary between repetition layers.
+      const childIsMultiple = childrenBracketed &&
+        hasSingleVisibleTermOfType(term.terms, "multiple");
+
+      const inner = formatUsageAsRoffInternal(
+        term.terms,
+        childrenBracketed,
+      );
       if (inner === "") return "";
+
+      // If this optional is already inside brackets and it wraps a single
+      // bracketed term (that is not a multiple), we can skip adding
+      // another layer of brackets.
+      if (insideBrackets && childrenBracketed && !childIsMultiple) {
+        return inner;
+      }
       return `[${inner}]`;
     }
 
     case "multiple": {
-      const inner = formatUsageAsRoff(term.terms);
+      const wrapInBrackets = term.min < 1;
+      const childrenBracketed = hasSingleBracketedTerm(term.terms);
+
+      // Don't elide when the child is also a multiple, to preserve
+      // the grouping boundary between repetition layers.
+      const childIsMultiple = childrenBracketed &&
+        hasSingleVisibleTermOfType(term.terms, "multiple");
+
+      // A child term should elide its brackets if this multiple term
+      // will wrap it in brackets, and the child is a single elide-able
+      // bracketed term.
+      const passInsideBrackets = wrapInBrackets && childrenBracketed &&
+        !childIsMultiple;
+      const inner = formatUsageAsRoffInternal(
+        term.terms,
+        passInsideBrackets,
+      );
       if (inner === "") return "";
-      if (term.min < 1) {
+
+      if (wrapInBrackets) {
+        // This multiple term should skip its own brackets if it's already
+        // inside brackets and it's wrapping a single elide-able term.
+        if (insideBrackets && passInsideBrackets) return `${inner} ...`;
         return `[${inner} ...]`;
       }
       return `${inner} ...`;
@@ -187,7 +263,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
 
     case "exclusive": {
       const alternatives = term.terms
-        .map((t) => formatUsageAsRoff(t))
+        .map((t) => formatUsageAsRoffInternal(t, false))
         .filter((s) => s !== "");
       if (alternatives.length === 0) return "";
       if (alternatives.length === 1) return alternatives[0];
@@ -219,8 +295,15 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
  * @returns The roff-formatted string.
  */
 function formatUsageAsRoff(usage: Usage): string {
+  return formatUsageAsRoffInternal(usage, false);
+}
+
+function formatUsageAsRoffInternal(
+  usage: Usage,
+  insideBrackets: boolean,
+): string {
   return usage
-    .map(formatUsageTermAsRoff)
+    .map((term) => formatUsageTermAsRoffInternal(term, insideBrackets))
     .filter((s) => s !== "")
     .join(" ");
 }

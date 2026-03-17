@@ -102,6 +102,179 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(formatUsageTermAsRoff(term), "[\\fIOUTPUT\\fR]");
   });
 
+  it("avoids double brackets for optional wrapping option with metavar", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "option", names: ["--host"], metavar: "STRING" }],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-host\\fR \\fISTRING\\fR]",
+    );
+  });
+
+  it("avoids double brackets for optional wrapping boolean option", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "option", names: ["--debug"] }],
+    };
+    assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-debug\\fR]");
+  });
+
+  it("avoids double brackets for optional wrapping aliased option", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{ type: "option", names: ["--verbose", "-v"] }],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR]",
+    );
+  });
+
+  it("keeps child brackets for optional wrapping multiple options", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [
+        { type: "option", names: ["--verbose", "-v"] },
+        { type: "option", names: ["--output", "-o"], metavar: "FILE" },
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR] [\\fB\\-\\-output\\fR | \\fB\\-o\\fR \\fIFILE\\fR]]",
+    );
+  });
+
+  it("preserves inner brackets for nested optional with siblings", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [
+        { type: "literal", value: "foo" },
+        {
+          type: "optional",
+          terms: [{ type: "argument", metavar: "BAR" }],
+        },
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[foo [\\fIBAR\\fR]]",
+    );
+  });
+
+  it("preserves option brackets in mixed optional group", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [
+        { type: "argument", metavar: "FILE" },
+        { type: "option", names: ["--flag"] },
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fIFILE\\fR [\\fB\\-\\-flag\\fR]]",
+    );
+  });
+
+  it("preserves option brackets in mixed multiple(min=0) group", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [
+        { type: "argument", metavar: "FILE" },
+        { type: "option", names: ["--recursive"] },
+      ],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fIFILE\\fR [\\fB\\-\\-recursive\\fR] ...]",
+    );
+  });
+
+  it("preserves inner brackets for nested multiple(min=0) with siblings", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [
+        { type: "literal", value: "foo" },
+        {
+          type: "multiple",
+          terms: [{ type: "argument", metavar: "BAR" }],
+          min: 0,
+        },
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[foo [\\fIBAR\\fR ...]]",
+    );
+  });
+
+  it("avoids double brackets for optional(multiple(option(...)))", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [{
+        type: "multiple",
+        terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
+        min: 0,
+      }],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-tag\\fR \\fISTRING\\fR ...]",
+    );
+  });
+
+  it("avoids double brackets for multiple(optional(option(...)))", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{
+        type: "optional",
+        terms: [{ type: "option", names: ["--flag"] }],
+      }],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-flag\\fR ...]",
+    );
+  });
+
+  it("preserves grouping for nested multiple(min=0) wrapping option", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{
+        type: "multiple",
+        terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
+        min: 0,
+      }],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[[\\fB\\-\\-tag\\fR \\fISTRING\\fR ...] ...]",
+    );
+  });
+
+  it("preserves grouping for multiple wrapping optional wrapping multiple", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{
+        type: "optional",
+        terms: [{
+          type: "multiple",
+          terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
+          min: 0,
+        }],
+      }],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[[\\fB\\-\\-tag\\fR \\fISTRING\\fR ...] ...]",
+    );
+  });
+
   it("formats multiple term with min 0", () => {
     const term: UsageTerm = {
       type: "multiple",
@@ -109,6 +282,18 @@ describe("formatUsageTermAsRoff()", () => {
       min: 0,
     };
     assert.equal(formatUsageTermAsRoff(term), "[\\fIFILE\\fR ...]");
+  });
+
+  it("avoids double brackets for multiple(min=0) wrapping option", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{ type: "option", names: ["--include"], metavar: "PATTERN" }],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-\\-include\\fR \\fIPATTERN\\fR ...]",
+    );
   });
 
   it("formats multiple term with min 1", () => {
