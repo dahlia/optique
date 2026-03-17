@@ -19,7 +19,6 @@ import {
   gitRemote,
   gitRemoteBranch,
   gitTag,
-  uniqueShortOids,
 } from "./index.ts";
 
 async function createTestRepo(): Promise<string> {
@@ -120,110 +119,6 @@ async function createTestRepoWithAmbiguousPrefixLength(
 async function cleanupTestRepo(dir: string): Promise<void> {
   await fs.rm(dir, { recursive: true, force: true });
 }
-
-describe("uniqueShortOids()", () => {
-  it("should return 1:1 map for non-colliding OIDs", () => {
-    const result = uniqueShortOids(
-      [
-        "aaaaaaa1111111111111111111111111111aaaaa",
-        "bbbbbbb2222222222222222222222222222bbbbb",
-      ],
-      7,
-    );
-    assert.equal(
-      result.get("aaaaaaa1111111111111111111111111111aaaaa"),
-      "aaaaaaa",
-    );
-    assert.equal(
-      result.get("bbbbbbb2222222222222222222222222222bbbbb"),
-      "bbbbbbb",
-    );
-  });
-
-  it("should lengthen OIDs that share the same prefix", () => {
-    const result = uniqueShortOids(
-      [
-        "abcdef01111111111111111111111111111aaaaa",
-        "abcdef02222222222222222222222222222bbbbb",
-      ],
-      7,
-    );
-    assert.equal(
-      result.get("abcdef01111111111111111111111111111aaaaa"),
-      "abcdef01",
-    );
-    assert.equal(
-      result.get("abcdef02222222222222222222222222222bbbbb"),
-      "abcdef02",
-    );
-  });
-
-  it("should handle multiple levels of collision", () => {
-    const result = uniqueShortOids(
-      [
-        "abcdef01234500000000000000000000000aaaaa",
-        "abcdef01234600000000000000000000000bbbbb",
-        "abcdef09999900000000000000000000000ccccc",
-      ],
-      7,
-    );
-    // First two share 11 chars ("abcdef01234"), diverge at char 12 (5 vs 6)
-    assert.equal(
-      result.get("abcdef01234500000000000000000000000aaaaa"),
-      "abcdef012345",
-    );
-    assert.equal(
-      result.get("abcdef01234600000000000000000000000bbbbb"),
-      "abcdef012346",
-    );
-    // Third diverges from the first two at char 8 (1 vs 9)
-    assert.equal(
-      result.get("abcdef09999900000000000000000000000ccccc"),
-      "abcdef09",
-    );
-  });
-
-  it("should deduplicate identical OIDs", () => {
-    const oid = "abcdef01234567890abcdef01234567890abcdef";
-    const result = uniqueShortOids([oid, oid], 7);
-    assert.equal(result.size, 1);
-    assert.equal(result.get(oid), "abcdef0");
-  });
-
-  it("should respect minLength parameter", () => {
-    const result = uniqueShortOids(
-      [
-        "aaaaaaa1111111111111111111111111111aaaaa",
-        "bbbbbbb2222222222222222222222222222bbbbb",
-      ],
-      10,
-    );
-    assert.equal(
-      result.get("aaaaaaa1111111111111111111111111111aaaaa"),
-      "aaaaaaa111",
-    );
-    assert.equal(
-      result.get("bbbbbbb2222222222222222222222222222bbbbb"),
-      "bbbbbbb222",
-    );
-  });
-
-  it("should handle a single OID", () => {
-    const result = uniqueShortOids(
-      ["abcdef01234567890abcdef01234567890abcdef"],
-      7,
-    );
-    assert.equal(
-      result.get("abcdef01234567890abcdef01234567890abcdef"),
-      "abcdef0",
-    );
-  });
-
-  it("should handle an empty array", () => {
-    const result = uniqueShortOids([], 7);
-    assert.equal(result.size, 0);
-  });
-});
 
 describe("git parsers", () => {
   describe("gitBranch()", () => {
