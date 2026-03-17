@@ -895,12 +895,12 @@ export function integer(
   if (options?.type !== "bigint") {
     if (options?.min != null && !Number.isFinite(options.min)) {
       throw new RangeError(
-        `Expected min to be a finite number, but got: ${options.min}.`,
+        `Expected min to be a finite number, but got: ${options.min}`,
       );
     }
     if (options?.max != null && !Number.isFinite(options.max)) {
       throw new RangeError(
-        `Expected max to be a finite number, but got: ${options.max}.`,
+        `Expected max to be a finite number, but got: ${options.max}`,
       );
     }
   }
@@ -1116,12 +1116,12 @@ export interface FloatOptions {
 export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
   if (options.min != null && !Number.isFinite(options.min)) {
     throw new RangeError(
-      `Expected min to be a finite number, but got: ${options.min}.`,
+      `Expected min to be a finite number, but got: ${options.min}`,
     );
   }
   if (options.max != null && !Number.isFinite(options.max)) {
     throw new RangeError(
-      `Expected max to be a finite number, but got: ${options.max}.`,
+      `Expected max to be a finite number, but got: ${options.max}`,
     );
   }
   if (
@@ -2094,12 +2094,12 @@ export function port(
 
   if (options?.min != null && !Number.isFinite(options.min)) {
     throw new RangeError(
-      `Expected min to be a finite number, but got: ${options.min}.`,
+      `Expected min to be a finite number, but got: ${options.min}`,
     );
   }
   if (options?.max != null && !Number.isFinite(options.max)) {
     throw new RangeError(
-      `Expected max to be a finite number, but got: ${options.max}.`,
+      `Expected max to be a finite number, but got: ${options.max}`,
     );
   }
   const metavar = options?.metavar ?? "PORT";
@@ -4920,12 +4920,12 @@ export function cidr(
 ): ValueParser<"sync", CidrValue> {
   if (options?.minPrefix != null && !Number.isFinite(options.minPrefix)) {
     throw new RangeError(
-      `Expected minPrefix to be a finite number, but got: ${options.minPrefix}.`,
+      `Expected minPrefix to be a finite number, but got: ${options.minPrefix}`,
     );
   }
   if (options?.maxPrefix != null && !Number.isFinite(options.maxPrefix)) {
     throw new RangeError(
-      `Expected maxPrefix to be a finite number, but got: ${options.maxPrefix}.`,
+      `Expected maxPrefix to be a finite number, but got: ${options.maxPrefix}`,
     );
   }
   if (
