@@ -256,6 +256,25 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
+  it("preserves grouping for multiple wrapping optional wrapping multiple", () => {
+    const term: UsageTerm = {
+      type: "multiple",
+      terms: [{
+        type: "optional",
+        terms: [{
+          type: "multiple",
+          terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
+          min: 0,
+        }],
+      }],
+      min: 0,
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[[\\fB\\-\\-tag\\fR \\fISTRING\\fR ...] ...]",
+    );
+  });
+
   it("formats multiple term with min 0", () => {
     const term: UsageTerm = {
       type: "multiple",

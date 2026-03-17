@@ -211,6 +211,12 @@ function formatUsageTermAsRoffInternal(
 
     case "optional": {
       const childrenBracketed = hasSingleBracketedTerm(term.terms);
+
+      // Don't elide when the child is a multiple, to preserve
+      // the grouping boundary between repetition layers.
+      const childIsMultiple = childrenBracketed &&
+        hasSingleVisibleTermOfType(term.terms, "multiple");
+
       const inner = formatUsageAsRoffInternal(
         term.terms,
         childrenBracketed,
@@ -218,8 +224,11 @@ function formatUsageTermAsRoffInternal(
       if (inner === "") return "";
 
       // If this optional is already inside brackets and it wraps a single
-      // bracketed term, we can skip adding another layer of brackets.
-      if (insideBrackets && childrenBracketed) return inner;
+      // bracketed term (that is not a multiple), we can skip adding
+      // another layer of brackets.
+      if (insideBrackets && childrenBracketed && !childIsMultiple) {
+        return inner;
+      }
       return `[${inner}]`;
     }
 
