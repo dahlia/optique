@@ -615,6 +615,41 @@ describe("git parsers", () => {
       }
     });
 
+    it("should suggest only unique and parseable commit SHAs", async () => {
+      const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
+      try {
+        const parser = gitCommit({ dir, suggestionDepth: 5000 });
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!(prefix)) {
+          suggestions.push(s);
+        }
+        const literals = suggestions.filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+        );
+        assert.ok(
+          literals.length >= 2,
+          `Should have at least 2 suggestions sharing prefix '${prefix}', ` +
+            `got ${literals.length}`,
+        );
+        const texts = literals.map((s) => s.text);
+        const unique = new Set(texts);
+        assert.equal(
+          unique.size,
+          texts.length,
+          `Suggestions should be unique, got: ${JSON.stringify(texts)}`,
+        );
+        for (const s of literals) {
+          const result = await parser.parse(s.text);
+          assert.ok(
+            result.success,
+            `Suggestion '${s.text}' should be parseable`,
+          );
+        }
+      } finally {
+        await cleanupTestRepo(dir);
+      }
+    });
+
     it("should report ambiguous abbreviated commit SHAs", async () => {
       const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
       try {
@@ -1084,6 +1119,45 @@ describe("git parsers", () => {
         }
       } finally {
         await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should suggest only unique and parseable commit SHAs", async () => {
+      const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
+      try {
+        const parser = gitRef({ dir, suggestionDepth: 5000 });
+        const suggestions: Suggestion[] = [];
+        for await (const s of parser.suggest!(prefix)) {
+          suggestions.push(s);
+        }
+        const literals = suggestions.filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+        );
+        // Filter to only commit SHA suggestions (not branches/tags)
+        const commitSuggestions = literals.filter(
+          (s) => /^[0-9a-f]+$/i.test(s.text),
+        );
+        assert.ok(
+          commitSuggestions.length >= 2,
+          `Should have at least 2 commit suggestions sharing prefix ` +
+            `'${prefix}', got ${commitSuggestions.length}`,
+        );
+        const texts = commitSuggestions.map((s) => s.text);
+        const unique = new Set(texts);
+        assert.equal(
+          unique.size,
+          texts.length,
+          `Suggestions should be unique, got: ${JSON.stringify(texts)}`,
+        );
+        for (const s of commitSuggestions) {
+          const result = await parser.parse(s.text);
+          assert.ok(
+            result.success,
+            `Suggestion '${s.text}' should be parseable`,
+          );
+        }
+      } finally {
+        await cleanupTestRepo(dir);
       }
     });
 
