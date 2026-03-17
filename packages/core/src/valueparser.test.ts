@@ -6937,6 +6937,22 @@ describe("portRange()", () => {
       const parser = portRange({ metavar: "RANGE" });
       assert.strictEqual(parser.metavar, "RANGE");
     });
+
+    it("should reflect custom separator in default metavar", () => {
+      assert.strictEqual(
+        portRange({ separator: ":" }).metavar,
+        "PORT:PORT",
+      );
+      assert.strictEqual(
+        portRange({ separator: " to " }).metavar,
+        "PORT to PORT",
+      );
+    });
+
+    it("should prefer explicit metavar over separator-derived one", () => {
+      const parser = portRange({ separator: ":", metavar: "CUSTOM" });
+      assert.strictEqual(parser.metavar, "CUSTOM");
+    });
   });
 
   describe("edge cases", () => {
@@ -7443,6 +7459,18 @@ describe("socketAddress()", () => {
     it("should use custom metavar", () => {
       const parser = socketAddress({ defaultPort: 80, metavar: "ENDPOINT" });
       assert.strictEqual(parser.metavar, "ENDPOINT");
+    });
+
+    it("should reflect custom separator in default metavar", () => {
+      assert.strictEqual(
+        socketAddress({ separator: " " }).metavar,
+        "HOST PORT",
+      );
+    });
+
+    it("should prefer explicit metavar over separator-derived one", () => {
+      const parser = socketAddress({ separator: " ", metavar: "CUSTOM" });
+      assert.strictEqual(parser.metavar, "CUSTOM");
     });
   });
 

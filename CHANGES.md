@@ -359,6 +359,11 @@ To be released.
     the `BigInt()` constructor would otherwise accept.
     [[#245], [#249], [#566], [#572]]
 
+ -  Fixed `portRange()` and `socketAddress()` to derive the default `metavar`
+    from the custom `separator` option (e.g., `portRange({ separator: ":" })`
+    now defaults to `PORT:PORT` instead of always using `PORT-PORT`).
+    [[#323], [#579]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -396,6 +401,7 @@ To be released.
 [#310]: https://github.com/dahlia/optique/issues/310
 [#315]: https://github.com/dahlia/optique/issues/315
 [#317]: https://github.com/dahlia/optique/issues/317
+[#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
 [#353]: https://github.com/dahlia/optique/issues/353
 [#363]: https://github.com/dahlia/optique/issues/363
@@ -434,6 +440,7 @@ To be released.
 [#573]: https://github.com/dahlia/optique/pull/573
 [#575]: https://github.com/dahlia/optique/pull/575
 [#576]: https://github.com/dahlia/optique/pull/576
+[#579]: https://github.com/dahlia/optique/pull/579
 
 ### @optique/config
 

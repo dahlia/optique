@@ -3012,8 +3012,8 @@ export interface SocketAddressValue {
  */
 export interface SocketAddressOptions {
   /**
-   * The metavariable name for this parser.
-   * @default "HOST:PORT"
+   * The metavariable name for this parser.  If not specified, it is derived
+   * from the {@link separator} (e.g., `"HOST:PORT"` for `":"`).
    */
   readonly metavar?: NonEmptyString;
 
@@ -3120,9 +3120,6 @@ export interface SocketAddressOptions {
 export function socketAddress(
   options?: SocketAddressOptions,
 ): ValueParser<"sync", SocketAddressValue> {
-  const metavar: NonEmptyString = options?.metavar ?? "HOST:PORT";
-  ensureNonEmptyString(metavar);
-
   const separator = options?.separator ?? ":";
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
@@ -3131,6 +3128,8 @@ export function socketAddress(
       }.`,
     );
   }
+  const metavar = options?.metavar ?? `HOST${separator}PORT`;
+  ensureNonEmptyString(metavar);
   const defaultPort = options?.defaultPort;
   const requirePort = options?.requirePort ?? false;
   const hostType = options?.host?.type ?? "both";
@@ -3306,8 +3305,8 @@ export interface PortRangeOptionsNumber {
   readonly type?: "number";
 
   /**
-   * The metavariable name for this parser.
-   * @default "PORT-PORT"
+   * The metavariable name for this parser.  If not specified, it is derived
+   * from the {@link separator} (e.g., `"PORT-PORT"` for `"-"`).
    */
   readonly metavar?: NonEmptyString;
 
@@ -3399,8 +3398,8 @@ export interface PortRangeOptionsBigInt {
   readonly type: "bigint";
 
   /**
-   * The metavariable name for this parser.
-   * @default "PORT-PORT"
+   * The metavariable name for this parser.  If not specified, it is derived
+   * from the {@link separator} (e.g., `"PORT-PORT"` for `"-"`).
    */
   readonly metavar?: NonEmptyString;
 
@@ -3542,9 +3541,6 @@ export function portRange(
         `${String(options.allowSingle)}.`,
     );
   }
-  const metavar: NonEmptyString = options?.metavar ?? "PORT-PORT";
-  ensureNonEmptyString(metavar);
-
   const separator = options?.separator ?? "-";
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
@@ -3553,6 +3549,8 @@ export function portRange(
       }.`,
     );
   }
+  const metavar = options?.metavar ?? `PORT${separator}PORT`;
+  ensureNonEmptyString(metavar);
   const allowSingle = options?.allowSingle ?? false;
   const isBigInt = options?.type === "bigint";
 
