@@ -78,7 +78,8 @@ export interface GitParserOptions {
 
   /**
    * Maximum number of recent commits to include in shell completion suggestions.
-   * Only applies to `gitCommit()` and `gitRef()` parsers.
+   * Only affects suggestions from `gitCommit()` and `gitRef()` parsers, but
+   * is validated by all git parser functions.
    * Must be a positive integer.
    * Defaults to 15.
    *
@@ -253,12 +254,10 @@ function createAsyncValueParser(
       !Number.isInteger(options.suggestionDepth) ||
       options.suggestionDepth < 1
     ) {
-      let repr: string;
-      try {
-        repr = JSON.stringify(options.suggestionDepth);
-      } catch {
-        repr = String(typeof options.suggestionDepth);
-      }
+      const depth = options.suggestionDepth;
+      const repr = typeof depth === "string"
+        ? JSON.stringify(depth)
+        : String(depth);
       throw new RangeError(
         `Invalid suggestionDepth (must be a positive integer): ${repr}`,
       );
