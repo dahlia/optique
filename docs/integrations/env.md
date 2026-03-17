@@ -223,7 +223,9 @@ const parser = object({
 
 await runAsync(parser, {
   contexts: [envContext, configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
 
