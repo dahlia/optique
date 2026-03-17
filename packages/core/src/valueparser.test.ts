@@ -7509,9 +7509,18 @@ describe("socketAddress()", () => {
         () => socketAddress({ separator: "123", defaultPort: 80 }),
         TypeError,
       );
+      assert.throws(
+        () => socketAddress({ separator: "a1b", defaultPort: 80 }),
+        TypeError,
+      );
       // Unicode digits (Arabic-Indic)
       assert.throws(
         () => socketAddress({ separator: "\u0661", defaultPort: 80 }),
+        TypeError,
+      );
+      // Unicode digits (Devanagari)
+      assert.throws(
+        () => socketAddress({ separator: "\u0967", defaultPort: 80 }),
         TypeError,
       );
     });
