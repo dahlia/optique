@@ -135,15 +135,39 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
-  it("avoids double brackets for nested optional wrapping option", () => {
+  it("preserves inner brackets for nested optional with siblings", () => {
     const term: UsageTerm = {
       type: "optional",
-      terms: [{
-        type: "optional",
-        terms: [{ type: "option", names: ["--flag"] }],
-      }],
+      terms: [
+        { type: "literal", value: "foo" },
+        {
+          type: "optional",
+          terms: [{ type: "argument", metavar: "BAR" }],
+        },
+      ],
     };
-    assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-flag\\fR]");
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[foo [\\fIBAR\\fR]]",
+    );
+  });
+
+  it("preserves inner brackets for nested multiple(min=0) with siblings", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [
+        { type: "literal", value: "foo" },
+        {
+          type: "multiple",
+          terms: [{ type: "argument", metavar: "BAR" }],
+          min: 0,
+        },
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[foo [\\fIBAR\\fR ...]]",
+    );
   });
 
   it("formats multiple term with min 0", () => {

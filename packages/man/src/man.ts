@@ -181,19 +181,14 @@ function formatUsageTermAsRoffInternal(
     case "optional": {
       const inner = formatUsageAsRoffInternal(term.terms, true);
       if (inner === "") return "";
-      if (insideBrackets) return inner;
       return `[${inner}]`;
     }
 
     case "multiple": {
       const wrapInBrackets = term.min < 1;
-      const inner = formatUsageAsRoffInternal(
-        term.terms,
-        insideBrackets || wrapInBrackets,
-      );
+      const inner = formatUsageAsRoffInternal(term.terms, wrapInBrackets);
       if (inner === "") return "";
       if (wrapInBrackets) {
-        if (insideBrackets) return `${inner} ...`;
         return `[${inner} ...]`;
       }
       return `${inner} ...`;
