@@ -810,6 +810,13 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     callers must use `generateManPageAsync()` or `generateManPage()` for async
     parsers.  [[#291], [#584]]
 
+ -  Fixed `formatUsageTermAsRoff()` rendering optional and boolean options
+    with duplicated brackets (e.g., `[[--host STRING]]`) in the SYNOPSIS
+    section.  The `optional` and `multiple` wrappers now avoid adding
+    redundant brackets around inner `option` terms that already imply
+    optionality.  [[#197], [#586]]
+
+[#197]: https://github.com/dahlia/optique/issues/197
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#273]: https://github.com/dahlia/optique/issues/273
@@ -848,6 +855,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#574]: https://github.com/dahlia/optique/pull/574
 [#578]: https://github.com/dahlia/optique/pull/578
 [#584]: https://github.com/dahlia/optique/pull/584
+[#586]: https://github.com/dahlia/optique/pull/586
 
 
 Version 0.10.7

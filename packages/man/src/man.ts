@@ -150,6 +150,13 @@ function formatCommandNameAsRoff(name: string): string {
  * @since 0.10.0
  */
 export function formatUsageTermAsRoff(term: UsageTerm): string {
+  return formatUsageTermAsRoffInternal(term, false);
+}
+
+function formatUsageTermAsRoffInternal(
+  term: UsageTerm,
+  insideBrackets: boolean,
+): string {
   // Skip usage-hidden terms
   if ("hidden" in term && isUsageHidden(term.hidden)) return "";
 
@@ -164,6 +171,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
       const metavarPart = term.metavar
         ? ` \\fI${escapeRoff(term.metavar)}\\fR`
         : "";
+      if (insideBrackets) return `${names}${metavarPart}`;
       return `[${names}${metavarPart}]`;
     }
 
@@ -171,15 +179,21 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
       return formatCommandNameAsRoff(term.name);
 
     case "optional": {
-      const inner = formatUsageAsRoff(term.terms);
+      const inner = formatUsageAsRoffInternal(term.terms, true);
       if (inner === "") return "";
+      if (insideBrackets) return inner;
       return `[${inner}]`;
     }
 
     case "multiple": {
-      const inner = formatUsageAsRoff(term.terms);
+      const wrapInBrackets = term.min < 1;
+      const inner = formatUsageAsRoffInternal(
+        term.terms,
+        insideBrackets || wrapInBrackets,
+      );
       if (inner === "") return "";
-      if (term.min < 1) {
+      if (wrapInBrackets) {
+        if (insideBrackets) return `${inner} ...`;
         return `[${inner} ...]`;
       }
       return `${inner} ...`;
@@ -187,7 +201,7 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
 
     case "exclusive": {
       const alternatives = term.terms
-        .map((t) => formatUsageAsRoff(t))
+        .map((t) => formatUsageAsRoffInternal(t, false))
         .filter((s) => s !== "");
       if (alternatives.length === 0) return "";
       if (alternatives.length === 1) return alternatives[0];
@@ -219,8 +233,15 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
  * @returns The roff-formatted string.
  */
 function formatUsageAsRoff(usage: Usage): string {
+  return formatUsageAsRoffInternal(usage, false);
+}
+
+function formatUsageAsRoffInternal(
+  usage: Usage,
+  insideBrackets: boolean,
+): string {
   return usage
-    .map(formatUsageTermAsRoff)
+    .map((term) => formatUsageTermAsRoffInternal(term, insideBrackets))
     .filter((s) => s !== "")
     .join(" ");
 }
