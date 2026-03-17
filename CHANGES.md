@@ -501,11 +501,17 @@ environment variable integration via source contexts.  [[#86], [#135]]
  -  `gitCommit()`, `gitRef()`, and other git parser functions now throw
     a `RangeError` when `suggestionDepth` is not a positive integer,
     instead of silently accepting invalid values.  [[#377], [#570]]
+ -  Fixed `gitCommit()` and `gitRef()` suggesting ambiguous 7-character SHA
+    prefixes when multiple recent commits share the same short prefix.
+    Short SHAs are now lengthened until each suggestion is unique.
+    [[#331], [#571]]
 
 [#284]: https://github.com/dahlia/optique/issues/284
+[#331]: https://github.com/dahlia/optique/issues/331
 [#377]: https://github.com/dahlia/optique/issues/377
 [#569]: https://github.com/dahlia/optique/pull/569
 [#570]: https://github.com/dahlia/optique/pull/570
+[#571]: https://github.com/dahlia/optique/pull/571
 
 ### @optique/inquirer
 
