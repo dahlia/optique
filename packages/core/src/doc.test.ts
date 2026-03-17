@@ -1500,6 +1500,14 @@ describe("formatDocPage", () => {
       () => formatDocPage("bad\nname", page),
       TypeError,
     );
+    assert.throws(
+      () => formatDocPage("bad\rname", page),
+      TypeError,
+    );
+    assert.throws(
+      () => formatDocPage("bad\r\nname", page),
+      TypeError,
+    );
   });
 
   it("should throw TypeError when section title contains a newline", () => {
@@ -1514,6 +1522,19 @@ describe("formatDocPage", () => {
     };
     assert.throws(
       () => formatDocPage("myapp", page),
+      TypeError,
+    );
+    const crPage: DocPage = {
+      sections: [{
+        title: "bad\rsection",
+        entries: [{
+          term: { type: "argument", metavar: "X" },
+          description: [{ type: "text", text: "desc" }],
+        }],
+      }],
+    };
+    assert.throws(
+      () => formatDocPage("myapp", crPage),
       TypeError,
     );
   });

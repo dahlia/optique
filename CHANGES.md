@@ -366,7 +366,7 @@ To be released.
     [[#323], [#579]]
 
  -  `formatDocPage()` now throws `TypeError` when `programName` or a section
-    title contains a newline character.  [[#429], [#580]]
+    title contains a CR or LF character.  [[#429], [#580]]
 
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
