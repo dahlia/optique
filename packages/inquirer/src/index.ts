@@ -885,8 +885,12 @@ export function prompt<M extends Mode, TValue, TState>(
     priority: parser.priority,
     [inheritParentAnnotationsKey]: true,
     // prompt() makes the CLI argument optional because missing values are
-    // handled interactively.
-    usage: [{ type: "optional", terms: parser.usage }],
+    // handled interactively.  If the inner parser is already optional
+    // (e.g., wrapped in optional() or withDefault()), reuse its usage
+    // directly to avoid double-bracketed help like [[--name STRING]].
+    usage: parser.usage.length === 1 && parser.usage[0].type === "optional"
+      ? parser.usage
+      : [{ type: "optional", terms: parser.usage }],
     // Use the sentinel as initialState so complete() can detect the
     // completability-check call and deduplicate prompt execution.
     get initialState(): TState {
