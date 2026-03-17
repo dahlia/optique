@@ -183,6 +183,22 @@ export interface Parser<
    *          fragments for this parser.
    */
   getDocFragments(state: DocState<TState>, defaultValue?: TValue): DocFragments;
+
+  /**
+   * Optional predicate that determines whether completion should be
+   * deferred for the given parser state.
+   *
+   * When present, combinator wrappers ({@link optional}, {@link withDefault},
+   * {@link group}) forward this field to the outer parser.  This enables
+   * packages like *\@optique/inquirer* to detect when interactive prompting
+   * should be deferred until an outer context (like a configuration file
+   * source) has resolved.
+   *
+   * @param state The current parser state.
+   * @returns `true` if completion should be deferred.
+   * @since 1.0.0
+   */
+  shouldDeferCompletion?(state: TState): boolean;
 }
 
 /**

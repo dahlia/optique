@@ -30,6 +30,7 @@ import type {
   Parser,
   ParserResult,
 } from "@optique/core/parser";
+import { placeholder } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
@@ -130,32 +131,13 @@ function isExitPromptError(error: unknown): boolean {
     error.name === "ExitPromptError";
 }
 
-const deferredPromptValueKey: unique symbol = Symbol.for(
-  "@optique/inquirer/deferredPromptValue",
-);
-const deferPromptUntilConfigResolvesKey = Symbol.for(
-  "@optique/config/deferPromptUntilResolved",
-);
 const inheritParentAnnotationsKey = Symbol.for(
   "@optique/core/inheritParentAnnotations",
 );
 
-const deferredPromptRegistryKey = Symbol.for(
-  "@optique/inquirer/deferredPromptRegistry",
-);
-
-function getDeferredPromptRegistry(): WeakSet<object> {
-  const g = globalThis as unknown as Record<symbol, unknown>;
-  if (!(g[deferredPromptRegistryKey] instanceof WeakSet)) {
-    g[deferredPromptRegistryKey] = new WeakSet();
-  }
-  return g[deferredPromptRegistryKey] as WeakSet<object>;
-}
-
 class DeferredPromptValue {
-  readonly [deferredPromptValueKey] = true as const;
+  readonly [placeholder] = true;
   constructor() {
-    getDeferredPromptRegistry().add(this);
   }
 }
 
@@ -163,12 +145,8 @@ function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
   state: unknown,
 ): boolean {
-  const maybeShouldDefer = Reflect.get(
-    parser,
-    deferPromptUntilConfigResolvesKey,
-  );
-  return typeof maybeShouldDefer === "function" &&
-    maybeShouldDefer(state) === true;
+  return typeof parser.shouldDeferCompletion === "function" &&
+    parser.shouldDeferCompletion(state) === true;
 }
 
 function deferredPromptResult<TValue>(): ValueParserResult<TValue> {
@@ -729,10 +707,7 @@ export function prompt<M extends Mode, TValue, TState>(
       // However, when the parser carries a config-prompt deferral hook
       // (e.g., optional(bindConfig(...))), the inner parser still needs a
       // chance to resolve from config during phase-two completion.
-      return typeof Reflect.get(
-        parser,
-        deferPromptUntilConfigResolvesKey,
-      ) === "function";
+      return typeof parser.shouldDeferCompletion === "function";
     }
     const prototype = Object.getPrototypeOf(cliState);
     return prototype !== Object.prototype && prototype !== null;
@@ -1017,10 +992,7 @@ export function prompt<M extends Mode, TValue, TState>(
           return cached;
         }
         // First call: try inner parser, fall back to prompt if it fails.
-        const hasDeferHook = typeof Reflect.get(
-          parser,
-          deferPromptUntilConfigResolvesKey,
-        ) === "function";
+        const hasDeferHook = typeof parser.shouldDeferCompletion === "function";
 
         const annotations = getAnnotations(state);
 

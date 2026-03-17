@@ -51,25 +51,13 @@ import {
 } from "./usage.ts";
 import { string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
-import type { ParserValuePlaceholder, SourceContext } from "./context.ts";
+import {
+  isPlaceholderValue,
+  type ParserValuePlaceholder,
+  type SourceContext,
+} from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
-
-const phase1ConfigAnnotationsKey = Symbol.for(
-  "@optique/config/phase1PromptAnnotations",
-);
-const phase2UndefinedParsedValueKey = Symbol.for(
-  "@optique/config/phase2UndefinedParsedValue",
-);
-const deferredPromptValueKey = Symbol.for(
-  "@optique/inquirer/deferredPromptValue",
-);
-
-function isDeferredPromptValue(value: unknown): boolean {
-  return value != null &&
-    typeof value === "object" &&
-    deferredPromptValueKey in value;
-}
 
 function isPlainObject(value: object): boolean {
   const proto = Object.getPrototypeOf(value);
@@ -89,7 +77,7 @@ function shouldSkipCollectionOwnKey(
   return false;
 }
 
-function containsDeferredPromptValuesInOwnProperties(
+function containsPlaceholderValuesInOwnProperties(
   value: object,
   seen: WeakSet<object>,
 ): boolean {
@@ -101,7 +89,7 @@ function containsDeferredPromptValuesInOwnProperties(
     if (
       descriptor != null &&
       "value" in descriptor &&
-      containsDeferredPromptValuesForContexts(descriptor.value, seen)
+      containsPlaceholderValues(descriptor.value, seen)
     ) {
       return true;
     }
@@ -123,7 +111,7 @@ function copySanitizedOwnProperties(
       continue;
     }
     if ("value" in descriptor) {
-      descriptor.value = stripDeferredPromptValuesForContexts(
+      descriptor.value = stripPlaceholderValues(
         descriptor.value,
         seen,
       );
@@ -179,14 +167,14 @@ function createMapCloneLike(
   }
 }
 
-function containsDeferredPromptValuesForContexts(
+function containsPlaceholderValues(
   value: unknown,
   seen = new WeakSet<object>(),
 ): boolean {
-  // FIXME: This only inspects own data properties, so deferred prompt values
+  // FIXME: This only inspects own data properties, so placeholder values
   // hidden behind private fields or method-only wrapper DTOs are missed. See:
   // https://github.com/dahlia/optique/issues/307
-  if (isDeferredPromptValue(value)) {
+  if (isPlaceholderValue(value)) {
     return true;
   }
   if (value == null || typeof value !== "object") {
@@ -198,39 +186,39 @@ function containsDeferredPromptValuesForContexts(
   seen.add(value);
   if (Array.isArray(value)) {
     if (
-      value.some((item) => containsDeferredPromptValuesForContexts(item, seen))
+      value.some((item) => containsPlaceholderValues(item, seen))
     ) {
       return true;
     }
-    return containsDeferredPromptValuesInOwnProperties(value, seen);
+    return containsPlaceholderValuesInOwnProperties(value, seen);
   }
   if (value instanceof Set) {
     for (const entryValue of value) {
-      if (containsDeferredPromptValuesForContexts(entryValue, seen)) {
+      if (containsPlaceholderValues(entryValue, seen)) {
         return true;
       }
     }
-    return containsDeferredPromptValuesInOwnProperties(value, seen);
+    return containsPlaceholderValuesInOwnProperties(value, seen);
   }
   if (value instanceof Map) {
     for (const [key, entryValue] of value) {
       if (
-        containsDeferredPromptValuesForContexts(key, seen) ||
-        containsDeferredPromptValuesForContexts(entryValue, seen)
+        containsPlaceholderValues(key, seen) ||
+        containsPlaceholderValues(entryValue, seen)
       ) {
         return true;
       }
     }
-    return containsDeferredPromptValuesInOwnProperties(value, seen);
+    return containsPlaceholderValuesInOwnProperties(value, seen);
   }
-  return containsDeferredPromptValuesInOwnProperties(value, seen);
+  return containsPlaceholderValuesInOwnProperties(value, seen);
 }
 
-function stripDeferredPromptValuesForContexts<T>(
+function stripPlaceholderValues<T>(
   value: T,
   seen = new WeakMap<object, unknown>(),
 ): T {
-  if (isDeferredPromptValue(value)) {
+  if (isPlaceholderValue(value)) {
     return undefined as T;
   }
   if (value == null || typeof value !== "object") {
@@ -241,49 +229,49 @@ function stripDeferredPromptValuesForContexts<T>(
     return cached as T;
   }
   if (Array.isArray(value)) {
-    if (!containsDeferredPromptValuesForContexts(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createArrayCloneLike(value);
     seen.set(value, clone);
     for (let i = 0; i < value.length; i++) {
-      clone[i] = stripDeferredPromptValuesForContexts(value[i], seen);
+      clone[i] = stripPlaceholderValues(value[i], seen);
     }
     copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (value instanceof Set) {
-    if (!containsDeferredPromptValuesForContexts(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createSetCloneLike(value);
     seen.set(value, clone);
     for (const entryValue of value) {
-      clone.add(stripDeferredPromptValuesForContexts(entryValue, seen));
+      clone.add(stripPlaceholderValues(entryValue, seen));
     }
     copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (value instanceof Map) {
-    if (!containsDeferredPromptValuesForContexts(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
     const clone = createMapCloneLike(value);
     seen.set(value, clone);
     for (const [key, entryValue] of value) {
       clone.set(
-        stripDeferredPromptValuesForContexts(key, seen),
-        stripDeferredPromptValuesForContexts(entryValue, seen),
+        stripPlaceholderValues(key, seen),
+        stripPlaceholderValues(entryValue, seen),
       );
     }
     copySanitizedOwnProperties(value, clone, seen);
     return clone as T;
   }
   if (!isPlainObject(value)) {
-    if (!containsDeferredPromptValuesForContexts(value)) {
+    if (!containsPlaceholderValues(value)) {
       return value;
     }
-    return createSanitizedNonPlainContextView(value, seen) as T;
+    return createSanitizedNonPlainView(value, seen) as T;
   }
   const clone: Record<PropertyKey, unknown> = Object.create(
     Object.getPrototypeOf(value),
@@ -295,7 +283,7 @@ function stripDeferredPromptValuesForContexts<T>(
       continue;
     }
     if ("value" in descriptor) {
-      descriptor.value = stripDeferredPromptValuesForContexts(
+      descriptor.value = stripPlaceholderValues(
         descriptor.value,
         seen,
       );
@@ -309,12 +297,9 @@ function finalizeParsedForContext(
   context: SourceContext<unknown>,
   parsed: unknown,
 ): unknown {
-  if (
-    parsed !== undefined || !Reflect.has(context, phase1ConfigAnnotationsKey)
-  ) {
-    return parsed;
-  }
-  return { [phase2UndefinedParsedValueKey]: true };
+  return context.finalizeParsed != null
+    ? context.finalizeParsed(parsed)
+    : parsed;
 }
 
 const SANITIZE_FAILED: unique symbol = Symbol("sanitizeFailed");
@@ -470,14 +455,14 @@ function callMethodOnSanitizedTarget(
   return strip(fallback, seen);
 }
 
-function createSanitizedNonPlainContextView<T extends object>(
+function createSanitizedNonPlainView<T extends object>(
   value: T,
   seen: WeakMap<object, unknown>,
 ): T {
   // NOTE: Methods are invoked on the original target with temporarily
   // sanitized own properties via callMethodOnSanitizedTarget().  This
   // allows private field access (which requires the real instance as
-  // receiver) while ensuring public deferred-value fields are scrubbed.
+  // receiver) while ensuring public placeholder-value fields are scrubbed.
   // If the target is frozen/sealed, methods fall back to the proxy path.
   // See: https://github.com/dahlia/optique/issues/307
   const methodCache = new Map<
@@ -493,7 +478,7 @@ function createSanitizedNonPlainContextView<T extends object>(
         if (!descriptor.configurable && !descriptor.writable) {
           return descriptor.value;
         }
-        const val = stripDeferredPromptValuesForContexts(
+        const val = stripPlaceholderValues(
           descriptor.value,
           seen,
         );
@@ -516,7 +501,7 @@ function createSanitizedNonPlainContextView<T extends object>(
           if (cached != null && cached.fn === val) return cached.wrapper;
           const wrapper = function (this: unknown, ...args: unknown[]) {
             if (this !== proxy) {
-              return stripDeferredPromptValuesForContexts(
+              return stripPlaceholderValues(
                 val.apply(this, args),
                 seen,
               );
@@ -526,7 +511,7 @@ function createSanitizedNonPlainContextView<T extends object>(
               proxy,
               target,
               args,
-              stripDeferredPromptValuesForContexts,
+              stripPlaceholderValues,
               seen,
             );
           };
@@ -564,7 +549,7 @@ function createSanitizedNonPlainContextView<T extends object>(
           if (cached != null && cached.fn === result) return cached.wrapper;
           const wrapper = function (this: unknown, ...args: unknown[]) {
             if (this !== proxy) {
-              return stripDeferredPromptValuesForContexts(
+              return stripPlaceholderValues(
                 result.apply(this, args),
                 seen,
               );
@@ -574,7 +559,7 @@ function createSanitizedNonPlainContextView<T extends object>(
               proxy,
               target,
               args,
-              stripDeferredPromptValuesForContexts,
+              stripPlaceholderValues,
               seen,
             );
           };
@@ -584,7 +569,7 @@ function createSanitizedNonPlainContextView<T extends object>(
         // Accessor-returned function: wrap without caching.
         return function (this: unknown, ...args: unknown[]) {
           if (this !== proxy) {
-            return stripDeferredPromptValuesForContexts(
+            return stripPlaceholderValues(
               result.apply(this, args),
               seen,
             );
@@ -594,12 +579,12 @@ function createSanitizedNonPlainContextView<T extends object>(
             proxy,
             target,
             args,
-            stripDeferredPromptValuesForContexts,
+            stripPlaceholderValues,
             seen,
           );
         };
       }
-      return stripDeferredPromptValuesForContexts(result, seen);
+      return stripPlaceholderValues(result, seen);
     },
     getOwnPropertyDescriptor(target, key) {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
@@ -613,7 +598,7 @@ function createSanitizedNonPlainContextView<T extends object>(
       }
       return {
         ...descriptor,
-        value: stripDeferredPromptValuesForContexts(descriptor.value, seen),
+        value: stripPlaceholderValues(descriptor.value, seen),
       };
     },
   });
@@ -625,10 +610,10 @@ function prepareParsedForContexts(
   parsed: unknown,
 ): unknown {
   if (parsed == null || typeof parsed !== "object") {
-    return stripDeferredPromptValuesForContexts(parsed);
+    return stripPlaceholderValues(parsed);
   }
 
-  if (isDeferredPromptValue(parsed)) {
+  if (isPlaceholderValue(parsed)) {
     return undefined;
   }
 
@@ -638,17 +623,17 @@ function prepareParsedForContexts(
     parsed instanceof Set ||
     parsed instanceof Map
   ) {
-    if (!containsDeferredPromptValuesForContexts(parsed)) {
+    if (!containsPlaceholderValues(parsed)) {
       return parsed;
     }
-    return stripDeferredPromptValuesForContexts(parsed);
+    return stripPlaceholderValues(parsed);
   }
 
-  if (!containsDeferredPromptValuesForContexts(parsed)) {
+  if (!containsPlaceholderValues(parsed)) {
     return parsed;
   }
 
-  return createSanitizedNonPlainContextView(
+  return createSanitizedNonPlainView(
     parsed,
     new WeakMap<object, unknown>(),
   );
@@ -2789,17 +2774,10 @@ async function collectPhase1Annotations(
     const result = context.getAnnotations(undefined, options);
     hasDynamic ||= needsTwoPhaseContext(context, result);
     const annotations = result instanceof Promise ? await result : result;
-    const internalAnnotationsGetter = Reflect.get(
-      context,
-      phase1ConfigAnnotationsKey,
+    const internalAnnotations = context.getInternalAnnotations?.(
+      undefined,
+      annotations,
     );
-    const internalAnnotations = typeof internalAnnotationsGetter === "function"
-      ? internalAnnotationsGetter.call(
-        context,
-        undefined,
-        annotations,
-      ) as (Annotations | undefined)
-      : undefined;
     annotationsList.push(
       internalAnnotations == null
         ? annotations
@@ -2840,18 +2818,10 @@ async function collectAnnotations(
       async (contextParsed) => {
         const result = context.getAnnotations(contextParsed, options);
         const annotations = result instanceof Promise ? await result : result;
-        const internalAnnotationsGetter = Reflect.get(
-          context,
-          phase1ConfigAnnotationsKey,
+        const internalAnnotations = context.getInternalAnnotations?.(
+          contextParsed,
+          annotations,
         );
-        const internalAnnotations =
-          typeof internalAnnotationsGetter === "function"
-            ? internalAnnotationsGetter.call(
-              context,
-              contextParsed,
-              annotations,
-            ) as (Annotations | undefined)
-            : undefined;
         return internalAnnotations == null
           ? annotations
           : mergeAnnotations([annotations, internalAnnotations]);
@@ -2895,17 +2865,10 @@ function collectPhase1AnnotationsSync(
       );
     }
     hasDynamic ||= needsTwoPhaseContext(context, result);
-    const internalAnnotationsGetter = Reflect.get(
-      context,
-      phase1ConfigAnnotationsKey,
+    const internalAnnotations = context.getInternalAnnotations?.(
+      undefined,
+      result,
     );
-    const internalAnnotations = typeof internalAnnotationsGetter === "function"
-      ? internalAnnotationsGetter.call(
-        context,
-        undefined,
-        result,
-      ) as (Annotations | undefined)
-      : undefined;
     annotationsList.push(
       internalAnnotations == null
         ? result
@@ -2974,18 +2937,10 @@ function collectAnnotationsSync(
               "Use runWith() or runWithAsync() for async contexts.",
           );
         }
-        const internalAnnotationsGetter = Reflect.get(
-          context,
-          phase1ConfigAnnotationsKey,
+        const internalAnnotations = context.getInternalAnnotations?.(
+          contextParsed,
+          result,
         );
-        const internalAnnotations =
-          typeof internalAnnotationsGetter === "function"
-            ? internalAnnotationsGetter.call(
-              context,
-              contextParsed,
-              result,
-            ) as (Annotations | undefined)
-            : undefined;
         return internalAnnotations == null
           ? result
           : mergeAnnotations([result, internalAnnotations]);

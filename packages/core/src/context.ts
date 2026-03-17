@@ -161,6 +161,40 @@ export interface SourceContext<TRequiredOptions = void> {
   ): Promise<Annotations> | Annotations;
 
   /**
+   * Optional hook to provide additional internal annotations during
+   * annotation collection.  Called after {@link getAnnotations} with the
+   * same parsed value and the annotations returned by `getAnnotations()`.
+   *
+   * Returns additional annotations to merge, or `undefined` to add nothing.
+   * This enables contexts to inject phase-specific markers without
+   * exposing them through the primary `getAnnotations()` API.
+   *
+   * @param parsed The parsed result from a previous parse pass, or
+   *               `undefined` during the first pass.
+   * @param annotations The annotations returned by `getAnnotations()`.
+   * @returns Additional annotations to merge, or `undefined`.
+   * @since 1.0.0
+   */
+  getInternalAnnotations?(
+    parsed: unknown,
+    annotations: Annotations,
+  ): Annotations | undefined;
+
+  /**
+   * Optional hook to transform the parsed value before it is passed to
+   * {@link getAnnotations} during phase-2 annotation collection.
+   *
+   * This allows contexts to distinguish between "parsed value was
+   * `undefined`" and "no parse happened yet" by wrapping `undefined`
+   * values with a context-private marker.
+   *
+   * @param parsed The parsed value to finalize.
+   * @returns The finalized parsed value.
+   * @since 1.0.0
+   */
+  finalizeParsed?(parsed: unknown): unknown;
+
+  /**
    * Optional synchronous cleanup method.  Called by `runWith()` and
    * `runWithSync()` in a `finally` block after parsing completes.
    */
@@ -188,6 +222,48 @@ export interface SourceContext<TRequiredOptions = void> {
  * @returns `true` if the context is static, `false` otherwise.
  * @since 0.10.0
  */
+/**
+ * Brand symbol for placeholder values.
+ *
+ * Placeholder values are sentinel objects that represent values to be
+ * resolved later (e.g., deferred interactive prompts).  During two-phase
+ * parsing, placeholder values are stripped from parsed results before they
+ * are passed to phase-2 context annotation collection, and `map()`
+ * transformations skip them.
+ *
+ * Packages that produce placeholder values should set this symbol as a
+ * property on their sentinel objects:
+ *
+ * ~~~~ typescript
+ * import { placeholder } from "@optique/core/context";
+ *
+ * class MyPlaceholder {
+ *   readonly [placeholder] = true;
+ * }
+ * ~~~~
+ *
+ * @since 1.0.0
+ */
+export const placeholder: unique symbol = Symbol(
+  "@optique/core/placeholder",
+);
+
+/**
+ * Tests whether a value is a placeholder.
+ *
+ * Returns `true` if the value is a non-null object carrying the
+ * {@link placeholder} property.
+ *
+ * @param value The value to test.
+ * @returns `true` if the value is a placeholder.
+ * @since 1.0.0
+ */
+export function isPlaceholderValue(value: unknown): boolean {
+  return value != null &&
+    typeof value === "object" &&
+    placeholder in value;
+}
+
 export function isStaticContext(context: SourceContext<unknown>): boolean {
   // If the context explicitly declares its static-ness, use that directly
   // to avoid calling getAnnotations() and triggering any side effects it
