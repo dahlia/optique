@@ -665,9 +665,15 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     unsupported values like `"files"` were silently accepted, causing
     inconsistent behavior between parsing and suggestions.  [[#361], [#545]]
 
+ -  Context-required options passed to `run()`, `runSync()`, and `runAsync()`
+    must now be wrapped in a `contextOptions` property instead of being
+    passed as top-level keys.  This prevents name collisions with runner
+    options such as `help`, `programName`, and `version`.  [[#240]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
+[#240]: https://github.com/dahlia/optique/issues/240
 [#257]: https://github.com/dahlia/optique/issues/257
 [#258]: https://github.com/dahlia/optique/issues/258
 [#309]: https://github.com/dahlia/optique/issues/309
