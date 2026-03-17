@@ -44,6 +44,8 @@ function isParser(
     return (
       "parse" in p &&
       typeof p.parse === "function" &&
+      "complete" in p &&
+      typeof p.complete === "function" &&
       "$mode" in p &&
       (p.$mode === "sync" || p.$mode === "async") &&
       "usage" in p &&
