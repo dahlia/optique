@@ -4960,7 +4960,7 @@ describe("shouldDeferCompletion forwarding", () => {
       const outer = optional(inner);
 
       const result = outer.shouldDeferCompletion!(undefined);
-      assert.equal(result, false);
+      assert.ok(!result);
       // Inner hook should NOT have been called
       assert.equal(inner.receivedStates.length, 0);
     });
@@ -4974,7 +4974,7 @@ describe("shouldDeferCompletion forwarding", () => {
         value: "test",
       };
       const result = outer.shouldDeferCompletion!([innerState]);
-      assert.equal(result, false);
+      assert.ok(!result);
     });
 
     it("should delegate non-array objects to inner hook", () => {
@@ -4989,7 +4989,7 @@ describe("shouldDeferCompletion forwarding", () => {
           | [ValueParserResult<string> | undefined]
           | undefined,
       );
-      assert.equal(result, true);
+      assert.ok(result);
       assert.equal(inner.receivedStates.length, 1);
       assert.deepEqual(inner.receivedStates[0], otherState);
     });
@@ -5016,7 +5016,7 @@ describe("shouldDeferCompletion forwarding", () => {
       const outer = withDefault(inner, "fallback");
 
       const result = outer.shouldDeferCompletion!(undefined);
-      assert.equal(result, false);
+      assert.ok(!result);
       assert.equal(inner.receivedStates.length, 0);
     });
 
@@ -5029,7 +5029,7 @@ describe("shouldDeferCompletion forwarding", () => {
         value: "test",
       };
       const result = outer.shouldDeferCompletion!([innerState]);
-      assert.equal(result, false);
+      assert.ok(!result);
     });
 
     it("should delegate non-array objects to inner hook", () => {
@@ -5042,7 +5042,7 @@ describe("shouldDeferCompletion forwarding", () => {
           | [ValueParserResult<string> | undefined]
           | undefined,
       );
-      assert.equal(result, true);
+      assert.ok(result);
       assert.equal(inner.receivedStates.length, 1);
       assert.deepEqual(inner.receivedStates[0], otherState);
     });
