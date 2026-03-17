@@ -6319,7 +6319,7 @@ export function group<M extends Mode, TValue, TState>(
     initialState: parser.initialState,
     // Forward completion deferral hook from inner parser so that
     // prompt(group("label", bindConfig(...))) defers correctly.
-    ...(parser.shouldDeferCompletion != null
+    ...(typeof parser.shouldDeferCompletion === "function"
       ? {
         shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
       }

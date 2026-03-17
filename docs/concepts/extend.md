@@ -686,7 +686,7 @@ API reference
      -  `finalizeParsed?(parsed): unknown` — Optional hook to transform the
         parsed value before it is passed to `getAnnotations()` during phase-2
         annotation collection.  This allows contexts to distinguish between
-        “parsed value was `undefined`“ and “no parse happened yet.”
+        “parsed value was `undefined`” and “no parse happened yet.”
 
     Use `ParserValuePlaceholder` in `TRequiredOptions` when the options depend
     on the parser's result type.
@@ -732,7 +732,7 @@ API reference
     `runWith()` strips them from parsed results before phase-2 annotation
     collection.  `map()` also skips transformation for placeholder values.
 
-    ~~~~ typescript
+    ~~~~ typescript twoslash
     import { placeholder } from "@optique/core/context";
 
     class MyPlaceholder {

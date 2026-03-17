@@ -317,7 +317,7 @@ export function bindEnv<
     },
 
     suggest: parser.suggest,
-    ...(deferPromptUntilConfigResolves != null
+    ...(typeof deferPromptUntilConfigResolves === "function"
       ? {
         shouldDeferCompletion: deferPromptUntilConfigResolves.bind(parser),
       }

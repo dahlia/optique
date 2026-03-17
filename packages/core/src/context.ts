@@ -211,18 +211,6 @@ export interface SourceContext<TRequiredOptions = void> {
 }
 
 /**
- * Checks whether a context is static (returns annotations without needing
- * parsed results).
- *
- * A context is considered static if it declares `mode: "static"` or if
- * `getAnnotations()` called without arguments returns a non-empty
- * annotations object synchronously.
- *
- * @param context The source context to check.
- * @returns `true` if the context is static, `false` otherwise.
- * @since 0.10.0
- */
-/**
  * Brand symbol for placeholder values.
  *
  * Placeholder values are sentinel objects that represent values to be
@@ -264,6 +252,18 @@ export function isPlaceholderValue(value: unknown): boolean {
     placeholder in value;
 }
 
+/**
+ * Checks whether a context is static (returns annotations without needing
+ * parsed results).
+ *
+ * A context is considered static if it declares `mode: "static"` or if
+ * `getAnnotations()` called without arguments returns a non-empty
+ * annotations object synchronously.
+ *
+ * @param context The source context to check.
+ * @returns `true` if the context is static, `false` otherwise.
+ * @since 0.10.0
+ */
 export function isStaticContext(context: SourceContext<unknown>): boolean {
   // If the context explicitly declares its static-ness, use that directly
   // to avoid calling getAnnotations() and triggering any side effects it
