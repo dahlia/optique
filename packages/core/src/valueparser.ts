@@ -3128,8 +3128,7 @@ export function socketAddress(
       }.`,
     );
   }
-  const metavar: NonEmptyString = options?.metavar ??
-    `HOST${separator}PORT` as NonEmptyString;
+  const metavar = options?.metavar ?? `HOST${separator}PORT`;
   ensureNonEmptyString(metavar);
   const defaultPort = options?.defaultPort;
   const requirePort = options?.requirePort ?? false;
@@ -3550,8 +3549,7 @@ export function portRange(
       }.`,
     );
   }
-  const metavar: NonEmptyString = options?.metavar ??
-    `PORT${separator}PORT` as NonEmptyString;
+  const metavar = options?.metavar ?? `PORT${separator}PORT`;
   ensureNonEmptyString(metavar);
   const allowSingle = options?.allowSingle ?? false;
   const isBigInt = options?.type === "bigint";
