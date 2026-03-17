@@ -2640,6 +2640,20 @@ describe("float", () => {
       );
     });
 
+    it("should throw RangeError when min is -Infinity", () => {
+      assert.throws(
+        () => float({ min: -Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is Infinity", () => {
+      assert.throws(
+        () => float({ max: Infinity as never }),
+        RangeError,
+      );
+    });
+
     it("should throw RangeError when max is -Infinity", () => {
       assert.throws(
         () => float({ max: -Infinity as never }),
@@ -5884,6 +5898,13 @@ describe("port", () => {
       );
     });
 
+    it("should throw RangeError when min is Infinity", () => {
+      assert.throws(
+        () => port({ min: Infinity as never }),
+        RangeError,
+      );
+    });
+
     it("should throw RangeError when min is -Infinity", () => {
       assert.throws(
         () => port({ min: -Infinity as never }),
@@ -5894,6 +5915,13 @@ describe("port", () => {
     it("should throw RangeError when max is Infinity", () => {
       assert.throws(
         () => port({ max: Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is -Infinity", () => {
+      assert.throws(
+        () => port({ max: -Infinity as never }),
         RangeError,
       );
     });
@@ -9533,6 +9561,34 @@ describe("cidr()", () => {
     it("should throw RangeError when maxPrefix is NaN", () => {
       assert.throws(
         () => cidr({ maxPrefix: NaN as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when minPrefix is Infinity", () => {
+      assert.throws(
+        () => cidr({ minPrefix: Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when minPrefix is -Infinity", () => {
+      assert.throws(
+        () => cidr({ minPrefix: -Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when maxPrefix is Infinity", () => {
+      assert.throws(
+        () => cidr({ maxPrefix: Infinity as never }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when maxPrefix is -Infinity", () => {
+      assert.throws(
+        () => cidr({ maxPrefix: -Infinity as never }),
         RangeError,
       );
     });
