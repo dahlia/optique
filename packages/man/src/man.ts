@@ -171,6 +171,19 @@ function hasSingleBracketedTerm(terms: Usage): boolean {
     t.type === "passthrough";
 }
 
+/**
+ * Returns whether a usage list's single visible term has the given type.
+ */
+function hasSingleVisibleTermOfType(
+  terms: Usage,
+  type: UsageTerm["type"],
+): boolean {
+  const visible = terms.filter(
+    (t) => !("hidden" in t && isUsageHidden(t.hidden)),
+  );
+  return visible.length === 1 && visible[0].type === type;
+}
+
 function formatUsageTermAsRoffInternal(
   term: UsageTerm,
   insideBrackets: boolean,
@@ -198,30 +211,42 @@ function formatUsageTermAsRoffInternal(
 
     case "optional": {
       const childrenBracketed = hasSingleBracketedTerm(term.terms);
-      const skipBrackets = insideBrackets && childrenBracketed;
       const inner = formatUsageAsRoffInternal(
         term.terms,
-        skipBrackets || childrenBracketed,
+        childrenBracketed,
       );
       if (inner === "") return "";
-      if (skipBrackets) return inner;
+
+      // If this optional is already inside brackets and it wraps a single
+      // bracketed term, we can skip adding another layer of brackets.
+      if (insideBrackets && childrenBracketed) return inner;
       return `[${inner}]`;
     }
 
     case "multiple": {
       const wrapInBrackets = term.min < 1;
       const childrenBracketed = hasSingleBracketedTerm(term.terms);
-      const skipBrackets = insideBrackets && wrapInBrackets &&
-        childrenBracketed;
-      const innerBracketed = (skipBrackets || wrapInBrackets) &&
-        childrenBracketed;
+
+      // Don't elide when the child is also a multiple, to preserve
+      // the grouping boundary between repetition layers.
+      const childIsMultiple = childrenBracketed &&
+        hasSingleVisibleTermOfType(term.terms, "multiple");
+
+      // A child term should elide its brackets if this multiple term
+      // will wrap it in brackets, and the child is a single elide-able
+      // bracketed term.
+      const passInsideBrackets = wrapInBrackets && childrenBracketed &&
+        !childIsMultiple;
       const inner = formatUsageAsRoffInternal(
         term.terms,
-        innerBracketed,
+        passInsideBrackets,
       );
       if (inner === "") return "";
+
       if (wrapInBrackets) {
-        if (skipBrackets) return `${inner} ...`;
+        // This multiple term should skip its own brackets if it's already
+        // inside brackets and it's wrapping a single elide-able term.
+        if (insideBrackets && passInsideBrackets) return `${inner} ...`;
         return `[${inner} ...]`;
       }
       return `${inner} ...`;
