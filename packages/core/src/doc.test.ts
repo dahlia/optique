@@ -1493,6 +1493,74 @@ describe("formatDocPage", () => {
       }
     });
   });
+
+  it("should throw TypeError when programName contains a newline", () => {
+    const page: DocPage = { sections: [] };
+    assert.throws(
+      () => formatDocPage("bad\nname", page),
+      TypeError,
+    );
+    assert.throws(
+      () => formatDocPage("bad\rname", page),
+      TypeError,
+    );
+    assert.throws(
+      () => formatDocPage("bad\r\nname", page),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError when section title contains a newline", () => {
+    const page: DocPage = {
+      sections: [{
+        title: "bad\nsection",
+        entries: [{
+          term: { type: "argument", metavar: "X" },
+          description: [{ type: "text", text: "desc" }],
+        }],
+      }],
+    };
+    assert.throws(
+      () => formatDocPage("myapp", page),
+      TypeError,
+    );
+    const crPage: DocPage = {
+      sections: [{
+        title: "bad\rsection",
+        entries: [{
+          term: { type: "argument", metavar: "X" },
+          description: [{ type: "text", text: "desc" }],
+        }],
+      }],
+    };
+    assert.throws(
+      () => formatDocPage("myapp", crPage),
+      TypeError,
+    );
+    const crlfPage: DocPage = {
+      sections: [{
+        title: "bad\r\nsection",
+        entries: [{
+          term: { type: "argument", metavar: "X" },
+          description: [{ type: "text", text: "desc" }],
+        }],
+      }],
+    };
+    assert.throws(
+      () => formatDocPage("myapp", crlfPage),
+      TypeError,
+    );
+  });
+
+  it("should not throw for newline in title of empty section", () => {
+    const page: DocPage = {
+      sections: [{
+        title: "bad\nsection",
+        entries: [],
+      }],
+    };
+    assert.doesNotThrow(() => formatDocPage("myapp", page));
+  });
 });
 
 describe("branch coverage: doc.ts edge cases", () => {

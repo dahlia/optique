@@ -330,6 +330,8 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @param page The documentation page to format
  * @param options Formatting options to customize the output
  * @returns A formatted string representation of the documentation page
+ * @throws {TypeError} If `programName` or any non-empty section's title
+ * contains a CR or LF character.
  *
  * @example
  * ```typescript
@@ -354,6 +356,9 @@ export function formatDocPage(
   page: DocPage,
   options: DocPageFormatOptions = {},
 ): string {
+  if (/[\r\n]/.test(programName)) {
+    throw new TypeError("Program name must not contain newlines.");
+  }
   const termIndent = options.termIndent ?? 2;
   const termWidth = options.termWidth ?? 26;
   let output = "";
@@ -411,6 +416,9 @@ export function formatDocPage(
     if (section.entries.length < 1) continue;
     output += "\n";
     if (section.title != null) {
+      if (/[\r\n]/.test(section.title)) {
+        throw new TypeError("Section title must not contain newlines.");
+      }
       const sectionLabel = options.colors
         ? `\x1b[1;2m${section.title}:\x1b[0m\n`
         : `${section.title}:\n`;
