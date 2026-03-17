@@ -1989,22 +1989,7 @@ export function port(
               : message`Expected a valid port number, but got ${input}.`,
           };
         }
-        let value: bigint;
-        try {
-          value = BigInt(input);
-        } catch (e) {
-          if (e instanceof SyntaxError) {
-            return {
-              success: false,
-              error: options.errors?.invalidPort
-                ? (typeof options.errors.invalidPort === "function"
-                  ? options.errors.invalidPort(input)
-                  : options.errors.invalidPort)
-                : message`Expected a valid port number, but got ${input}.`,
-            };
-          }
-          throw e;
-        }
+        const value = BigInt(input);
 
         if (value < min) {
           return {
