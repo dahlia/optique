@@ -3096,6 +3096,8 @@ export interface SocketAddressOptions {
  *
  * @param options - Options for socket address validation.
  * @returns A value parser for socket addresses.
+ * @throws {TypeError} If `separator` contains digit characters, since digits
+ *   in the separator would cause ambiguous splitting of port input.
  * @since 0.10.0
  *
  * @example
@@ -3122,6 +3124,13 @@ export function socketAddress(
   ensureNonEmptyString(metavar);
 
   const separator = options?.separator ?? ":";
+  if (/\p{Nd}/u.test(separator)) {
+    throw new TypeError(
+      `Expected separator to not contain digits, but got: ${
+        JSON.stringify(separator)
+      }.`,
+    );
+  }
   const defaultPort = options?.defaultPort;
   const requirePort = options?.requirePort ?? false;
   const hostType = options?.host?.type ?? "both";
@@ -3483,6 +3492,8 @@ export interface PortRangeOptionsBigInt {
  *
  * @param options - Options for port range validation.
  * @returns A value parser for port ranges.
+ * @throws {TypeError} If `separator` contains digit characters, since digits
+ *   in the separator would cause ambiguous splitting of numeric port input.
  * @since 0.10.0
  *
  * @example
@@ -3535,6 +3546,13 @@ export function portRange(
   ensureNonEmptyString(metavar);
 
   const separator = options?.separator ?? "-";
+  if (/\p{Nd}/u.test(separator)) {
+    throw new TypeError(
+      `Expected separator to not contain digits, but got: ${
+        JSON.stringify(separator)
+      }.`,
+    );
+  }
   const allowSingle = options?.allowSingle ?? false;
   const isBigInt = options?.type === "bigint";
 

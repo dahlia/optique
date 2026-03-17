@@ -7082,6 +7082,55 @@ describe("portRange()", () => {
       );
     });
   });
+
+  describe("separator validation", () => {
+    it("should reject separator containing digits", () => {
+      assert.throws(
+        () => portRange({ separator: "0" }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ separator: "8" }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ separator: "123" }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ separator: "a1b" }),
+        TypeError,
+      );
+      // Unicode digits (Arabic-Indic)
+      assert.throws(
+        () => portRange({ separator: "\u0661" }),
+        TypeError,
+      );
+      // Unicode digits (Devanagari)
+      assert.throws(
+        () => portRange({ separator: "\u0967" }),
+        TypeError,
+      );
+    });
+
+    it("should reject separator containing digits (bigint)", () => {
+      assert.throws(
+        () => portRange({ type: "bigint", separator: "0" }),
+        TypeError,
+      );
+      assert.throws(
+        () => portRange({ type: "bigint", separator: "8" }),
+        TypeError,
+      );
+    });
+
+    it("should accept separator without digits", () => {
+      assert.ok(portRange({ separator: ":" }));
+      assert.ok(portRange({ separator: " to " }));
+      assert.ok(portRange({ separator: ".." }));
+      assert.ok(portRange({ separator: "-" }));
+    });
+  });
 });
 
 describe("socketAddress()", () => {
@@ -7443,6 +7492,42 @@ describe("socketAddress()", () => {
       const result3 = parser.parse("example.com");
       assert.ok(result3.success);
       assert.strictEqual(result3.value.port, 8080);
+    });
+  });
+
+  describe("separator validation", () => {
+    it("should reject separator containing digits", () => {
+      assert.throws(
+        () => socketAddress({ separator: "0", defaultPort: 80 }),
+        TypeError,
+      );
+      assert.throws(
+        () => socketAddress({ separator: "8", defaultPort: 80 }),
+        TypeError,
+      );
+      assert.throws(
+        () => socketAddress({ separator: "123", defaultPort: 80 }),
+        TypeError,
+      );
+      assert.throws(
+        () => socketAddress({ separator: "a1b", defaultPort: 80 }),
+        TypeError,
+      );
+      // Unicode digits (Arabic-Indic)
+      assert.throws(
+        () => socketAddress({ separator: "\u0661", defaultPort: 80 }),
+        TypeError,
+      );
+      // Unicode digits (Devanagari)
+      assert.throws(
+        () => socketAddress({ separator: "\u0967", defaultPort: 80 }),
+        TypeError,
+      );
+    });
+
+    it("should accept separator without digits", () => {
+      assert.ok(socketAddress({ separator: ":", defaultPort: 80 }));
+      assert.ok(socketAddress({ separator: " ", defaultPort: 80 }));
     });
   });
 });
