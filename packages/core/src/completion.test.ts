@@ -1303,7 +1303,9 @@ describe("completion module", () => {
             () => shell.generateScript(name),
             (e: unknown) =>
               e instanceof Error &&
-              e.message.includes("Invalid program name"),
+              e.message.includes(
+                "must start with an alphanumeric character or",
+              ),
             `${shell.name} should reject program name: ${name}`,
           );
         }
