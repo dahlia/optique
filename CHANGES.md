@@ -10,6 +10,25 @@ To be released.
 
 ### @optique/core
 
+ -  Added generalized APIs to `SourceContext` and `Parser` interfaces so that
+    packages like *@optique/config* and *@optique/inquirer* can integrate with
+    core through public interfaces instead of `Symbol.for()` + `Reflect.get()`
+    duck typing:
+
+     -  `SourceContext.getInternalAnnotations()`: optional method for contexts
+        to inject additional annotations during collection
+     -  `SourceContext.finalizeParsed()`: optional method for contexts to
+        transform parsed values before phase-2 annotation collection
+     -  `Parser.shouldDeferCompletion()`: optional method that combinators
+        (`optional()`, `withDefault()`, `group()`) forward from inner parsers
+     -  `placeholder` symbol and `isPlaceholderValue()` in
+        `@optique/core/context`: brand-based detection of placeholder values
+        that should be stripped during two-phase parsing
+
+    This removes core's hidden dependency on *@optique/config* and
+    *@optique/inquirer* implementation details, enabling third-party
+    alternative implementations.  [[#588]]
+
  -  Added `options` parameter to `SourceContext.getAnnotations()`.  Contexts
     now receive runtime options (e.g., `getConfigPath`, `load`) passed by
     the runner, enabling config contexts to load files without a separate
@@ -470,6 +489,7 @@ To be released.
 [#583]: https://github.com/dahlia/optique/pull/583
 [#585]: https://github.com/dahlia/optique/pull/585
 [#587]: https://github.com/dahlia/optique/pull/587
+[#588]: https://github.com/dahlia/optique/pull/588
 
 ### @optique/config
 
