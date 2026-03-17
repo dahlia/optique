@@ -1995,19 +1995,17 @@ export function port(
         `${String(options.disallowWellKnown)}.`,
     );
   }
-  if (
-    options?.min != null && options?.max != null && options.min > options.max
-  ) {
-    throw new RangeError(
-      `Expected min to be less than or equal to max, but got ` +
-        `min: ${options.min} and max: ${options.max}.`,
-    );
-  }
   if (options?.type === "bigint") {
     const metavar = options.metavar ?? "PORT";
     ensureNonEmptyString(metavar);
     const min = options.min ?? 1n;
     const max = options.max ?? 65535n;
+    if (min > max) {
+      throw new RangeError(
+        `Expected min to be less than or equal to max, but got ` +
+          `min: ${min} and max: ${max}.`,
+      );
+    }
 
     return {
       $mode: "sync",
@@ -2076,6 +2074,12 @@ export function port(
   ensureNonEmptyString(metavar);
   const min = options?.min ?? 1;
   const max = options?.max ?? 65535;
+  if (min > max) {
+    throw new RangeError(
+      `Expected min to be less than or equal to max, but got ` +
+        `min: ${min} and max: ${max}.`,
+    );
+  }
 
   return {
     $mode: "sync",
@@ -3565,14 +3569,6 @@ export function portRange(
         `${String(options.allowSingle)}.`,
     );
   }
-  if (
-    options?.min != null && options?.max != null && options.min > options.max
-  ) {
-    throw new RangeError(
-      `Expected min to be less than or equal to max, but got ` +
-        `min: ${options.min} and max: ${options.max}.`,
-    );
-  }
   const separator = options?.separator ?? "-";
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
@@ -4900,6 +4896,20 @@ export function cidr(
     );
   }
   const version = options?.version ?? "both";
+  const maxPrefixForVersion = version === 4 ? 32 : version === 6 ? 128 : 128;
+  if (options?.minPrefix != null && options.minPrefix > maxPrefixForVersion) {
+    throw new RangeError(
+      `Expected minPrefix to be at most ${maxPrefixForVersion} for IPv${
+        version === "both" ? "4/6" : version
+      }, but got minPrefix: ${options.minPrefix}.`,
+    );
+  }
+  if (options?.maxPrefix != null && options.maxPrefix < 0) {
+    throw new RangeError(
+      `Expected maxPrefix to be at least 0, but got ` +
+        `maxPrefix: ${options.maxPrefix}.`,
+    );
+  }
   const minPrefix = options?.minPrefix;
   const maxPrefix = options?.maxPrefix;
   const errors = options?.errors;

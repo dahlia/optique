@@ -5765,6 +5765,34 @@ describe("port", () => {
         () => port({ type: "bigint", min: 8080n, max: 8080n }),
       );
     });
+
+    it("should throw RangeError when min exceeds default max", () => {
+      assert.throws(
+        () => port({ min: 70000 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is below default min", () => {
+      assert.throws(
+        () => port({ max: 0 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when bigint min exceeds default max", () => {
+      assert.throws(
+        () => port({ type: "bigint", min: 70000n }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when bigint max is below default min", () => {
+      assert.throws(
+        () => port({ type: "bigint", max: 0n }),
+        RangeError,
+      );
+    });
   });
 });
 
@@ -7233,6 +7261,20 @@ describe("portRange()", () => {
     it("should not throw when min equals max (bigint mode)", () => {
       assert.doesNotThrow(
         () => portRange({ type: "bigint", min: 8080n, max: 8080n }),
+      );
+    });
+
+    it("should throw RangeError when min exceeds default max", () => {
+      assert.throws(
+        () => portRange({ min: 70000 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when max is below default min", () => {
+      assert.throws(
+        () => portRange({ max: 0 }),
+        RangeError,
       );
     });
   });
@@ -9325,6 +9367,35 @@ describe("cidr()", () => {
 
     it("should not throw when minPrefix equals maxPrefix", () => {
       assert.doesNotThrow(() => cidr({ minPrefix: 24, maxPrefix: 24 }));
+    });
+
+    it("should throw RangeError when minPrefix exceeds IPv4 max", () => {
+      assert.throws(
+        () => cidr({ version: 4, minPrefix: 64 }),
+        RangeError,
+      );
+    });
+
+    it("should throw RangeError when maxPrefix is negative", () => {
+      assert.throws(
+        () => cidr({ maxPrefix: -1 }),
+        RangeError,
+      );
+    });
+
+    it("should not throw when minPrefix is at IPv4 max", () => {
+      assert.doesNotThrow(() => cidr({ version: 4, minPrefix: 32 }));
+    });
+
+    it("should not throw when minPrefix is within IPv6 range", () => {
+      assert.doesNotThrow(() => cidr({ version: 6, minPrefix: 64 }));
+    });
+
+    it("should throw RangeError when minPrefix exceeds IPv6 max", () => {
+      assert.throws(
+        () => cidr({ version: 6, minPrefix: 129 }),
+        RangeError,
+      );
     });
   });
 });
