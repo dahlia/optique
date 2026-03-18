@@ -127,7 +127,7 @@ function _${programName} () {
             # Complete with extension filtering
             local ext_pattern="\${extensions//,/|}"
             for file in "$__glob_current"*; do
-              [[ -e "$file" && "$file" =~ \\.($ext_pattern)$ ]] && COMPREPLY+=("$file")
+              [[ -f "$file" && "$file" =~ \\.($ext_pattern)$ ]] && COMPREPLY+=("$file")
             done
           else
             # Complete files only, exclude directories
@@ -151,7 +151,7 @@ function _${programName} () {
             for item in "$__glob_current"*; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
-              elif [[ -f "$item" && "$item" =~ \\.($ext_pattern)$ ]]; then
+              elif [[ ( -e "$item" || -L "$item" ) && "$item" =~ \\.($ext_pattern)$ ]]; then
                 COMPREPLY+=("$item")
               fi
             done
@@ -160,6 +160,7 @@ function _${programName} () {
             for item in "$__glob_current"*; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
+              # Use -e || -L to include non-regular files (sockets, FIFOs, dangling symlinks)
               elif [[ -e "$item" || -L "$item" ]]; then
                 COMPREPLY+=("$item")
               fi
