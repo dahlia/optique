@@ -698,6 +698,58 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       }
     });
 
+    it("should complete inside nested hidden directory paths", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-nested-hidden-dir-"),
+      );
+
+      try {
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "nested-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create .config/nvim/ with a hidden file inside
+        const nestedDir = join(tempDir, ".config", "nvim");
+        mkdirSync(nestedDir, { recursive: true });
+        writeFileSync(join(nestedDir, "init.lua"), "");
+        writeFileSync(join(nestedDir, ".hidden-plugin"), "");
+
+        const script = bash.generateScript("nested-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("nested-cli" ".config/nvim/")
+COMP_CWORD=1
+_nested-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes("init.lua")));
+        ok(completions.some((c) => c.includes(".hidden-plugin")));
+        deepStrictEqual(completions.length, 2);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should preserve caller's dotglob setting after completion", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");

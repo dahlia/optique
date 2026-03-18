@@ -100,9 +100,12 @@ function _${programName} () {
       set +f
       unset GLOBIGNORE
       # Enable dotglob when hidden files are requested, or when the user
-      # is already navigating inside a hidden directory (e.g., .config/)
-      local __current_tail="\${current%/}"; __current_tail="\${__current_tail##*/}"
-      if [[ "$hidden" == "1" || "$__current_tail" == .* ]]; then shopt -s dotglob; fi
+      # is already navigating inside a hidden directory (e.g., .config/nvim/)
+      local __inside_hidden_path=0
+      case "/\${current%/}/" in
+        */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
+      esac
+      if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" ]]; then shopt -s dotglob; fi
 
       # Expand tilde prefix for file globbing
       local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
@@ -182,8 +185,7 @@ function _${programName} () {
       if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
 
       # Filter out hidden files unless requested
-      local __current_base="\${current%/}"; __current_base="\${__current_base##*/}"
-      if [[ "$hidden" != "1" && "$__current_base" != .* ]]; then
+      if [[ "$hidden" != "1" && "$__inside_hidden_path" == "0" ]]; then
         local filtered=()
         local __name
         for item in "\${COMPREPLY[@]}"; do
