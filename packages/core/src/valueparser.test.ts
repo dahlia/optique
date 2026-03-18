@@ -6558,6 +6558,33 @@ describe("email()", () => {
       assert.deepStrictEqual(result.value, ['"a,b"@example.com']);
     });
 
+    it("should not split on commas after escaped quotes in local parts", () => {
+      const parser = email({ allowMultiple: true });
+
+      const result = parser.parse('"a\\",b"@example.com, c@example.com');
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, [
+        '"a\\",b"@example.com',
+        "c@example.com",
+      ]);
+    });
+
+    it("should not split on commas after escaped quotes in display names", () => {
+      const parser = email({
+        allowMultiple: true,
+        allowDisplayName: true,
+      });
+
+      const result = parser.parse(
+        '"Doe \\", John" <john@example.com>, jane@example.com',
+      );
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, [
+        "john@example.com",
+        "jane@example.com",
+      ]);
+    });
+
     it("should not split on commas inside display names", () => {
       const parser = email({
         allowMultiple: true,

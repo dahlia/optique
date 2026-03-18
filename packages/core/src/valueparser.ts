@@ -2971,7 +2971,18 @@ export function email(
     let current = "";
     let inQuotes = false;
     let inAngleBrackets = false;
+    let escaped = false;
     for (const char of input) {
+      if (escaped) {
+        escaped = false;
+        current += char;
+        continue;
+      }
+      if (char === "\\" && inQuotes) {
+        escaped = true;
+        current += char;
+        continue;
+      }
       if (char === '"' && !inAngleBrackets) {
         inQuotes = !inQuotes;
       } else if (char === "<" && !inQuotes) {
