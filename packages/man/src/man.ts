@@ -1,4 +1,4 @@
-import type { DocPage, DocSection } from "@optique/core/doc";
+import type { DocEntry, DocPage, DocSection } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
 import {
   isDocHidden,
@@ -444,6 +444,27 @@ function formatDocUsageAsRoff(usage: Usage): string {
 }
 
 /**
+ * Infers the section title from entry kinds when no explicit title is given.
+ * Returns `"COMMANDS"` for command-only sections, `"ARGUMENTS"` for
+ * argument-only sections, and `"OPTIONS"` otherwise.
+ *
+ * @param entries The entries in the section.
+ * @returns The inferred section title in uppercase.
+ */
+function inferSectionTitle(entries: readonly DocEntry[]): string {
+  const kinds = new Set<string>();
+  for (const entry of entries) {
+    if ("hidden" in entry.term && isDocHidden(entry.term.hidden)) continue;
+    kinds.add(entry.term.type);
+  }
+  if (kinds.size === 1) {
+    if (kinds.has("command")) return "COMMANDS";
+    if (kinds.has("argument")) return "ARGUMENTS";
+  }
+  return "OPTIONS";
+}
+
+/**
  * Formats a {@link DocSection} as roff markup with .TP macros.
  *
  * @param section The section to format.
@@ -598,7 +619,8 @@ export function formatDocPageAsMan(
     const content = formatDocSectionEntries(section);
     if (content === "") continue;
 
-    const title = section.title?.toUpperCase() ?? "OPTIONS";
+    const title = section.title?.toUpperCase() ??
+      inferSectionTitle(section.entries);
     lines.push(`.SH "${escapeRequestArg(title)}"`);
     lines.push(content);
   }
