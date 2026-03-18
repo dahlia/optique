@@ -19,7 +19,7 @@ import {
 } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
 import { bindConfig, createConfigContext } from "../../config/src/index.ts";
@@ -3996,6 +3996,23 @@ describe("prompt()", () => {
   });
 
   describe("prompt revalidation", () => {
+    it("accepts prompted value when map() transforms the domain", async () => {
+      const parser = prompt(
+        map(
+          option("--color", choice(["red", "green", "blue"])),
+          (c) => c.toUpperCase(),
+        ),
+        {
+          type: "input",
+          message: "color?",
+          prompter: () => Promise.resolve("RED"),
+        },
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "RED");
+    });
+
     it("rejects prompted number below min constraint", async () => {
       const parser = prompt(
         option("--port", integer({ min: 1024, max: 65535 })),
