@@ -1896,6 +1896,9 @@ describe("formatDocPageAsMan()", () => {
 
     assert.ok(synopsis.includes("\\fBserve\\fR"));
     assert.ok(synopsis.includes("serve-custom"));
+    // Default subcommands should be replaced by the usageLine override
+    assert.ok(!synopsis.includes("\\fBstart\\fR"));
+    assert.ok(!synopsis.includes("\\fBstop\\fR"));
   });
 
   it("renders function usageLine override via getDocPage() in SYNOPSIS", async () => {
