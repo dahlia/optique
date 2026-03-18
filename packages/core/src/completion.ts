@@ -235,7 +235,7 @@ complete -F _${programName} ${programName}
         // Emit special marker for native file completion
         const extensions = suggestion.extensions?.join(",") || "";
         const hidden = suggestion.includeHidden ? "1" : "0";
-        const pattern = encodePattern(suggestion.pattern || "");
+        const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}`;
       }
       i++;
@@ -363,7 +363,7 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
         const description = suggestion.description == null
           ? ""
           : formatMessage(suggestion.description, { colors: false });
-        const pattern = encodePattern(suggestion.pattern || "");
+        const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\0${description}\0`;
       }
     }
@@ -510,7 +510,7 @@ complete -c ${programName} -f -a '(${functionName})'
         const description = suggestion.description == null
           ? ""
           : formatMessage(suggestion.description, { colors: false });
-        const pattern = encodePattern(suggestion.pattern || "");
+        const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t${description}`;
       }
       i++;
@@ -754,7 +754,7 @@ ${functionName}-external
         const description = suggestion.description == null
           ? ""
           : formatMessage(suggestion.description, { colors: false });
-        const pattern = encodePattern(suggestion.pattern || "");
+        const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t${description}`;
       }
       i++;
@@ -926,7 +926,7 @@ ${
         const description = suggestion.description == null
           ? ""
           : formatMessage(suggestion.description, { colors: false });
-        const pattern = encodePattern(suggestion.pattern || "");
+        const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t[file]\t${description}`;
       }
       i++;
