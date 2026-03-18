@@ -422,11 +422,26 @@ ${
                             set -a items $item
                         end
                     end
+                    # Fish's * glob does not match dotfiles; add them explicitly
+                    if test "$hidden" = "1"
+                        for item in $current.*
+                            if test -f $item
+                                set -a items $item
+                            end
+                        end
+                    end
                 case directory
                     # Complete directories only
                     for item in $current*
                         if test -d $item
                             set -a items $item/
+                        end
+                    end
+                    if test "$hidden" = "1"
+                        for item in $current.*
+                            if test -d $item
+                                set -a items $item/
+                            end
                         end
                     end
                 case any
@@ -436,6 +451,15 @@ ${
                             set -a items $item/
                         else if test -f $item
                             set -a items $item
+                        end
+                    end
+                    if test "$hidden" = "1"
+                        for item in $current.*
+                            if test -d $item
+                                set -a items $item/
+                            else if test -f $item
+                                set -a items $item
+                            end
                         end
                     end
             end
@@ -643,29 +667,30 @@ ${
       # Use current directory if prefix is empty
       let ls_pattern = if ($prefix | is-empty) { "." } else { $prefix + "*" }
 
+      # Use ls -a to include hidden files when requested
       let items = try {
         match $type {
           "file" => {
             if ($extensions | is-empty) {
-              ls $ls_pattern | where type == file
+              (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file
             } else {
               let ext_list = ($extensions | split row ',')
-              ls $ls_pattern | where type == file | where {|f|
+              (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file | where {|f|
                 let ext = ($f.name | path parse | get extension)
                 $ext in $ext_list
               }
             }
           },
           "directory" => {
-            ls $ls_pattern | where type == dir
+            (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == dir
           },
           "any" => {
             if ($extensions | is-empty) {
-              ls $ls_pattern
+              if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }
             } else {
               let ext_list = ($extensions | split row ',')
-              let dirs = ls $ls_pattern | where type == dir
-              let files = ls $ls_pattern | where type == file | where {|f|
+              let dirs = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == dir
+              let files = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file | where {|f|
                 let ext = ($f.name | path parse | get extension)
                 $ext in $ext_list
               }
@@ -839,6 +864,9 @@ ${
                 # Determine current prefix for file matching
                 \$prefix = if (\$wordToComplete) { \$wordToComplete } else { '' }
 
+                # Use -Force to include hidden files when requested
+                \$forceParam = if (\$hidden) { @{Force = \$true} } else { @{} }
+
                 # Get file system items based on type
                 \$items = @()
                 switch (\$type) {
@@ -846,31 +874,31 @@ ${
                         if (\$extensions) {
                             # Filter by extensions
                             \$extList = \$extensions -split ','
-                            \$items = Get-ChildItem -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$items = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
                                 Where-Object {
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
                         } else {
-                            \$items = Get-ChildItem -File -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$items = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue
                         }
                     }
                     'directory' {
-                        \$items = Get-ChildItem -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                        \$items = Get-ChildItem @forceParam -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
                     }
                     'any' {
                         if (\$extensions) {
                             # Get directories and filtered files
-                            \$dirs = Get-ChildItem -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$dirs = Get-ChildItem @forceParam -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
                             \$extList = \$extensions -split ','
-                            \$files = Get-ChildItem -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$files = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
                                 Where-Object {
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
                             \$items = \$dirs + \$files
                         } else {
-                            \$items = Get-ChildItem -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue
                         }
                     }
                 }
