@@ -426,6 +426,60 @@ describe("timeZone", () => {
     }
   });
 
+  it("should parse single-segment timezone identifiers", () => {
+    const validInputs: TimeZone[] = [
+      "GMT",
+      "GMT0",
+      "GMT+0",
+      "GMT-0",
+      "UCT",
+      "Universal",
+      "Greenwich",
+      "Zulu",
+      "EST",
+      "MST",
+      "HST",
+      "CET",
+      "MET",
+      "WET",
+      "EET",
+      "EST5EDT",
+      "CST6CDT",
+      "MST7MDT",
+      "PST8PDT",
+      "Cuba",
+      "Egypt",
+      "Eire",
+      "GB",
+      "GB-Eire",
+      "Hongkong",
+      "Iceland",
+      "Iran",
+      "Israel",
+      "Jamaica",
+      "Japan",
+      "Kwajalein",
+      "Libya",
+      "Navajo",
+      "NZ",
+      "NZ-CHAT",
+      "Poland",
+      "Portugal",
+      "PRC",
+      "ROC",
+      "ROK",
+      "Singapore",
+      "Turkey",
+      "W-SU",
+    ];
+
+    for (const input of validInputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.equal(result.value, input);
+    }
+  });
+
   it("should reject invalid timezone identifiers", () => {
     const invalidInputs = [
       "seoul",

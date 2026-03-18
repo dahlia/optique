@@ -23,20 +23,67 @@ function ensureTemporal(): void {
  * convention:
  *
  * - Two-level: `"Asia/Seoul"`, `"America/New_York"`, `"Europe/London"`
- * - Three-level: `"America/Argentina/Buenos_Aires"`, `"America/Kentucky/Louisville"`
- * - Special case: `"UTC"`
+ * - Three-level: `"America/Argentina/Buenos_Aires"`,
+ *   `"America/Kentucky/Louisville"`
+ * - Standard single-segment: `"UTC"`, `"GMT"`, `"Universal"`
+ * - POSIX abbreviations: `"EST"`, `"CET"`, `"EST5EDT"`
+ * - Deprecated aliases: `"Japan"`, `"Singapore"`, `"Cuba"`
  *
  * @example
  * ```typescript
  * const seoul: TimeZone = "Asia/Seoul";
  * const utc: TimeZone = "UTC";
+ * const gmt: TimeZone = "GMT";
  * const buenosAires: TimeZone = "America/Argentina/Buenos_Aires";
  * ```
  */
 export type TimeZone =
   | `${string}/${string}/${string}`
   | `${string}/${string}`
-  | "UTC";
+  | "UTC"
+  | "GMT"
+  | "GMT0"
+  | "GMT+0"
+  | "GMT-0"
+  | "UCT"
+  | "Universal"
+  | "Greenwich"
+  | "Zulu"
+  | "EST"
+  | "MST"
+  | "HST"
+  | "CET"
+  | "MET"
+  | "WET"
+  | "EET"
+  | "EST5EDT"
+  | "CST6CDT"
+  | "MST7MDT"
+  | "PST8PDT"
+  | "Cuba"
+  | "Egypt"
+  | "Eire"
+  | "GB"
+  | "GB-Eire"
+  | "Hongkong"
+  | "Iceland"
+  | "Iran"
+  | "Israel"
+  | "Jamaica"
+  | "Japan"
+  | "Kwajalein"
+  | "Libya"
+  | "Navajo"
+  | "NZ"
+  | "NZ-CHAT"
+  | "Poland"
+  | "Portugal"
+  | "PRC"
+  | "ROC"
+  | "ROK"
+  | "Singapore"
+  | "Turkey"
+  | "W-SU";
 
 /**
  * Options for creating an instant parser.

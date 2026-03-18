@@ -699,8 +699,15 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     This makes it clear that the runtime lacks Temporal support and a polyfill
     is needed.  [[#282], [#561]]
 
+ -  Fixed `TimeZone` type to include single-segment IANA timezone identifiers
+    such as `"GMT"`, `"EST"`, `"Factory"`, and deprecated aliases like
+    `"Japan"` and `"Cuba"`.  These were already accepted at runtime by the
+    `timeZone()` parser but excluded from the static type.  [[#304], [#596]]
+
 [#282]: https://github.com/dahlia/optique/issues/282
+[#304]: https://github.com/dahlia/optique/issues/304
 [#561]: https://github.com/dahlia/optique/pull/561
+[#596]: https://github.com/dahlia/optique/pull/596
 
 ### @optique/run
 
