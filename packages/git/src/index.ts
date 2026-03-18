@@ -450,6 +450,24 @@ export function gitRemoteBranch(
         if (branches.includes(input)) {
           return { success: true, value: input };
         }
+        if (branches.length === 0) {
+          const remotes = await git.listRemotes({ fs: gitFs, dir });
+          const names = remotes.map((r: GitRemote) => r.remote);
+          if (!names.includes(remote)) {
+            if (errors?.notFound) {
+              return {
+                success: false,
+                error: errors.notFound(input, branches),
+              };
+            }
+            return {
+              success: false,
+              error: message`Remote ${
+                value(remote)
+              } does not exist. Available remotes: ${valueSet(names)}`,
+            };
+          }
+        }
         if (errors?.notFound) {
           return { success: false, error: errors.notFound(input, branches) };
         }

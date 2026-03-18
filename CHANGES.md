@@ -645,8 +645,12 @@ environment variable integration via source contexts.  [[#86], [#135]]
     prefixes when multiple recent commits share the same short prefix.
     Short SHAs are now lengthened until each suggestion is unique.
     [[#331], [#571]]
+ -  Fixed `gitRemoteBranch()` reporting a misleading “branch not found” error
+    when the specified remote does not exist.  The parser now correctly
+    diagnoses the missing remote.  [[#308]]
 
 [#284]: https://github.com/dahlia/optique/issues/284
+[#308]: https://github.com/dahlia/optique/issues/308
 [#331]: https://github.com/dahlia/optique/issues/331
 [#377]: https://github.com/dahlia/optique/issues/377
 [#569]: https://github.com/dahlia/optique/pull/569

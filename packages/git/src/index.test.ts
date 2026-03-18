@@ -459,12 +459,45 @@ describe("git parsers", () => {
       }
     });
 
-    it("should fail for non-existent remotes", async () => {
+    it("should report missing remote when remote does not exist", async () => {
       const testRepoDir = await createTestRepo();
       try {
         const parser = gitRemoteBranch("nonexistent", { dir: testRepoDir });
         const result = await parser.parse("main");
         assert.ok(!result.success);
+        if (!result.success) {
+          const msg = formatMessage(result.error);
+          assert.match(msg, /remote/i);
+          assert.match(msg, /nonexistent/);
+          assert.ok(
+            !msg.includes("Remote branch"),
+            "Should not say 'Remote branch' when the remote itself is missing",
+          );
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should report missing branch when remote exists but branch does not", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+
+        const parser = gitRemoteBranch("origin", { dir: testRepoDir });
+        const result = await parser.parse("nonexistent");
+        assert.ok(!result.success);
+        if (!result.success) {
+          const msg = formatMessage(result.error);
+          assert.match(msg, /Remote branch/);
+          assert.match(msg, /nonexistent/);
+        }
       } finally {
         await cleanupTestRepo(testRepoDir);
       }
