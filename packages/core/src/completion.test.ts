@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
-import { deepStrictEqual, throws } from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { deepStrictEqual, ok, throws } from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -472,6 +472,716 @@ describe("completion module", () => {
       const encoded = Array.from(bash.encodeSuggestions(suggestions));
 
       deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0"]);
+    });
+
+    it("should not use compgen -z flag", () => {
+      const script = bash.generateScript("myapp");
+
+      // compgen -z is not supported on macOS default Bash 3.2
+      ok(!script.includes("compgen -z"));
+      ok(!script.includes("-z --"));
+    });
+
+    it("should complete files with native file completion in bash", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-file-completion-"));
+
+      try {
+        // Create a CLI that emits a __FILE__ directive for file completion
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "file-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create some test files
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir);
+        writeFileSync(join(srcDir, "main.ts"), "");
+        writeFileSync(join(srcDir, "util.ts"), "");
+        writeFileSync(join(tempDir, "README.md"), "");
+
+        const script = bash.generateScript("file-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("file-cli" "src/")
+COMP_CWORD=1
+_file-cli 2>&1
+if [ \${#COMPREPLY[@]} -gt 0 ]; then
+  printf "%s\\n" "\${COMPREPLY[@]}"
+else
+  echo "__NO_COMPLETIONS__"
+fi
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        // Should not contain error messages about -z flag
+        ok(!result.includes("invalid option"));
+        ok(!result.includes("compgen"));
+        // Should have found files in src/
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.length > 0);
+        ok(completions.some((c) => c.includes("main.ts")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should include hidden files when includeHidden is true", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-hidden-completion-"));
+
+      try {
+        // CLI that emits __FILE__ with hidden=1
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\n'
+`;
+        const cliPath = join(tempDir, "hidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create visible and hidden files
+        writeFileSync(join(tempDir, "visible.txt"), "");
+        writeFileSync(join(tempDir, ".hidden"), "");
+        writeFileSync(join(tempDir, ".env"), "");
+
+        const script = bash.generateScript("hidden-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("hidden-cli" "")
+COMP_CWORD=1
+_hidden-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes(".hidden")));
+        ok(completions.some((c) => c.includes(".env")));
+        ok(completions.some((c) => c.includes("visible.txt")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should filter hidden directories when includeHidden is false and dotglob is on", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-hidden-dir-filter-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:directory with includeHidden=0
+        const cliScript = `#!/bin/bash
+printf '__FILE__:directory:::0\\n'
+`;
+        const cliPath = join(tempDir, "dir-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create visible and hidden directories
+        mkdirSync(join(tempDir, "visible"));
+        mkdirSync(join(tempDir, ".hidden-dir"));
+
+        const script = bash.generateScript("dir-cli");
+
+        // Enable dotglob in the caller's shell before completion
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+shopt -s dotglob
+COMP_WORDS=("dir-cli" "")
+COMP_CWORD=1
+_dir-cli 2>/dev/null
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes("visible")));
+        ok(!completions.some((c) => c.includes(".hidden-dir")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should preserve completions inside a hidden directory", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-inside-hidden-dir-"));
+
+      try {
+        // CLI that emits __FILE__:file without includeHidden
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "inner-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create a hidden directory with files inside
+        const hiddenDir = join(tempDir, ".config");
+        mkdirSync(hiddenDir);
+        writeFileSync(join(hiddenDir, "settings.json"), "");
+        writeFileSync(join(hiddenDir, ".secret"), "");
+
+        const script = bash.generateScript("inner-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("inner-cli" ".config/")
+COMP_CWORD=1
+_inner-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find visible files inside the hidden directory
+        ok(completions.some((c) => c.includes("settings.json")));
+        // Hidden files inside a hidden directory should also appear
+        // since user explicitly navigated into .config/
+        ok(completions.some((c) => c.includes(".secret")));
+        // Should have exactly 2 completions
+        deepStrictEqual(completions.length, 2);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should complete inside nested hidden directory paths", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-nested-hidden-dir-"),
+      );
+
+      try {
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "nested-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create .config/nvim/ with a hidden file inside
+        const nestedDir = join(tempDir, ".config", "nvim");
+        mkdirSync(nestedDir, { recursive: true });
+        writeFileSync(join(nestedDir, "init.lua"), "");
+        writeFileSync(join(nestedDir, ".hidden-plugin"), "");
+
+        const script = bash.generateScript("nested-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("nested-cli" ".config/nvim/")
+COMP_CWORD=1
+_nested-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes("init.lua")));
+        ok(completions.some((c) => c.includes(".hidden-plugin")));
+        deepStrictEqual(completions.length, 2);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should complete hidden files when prefix starts with dot", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-dot-prefix-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:file without includeHidden
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "dot-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        writeFileSync(join(tempDir, ".env"), "");
+        writeFileSync(join(tempDir, ".gitignore"), "");
+        writeFileSync(join(tempDir, "visible.txt"), "");
+
+        const script = bash.generateScript("dot-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("dot-cli" ".")
+COMP_CWORD=1
+_dot-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes(".env")));
+        ok(completions.some((c) => c.includes(".gitignore")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should preserve caller's dotglob setting after completion", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-dotglob-restore-"));
+
+      try {
+        // CLI that emits __FILE__ with hidden=1
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\n'
+`;
+        const cliPath = join(tempDir, "dotglob-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "a.txt"), "");
+
+        const script = bash.generateScript("dotglob-cli");
+
+        // Enable dotglob before running completion, verify it's still on after
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+shopt -s dotglob
+COMP_WORDS=("dotglob-cli" "")
+COMP_CWORD=1
+_dotglob-cli 2>/dev/null
+shopt -q dotglob && echo "dotglob_preserved" || echo "dotglob_lost"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(result.includes("dotglob_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should not error when failglob is enabled and prefix has no matches", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-failglob-"));
+
+      try {
+        // CLI that emits __FILE__ directive
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "failglob-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const script = bash.generateScript("failglob-cli");
+
+        // Enable failglob, then complete with a prefix that matches nothing
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+shopt -s failglob
+COMP_WORDS=("failglob-cli" "nonexistent_prefix")
+COMP_CWORD=1
+_failglob-cli 2>&1
+echo "exit_status=\$?"
+shopt -q failglob && echo "failglob_preserved" || echo "failglob_lost"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(!result.includes("no match"));
+        ok(result.includes("exit_status=0"));
+        ok(result.includes("failglob_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should complete files even when noglob is set", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-noglob-"));
+
+      try {
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "noglob-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "hello.txt"), "");
+
+        const script = bash.generateScript("noglob-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+set -f
+COMP_WORDS=("noglob-cli" "")
+COMP_CWORD=1
+_noglob-cli 2>/dev/null
+printf "%s\\n" "\${COMPREPLY[@]}"
+[[ $- == *f* ]] && echo "noglob_preserved" || echo "noglob_lost"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(result.includes("hello.txt"));
+        ok(result.includes("noglob_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should preserve caller's GLOBIGNORE after completion", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-globignore-"));
+
+      try {
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "globignore-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "keep.txt"), "");
+
+        const script = bash.generateScript("globignore-cli");
+
+        // Set GLOBIGNORE before running completion, verify it's preserved after
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+GLOBIGNORE='*.tmp'
+COMP_WORDS=("globignore-cli" "")
+COMP_CWORD=1
+_globignore-cli 2>/dev/null
+[[ "$GLOBIGNORE" == "*.tmp" ]] && echo "globignore_preserved" || echo "globignore_lost:$GLOBIGNORE"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(result.includes("globignore_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should preserve caller's set-but-empty GLOBIGNORE after completion", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-globignore-empty-"),
+      );
+
+      try {
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "globignore-empty-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "a.txt"), "");
+
+        const script = bash.generateScript("globignore-empty-cli");
+
+        // Set GLOBIGNORE to empty string (distinct from unset)
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+GLOBIGNORE=''
+COMP_WORDS=("globignore-empty-cli" "")
+COMP_CWORD=1
+_globignore-empty-cli 2>/dev/null
+if [[ \${GLOBIGNORE+x} == x && -z "$GLOBIGNORE" ]]; then
+  echo "globignore_empty_preserved"
+else
+  echo "globignore_empty_lost"
+fi
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(result.includes("globignore_empty_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should complete non-regular files in any mode", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      // Skip on platforms without mkfifo
+      try {
+        runCommand("which", ["mkfifo"], { stdio: "pipe" });
+      } catch {
+        t.skip("mkfifo not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-any-fifo-"));
+
+      try {
+        // CLI that emits __FILE__:any (complete all filesystem entries)
+        const cliScript = `#!/bin/bash
+printf '__FILE__:any:::0\\n'
+`;
+        const cliPath = join(tempDir, "any-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "regular.txt"), "");
+        runCommand("mkfifo", [join(tempDir, "myfifo")]);
+
+        const script = bash.generateScript("any-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("any-cli" "")
+COMP_CWORD=1
+_any-cli 2>/dev/null
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes("regular.txt")));
+        ok(completions.some((c) => c.includes("myfifo")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should expand tilde prefix in file completion", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const home = process.env.HOME;
+      if (!home) {
+        t.skip("HOME not set");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(home, ".optique-tilde-test-"));
+
+      try {
+        // CLI that emits __FILE__:file directive
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "tilde-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "testfile.txt"), "");
+
+        const script = bash.generateScript("tilde-cli");
+
+        // Compute the tilde-relative path prefix
+        const relDir = tempDir.replace(home, "~");
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+COMP_WORDS=("tilde-cli" "${relDir}/")
+COMP_CWORD=1
+_tilde-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find the file
+        ok(completions.some((c) => c.includes("testfile.txt")));
+        // Results should use tilde prefix, not expanded home
+        ok(completions.some((c) => c.startsWith("~/")));
+        ok(!completions.some((c) => c.startsWith(home)));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should complete hidden files under tilde-relative dot prefix", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const home = process.env.HOME;
+      if (!home) {
+        t.skip("HOME not set");
+        return;
+      }
+
+      // Create a unique hidden directory under $HOME
+      const hiddenDir = mkdtempSync(join(home, ".optique-tilde-dot-test-"));
+
+      try {
+        // CLI that emits __FILE__:file without includeHidden
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        writeFileSync(join(hiddenDir, "tilde-dot-cli"), cliScript, {
+          mode: 0o755,
+        });
+        writeFileSync(join(hiddenDir, "target.txt"), "");
+
+        const script = bash.generateScript("tilde-dot-cli");
+
+        // Complete with ~/.optique-tilde-dot-test/ prefix
+        const relDir = hiddenDir.replace(home, "~");
+        const testScript = `
+export PATH="${hiddenDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+COMP_WORDS=("tilde-dot-cli" "${relDir}/")
+COMP_CWORD=1
+_tilde-dot-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: hiddenDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find files inside the hidden directory
+        ok(completions.some((c) => c.includes("target.txt")));
+      } finally {
+        rmSync(hiddenDir, { recursive: true, force: true });
+      }
     });
   });
 

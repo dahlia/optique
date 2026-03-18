@@ -87,6 +87,46 @@ function _${programName} () {
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
 
+      # Save and adjust glob/shell options for safe file completion
+      local __dotglob_was_set=0 __failglob_was_set=0 __noglob_was_set=0
+      local __globignore_was_set=0 __saved_globignore="\${GLOBIGNORE-}"
+      [[ \${GLOBIGNORE+x} == x ]] && __globignore_was_set=1
+      shopt -q dotglob && __dotglob_was_set=1
+      shopt -q failglob && __failglob_was_set=1
+      [[ $- == *f* ]] && __noglob_was_set=1
+      # Unset GLOBIGNORE before enabling dotglob because unsetting
+      # GLOBIGNORE implicitly clears dotglob in Bash
+      shopt -u failglob 2>/dev/null
+      set +f
+      unset GLOBIGNORE
+
+      # Expand tilde prefix for file globbing
+      local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
+      if [[ "$current" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)$ ]]; then
+        __tilde_prefix="\${BASH_REMATCH[1]}"
+        eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
+        if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
+          __glob_current="\${__tilde_expanded}\${current#\$__tilde_prefix}"
+        else
+          __tilde_prefix=""
+        fi
+      fi
+
+      # Enable dotglob when hidden files are requested, or when the user
+      # is already navigating inside a hidden directory (e.g., ~/.config/nvim/)
+      # This runs after tilde expansion so that paths like ~/.config/ are
+      # checked against the expanded path, not the literal ~ string.
+      local __inside_hidden_path=0
+      case "/\${__glob_current%/}/" in
+        */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
+      esac
+      # Also check if the current prefix explicitly targets hidden entries
+      # (e.g., user typed "." or ".e" to complete .env)
+      local __prefix_targets_hidden=0
+      local __prefix_base="\${__glob_current##*/}"
+      [[ "$__prefix_base" == .* ]] && __prefix_targets_hidden=1
+      if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" || "$__prefix_targets_hidden" == "1" ]]; then shopt -s dotglob; fi
+
       # Generate file completions based on type
       case "$type" in
         file)
@@ -94,21 +134,21 @@ function _${programName} () {
           if [[ -n "$extensions" ]]; then
             # Complete with extension filtering
             local ext_pattern="\${extensions//,/|}"
-            for file in "$current"*; do
-              [[ -e "$file" && "$file" =~ \\.($ext_pattern)$ ]] && COMPREPLY+=("$file")
+            for file in "$__glob_current"*; do
+              [[ -f "$file" && "$file" =~ \\.($ext_pattern)$ ]] && COMPREPLY+=("$file")
             done
           else
             # Complete files only, exclude directories
-            while IFS= read -r -d '' item; do
+            for item in "$__glob_current"*; do
               [[ -f "$item" ]] && COMPREPLY+=("$item")
-            done < <(compgen -f -z -- "$current")
+            done
           fi
           ;;
         directory)
           # Complete directories only
-          while IFS= read -r -d '' dir; do
-            COMPREPLY+=("$dir/")
-          done < <(compgen -d -z -- "$current")
+          for dir in "$__glob_current"*; do
+            [[ -d "$dir" ]] && COMPREPLY+=("$dir/")
+          done
           ;;
         any)
           # Complete both files and directories
@@ -116,31 +156,50 @@ function _${programName} () {
             # Files with extension filtering + directories
             # Files with extension filtering
             local ext_pattern="\${extensions//,/|}"
-            for item in "$current"*; do
+            for item in "$__glob_current"*; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
-              elif [[ -f "$item" && "$item" =~ \\.($ext_pattern)$ ]]; then
+              elif [[ ( -e "$item" || -L "$item" ) && "$item" =~ \\.($ext_pattern)$ ]]; then
                 COMPREPLY+=("$item")
               fi
             done
           else
             # Complete files and directories, add slash to directories
-            while IFS= read -r -d '' item; do
+            for item in "$__glob_current"*; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
-              else
+              # Use -e || -L to include non-regular files (sockets, FIFOs, dangling symlinks)
+              elif [[ -e "$item" || -L "$item" ]]; then
                 COMPREPLY+=("$item")
               fi
-            done < <(compgen -f -z -- "$current")
+            done
           fi
           ;;
       esac
 
+      # Restore tilde prefix in completion results
+      if [[ -n "$__tilde_prefix" ]]; then
+        local __i
+        for __i in "\${!COMPREPLY[@]}"; do
+          COMPREPLY[\$__i]="\${COMPREPLY[\$__i]/#\$__tilde_expanded/\$__tilde_prefix}"
+        done
+      fi
+
+      # Restore glob/shell options
+      # Restore GLOBIGNORE before dotglob because assigning GLOBIGNORE
+      # implicitly enables dotglob in Bash
+      if [[ "$__globignore_was_set" == "1" ]]; then GLOBIGNORE="$__saved_globignore"; fi
+      if [[ "$__dotglob_was_set" == "0" ]]; then shopt -u dotglob; else shopt -s dotglob; fi
+      if [[ "$__failglob_was_set" == "1" ]]; then shopt -s failglob; fi
+      if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
+
       # Filter out hidden files unless requested
-      if [[ "$hidden" != "1" && "$current" != .* ]]; then
+      if [[ "$hidden" != "1" && "$__inside_hidden_path" == "0" && "$__prefix_targets_hidden" == "0" ]]; then
         local filtered=()
+        local __name
         for item in "\${COMPREPLY[@]}"; do
-          [[ "$(basename "$item")" != .* ]] && filtered+=("$item")
+          __name="\${item%/}"; __name="\${__name##*/}"
+          [[ "$__name" != .* ]] && filtered+=("$item")
         done
         COMPREPLY=("\${filtered[@]}")
       fi
