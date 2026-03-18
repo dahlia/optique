@@ -6497,6 +6497,13 @@ describe("email()", () => {
       // Mixed numeric and alphabetic labels should still be valid
       const result15 = parser.parse("user@123.example.com");
       assert.ok(result15.success);
+
+      // All-numeric but not exactly 4 labels (not IPv4-like) should be valid
+      const result16 = parser.parse("user@123.456");
+      assert.ok(result16.success);
+
+      const result17 = parser.parse("user@1.2.3");
+      assert.ok(result17.success);
     });
   });
 

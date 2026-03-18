@@ -2994,8 +2994,11 @@ export function email(
       }
     }
 
-    // Reject all-numeric domains (IPv4-like patterns like 192.168.0.1)
-    if (domainLabels.every((label) => /^[0-9]+$/.test(label))) {
+    // Reject IPv4-like dotted-quad domains (e.g., 192.168.0.1)
+    if (
+      domainLabels.length === 4 &&
+      domainLabels.every((label) => /^[0-9]+$/.test(label))
+    ) {
       return null;
     }
 
