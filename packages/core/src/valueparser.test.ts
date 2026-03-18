@@ -6528,6 +6528,14 @@ describe("email()", () => {
       assert.ok(!result.success);
     });
 
+    it("should measure local-part limit in octets, not code units", () => {
+      const parser = email();
+      // "¢" is U+00A2, 2 bytes in UTF-8; 32 of them = 64 bytes
+      // Plus 2 quote characters = 66 bytes, exceeding the 64-octet limit
+      const result = parser.parse(`"${"\u00A2".repeat(32)}"@example.com`);
+      assert.ok(!result.success);
+    });
+
     it("should accept address with exactly 254 characters", () => {
       const parser = email();
       // "user" (4) + "@" (1) + domain (249) = 254

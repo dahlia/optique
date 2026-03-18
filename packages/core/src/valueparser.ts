@@ -2857,6 +2857,7 @@ export function email(
 
   // Simplified RFC 5322: alphanumeric, dots, hyphens, underscores, plus signs
   const atextRegex = /^[a-zA-Z0-9._+-]+$/;
+  const encoder = new TextEncoder();
 
   // Validate a single email address (RFC 5322 addr-spec)
   function validateEmail(input: string): string | null {
@@ -2962,7 +2963,7 @@ export function email(
     }
 
     // RFC 5321 §4.5.3.1.1: local-part max 64 octets
-    if (localPart.length > 64) {
+    if (encoder.encode(localPart).length > 64) {
       return null;
     }
 
@@ -3007,8 +3008,8 @@ export function email(
       return null;
     }
 
-    // RFC 5321 §4.5.3.1.3: path max 256 octets → address max 254 chars
-    if (emailAddr.length > 254) {
+    // RFC 5321 §4.5.3.1.3: path max 256 octets → address max 254 octets
+    if (encoder.encode(emailAddr).length > 254) {
       return null;
     }
 
