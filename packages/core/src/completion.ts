@@ -176,8 +176,10 @@ function _${programName} () {
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "\${current##*/}" != .* ]]; then
         local filtered=()
+        local __name
         for item in "\${COMPREPLY[@]}"; do
-          [[ "\${item##*/}" != .* ]] && filtered+=("$item")
+          __name="\${item%/}"; __name="\${__name##*/}"
+          [[ "$__name" != .* ]] && filtered+=("$item")
         done
         COMPREPLY=("\${filtered[@]}")
       fi

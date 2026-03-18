@@ -591,6 +591,58 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       }
     });
 
+    it("should filter hidden directories when includeHidden is false and dotglob is on", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-hidden-dir-filter-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:directory with includeHidden=0
+        const cliScript = `#!/bin/bash
+printf '__FILE__:directory:::0\\n'
+`;
+        const cliPath = join(tempDir, "dir-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create visible and hidden directories
+        mkdirSync(join(tempDir, "visible"));
+        mkdirSync(join(tempDir, ".hidden-dir"));
+
+        const script = bash.generateScript("dir-cli");
+
+        // Enable dotglob in the caller's shell before completion
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+shopt -s dotglob
+COMP_WORDS=("dir-cli" "")
+COMP_CWORD=1
+_dir-cli 2>/dev/null
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes("visible")));
+        ok(!completions.some((c) => c.includes(".hidden-dir")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should preserve caller's dotglob setting after completion", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");
