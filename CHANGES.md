@@ -768,7 +768,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `type` value is passed at runtime through an untyped path.  It now throws
     a clear `TypeError` with the invalid type name up front.  [[#386], [#612]]
 
- -  **Behavioral change:** `prompt()` no longer re-validates prompted values
+ -  *Behavioral change:* `prompt()` no longer re-validates prompted values
     through the inner parser's constraint pipeline.  The CLI path and the
     prompt path are now treated as independent value sources.  Previously,
     prompted values were fed back through a synthetic parse, which caused
