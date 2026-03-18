@@ -109,7 +109,7 @@ function _${programName} () {
 
       # Expand tilde prefix for file globbing
       local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
-      if [[ "$current" =~ ^(~[a-zA-Z0-9_.-]*)(/.*)?$ ]]; then
+      if [[ "$current" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)?$ ]]; then
         __tilde_prefix="\${BASH_REMATCH[1]}"
         eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
         if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
