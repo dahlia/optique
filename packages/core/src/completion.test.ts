@@ -489,6 +489,21 @@ describe("completion module", () => {
       deepStrictEqual(encoded, ["__FILE__:file::C%3A/Users/test/:0"]);
     });
 
+    it("should encode file suggestions with percent in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "100%done",
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(bash.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:file::100%25done:0"]);
+    });
+
     it("should not use compgen -z flag", () => {
       const script = bash.generateScript("myapp");
 
@@ -1370,6 +1385,21 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         "__FILE__:file::C%3A/Users/test/:0\0Config file\0",
       ]);
     });
+
+    it("should encode file suggestions with percent in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "100%done",
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(zsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:file::100%25done:0\0\0"]);
+    });
   });
 
   describe("pwsh shell completion", () => {
@@ -1529,6 +1559,24 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       deepStrictEqual(
         encoded[0],
         "__FILE__:file::C%3A/Users/test/:0\t[file]\tConfig file",
+      );
+    });
+
+    it("should encode file suggestions with percent in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "100%done",
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file::100%25done:0\t[file]\t",
       );
     });
 
@@ -1720,6 +1768,24 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       deepStrictEqual(
         encoded[0],
         "__FILE__:file::C%3A/Users/test/:0\tConfig file",
+      );
+    });
+
+    it("should encode file suggestions with percent in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "100%done",
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file::100%25done:0\t",
       );
     });
 
@@ -1922,6 +1988,24 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       deepStrictEqual(
         encoded[0],
         "__FILE__:file::C%3A/Users/test/:0\tConfig file",
+      );
+    });
+
+    it("should encode file suggestions with percent in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "100%done",
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file::100%25done:0\t",
       );
     });
 
