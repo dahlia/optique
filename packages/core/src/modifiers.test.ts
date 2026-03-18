@@ -4937,40 +4937,6 @@ describe("shouldDeferCompletion forwarding", () => {
     return parser;
   }
 
-  // Helper: create a sync parser whose state IS a primitive (string),
-  // not a ValueParserResult wrapper.  This lets us test annotation
-  // propagation for primitive inner states.
-  function createPrimitiveDeferrableParser(
-    deferResult: boolean | ((state: unknown) => boolean),
-  ) {
-    const receivedStates: unknown[] = [];
-    const base = option("--val", string());
-    const parser = {
-      ...base,
-      $valueType: [] as string[],
-      $stateType: [] as string[],
-      initialState: "",
-      receivedStates,
-      parse(context: { buffer: readonly string[]; state: string }) {
-        return {
-          success: true as const,
-          next: { ...context, state: context.buffer[0] ?? "" },
-          consumed: context.buffer.length > 0 ? 1 : 0,
-        };
-      },
-      complete(state: string) {
-        return { success: true as const, value: state };
-      },
-      shouldDeferCompletion(state: string): boolean {
-        receivedStates.push(state);
-        return typeof deferResult === "function"
-          ? deferResult(state)
-          : deferResult;
-      },
-    };
-    return parser;
-  }
-
   class CustomState {
     constructor(public readonly value: string) {}
   }
@@ -5092,24 +5058,6 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.deepEqual(inner.receivedStates[0], otherState);
     });
 
-    it("should propagate annotations for primitive inner state", () => {
-      const inner = createPrimitiveDeferrableParser(true);
-      const outer = optional(
-        inner as unknown as Parser<"sync", string, string | undefined>,
-      );
-
-      const annotations = { testCtx: "phase1" };
-      const annotatedOuter = injectAnnotations(
-        ["hello"] as [string],
-        annotations,
-      );
-      outer.shouldDeferCompletion!(annotatedOuter);
-
-      assert.equal(inner.receivedStates.length, 1);
-      const received = inner.receivedStates[0];
-      assert.deepEqual(getAnnotations(received), annotations);
-    });
-
     it("should propagate annotations for class instance inner state", () => {
       const inner = createClassInstanceDeferrableParser(true);
       const outer = optional(
@@ -5208,25 +5156,6 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.ok(result);
       assert.equal(inner.receivedStates.length, 1);
       assert.deepEqual(inner.receivedStates[0], otherState);
-    });
-
-    it("should propagate annotations for primitive inner state", () => {
-      const inner = createPrimitiveDeferrableParser(true);
-      const outer = withDefault(
-        inner as unknown as Parser<"sync", string, string | undefined>,
-        "fallback",
-      );
-
-      const annotations = { testCtx: "phase1" };
-      const annotatedOuter = injectAnnotations(
-        ["hello"] as [string],
-        annotations,
-      );
-      outer.shouldDeferCompletion!(annotatedOuter);
-
-      assert.equal(inner.receivedStates.length, 1);
-      const received = inner.receivedStates[0];
-      assert.deepEqual(getAnnotations(received), annotations);
     });
 
     it("should propagate annotations for class instance inner state", () => {

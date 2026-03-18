@@ -146,7 +146,11 @@ function adaptShouldDeferCompletion<TState>(
     if (Array.isArray(state)) {
       const annotations = getAnnotations(state);
       let inner: TState;
-      if (annotations != null && state[0] != null) {
+      if (
+        annotations != null &&
+        state[0] != null &&
+        typeof state[0] === "object"
+      ) {
         const propagated = inheritAnnotations(state, state[0]);
         // inheritAnnotations is a no-op for non-plain objects (returns
         // target unchanged), so fall back to injectAnnotations which
@@ -351,8 +355,12 @@ export function optional<M extends Mode, TValue, TState>(
       }
       // Propagate annotations from the outer array state into the inner
       // element so that source-binding wrappers like bindConfig can read
-      // them during phase-two resolution.
-      const innerElement = getAnnotations(state) != null && state[0] != null
+      // them during phase-two resolution.  Only propagate when the inner
+      // element is an object; primitive states cannot carry annotations
+      // without changing their shape, which would break inner parsers.
+      const innerElement = getAnnotations(state) != null &&
+          state[0] != null &&
+          typeof state[0] === "object"
         ? inheritAnnotations(state, state[0])
         : state[0];
       return dispatchByMode(
@@ -809,8 +817,12 @@ export function withDefault<
       }
       // Propagate annotations from the outer array state into the inner
       // element so that source-binding wrappers like bindConfig can read
-      // them during phase-two resolution.
-      const innerElement = getAnnotations(state) != null && state[0] != null
+      // them during phase-two resolution.  Only propagate when the inner
+      // element is an object; primitive states cannot carry annotations
+      // without changing their shape, which would break inner parsers.
+      const innerElement = getAnnotations(state) != null &&
+          state[0] != null &&
+          typeof state[0] === "object"
         ? inheritAnnotations(state, state[0])
         : state[0];
       return dispatchByMode(
