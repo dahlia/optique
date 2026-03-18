@@ -88,6 +88,8 @@ function _${programName} () {
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
 
       # Enable dotglob so globs match hidden files when requested
+      local __dotglob_was_set=0
+      shopt -q dotglob && __dotglob_was_set=1
       if [[ "$hidden" == "1" ]]; then shopt -s dotglob; fi
 
       # Generate file completions based on type
@@ -139,7 +141,7 @@ function _${programName} () {
           ;;
       esac
 
-      if [[ "$hidden" == "1" ]]; then shopt -u dotglob; fi
+      if [[ "$__dotglob_was_set" == "0" ]]; then shopt -u dotglob; else shopt -s dotglob; fi
 
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "$current" != .* ]]; then

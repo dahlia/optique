@@ -590,6 +590,49 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should preserve caller's dotglob setting after completion", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-dotglob-restore-"));
+
+      try {
+        // CLI that emits __FILE__ with hidden=1
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\n'
+`;
+        const cliPath = join(tempDir, "dotglob-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "a.txt"), "");
+
+        const script = bash.generateScript("dotglob-cli");
+
+        // Enable dotglob before running completion, verify it's still on after
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+shopt -s dotglob
+COMP_WORDS=("dotglob-cli" "")
+COMP_CWORD=1
+_dotglob-cli 2>/dev/null
+shopt -q dotglob && echo "dotglob_preserved" || echo "dotglob_lost"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(result.includes("dotglob_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("zsh shell completion", () => {
