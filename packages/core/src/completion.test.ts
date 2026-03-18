@@ -750,6 +750,56 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       }
     });
 
+    it("should complete hidden files when prefix starts with dot", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-dot-prefix-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:file without includeHidden
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "dot-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        writeFileSync(join(tempDir, ".env"), "");
+        writeFileSync(join(tempDir, ".gitignore"), "");
+        writeFileSync(join(tempDir, "visible.txt"), "");
+
+        const script = bash.generateScript("dot-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("dot-cli" ".")
+COMP_CWORD=1
+_dot-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes(".env")));
+        ok(completions.some((c) => c.includes(".gitignore")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should preserve caller's dotglob setting after completion", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");

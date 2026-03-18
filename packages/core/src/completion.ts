@@ -120,7 +120,12 @@ function _${programName} () {
       case "/\${__glob_current%/}/" in
         */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
       esac
-      if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" ]]; then shopt -s dotglob; fi
+      # Also check if the current prefix explicitly targets hidden entries
+      # (e.g., user typed "." or ".e" to complete .env)
+      local __prefix_targets_hidden=0
+      local __prefix_base="\${__glob_current##*/}"
+      [[ "$__prefix_base" == .* ]] && __prefix_targets_hidden=1
+      if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" || "$__prefix_targets_hidden" == "1" ]]; then shopt -s dotglob; fi
 
       # Generate file completions based on type
       case "$type" in
@@ -189,7 +194,7 @@ function _${programName} () {
       if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
 
       # Filter out hidden files unless requested
-      if [[ "$hidden" != "1" && "$__inside_hidden_path" == "0" ]]; then
+      if [[ "$hidden" != "1" && "$__inside_hidden_path" == "0" && "$__prefix_targets_hidden" == "0" ]]; then
         local filtered=()
         local __name
         for item in "\${COMPREPLY[@]}"; do
