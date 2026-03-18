@@ -1355,6 +1355,27 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("(choices: 80, 443, 8080)"));
   });
 
+  it("renders default and choices together when description is omitted", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--port"], metavar: "NUM" },
+          default: message`8080`,
+          choices: message`80, 443, 8080`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("\\fB\\-\\-port\\fR \\fINUM\\fR"));
+    assert.ok(result.includes("[8080] (choices: 80, 443, 8080)"));
+  });
+
   it("supports usage formatter fallback for doc entry terms", () => {
     const section: DocSection = {
       title: "Examples",
