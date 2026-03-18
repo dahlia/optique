@@ -136,7 +136,8 @@ describe("bindConfig", () => {
           }),
         {
           name: "TypeError",
-          message: "Expected key to be a string or function, but got: object.",
+          message:
+            "Expected key to be a property key or function, but got: object.",
         },
       );
     });
@@ -153,24 +154,8 @@ describe("bindConfig", () => {
           }),
         {
           name: "TypeError",
-          message: "Expected key to be a string or function, but got: null.",
-        },
-      );
-    });
-
-    test("throws TypeError when key is a symbol", () => {
-      const context = createConfigContext({
-        schema: z.object({ name: z.string() }),
-      });
-      assert.throws(
-        () =>
-          bindConfig(option("--name", string()), {
-            context,
-            key: Symbol("KEY") as never,
-          }),
-        {
-          name: "TypeError",
-          message: "Expected key to be a string or function, but got: symbol.",
+          message:
+            "Expected key to be a property key or function, but got: null.",
         },
       );
     });
@@ -187,8 +172,36 @@ describe("bindConfig", () => {
           }),
         {
           name: "TypeError",
-          message: "Expected key to be a string or function, but got: array.",
+          message:
+            "Expected key to be a property key or function, but got: array.",
         },
+      );
+    });
+
+    test("accepts symbol keys", () => {
+      const sym = Symbol("KEY");
+      const context = createConfigContext<{ [sym]: string }>({
+        schema: z.object({}) as never,
+      });
+      // Should not throw — symbol is a valid property key
+      assert.doesNotThrow(() =>
+        bindConfig(option("--name", string()), {
+          context,
+          key: sym,
+        })
+      );
+    });
+
+    test("accepts numeric keys", () => {
+      const context = createConfigContext<{ 0: string }>({
+        schema: z.object({}) as never,
+      });
+      // Should not throw — number is a valid property key
+      assert.doesNotThrow(() =>
+        bindConfig(option("--name", string()), {
+          context,
+          key: 0,
+        })
       );
     });
   });

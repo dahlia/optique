@@ -1027,7 +1027,7 @@ export interface BindConfigOptions<T, TValue, TConfigMeta = ConfigMeta> {
  * @param parser The parser to bind to config values.
  * @param options Binding options including context, key, and default.
  * @returns A new parser with config fallback behavior.
- * @throws {TypeError} If `key` is not a string or function.
+ * @throws {TypeError} If `key` is not a property key or function.
  * @since 0.10.0
  *
  * @example
@@ -1053,9 +1053,13 @@ export function bindConfig<
   parser: Parser<M, TValue, TState>,
   options: BindConfigOptions<T, TValue, TConfigMeta>,
 ): Parser<M, TValue, TState> {
-  if (typeof options.key !== "string" && typeof options.key !== "function") {
+  const keyType = typeof options.key;
+  if (
+    keyType !== "string" && keyType !== "number" && keyType !== "symbol" &&
+    keyType !== "function"
+  ) {
     throw new TypeError(
-      `Expected key to be a string or function, but got: ${
+      `Expected key to be a property key or function, but got: ${
         getTypeName(options.key)
       }.`,
     );

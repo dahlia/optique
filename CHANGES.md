@@ -667,9 +667,9 @@ To be released.
     Promises, numbers, etc.) now throw a `TypeError` instead of crashing
     with a raw `path.resolve()` error.  [[#416], [#609]]
 
- -  `bindConfig()` now throws a `TypeError` when `key` is neither
-    a string nor a function, instead of silently coercing the value.
-    [[#398], [#627]]
+ -  `bindConfig()` now throws a `TypeError` when `key` is not a valid
+    property key (string, number, or symbol) or function, instead of
+    silently coercing the value.  [[#398], [#627]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
