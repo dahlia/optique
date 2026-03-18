@@ -125,7 +125,9 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
   const contextId = Symbol(`@optique/env context:${Math.random()}`);
   if (options.source !== undefined && typeof options.source !== "function") {
     throw new TypeError(
-      `Expected source to be a function, but got: ${typeof options.source}.`,
+      `Expected source to be a function, but got: ${
+        options.source === null ? "null" : typeof options.source
+      }.`,
     );
   }
   const source = options.source ?? defaultEnvSource;

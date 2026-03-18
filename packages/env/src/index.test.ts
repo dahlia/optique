@@ -1248,7 +1248,7 @@ describe("createEnvContext defaults", () => {
       () => createEnvContext({ source: null as never }),
       {
         name: "TypeError",
-        message: "Expected source to be a function, but got: object.",
+        message: "Expected source to be a function, but got: null.",
       },
     );
   });
