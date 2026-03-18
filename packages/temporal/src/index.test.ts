@@ -515,6 +515,15 @@ describe("timeZone", () => {
     }
   });
 
+  it("should accept case-insensitive single-segment inputs", () => {
+    const inputs = ["gmt", "utc", "est", "japan", "cuba", "zulu"];
+
+    for (const input of inputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+    }
+  });
+
   it("should format timezone values correctly", () => {
     const timezone: TimeZone = "Asia/Seoul";
     const formatted = parser.format(timezone);

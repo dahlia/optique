@@ -40,50 +40,7 @@ function ensureTemporal(): void {
 export type TimeZone =
   | `${string}/${string}/${string}`
   | `${string}/${string}`
-  | "UTC"
-  | "GMT"
-  | "GMT0"
-  | "GMT+0"
-  | "GMT-0"
-  | "UCT"
-  | "Universal"
-  | "Greenwich"
-  | "Zulu"
-  | "EST"
-  | "MST"
-  | "HST"
-  | "CET"
-  | "MET"
-  | "WET"
-  | "EET"
-  | "EST5EDT"
-  | "CST6CDT"
-  | "MST7MDT"
-  | "PST8PDT"
-  | "Cuba"
-  | "Egypt"
-  | "Eire"
-  | "GB"
-  | "GB-Eire"
-  | "Hongkong"
-  | "Iceland"
-  | "Iran"
-  | "Israel"
-  | "Jamaica"
-  | "Japan"
-  | "Kwajalein"
-  | "Libya"
-  | "Navajo"
-  | "NZ"
-  | "NZ-CHAT"
-  | "Poland"
-  | "Portugal"
-  | "PRC"
-  | "ROC"
-  | "ROK"
-  | "Singapore"
-  | "Turkey"
-  | "W-SU";
+  | SingleSegmentTimeZone;
 
 /**
  * Options for creating an instant parser.
@@ -666,11 +623,11 @@ export function plainMonthDay(
 
 /**
  * Single-segment IANA timezone identifiers accepted across all supported
- * runtimes (Deno, Node.js, Bun).  Used by {@link timeZone} to gate
- * single-segment inputs so the parser never returns values outside the
- * {@link TimeZone} type.
+ * runtimes (Deno, Node.js, Bun).  This tuple is the single source of truth:
+ * {@link SingleSegmentTimeZone} is derived from it, and the runtime allowlist
+ * {@link singleSegmentTimeZones} is built from it.
  */
-const singleSegmentTimeZones: ReadonlySet<string> = new Set([
+const singleSegmentTimeZoneList = [
   "UTC",
   "GMT",
   "GMT0",
@@ -715,7 +672,17 @@ const singleSegmentTimeZones: ReadonlySet<string> = new Set([
   "Singapore",
   "Turkey",
   "W-SU",
-]);
+] as const;
+
+type SingleSegmentTimeZone = typeof singleSegmentTimeZoneList[number];
+
+const singleSegmentTimeZones: ReadonlySet<string> = new Set(
+  singleSegmentTimeZoneList,
+);
+
+const singleSegmentTimeZoneLower: ReadonlySet<string> = new Set(
+  singleSegmentTimeZoneList.map((tz) => tz.toLowerCase()),
+);
 
 /**
  * Creates a ValueParser for parsing IANA Time Zone Database identifiers.
@@ -756,8 +723,14 @@ export function timeZone(
         // For single-segment identifiers (no "/"), only accept those
         // in the curated allowlist to ensure cross-runtime consistency.
         // Some Temporal implementations accept identifiers (e.g.,
-        // "Factory") that others reject.
-        if (!input.includes("/") && !singleSegmentTimeZones.has(input)) {
+        // "Factory") that others reject.  The check uses
+        // case-insensitive matching because Temporal resolves aliases
+        // case-insensitively.
+        if (
+          !input.includes("/") &&
+          !singleSegmentTimeZones.has(input) &&
+          !singleSegmentTimeZoneLower.has(input.toLowerCase())
+        ) {
           throw new RangeError();
         }
         return { success: true, value: input as TimeZone };
