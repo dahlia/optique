@@ -1609,10 +1609,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         script.indexOf("__FILE__:"),
         script.indexOf("$type = $parts[1]"),
       );
-      deepStrictEqual(
-        fileBlock.includes('-split "`t"'),
-        true,
-      );
+      ok(fileBlock.includes('-split "`t"'));
     });
   });
 
@@ -1842,10 +1839,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         script.indexOf("__FILE__:"),
         script.indexOf("set -l type $parts[2]"),
       );
-      deepStrictEqual(
-        fileBlock.includes("string split \\t"),
-        true,
-      );
+      ok(fileBlock.includes("string split \\t"));
     });
   });
 
@@ -2104,10 +2098,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         script.indexOf("__FILE__:"),
         script.indexOf("$parts | get 1"),
       );
-      deepStrictEqual(
-        fileBlock.includes('split row "\t"'),
-        true,
-      );
+      ok(fileBlock.includes('split row "\t"'));
     });
   });
 
