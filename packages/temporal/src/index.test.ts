@@ -426,6 +426,60 @@ describe("timeZone", () => {
     }
   });
 
+  it("should parse single-segment timezone identifiers", () => {
+    const validInputs: TimeZone[] = [
+      "GMT",
+      "GMT0",
+      "GMT+0",
+      "GMT-0",
+      "UCT",
+      "Universal",
+      "Greenwich",
+      "Zulu",
+      "EST",
+      "MST",
+      "HST",
+      "CET",
+      "MET",
+      "WET",
+      "EET",
+      "EST5EDT",
+      "CST6CDT",
+      "MST7MDT",
+      "PST8PDT",
+      "Cuba",
+      "Egypt",
+      "Eire",
+      "GB",
+      "GB-Eire",
+      "Hongkong",
+      "Iceland",
+      "Iran",
+      "Israel",
+      "Jamaica",
+      "Japan",
+      "Kwajalein",
+      "Libya",
+      "Navajo",
+      "NZ",
+      "NZ-CHAT",
+      "Poland",
+      "Portugal",
+      "PRC",
+      "ROC",
+      "ROK",
+      "Singapore",
+      "Turkey",
+      "W-SU",
+    ];
+
+    for (const input of validInputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.equal(result.value, input);
+    }
+  });
+
   it("should reject invalid timezone identifiers", () => {
     const invalidInputs = [
       "seoul",
@@ -441,6 +495,40 @@ describe("timeZone", () => {
     for (const input of invalidInputs) {
       const result = parser.parse(input);
       assert.ok(!result.success, `Should not parse: ${input}`);
+    }
+  });
+
+  it("should reject single-segment IDs not in the allowlist", () => {
+    // These may be accepted by some Temporal implementations but are not
+    // in the cross-runtime TimeZone allowlist.
+    const nonAllowlisted = [
+      "Factory",
+      "CST",
+      "PST",
+      "AST",
+      "SST",
+    ];
+
+    for (const input of nonAllowlisted) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
+    }
+  });
+
+  it("should normalize case-insensitive single-segment inputs", () => {
+    const cases: [string, TimeZone][] = [
+      ["gmt", "GMT"],
+      ["utc", "UTC"],
+      ["est", "EST"],
+      ["japan", "Japan"],
+      ["cuba", "Cuba"],
+      ["zulu", "Zulu"],
+    ];
+
+    for (const [input, expected] of cases) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.equal(result.value, expected, `${input} -> ${expected}`);
     }
   });
 

@@ -23,20 +23,24 @@ function ensureTemporal(): void {
  * convention:
  *
  * - Two-level: `"Asia/Seoul"`, `"America/New_York"`, `"Europe/London"`
- * - Three-level: `"America/Argentina/Buenos_Aires"`, `"America/Kentucky/Louisville"`
- * - Special case: `"UTC"`
+ * - Three-level: `"America/Argentina/Buenos_Aires"`,
+ *   `"America/Kentucky/Louisville"`
+ * - Standard single-segment: `"UTC"`, `"GMT"`, `"Universal"`
+ * - POSIX abbreviations: `"EST"`, `"CET"`, `"EST5EDT"`
+ * - Deprecated aliases: `"Japan"`, `"Singapore"`, `"Cuba"`
  *
  * @example
  * ```typescript
  * const seoul: TimeZone = "Asia/Seoul";
  * const utc: TimeZone = "UTC";
+ * const gmt: TimeZone = "GMT";
  * const buenosAires: TimeZone = "America/Argentina/Buenos_Aires";
  * ```
  */
 export type TimeZone =
   | `${string}/${string}/${string}`
   | `${string}/${string}`
-  | "UTC";
+  | SingleSegmentTimeZone;
 
 /**
  * Options for creating an instant parser.
@@ -618,6 +622,69 @@ export function plainMonthDay(
 }
 
 /**
+ * Single-segment IANA timezone identifiers accepted across all supported
+ * runtimes (Deno, Node.js, Bun).  This tuple is the single source of truth:
+ * {@link SingleSegmentTimeZone} is derived from it, and the runtime lookup
+ * {@link singleSegmentTimeZoneLookup} is built from it.
+ */
+const singleSegmentTimeZoneList = [
+  "UTC",
+  "GMT",
+  "GMT0",
+  "GMT+0",
+  "GMT-0",
+  "UCT",
+  "Universal",
+  "Greenwich",
+  "Zulu",
+  "EST",
+  "MST",
+  "HST",
+  "CET",
+  "MET",
+  "WET",
+  "EET",
+  "EST5EDT",
+  "CST6CDT",
+  "MST7MDT",
+  "PST8PDT",
+  "Cuba",
+  "Egypt",
+  "Eire",
+  "GB",
+  "GB-Eire",
+  "Hongkong",
+  "Iceland",
+  "Iran",
+  "Israel",
+  "Jamaica",
+  "Japan",
+  "Kwajalein",
+  "Libya",
+  "Navajo",
+  "NZ",
+  "NZ-CHAT",
+  "Poland",
+  "Portugal",
+  "PRC",
+  "ROC",
+  "ROK",
+  "Singapore",
+  "Turkey",
+  "W-SU",
+] as const;
+
+type SingleSegmentTimeZone = typeof singleSegmentTimeZoneList[number];
+
+const singleSegmentTimeZoneLookup: ReadonlyMap<string, SingleSegmentTimeZone> =
+  new Map(
+    singleSegmentTimeZoneList.map((timeZone) => [
+      timeZone.toLowerCase(),
+      timeZone,
+    ]),
+  );
+
+/**
  * Creates a ValueParser for parsing IANA Time Zone Database identifiers.
  *
  * Accepts strings like:
@@ -626,6 +693,8 @@ export function plainMonthDay(
  * - `"America/New_York"`
  * - `"Europe/London"`
  * - `"UTC"`
+ * - `"GMT"`
+ * - `"EST"`
  *
  * @param options Configuration options for the timezone parser.
  * @returns A ValueParser that parses and validates timezone identifiers.
@@ -651,6 +720,21 @@ export function timeZone(
           day: 1,
           timeZone: input,
         });
+        // For single-segment identifiers (no "/"), only accept those
+        // in the curated allowlist to ensure cross-runtime consistency.
+        // Some Temporal implementations accept identifiers (e.g.,
+        // "Factory") that others reject.  The lookup is
+        // case-insensitive and normalizes to canonical casing so the
+        // returned value is always a valid SingleSegmentTimeZone member.
+        if (!input.includes("/")) {
+          const canonical = singleSegmentTimeZoneLookup.get(
+            input.toLowerCase(),
+          );
+          if (canonical == null) {
+            throw new RangeError();
+          }
+          return { success: true, value: canonical };
+        }
         return { success: true, value: input as TimeZone };
       } catch {
         return {
