@@ -6536,6 +6536,16 @@ describe("email()", () => {
       assert.ok(!result.success);
     });
 
+    it("should accept quoted local part at exactly 64 octets with multibyte characters", () => {
+      const parser = email();
+      // "¢" is U+00A2, 2 bytes in UTF-8; 31 of them = 62 bytes
+      // Plus 2 quote characters = 64 bytes, exactly at the limit
+      const localPart = `"${"\u00A2".repeat(31)}"`;
+      assert.strictEqual(new TextEncoder().encode(localPart).length, 64);
+      const result = parser.parse(`${localPart}@example.com`);
+      assert.ok(result.success);
+    });
+
     it("should accept address with exactly 254 characters", () => {
       const parser = email();
       // "user" (4) + "@" (1) + domain (249) = 254
