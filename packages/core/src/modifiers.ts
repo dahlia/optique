@@ -127,19 +127,6 @@ function processOptionalStyleResult<TState>(
 }
 
 /**
- * Creates a parser that makes another parser optional, allowing it to succeed
- * without consuming input if the wrapped parser fails to match.
- * If the wrapped parser succeeds, this returns its value.
- * If the wrapped parser fails, this returns `undefined` without consuming input.
- * @template M The execution mode of the parser.
- * @template TValue The type of the value returned by the wrapped parser.
- * @template TState The type of the state used by the wrapped parser.
- * @param parser The {@link Parser} to make optional.
- * @returns A {@link Parser} that produces either the result of the wrapped parser
- *          or `undefined` if the wrapped parser fails to match.
- */
-
-/**
  * Creates a `shouldDeferCompletion` adapter that unwraps the outer state
  * shape (`[TState] | undefined`) used by {@link optional} and
  * {@link withDefault} before delegating to the inner parser's hook.
@@ -170,6 +157,18 @@ function adaptShouldDeferCompletion<TState>(
   };
 }
 
+/**
+ * Creates a parser that makes another parser optional, allowing it to succeed
+ * without consuming input if the wrapped parser fails to match.
+ * If the wrapped parser succeeds, this returns its value.
+ * If the wrapped parser fails, this returns `undefined` without consuming input.
+ * @template M The execution mode of the parser.
+ * @template TValue The type of the value returned by the wrapped parser.
+ * @template TState The type of the state used by the wrapped parser.
+ * @param parser The {@link Parser} to make optional.
+ * @returns A {@link Parser} that produces either the result of the wrapped parser
+ *          or `undefined` if the wrapped parser fails to match.
+ */
 export function optional<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
 ): Parser<M, TValue | undefined, [TState] | undefined> {
