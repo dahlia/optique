@@ -1028,4 +1028,29 @@ describe("parser.ts coverage branches", () => {
     }
     assert.equal(doc.usage[1].type, "ellipsis");
   });
+
+  it("getDocPage applies command usageLine for top-level command without args", async () => {
+    const parser = command(
+      "config",
+      or(
+        command("get", constant("get")),
+        command("set", constant("set")),
+      ),
+      {
+        usageLine: [{ type: "ellipsis" }],
+      },
+    );
+
+    // No args — the page's own usage should still reflect the override.
+    const doc = await getDocPage(parser);
+    assert.ok(doc);
+    assert.ok(doc.usage);
+    const usage = doc.usage;
+    assert.equal(usage.length, 2);
+    assert.equal(usage[0].type, "command");
+    if (usage[0].type === "command") {
+      assert.equal(usage[0].name, "config");
+    }
+    assert.equal(usage[1].type, "ellipsis");
+  });
 });

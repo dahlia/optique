@@ -1044,6 +1044,19 @@ function buildDocPage(
     maybeApplyCommandUsageLine(term, arg, argIndex === args.length - 1, i);
     i++;
   }
+  // When no args navigate into a command, apply usageLine for the first
+  // bare command term (not inside an exclusive) so the page's own usage
+  // reflects the override.  This mirrors the navigated-command path above.
+  if (args.length === 0 && usage.length > 0) {
+    const first = usage[0];
+    if (first.type === "command" && first.usageLine != null) {
+      const defaultUsageLine = usage.slice(1);
+      const customUsageLine = typeof first.usageLine === "function"
+        ? first.usageLine(defaultUsageLine)
+        : first.usageLine;
+      usage.splice(1, usage.length - 1, ...normalizeUsage(customUsageLine));
+    }
+  }
   return {
     usage,
     sections,

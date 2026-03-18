@@ -772,6 +772,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/man
 
+ -  Fixed `formatDocPageAsMan()` to respect command `usageLine` overrides
+    in the SYNOPSIS section.  Previously, the man page formatter always
+    rendered the default command usage, ignoring custom `usageLine` values.
+    [[#237], [#593]]
+
  -  Changed `ManPageOptions.seeAlso[].section` type from `number` to
     `ManPageSection` and added runtime validation that rejects invalid section
     numbers (must be integers 1–8).  Previously, fractional or negative numbers
@@ -874,6 +879,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#197]: https://github.com/dahlia/optique/issues/197
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
+[#237]: https://github.com/dahlia/optique/issues/237
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#276]: https://github.com/dahlia/optique/issues/276
@@ -911,6 +917,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#578]: https://github.com/dahlia/optique/pull/578
 [#584]: https://github.com/dahlia/optique/pull/584
 [#586]: https://github.com/dahlia/optique/pull/586
+[#593]: https://github.com/dahlia/optique/pull/593
 
 
 Version 0.10.7
