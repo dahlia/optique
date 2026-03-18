@@ -422,8 +422,13 @@ ${
                             set -a items $item
                         end
                     end
-                    # Fish's * glob does not match dotfiles; add them explicitly
-                    if test "$hidden" = "1"
+                    # Fish's * glob does not match dotfiles; add them
+                    # explicitly when the basename is empty (i.e., $current
+                    # is "" or ends with "/"), because only then are * and
+                    # .* complementary.  When a non-empty basename is present
+                    # (e.g., "foo"), foo* already covers foo.txt, so foo.*
+                    # would just produce duplicates.
+                    if test "$hidden" = "1" -a \\( -z "$current" -o (string sub -s -1 -- $current) = "/" \\)
                         for item in $current.*
                             if test -f $item
                                 set -a items $item
@@ -437,7 +442,7 @@ ${
                             set -a items $item/
                         end
                     end
-                    if test "$hidden" = "1"
+                    if test "$hidden" = "1" -a \\( -z "$current" -o (string sub -s -1 -- $current) = "/" \\)
                         for item in $current.*
                             if test -d $item
                                 set -a items $item/
@@ -453,7 +458,7 @@ ${
                             set -a items $item
                         end
                     end
-                    if test "$hidden" = "1"
+                    if test "$hidden" = "1" -a \\( -z "$current" -o (string sub -s -1 -- $current) = "/" \\)
                         for item in $current.*
                             if test -d $item
                                 set -a items $item/

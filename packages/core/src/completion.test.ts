@@ -1649,8 +1649,16 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
         script.indexOf("# Create completion results for files"),
       );
 
-      // The script should use -Force with Get-ChildItem when $hidden is true
-      ok(fileBlock.includes("Force"));
+      // The script should use -Force with Get-ChildItem when $hidden is true:
+      // $forceParam is set from $hidden, then splatted into Get-ChildItem
+      ok(
+        /\$hidden\b[\s\S]*Force/.test(fileBlock),
+        "Expected Force parameter derived from $hidden.",
+      );
+      ok(
+        /Get-ChildItem\s+@forceParam/.test(fileBlock),
+        "Expected Get-ChildItem to use @forceParam splatting.",
+      );
     });
   });
 
@@ -2328,7 +2336,13 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
         const script = nu.generateScript("hidden-cli");
         const completions = testNuCompletion(script, "hidden-cli", tempDir);
 
-        if (completions.length > 0) {
+        if (completions.length === 0) {
+          // Fallback: verify the generated script uses ls -a for hidden files
+          ok(
+            script.includes("ls -a"),
+            "Generated Nushell script must enumerate hidden entries with ls -a.",
+          );
+        } else {
           // With hidden=1, hidden files must be included even without dot prefix
           ok(completions.some((c) => c.includes(".hidden")));
           ok(completions.some((c) => c.includes("visible.txt")));
