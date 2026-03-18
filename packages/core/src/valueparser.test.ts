@@ -6658,6 +6658,9 @@ describe("email()", () => {
         "junk <first@example.com> <second@example.com>",
       );
       assert.ok(!result2.success);
+
+      const result3 = parser.parse("Name <user@example.com> extra");
+      assert.ok(!result3.success);
     });
 
     it("should reject bare angle-bracket wrapper without display name", () => {
