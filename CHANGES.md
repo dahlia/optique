@@ -730,13 +730,19 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     caused help usage to render `[[--name STRING]]` instead of
     `[--name STRING]`.  [[#289], [#582]]
 
+ -  Fixed `prompt()` crashing with an internal `TypeError` when an unsupported
+    `type` value is passed at runtime through an untyped path.  It now throws
+    a clear `TypeError` with the invalid type name up front.  [[#386], [#612]]
+
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137
 [#151]: https://github.com/dahlia/optique/issues/151
 [#288]: https://github.com/dahlia/optique/issues/288
 [#289]: https://github.com/dahlia/optique/issues/289
+[#386]: https://github.com/dahlia/optique/issues/386
 [#540]: https://github.com/dahlia/optique/pull/540
 [#582]: https://github.com/dahlia/optique/pull/582
+[#612]: https://github.com/dahlia/optique/pull/612
 
 ### @optique/temporal
 

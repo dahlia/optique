@@ -723,9 +723,27 @@ export function prompt<M extends Mode, TValue, TState>(
    * @throws {Error} Rethrows unexpected prompt failures after converting
    *                 `ExitPromptError` cancellations into parse failures.
    */
+  const validPromptTypes: ReadonlySet<string> = new Set([
+    "confirm",
+    "number",
+    "input",
+    "password",
+    "editor",
+    "select",
+    "rawlist",
+    "expand",
+    "checkbox",
+  ]);
+
   async function executePrompt(): Promise<ValueParserResult<TValue>> {
     const prompts = getPromptFunctions();
     try {
+      if (!validPromptTypes.has(cfg.type)) {
+        throw new TypeError(
+          `Unsupported prompt type: ${(cfg as { readonly type: string }).type}`,
+        );
+      }
+
       // Prompter override (for testing)
       if ("prompter" in cfg && cfg.prompter != null) {
         const value = await cfg.prompter();
