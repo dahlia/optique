@@ -643,6 +643,59 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       }
     });
 
+    it("should preserve completions inside a hidden directory", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-inside-hidden-dir-"));
+
+      try {
+        // CLI that emits __FILE__:file without includeHidden
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "inner-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create a hidden directory with files inside
+        const hiddenDir = join(tempDir, ".config");
+        mkdirSync(hiddenDir);
+        writeFileSync(join(hiddenDir, "settings.json"), "");
+        writeFileSync(join(hiddenDir, ".secret"), "");
+
+        const script = bash.generateScript("inner-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("inner-cli" ".config/")
+COMP_CWORD=1
+_inner-cli 2>/dev/null
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find files inside the hidden directory
+        ok(completions.some((c) => c.includes("settings.json")));
+        // Hidden files inside a hidden directory should also appear
+        // since user explicitly navigated into .config/
+        ok(completions.some((c) => c.includes(".secret")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should preserve caller's dotglob setting after completion", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");

@@ -176,7 +176,8 @@ function _${programName} () {
       if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
 
       # Filter out hidden files unless requested
-      if [[ "$hidden" != "1" && "\${current##*/}" != .* ]]; then
+      local __current_base="\${current%/}"; __current_base="\${__current_base##*/}"
+      if [[ "$hidden" != "1" && "$__current_base" != .* ]]; then
         local filtered=()
         local __name
         for item in "\${COMPREPLY[@]}"; do
