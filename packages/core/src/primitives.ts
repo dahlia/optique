@@ -1991,6 +1991,7 @@ export function command<M extends Mode, T, TState>(
 
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
+    [Symbol.for("@optique/core/commandParser")]: true,
     $mode: parser.$mode,
     $valueType: [],
     $stateType: [],

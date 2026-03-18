@@ -1389,6 +1389,116 @@ describe("getDocPage", () => {
     assert.ok(commandDoc.usage && commandDoc.usage.length > 0);
   });
 
+  it("should show inner docs for top-level command with no args", () => {
+    const targetDesc = message`Target to build`;
+    const subParser = object({
+      target: option("--target", string({ metavar: "TARGET" }), {
+        description: targetDesc,
+      }),
+    });
+    const brief = message`Build the project`;
+    const footer = message`Examples: build --target x86`;
+    const parser = command("build", subParser, { brief, footer });
+
+    const doc = getDocPage(parser);
+    assert.ok(doc);
+
+    // Should have inner option entries, not just the command entry
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    const targetEntry = allEntries.find(
+      (e) => e.term.type === "option" && e.term.names.includes("--target"),
+    );
+    assert.ok(
+      targetEntry,
+      "Should have --target option entry from inner parser",
+    );
+    assert.deepEqual(targetEntry?.description, targetDesc);
+
+    // Should have brief and footer from the command
+    assert.ok(doc.brief);
+    assert.ok(doc.footer);
+  });
+
+  it("should show inner docs for top-level command with no args (async)", async () => {
+    const targetDesc = message`Target to build`;
+    const subParser = object({
+      target: option("--target", string({ metavar: "TARGET" }), {
+        description: targetDesc,
+      }),
+    });
+    const brief = message`Build the project`;
+    const footer = message`Examples: build --target x86`;
+    const parser = command("build", subParser, { brief, footer });
+
+    const doc = await getDocPageAsync(parser);
+    assert.ok(doc);
+
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    const targetEntry = allEntries.find(
+      (e) => e.term.type === "option" && e.term.names.includes("--target"),
+    );
+    assert.ok(
+      targetEntry,
+      "Should have --target option entry from inner parser",
+    );
+    assert.deepEqual(targetEntry?.description, targetDesc);
+    assert.ok(doc.brief);
+    assert.ok(doc.footer);
+  });
+
+  it("should not auto-navigate for exclusive command groups with no args", () => {
+    const parser = or(
+      command(
+        "build",
+        object({
+          target: option("--target", string()),
+        }),
+      ),
+      command("test", object({})),
+    );
+
+    const doc = getDocPage(parser);
+    assert.ok(doc);
+
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    const cmdEntries = allEntries.filter((e) => e.term.type === "command");
+    assert.ok(cmdEntries.length >= 2, "Should list both commands");
+    const optEntries = allEntries.filter((e) => e.term.type === "option");
+    assert.equal(optEntries.length, 0, "Should not show inner options");
+  });
+
+  it("should not synthesize state for non-command parsers with command entry", () => {
+    // A wrapper that forwards everything from a command() parser but strips
+    // the internal brand symbol.  buildDocPage must not try to call
+    // getDocFragments with ["matched", name] on such a wrapper.
+    const inner: Parser<"sync", unknown, unknown> = command(
+      "wrapped",
+      object({
+        opt: option("--opt", string()),
+      }),
+    );
+    const wrapper: Parser<"sync", unknown, unknown> = {
+      $mode: inner.$mode,
+      $valueType: inner.$valueType,
+      $stateType: inner.$stateType,
+      priority: inner.priority,
+      usage: inner.usage,
+      initialState: inner.initialState,
+      parse: (ctx) => inner.parse(ctx),
+      complete: (state) => inner.complete(state),
+      suggest: (ctx, prefix) => inner.suggest(ctx, prefix),
+      getDocFragments: (state, dv) => inner.getDocFragments(state, dv),
+    };
+
+    const doc = getDocPage(wrapper);
+    assert.ok(doc);
+    // Without the brand, the wrapper should NOT auto-navigate into
+    // the inner parser's options — it should show the single command entry.
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 1);
+    assert.equal(allEntries[0].term.type, "command");
+  });
+
   it("should show subcommand option descriptions with getDocPage", () => {
     const targetDesc = message`Target language code`;
     const sourceDesc = message`Source language code`;

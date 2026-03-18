@@ -414,6 +414,10 @@ To be released.
     Previously, unsupported values silently fell back to number mode.
     [[#368], [#589]]
 
+ -  Fixed `getDocPage()`/`getDocPageSync()`/`getDocPageAsync()` losing
+    inner option/argument documentation when called on a top-level `command()`
+    parser with no arguments.  [[#200], [#595]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -438,6 +442,7 @@ To be released.
 [#177]: https://github.com/dahlia/optique/issues/177
 [#178]: https://github.com/dahlia/optique/issues/178
 [#186]: https://github.com/dahlia/optique/issues/186
+[#200]: https://github.com/dahlia/optique/issues/200
 [#223]: https://github.com/dahlia/optique/issues/223
 [#224]: https://github.com/dahlia/optique/issues/224
 [#225]: https://github.com/dahlia/optique/issues/225
@@ -506,6 +511,7 @@ To be released.
 [#589]: https://github.com/dahlia/optique/pull/589
 [#590]: https://github.com/dahlia/optique/issues/590
 [#592]: https://github.com/dahlia/optique/pull/592
+[#595]: https://github.com/dahlia/optique/pull/595
 
 ### @optique/config
 

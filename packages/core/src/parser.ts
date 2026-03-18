@@ -961,10 +961,35 @@ function buildDocPage(
   context: ParserContext<unknown>,
   args: readonly string[],
 ): DocPage | undefined {
-  const { brief, description, fragments, footer } = parser.getDocFragments(
+  let effectiveArgs: readonly string[] = args;
+  let { brief, description, fragments, footer } = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,
   );
+  // When the doc root is a bare command() parser and no args navigated into
+  // it, the fragments contain only a single command entry instead of the
+  // inner parser's options/arguments.  Detect this case and re-invoke
+  // getDocFragments with the command's "matched" state so the inner docs are
+  // exposed.  The Symbol.for brand check ensures we only synthesize state
+  // for real command() parsers, not custom Parser implementations that happen
+  // to emit a single command entry.
+  // See: https://github.com/dahlia/optique/issues/200
+  if (
+    args.length === 0 &&
+    Reflect.get(parser, Symbol.for("@optique/core/commandParser")) ===
+      true &&
+    fragments.length === 1 &&
+    fragments[0].type === "entry" &&
+    fragments[0].term.type === "command"
+  ) {
+    const cmdName = fragments[0].term.name;
+    const matched = parser.getDocFragments(
+      { kind: "available", state: ["matched", cmdName] },
+      undefined,
+    );
+    ({ brief, description, fragments, footer } = matched);
+    effectiveArgs = [cmdName];
+  }
   // Build sections in the order that entries first appear in the fragment
   // stream, merging same-titled sections together.  This ensures that the
   // untitled (catch-all) section appears at its natural position in the
@@ -1030,8 +1055,8 @@ function buildDocPage(
     );
   };
   let i = 0;
-  for (let argIndex = 0; argIndex < args.length; argIndex++) {
-    const arg = args[argIndex];
+  for (let argIndex = 0; argIndex < effectiveArgs.length; argIndex++) {
+    const arg = effectiveArgs[argIndex];
     if (i >= usage.length) break;
     let term = usage[i];
     if (term.type === "exclusive") {
@@ -1041,13 +1066,18 @@ function buildDocPage(
         term = usage[i];
       }
     }
-    maybeApplyCommandUsageLine(term, arg, argIndex === args.length - 1, i);
+    maybeApplyCommandUsageLine(
+      term,
+      arg,
+      argIndex === effectiveArgs.length - 1,
+      i,
+    );
     i++;
   }
   // When no args navigate into a command, apply usageLine for the first
   // bare command term (not inside an exclusive) so the page's own usage
   // reflects the override.  This mirrors the navigated-command path above.
-  if (args.length === 0 && usage.length > 0) {
+  if (effectiveArgs.length === 0 && usage.length > 0) {
     const first = usage[0];
     if (first.type === "command" && first.usageLine != null) {
       const defaultUsageLine = usage.slice(1);
