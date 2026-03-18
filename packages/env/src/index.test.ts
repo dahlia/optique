@@ -254,6 +254,72 @@ describe("bindEnv()", () => {
     });
   });
 
+  describe("key validation", () => {
+    it("throws TypeError when key is an object", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: {} as never,
+            parser: string(),
+          }),
+        {
+          name: "TypeError",
+          message: "Expected key to be a string, but got: object.",
+        },
+      );
+    });
+
+    it("throws TypeError when key is null", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: null as never,
+            parser: string(),
+          }),
+        {
+          name: "TypeError",
+          message: "Expected key to be a string, but got: null.",
+        },
+      );
+    });
+
+    it("throws TypeError when key is a symbol", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: Symbol("KEY") as never,
+            parser: string(),
+          }),
+        {
+          name: "TypeError",
+          message: "Expected key to be a string, but got: symbol.",
+        },
+      );
+    });
+
+    it("throws TypeError when key is an array", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: [] as never,
+            parser: string(),
+          }),
+        {
+          name: "TypeError",
+          message: "Expected key to be a string, but got: array.",
+        },
+      );
+    });
+  });
+
   it("uses CLI value when provided", () => {
     const context = createEnvContext({
       source: (key) => ({ APP_PORT: "8080" })[key],

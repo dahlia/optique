@@ -123,6 +123,76 @@ describe("createConfigContext", () => {
 });
 
 describe("bindConfig", () => {
+  describe("key validation", () => {
+    test("throws TypeError when key is an object", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string() }),
+      });
+      assert.throws(
+        () =>
+          bindConfig(option("--name", string()), {
+            context,
+            key: {} as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected key to be a string or function, but got: object.",
+        },
+      );
+    });
+
+    test("throws TypeError when key is null", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string() }),
+      });
+      assert.throws(
+        () =>
+          bindConfig(option("--name", string()), {
+            context,
+            key: null as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected key to be a string or function, but got: null.",
+        },
+      );
+    });
+
+    test("throws TypeError when key is a symbol", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string() }),
+      });
+      assert.throws(
+        () =>
+          bindConfig(option("--name", string()), {
+            context,
+            key: Symbol("KEY") as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected key to be a string or function, but got: symbol.",
+        },
+      );
+    });
+
+    test("throws TypeError when key is an array", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string() }),
+      });
+      assert.throws(
+        () =>
+          bindConfig(option("--name", string()), {
+            context,
+            key: [] as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected key to be a string or function, but got: array.",
+        },
+      );
+    });
+  });
+
   test("uses CLI value when provided", () => {
     const schema = z.object({
       host: z.string(),
