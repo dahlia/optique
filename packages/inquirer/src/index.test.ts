@@ -19,7 +19,7 @@ import {
 } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { prompt, Separator } from "@optique/inquirer";
 import { bindConfig, createConfigContext } from "../../config/src/index.ts";
@@ -3996,7 +3996,24 @@ describe("prompt()", () => {
   });
 
   describe("prompt revalidation", () => {
-    it("rejects prompted number below min constraint", async () => {
+    it("accepts prompted value when map() transforms the domain", async () => {
+      const parser = prompt(
+        map(
+          option("--color", choice(["red", "green", "blue"])),
+          (c) => c.toUpperCase(),
+        ),
+        {
+          type: "input",
+          message: "color?",
+          prompter: () => Promise.resolve("RED"),
+        },
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "RED");
+    });
+
+    it("accepts prompted number outside inner constraint range", async () => {
       const parser = prompt(
         option("--port", integer({ min: 1024, max: 65535 })),
         {
@@ -4006,14 +4023,11 @@ describe("prompt()", () => {
         },
       );
       const result = await parseAsync(parser, []);
-      assert.ok(!result.success);
-      const errorText = result.error
-        .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
-        .join("");
-      assert.match(errorText, /1,?024/);
+      assert.ok(result.success);
+      assert.equal(result.value, 80);
     });
 
-    it("rejects prompted string not matching pattern", async () => {
+    it("accepts prompted string not matching inner pattern", async () => {
       const parser = prompt(
         option("--name", string({ pattern: /^[A-Z]+$/ })),
         {
@@ -4023,11 +4037,8 @@ describe("prompt()", () => {
         },
       );
       const result = await parseAsync(parser, []);
-      assert.ok(!result.success);
-      const errorText = result.error
-        .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
-        .join("");
-      assert.match(errorText, /pattern/i);
+      assert.ok(result.success);
+      assert.equal(result.value, "abc");
     });
 
     it("accepts prompted number within valid range", async () => {

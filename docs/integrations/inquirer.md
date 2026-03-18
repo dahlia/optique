@@ -544,6 +544,94 @@ Re-exported from Inquirer.js.  Use `new Separator(text?)` to add visual
 dividers in `select` and `checkbox` choice lists.
 
 
+Prompt and inner parser independence
+------------------------------------
+
+The CLI path and the prompt path are *independent value sources*.  When
+a value comes from the CLI, the inner parser's full constraint pipeline
+(value parsing, `choice()` domain checks, `integer({ min, max })`, etc.)
+is applied.  When a value comes from a prompt, it is used as-is — the
+inner parser's constraints are *not* re-applied.
+
+This design is intentional: combinators like `map()` can transform the
+value domain, making the prompted value incompatible with the inner
+parser's input path.  Treating the two paths independently avoids false
+rejections and keeps the architecture sound.
+
+As a consequence, any runtime validation you need on prompted values
+must be configured in the prompt config itself.  Some prompt types
+provide a `validate` option for this purpose.
+
+### Matching constraints between CLI and prompt
+
+When the inner parser carries constraints, you should mirror them in the
+prompt config.
+
+`number` prompt with `integer()` semantics
+:   Use `step: 1` to restrict the prompt to integers, and `min`/`max`
+    to match the inner parser's range.
+
+    ~~~~ typescript twoslash
+    import { option } from "@optique/core/primitives";
+    import { integer } from "@optique/core/valueparser";
+    import { prompt } from "@optique/inquirer";
+
+    const port = prompt(option("--port", integer({ min: 1024, max: 65535 })), {
+      type: "number",
+      message: "Enter the port:",
+      min: 1024,
+      max: 65535,
+      step: 1,
+    });
+    ~~~~
+
+`input` prompt with `string({ pattern })` semantics
+:   Use `validate` to enforce the same pattern.
+
+    ~~~~ typescript twoslash
+    import { option } from "@optique/core/primitives";
+    import { string } from "@optique/core/valueparser";
+    import { prompt } from "@optique/inquirer";
+
+    const id = prompt(option("--id", string({ pattern: /^[A-Z]{3}-\d+$/ })), {
+      type: "input",
+      message: "Enter the ID:",
+      validate: (value) =>
+        /^[A-Z]{3}-\d+$/.test(value) || "Must match AAA-123 format.",
+    });
+    ~~~~
+
+`select`/`rawlist`/`expand` with `choice()` values
+:   Keep the prompt `choices` array consistent with the inner parser's
+    `choice()` domain.  Ensuring this consistency is the caller's
+    responsibility.
+
+    ~~~~ typescript twoslash
+    import { option } from "@optique/core/primitives";
+    import { choice } from "@optique/core/valueparser";
+    import { prompt } from "@optique/inquirer";
+
+    const env = prompt(option("--env", choice(["dev", "staging", "prod"])), {
+      type: "select",
+      message: "Choose environment:",
+      choices: ["dev", "staging", "prod"],  // must match choice() values
+    });
+    ~~~~
+
+`checkbox` with `multiple()` cardinality
+:   The `checkbox` prompt type does not currently support a `validate`
+    callback, so cardinality constraints from `multiple(..., { min, max })`
+    cannot be enforced at the prompt level.  This is a known limitation;
+    prompted checkbox values may violate the inner parser's cardinality
+    bounds.
+
+> [!IMPORTANT]
+> `select`, `rawlist`, `expand`, and `checkbox` prompt types do not
+> expose a `validate` callback.  For these types, there is currently no
+> way to add custom runtime validation on prompted values.  This is a
+> known limitation that may be addressed in a future release.
+
+
 Limitations
 -----------
 
