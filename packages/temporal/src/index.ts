@@ -25,7 +25,7 @@ function ensureTemporal(): void {
  * - Two-level: `"Asia/Seoul"`, `"America/New_York"`, `"Europe/London"`
  * - Three-level: `"America/Argentina/Buenos_Aires"`,
  *   `"America/Kentucky/Louisville"`
- * - Standard single-segment: `"UTC"`, `"GMT"`, `"Universal"`
+ * - Standard single-segment: `"UTC"`, `"GMT"`, `"Factory"`, `"Universal"`
  * - POSIX abbreviations: `"EST"`, `"CET"`, `"EST5EDT"`
  * - Deprecated aliases: `"Japan"`, `"Singapore"`, `"Cuba"`
  *
@@ -49,6 +49,7 @@ export type TimeZone =
   | "Universal"
   | "Greenwich"
   | "Zulu"
+  | "Factory"
   | "EST"
   | "MST"
   | "HST"
