@@ -2966,6 +2966,42 @@ export function email(
     return lowercase ? resultEmail.toLowerCase() : resultEmail;
   }
 
+  /**
+   * Splits an input string on commas, respecting quoted segments and
+   * angle-bracket display-name syntax per RFC 5322.
+   */
+  function splitEmails(input: string): readonly string[] {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    let inAngleBrackets = false;
+    let escaped = false;
+    for (const char of input) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\" && inQuotes) {
+        escaped = true;
+      } else if (char === '"' && !inAngleBrackets) {
+        if (inQuotes) {
+          inQuotes = false;
+        } else if (current.trim() === "") {
+          inQuotes = true;
+        }
+      } else if (char === "<" && !inQuotes) {
+        inAngleBrackets = true;
+      } else if (char === ">" && !inQuotes) {
+        inAngleBrackets = false;
+      } else if (char === "," && !inQuotes && !inAngleBrackets) {
+        result.push(current);
+        current = "";
+        continue;
+      }
+      current += char;
+    }
+    result.push(current);
+    return result;
+  }
+
   return {
     $mode: "sync" as const,
     metavar,
@@ -2974,7 +3010,7 @@ export function email(
     ): ValueParserResult<string> | ValueParserResult<readonly string[]> {
       if (allowMultiple) {
         // Parse multiple emails separated by commas
-        const emails = input.split(",").map((e) => e.trim());
+        const emails = splitEmails(input).map((e) => e.trim());
         const validatedEmails: string[] = [];
 
         for (const email of emails) {
