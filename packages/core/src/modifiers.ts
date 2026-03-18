@@ -127,6 +127,37 @@ function processOptionalStyleResult<TState>(
 }
 
 /**
+ * Creates a `shouldDeferCompletion` adapter that unwraps the outer state
+ * shape (`[TState] | undefined`) used by {@link optional} and
+ * {@link withDefault} before delegating to the inner parser's hook.
+ *
+ * When state is an array, the adapter unwraps `state[0]` and propagates
+ * annotations from the outer array.  Non-array objects (e.g., PromptBindState
+ * from `prompt()`) are passed through directly.  `undefined` returns `false`
+ * without calling the inner hook.
+ *
+ * @internal
+ */
+function adaptShouldDeferCompletion<TState>(
+  innerCheck: (state: TState) => boolean,
+): (state: [TState] | undefined) => boolean {
+  return (state: [TState] | undefined): boolean => {
+    if (Array.isArray(state)) {
+      const inner = getAnnotations(state) != null &&
+          state[0] != null &&
+          typeof state[0] === "object"
+        ? inheritAnnotations(state, state[0]) as TState
+        : state[0];
+      return innerCheck(inner);
+    }
+    if (state != null && typeof state === "object") {
+      return innerCheck(state as unknown as TState);
+    }
+    return false;
+  };
+}
+
+/**
  * Creates a parser that makes another parser optional, allowing it to succeed
  * without consuming input if the wrapped parser fails to match.
  * If the wrapped parser succeeds, this returns its value.
@@ -210,11 +241,13 @@ export function optional<M extends Mode, TValue, TState>(
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     ...wrappedDependencyMarker,
-    // Forward completion deferral hook from inner parser so that
-    // prompt(optional(bindConfig(...))) defers correctly.
+    // Forward completion deferral hook from inner parser, adapting the
+    // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
-        shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
+        shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
+          parser.shouldDeferCompletion.bind(parser),
+        ),
       }
       : {}),
     parse(context: ParserContext<[TState] | undefined>) {
@@ -548,11 +581,13 @@ export function withDefault<
     usage: [{ type: "optional", terms: parser.usage }],
     initialState: undefined,
     ...wrappedDependencyMarker,
-    // Forward completion deferral hook from inner parser so that
-    // prompt(withDefault(bindConfig(...), val)) defers correctly.
+    // Forward completion deferral hook from inner parser, adapting the
+    // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
-        shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
+        shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
+          parser.shouldDeferCompletion.bind(parser),
+        ),
       }
       : {}),
     parse(context: ParserContext<[TState] | undefined>) {
