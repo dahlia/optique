@@ -700,7 +700,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     is needed.  [[#282], [#561]]
 
  -  Fixed `TimeZone` type to include single-segment IANA timezone identifiers
-    such as `"GMT"`, `"EST"`, `"Factory"`, and deprecated aliases like
+    such as `"GMT"`, `"EST"`, and deprecated aliases like
     `"Japan"` and `"Cuba"`.  These were already accepted at runtime by the
     `timeZone()` parser but excluded from the static type.  [[#304], [#596]]
 

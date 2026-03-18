@@ -478,12 +478,6 @@ describe("timeZone", () => {
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.equal(result.value, input);
     }
-
-    // "Factory" is valid on Deno's native Temporal but rejected by the
-    // @js-temporal/polyfill used in Node.js/Bun builds.  Verify it is at
-    // least assignable to TimeZone at the type level.
-    const _factory: TimeZone = "Factory";
-    void _factory;
   });
 
   it("should reject invalid timezone identifiers", () => {
