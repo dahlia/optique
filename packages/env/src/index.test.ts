@@ -1236,6 +1236,30 @@ describe("createEnvContext defaults", () => {
     }
   });
 
+  it("throws TypeError when source is not a function", () => {
+    assert.throws(
+      () => createEnvContext({ source: "nope" as never }),
+      {
+        name: "TypeError",
+        message: "Expected source to be a function, but got: string.",
+      },
+    );
+    assert.throws(
+      () => createEnvContext({ source: null as never }),
+      {
+        name: "TypeError",
+        message: "Expected source to be a function, but got: null.",
+      },
+    );
+    assert.throws(
+      () => createEnvContext({ source: [] as never }),
+      {
+        name: "TypeError",
+        message: "Expected source to be a function, but got: array.",
+      },
+    );
+  });
+
   it("falls back to process.env when Deno.env.get is unavailable", () => {
     const originalDeno = Object.getOwnPropertyDescriptor(globalThis, "Deno");
     const originalProcess = Object.getOwnPropertyDescriptor(
