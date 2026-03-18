@@ -687,6 +687,12 @@ export interface ConfigContext<T, TConfigMeta = ConfigMeta>
   readonly schema: StandardSchemaV1<unknown, T>;
 }
 
+function getTypeName(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
 function isStandardSchema(value: unknown): value is StandardSchemaV1 {
   if (
     value == null || (typeof value !== "object" && typeof value !== "function")
@@ -697,7 +703,12 @@ function isStandardSchema(value: unknown): value is StandardSchemaV1 {
   const standard: unknown = (value as Record<PropertyKey, unknown>)[
     "~standard"
   ];
-  if (standard == null || typeof standard !== "object") return false;
+  if (
+    standard == null ||
+    (typeof standard !== "object" && typeof standard !== "function")
+  ) {
+    return false;
+  }
   return typeof (standard as Record<string, unknown>).validate === "function";
 }
 
@@ -775,11 +786,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   if (!isStandardSchema(rawSchema)) {
     throw new TypeError(
       `Expected schema to be a Standard Schema object, but got: ${
-        rawSchema === null
-          ? "null"
-          : Array.isArray(rawSchema)
-          ? "array"
-          : typeof rawSchema
+        getTypeName(rawSchema)
       }.`,
     );
   }
@@ -789,11 +796,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   if (rawFileParser !== undefined && typeof rawFileParser !== "function") {
     throw new TypeError(
       `Expected fileParser to be a function, but got: ${
-        rawFileParser === null
-          ? "null"
-          : Array.isArray(rawFileParser)
-          ? "array"
-          : typeof rawFileParser
+        getTypeName(rawFileParser)
       }.`,
     );
   }
@@ -840,13 +843,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       }
       if (opts.load !== undefined && typeof opts.load !== "function") {
         throw new TypeError(
-          `Expected load to be a function, but got: ${
-            opts.load === null
-              ? "null"
-              : Array.isArray(opts.load)
-              ? "array"
-              : typeof opts.load
-          }.`,
+          `Expected load to be a function, but got: ${getTypeName(opts.load)}.`,
         );
       }
       if (
@@ -856,11 +853,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       ) {
         throw new TypeError(
           `Expected getConfigPath to be a function, but got: ${
-            opts.getConfigPath === null
-              ? "null"
-              : Array.isArray(opts.getConfigPath)
-              ? "array"
-              : typeof opts.getConfigPath
+            getTypeName(opts.getConfigPath)
           }.`,
         );
       }

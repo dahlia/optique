@@ -841,6 +841,20 @@ describe("createConfigContext input validation", () => {
     assert.ok(context != null);
   });
 
+  test("accepts callable ~standard property bag", () => {
+    const callableStandard = Object.assign(
+      () => {},
+      {
+        validate(value: unknown) {
+          return { value };
+        },
+      },
+    );
+    const schema = { "~standard": callableStandard };
+    const context = createConfigContext({ schema: schema as never });
+    assert.ok(context != null);
+  });
+
   test("rejects non-function fileParser", () => {
     const schema = z.object({ host: z.string() });
     assert.throws(
