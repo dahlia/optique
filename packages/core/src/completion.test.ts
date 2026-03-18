@@ -923,6 +923,54 @@ _globignore-cli 2>/dev/null
       }
     });
 
+    it("should preserve caller's set-but-empty GLOBIGNORE after completion", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-globignore-empty-"),
+      );
+
+      try {
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "globignore-empty-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "a.txt"), "");
+
+        const script = bash.generateScript("globignore-empty-cli");
+
+        // Set GLOBIGNORE to empty string (distinct from unset)
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+GLOBIGNORE=''
+COMP_WORDS=("globignore-empty-cli" "")
+COMP_CWORD=1
+_globignore-empty-cli 2>/dev/null
+if [[ \${GLOBIGNORE+x} == x && -z "$GLOBIGNORE" ]]; then
+  echo "globignore_empty_preserved"
+else
+  echo "globignore_empty_lost"
+fi
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(result.includes("globignore_empty_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should complete non-regular files in any mode", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");
