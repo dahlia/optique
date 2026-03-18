@@ -595,6 +595,12 @@ To be released.
     allowing private field access to work correctly through the sanitized
     view.  [[#307], [#558]]
 
+ -  `createConfigContext()` now validates `schema` and `fileParser` at
+    construction time, and `getAnnotations()` validates `load` and
+    `getConfigPath` types.  Malformed values now throw a `TypeError`
+    immediately instead of surfacing as late internal errors during
+    annotation loading.  [[#391], [#605]]
+
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
 [#155]: https://github.com/dahlia/optique/issues/155
@@ -603,7 +609,9 @@ To be released.
 [#162]: https://github.com/dahlia/optique/pull/162
 [#164]: https://github.com/dahlia/optique/pull/164
 [#259]: https://github.com/dahlia/optique/issues/259
+[#391]: https://github.com/dahlia/optique/issues/391
 [#549]: https://github.com/dahlia/optique/pull/549
+[#605]: https://github.com/dahlia/optique/pull/605
 
 ### @optique/env
 

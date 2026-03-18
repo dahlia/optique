@@ -687,6 +687,16 @@ export interface ConfigContext<T, TConfigMeta = ConfigMeta>
   readonly schema: StandardSchemaV1<unknown, T>;
 }
 
+function isStandardSchema(value: unknown): value is StandardSchemaV1 {
+  if (value == null || typeof value !== "object") return false;
+  if (!("~standard" in value)) return false;
+  const standard: unknown = (value as Record<PropertyKey, unknown>)[
+    "~standard"
+  ];
+  if (standard == null || typeof standard !== "object") return false;
+  return typeof (standard as Record<string, unknown>).validate === "function";
+}
+
 function isErrnoException(
   error: unknown,
 ): error is NodeJS.ErrnoException {
@@ -736,6 +746,8 @@ function validateWithSchema<T>(
  * @param options Configuration options including schema and optional file
  *   parser.
  * @returns A config context that can be used with `bindConfig()` and runners.
+ * @throws {TypeError} If `schema` is not a valid Standard Schema object.
+ * @throws {TypeError} If `fileParser` is provided but is not a function.
  * @since 0.10.0
  *
  * @example
@@ -754,12 +766,40 @@ function validateWithSchema<T>(
 export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   options: ConfigContextOptions<T>,
 ): ConfigContext<T, TConfigMeta> {
+  // Snapshot and validate schema
+  const rawSchema = options.schema;
+  if (!isStandardSchema(rawSchema)) {
+    throw new TypeError(
+      `Expected schema to be a Standard Schema object, but got: ${
+        rawSchema === null
+          ? "null"
+          : Array.isArray(rawSchema)
+          ? "array"
+          : typeof rawSchema
+      }.`,
+    );
+  }
+
+  // Snapshot and validate fileParser
+  const rawFileParser = options.fileParser;
+  if (rawFileParser !== undefined && typeof rawFileParser !== "function") {
+    throw new TypeError(
+      `Expected fileParser to be a function, but got: ${
+        rawFileParser === null
+          ? "null"
+          : Array.isArray(rawFileParser)
+          ? "array"
+          : typeof rawFileParser
+      }.`,
+    );
+  }
+
   // Create a unique ID for this context instance
   const contextId = Symbol(`@optique/config:${Math.random()}`);
 
   const context: ConfigContext<T, TConfigMeta> = {
     id: contextId,
-    schema: options.schema,
+    schema: rawSchema,
     mode: "dynamic",
     getInternalAnnotations(parsed: unknown, annotations: Annotations) {
       if (parsed === undefined) {
@@ -792,6 +832,31 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         throw new TypeError(
           "Either getConfigPath or load must be provided " +
             "in the runner options when using ConfigContext.",
+        );
+      }
+      if (opts.load !== undefined && typeof opts.load !== "function") {
+        throw new TypeError(
+          `Expected load to be a function, but got: ${
+            opts.load === null
+              ? "null"
+              : Array.isArray(opts.load)
+              ? "array"
+              : typeof opts.load
+          }.`,
+        );
+      }
+      if (
+        opts.getConfigPath !== undefined &&
+        typeof opts.getConfigPath !== "function"
+      ) {
+        throw new TypeError(
+          `Expected getConfigPath to be a function, but got: ${
+            opts.getConfigPath === null
+              ? "null"
+              : Array.isArray(opts.getConfigPath)
+              ? "array"
+              : typeof opts.getConfigPath
+          }.`,
         );
       }
 
@@ -831,7 +896,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         rawData: unknown,
         configMeta: TConfigMeta | undefined,
       ): Promise<Annotations> | Annotations => {
-        const validated = validateWithSchema(options.schema, rawData);
+        const validated = validateWithSchema(rawSchema, rawData);
         if (validated instanceof Promise) {
           return validated.then((configData) =>
             buildAnnotations(configData, configMeta)
@@ -871,8 +936,8 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
           // Parse file contents
           let rawData: unknown;
-          if (options.fileParser) {
-            rawData = options.fileParser(contents);
+          if (rawFileParser) {
+            rawData = rawFileParser(contents);
           } else {
             // Default to JSON
             const text = new TextDecoder().decode(contents);

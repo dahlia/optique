@@ -779,6 +779,117 @@ describe("bindConfig parity with bindEnv", () => {
   });
 });
 
+describe("createConfigContext input validation", () => {
+  test("rejects non-object schema", () => {
+    assert.throws(
+      () => createConfigContext({ schema: "not a schema" as never }),
+      {
+        name: "TypeError",
+        message:
+          "Expected schema to be a Standard Schema object, but got: string.",
+      },
+    );
+  });
+
+  test("rejects null schema", () => {
+    assert.throws(
+      () => createConfigContext({ schema: null as never }),
+      {
+        name: "TypeError",
+        message:
+          "Expected schema to be a Standard Schema object, but got: null.",
+      },
+    );
+  });
+
+  test("rejects object without ~standard property", () => {
+    assert.throws(
+      () => createConfigContext({ schema: {} as never }),
+      {
+        name: "TypeError",
+        message:
+          "Expected schema to be a Standard Schema object, but got: object.",
+      },
+    );
+  });
+
+  test("rejects array schema", () => {
+    assert.throws(
+      () => createConfigContext({ schema: [] as never }),
+      {
+        name: "TypeError",
+        message:
+          "Expected schema to be a Standard Schema object, but got: array.",
+      },
+    );
+  });
+
+  test("rejects non-function fileParser", () => {
+    const schema = z.object({ host: z.string() });
+    assert.throws(
+      () => createConfigContext({ schema, fileParser: "nope" as never }),
+      {
+        name: "TypeError",
+        message: "Expected fileParser to be a function, but got: string.",
+      },
+    );
+  });
+
+  test("rejects null fileParser", () => {
+    const schema = z.object({ host: z.string() });
+    assert.throws(
+      () => createConfigContext({ schema, fileParser: null as never }),
+      {
+        name: "TypeError",
+        message: "Expected fileParser to be a function, but got: null.",
+      },
+    );
+  });
+
+  test("rejects array fileParser", () => {
+    const schema = z.object({ host: z.string() });
+    assert.throws(
+      () => createConfigContext({ schema, fileParser: [] as never }),
+      {
+        name: "TypeError",
+        message: "Expected fileParser to be a function, but got: array.",
+      },
+    );
+  });
+
+  test("rejects non-function load in getAnnotations", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          { any: 1 },
+          { load: "nope" as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load to be a function, but got: string.",
+      },
+    );
+  });
+
+  test("rejects non-function getConfigPath in getAnnotations", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          { any: 1 },
+          { getConfigPath: "nope" as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected getConfigPath to be a function, but got: string.",
+      },
+    );
+  });
+});
+
 describe("createConfigContext error paths", () => {
   test("supports async Standard Schema validation result", async () => {
     const asyncSchema = {
