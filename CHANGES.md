@@ -435,6 +435,10 @@ To be released.
     containing multiple angle-bracket groups or bare `<email>` wrappers
     without a display name.  [[#338], [#611]]
 
+ -  Fixed `email({ lowercase: true })` lowercasing the entire address instead
+    of only the domain part; the local part (including quoted local parts)
+    is now preserved.  [[#352], [#614]]
+
  -  Fixed Bash completion scripts using `compgen -z` which is unsupported on
     macOS's default GNU Bash 3.2.  File and directory completions now use
     glob-based iteration instead, matching the pattern already used for
@@ -488,6 +492,7 @@ To be released.
 [#338]: https://github.com/dahlia/optique/issues/338
 [#341]: https://github.com/dahlia/optique/issues/341
 [#349]: https://github.com/dahlia/optique/issues/349
+[#352]: https://github.com/dahlia/optique/issues/352
 [#353]: https://github.com/dahlia/optique/issues/353
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
@@ -544,6 +549,7 @@ To be released.
 [#608]: https://github.com/dahlia/optique/pull/608
 [#610]: https://github.com/dahlia/optique/pull/610
 [#611]: https://github.com/dahlia/optique/pull/611
+[#614]: https://github.com/dahlia/optique/pull/614
 
 ### @optique/config
 

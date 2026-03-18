@@ -1085,18 +1085,20 @@ Domain matching is case-insensitive.
 
 ### Lowercase conversion
 
-Convert email addresses to lowercase with the `lowercase` option:
+Normalize the domain part of email addresses to lowercase with
+the `lowercase` option.  The local part is preserved as-is, since it is
+technically case-sensitive per RFC 5321.
 
 ~~~~ typescript twoslash
 import { email } from "@optique/core/valueparser";
 import { option } from "@optique/core";
 // ---cut-before---
-// Normalize email to lowercase
+// Normalize email domain to lowercase
 const normalizedEmail = option("--email", email({ lowercase: true }));
 ~~~~
 
 ~~~~ bash
-$ example --email "User@Example.COM"  # Returns: "user@example.com"
+$ example --email "User@Example.COM"  # Returns: "User@example.com"
 ~~~~
 
 ### Quoted local parts
