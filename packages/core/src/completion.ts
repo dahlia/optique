@@ -93,13 +93,15 @@ function _${programName} () {
       shopt -q dotglob && __dotglob_was_set=1
       shopt -q failglob && __failglob_was_set=1
       [[ $- == *f* ]] && __noglob_was_set=1
+      # Unset GLOBIGNORE before enabling dotglob because unsetting
+      # GLOBIGNORE implicitly clears dotglob in Bash
+      shopt -u failglob 2>/dev/null
+      set +f
+      unset GLOBIGNORE
       # Enable dotglob when hidden files are requested, or when the user
       # is already navigating inside a hidden directory (e.g., .config/)
       local __current_tail="\${current%/}"; __current_tail="\${__current_tail##*/}"
       if [[ "$hidden" == "1" || "$__current_tail" == .* ]]; then shopt -s dotglob; fi
-      shopt -u failglob 2>/dev/null
-      set +f
-      unset GLOBIGNORE
 
       # Expand tilde prefix for file globbing
       local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
