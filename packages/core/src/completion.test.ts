@@ -678,6 +678,103 @@ shopt -q failglob && echo "failglob_preserved" || echo "failglob_lost"
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should complete files even when noglob is set", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-noglob-"));
+
+      try {
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "noglob-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "hello.txt"), "");
+
+        const script = bash.generateScript("noglob-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+set -f
+COMP_WORDS=("noglob-cli" "")
+COMP_CWORD=1
+_noglob-cli 2>/dev/null
+printf "%s\\n" "\${COMPREPLY[@]}"
+[[ $- == *f* ]] && echo "noglob_preserved" || echo "noglob_lost"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(result.includes("hello.txt"));
+        ok(result.includes("noglob_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should complete non-regular files in any mode", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      // Skip on platforms without mkfifo
+      try {
+        runCommand("which", ["mkfifo"], { stdio: "pipe" });
+      } catch {
+        t.skip("mkfifo not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-any-fifo-"));
+
+      try {
+        // CLI that emits __FILE__:any (complete all filesystem entries)
+        const cliScript = `#!/bin/bash
+printf '__FILE__:any:::0\\n'
+`;
+        const cliPath = join(tempDir, "any-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "regular.txt"), "");
+        runCommand("mkfifo", [join(tempDir, "myfifo")]);
+
+        const script = bash.generateScript("any-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("any-cli" "")
+COMP_CWORD=1
+_any-cli 2>/dev/null
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes("regular.txt")));
+        ok(completions.some((c) => c.includes("myfifo")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("zsh shell completion", () => {

@@ -87,12 +87,16 @@ function _${programName} () {
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
 
-      # Save and adjust glob options for safe file completion
-      local __dotglob_was_set=0 __failglob_was_set=0
+      # Save and adjust glob/shell options for safe file completion
+      local __dotglob_was_set=0 __failglob_was_set=0 __noglob_was_set=0
+      local __saved_globignore="\${GLOBIGNORE-}"
       shopt -q dotglob && __dotglob_was_set=1
       shopt -q failglob && __failglob_was_set=1
+      [[ $- == *f* ]] && __noglob_was_set=1
       if [[ "$hidden" == "1" ]]; then shopt -s dotglob; fi
       shopt -u failglob 2>/dev/null
+      set +f
+      unset GLOBIGNORE
 
       # Generate file completions based on type
       case "$type" in
@@ -135,7 +139,7 @@ function _${programName} () {
             for item in "$current"*; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
-              elif [[ -f "$item" ]]; then
+              elif [[ -e "$item" || -L "$item" ]]; then
                 COMPREPLY+=("$item")
               fi
             done
@@ -143,9 +147,11 @@ function _${programName} () {
           ;;
       esac
 
-      # Restore glob options
+      # Restore glob/shell options
       if [[ "$__dotglob_was_set" == "0" ]]; then shopt -u dotglob; else shopt -s dotglob; fi
       if [[ "$__failglob_was_set" == "1" ]]; then shopt -s failglob; fi
+      if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
+      if [[ -n "$__saved_globignore" ]]; then GLOBIGNORE="$__saved_globignore"; fi
 
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "$current" != .* ]]; then
