@@ -555,6 +555,13 @@ Limitations
     are used.
  -  *Single prompt per field* — Each `prompt()` call runs the prompter
     exactly once per parse, even when used inside `object()`.
+ -  *No inner-parser constraint enforcement on prompted values* — Prompted
+    values bypass the inner parser's constraint pipeline (e.g.,
+    `integer({ min, max })` or `string({ pattern })`).  The prompter returns
+    a value of type `TValue` directly, which may belong to a different domain
+    than the inner parser's input — for example, when `map()` transforms the
+    value.  To validate prompted input at runtime, use the prompt config's
+    `validate` option.
  -  *TTY required* — Inquirer.js requires an interactive terminal (TTY).
     In non-interactive environments (CI pipelines, piped input), prompts
     will error.  Use the `prompter` override for non-interactive testing.
