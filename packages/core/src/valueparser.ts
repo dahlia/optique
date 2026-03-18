@@ -2868,6 +2868,19 @@ export function email(
       // The display name is a sequence of quoted strings (which may contain
       // angle brackets) and unquoted characters (which may not).  Rejects
       // bare <email>, multiple unquoted <...> groups, and trailing text.
+      //
+      // Regex breakdown:
+      //   ^                          start of string
+      //   (                          capture group 1: display name
+      //     (?:                        one or more of:
+      //       "(?:[^"\\]|\\.)*"          quoted string (may contain <> etc.)
+      //       |                          or
+      //       [^<>"]                     single char: not < > or "
+      //     )+
+      //   )
+      //   \s*                         optional whitespace before <
+      //   <([^<>]+)>                  capture group 2: email inside < >
+      //   $                           end of string
       const displayNameMatch = trimmed.match(
         /^((?:"(?:[^"\\]|\\.)*"|[^<>"])+)\s*<([^<>]+)>$/,
       );
