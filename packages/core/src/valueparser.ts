@@ -2994,6 +2994,14 @@ export function email(
       }
     }
 
+    // Reject IPv4-like dotted-quad domains (e.g., 192.168.0.1)
+    if (
+      domainLabels.length === 4 &&
+      domainLabels.every((label) => /^[0-9]+$/.test(label))
+    ) {
+      return null;
+    }
+
     // Return the email (preserve original form or extracted from display name)
     const resultEmail = emailAddr;
     if (!lowercase) return resultEmail;
