@@ -1361,11 +1361,15 @@ function classifyResult(
     const hasVersionOption = versionOptionNames.some((n) => args.includes(n));
     const hasVersionCommand = args.length > 0 &&
       versionCommandNames.includes(args[0]);
-    const hasHelpOption = helpOptionNames.some((n) => args.includes(n));
-    const hasHelpCommand = args.length > 0 &&
-      helpCommandNames.includes(args[0]);
     const hasCompletionCommand = args.length > 0 &&
       completionCommandNames.includes(args[0]);
+    const hasHelpOption = hasCompletionCommand
+      // Completion command detected: only check args[1] for help
+      ? helpOptionNames.length > 0 && args.length >= 2 &&
+        helpOptionNames.includes(args[1])
+      : helpOptionNames.some((n) => args.includes(n));
+    const hasHelpCommand = args.length > 0 &&
+      helpCommandNames.includes(args[0]);
 
     // Standard CLI behavior:
     // 1. `command --help` should show help for that command
@@ -1984,7 +1988,11 @@ export function runParser<
   // Exception: if a help option is present, let the parser handle it
   if (options.completion) {
     const hasHelpOption = helpOptionConfig
-      ? helpOptionNames.some((n) => args.includes(n))
+      ? (completionCommandConfig && completionCommandNames.includes(args[0]))
+        // Completion command detected: only check args[1] for help
+        ? args.length >= 2 && helpOptionNames.includes(args[1])
+        // No completion command: check all args
+        : helpOptionNames.some((n) => args.includes(n))
       : false;
 
     // Handle completion command format: "completion <shell> [args...]"
