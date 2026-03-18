@@ -249,7 +249,7 @@ describe("inheritAnnotations", () => {
     assert.equal(getAnnotations(result)?.[marker], "ok");
   });
 
-  it("should not mutate extensible non-plain objects", () => {
+  it("should clone non-plain objects and propagate annotations", () => {
     const marker = Symbol.for("@test/inherit-nonplain");
     const source = { [annotationKey]: { [marker]: "ok" } };
     class CustomState {
@@ -259,9 +259,13 @@ describe("inheritAnnotations", () => {
 
     const result = inheritAnnotations(source, target);
 
-    assert.equal(result, target);
-    assert.equal(result.value, 1);
+    // Should NOT mutate the original
+    assert.notEqual(result, target);
     assert.equal(getAnnotations(target), undefined);
+    // Should propagate annotations to the clone
+    assert.equal(getAnnotations(result)?.[marker], "ok");
+    // Clone should preserve the value
+    assert.equal(result.value, 1);
   });
 });
 
