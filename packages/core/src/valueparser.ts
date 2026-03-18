@@ -2884,7 +2884,18 @@ export function email(
       const displayNameMatch = trimmed.match(
         /^((?:"(?:[^"\\]|\\.)*"|[^<>"])+)\s*<([^<>]+)>$/,
       );
-      if (displayNameMatch && /\S/.test(displayNameMatch[1])) {
+      // Ensure the display name contains real content, not just quotes
+      // and whitespace (e.g., reject "" <email> and "   " <email>).
+      // Strip surrounding quotes from each quoted phrase before testing.
+      if (
+        displayNameMatch &&
+        /\S/.test(
+          displayNameMatch[1].replace(
+            /"((?:[^"\\]|\\.)*)"/g,
+            (_match, inner: string) => inner,
+          ),
+        )
+      ) {
         emailAddr = displayNameMatch[2].trim();
       }
     }

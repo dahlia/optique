@@ -6670,6 +6670,16 @@ describe("email()", () => {
       assert.ok(!result.success);
     });
 
+    it("should reject empty or whitespace-only quoted display names", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result1 = parser.parse('"" <user@example.com>');
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse('"   " <user@example.com>');
+      assert.ok(!result2.success);
+    });
+
     it("should accept well-formed display names with dots and hyphens", () => {
       const parser = email({ allowDisplayName: true });
 
