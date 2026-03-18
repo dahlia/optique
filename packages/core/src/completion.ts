@@ -87,10 +87,12 @@ function _${programName} () {
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
 
-      # Enable dotglob so globs match hidden files when requested
-      local __dotglob_was_set=0
+      # Save and adjust glob options for safe file completion
+      local __dotglob_was_set=0 __failglob_was_set=0
       shopt -q dotglob && __dotglob_was_set=1
+      shopt -q failglob && __failglob_was_set=1
       if [[ "$hidden" == "1" ]]; then shopt -s dotglob; fi
+      shopt -u failglob 2>/dev/null
 
       # Generate file completions based on type
       case "$type" in
@@ -141,7 +143,9 @@ function _${programName} () {
           ;;
       esac
 
+      # Restore glob options
       if [[ "$__dotglob_was_set" == "0" ]]; then shopt -u dotglob; else shopt -s dotglob; fi
+      if [[ "$__failglob_was_set" == "1" ]]; then shopt -s failglob; fi
 
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "$current" != .* ]]; then

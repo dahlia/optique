@@ -633,6 +633,51 @@ shopt -q dotglob && echo "dotglob_preserved" || echo "dotglob_lost"
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should not error when failglob is enabled and prefix has no matches", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-failglob-"));
+
+      try {
+        // CLI that emits __FILE__ directive
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "failglob-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const script = bash.generateScript("failglob-cli");
+
+        // Enable failglob, then complete with a prefix that matches nothing
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+shopt -s failglob
+COMP_WORDS=("failglob-cli" "nonexistent_prefix")
+COMP_CWORD=1
+_failglob-cli 2>&1
+echo "exit_status=\$?"
+shopt -q failglob && echo "failglob_preserved" || echo "failglob_lost"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(!result.includes("no match"));
+        ok(result.includes("exit_status=0"));
+        ok(result.includes("failglob_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("zsh shell completion", () => {
