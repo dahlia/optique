@@ -3025,7 +3025,7 @@ export function email(
           }
 
           // Check domain restriction
-          if (allowedDomains && allowedDomains.length > 0) {
+          if (allowedDomains != null) {
             const atIndex = validated.indexOf("@");
             const domain = validated.substring(atIndex + 1).toLowerCase();
             const isAllowed = allowedDomains.some((allowed) =>
@@ -3070,7 +3070,7 @@ export function email(
         }
 
         // Check domain restriction
-        if (allowedDomains && allowedDomains.length > 0) {
+        if (allowedDomains != null) {
           const atIndex = validated.indexOf("@");
           const domain = validated.substring(atIndex + 1).toLowerCase();
           const isAllowed = allowedDomains.some((allowed) =>
