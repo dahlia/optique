@@ -132,6 +132,7 @@ export interface ManPageOptions {
  *
  * @param date The date to format, or undefined.
  * @returns The formatted date string, or undefined.
+ * @throws {RangeError} If the given `Date` object is invalid.
  * @since 0.10.0
  */
 export function formatDateForMan(
@@ -139,6 +140,9 @@ export function formatDateForMan(
 ): string | undefined {
   if (date === undefined) return undefined;
   if (typeof date === "string") return date;
+  if (Number.isNaN(date.getTime())) {
+    throw new RangeError("Invalid Date object.");
+  }
 
   const months = [
     "January",

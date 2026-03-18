@@ -813,6 +813,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/man
 
+ -  Fixed `formatDateForMan()` to throw a `RangeError` for invalid `Date`
+    objects instead of formatting them as `"undefined NaN"`.  [[#266], [#607]]
+
  -  Fixed `formatDocPageAsMan()` to include `DocEntry.choices` in man page
     output.  Previously, available choices were silently dropped.
     [[#265], [#604]]
@@ -946,6 +949,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#261]: https://github.com/dahlia/optique/issues/261
 [#263]: https://github.com/dahlia/optique/issues/263
 [#265]: https://github.com/dahlia/optique/issues/265
+[#266]: https://github.com/dahlia/optique/issues/266
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#276]: https://github.com/dahlia/optique/issues/276
@@ -988,6 +992,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#601]: https://github.com/dahlia/optique/pull/601
 [#602]: https://github.com/dahlia/optique/pull/602
 [#604]: https://github.com/dahlia/optique/pull/604
+[#607]: https://github.com/dahlia/optique/pull/607
 
 
 Version 0.10.7

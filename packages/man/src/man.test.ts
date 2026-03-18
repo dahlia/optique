@@ -32,6 +32,10 @@ describe("formatDateForMan()", () => {
   it("returns undefined for undefined input", () => {
     assert.equal(formatDateForMan(undefined), undefined);
   });
+
+  it("throws RangeError for invalid Date object", () => {
+    assert.throws(() => formatDateForMan(new Date("invalid")), RangeError);
+  });
 });
 
 describe("formatUsageTermAsRoff()", () => {
@@ -598,6 +602,19 @@ describe("formatDocPageAsMan()", () => {
     });
     const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
     assert.equal(thLine, '.TH "MYAPP" 1');
+  });
+
+  it("throws RangeError for invalid Date object", () => {
+    const page: DocPage = { sections: [] };
+    assert.throws(
+      () =>
+        formatDocPageAsMan(page, {
+          name: "myapp",
+          section: 1,
+          date: new Date("invalid"),
+        }),
+      RangeError,
+    );
   });
 
   it("uses brief in NAME section", () => {
