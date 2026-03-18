@@ -99,16 +99,16 @@ function _${programName} () {
             done
           else
             # Complete files only, exclude directories
-            while IFS= read -r -d '' item; do
+            for item in "$current"*; do
               [[ -f "$item" ]] && COMPREPLY+=("$item")
-            done < <(compgen -f -z -- "$current")
+            done
           fi
           ;;
         directory)
           # Complete directories only
-          while IFS= read -r -d '' dir; do
-            COMPREPLY+=("$dir/")
-          done < <(compgen -d -z -- "$current")
+          for dir in "$current"*; do
+            [[ -d "$dir" ]] && COMPREPLY+=("$dir/")
+          done
           ;;
         any)
           # Complete both files and directories
@@ -125,13 +125,13 @@ function _${programName} () {
             done
           else
             # Complete files and directories, add slash to directories
-            while IFS= read -r -d '' item; do
+            for item in "$current"*; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
-              else
+              elif [[ -f "$item" ]]; then
                 COMPREPLY+=("$item")
               fi
-            done < <(compgen -f -z -- "$current")
+            done
           fi
           ;;
       esac

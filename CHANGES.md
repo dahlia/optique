@@ -435,6 +435,11 @@ To be released.
     containing multiple angle-bracket groups or bare `<email>` wrappers
     without a display name.  [[#338], [#611]]
 
+ -  Fixed Bash completion scripts using `compgen -z` which is unsupported on
+    macOS's default GNU Bash 3.2.  File and directory completions now use
+    glob-based iteration instead, matching the pattern already used for
+    extension-filtered completions.  [[#250], [#608]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -470,6 +475,7 @@ To be released.
 [#245]: https://github.com/dahlia/optique/issues/245
 [#248]: https://github.com/dahlia/optique/issues/248
 [#249]: https://github.com/dahlia/optique/issues/249
+[#250]: https://github.com/dahlia/optique/issues/250
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
 [#307]: https://github.com/dahlia/optique/issues/307
@@ -535,6 +541,7 @@ To be released.
 [#595]: https://github.com/dahlia/optique/pull/595
 [#599]: https://github.com/dahlia/optique/pull/599
 [#606]: https://github.com/dahlia/optique/pull/606
+[#608]: https://github.com/dahlia/optique/pull/608
 [#610]: https://github.com/dahlia/optique/pull/610
 [#611]: https://github.com/dahlia/optique/pull/611
 

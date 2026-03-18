@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
-import { deepStrictEqual, throws } from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { deepStrictEqual, ok, throws } from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -472,6 +472,73 @@ describe("completion module", () => {
       const encoded = Array.from(bash.encodeSuggestions(suggestions));
 
       deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0"]);
+    });
+
+    it("should not use compgen -z flag", () => {
+      const script = bash.generateScript("myapp");
+
+      // compgen -z is not supported on macOS default Bash 3.2
+      ok(!script.includes("compgen -z"));
+      ok(!script.includes("-z --"));
+    });
+
+    it("should complete files with native file completion in bash", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-file-completion-"));
+
+      try {
+        // Create a CLI that emits a __FILE__ directive for file completion
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "file-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create some test files
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir);
+        writeFileSync(join(srcDir, "main.ts"), "");
+        writeFileSync(join(srcDir, "util.ts"), "");
+        writeFileSync(join(tempDir, "README.md"), "");
+
+        const script = bash.generateScript("file-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("file-cli" "src/")
+COMP_CWORD=1
+_file-cli 2>&1
+if [ \${#COMPREPLY[@]} -gt 0 ]; then
+  printf "%s\\n" "\${COMPREPLY[@]}"
+else
+  echo "__NO_COMPLETIONS__"
+fi
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        // Should not contain error messages about -z flag
+        ok(!result.includes("invalid option"));
+        ok(!result.includes("compgen"));
+        // Should have found files in src/
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.length > 0);
+        ok(completions.some((c) => c.includes("main.ts")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
     });
   });
 
