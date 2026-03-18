@@ -4937,46 +4937,6 @@ describe("shouldDeferCompletion forwarding", () => {
     return parser;
   }
 
-  class CustomState {
-    constructor(public readonly value: string) {}
-  }
-
-  // Helper: create a sync parser whose state is a class instance
-  // (non-plain object) to test annotation propagation for class instances.
-  function createClassInstanceDeferrableParser(
-    deferResult: boolean | ((state: unknown) => boolean),
-  ) {
-    const receivedStates: unknown[] = [];
-    const base = option("--val", string());
-    const parser = {
-      ...base,
-      $valueType: [] as string[],
-      $stateType: [] as CustomState[],
-      initialState: new CustomState(""),
-      receivedStates,
-      parse(context: { buffer: readonly string[]; state: CustomState }) {
-        return {
-          success: true as const,
-          next: {
-            ...context,
-            state: new CustomState(context.buffer[0] ?? ""),
-          },
-          consumed: context.buffer.length > 0 ? 1 : 0,
-        };
-      },
-      complete(state: CustomState) {
-        return { success: true as const, value: state.value };
-      },
-      shouldDeferCompletion(state: CustomState): boolean {
-        receivedStates.push(state);
-        return typeof deferResult === "function"
-          ? deferResult(state)
-          : deferResult;
-      },
-    };
-    return parser;
-  }
-
   describe("optional() shouldDeferCompletion", () => {
     it("should unwrap outer state before delegating to inner hook", () => {
       const inner = createDeferrableParser(true);
@@ -5057,29 +5017,6 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.equal(inner.receivedStates.length, 1);
       assert.deepEqual(inner.receivedStates[0], otherState);
     });
-
-    it("should propagate annotations for class instance inner state", () => {
-      const inner = createClassInstanceDeferrableParser(true);
-      const outer = optional(
-        inner as unknown as Parser<
-          "sync",
-          string,
-          CustomState | undefined
-        >,
-      );
-
-      const annotations = { testCtx: "phase1" };
-      const innerState = new CustomState("hello");
-      const annotatedOuter = injectAnnotations(
-        [innerState] as [CustomState],
-        annotations,
-      );
-      outer.shouldDeferCompletion!(annotatedOuter);
-
-      assert.equal(inner.receivedStates.length, 1);
-      const received = inner.receivedStates[0];
-      assert.deepEqual(getAnnotations(received), annotations);
-    });
   });
 
   describe("withDefault() shouldDeferCompletion", () => {
@@ -5156,30 +5093,6 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.ok(result);
       assert.equal(inner.receivedStates.length, 1);
       assert.deepEqual(inner.receivedStates[0], otherState);
-    });
-
-    it("should propagate annotations for class instance inner state", () => {
-      const inner = createClassInstanceDeferrableParser(true);
-      const outer = withDefault(
-        inner as unknown as Parser<
-          "sync",
-          string,
-          CustomState | undefined
-        >,
-        "fallback",
-      );
-
-      const annotations = { testCtx: "phase1" };
-      const innerState = new CustomState("hello");
-      const annotatedOuter = injectAnnotations(
-        [innerState] as [CustomState],
-        annotations,
-      );
-      outer.shouldDeferCompletion!(annotatedOuter);
-
-      assert.equal(inner.receivedStates.length, 1);
-      const received = inner.receivedStates[0];
-      assert.deepEqual(getAnnotations(received), annotations);
     });
   });
 });

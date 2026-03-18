@@ -14,7 +14,6 @@ import {
   annotateFreshArray,
   getAnnotations,
   inheritAnnotations,
-  injectAnnotations,
   isInjectedAnnotationWrapper,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
@@ -144,23 +143,11 @@ function adaptShouldDeferCompletion<TState>(
 ): (state: [TState] | undefined) => boolean {
   return (state: [TState] | undefined): boolean => {
     if (Array.isArray(state)) {
-      const annotations = getAnnotations(state);
-      let inner: TState;
-      if (
-        annotations != null &&
-        state[0] != null &&
-        typeof state[0] === "object"
-      ) {
-        const propagated = inheritAnnotations(state, state[0]);
-        // inheritAnnotations is a no-op for non-plain objects (returns
-        // target unchanged), so fall back to injectAnnotations which
-        // creates a wrapper that getAnnotations() can read.
-        inner = (propagated === state[0]
-          ? injectAnnotations(state[0], annotations)
-          : propagated) as TState;
-      } else {
-        inner = state[0];
-      }
+      const inner = getAnnotations(state) != null &&
+          state[0] != null &&
+          typeof state[0] === "object"
+        ? inheritAnnotations(state, state[0]) as TState
+        : state[0];
       return innerCheck(inner);
     }
     if (state != null && typeof state === "object") {
