@@ -667,6 +667,10 @@ To be released.
     Promises, numbers, etc.) now throw a `TypeError` instead of crashing
     with a raw `path.resolve()` error.  [[#416], [#609]]
 
+ -  `bindConfig()` now throws a `TypeError` when `key` is neither
+    a string nor a function, instead of silently coercing the value.
+    [[#398], [#627]]
+
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
 [#155]: https://github.com/dahlia/optique/issues/155
@@ -676,10 +680,12 @@ To be released.
 [#164]: https://github.com/dahlia/optique/pull/164
 [#259]: https://github.com/dahlia/optique/issues/259
 [#391]: https://github.com/dahlia/optique/issues/391
+[#398]: https://github.com/dahlia/optique/issues/398
 [#416]: https://github.com/dahlia/optique/issues/416
 [#549]: https://github.com/dahlia/optique/pull/549
 [#605]: https://github.com/dahlia/optique/pull/605
 [#609]: https://github.com/dahlia/optique/pull/609
+[#627]: https://github.com/dahlia/optique/pull/627
 
 ### @optique/env
 
@@ -704,6 +710,10 @@ environment variable integration via source contexts.  [[#86], [#135]]
  -  `createEnvContext()` now throws a `TypeError` when `source` is not
     a function, instead of deferring the crash to environment lookup time.
     [[#390], [#600]]
+
+ -  `bindEnv()` now throws a `TypeError` when `key` is not a string,
+    instead of deferring the crash to environment lookup time.
+    [[#398], [#627]]
 
 [#86]: https://github.com/dahlia/optique/issues/86
 [#135]: https://github.com/dahlia/optique/pull/135
