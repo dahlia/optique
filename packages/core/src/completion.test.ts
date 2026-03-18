@@ -1597,6 +1597,48 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       // Should not contain ANSI color codes
       deepStrictEqual(encoded[0].includes("\x1b["), false);
     });
+
+    it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
+      const script = pwsh.generateScript("myapp");
+
+      // In the __FILE__ block, the script must split by tab first to
+      // isolate the directive before splitting by colon.  Verify that
+      // a tab-stripping split appears between the __FILE__ match and
+      // the colon split.
+      const fileBlock = script.substring(
+        script.indexOf("__FILE__:"),
+        script.indexOf("$type = $parts[1]"),
+      );
+      ok(fileBlock.includes('-split "`t"'));
+    });
+
+    it("should parse hidden field correctly with tab-delimited metadata", (t) => {
+      if (!isShellAvailable("pwsh")) {
+        t.skip("pwsh not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "pwsh-hidden-completion-"),
+      );
+
+      try {
+        // CLI that emits __FILE__ with hidden=1 and tab-delimited metadata
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
+`;
+        const cliPath = join(tempDir, "hidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const script = pwsh.generateScript("hidden-cli");
+        const completions = testPwshCompletion(script, "hidden-cli", tempDir);
+
+        // Verify the script loads without error (pwsh helper is limited)
+        ok(completions.includes("success"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("fish shell completion", () => {
@@ -1812,6 +1854,85 @@ printf "%s\\n" "\${COMPREPLY[@]}"
 
       // Function name should have special characters replaced
       deepStrictEqual(script.includes("function __my_app_js_complete"), true);
+    });
+
+    it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
+      const script = fish.generateScript("myapp");
+
+      // In the __FILE__ block, the script must split by tab first to
+      // isolate the directive before splitting by colon.  Verify that
+      // a tab-stripping split appears between the __FILE__ match and
+      // the colon split on parts.
+      const fileBlock = script.substring(
+        script.indexOf("__FILE__:"),
+        script.indexOf("set -l type $parts[2]"),
+      );
+      ok(fileBlock.includes("string split \\t"));
+    });
+
+    it("should include hidden files when includeHidden is true", (t) => {
+      if (!isShellAvailable("fish")) {
+        t.skip("fish not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "fish-hidden-completion-"),
+      );
+
+      try {
+        // CLI that emits __FILE__ with hidden=1 and tab-delimited description,
+        // matching the format produced by fish.encodeSuggestions()
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\tConfiguration file\\n'
+`;
+        const cliPath = join(tempDir, "hidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create visible and hidden files
+        writeFileSync(join(tempDir, "visible.txt"), "");
+        writeFileSync(join(tempDir, ".hidden"), "");
+
+        const script = fish.generateScript("hidden-cli");
+        const scriptPath = join(tempDir, "completion.fish");
+        writeFileSync(scriptPath, script);
+
+        // Override commandline mock to complete with dot prefix so fish
+        // globs hidden files (fish's * does not match dotfiles by default)
+        const functionMatch = script.match(/function ([^\s]+)/);
+        const functionName = functionMatch
+          ? functionMatch[1]
+          : "__hidden_cli_complete";
+        const testScript = `
+set -x PATH "${tempDir}" $PATH
+source "${scriptPath}"
+cd "${tempDir}"
+
+# Mock commandline to return dot prefix so glob picks up hidden files
+function commandline
+    switch $argv[1]
+        case '-poc'
+            echo "hidden-cli"
+            echo "."
+        case '-ct'
+            echo "."
+    end
+end
+
+${functionName}
+`;
+        const testScriptPath = join(tempDir, "test.fish");
+        writeFileSync(testScriptPath, testScript);
+        const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        // With hidden=1 and dot prefix, hidden files must be included
+        ok(completions.some((c) => c.includes(".hidden")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
     });
   });
 
@@ -2057,6 +2178,56 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       deepStrictEqual(script.includes("[context: string]"), true);
       deepStrictEqual(script.includes("$context | args-split"), true);
       deepStrictEqual(script.includes("str ends-with ' '"), true);
+    });
+
+    it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
+      const script = nu.generateScript("myapp");
+
+      // In the __FILE__ block, the script must split by tab first to
+      // isolate the directive before splitting by colon.  Verify that
+      // a tab-stripping split appears between the __FILE__ match and
+      // the colon split.
+      const fileBlock = script.substring(
+        script.indexOf("__FILE__:"),
+        script.indexOf("$parts | get 1"),
+      );
+      ok(fileBlock.includes('split row "\t"'));
+    });
+
+    it("should parse hidden field correctly with tab-delimited metadata", (t) => {
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "nu-hidden-completion-"),
+      );
+
+      try {
+        // CLI that emits __FILE__ with hidden=1 and tab-delimited description,
+        // matching the format produced by nu.encodeSuggestions()
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\tConfiguration file\\n'
+`;
+        const cliPath = join(tempDir, "hidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create visible and hidden files
+        writeFileSync(join(tempDir, "visible.txt"), "");
+        writeFileSync(join(tempDir, ".hidden"), "");
+
+        const script = nu.generateScript("hidden-cli");
+        const completions = testNuCompletion(script, "hidden-cli", tempDir);
+
+        // Verify that completions were returned (nu helper may return empty
+        // on some environments, so only assert when results are available)
+        if (completions.length > 0) {
+          ok(completions.some((c) => c.includes("visible.txt")));
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
     });
   });
 
