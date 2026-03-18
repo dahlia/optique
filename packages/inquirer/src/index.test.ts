@@ -4007,6 +4007,10 @@ describe("prompt()", () => {
       );
       const result = await parseAsync(parser, []);
       assert.ok(!result.success);
+      const errorText = result.error
+        .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
+        .join("");
+      assert.match(errorText, /1,?024/);
     });
 
     it("rejects prompted string not matching pattern", async () => {
@@ -4020,6 +4024,10 @@ describe("prompt()", () => {
       );
       const result = await parseAsync(parser, []);
       assert.ok(!result.success);
+      const errorText = result.error
+        .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
+        .join("");
+      assert.match(errorText, /pattern/i);
     });
 
     it("accepts prompted number within valid range", async () => {
