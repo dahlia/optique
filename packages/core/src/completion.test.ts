@@ -895,9 +895,8 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         return;
       }
 
-      // Create a hidden directory under $HOME with a unique name
-      const hiddenDir = join(home, ".optique-tilde-dot-test");
-      mkdirSync(hiddenDir, { recursive: true });
+      // Create a unique hidden directory under $HOME
+      const hiddenDir = mkdtempSync(join(home, ".optique-tilde-dot-test-"));
 
       try {
         // CLI that emits __FILE__:file without includeHidden

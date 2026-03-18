@@ -168,10 +168,12 @@ function _${programName} () {
       fi
 
       # Restore glob/shell options
+      # Restore GLOBIGNORE before dotglob because assigning GLOBIGNORE
+      # implicitly enables dotglob in Bash
+      if [[ -n "$__saved_globignore" ]]; then GLOBIGNORE="$__saved_globignore"; fi
       if [[ "$__dotglob_was_set" == "0" ]]; then shopt -u dotglob; else shopt -s dotglob; fi
       if [[ "$__failglob_was_set" == "1" ]]; then shopt -s failglob; fi
       if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
-      if [[ -n "$__saved_globignore" ]]; then GLOBIGNORE="$__saved_globignore"; fi
 
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "\${current##*/}" != .* ]]; then
