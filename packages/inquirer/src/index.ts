@@ -842,6 +842,13 @@ export function prompt<M extends Mode, TValue, TState>(
               choices: normalizeChoices(cfg.choices),
             }) as TValue,
           };
+
+        default:
+          throw new TypeError(
+            `Unsupported prompt type: ${
+              (cfg as { readonly type: string }).type
+            }`,
+          );
       }
     } catch (error) {
       if (isExitPromptError(error)) {

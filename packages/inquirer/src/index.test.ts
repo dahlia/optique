@@ -571,6 +571,22 @@ describe("prompt()", () => {
         },
       );
     });
+
+    it("rejects unsupported prompt type at runtime", async () => {
+      const parser = prompt(fail<string>(), {
+        type: "mystery" as never,
+        message: "x",
+      });
+
+      await assert.rejects(
+        () => parseAsync(parser, []),
+        (error: unknown) => {
+          assert.ok(error instanceof TypeError);
+          assert.match(error.message, /mystery/);
+          return true;
+        },
+      );
+    });
   });
 
   describe("object() composition", () => {
