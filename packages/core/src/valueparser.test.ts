@@ -6688,6 +6688,16 @@ describe("email()", () => {
       assert.ok(result2.success);
       assert.strictEqual(result2.value, "john@example.com");
     });
+
+    it("should accept quoted display names containing angle brackets", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result = parser.parse(
+        '"Team <Ops>" <alerts@example.com>',
+      );
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "alerts@example.com");
+    });
   });
 
   describe("lowercase option", () => {
