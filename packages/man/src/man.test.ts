@@ -1289,6 +1289,72 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("[safe]"));
   });
 
+  it("handles entries with choices", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--mode"], metavar: "MODE" },
+          description: message`Select mode.`,
+          choices: message`fast, slow`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes("Select mode."));
+    assert.ok(result.includes("(choices: fast, slow)"));
+  });
+
+  it("renders choices when description is omitted", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--mode"], metavar: "MODE" },
+          choices: message`fast, slow`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("\\fB\\-\\-mode\\fR \\fIMODE\\fR"));
+    assert.ok(result.includes("(choices: fast, slow)"));
+  });
+
+  it("handles entries with both default and choices", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--port"], metavar: "NUM" },
+          description: message`Port to listen on.`,
+          default: message`8080`,
+          choices: message`80, 443, 8080`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes("Port to listen on."));
+    assert.ok(result.includes("[8080]"));
+    assert.ok(result.includes("(choices: 80, 443, 8080)"));
+  });
+
   it("supports usage formatter fallback for doc entry terms", () => {
     const section: DocSection = {
       title: "Examples",

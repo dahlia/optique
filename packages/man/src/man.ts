@@ -485,9 +485,19 @@ function formatDocSectionEntries(section: DocSection): string {
       if (entry.default) {
         desc += ` [${formatMessageAsRoff(entry.default)}]`;
       }
+      if (entry.choices) {
+        desc += ` (choices: ${formatMessageAsRoff(entry.choices)})`;
+      }
       lines.push(desc);
-    } else if (entry.default) {
-      lines.push(`[${formatMessageAsRoff(entry.default)}]`);
+    } else if (entry.default || entry.choices) {
+      const parts: string[] = [];
+      if (entry.default) {
+        parts.push(`[${formatMessageAsRoff(entry.default)}]`);
+      }
+      if (entry.choices) {
+        parts.push(`(choices: ${formatMessageAsRoff(entry.choices)})`);
+      }
+      lines.push(parts.join(" "));
     }
   }
 

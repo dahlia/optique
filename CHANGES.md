@@ -801,6 +801,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/man
 
+ -  Fixed `formatDocPageAsMan()` to include `DocEntry.choices` in man page
+    output.  Previously, available choices were silently dropped.
+    [[#265], [#604]]
+
  -  Fixed `formatDocPageAsMan()` to fall back to `DocPage.examples`,
     `DocPage.author`, and `DocPage.bugs` when the corresponding
     `ManPageOptions` fields are absent.  Previously, those page-level
@@ -929,6 +933,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#260]: https://github.com/dahlia/optique/issues/260
 [#261]: https://github.com/dahlia/optique/issues/261
 [#263]: https://github.com/dahlia/optique/issues/263
+[#265]: https://github.com/dahlia/optique/issues/265
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#276]: https://github.com/dahlia/optique/issues/276
@@ -970,6 +975,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#598]: https://github.com/dahlia/optique/pull/598
 [#601]: https://github.com/dahlia/optique/pull/601
 [#602]: https://github.com/dahlia/optique/pull/602
+[#604]: https://github.com/dahlia/optique/pull/604
 
 
 Version 0.10.7
