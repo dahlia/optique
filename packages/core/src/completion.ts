@@ -174,10 +174,10 @@ function _${programName} () {
       if [[ -n "$__saved_globignore" ]]; then GLOBIGNORE="$__saved_globignore"; fi
 
       # Filter out hidden files unless requested
-      if [[ "$hidden" != "1" && "$(basename -- "$current")" != .* ]]; then
+      if [[ "$hidden" != "1" && "\${current##*/}" != .* ]]; then
         local filtered=()
         for item in "\${COMPREPLY[@]}"; do
-          [[ "$(basename -- "$item")" != .* ]] && filtered+=("$item")
+          [[ "\${item##*/}" != .* ]] && filtered+=("$item")
         done
         COMPREPLY=("\${filtered[@]}")
       fi
