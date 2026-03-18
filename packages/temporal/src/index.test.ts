@@ -498,6 +498,23 @@ describe("timeZone", () => {
     }
   });
 
+  it("should reject single-segment IDs not in the allowlist", () => {
+    // These may be accepted by some Temporal implementations but are not
+    // in the cross-runtime TimeZone allowlist.
+    const nonAllowlisted = [
+      "Factory",
+      "CST",
+      "PST",
+      "AST",
+      "SST",
+    ];
+
+    for (const input of nonAllowlisted) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
+    }
+  });
+
   it("should format timezone values correctly", () => {
     const timezone: TimeZone = "Asia/Seoul";
     const formatted = parser.format(timezone);

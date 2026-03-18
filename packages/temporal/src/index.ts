@@ -665,6 +665,59 @@ export function plainMonthDay(
 }
 
 /**
+ * Single-segment IANA timezone identifiers accepted across all supported
+ * runtimes (Deno, Node.js, Bun).  Used by {@link timeZone} to gate
+ * single-segment inputs so the parser never returns values outside the
+ * {@link TimeZone} type.
+ */
+const singleSegmentTimeZones: ReadonlySet<string> = new Set([
+  "UTC",
+  "GMT",
+  "GMT0",
+  "GMT+0",
+  "GMT-0",
+  "UCT",
+  "Universal",
+  "Greenwich",
+  "Zulu",
+  "EST",
+  "MST",
+  "HST",
+  "CET",
+  "MET",
+  "WET",
+  "EET",
+  "EST5EDT",
+  "CST6CDT",
+  "MST7MDT",
+  "PST8PDT",
+  "Cuba",
+  "Egypt",
+  "Eire",
+  "GB",
+  "GB-Eire",
+  "Hongkong",
+  "Iceland",
+  "Iran",
+  "Israel",
+  "Jamaica",
+  "Japan",
+  "Kwajalein",
+  "Libya",
+  "Navajo",
+  "NZ",
+  "NZ-CHAT",
+  "Poland",
+  "Portugal",
+  "PRC",
+  "ROC",
+  "ROK",
+  "Singapore",
+  "Turkey",
+  "W-SU",
+]);
+
+/**
  * Creates a ValueParser for parsing IANA Time Zone Database identifiers.
  *
  * Accepts strings like:
@@ -673,6 +726,8 @@ export function plainMonthDay(
  * - `"America/New_York"`
  * - `"Europe/London"`
  * - `"UTC"`
+ * - `"GMT"`
+ * - `"EST"`
  *
  * @param options Configuration options for the timezone parser.
  * @returns A ValueParser that parses and validates timezone identifiers.
@@ -698,6 +753,13 @@ export function timeZone(
           day: 1,
           timeZone: input,
         });
+        // For single-segment identifiers (no "/"), only accept those
+        // in the curated allowlist to ensure cross-runtime consistency.
+        // Some Temporal implementations accept identifiers (e.g.,
+        // "Factory") that others reject.
+        if (!input.includes("/") && !singleSegmentTimeZones.has(input)) {
+          throw new RangeError();
+        }
         return { success: true, value: input as TimeZone };
       } catch {
         return {
