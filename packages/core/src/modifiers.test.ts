@@ -4955,6 +4955,30 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.deepEqual(inner.receivedStates[0], innerState);
     });
 
+    it("should propagate annotations from outer array to inner state", () => {
+      const inner = createDeferrableParser(true);
+      const outer = optional(inner);
+
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "hello",
+      };
+      const annotations = { testCtx: "phase1" };
+      const annotatedOuter = injectAnnotations(
+        [innerState] as [ValueParserResult<string>],
+        annotations,
+      );
+      outer.shouldDeferCompletion!(annotatedOuter);
+
+      assert.equal(inner.receivedStates.length, 1);
+      const received = inner.receivedStates[0];
+      assert.ok(received != null && typeof received === "object");
+      assert.deepEqual(
+        getAnnotations(received as Record<PropertyKey, unknown>),
+        annotations,
+      );
+    });
+
     it("should return false when outer state is undefined", () => {
       const inner = createDeferrableParser(true);
       const outer = optional(inner);
@@ -5009,6 +5033,30 @@ describe("shouldDeferCompletion forwarding", () => {
 
       assert.equal(inner.receivedStates.length, 1);
       assert.deepEqual(inner.receivedStates[0], innerState);
+    });
+
+    it("should propagate annotations from outer array to inner state", () => {
+      const inner = createDeferrableParser(true);
+      const outer = withDefault(inner, "fallback");
+
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "hello",
+      };
+      const annotations = { testCtx: "phase1" };
+      const annotatedOuter = injectAnnotations(
+        [innerState] as [ValueParserResult<string>],
+        annotations,
+      );
+      outer.shouldDeferCompletion!(annotatedOuter);
+
+      assert.equal(inner.receivedStates.length, 1);
+      const received = inner.receivedStates[0];
+      assert.ok(received != null && typeof received === "object");
+      assert.deepEqual(
+        getAnnotations(received as Record<PropertyKey, unknown>),
+        annotations,
+      );
     });
 
     it("should return false when outer state is undefined", () => {
