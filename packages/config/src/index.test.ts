@@ -936,6 +936,76 @@ describe("createConfigContext input validation", () => {
     );
     assert.ok(result != null);
   });
+
+  test("rejects non-string getConfigPath() return value (object)", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { getConfigPath: (() => ({ path: "./foo.json" })) as never },
+        ),
+      {
+        name: "TypeError",
+        message:
+          "Expected getConfigPath() to return a string or undefined, but got: object.",
+      },
+    );
+  });
+
+  test("rejects non-string getConfigPath() return value (Promise)", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            getConfigPath: (() => Promise.resolve("./foo.json")) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message:
+          "Expected getConfigPath() to return a string or undefined, but got: object.",
+      },
+    );
+  });
+
+  test("rejects non-string getConfigPath() return value (null)", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { getConfigPath: (() => null) as never },
+        ),
+      {
+        name: "TypeError",
+        message:
+          "Expected getConfigPath() to return a string or undefined, but got: null.",
+      },
+    );
+  });
+
+  test("rejects non-string getConfigPath() return value (number)", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { getConfigPath: (() => 123) as never },
+        ),
+      {
+        name: "TypeError",
+        message:
+          "Expected getConfigPath() to return a string or undefined, but got: number.",
+      },
+    );
+  });
 });
 
 describe("createConfigContext error paths", () => {

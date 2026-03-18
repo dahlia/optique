@@ -613,6 +613,11 @@ To be released.
     immediately instead of surfacing as late internal errors during
     annotation loading.  [[#391], [#605]]
 
+ -  `createConfigContext()` now validates that `getConfigPath()` returns
+    a string or `undefined` at runtime.  Malformed return values (objects,
+    Promises, numbers, etc.) now throw a `TypeError` instead of crashing
+    with a raw `path.resolve()` error.  [[#416], [#609]]
+
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
 [#155]: https://github.com/dahlia/optique/issues/155
@@ -622,8 +627,10 @@ To be released.
 [#164]: https://github.com/dahlia/optique/pull/164
 [#259]: https://github.com/dahlia/optique/issues/259
 [#391]: https://github.com/dahlia/optique/issues/391
+[#416]: https://github.com/dahlia/optique/issues/416
 [#549]: https://github.com/dahlia/optique/pull/549
 [#605]: https://github.com/dahlia/optique/pull/605
+[#609]: https://github.com/dahlia/optique/pull/609
 
 ### @optique/env
 
