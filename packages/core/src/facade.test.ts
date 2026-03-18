@@ -3128,6 +3128,106 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(helpOutput.includes("\n  Nushell:"));
     });
 
+    it("should not treat --help in completion payload as help request", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "--", "--help"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            command: true,
+            option: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(completionShown, "completion callback should be called");
+      assert.ok(!helpShown, "help callback should not be called");
+    });
+
+    it("should not treat --help after shell arg as help request", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "git", "--help"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(completionShown, "completion callback should be called");
+      assert.ok(!helpShown, "help callback should not be called");
+    });
+
+    it("should not treat custom help name in completion payload as help request", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "--", "--assist"],
+        {
+          help: {
+            option: { names: ["--assist"] },
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(completionShown, "completion callback should be called");
+      assert.ok(!helpShown, "help callback should not be called");
+    });
+
     it("should support --completions (plural) option", () => {
       const parser = object({
         verbose: option("--verbose"),

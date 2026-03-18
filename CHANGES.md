@@ -418,6 +418,11 @@ To be released.
     inner option/argument documentation when called on a top-level `command()`
     parser with no arguments.  [[#200], [#595]]
 
+ -  Fixed `runParser()` crashing or showing help instead of handling completion
+    when help-option names (e.g., `--help`) appear inside completion payloads.
+    Help-option scanning now only checks the argument immediately after the
+    completion command name, not the entire `args` array.  [[#300], [#599]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -454,6 +459,7 @@ To be released.
 [#248]: https://github.com/dahlia/optique/issues/248
 [#249]: https://github.com/dahlia/optique/issues/249
 [#296]: https://github.com/dahlia/optique/issues/296
+[#300]: https://github.com/dahlia/optique/issues/300
 [#307]: https://github.com/dahlia/optique/issues/307
 [#310]: https://github.com/dahlia/optique/issues/310
 [#315]: https://github.com/dahlia/optique/issues/315
@@ -512,6 +518,7 @@ To be released.
 [#590]: https://github.com/dahlia/optique/issues/590
 [#592]: https://github.com/dahlia/optique/pull/592
 [#595]: https://github.com/dahlia/optique/pull/595
+[#599]: https://github.com/dahlia/optique/pull/599
 
 ### @optique/config
 
