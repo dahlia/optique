@@ -2970,7 +2970,7 @@ export function email(
    * Splits an input string on commas, respecting quoted segments and
    * angle-bracket display-name syntax per RFC 5322.
    */
-  function splitEmails(input: string): string[] {
+  function splitEmails(input: string): readonly string[] {
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
