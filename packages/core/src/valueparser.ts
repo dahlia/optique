@@ -2979,27 +2979,20 @@ export function email(
     for (const char of input) {
       if (escaped) {
         escaped = false;
-        current += char;
-        continue;
-      }
-      if (char === "\\" && inQuotes) {
+      } else if (char === "\\" && inQuotes) {
         escaped = true;
-        current += char;
-        continue;
-      }
-      if (char === '"' && !inAngleBrackets) {
+      } else if (char === '"' && !inAngleBrackets) {
         inQuotes = !inQuotes;
       } else if (char === "<" && !inQuotes) {
         inAngleBrackets = true;
       } else if (char === ">" && !inQuotes) {
         inAngleBrackets = false;
-      }
-      if (char === "," && !inQuotes && !inAngleBrackets) {
+      } else if (char === "," && !inQuotes && !inAngleBrackets) {
         result.push(current);
         current = "";
-      } else {
-        current += char;
+        continue;
       }
+      current += char;
     }
     result.push(current);
     return result;
