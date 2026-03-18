@@ -1236,6 +1236,13 @@ describe("createEnvContext defaults", () => {
     }
   });
 
+  it("throws TypeError when source is not a function", () => {
+    assert.throws(
+      () => createEnvContext({ source: "nope" as never }),
+      TypeError,
+    );
+  });
+
   it("falls back to process.env when Deno.env.get is unavailable", () => {
     const originalDeno = Object.getOwnPropertyDescriptor(globalThis, "Deno");
     const originalProcess = Object.getOwnPropertyDescriptor(

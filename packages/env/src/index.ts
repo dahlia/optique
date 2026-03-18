@@ -118,11 +118,17 @@ function defaultEnvSource(key: string): string | undefined {
  *
  * @param options Environment context options.
  * @returns A context that provides environment source annotations.
+ * @throws {TypeError} If `source` is not a function.
  * @since 1.0.0
  */
 export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
   const contextId = Symbol(`@optique/env context:${Math.random()}`);
   const source = options.source ?? defaultEnvSource;
+  if (typeof source !== "function") {
+    throw new TypeError(
+      `Expected source to be a function, but got: ${typeof source}.`,
+    );
+  }
   const prefix = options.prefix ?? "";
 
   return {
