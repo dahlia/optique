@@ -439,6 +439,11 @@ To be released.
     of only the domain part; the local part (including quoted local parts)
     is now preserved.  [[#352], [#614]]
 
+ -  Fixed `__FILE__` completion transport unable to represent `pattern` values
+    containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
+    Colons in the pattern field are now percent-encoded (`%3A`) so that the
+    colon-delimited field boundaries stay intact.  [[#252], [#616]]
+
  -  Fixed Bash completion scripts using `compgen -z` which is unsupported on
     macOS's default GNU Bash 3.2.  File and directory completions now use
     glob-based iteration instead, matching the pattern already used for
@@ -480,6 +485,7 @@ To be released.
 [#248]: https://github.com/dahlia/optique/issues/248
 [#249]: https://github.com/dahlia/optique/issues/249
 [#250]: https://github.com/dahlia/optique/issues/250
+[#252]: https://github.com/dahlia/optique/issues/252
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
 [#307]: https://github.com/dahlia/optique/issues/307
@@ -550,6 +556,7 @@ To be released.
 [#610]: https://github.com/dahlia/optique/pull/610
 [#611]: https://github.com/dahlia/optique/pull/611
 [#614]: https://github.com/dahlia/optique/pull/614
+[#616]: https://github.com/dahlia/optique/pull/616
 
 ### @optique/config
 

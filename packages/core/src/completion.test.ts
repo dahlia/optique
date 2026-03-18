@@ -474,6 +474,21 @@ describe("completion module", () => {
       deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0"]);
     });
 
+    it("should encode file suggestions with colon in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "C:/Users/test/",
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(bash.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:file::C%3A/Users/test/:0"]);
+    });
+
     it("should not use compgen -z flag", () => {
       const script = bash.generateScript("myapp");
 
@@ -1337,6 +1352,24 @@ printf "%s\\n" "\${COMPREPLY[@]}"
 
       deepStrictEqual(encoded, ["__FILE__:directory:::1\0\0"]);
     });
+
+    it("should encode file suggestions with colon in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "C:/Users/test/",
+          includeHidden: false,
+          description: message`Config file`,
+        },
+      ];
+
+      const encoded = Array.from(zsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, [
+        "__FILE__:file::C%3A/Users/test/:0\0Config file\0",
+      ]);
+    });
   });
 
   describe("pwsh shell completion", () => {
@@ -1478,6 +1511,25 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
 
       deepStrictEqual(encoded, ["__FILE__:directory:::1\t[file]\t"]);
+    });
+
+    it("should encode file suggestions with colon in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "C:/Users/test/",
+          includeHidden: false,
+          description: message`Config file`,
+        },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file::C%3A/Users/test/:0\t[file]\tConfig file",
+      );
     });
 
     it("should format descriptions without colors", () => {
@@ -1650,6 +1702,25 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       const encoded = Array.from(fish.encodeSuggestions(suggestions));
 
       deepStrictEqual(encoded, ["__FILE__:directory:::1\t"]);
+    });
+
+    it("should encode file suggestions with colon in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "C:/Users/test/",
+          includeHidden: false,
+          description: message`Config file`,
+        },
+      ];
+
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file::C%3A/Users/test/:0\tConfig file",
+      );
     });
 
     it("should format descriptions without colors", () => {
@@ -1833,6 +1904,25 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       const encoded = Array.from(nu.encodeSuggestions(suggestions));
 
       deepStrictEqual(encoded, ["__FILE__:directory:::1\t"]);
+    });
+
+    it("should encode file suggestions with colon in pattern", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          pattern: "C:/Users/test/",
+          includeHidden: false,
+          description: message`Config file`,
+        },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file::C%3A/Users/test/:0\tConfig file",
+      );
     });
 
     it("should format descriptions without colors", () => {

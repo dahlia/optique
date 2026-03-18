@@ -40,6 +40,17 @@ function validateProgramName(programName: string): void {
 }
 
 /**
+ * Percent-encodes colons and percent signs in a pattern string so that it
+ * can be safely embedded in the colon-delimited `__FILE__` transport format.
+ * @param pattern The raw pattern string.
+ * @returns The encoded pattern string.
+ * @internal
+ */
+function encodePattern(pattern: string): string {
+  return pattern.replace(/%/g, "%25").replace(/:/g, "%3A");
+}
+
+/**
  * A shell completion generator.
  * @since 0.6.0
  */
@@ -86,6 +97,7 @@ function _${programName} () {
     if [[ "$line" == __FILE__:* ]]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
+      pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
 
       # Save and adjust glob/shell options for safe file completion
       local __dotglob_was_set=0 __failglob_was_set=0 __noglob_was_set=0
@@ -223,9 +235,8 @@ complete -F _${programName} ${programName}
         // Emit special marker for native file completion
         const extensions = suggestion.extensions?.join(",") || "";
         const hidden = suggestion.includeHidden ? "1" : "0";
-        yield `__FILE__:${suggestion.type}:${extensions}:${
-          suggestion.pattern || ""
-        }:${hidden}`;
+        const pattern = encodePattern(suggestion.pattern || "");
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}`;
       }
       i++;
     }
@@ -279,6 +290,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
         local type extensions pattern hidden
         IFS=':' read -r _ type extensions pattern hidden <<< "\$value"
+        pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
         has_file_completion=1
 
         # Use zsh's native file completion
@@ -351,9 +363,8 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
         const description = suggestion.description == null
           ? ""
           : formatMessage(suggestion.description, { colors: false });
-        yield `__FILE__:${suggestion.type}:${extensions}:${
-          suggestion.pattern || ""
-        }:${hidden}\0${description}\0`;
+        const pattern = encodePattern(suggestion.pattern || "");
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\0${description}\0`;
       }
     }
   },
@@ -397,7 +408,7 @@ ${
             set -l parts (string split ':' -- $line)
             set -l type $parts[2]
             set -l extensions $parts[3]
-            set -l pattern $parts[4]
+            set -l pattern (string replace -a '%25' '%' -- (string replace -a '%3A' ':' -- $parts[4]))
             set -l hidden $parts[5]
 
             # Generate file completions based on type
@@ -499,9 +510,8 @@ complete -c ${programName} -f -a '(${functionName})'
         const description = suggestion.description == null
           ? ""
           : formatMessage(suggestion.description, { colors: false });
-        yield `__FILE__:${suggestion.type}:${extensions}:${
-          suggestion.pattern || ""
-        }:${hidden}\t${description}`;
+        const pattern = encodePattern(suggestion.pattern || "");
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t${description}`;
       }
       i++;
     }
@@ -617,7 +627,7 @@ ${
       let parts = ($line | split row ':')
       let type = ($parts | get 1)
       let extensions = ($parts | get 2)
-      let pattern = ($parts | get 3)
+      let pattern = ($parts | get 3 | str replace -a '%3A' ':' | str replace -a '%25' '%')
       let hidden = ($parts | get 4) == '1'
 
       # Extract prefix from the last argument if it exists
@@ -744,9 +754,8 @@ ${functionName}-external
         const description = suggestion.description == null
           ? ""
           : formatMessage(suggestion.description, { colors: false });
-        yield `__FILE__:${suggestion.type}:${extensions}:${
-          suggestion.pattern || ""
-        }:${hidden}\t${description}`;
+        const pattern = encodePattern(suggestion.pattern || "");
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t${description}`;
       }
       i++;
     }
@@ -821,7 +830,7 @@ ${
                 \$parts = \$line -split ':', 5
                 \$type = \$parts[1]
                 \$extensions = \$parts[2]
-                \$pattern = \$parts[3]
+                \$pattern = \$parts[3] -replace '%3A', ':' -replace '%25', '%'
                 \$hidden = \$parts[4] -eq '1'
 
                 # Determine current prefix for file matching
@@ -917,9 +926,8 @@ ${
         const description = suggestion.description == null
           ? ""
           : formatMessage(suggestion.description, { colors: false });
-        yield `__FILE__:${suggestion.type}:${extensions}:${
-          suggestion.pattern || ""
-        }:${hidden}\t[file]\t${description}`;
+        const pattern = encodePattern(suggestion.pattern || "");
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t[file]\t${description}`;
       }
       i++;
     }
