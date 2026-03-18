@@ -2982,7 +2982,11 @@ export function email(
       } else if (char === "\\" && inQuotes) {
         escaped = true;
       } else if (char === '"' && !inAngleBrackets) {
-        inQuotes = !inQuotes;
+        if (inQuotes) {
+          inQuotes = false;
+        } else if (current.trim() === "") {
+          inQuotes = true;
+        }
       } else if (char === "<" && !inQuotes) {
         inAngleBrackets = true;
       } else if (char === ">" && !inQuotes) {

@@ -6585,6 +6585,17 @@ describe("email()", () => {
       ]);
     });
 
+    it("should handle consecutive quotes in local parts without regression", () => {
+      const parser = email({ allowMultiple: true });
+
+      const result = parser.parse('"""@example.com, c@example.com');
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, [
+        '"""@example.com',
+        "c@example.com",
+      ]);
+    });
+
     it("should not split on commas inside display names", () => {
       const parser = email({
         allowMultiple: true,
