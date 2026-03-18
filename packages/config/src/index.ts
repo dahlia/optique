@@ -850,6 +850,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         );
       }
       if (
+        !opts.load &&
         opts.getConfigPath !== undefined &&
         typeof opts.getConfigPath !== "function"
       ) {

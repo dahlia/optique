@@ -905,6 +905,23 @@ describe("createConfigContext input validation", () => {
       },
     );
   });
+
+  test("ignores malformed getConfigPath when load is provided", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    // load takes precedence; getConfigPath should not be validated
+    const result = context.getAnnotations(
+      { any: 1 },
+      {
+        load: () => ({
+          config: { host: "ok" },
+          meta: undefined,
+        }),
+        getConfigPath: "nope" as never,
+      },
+    );
+    assert.ok(result != null);
+  });
 });
 
 describe("createConfigContext error paths", () => {
