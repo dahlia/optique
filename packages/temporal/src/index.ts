@@ -624,8 +624,8 @@ export function plainMonthDay(
 /**
  * Single-segment IANA timezone identifiers accepted across all supported
  * runtimes (Deno, Node.js, Bun).  This tuple is the single source of truth:
- * {@link SingleSegmentTimeZone} is derived from it, and the runtime allowlist
- * {@link singleSegmentTimeZones} is built from it.
+ * {@link SingleSegmentTimeZone} is derived from it, and the runtime lookup
+ * {@link singleSegmentTimeZoneLookup} is built from it.
  */
 const singleSegmentTimeZoneList = [
   "UTC",
