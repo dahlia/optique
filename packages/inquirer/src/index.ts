@@ -30,6 +30,7 @@ import type {
   Parser,
   ParserResult,
 } from "@optique/core/parser";
+import type { UsageTerm } from "@optique/core/usage";
 import { placeholder } from "@optique/core/context";
 import { message } from "@optique/core/message";
 import type { ValueParserResult } from "@optique/core/valueparser";
@@ -723,6 +724,94 @@ export function prompt<M extends Mode, TValue, TState>(
    * @throws {Error} Rethrows unexpected prompt failures after converting
    *                 `ExitPromptError` cancellations into parse failures.
    */
+  function extractConcreteUsageTerm(
+    usage: readonly UsageTerm[],
+  ): UsageTerm | null {
+    if (usage.length !== 1) return null;
+    const term = usage[0];
+    switch (term.type) {
+      case "option":
+      case "argument":
+        return term;
+      case "optional":
+      case "multiple":
+        return extractConcreteUsageTerm(term.terms);
+      default:
+        return null;
+    }
+  }
+
+  async function validatePromptedValue(
+    result: ValueParserResult<TValue>,
+  ): Promise<ValueParserResult<TValue>> {
+    if (!result.success) return result;
+
+    const term = extractConcreteUsageTerm(parser.usage);
+    if (term == null) return result;
+
+    // Boolean flags have no value constraints to validate.
+    if (term.type === "option" && term.metavar == null) return result;
+
+    let syntheticArgs: readonly string[];
+    if (term.type === "option") {
+      if (Array.isArray(result.value)) {
+        syntheticArgs = (result.value as readonly unknown[]).flatMap(
+          (v) => [term.names[0], String(v)],
+        );
+      } else {
+        syntheticArgs = [term.names[0], String(result.value)];
+      }
+    } else {
+      // argument
+      if (Array.isArray(result.value)) {
+        syntheticArgs = (result.value as readonly unknown[]).map(
+          (v) => String(v),
+        );
+      } else {
+        syntheticArgs = [String(result.value)];
+      }
+    }
+
+    // Run a synthetic parse to validate (but not replace) the prompted value.
+    let state: TState = parser.initialState;
+    let buffer: readonly string[] = syntheticArgs;
+
+    while (buffer.length > 0) {
+      const parseResultRaw = parser.parse({
+        buffer,
+        state,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      const parseResult: ParserResult<TState> =
+        parseResultRaw instanceof Promise
+          ? await parseResultRaw
+          : parseResultRaw as ParserResult<TState>;
+
+      if (!parseResult.success) {
+        return { success: false, error: parseResult.error };
+      }
+
+      const prevLen = buffer.length;
+      buffer = parseResult.next.buffer;
+      state = parseResult.next.state;
+
+      // No progress — avoid infinite loop.
+      if (buffer.length >= prevLen) break;
+    }
+
+    const completeResultRaw = parser.complete(state);
+    const completeResult: ValueParserResult<TValue> =
+      completeResultRaw instanceof Promise
+        ? await completeResultRaw
+        : completeResultRaw as ValueParserResult<TValue>;
+
+    // Only check validity; preserve the original prompted value so that
+    // wrapper transformations (e.g., map()) are not double-applied.
+    if (!completeResult.success) return completeResult;
+    return result;
+  }
+
   const validPromptTypes: ReadonlySet<string> = new Set([
     "confirm",
     "number",
@@ -735,7 +824,7 @@ export function prompt<M extends Mode, TValue, TState>(
     "checkbox",
   ]);
 
-  async function executePrompt(): Promise<ValueParserResult<TValue>> {
+  async function executePromptRaw(): Promise<ValueParserResult<TValue>> {
     const prompts = getPromptFunctions();
     try {
       if (!validPromptTypes.has(cfg.type)) {
@@ -867,6 +956,11 @@ export function prompt<M extends Mode, TValue, TState>(
       }
       throw error;
     }
+  }
+
+  async function executePrompt(): Promise<ValueParserResult<TValue>> {
+    const result = await executePromptRaw();
+    return validatePromptedValue(result);
   }
 
   function usePromptOrDefer(
