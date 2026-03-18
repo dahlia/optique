@@ -830,6 +830,61 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should complete hidden files under tilde-relative dot prefix", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const home = process.env.HOME;
+      if (!home) {
+        t.skip("HOME not set");
+        return;
+      }
+
+      // Create a hidden directory under $HOME with a unique name
+      const hiddenDir = join(home, ".optique-tilde-dot-test");
+      mkdirSync(hiddenDir, { recursive: true });
+
+      try {
+        // CLI that emits __FILE__:file without includeHidden
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        writeFileSync(join(hiddenDir, "tilde-dot-cli"), cliScript, {
+          mode: 0o755,
+        });
+        writeFileSync(join(hiddenDir, "target.txt"), "");
+
+        const script = bash.generateScript("tilde-dot-cli");
+
+        // Complete with ~/.optique-tilde-dot-test/ prefix
+        const relDir = hiddenDir.replace(home, "~");
+        const testScript = `
+export PATH="${hiddenDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+COMP_WORDS=("tilde-dot-cli" "${relDir}/")
+COMP_CWORD=1
+_tilde-dot-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: hiddenDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find files inside the hidden directory
+        ok(completions.some((c) => c.includes("target.txt")));
+      } finally {
+        rmSync(hiddenDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("zsh shell completion", () => {
