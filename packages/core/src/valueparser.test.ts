@@ -6714,16 +6714,28 @@ describe("email()", () => {
   });
 
   describe("lowercase option", () => {
-    it("should convert email to lowercase when lowercase is true", () => {
+    it("should lowercase only the domain when lowercase is true", () => {
       const parser = email({ lowercase: true });
 
       const result1 = parser.parse("User@Example.COM");
       assert.ok(result1.success);
-      assert.strictEqual(result1.value, "user@example.com");
+      assert.strictEqual(result1.value, "User@example.com");
 
       const result2 = parser.parse("ADMIN@COMPANY.NET");
       assert.ok(result2.success);
-      assert.strictEqual(result2.value, "admin@company.net");
+      assert.strictEqual(result2.value, "ADMIN@company.net");
+    });
+
+    it("should preserve local part case including quoted local parts", () => {
+      const parser = email({ lowercase: true });
+
+      const result1 = parser.parse("User.Name+Tag@Example.COM");
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "User.Name+Tag@example.com");
+
+      const result2 = parser.parse('"Case.Sensitive"@Example.COM');
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, '"Case.Sensitive"@example.com');
     });
 
     it("should preserve case when lowercase is false", () => {
@@ -6740,8 +6752,8 @@ describe("email()", () => {
       const result = parser.parse("User1@Example.COM,User2@Example.ORG");
       assert.ok(result.success);
       assert.deepStrictEqual(result.value, [
-        "user1@example.com",
-        "user2@example.org",
+        "User1@example.com",
+        "User2@example.org",
       ]);
     });
   });
@@ -6941,8 +6953,8 @@ describe("email()", () => {
       const result = parser.parse("User1@Example.COM,User2@Example.COM");
       assert.ok(result.success);
       assert.deepStrictEqual(result.value, [
-        "user1@example.com",
-        "user2@example.com",
+        "User1@example.com",
+        "User2@example.com",
       ]);
     });
 

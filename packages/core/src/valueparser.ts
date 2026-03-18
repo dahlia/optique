@@ -2769,7 +2769,9 @@ export interface EmailOptions {
   readonly allowDisplayName?: boolean;
 
   /**
-   * If `true`, converts email to lowercase.
+   * If `true`, converts the domain part of the email to lowercase.
+   * The local part is preserved as-is, since it is technically
+   * case-sensitive per RFC 5321.
    * @default false
    */
   readonly lowercase?: boolean;
@@ -2994,7 +2996,10 @@ export function email(
 
     // Return the email (preserve original form or extracted from display name)
     const resultEmail = emailAddr;
-    return lowercase ? resultEmail.toLowerCase() : resultEmail;
+    if (!lowercase) return resultEmail;
+    const lastAt = resultEmail.lastIndexOf("@");
+    return resultEmail.slice(0, lastAt) +
+      resultEmail.slice(lastAt).toLowerCase();
   }
 
   /**
