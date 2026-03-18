@@ -6736,6 +6736,23 @@ describe("email()", () => {
       const result2 = parser.parse("user1@example.com,user2@other.com");
       assert.ok(!result2.success);
     });
+
+    it("should reject all emails when allowedDomains is empty", () => {
+      const parser = email({ allowedDomains: [] });
+
+      const result1 = parser.parse("user@example.com");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("user@other.com");
+      assert.ok(!result2.success);
+    });
+
+    it("should reject all emails when allowedDomains is empty with allowMultiple", () => {
+      const parser = email({ allowedDomains: [], allowMultiple: true });
+
+      const result = parser.parse("user@example.com,user@other.com");
+      assert.ok(!result.success);
+    });
   });
 
   describe("custom error messages", () => {

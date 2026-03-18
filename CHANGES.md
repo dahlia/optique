@@ -426,6 +426,11 @@ To be released.
  -  Fixed `email()` with `allowMultiple` splitting on commas inside quoted
     local parts and quoted display names.  [[#320], [#606]]
 
+ -  Fixed `email({ allowedDomains: [] })` silently disabling domain filtering
+    instead of rejecting all domains, making it consistent with
+    `url({ allowedProtocols: [] })` and `domain({ allowedTLDs: [] })`.
+    [[#341], [#610]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -470,6 +475,7 @@ To be released.
 [#320]: https://github.com/dahlia/optique/issues/320
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
+[#341]: https://github.com/dahlia/optique/issues/341
 [#349]: https://github.com/dahlia/optique/issues/349
 [#353]: https://github.com/dahlia/optique/issues/353
 [#362]: https://github.com/dahlia/optique/issues/362
@@ -524,6 +530,7 @@ To be released.
 [#595]: https://github.com/dahlia/optique/pull/595
 [#599]: https://github.com/dahlia/optique/pull/599
 [#606]: https://github.com/dahlia/optique/pull/606
+[#610]: https://github.com/dahlia/optique/pull/610
 
 ### @optique/config
 
