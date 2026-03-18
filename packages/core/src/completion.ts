@@ -625,7 +625,7 @@ ${
   $output | lines | each {|line|
     if ($line | str starts-with '__FILE__:') {
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
-      let directive = ($line | split row "\\t" | first)
+      let directive = ($line | split row "\t" | first)
       let parts = ($directive | split row ':')
       let type = ($parts | get 1)
       let extensions = ($parts | get 2)

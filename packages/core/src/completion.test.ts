@@ -2096,11 +2096,16 @@ printf "%s\\n" "\${COMPREPLY[@]}"
     it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
       const script = nu.generateScript("myapp");
 
-      // The script must split by tab first to isolate the directive
-      // before splitting by colon, otherwise the hidden field will
-      // contain trailing tab + description text
+      // In the __FILE__ block, the script must split by tab first to
+      // isolate the directive before splitting by colon.  Verify that
+      // a tab-stripping split appears between the __FILE__ match and
+      // the colon split.
+      const fileBlock = script.substring(
+        script.indexOf("__FILE__:"),
+        script.indexOf("$parts | get 1"),
+      );
       deepStrictEqual(
-        script.includes('split row "\\t"'),
+        fileBlock.includes('split row "\t"'),
         true,
       );
     });
