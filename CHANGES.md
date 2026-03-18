@@ -734,15 +734,22 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `type` value is passed at runtime through an untyped path.  It now throws
     a clear `TypeError` with the invalid type name up front.  [[#386], [#612]]
 
+ -  Fixed `prompt()` to revalidate prompted values through the inner parser's
+    validation pipeline.  Previously, values from interactive prompts or
+    `prompter` overrides bypassed constraints like `integer({ min, max })` or
+    `string({ pattern })`.  [[#392], [#613]]
+
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137
 [#151]: https://github.com/dahlia/optique/issues/151
 [#288]: https://github.com/dahlia/optique/issues/288
 [#289]: https://github.com/dahlia/optique/issues/289
 [#386]: https://github.com/dahlia/optique/issues/386
+[#392]: https://github.com/dahlia/optique/issues/392
 [#540]: https://github.com/dahlia/optique/pull/540
 [#582]: https://github.com/dahlia/optique/pull/582
 [#612]: https://github.com/dahlia/optique/pull/612
+[#613]: https://github.com/dahlia/optique/pull/613
 
 ### @optique/temporal
 
