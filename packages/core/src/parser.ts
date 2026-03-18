@@ -966,13 +966,18 @@ function buildDocPage(
     { kind: "available", state: context.state },
     undefined,
   );
-  // When the doc root is a bare command parser and no args navigated into it,
-  // the fragments contain only a single command entry instead of the inner
-  // parser's options/arguments.  Detect this degenerate case and re-invoke
+  // When the doc root is a bare command() parser and no args navigated into
+  // it, the fragments contain only a single command entry instead of the
+  // inner parser's options/arguments.  Detect this case and re-invoke
   // getDocFragments with the command's "matched" state so the inner docs are
-  // exposed.  See: https://github.com/dahlia/optique/issues/200
+  // exposed.  The Symbol.for brand check ensures we only synthesize state
+  // for real command() parsers, not custom Parser implementations that happen
+  // to emit a single command entry.
+  // See: https://github.com/dahlia/optique/issues/200
   if (
     args.length === 0 &&
+    Reflect.get(parser, Symbol.for("@optique/core/commandParser")) ===
+      true &&
     fragments.length === 1 &&
     fragments[0].type === "entry" &&
     fragments[0].term.type === "command"

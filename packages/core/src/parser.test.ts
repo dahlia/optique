@@ -1467,6 +1467,38 @@ describe("getDocPage", () => {
     assert.equal(optEntries.length, 0, "Should not show inner options");
   });
 
+  it("should not synthesize state for non-command parsers with command entry", () => {
+    // A wrapper that forwards everything from a command() parser but strips
+    // the internal brand symbol.  buildDocPage must not try to call
+    // getDocFragments with ["matched", name] on such a wrapper.
+    const inner: Parser<"sync", unknown, unknown> = command(
+      "wrapped",
+      object({
+        opt: option("--opt", string()),
+      }),
+    );
+    const wrapper: Parser<"sync", unknown, unknown> = {
+      $mode: inner.$mode,
+      $valueType: inner.$valueType,
+      $stateType: inner.$stateType,
+      priority: inner.priority,
+      usage: inner.usage,
+      initialState: inner.initialState,
+      parse: (ctx) => inner.parse(ctx),
+      complete: (state) => inner.complete(state),
+      suggest: (ctx, prefix) => inner.suggest(ctx, prefix),
+      getDocFragments: (state, dv) => inner.getDocFragments(state, dv),
+    };
+
+    const doc = getDocPage(wrapper);
+    assert.ok(doc);
+    // Without the brand, the wrapper should NOT auto-navigate into
+    // the inner parser's options — it should show the single command entry.
+    const allEntries = doc.sections.flatMap((s) => s.entries);
+    assert.equal(allEntries.length, 1);
+    assert.equal(allEntries[0].term.type, "command");
+  });
+
   it("should show subcommand option descriptions with getDocPage", () => {
     const targetDesc = message`Target language code`;
     const sourceDesc = message`Source language code`;
