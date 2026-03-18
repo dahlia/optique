@@ -439,10 +439,9 @@ To be released.
     of only the domain part; the local part (including quoted local parts)
     is now preserved.  [[#352], [#614]]
 
- -  Fixed `email()` accepting IPv4-like all-numeric domains (e.g.,
+ -  Fixed `email()` accepting IPv4-like dotted-quad domains (e.g.,
     `user@192.168.0.1`, `user@999.999.999.999`) as valid email addresses.
-    Domains where every label is purely numeric are now rejected.
-    [[#387], [#617]]
+    Unbracketed IPv4-like dotted quads are now rejected.  [[#387], [#617]]
 
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
