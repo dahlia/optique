@@ -442,7 +442,9 @@ To be released.
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
     Colons in the pattern field are now percent-encoded (`%3A`) so that the
-    colon-delimited field boundaries stay intact.  [[#252], [#616]]
+    colon-delimited field boundaries stay intact.  Users must regenerate or
+    re-source their shell completion script after upgrading for this fix to
+    take effect.  [[#252], [#616]]
 
  -  Fixed Bash completion scripts using `compgen -z` which is unsupported on
     macOS's default GNU Bash 3.2.  File and directory completions now use
