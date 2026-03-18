@@ -2966,6 +2966,30 @@ export function email(
     return lowercase ? resultEmail.toLowerCase() : resultEmail;
   }
 
+  function splitEmails(input: string): string[] {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    let inAngleBrackets = false;
+    for (const char of input) {
+      if (char === '"' && !inAngleBrackets) {
+        inQuotes = !inQuotes;
+      } else if (char === "<" && !inQuotes) {
+        inAngleBrackets = true;
+      } else if (char === ">" && !inQuotes) {
+        inAngleBrackets = false;
+      }
+      if (char === "," && !inQuotes && !inAngleBrackets) {
+        result.push(current);
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+
   return {
     $mode: "sync" as const,
     metavar,
@@ -2974,7 +2998,7 @@ export function email(
     ): ValueParserResult<string> | ValueParserResult<readonly string[]> {
       if (allowMultiple) {
         // Parse multiple emails separated by commas
-        const emails = input.split(",").map((e) => e.trim());
+        const emails = splitEmails(input).map((e) => e.trim());
         const validatedEmails: string[] = [];
 
         for (const email of emails) {

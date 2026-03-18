@@ -423,6 +423,9 @@ To be released.
     Help-option scanning now only checks the argument immediately after the
     completion command name, not the entire `args` array.  [[#300], [#599]]
 
+ -  Fixed `email()` with `allowMultiple` splitting on commas inside quoted
+    local parts and display names.  [[#320], [#606]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -464,6 +467,7 @@ To be released.
 [#310]: https://github.com/dahlia/optique/issues/310
 [#315]: https://github.com/dahlia/optique/issues/315
 [#317]: https://github.com/dahlia/optique/issues/317
+[#320]: https://github.com/dahlia/optique/issues/320
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
 [#349]: https://github.com/dahlia/optique/issues/349
@@ -519,6 +523,7 @@ To be released.
 [#592]: https://github.com/dahlia/optique/pull/592
 [#595]: https://github.com/dahlia/optique/pull/595
 [#599]: https://github.com/dahlia/optique/pull/599
+[#606]: https://github.com/dahlia/optique/pull/606
 
 ### @optique/config
 
