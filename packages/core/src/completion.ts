@@ -405,7 +405,8 @@ ${
     for line in $output
         if string match -q '__FILE__:*' -- $line
             # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
-            set -l parts (string split ':' -- $line)
+            set -l directive (string split \\t -- $line)[1]
+            set -l parts (string split ':' -- $directive)
             set -l type $parts[2]
             set -l extensions $parts[3]
             set -l pattern (string replace -a '%25' '%' -- (string replace -a '%3A' ':' -- $parts[4]))
@@ -624,7 +625,8 @@ ${
   $output | lines | each {|line|
     if ($line | str starts-with '__FILE__:') {
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
-      let parts = ($line | split row ':')
+      let directive = ($line | split row "\\t" | first)
+      let parts = ($directive | split row ':')
       let type = ($parts | get 1)
       let extensions = ($parts | get 2)
       let pattern = ($parts | get 3 | str replace -a '%3A' ':' | str replace -a '%25' '%')
@@ -827,7 +829,8 @@ ${
 
             if (\$line -match '^__FILE__:') {
                 # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
-                \$parts = \$line -split ':', 5
+                \$directive = (\$line -split "\`t")[0]
+                \$parts = \$directive -split ':', 5
                 \$type = \$parts[1]
                 \$extensions = \$parts[2]
                 \$pattern = \$parts[3] -replace '%3A', ':' -replace '%25', '%'

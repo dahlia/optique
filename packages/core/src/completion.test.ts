@@ -1597,6 +1597,23 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       // Should not contain ANSI color codes
       deepStrictEqual(encoded[0].includes("\x1b["), false);
     });
+
+    it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
+      const script = pwsh.generateScript("myapp");
+
+      // In the __FILE__ block, the script must split by tab first to
+      // isolate the directive before splitting by colon.  Verify that
+      // a tab-stripping split appears between the __FILE__ match and
+      // the colon split.
+      const fileBlock = script.substring(
+        script.indexOf("__FILE__:"),
+        script.indexOf("$type = $parts[1]"),
+      );
+      deepStrictEqual(
+        fileBlock.includes('-split "`t"'),
+        true,
+      );
+    });
   });
 
   describe("fish shell completion", () => {
@@ -1812,6 +1829,23 @@ printf "%s\\n" "\${COMPREPLY[@]}"
 
       // Function name should have special characters replaced
       deepStrictEqual(script.includes("function __my_app_js_complete"), true);
+    });
+
+    it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
+      const script = fish.generateScript("myapp");
+
+      // In the __FILE__ block, the script must split by tab first to
+      // isolate the directive before splitting by colon.  Verify that
+      // a tab-stripping split appears between the __FILE__ match and
+      // the colon split on parts.
+      const fileBlock = script.substring(
+        script.indexOf("__FILE__:"),
+        script.indexOf("set -l type $parts[2]"),
+      );
+      deepStrictEqual(
+        fileBlock.includes("string split \\t"),
+        true,
+      );
     });
   });
 
@@ -2057,6 +2091,18 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       deepStrictEqual(script.includes("[context: string]"), true);
       deepStrictEqual(script.includes("$context | args-split"), true);
       deepStrictEqual(script.includes("str ends-with ' '"), true);
+    });
+
+    it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
+      const script = nu.generateScript("myapp");
+
+      // The script must split by tab first to isolate the directive
+      // before splitting by colon, otherwise the hidden field will
+      // contain trailing tab + description text
+      deepStrictEqual(
+        script.includes('split row "\\t"'),
+        true,
+      );
     });
   });
 

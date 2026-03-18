@@ -455,6 +455,13 @@ To be released.
     glob-based iteration instead, matching the pattern already used for
     extension-filtered completions.  [[#250], [#608]]
 
+ -  Fixed fish, Nushell, and PowerShell completion scripts ignoring
+    `includeHidden: true` for file suggestions.  The shell-side `__FILE__`
+    parsers now strip tab-delimited metadata before splitting by colon,
+    so the `hidden` field is compared correctly.  Users must regenerate or
+    re-source their shell completion script after upgrading for this fix to
+    take effect.  [[#618], [#619]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -565,6 +572,8 @@ To be released.
 [#614]: https://github.com/dahlia/optique/pull/614
 [#616]: https://github.com/dahlia/optique/pull/616
 [#617]: https://github.com/dahlia/optique/pull/617
+[#618]: https://github.com/dahlia/optique/issues/618
+[#619]: https://github.com/dahlia/optique/pull/619
 
 ### @optique/config
 
