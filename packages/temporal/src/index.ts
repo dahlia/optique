@@ -676,13 +676,13 @@ const singleSegmentTimeZoneList = [
 
 type SingleSegmentTimeZone = typeof singleSegmentTimeZoneList[number];
 
-const singleSegmentTimeZones: ReadonlySet<string> = new Set(
-  singleSegmentTimeZoneList,
-);
-
-const singleSegmentTimeZoneLower: ReadonlySet<string> = new Set(
-  singleSegmentTimeZoneList.map((tz) => tz.toLowerCase()),
-);
+const singleSegmentTimeZoneLookup: ReadonlyMap<string, SingleSegmentTimeZone> =
+  new Map(
+    singleSegmentTimeZoneList.map((timeZone) => [
+      timeZone.toLowerCase(),
+      timeZone,
+    ]),
+  );
 
 /**
  * Creates a ValueParser for parsing IANA Time Zone Database identifiers.
@@ -723,15 +723,17 @@ export function timeZone(
         // For single-segment identifiers (no "/"), only accept those
         // in the curated allowlist to ensure cross-runtime consistency.
         // Some Temporal implementations accept identifiers (e.g.,
-        // "Factory") that others reject.  The check uses
-        // case-insensitive matching because Temporal resolves aliases
-        // case-insensitively.
-        if (
-          !input.includes("/") &&
-          !singleSegmentTimeZones.has(input) &&
-          !singleSegmentTimeZoneLower.has(input.toLowerCase())
-        ) {
-          throw new RangeError();
+        // "Factory") that others reject.  The lookup is
+        // case-insensitive and normalizes to canonical casing so the
+        // returned value is always a valid SingleSegmentTimeZone member.
+        if (!input.includes("/")) {
+          const canonical = singleSegmentTimeZoneLookup.get(
+            input.toLowerCase(),
+          );
+          if (canonical == null) {
+            throw new RangeError();
+          }
+          return { success: true, value: canonical };
         }
         return { success: true, value: input as TimeZone };
       } catch {

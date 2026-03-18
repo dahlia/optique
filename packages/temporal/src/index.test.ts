@@ -515,12 +515,20 @@ describe("timeZone", () => {
     }
   });
 
-  it("should accept case-insensitive single-segment inputs", () => {
-    const inputs = ["gmt", "utc", "est", "japan", "cuba", "zulu"];
+  it("should normalize case-insensitive single-segment inputs", () => {
+    const cases: [string, TimeZone][] = [
+      ["gmt", "GMT"],
+      ["utc", "UTC"],
+      ["est", "EST"],
+      ["japan", "Japan"],
+      ["cuba", "Cuba"],
+      ["zulu", "Zulu"],
+    ];
 
-    for (const input of inputs) {
+    for (const [input, expected] of cases) {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.equal(result.value, expected, `${input} -> ${expected}`);
     }
   });
 
