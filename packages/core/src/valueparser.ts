@@ -3158,7 +3158,7 @@ export function email(
     },
     format(value: string | readonly string[]): string {
       if (Array.isArray(value)) {
-        return value.join(",");
+        return value.join(", ");
       }
       return value as string;
     },

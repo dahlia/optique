@@ -6992,13 +6992,33 @@ describe("email()", () => {
       assert.strictEqual(parser.format("user@example.com"), "user@example.com");
     });
 
-    it("should return multiple emails joined by comma", () => {
+    it("should return multiple emails joined by comma-space", () => {
       const parser = email({ allowMultiple: true });
 
       assert.strictEqual(
         parser.format(["user1@example.com", "user2@example.com"]),
-        "user1@example.com,user2@example.com",
+        "user1@example.com, user2@example.com",
       );
+    });
+
+    it("should round-trip emails with quoted commas in local part", () => {
+      const parser = email({ allowMultiple: true });
+      const value = ['"Doe, John"@example.com', "x@example.com"];
+
+      const formatted = parser.format(value);
+      const parsed = parser.parse(formatted);
+      assert.ok(parsed.success);
+      assert.deepStrictEqual(parsed.value, value);
+    });
+
+    it("should round-trip emails with escaped quotes and commas", () => {
+      const parser = email({ allowMultiple: true });
+      const value = ['"a\\",b"@example.com', "d@example.com"];
+
+      const formatted = parser.format(value);
+      const parsed = parser.parse(formatted);
+      assert.ok(parsed.success);
+      assert.deepStrictEqual(parsed.value, value);
     });
   });
 

@@ -447,6 +447,11 @@ To be released.
     (64-octet local-part maximum and 254-octet overall address maximum,
     measured in UTF-8).  [[#396], [#622]]
 
+ -  Fixed `email({ allowMultiple: true })` round-trip: `format()` now joins
+    addresses with `, ` (comma-space) instead of bare `,`, so quoted local
+    parts containing commas (e.g., `"Doe, John"@example.com`) survive a
+    `format()` → `parse()` cycle.  [[#354], [#626]]
+
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
     Colons in the pattern field are now percent-encoded (`%3A`) so that the
@@ -517,6 +522,7 @@ To be released.
 [#349]: https://github.com/dahlia/optique/issues/349
 [#352]: https://github.com/dahlia/optique/issues/352
 [#353]: https://github.com/dahlia/optique/issues/353
+[#354]: https://github.com/dahlia/optique/issues/354
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
 [#368]: https://github.com/dahlia/optique/issues/368
@@ -580,6 +586,7 @@ To be released.
 [#618]: https://github.com/dahlia/optique/issues/618
 [#619]: https://github.com/dahlia/optique/pull/619
 [#622]: https://github.com/dahlia/optique/pull/622
+[#626]: https://github.com/dahlia/optique/pull/626
 
 ### @optique/config
 
