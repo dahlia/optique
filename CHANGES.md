@@ -424,7 +424,7 @@ To be released.
     completion command name, not the entire `args` array.  [[#300], [#599]]
 
  -  Fixed `email()` with `allowMultiple` splitting on commas inside quoted
-    local parts and display names.  [[#320], [#606]]
+    local parts and quoted display names.  [[#320], [#606]]
 
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
