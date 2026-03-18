@@ -216,6 +216,11 @@ describe("formatMessageAsRoff()", () => {
     assert.equal(formatMessageAsRoff(msg), '"hello"');
   });
 
+  it("formats value without quotes when quotes: false", () => {
+    const msg = [value("hello")];
+    assert.equal(formatMessageAsRoff(msg, { quotes: false }), "hello");
+  });
+
   it("formats value with special characters", () => {
     const msg = [value("path\\to\\file")];
     assert.equal(formatMessageAsRoff(msg), '"path\\\\to\\\\file"');
@@ -229,6 +234,11 @@ describe("formatMessageAsRoff()", () => {
   it("formats values as space-separated quoted strings", () => {
     const msg = [values(["a", "b", "c"])];
     assert.equal(formatMessageAsRoff(msg), '"a" "b" "c"');
+  });
+
+  it("formats values without quotes when quotes: false", () => {
+    const msg = [values(["a", "b", "c"])];
+    assert.equal(formatMessageAsRoff(msg, { quotes: false }), "a b c");
   });
 
   it("formats single values", () => {

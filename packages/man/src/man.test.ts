@@ -1376,7 +1376,7 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("[8080] (choices: 80, 443, 8080)"));
   });
 
-  it("renders parser-generated choices with quoted values", () => {
+  it("renders parser-generated choices without quotes", () => {
     const section: DocSection = {
       title: "Options",
       entries: [
@@ -1394,9 +1394,8 @@ describe("formatDocPageAsMan()", () => {
 
     const result = formatDocPageAsMan(page, minimalOptions);
     assert.ok(result.includes("Output format."));
-    assert.ok(
-      result.includes('(choices: "json", "yaml", "xml")'),
-    );
+    assert.ok(result.includes("(choices: json, yaml, xml)"));
+    assert.ok(!result.includes('"json"'));
   });
 
   it("supports usage formatter fallback for doc entry terms", () => {
