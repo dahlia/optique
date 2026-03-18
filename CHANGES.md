@@ -795,6 +795,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     to enforce equivalent constraints on prompted values.
     [[#392], [#613], [#615], [#621]]
 
+ -  Added `validate` support to `SelectConfig`, `RawlistConfig`,
+    `ExpandConfig`, and `CheckboxConfig` prompt configurations.  Return
+    `true` to accept, or a string error message to reject and re-prompt.
+    [[#620], [#625]]
+
 [#87]: https://github.com/dahlia/optique/issues/87
 [#137]: https://github.com/dahlia/optique/pull/137
 [#151]: https://github.com/dahlia/optique/issues/151
@@ -807,7 +812,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#612]: https://github.com/dahlia/optique/pull/612
 [#613]: https://github.com/dahlia/optique/pull/613
 [#615]: https://github.com/dahlia/optique/issues/615
+[#620]: https://github.com/dahlia/optique/issues/620
 [#621]: https://github.com/dahlia/optique/pull/621
+[#625]: https://github.com/dahlia/optique/pull/625
 
 ### @optique/temporal
 
