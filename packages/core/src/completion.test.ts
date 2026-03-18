@@ -675,7 +675,7 @@ COMPLETION_SCRIPT
 cd "${tempDir}"
 COMP_WORDS=("inner-cli" ".config/")
 COMP_CWORD=1
-_inner-cli 2>/dev/null
+_inner-cli 2>&1
 printf "%s\\n" "\${COMPREPLY[@]}"
 `;
 
@@ -686,11 +686,13 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         const completions = result.trim().split("\n").filter((l) =>
           l.length > 0
         );
-        // Should find files inside the hidden directory
+        // Should find visible files inside the hidden directory
         ok(completions.some((c) => c.includes("settings.json")));
         // Hidden files inside a hidden directory should also appear
         // since user explicitly navigated into .config/
         ok(completions.some((c) => c.includes(".secret")));
+        // Should have exactly 2 completions
+        deepStrictEqual(completions.length, 2);
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
