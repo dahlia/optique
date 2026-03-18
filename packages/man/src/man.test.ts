@@ -892,6 +892,83 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(!result.includes('.SH "EMPTY"'));
   });
 
+  it("infers COMMANDS heading for untitled command-only sections", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [
+          {
+            term: { type: "command", name: "build" },
+            description: message`Build the project.`,
+          },
+          {
+            term: { type: "command", name: "test" },
+            description: message`Run tests.`,
+          },
+        ],
+      }],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes('.SH "COMMANDS"'));
+    assert.ok(!result.includes('.SH "OPTIONS"'));
+  });
+
+  it("infers ARGUMENTS heading for untitled argument-only sections", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [
+          {
+            term: { type: "argument", metavar: "INPUT" },
+          },
+        ],
+      }],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes('.SH "ARGUMENTS"'));
+    assert.ok(!result.includes('.SH "OPTIONS"'));
+  });
+
+  it("infers OPTIONS heading for untitled option-only sections", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [
+          {
+            term: { type: "option", names: ["--verbose"] },
+            description: message`Enable verbose output.`,
+          },
+        ],
+      }],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes('.SH "OPTIONS"'));
+  });
+
+  it("falls back to OPTIONS for untitled mixed sections", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [
+          {
+            term: { type: "option", names: ["--verbose"] },
+            description: message`Enable verbose output.`,
+          },
+          {
+            term: { type: "command", name: "build" },
+            description: message`Build the project.`,
+          },
+        ],
+      }],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes('.SH "OPTIONS"'));
+  });
+
   it("generates AUTHOR section", () => {
     const page: DocPage = {
       sections: [],

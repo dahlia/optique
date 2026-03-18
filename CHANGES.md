@@ -904,11 +904,17 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     so they can also be passed as explicit overrides in both the parser-based
     and program-based APIs.  [[#260], [#598]]
 
+ -  Fixed `formatDocPageAsMan()` labeling untitled sections as `OPTIONS`
+    regardless of entry kinds.  Untitled command-only sections now render
+    as `COMMANDS`, and untitled argument-only sections render as `ARGUMENTS`.
+    [[#261], [#601]]
+
 [#197]: https://github.com/dahlia/optique/issues/197
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#237]: https://github.com/dahlia/optique/issues/237
 [#260]: https://github.com/dahlia/optique/issues/260
+[#261]: https://github.com/dahlia/optique/issues/261
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#276]: https://github.com/dahlia/optique/issues/276
@@ -948,6 +954,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#586]: https://github.com/dahlia/optique/pull/586
 [#593]: https://github.com/dahlia/optique/pull/593
 [#598]: https://github.com/dahlia/optique/pull/598
+[#601]: https://github.com/dahlia/optique/pull/601
 
 
 Version 0.10.7
