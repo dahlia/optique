@@ -1239,11 +1239,17 @@ describe("createEnvContext defaults", () => {
   it("throws TypeError when source is not a function", () => {
     assert.throws(
       () => createEnvContext({ source: "nope" as never }),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "Expected source to be a function, but got: string.",
+      },
     );
     assert.throws(
       () => createEnvContext({ source: null as never }),
-      TypeError,
+      {
+        name: "TypeError",
+        message: "Expected source to be a function, but got: object.",
+      },
     );
   });
 
