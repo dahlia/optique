@@ -587,6 +587,23 @@ describe("prompt()", () => {
         },
       );
     });
+
+    it("rejects unsupported prompt type even with prompter override", async () => {
+      const parser = prompt(fail<string>(), {
+        type: "mystery" as never,
+        message: "x",
+        prompter: () => Promise.resolve("value"),
+      } as never);
+
+      await assert.rejects(
+        () => parseAsync(parser, []),
+        (error: unknown) => {
+          assert.ok(error instanceof TypeError);
+          assert.match(error.message, /mystery/);
+          return true;
+        },
+      );
+    });
   });
 
   describe("object() composition", () => {
