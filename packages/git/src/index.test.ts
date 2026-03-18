@@ -459,12 +459,45 @@ describe("git parsers", () => {
       }
     });
 
-    it("should fail for non-existent remotes", async () => {
+    it("should report missing remote when remote does not exist", async () => {
       const testRepoDir = await createTestRepo();
       try {
         const parser = gitRemoteBranch("nonexistent", { dir: testRepoDir });
         const result = await parser.parse("main");
         assert.ok(!result.success);
+        if (!result.success) {
+          const msg = formatMessage(result.error);
+          assert.match(msg, /remote/i);
+          assert.match(msg, /nonexistent/);
+          assert.ok(
+            !msg.includes("Remote branch"),
+            "Should not say 'Remote branch' when the remote itself is missing",
+          );
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should report missing branch when remote exists but branch does not", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "origin",
+          url: "https://example.com/repo.git",
+          force: true,
+        });
+
+        const parser = gitRemoteBranch("origin", { dir: testRepoDir });
+        const result = await parser.parse("nonexistent");
+        assert.ok(!result.success);
+        if (!result.success) {
+          const msg = formatMessage(result.error);
+          assert.match(msg, /Remote branch/);
+          assert.match(msg, /nonexistent/);
+        }
       } finally {
         await cleanupTestRepo(testRepoDir);
       }
@@ -1509,6 +1542,59 @@ describe("git parsers", () => {
         const result = await parser.parse("nonexistent-branch");
         assert.ok(!result.success, "Should fail for nonexistent remote branch");
         assert.ok(result.error != null, "Should have custom error message");
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should fall back to notFound for missing remote when remoteNotFound is absent", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const parser = gitRemoteBranch("nonexistent", {
+          dir: testRepoDir,
+          errors: {
+            notFound: (input) => message`Custom: ${input} not found`,
+          },
+        });
+        const result = await parser.parse("main");
+        assert.ok(!result.success);
+        if (!result.success) {
+          const msg = formatMessage(result.error);
+          assert.match(msg, /Custom:/);
+          assert.match(msg, /main/);
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
+    it("should use custom remoteNotFound error for gitRemoteBranch", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "upstream",
+          url: "https://example.com/upstream.git",
+          force: true,
+        });
+        const parser = gitRemoteBranch("nonexistent", {
+          dir: testRepoDir,
+          errors: {
+            remoteNotFound: (remote, availableRemotes) =>
+              message`No such remote ${remote}. Try: ${
+                valueSet(availableRemotes)
+              }`,
+          },
+        });
+        const result = await parser.parse("main");
+        assert.ok(!result.success, "Should fail for nonexistent remote");
+        if (!result.success) {
+          const msg = formatMessage(result.error);
+          assert.match(msg, /No such remote/);
+          assert.match(msg, /nonexistent/);
+          assert.match(msg, /upstream/);
+        }
       } finally {
         await cleanupTestRepo(testRepoDir);
       }

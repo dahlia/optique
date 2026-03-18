@@ -120,6 +120,20 @@ export interface GitParserErrors {
    * @returns A custom error message.
    */
   invalidFormat?: (input: string) => Message;
+
+  /**
+   * Error message when the remote does not exist.
+   * Only used by {@link gitRemoteBranch}.
+   *
+   * @param remote The remote name that was not found.
+   * @param availableRemotes List of available remote names.
+   * @returns A custom error message.
+   * @since 1.0.0
+   */
+  remoteNotFound?: (
+    remote: string,
+    availableRemotes: readonly string[],
+  ) => Message;
 }
 
 /**
@@ -449,6 +463,30 @@ export function gitRemoteBranch(
         const branches = await git.listBranches({ fs: gitFs, dir, remote });
         if (branches.includes(input)) {
           return { success: true, value: input };
+        }
+        if (branches.length === 0) {
+          const remotes = await git.listRemotes({ fs: gitFs, dir });
+          const names = remotes.map((r: GitRemote) => r.remote);
+          if (!names.includes(remote)) {
+            if (errors?.remoteNotFound) {
+              return {
+                success: false,
+                error: errors.remoteNotFound(remote, names),
+              };
+            }
+            if (errors?.notFound) {
+              return {
+                success: false,
+                error: errors.notFound(input, branches),
+              };
+            }
+            return {
+              success: false,
+              error: message`Remote ${
+                value(remote)
+              } does not exist. Available remotes: ${valueSet(names)}`,
+            };
+          }
         }
         if (errors?.notFound) {
           return { success: false, error: errors.notFound(input, branches) };
