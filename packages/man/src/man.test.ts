@@ -8,7 +8,7 @@ import {
 } from "./man.ts";
 import type { DocPage, DocSection } from "@optique/core/doc";
 import type { Usage, UsageTerm } from "@optique/core/usage";
-import { message } from "@optique/core/message";
+import { message, valueSet } from "@optique/core/message";
 import { command, constant } from "@optique/core/primitives";
 import { or } from "@optique/core/constructs";
 import { getDocPage } from "@optique/core/parser";
@@ -1287,6 +1287,115 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes('.SH "OPTIONS"'));
     assert.ok(result.includes("\\fB\\-\\-mode\\fR \\fIMODE\\fR"));
     assert.ok(result.includes("[safe]"));
+  });
+
+  it("handles entries with choices", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--mode"], metavar: "MODE" },
+          description: message`Select mode.`,
+          choices: message`fast, slow`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes("Select mode."));
+    assert.ok(result.includes("(choices: fast, slow)"));
+  });
+
+  it("renders choices when description is omitted", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--mode"], metavar: "MODE" },
+          choices: message`fast, slow`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("\\fB\\-\\-mode\\fR \\fIMODE\\fR"));
+    assert.ok(result.includes("(choices: fast, slow)"));
+  });
+
+  it("handles entries with both default and choices", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--port"], metavar: "NUM" },
+          description: message`Port to listen on.`,
+          default: message`8080`,
+          choices: message`80, 443, 8080`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes("Port to listen on."));
+    assert.ok(result.includes("[8080]"));
+    assert.ok(result.includes("(choices: 80, 443, 8080)"));
+  });
+
+  it("renders default and choices together when description is omitted", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--port"], metavar: "NUM" },
+          default: message`8080`,
+          choices: message`80, 443, 8080`,
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("\\fB\\-\\-port\\fR \\fINUM\\fR"));
+    assert.ok(result.includes("[8080] (choices: 80, 443, 8080)"));
+  });
+
+  it("renders parser-generated choices without quotes", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--format"], metavar: "FMT" },
+          description: message`Output format.`,
+          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("Output format."));
+    assert.ok(result.includes("(choices: json, yaml, xml)"));
+    assert.ok(!result.includes('"json"'));
   });
 
   it("supports usage formatter fallback for doc entry terms", () => {

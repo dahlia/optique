@@ -42,6 +42,7 @@ export {
   escapeRequestArg,
   escapeRoff,
   formatMessageAsRoff,
+  type RoffFormatOptions,
 } from "./roff.ts";
 
 // Re-export from man.ts

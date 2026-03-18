@@ -1,6 +1,21 @@
 import type { Message, MessageTerm } from "@optique/core/message";
 
 /**
+ * Options for roff formatting of messages.
+ *
+ * @since 1.0.0
+ */
+export interface RoffFormatOptions {
+  /**
+   * Whether to wrap `value` and `values` terms in double quotes.
+   * Defaults to `true`.
+   *
+   * @since 1.0.0
+   */
+  readonly quotes?: boolean;
+}
+
+/**
  * Escapes backslashes in text for roff.
  * This is an internal helper that only handles backslash escaping.
  *
@@ -114,9 +129,13 @@ export function escapeHyphens(text: string): string {
  * is done in formatMessageAsRoff after all terms are joined.
  *
  * @param term The message term to format.
+ * @param options Optional formatting options.
  * @returns The roff-formatted string.
  */
-function formatTermAsRoff(term: MessageTerm): string {
+function formatTermAsRoff(
+  term: MessageTerm,
+  options?: RoffFormatOptions,
+): string {
   switch (term.type) {
     case "text": {
       // Only escape backslashes, not line starts (handled later)
@@ -139,12 +158,18 @@ function formatTermAsRoff(term: MessageTerm): string {
       return `\\fI${escapeBackslashes(term.metavar)}\\fR`;
 
     case "value":
-      // Quoted value with escaped content
+      // Quoted value with escaped content (quotes can be disabled)
+      if (options?.quotes === false) {
+        return escapeBackslashes(term.value);
+      }
       return `"${escapeQuotedValue(term.value)}"`;
 
     case "values":
-      // Space-separated quoted values
+      // Space-separated quoted values (quotes can be disabled)
       if (term.values.length === 0) return "";
+      if (options?.quotes === false) {
+        return term.values.map((v) => escapeBackslashes(v)).join(" ");
+      }
       return term.values
         .map((v) => `"${escapeQuotedValue(v)}"`)
         .join(" ");
@@ -205,12 +230,16 @@ function formatTermAsRoff(term: MessageTerm): string {
  * ```
  *
  * @param msg The message to format.
+ * @param options Optional formatting options.
  * @returns The roff-formatted string.
  * @since 0.10.0
  */
-export function formatMessageAsRoff(msg: Message): string {
+export function formatMessageAsRoff(
+  msg: Message,
+  options?: RoffFormatOptions,
+): string {
   // First join all terms
-  const joined = msg.map(formatTermAsRoff).join("");
+  const joined = msg.map((t) => formatTermAsRoff(t, options)).join("");
   // Escape line-start characters (. and ' at start of lines)
   const escaped = escapeLineStarts(joined);
   // Convert paragraph breaks (double newlines) to .PP macro
