@@ -1571,6 +1571,13 @@ describe("git parsers", () => {
     it("should use custom remoteNotFound error for gitRemoteBranch", async () => {
       const testRepoDir = await createTestRepo();
       try {
+        await isomorphicGit.addRemote({
+          fs,
+          dir: testRepoDir,
+          remote: "upstream",
+          url: "https://example.com/upstream.git",
+          force: true,
+        });
         const parser = gitRemoteBranch("nonexistent", {
           dir: testRepoDir,
           errors: {
@@ -1586,6 +1593,7 @@ describe("git parsers", () => {
           const msg = formatMessage(result.error);
           assert.match(msg, /No such remote/);
           assert.match(msg, /nonexistent/);
+          assert.match(msg, /upstream/);
         }
       } finally {
         await cleanupTestRepo(testRepoDir);
