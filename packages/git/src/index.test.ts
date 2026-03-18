@@ -1547,6 +1547,27 @@ describe("git parsers", () => {
       }
     });
 
+    it("should fall back to notFound for missing remote when remoteNotFound is absent", async () => {
+      const testRepoDir = await createTestRepo();
+      try {
+        const parser = gitRemoteBranch("nonexistent", {
+          dir: testRepoDir,
+          errors: {
+            notFound: (input) => message`Custom: ${input} not found`,
+          },
+        });
+        const result = await parser.parse("main");
+        assert.ok(!result.success);
+        if (!result.success) {
+          const msg = formatMessage(result.error);
+          assert.match(msg, /Custom:/);
+          assert.match(msg, /main/);
+        }
+      } finally {
+        await cleanupTestRepo(testRepoDir);
+      }
+    });
+
     it("should use custom remoteNotFound error for gitRemoteBranch", async () => {
       const testRepoDir = await createTestRepo();
       try {

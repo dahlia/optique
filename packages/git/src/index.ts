@@ -474,6 +474,12 @@ export function gitRemoteBranch(
                 error: errors.remoteNotFound(remote, names),
               };
             }
+            if (errors?.notFound) {
+              return {
+                success: false,
+                error: errors.notFound(input, branches),
+              };
+            }
             return {
               success: false,
               error: message`Remote ${
