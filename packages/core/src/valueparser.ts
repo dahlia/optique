@@ -2966,6 +2966,10 @@ export function email(
     return lowercase ? resultEmail.toLowerCase() : resultEmail;
   }
 
+  /**
+   * Splits an input string on commas, respecting quoted segments and
+   * angle-bracket display-name syntax per RFC 5322.
+   */
   function splitEmails(input: string): string[] {
     const result: string[] = [];
     let current = "";
