@@ -6674,6 +6674,20 @@ describe("email()", () => {
       assert.ok(result.success);
       assert.strictEqual(result.value, "smith@example.com");
     });
+
+    it("should accept mixed quoted and unquoted words in display name", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result1 = parser.parse(
+        'John "Johnny" Doe <john@example.com>',
+      );
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "john@example.com");
+
+      const result2 = parser.parse('"John" Doe <john@example.com>');
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "john@example.com");
+    });
   });
 
   describe("lowercase option", () => {

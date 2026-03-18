@@ -2864,10 +2864,12 @@ export function email(
     let emailAddr = trimmed;
     if (allowDisplayName) {
       // Match well-formed display-name syntax per RFC 5322:
-      //   "Quoted Name" <email>   or   Unquoted Name <email>
-      // Rejects bare <email>, multiple <...> groups, and trailing text.
+      //   Display Name <email>  (phrase may mix unquoted and quoted words)
+      // Rejects bare <email>, multiple <...> groups, and trailing text
+      // by forbidding angle brackets in the display-name portion and
+      // requiring at least one non-whitespace character before '<'.
       const displayNameMatch = trimmed.match(
-        /^(?:"(?:[^"\\]|\\.)*"|[^<>"]+)\s*<([^<>]+)>$/,
+        /^[^<>]*\S[^<>]*<([^<>]+)>$/,
       );
       if (displayNameMatch) {
         emailAddr = displayNameMatch[1].trim();
