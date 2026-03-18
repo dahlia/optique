@@ -126,7 +126,11 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
   if (options.source !== undefined && typeof options.source !== "function") {
     throw new TypeError(
       `Expected source to be a function, but got: ${
-        options.source === null ? "null" : typeof options.source
+        options.source === null
+          ? "null"
+          : Array.isArray(options.source)
+          ? "array"
+          : typeof options.source
       }.`,
     );
   }

@@ -1251,6 +1251,13 @@ describe("createEnvContext defaults", () => {
         message: "Expected source to be a function, but got: null.",
       },
     );
+    assert.throws(
+      () => createEnvContext({ source: [] as never }),
+      {
+        name: "TypeError",
+        message: "Expected source to be a function, but got: array.",
+      },
+    );
   });
 
   it("falls back to process.env when Deno.env.get is unavailable", () => {
