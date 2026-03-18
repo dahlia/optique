@@ -1202,6 +1202,46 @@ describe("path", () => {
     });
   });
 
+  describe("boolean option validation", () => {
+    const invalidBooleanValues = ["no", 1, "true", 0, null] as const;
+
+    it("should reject non-boolean mustExist option", () => {
+      for (const value of invalidBooleanValues) {
+        assert.throws(
+          // @ts-expect-error intentional runtime validation test
+          () => path({ mustExist: value }),
+          { name: "TypeError", message: /Expected mustExist to be a boolean/ },
+        );
+      }
+    });
+
+    it("should reject non-boolean mustNotExist option", () => {
+      for (const value of invalidBooleanValues) {
+        assert.throws(
+          // @ts-expect-error intentional runtime validation test
+          () => path({ mustNotExist: value }),
+          {
+            name: "TypeError",
+            message: /Expected mustNotExist to be a boolean/,
+          },
+        );
+      }
+    });
+
+    it("should reject non-boolean allowCreate option", () => {
+      for (const value of invalidBooleanValues) {
+        assert.throws(
+          // @ts-expect-error intentional runtime validation test
+          () => path({ allowCreate: value }),
+          {
+            name: "TypeError",
+            message: /Expected allowCreate to be a boolean/,
+          },
+        );
+      }
+    });
+  });
+
   describe("metavar validation", () => {
     it("should throw TypeError when metavar is empty string", () => {
       assert.throws(

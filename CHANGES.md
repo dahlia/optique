@@ -307,18 +307,18 @@ To be released.
     invisible items in help text, error messages, and shell completions.
     [[#371], [#546]]
 
- -  Changed `choice()` to reject non-boolean `caseInsensitive` option values
-    at runtime.  Previously, truthy non-boolean values like `"no"` silently
+ -  Changed `choice()` to reject non-Boolean `caseInsensitive` option values
+    at runtime.  Previously, truthy non-Boolean values like `"no"` silently
     enabled case-insensitive matching due to JavaScript truthiness coercion.
     [[#389], [#548]]
 
- -  Changed `port()` to reject non-boolean `disallowWellKnown` option values
-    at runtime.  Previously, truthy non-boolean values like `"no"` silently
+ -  Changed `port()` to reject non-Boolean `disallowWellKnown` option values
+    at runtime.  Previously, truthy non-Boolean values like `"no"` silently
     enabled well-known port restrictions due to JavaScript truthiness coercion.
     [[#370], [#573]]
 
- -  Changed `portRange()` to reject non-boolean `disallowWellKnown` and
-    `allowSingle` option values at runtime.  Previously, truthy non-boolean
+ -  Changed `portRange()` to reject non-Boolean `disallowWellKnown` and
+    `allowSingle` option values at runtime.  Previously, truthy non-Boolean
     values like `"no"` silently enabled those behaviors due to JavaScript
     truthiness coercion.  [[#370], [#573]]
 
@@ -747,6 +747,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     options such as `help`, `programName`, and `version`.
     [[#240], [#241], [#575], [#581]]
 
+ -  `path()` now throws `TypeError` at construction time when `mustExist`,
+    `mustNotExist`, or `allowCreate` receive non-Boolean values.  Previously,
+    JavaScript truthiness silently coerced invalid values like `"no"` into
+    `true`.  [[#383], [#591]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
@@ -756,12 +761,14 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#343]: https://github.com/dahlia/optique/issues/343
 [#358]: https://github.com/dahlia/optique/issues/358
 [#361]: https://github.com/dahlia/optique/issues/361
+[#383]: https://github.com/dahlia/optique/issues/383
 [#530]: https://github.com/dahlia/optique/pull/530
 [#538]: https://github.com/dahlia/optique/pull/538
 [#539]: https://github.com/dahlia/optique/pull/539
 [#541]: https://github.com/dahlia/optique/pull/541
 [#543]: https://github.com/dahlia/optique/pull/543
 [#545]: https://github.com/dahlia/optique/pull/545
+[#591]: https://github.com/dahlia/optique/pull/591
 
 ### @optique/man
 
@@ -858,7 +865,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     callers must use `generateManPageAsync()` or `generateManPage()` for async
     parsers.  [[#291], [#584]]
 
- -  Fixed `formatUsageTermAsRoff()` rendering optional and boolean options
+ -  Fixed `formatUsageTermAsRoff()` rendering optional and Boolean options
     with duplicated brackets (e.g., `[[--host STRING]]`) in the SYNOPSIS
     section.  The `optional` and `multiple` wrappers now avoid adding
     redundant brackets around inner `option` terms that already imply
@@ -3465,7 +3472,7 @@ Released on November 25, 2025.
     );
     ~~~~
 
-    The callback receives a `NoMatchContext` object with boolean flags
+    The callback receives a `NoMatchContext` object with Boolean flags
     (`hasOptions`, `hasCommands`, `hasArguments`) indicating what types of
     inputs are expected. This allows generating language-specific or
     context-specific error messages while maintaining backward compatibility
