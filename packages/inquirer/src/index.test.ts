@@ -4059,20 +4059,28 @@ describe("prompt()", () => {
     });
 
     it("still validates CLI input correctly", async () => {
+      let promptCalls = 0;
       const parser = prompt(
         option("--port", integer({ min: 1024 })),
         {
           type: "number",
           message: "Port:",
-          prompter: () => Promise.reject(new Error("should not prompt")),
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.reject(
+              new TypeError("Prompt should not be called."),
+            );
+          },
         },
       );
       const valid = await parseAsync(parser, ["--port", "8080"]);
       assert.ok(valid.success);
       assert.equal(valid.value, 8080);
+      assert.equal(promptCalls, 0);
 
       const invalid = await parseAsync(parser, ["--port", "80"]);
       assert.ok(!invalid.success);
+      assert.equal(promptCalls, 0);
     });
   });
 });
