@@ -1027,6 +1027,7 @@ export interface BindConfigOptions<T, TValue, TConfigMeta = ConfigMeta> {
  * @param parser The parser to bind to config values.
  * @param options Binding options including context, key, and default.
  * @returns A new parser with config fallback behavior.
+ * @throws {TypeError} If `key` is not a string or function.
  * @since 0.10.0
  *
  * @example
@@ -1052,6 +1053,14 @@ export function bindConfig<
   parser: Parser<M, TValue, TState>,
   options: BindConfigOptions<T, TValue, TConfigMeta>,
 ): Parser<M, TValue, TState> {
+  if (typeof options.key !== "string" && typeof options.key !== "function") {
+    throw new TypeError(
+      `Expected key to be a string or function, but got: ${
+        getTypeName(options.key)
+      }.`,
+    );
+  }
+
   // Unique brand symbol scoped to this bindConfig call, mirroring the
   // approach used by bindEnv.  This prevents complete() from accidentally
   // treating an unrelated state object with a `hasCliValue` property as a
