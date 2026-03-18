@@ -823,4 +823,79 @@ describe("Program-based API", () => {
     assert.ok(!optionsSection.includes("\\-\\-doc\\-hidden"));
     assert.ok(!optionsSection.includes("A doc-hidden option."));
   });
+
+  it("includes brief, description, and footer from metadata", () => {
+    const prog = defineProgram({
+      parser: object({
+        verbose: flag("-v", "--verbose"),
+      }),
+      metadata: {
+        name: "myapp",
+        version: "1.0.0",
+        brief: message`A sample application.`,
+        description:
+          message`This is a detailed description of the application.`,
+        footer: message`Copyright 2026 Example Corp.`,
+      },
+    });
+
+    const result = generateManPage(prog, { section: 1 });
+
+    // NAME section should include brief
+    assert.ok(result.includes("\\- A sample application."));
+    // DESCRIPTION section should exist
+    assert.ok(result.includes(".SH DESCRIPTION"));
+    assert.ok(
+      result.includes(
+        "This is a detailed description of the application.",
+      ),
+    );
+    // Footer should be present
+    assert.ok(result.includes("Copyright 2026 Example Corp."));
+  });
+
+  it("allows overriding brief, description, and footer via options", () => {
+    const prog = defineProgram({
+      parser: object({}),
+      metadata: {
+        name: "myapp",
+        brief: message`Original brief.`,
+        description: message`Original description.`,
+        footer: message`Original footer.`,
+      },
+    });
+
+    const result = generateManPage(prog, {
+      section: 1,
+      brief: message`Overridden brief.`,
+      description: message`Overridden description.`,
+      footer: message`Overridden footer.`,
+    });
+
+    assert.ok(result.includes("\\- Overridden brief."));
+    assert.ok(result.includes("Overridden description."));
+    assert.ok(result.includes("Overridden footer."));
+    assert.ok(!result.includes("Original brief."));
+    assert.ok(!result.includes("Original description."));
+    assert.ok(!result.includes("Original footer."));
+  });
+
+  it("accepts brief, description, and footer in parser-based API", () => {
+    const parser = object({
+      verbose: flag("-v", "--verbose"),
+    });
+
+    const result = generateManPage(parser, {
+      name: "myapp",
+      section: 1,
+      brief: message`A CLI tool.`,
+      description: message`Detailed description.`,
+      footer: message`Footer text.`,
+    });
+
+    assert.ok(result.includes("\\- A CLI tool."));
+    assert.ok(result.includes(".SH DESCRIPTION"));
+    assert.ok(result.includes("Detailed description."));
+    assert.ok(result.includes("Footer text."));
+  });
 });

@@ -891,10 +891,17 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     redundant brackets around inner `option` terms that already imply
     optionality.  [[#197], [#586]]
 
+ -  Fixed `generateManPage*()` dropping `brief`, `description`, and `footer`
+    from `Program` metadata.  These fields are now forwarded to the man page
+    output.  Added `brief`, `description`, and `footer` to `ManPageOptions`
+    so they can also be passed as explicit overrides in both the parser-based
+    and program-based APIs.  [[#260], [#598]]
+
 [#197]: https://github.com/dahlia/optique/issues/197
 [#221]: https://github.com/dahlia/optique/issues/221
 [#222]: https://github.com/dahlia/optique/issues/222
 [#237]: https://github.com/dahlia/optique/issues/237
+[#260]: https://github.com/dahlia/optique/issues/260
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#276]: https://github.com/dahlia/optique/issues/276
@@ -933,6 +940,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#584]: https://github.com/dahlia/optique/pull/584
 [#586]: https://github.com/dahlia/optique/pull/586
 [#593]: https://github.com/dahlia/optique/pull/593
+[#598]: https://github.com/dahlia/optique/pull/598
 
 
 Version 0.10.7

@@ -18,10 +18,10 @@ export interface GenerateManPageOptions extends ManPageOptions {}
 /**
  * Options for generating a man page from a {@link Program}.
  *
- * This interface omits `name`, `version`, `author`, `bugs`, and `examples`
- * from {@link ManPageOptions} since they are extracted from the program's
- * metadata. You can still override them by providing values in this options
- * object.
+ * This interface omits `name`, `version`, `author`, `bugs`, `examples`,
+ * `brief`, `description`, and `footer` from {@link ManPageOptions} since they
+ * are extracted from the program's metadata. You can still override them by
+ * providing values in this options object.
  *
  * @since 0.10.0
  */
@@ -115,6 +115,9 @@ function extractParserAndOptions<M extends Mode>(
         author: programOptions.author ?? metadata.author,
         bugs: programOptions.bugs ?? metadata.bugs,
         examples: programOptions.examples ?? metadata.examples,
+        brief: programOptions.brief ?? metadata.brief,
+        description: programOptions.description ?? metadata.description,
+        footer: programOptions.footer ?? metadata.footer,
         seeAlso: programOptions.seeAlso,
         environment: programOptions.environment,
         files: programOptions.files,

@@ -98,6 +98,27 @@ export interface ManPageOptions {
    * Exit status codes to document in the EXIT STATUS section.
    */
   readonly exitStatus?: DocSection;
+
+  /**
+   * A brief description of the program for the NAME section.
+   * Overrides the brief from the {@link DocPage} if both are present.
+   * @since 1.0.0
+   */
+  readonly brief?: Message;
+
+  /**
+   * A detailed description of the program for the DESCRIPTION section.
+   * Overrides the description from the {@link DocPage} if both are present.
+   * @since 1.0.0
+   */
+  readonly description?: Message;
+
+  /**
+   * Footer text appended at the end of the man page.
+   * Overrides the footer from the {@link DocPage} if both are present.
+   * @since 1.0.0
+   */
+  readonly footer?: Message;
 }
 
 /**
@@ -542,10 +563,11 @@ export function formatDocPageAsMan(
 
   // .SH NAME
   lines.push(".SH NAME");
-  if (page.brief) {
+  const brief = options.brief ?? page.brief;
+  if (brief) {
     lines.push(
       `${escapeHyphens(escapeRoff(options.name))} \\- ${
-        formatMessageAsRoff(page.brief)
+        formatMessageAsRoff(brief)
       }`,
     );
   } else {
@@ -563,9 +585,10 @@ export function formatDocPageAsMan(
   }
 
   // .SH DESCRIPTION
-  if (page.description) {
+  const description = options.description ?? page.description;
+  if (description) {
     lines.push(".SH DESCRIPTION");
-    lines.push(formatMessageAsRoff(page.description));
+    lines.push(formatMessageAsRoff(description));
   }
 
   // Process DocPage sections
@@ -656,9 +679,10 @@ export function formatDocPageAsMan(
   }
 
   // Footer (if present, add at the end)
-  if (page.footer) {
+  const footer = options.footer ?? page.footer;
+  if (footer) {
     lines.push(".PP");
-    lines.push(formatMessageAsRoff(page.footer));
+    lines.push(formatMessageAsRoff(footer));
   }
 
   return lines.join("\n");

@@ -122,9 +122,12 @@ The following metadata fields are shared between `Program` and man pages:
 
  -  `name`: Program name
  -  `version`: Version string
+ -  `brief`: Brief description for the NAME section
+ -  `description`: Detailed description for the DESCRIPTION section
  -  `author`: Author information
  -  `bugs`: Bug reporting URL
  -  `examples`: Usage examples
+ -  `footer`: Footer text
 
 You can still override any of these by passing them in the options:
 
@@ -188,6 +191,19 @@ the generated man page:
 
 `examples`
 :   A `Message` with usage examples, shown in the EXAMPLES section.
+
+`brief`
+:   A `Message` for the NAME section's brief description.  When provided,
+    this overrides the brief from the parser's documentation.
+
+`description`
+:   A `Message` for the DESCRIPTION section.  When provided,
+    this overrides the description from the parser's documentation.
+
+`footer`
+:   A `Message` appended at the end of the man page as footer text.
+    When provided, this overrides the footer from the parser's
+    documentation.
 
 
 Complete example
