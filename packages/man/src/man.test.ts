@@ -8,7 +8,7 @@ import {
 } from "./man.ts";
 import type { DocPage, DocSection } from "@optique/core/doc";
 import type { Usage, UsageTerm } from "@optique/core/usage";
-import { message } from "@optique/core/message";
+import { message, valueSet } from "@optique/core/message";
 import { command, constant } from "@optique/core/primitives";
 import { or } from "@optique/core/constructs";
 import { getDocPage } from "@optique/core/parser";
@@ -1374,6 +1374,29 @@ describe("formatDocPageAsMan()", () => {
     const result = formatDocPageAsMan(page, minimalOptions);
     assert.ok(result.includes("\\fB\\-\\-port\\fR \\fINUM\\fR"));
     assert.ok(result.includes("[8080] (choices: 80, 443, 8080)"));
+  });
+
+  it("renders parser-generated choices with quoted values", () => {
+    const section: DocSection = {
+      title: "Options",
+      entries: [
+        {
+          term: { type: "option", names: ["--format"], metavar: "FMT" },
+          description: message`Output format.`,
+          choices: valueSet(["json", "yaml", "xml"], { type: "unit" }),
+        },
+      ],
+    };
+
+    const page: DocPage = {
+      sections: [section],
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+    assert.ok(result.includes("Output format."));
+    assert.ok(
+      result.includes('(choices: "json", "yaml", "xml")'),
+    );
   });
 
   it("supports usage formatter fallback for doc entry terms", () => {
