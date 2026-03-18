@@ -973,6 +973,23 @@ describe("createConfigContext input validation", () => {
     );
   });
 
+  test("rejects non-string getConfigPath() return value (null)", () => {
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { getConfigPath: (() => null) as never },
+        ),
+      {
+        name: "TypeError",
+        message:
+          "Expected getConfigPath() to return a string or undefined, but got: null.",
+      },
+    );
+  });
+
   test("rejects non-string getConfigPath() return value (number)", () => {
     const schema = z.object({ host: z.string() });
     const context = createConfigContext({ schema });
