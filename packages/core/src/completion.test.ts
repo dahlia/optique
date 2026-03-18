@@ -540,6 +540,56 @@ fi
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should include hidden files when includeHidden is true", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-hidden-completion-"));
+
+      try {
+        // CLI that emits __FILE__ with hidden=1
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\n'
+`;
+        const cliPath = join(tempDir, "hidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create visible and hidden files
+        writeFileSync(join(tempDir, "visible.txt"), "");
+        writeFileSync(join(tempDir, ".hidden"), "");
+        writeFileSync(join(tempDir, ".env"), "");
+
+        const script = bash.generateScript("hidden-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("hidden-cli" "")
+COMP_CWORD=1
+_hidden-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes(".hidden")));
+        ok(completions.some((c) => c.includes(".env")));
+        ok(completions.some((c) => c.includes("visible.txt")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("zsh shell completion", () => {
