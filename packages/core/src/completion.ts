@@ -98,6 +98,18 @@ function _${programName} () {
       set +f
       unset GLOBIGNORE
 
+      # Expand tilde prefix for file globbing
+      local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
+      if [[ "$current" =~ ^(~[a-zA-Z0-9_.-]*)(/.*)?$ ]]; then
+        __tilde_prefix="\${BASH_REMATCH[1]}"
+        eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
+        if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
+          __glob_current="\${__tilde_expanded}\${current#\$__tilde_prefix}"
+        else
+          __tilde_prefix=""
+        fi
+      fi
+
       # Generate file completions based on type
       case "$type" in
         file)
@@ -105,19 +117,19 @@ function _${programName} () {
           if [[ -n "$extensions" ]]; then
             # Complete with extension filtering
             local ext_pattern="\${extensions//,/|}"
-            for file in "$current"*; do
+            for file in "$__glob_current"*; do
               [[ -e "$file" && "$file" =~ \\.($ext_pattern)$ ]] && COMPREPLY+=("$file")
             done
           else
             # Complete files only, exclude directories
-            for item in "$current"*; do
+            for item in "$__glob_current"*; do
               [[ -f "$item" ]] && COMPREPLY+=("$item")
             done
           fi
           ;;
         directory)
           # Complete directories only
-          for dir in "$current"*; do
+          for dir in "$__glob_current"*; do
             [[ -d "$dir" ]] && COMPREPLY+=("$dir/")
           done
           ;;
@@ -127,7 +139,7 @@ function _${programName} () {
             # Files with extension filtering + directories
             # Files with extension filtering
             local ext_pattern="\${extensions//,/|}"
-            for item in "$current"*; do
+            for item in "$__glob_current"*; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               elif [[ -f "$item" && "$item" =~ \\.($ext_pattern)$ ]]; then
@@ -136,7 +148,7 @@ function _${programName} () {
             done
           else
             # Complete files and directories, add slash to directories
-            for item in "$current"*; do
+            for item in "$__glob_current"*; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               elif [[ -e "$item" || -L "$item" ]]; then
@@ -146,6 +158,14 @@ function _${programName} () {
           fi
           ;;
       esac
+
+      # Restore tilde prefix in completion results
+      if [[ -n "$__tilde_prefix" ]]; then
+        local __i
+        for __i in "\${!COMPREPLY[@]}"; do
+          COMPREPLY[\$__i]="\${COMPREPLY[\$__i]/#\$__tilde_expanded/\$__tilde_prefix}"
+        done
+      fi
 
       # Restore glob/shell options
       if [[ "$__dotglob_was_set" == "0" ]]; then shopt -u dotglob; else shopt -s dotglob; fi

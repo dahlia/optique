@@ -775,6 +775,61 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should expand tilde prefix in file completion", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const home = process.env.HOME;
+      if (!home) {
+        t.skip("HOME not set");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(home, ".optique-tilde-test-"));
+
+      try {
+        // CLI that emits __FILE__:file directive
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "tilde-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "testfile.txt"), "");
+
+        const script = bash.generateScript("tilde-cli");
+
+        // Compute the tilde-relative path prefix
+        const relDir = tempDir.replace(home, "~");
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+COMP_WORDS=("tilde-cli" "${relDir}/")
+COMP_CWORD=1
+_tilde-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find the file
+        ok(completions.some((c) => c.includes("testfile.txt")));
+        // Results should use tilde prefix, not expanded home
+        ok(completions.some((c) => c.startsWith("~/")));
+        ok(!completions.some((c) => c.startsWith(home)));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("zsh shell completion", () => {
