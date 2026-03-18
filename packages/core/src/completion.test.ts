@@ -881,6 +881,48 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       }
     });
 
+    it("should preserve caller's GLOBIGNORE after completion", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-globignore-"));
+
+      try {
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "globignore-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "keep.txt"), "");
+
+        const script = bash.generateScript("globignore-cli");
+
+        // Set GLOBIGNORE before running completion, verify it's preserved after
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+GLOBIGNORE='*.tmp'
+COMP_WORDS=("globignore-cli" "")
+COMP_CWORD=1
+_globignore-cli 2>/dev/null
+[[ "$GLOBIGNORE" == "*.tmp" ]] && echo "globignore_preserved" || echo "globignore_lost:$GLOBIGNORE"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        ok(result.includes("globignore_preserved"));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should complete non-regular files in any mode", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");
