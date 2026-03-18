@@ -444,8 +444,8 @@ To be released.
     Unbracketed IPv4-like dotted quads are now rejected.  [[#387], [#617]]
 
  -  Fixed `email()` accepting addresses that exceed RFC 5321 length limits
-    (64-character local-part maximum and 254-character overall address
-    maximum).  [[#396], [#622]]
+    (64-octet local-part maximum and 254-octet overall address maximum,
+    measured in UTF-8).  [[#396], [#622]]
 
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
