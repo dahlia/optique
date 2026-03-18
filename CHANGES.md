@@ -443,6 +443,10 @@ To be released.
     `user@192.168.0.1`, `user@999.999.999.999`) as valid email addresses.
     Unbracketed IPv4-like dotted quads are now rejected.  [[#387], [#617]]
 
+ -  Fixed `email()` accepting addresses that exceed RFC 5321 length limits
+    (64-octet local-part maximum and 254-octet overall address maximum,
+    measured in UTF-8).  [[#396], [#622]]
+
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
     Colons in the pattern field are now percent-encoded (`%3A`) so that the
@@ -523,6 +527,7 @@ To be released.
 [#387]: https://github.com/dahlia/optique/issues/387
 [#388]: https://github.com/dahlia/optique/issues/388
 [#389]: https://github.com/dahlia/optique/issues/389
+[#396]: https://github.com/dahlia/optique/issues/396
 [#429]: https://github.com/dahlia/optique/issues/429
 [#490]: https://github.com/dahlia/optique/pull/490
 [#507]: https://github.com/dahlia/optique/issues/507
@@ -574,6 +579,7 @@ To be released.
 [#617]: https://github.com/dahlia/optique/pull/617
 [#618]: https://github.com/dahlia/optique/issues/618
 [#619]: https://github.com/dahlia/optique/pull/619
+[#622]: https://github.com/dahlia/optique/pull/622
 
 ### @optique/config
 
