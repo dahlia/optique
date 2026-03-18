@@ -201,9 +201,9 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
     Object.getPrototypeOf(target) !== Object.prototype &&
     Object.getPrototypeOf(target) !== null
   ) {
-    // Clone non-plain objects via injectAnnotations() to avoid mutating
-    // shared parser initialState values while still propagating annotations.
-    return injectAnnotations(target, annotations);
+    // Avoid mutating non-plain objects because they may be shared parser
+    // initialState values, which can leak annotations across runs.
+    return target;
   }
   const cloned = Object.create(
     Object.getPrototypeOf(target),
