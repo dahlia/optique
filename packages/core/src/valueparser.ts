@@ -2994,6 +2994,11 @@ export function email(
       }
     }
 
+    // Reject all-numeric domains (IPv4-like patterns like 192.168.0.1)
+    if (domainLabels.every((label) => /^[0-9]+$/.test(label))) {
+      return null;
+    }
+
     // Return the email (preserve original form or extracted from display name)
     const resultEmail = emailAddr;
     if (!lowercase) return resultEmail;

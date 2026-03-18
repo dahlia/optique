@@ -439,6 +439,11 @@ To be released.
     of only the domain part; the local part (including quoted local parts)
     is now preserved.  [[#352], [#614]]
 
+ -  Fixed `email()` accepting IPv4-like all-numeric domains (e.g.,
+    `user@192.168.0.1`, `user@999.999.999.999`) as valid email addresses.
+    Domains where every label is purely numeric are now rejected.
+    [[#387], [#617]]
+
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
     Colons in the pattern field are now percent-encoded (`%3A`) so that the
@@ -509,6 +514,7 @@ To be released.
 [#371]: https://github.com/dahlia/optique/issues/371
 [#378]: https://github.com/dahlia/optique/issues/378
 [#385]: https://github.com/dahlia/optique/issues/385
+[#387]: https://github.com/dahlia/optique/issues/387
 [#388]: https://github.com/dahlia/optique/issues/388
 [#389]: https://github.com/dahlia/optique/issues/389
 [#429]: https://github.com/dahlia/optique/issues/429
@@ -559,6 +565,7 @@ To be released.
 [#611]: https://github.com/dahlia/optique/pull/611
 [#614]: https://github.com/dahlia/optique/pull/614
 [#616]: https://github.com/dahlia/optique/pull/616
+[#617]: https://github.com/dahlia/optique/pull/617
 
 ### @optique/config
 

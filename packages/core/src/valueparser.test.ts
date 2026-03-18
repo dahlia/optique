@@ -6480,6 +6480,23 @@ describe("email()", () => {
       // Domain ending with dot
       const result10 = parser.parse("user@example.com.");
       assert.ok(!result10.success);
+
+      // All-numeric domain labels (IPv4-like patterns)
+      const result11 = parser.parse("user@192.168.0.1");
+      assert.ok(!result11.success);
+
+      const result12 = parser.parse("user@127.0.0.1");
+      assert.ok(!result12.success);
+
+      const result13 = parser.parse("user@999.999.999.999");
+      assert.ok(!result13.success);
+
+      const result14 = parser.parse("user@0.0.0.0");
+      assert.ok(!result14.success);
+
+      // Mixed numeric and alphabetic labels should still be valid
+      const result15 = parser.parse("user@123.example.com");
+      assert.ok(result15.success);
     });
   });
 
