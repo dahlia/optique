@@ -985,6 +985,35 @@ describe("formatDocPageAsMan()", () => {
     assert.ok(result.includes("Hong Minhee <hong@minhee.org>"));
   });
 
+  it("falls back to page.author when options.author is absent", () => {
+    const page: DocPage = {
+      sections: [],
+      author: message`Page Author`,
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes(".SH AUTHOR"));
+    assert.ok(result.includes("Page Author"));
+  });
+
+  it("prefers options.author over page.author", () => {
+    const page: DocPage = {
+      sections: [],
+      author: message`Page Author`,
+    };
+
+    const options: ManPageOptions = {
+      ...minimalOptions,
+      author: message`Options Author`,
+    };
+
+    const result = formatDocPageAsMan(page, options);
+
+    assert.ok(result.includes("Options Author"));
+    assert.ok(!result.includes("Page Author"));
+  });
+
   it("generates BUGS section", () => {
     const page: DocPage = {
       sections: [],
@@ -1005,6 +1034,35 @@ describe("formatDocPageAsMan()", () => {
     );
   });
 
+  it("falls back to page.bugs when options.bugs is absent", () => {
+    const page: DocPage = {
+      sections: [],
+      bugs: message`Page Bugs`,
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes(".SH BUGS"));
+    assert.ok(result.includes("Page Bugs"));
+  });
+
+  it("prefers options.bugs over page.bugs", () => {
+    const page: DocPage = {
+      sections: [],
+      bugs: message`Page Bugs`,
+    };
+
+    const options: ManPageOptions = {
+      ...minimalOptions,
+      bugs: message`Options Bugs`,
+    };
+
+    const result = formatDocPageAsMan(page, options);
+
+    assert.ok(result.includes("Options Bugs"));
+    assert.ok(!result.includes("Page Bugs"));
+  });
+
   it("generates EXAMPLES section", () => {
     const page: DocPage = {
       sections: [],
@@ -1019,6 +1077,35 @@ describe("formatDocPageAsMan()", () => {
 
     assert.ok(result.includes(".SH EXAMPLES"));
     assert.ok(result.includes("Run with verbose output:"));
+  });
+
+  it("falls back to page.examples when options.examples is absent", () => {
+    const page: DocPage = {
+      sections: [],
+      examples: message`Page Examples`,
+    };
+
+    const result = formatDocPageAsMan(page, minimalOptions);
+
+    assert.ok(result.includes(".SH EXAMPLES"));
+    assert.ok(result.includes("Page Examples"));
+  });
+
+  it("prefers options.examples over page.examples", () => {
+    const page: DocPage = {
+      sections: [],
+      examples: message`Page Examples`,
+    };
+
+    const options: ManPageOptions = {
+      ...minimalOptions,
+      examples: message`Options Examples`,
+    };
+
+    const result = formatDocPageAsMan(page, options);
+
+    assert.ok(result.includes("Options Examples"));
+    assert.ok(!result.includes("Page Examples"));
   });
 
   it("generates SEE ALSO section", () => {

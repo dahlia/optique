@@ -801,6 +801,12 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/man
 
+ -  Fixed `formatDocPageAsMan()` to fall back to `DocPage.examples`,
+    `DocPage.author`, and `DocPage.bugs` when the corresponding
+    `ManPageOptions` fields are absent.  Previously, those page-level
+    metadata fields were silently ignored unless duplicated in the options.
+    [[#263], [#602]]
+
  -  Fixed `formatDocPageAsMan()` to respect command `usageLine` overrides
     in the SYNOPSIS section.  Previously, the man page formatter always
     rendered the default command usage, ignoring custom `usageLine` values.
@@ -922,6 +928,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#237]: https://github.com/dahlia/optique/issues/237
 [#260]: https://github.com/dahlia/optique/issues/260
 [#261]: https://github.com/dahlia/optique/issues/261
+[#263]: https://github.com/dahlia/optique/issues/263
 [#273]: https://github.com/dahlia/optique/issues/273
 [#274]: https://github.com/dahlia/optique/issues/274
 [#276]: https://github.com/dahlia/optique/issues/276
@@ -962,6 +969,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#593]: https://github.com/dahlia/optique/pull/593
 [#598]: https://github.com/dahlia/optique/pull/598
 [#601]: https://github.com/dahlia/optique/pull/601
+[#602]: https://github.com/dahlia/optique/pull/602
 
 
 Version 0.10.7
