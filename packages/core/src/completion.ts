@@ -99,13 +99,6 @@ function _${programName} () {
       shopt -u failglob 2>/dev/null
       set +f
       unset GLOBIGNORE
-      # Enable dotglob when hidden files are requested, or when the user
-      # is already navigating inside a hidden directory (e.g., .config/nvim/)
-      local __inside_hidden_path=0
-      case "/\${current%/}/" in
-        */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
-      esac
-      if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" ]]; then shopt -s dotglob; fi
 
       # Expand tilde prefix for file globbing
       local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
@@ -118,6 +111,16 @@ function _${programName} () {
           __tilde_prefix=""
         fi
       fi
+
+      # Enable dotglob when hidden files are requested, or when the user
+      # is already navigating inside a hidden directory (e.g., ~/.config/nvim/)
+      # This runs after tilde expansion so that paths like ~/.config/ are
+      # checked against the expanded path, not the literal ~ string.
+      local __inside_hidden_path=0
+      case "/\${__glob_current%/}/" in
+        */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
+      esac
+      if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" ]]; then shopt -s dotglob; fi
 
       # Generate file completions based on type
       case "$type" in
