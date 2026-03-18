@@ -2862,10 +2862,15 @@ export function email(
 
     // Handle display name format: "Name <email@example.com>"
     let emailAddr = trimmed;
-    if (allowDisplayName && trimmed.includes("<") && trimmed.endsWith(">")) {
-      const match = trimmed.match(/<([^>]+)>$/);
-      if (match) {
-        emailAddr = match[1].trim();
+    if (allowDisplayName) {
+      // Match well-formed display-name syntax per RFC 5322:
+      //   "Quoted Name" <email>   or   Unquoted Name <email>
+      // Rejects bare <email>, multiple <...> groups, and trailing text.
+      const displayNameMatch = trimmed.match(
+        /^(?:"(?:[^"\\]|\\.)*"|[^<>"]+)\s*<([^<>]+)>$/,
+      );
+      if (displayNameMatch) {
+        emailAddr = displayNameMatch[1].trim();
       }
     }
 
