@@ -688,7 +688,11 @@ export interface ConfigContext<T, TConfigMeta = ConfigMeta>
 }
 
 function isStandardSchema(value: unknown): value is StandardSchemaV1 {
-  if (value == null || typeof value !== "object") return false;
+  if (
+    value == null || (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return false;
+  }
   if (!("~standard" in value)) return false;
   const standard: unknown = (value as Record<PropertyKey, unknown>)[
     "~standard"

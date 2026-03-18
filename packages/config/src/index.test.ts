@@ -824,6 +824,23 @@ describe("createConfigContext input validation", () => {
     );
   });
 
+  test("accepts callable Standard Schema (e.g., ArkType)", () => {
+    const callableSchema = Object.assign(
+      (input: unknown) => input,
+      {
+        "~standard": {
+          validate(value: unknown) {
+            return { value };
+          },
+        },
+      },
+    );
+    const context = createConfigContext({
+      schema: callableSchema as never,
+    });
+    assert.ok(context != null);
+  });
+
   test("rejects non-function fileParser", () => {
     const schema = z.object({ host: z.string() });
     assert.throws(
