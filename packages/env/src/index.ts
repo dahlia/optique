@@ -123,12 +123,12 @@ function defaultEnvSource(key: string): string | undefined {
  */
 export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
   const contextId = Symbol(`@optique/env context:${Math.random()}`);
-  const source = options.source ?? defaultEnvSource;
-  if (typeof source !== "function") {
+  if (options.source !== undefined && typeof options.source !== "function") {
     throw new TypeError(
-      `Expected source to be a function, but got: ${typeof source}.`,
+      `Expected source to be a function, but got: ${typeof options.source}.`,
     );
   }
+  const source = options.source ?? defaultEnvSource;
   const prefix = options.prefix ?? "";
 
   return {

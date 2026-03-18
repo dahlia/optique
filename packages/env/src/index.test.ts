@@ -1241,6 +1241,10 @@ describe("createEnvContext defaults", () => {
       () => createEnvContext({ source: "nope" as never }),
       TypeError,
     );
+    assert.throws(
+      () => createEnvContext({ source: null as never }),
+      TypeError,
+    );
   });
 
   it("falls back to process.env when Deno.env.get is unavailable", () => {
