@@ -89,7 +89,8 @@ function _${programName} () {
 
       # Save and adjust glob/shell options for safe file completion
       local __dotglob_was_set=0 __failglob_was_set=0 __noglob_was_set=0
-      local __saved_globignore="\${GLOBIGNORE-}"
+      local __globignore_was_set=0 __saved_globignore="\${GLOBIGNORE-}"
+      [[ \${GLOBIGNORE+x} == x ]] && __globignore_was_set=1
       shopt -q dotglob && __dotglob_was_set=1
       shopt -q failglob && __failglob_was_set=1
       [[ $- == *f* ]] && __noglob_was_set=1
@@ -175,7 +176,7 @@ function _${programName} () {
       # Restore glob/shell options
       # Restore GLOBIGNORE before dotglob because assigning GLOBIGNORE
       # implicitly enables dotglob in Bash
-      if [[ -n "$__saved_globignore" ]]; then GLOBIGNORE="$__saved_globignore"; fi
+      if [[ "$__globignore_was_set" == "1" ]]; then GLOBIGNORE="$__saved_globignore"; fi
       if [[ "$__dotglob_was_set" == "0" ]]; then shopt -u dotglob; else shopt -s dotglob; fi
       if [[ "$__failglob_was_set" == "1" ]]; then shopt -s failglob; fi
       if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
