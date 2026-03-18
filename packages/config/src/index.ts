@@ -919,6 +919,14 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         // Single-file mode
         const configPath = opts.getConfigPath(parsedPlaceholder);
 
+        if (configPath != null && typeof configPath !== "string") {
+          throw new TypeError(
+            `Expected getConfigPath() to return a string or undefined, but got: ${
+              getTypeName(configPath)
+            }.`,
+          );
+        }
+
         if (!configPath) {
           return {};
         }
