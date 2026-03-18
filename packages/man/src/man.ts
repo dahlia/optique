@@ -653,15 +653,17 @@ export function formatDocPageAsMan(
   }
 
   // .SH EXAMPLES
-  if (options.examples) {
+  const examples = options.examples ?? page.examples;
+  if (examples) {
     lines.push(".SH EXAMPLES");
-    lines.push(formatMessageAsRoff(options.examples));
+    lines.push(formatMessageAsRoff(examples));
   }
 
   // .SH BUGS
-  if (options.bugs) {
+  const bugs = options.bugs ?? page.bugs;
+  if (bugs) {
     lines.push(".SH BUGS");
-    lines.push(formatMessageAsRoff(options.bugs));
+    lines.push(formatMessageAsRoff(bugs));
   }
 
   // .SH SEE ALSO
@@ -695,9 +697,10 @@ export function formatDocPageAsMan(
   }
 
   // .SH AUTHOR
-  if (options.author) {
+  const author = options.author ?? page.author;
+  if (author) {
     lines.push(".SH AUTHOR");
-    lines.push(formatMessageAsRoff(options.author));
+    lines.push(formatMessageAsRoff(author));
   }
 
   // Footer (if present, add at the end)
