@@ -3994,4 +3994,93 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 1);
     });
   });
+
+  describe("prompt revalidation", () => {
+    it("rejects prompted number below min constraint", async () => {
+      const parser = prompt(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          type: "number",
+          message: "Port:",
+          prompter: () => Promise.resolve(80),
+        },
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(!result.success);
+      const errorText = result.error
+        .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
+        .join("");
+      assert.match(errorText, /1,?024/);
+    });
+
+    it("rejects prompted string not matching pattern", async () => {
+      const parser = prompt(
+        option("--name", string({ pattern: /^[A-Z]+$/ })),
+        {
+          type: "input",
+          message: "Name:",
+          prompter: () => Promise.resolve("abc"),
+        },
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(!result.success);
+      const errorText = result.error
+        .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
+        .join("");
+      assert.match(errorText, /pattern/i);
+    });
+
+    it("accepts prompted number within valid range", async () => {
+      const parser = prompt(
+        option("--port", integer({ min: 1024, max: 65535 })),
+        {
+          type: "number",
+          message: "Port:",
+          prompter: () => Promise.resolve(8080),
+        },
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, 8080);
+    });
+
+    it("accepts prompted string matching pattern", async () => {
+      const parser = prompt(
+        option("--name", string({ pattern: /^[A-Z]+$/ })),
+        {
+          type: "input",
+          message: "Name:",
+          prompter: () => Promise.resolve("ABC"),
+        },
+      );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value, "ABC");
+    });
+
+    it("still validates CLI input correctly", async () => {
+      let promptCalls = 0;
+      const parser = prompt(
+        option("--port", integer({ min: 1024 })),
+        {
+          type: "number",
+          message: "Port:",
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.reject(
+              new TypeError("Prompt should not be called."),
+            );
+          },
+        },
+      );
+      const valid = await parseAsync(parser, ["--port", "8080"]);
+      assert.ok(valid.success);
+      assert.equal(valid.value, 8080);
+      assert.equal(promptCalls, 0);
+
+      const invalid = await parseAsync(parser, ["--port", "80"]);
+      assert.ok(!invalid.success);
+      assert.equal(promptCalls, 0);
+    });
+  });
 });
