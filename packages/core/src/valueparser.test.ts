@@ -6645,6 +6645,72 @@ describe("email()", () => {
       assert.ok(result1.success);
       assert.strictEqual(result1.value, "john.smith@example.com");
     });
+
+    it("should reject malformed display name with multiple angle-bracket groups", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result1 = parser.parse(
+        "Name <user@example.com> extra <x@y.com>",
+      );
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse(
+        "junk <first@example.com> <second@example.com>",
+      );
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("Name <user@example.com> extra");
+      assert.ok(!result3.success);
+    });
+
+    it("should reject bare angle-bracket wrapper without display name", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result = parser.parse("<user@example.com>");
+      assert.ok(!result.success);
+    });
+
+    it("should reject empty or whitespace-only quoted display names", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result1 = parser.parse('"" <user@example.com>');
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse('"   " <user@example.com>');
+      assert.ok(!result2.success);
+    });
+
+    it("should accept well-formed display names with dots and hyphens", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result = parser.parse("Dr. Smith-Jones <smith@example.com>");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "smith@example.com");
+    });
+
+    it("should accept mixed quoted and unquoted words in display name", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result1 = parser.parse(
+        'John "Johnny" Doe <john@example.com>',
+      );
+      assert.ok(result1.success);
+      assert.strictEqual(result1.value, "john@example.com");
+
+      const result2 = parser.parse('"John" Doe <john@example.com>');
+      assert.ok(result2.success);
+      assert.strictEqual(result2.value, "john@example.com");
+    });
+
+    it("should accept quoted display names containing angle brackets", () => {
+      const parser = email({ allowDisplayName: true });
+
+      const result = parser.parse(
+        '"Team <Ops>" <alerts@example.com>',
+      );
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "alerts@example.com");
+    });
   });
 
   describe("lowercase option", () => {

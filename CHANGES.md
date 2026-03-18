@@ -431,6 +431,10 @@ To be released.
     `url({ allowedProtocols: [] })` and `domain({ allowedTLDs: [] })`.
     [[#341], [#610]]
 
+ -  Fixed `email({ allowDisplayName: true })` accepting malformed inputs
+    containing multiple angle-bracket groups or bare `<email>` wrappers
+    without a display name.  [[#338], [#611]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -475,6 +479,7 @@ To be released.
 [#320]: https://github.com/dahlia/optique/issues/320
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
+[#338]: https://github.com/dahlia/optique/issues/338
 [#341]: https://github.com/dahlia/optique/issues/341
 [#349]: https://github.com/dahlia/optique/issues/349
 [#353]: https://github.com/dahlia/optique/issues/353
@@ -531,6 +536,7 @@ To be released.
 [#599]: https://github.com/dahlia/optique/pull/599
 [#606]: https://github.com/dahlia/optique/pull/606
 [#610]: https://github.com/dahlia/optique/pull/610
+[#611]: https://github.com/dahlia/optique/pull/611
 
 ### @optique/config
 

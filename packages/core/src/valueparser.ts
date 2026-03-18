@@ -2862,10 +2862,41 @@ export function email(
 
     // Handle display name format: "Name <email@example.com>"
     let emailAddr = trimmed;
-    if (allowDisplayName && trimmed.includes("<") && trimmed.endsWith(">")) {
-      const match = trimmed.match(/<([^>]+)>$/);
-      if (match) {
-        emailAddr = match[1].trim();
+    if (allowDisplayName) {
+      // Match well-formed display-name syntax per RFC 5322:
+      //   Display Name <email>  (phrase may mix unquoted and quoted words)
+      // The display name is a sequence of quoted strings (which may contain
+      // angle brackets) and unquoted characters (which may not).  Rejects
+      // bare <email>, multiple unquoted <...> groups, and trailing text.
+      //
+      // Regex breakdown:
+      //   ^                          start of string
+      //   (                          capture group 1: display name
+      //     (?:                        one or more of:
+      //       "(?:[^"\\]|\\.)*"          quoted string (may contain <> etc.)
+      //       |                          or
+      //       [^<>"]                     single char: not < > or "
+      //     )+
+      //   )
+      //   \s*                         optional whitespace before <
+      //   <([^<>]+)>                  capture group 2: email inside < >
+      //   $                           end of string
+      const displayNameMatch = trimmed.match(
+        /^((?:"(?:[^"\\]|\\.)*"|[^<>"])+)\s*<([^<>]+)>$/,
+      );
+      // Ensure the display name contains real content, not just quotes
+      // and whitespace (e.g., reject "" <email> and "   " <email>).
+      // Strip surrounding quotes from each quoted phrase before testing.
+      if (
+        displayNameMatch &&
+        /\S/.test(
+          displayNameMatch[1].replace(
+            /"((?:[^"\\]|\\.)*)"/g,
+            (_match, inner: string) => inner,
+          ),
+        )
+      ) {
+        emailAddr = displayNameMatch[2].trim();
       }
     }
 
