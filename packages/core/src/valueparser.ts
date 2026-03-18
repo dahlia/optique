@@ -2961,6 +2961,11 @@ export function email(
       return null;
     }
 
+    // RFC 5321 §4.5.3.1.1: local-part max 64 octets
+    if (localPart.length > 64) {
+      return null;
+    }
+
     // Validate domain part
     if (!domain || domain.length === 0) {
       return null;
@@ -2999,6 +3004,11 @@ export function email(
       domainLabels.length === 4 &&
       domainLabels.every((label) => /^[0-9]+$/.test(label))
     ) {
+      return null;
+    }
+
+    // RFC 5321 §4.5.3.1.3: path max 256 octets → address max 254 chars
+    if (emailAddr.length > 254) {
       return null;
     }
 

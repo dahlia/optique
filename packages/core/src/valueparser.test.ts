@@ -6505,6 +6505,68 @@ describe("email()", () => {
       const result17 = parser.parse("user@1.2.3");
       assert.ok(result17.success);
     });
+
+    it("should accept local part with exactly 64 characters", () => {
+      const parser = email();
+      const localPart = "a".repeat(64);
+      const result = parser.parse(`${localPart}@example.com`);
+      assert.ok(result.success);
+    });
+
+    it("should reject local part exceeding 64 characters", () => {
+      const parser = email();
+      const localPart = "a".repeat(65);
+      const result = parser.parse(`${localPart}@example.com`);
+      assert.ok(!result.success);
+    });
+
+    it("should reject quoted local part exceeding 64 characters", () => {
+      const parser = email();
+      // Quoted local part: quotes are included in the 64-char limit
+      const inner = "a".repeat(63);
+      const result = parser.parse(`"${inner}"@example.com`);
+      assert.ok(!result.success);
+    });
+
+    it("should accept address with exactly 254 characters", () => {
+      const parser = email();
+      // "user" (4) + "@" (1) + domain (249) = 254
+      // domain: 63 + "." + 63 + "." + 63 + "." + 57 = 249
+      const label = "a".repeat(63);
+      const domain = `${label}.${label}.${label}.${"a".repeat(57)}`;
+      assert.strictEqual(domain.length, 249);
+      const addr = `user@${domain}`;
+      assert.strictEqual(addr.length, 254);
+      const result = parser.parse(addr);
+      assert.ok(result.success);
+    });
+
+    it("should reject address exceeding 254 characters", () => {
+      const parser = email();
+      const label = "a".repeat(63);
+      const domain = `${label}.${label}.${label}.${"a".repeat(58)}`;
+      assert.strictEqual(domain.length, 250);
+      const addr = `user@${domain}`;
+      assert.strictEqual(addr.length, 255);
+      const result = parser.parse(addr);
+      assert.ok(!result.success);
+    });
+
+    it("should enforce length limits with allowDisplayName", () => {
+      const parser = email({ allowDisplayName: true });
+      const localPart = "a".repeat(65);
+      const result = parser.parse(`John Doe <${localPart}@example.com>`);
+      assert.ok(!result.success);
+    });
+
+    it("should enforce length limits with allowMultiple", () => {
+      const parser = email({ allowMultiple: true });
+      const localPart = "a".repeat(65);
+      const result = parser.parse(
+        `valid@example.com, ${localPart}@example.com`,
+      );
+      assert.ok(!result.success);
+    });
   });
 
   describe("allowMultiple option", () => {
