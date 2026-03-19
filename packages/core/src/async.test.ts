@@ -6363,7 +6363,7 @@ describe("shell completion with async parsers in runParser", () => {
       assert.equal(result, "completion-shown");
       assert.ok(completionShown);
       assert.ok(completionOutput.includes("function _myapp"));
-      assert.ok(completionOutput.includes("complete -F _myapp myapp"));
+      assert.ok(completionOutput.includes("complete -F _myapp -- myapp"));
     });
 
     it("should generate zsh completion script with async parser", async () => {

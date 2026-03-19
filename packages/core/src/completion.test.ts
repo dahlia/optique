@@ -353,7 +353,7 @@ describe("completion module", () => {
       deepStrictEqual(script.includes("function _myapp ()"), true);
       deepStrictEqual(script.includes("COMPREPLY=()"), true);
       deepStrictEqual(script.includes("COMP_WORDS"), true);
-      deepStrictEqual(script.includes("complete -F _myapp myapp"), true);
+      deepStrictEqual(script.includes("complete -F _myapp -- myapp"), true);
     });
 
     it("should work with actual bash shell", (t) => {
