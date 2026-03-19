@@ -2430,6 +2430,218 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
       }
     });
 
+    it("should preserve directory prefix in nested file completions", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "nu-nested-dir-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:file:::0
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "nested-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create src/ directory with a file inside
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir, { recursive: true });
+        writeFileSync(join(srcDir, "alpha.txt"), "");
+
+        const script = nu.generateScript("nested-cli");
+
+        // Write and run test script with "nested-cli src/" context
+        const nuTempDir = mkdtempSync(
+          join(tmpdir(), "nu-nested-test-"),
+        );
+        try {
+          const scriptPath = join(nuTempDir, "completion.nu");
+          writeFileSync(scriptPath, script);
+
+          const safeName = "nested-cli".replace(/[^a-zA-Z0-9]+/g, "-");
+          const functionName = `nu-complete-${safeName}`;
+          const testScript = `
+$env.PATH = ($env.PATH | prepend "${tempDir}")
+source ${scriptPath}
+
+do { ${functionName} "nested-cli src/" }
+`;
+          const testScriptPath = join(nuTempDir, "test.nu");
+          writeFileSync(testScriptPath, testScript);
+
+          const result = runCommand("nu", [testScriptPath], {
+            cwd: tempDir,
+          });
+
+          const lines = result.trim().split("\n");
+          const completions: string[] = [];
+          for (const line of lines) {
+            const match = line.match(
+              /│\s*\d+\s*│\s*([^│]+)\s*│/,
+            );
+            if (match) {
+              const value = match[1]?.trim();
+              if (value) completions.push(value);
+            }
+          }
+
+          ok(
+            completions.some((c) => c === "src/alpha.txt"),
+            `Expected "src/alpha.txt" in completions, got: ${
+              JSON.stringify(completions)
+            }`,
+          );
+        } finally {
+          rmSync(nuTempDir, { recursive: true, force: true });
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should not double slash for root-level absolute path prefix", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const script = nu.generateScript("root-cli");
+
+      // Verify the generated script does not produce "//" for root paths
+      // by checking the dir_prefix logic handles parent == "/" correctly
+      const nuTempDir = mkdtempSync(
+        join(tmpdir(), "nu-root-prefix-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:any:::0
+        const cliScript = `#!/bin/bash
+printf '__FILE__:any:::0\\n'
+`;
+        const cliPath = join(nuTempDir, "root-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const scriptPath = join(nuTempDir, "completion.nu");
+        writeFileSync(scriptPath, script);
+
+        const functionName = "nu-complete-root-cli";
+        const testScript = `
+$env.PATH = ($env.PATH | prepend "${nuTempDir}")
+source ${scriptPath}
+
+do { ${functionName} "root-cli /u" }
+`;
+        const testScriptPath = join(nuTempDir, "test.nu");
+        writeFileSync(testScriptPath, testScript);
+
+        const result = runCommand("nu", [testScriptPath], {
+          cwd: nuTempDir,
+        });
+
+        const lines = result.trim().split("\n");
+        for (const line of lines) {
+          const match = line.match(
+            /│\s*\d+\s*│\s*([^│]+)\s*│/,
+          );
+          if (match) {
+            const value = match[1]?.trim();
+            if (value) {
+              ok(
+                !value.startsWith("//"),
+                `Completion "${value}" has double-slash prefix`,
+              );
+            }
+          }
+        }
+      } finally {
+        rmSync(nuTempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should not prefix bare relative path completions with slash", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "nu-bare-prefix-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:file:::0
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+        const cliPath = join(tempDir, "bare-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create a file that starts with "re"
+        writeFileSync(join(tempDir, "readme.txt"), "");
+
+        const script = nu.generateScript("bare-cli");
+
+        const nuTempDir = mkdtempSync(
+          join(tmpdir(), "nu-bare-test-"),
+        );
+        try {
+          const scriptPath = join(nuTempDir, "completion.nu");
+          writeFileSync(scriptPath, script);
+
+          const functionName = "nu-complete-bare-cli";
+          const testScript = `
+$env.PATH = ($env.PATH | prepend "${tempDir}")
+source ${scriptPath}
+
+do { ${functionName} "bare-cli re" }
+`;
+          const testScriptPath = join(nuTempDir, "test.nu");
+          writeFileSync(testScriptPath, testScript);
+
+          const result = runCommand("nu", [testScriptPath], {
+            cwd: tempDir,
+          });
+
+          const lines = result.trim().split("\n");
+          for (const line of lines) {
+            const match = line.match(
+              /│\s*\d+\s*│\s*([^│]+)\s*│/,
+            );
+            if (match) {
+              const value = match[1]?.trim();
+              if (value) {
+                ok(
+                  !value.startsWith("/"),
+                  `Completion "${value}" should not start with "/"`,
+                );
+              }
+            }
+          }
+        } finally {
+          rmSync(nuTempDir, { recursive: true, force: true });
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should enumerate hidden files without dot prefix when includeHidden is true", (t) => {
       if (!isShellAvailable("nu")) {
         t.skip("nu not available");
