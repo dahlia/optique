@@ -1793,6 +1793,123 @@ function validateVersionValue(value: unknown): string {
 }
 
 /**
+ * Escapes control characters in a string for display in error messages.
+ *
+ * @param value The string to escape.
+ * @returns The escaped string with control characters replaced by escape
+ *          sequences.
+ */
+function escapeControlChars(value: string): string {
+  // deno-lint-ignore no-control-regex
+  return value.replace(/[\x00-\x1f\x7f]/g, (ch) => {
+    const code = ch.charCodeAt(0);
+    switch (code) {
+      case 0x09:
+        return "\\t";
+      case 0x0a:
+        return "\\n";
+      case 0x0d:
+        return "\\r";
+      default:
+        return `\\x${code.toString(16).padStart(2, "0")}`;
+    }
+  });
+}
+
+/**
+ * Validates meta option names at runtime.
+ *
+ * @param names The option names to validate.
+ * @param label A human-readable label for error messages (e.g.,
+ *              `"Help option"`).
+ * @throws {TypeError} If the names array is empty, or any name is empty,
+ *         lacks a valid prefix, or contains whitespace or control characters.
+ */
+function validateOptionNames(
+  names: readonly string[],
+  label: string,
+): void {
+  if (names.length === 0) {
+    throw new TypeError(
+      `Expected at least one ${label.toLowerCase()} name.`,
+    );
+  }
+  for (const name of names) {
+    if (name === "") {
+      throw new TypeError(`${label} name must not be empty.`);
+    }
+    if (/^\s+$/.test(name)) {
+      throw new TypeError(
+        `${label} name must not be whitespace-only: ` +
+          `"${escapeControlChars(name)}".`,
+      );
+    }
+    // deno-lint-ignore no-control-regex
+    if (/[\x00-\x1f\x7f]/.test(name)) {
+      throw new TypeError(
+        `${label} name must not contain control characters: ` +
+          `"${escapeControlChars(name)}".`,
+      );
+    }
+    if (/\s/.test(name)) {
+      throw new TypeError(
+        `${label} name must not contain whitespace: ` +
+          `"${escapeControlChars(name)}".`,
+      );
+    }
+    if (!/^(--|[-/+])/.test(name)) {
+      throw new TypeError(
+        `${label} name must start with "--", "-", "/", or "+": "${name}".`,
+      );
+    }
+  }
+}
+
+/**
+ * Validates meta command names at runtime.
+ *
+ * @param names The command names to validate.
+ * @param label A human-readable label for error messages (e.g.,
+ *              `"Help command"`).
+ * @throws {TypeError} If the names array is empty, or any name is empty,
+ *         whitespace-only, or contains whitespace or control characters.
+ */
+function validateCommandNames(
+  names: readonly string[],
+  label: string,
+): void {
+  if (names.length === 0) {
+    throw new TypeError(
+      `Expected at least one ${label.toLowerCase()} name.`,
+    );
+  }
+  for (const name of names) {
+    if (name === "") {
+      throw new TypeError(`${label} name must not be empty.`);
+    }
+    if (/^\s+$/.test(name)) {
+      throw new TypeError(
+        `${label} name must not be whitespace-only: ` +
+          `"${escapeControlChars(name)}".`,
+      );
+    }
+    // deno-lint-ignore no-control-regex
+    if (/[\x00-\x1f\x7f]/.test(name)) {
+      throw new TypeError(
+        `${label} name must not contain control characters: ` +
+          `"${escapeControlChars(name)}".`,
+      );
+    }
+    if (/\s/.test(name)) {
+      throw new TypeError(
+        `${label} name must not contain whitespace: ` +
+          `"${escapeControlChars(name)}".`,
+      );
+    }
+  }
+}
+
+/**
  * Runs a parser against command-line arguments with built-in help and error
  * handling.
  *
@@ -1820,7 +1937,10 @@ function validateVersionValue(value: unknown): string {
  * @returns The parsed result value, or the return value of `onHelp`/`onError`
  *          callbacks.
  * @throws {TypeError} If `options.version.value` is not a non-empty string
- *          without ASCII control characters.
+ *          without ASCII control characters, or if any meta command/option
+ *          name is empty, whitespace-only, contains whitespace or control
+ *          characters, or (for option names) lacks a valid prefix (`--`,
+ *          `-`, `/`, or `+`).
  * @throws {RunParserError} When parsing fails and no `onError` callback is
  *          provided.
  * @since 0.10.0 Added support for {@link Program} objects.
@@ -1970,6 +2090,26 @@ export function runParser<
     onCompletion(code) as InferValue<TParser>;
   const onErrorResult = (code: number): InferValue<TParser> =>
     onError(code) as InferValue<TParser>;
+
+  // Validate meta names eagerly
+  if (helpOptionConfig?.names) {
+    validateOptionNames(helpOptionConfig.names, "Help option");
+  }
+  if (helpCommandConfig?.names) {
+    validateCommandNames(helpCommandConfig.names, "Help command");
+  }
+  if (versionOptionConfig?.names) {
+    validateOptionNames(versionOptionConfig.names, "Version option");
+  }
+  if (versionCommandConfig?.names) {
+    validateCommandNames(versionCommandConfig.names, "Version command");
+  }
+  if (completionOptionConfig?.names) {
+    validateOptionNames(completionOptionConfig.names, "Completion option");
+  }
+  if (completionCommandConfig?.names) {
+    validateCommandNames(completionCommandConfig.names, "Completion command");
+  }
 
   // Resolved name arrays for matching
   const helpOptionNames: readonly string[] = helpOptionConfig?.names ??

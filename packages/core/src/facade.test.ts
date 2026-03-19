@@ -921,6 +921,349 @@ describe("runParser", () => {
     });
   });
 
+  describe("meta name validation", () => {
+    // Help option names
+    it("should reject empty help option names array", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--help"], {
+            help: { option: { names: [] as never } },
+            stdout: () => {},
+          }),
+        {
+          name: "TypeError",
+          message: "Expected at least one help option name.",
+        },
+      );
+    });
+
+    it("should reject empty string help option name", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: { names: [""] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Help option name must not be empty.",
+        },
+      );
+    });
+
+    it("should reject help option name containing space", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: { names: ["--bad name"] as never } },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Help option name must not contain whitespace: "--bad name".',
+        },
+      );
+    });
+
+    it("should reject help option name containing newline", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: { names: ["--bad\nname"] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Help option name must not contain control characters: " +
+            '"--bad\\nname".',
+        },
+      );
+    });
+
+    it("should reject whitespace-only help option name", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: { names: ["   "] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: 'Help option name must not be whitespace-only: "   ".',
+        },
+      );
+    });
+
+    it("should reject help option name without valid prefix", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: { names: ["help"] as never } },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Help option name must start with "--", "-", "/", or "+": "help".',
+        },
+      );
+    });
+
+    it("should eagerly reject invalid help option names even without --help flag", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["Alice"], {
+            help: { option: { names: [] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Expected at least one help option name.",
+        },
+      );
+    });
+
+    // Help command names
+    it("should reject empty help command names array", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { command: { names: [] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Expected at least one help command name.",
+        },
+      );
+    });
+
+    it("should reject empty string help command name", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { command: { names: [""] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Help command name must not be empty.",
+        },
+      );
+    });
+
+    it("should reject whitespace-only help command name", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { command: { names: ["   "] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: 'Help command name must not be whitespace-only: "   ".',
+        },
+      );
+    });
+
+    it("should reject help command name containing space", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { command: { names: ["help me"] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: 'Help command name must not contain whitespace: "help me".',
+        },
+      );
+    });
+
+    it("should reject help command name containing control character", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { command: { names: ["help\x00"] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Help command name must not contain control characters: " +
+            '"help\\x00".',
+        },
+      );
+    });
+
+    // Version option names
+    it("should reject empty version option names array", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            version: { option: { names: [] as never }, value: "1.0.0" },
+          }),
+        {
+          name: "TypeError",
+          message: "Expected at least one version option name.",
+        },
+      );
+    });
+
+    it("should reject version option name containing tab", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            version: {
+              option: { names: ["--ver\tsion"] as never },
+              value: "1.0.0",
+            },
+          }),
+        {
+          name: "TypeError",
+          message: "Version option name must not contain control characters: " +
+            '"--ver\\tsion".',
+        },
+      );
+    });
+
+    it("should reject version option name without valid prefix", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            version: {
+              option: { names: ["version"] as never },
+              value: "1.0.0",
+            },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Version option name must start with "--", "-", "/", or "+": "version".',
+        },
+      );
+    });
+
+    // Version command names
+    it("should reject empty version command names array", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            version: { command: { names: [] as never }, value: "1.0.0" },
+          }),
+        {
+          name: "TypeError",
+          message: "Expected at least one version command name.",
+        },
+      );
+    });
+
+    it("should reject version command name containing control character", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            version: {
+              command: { names: ["ver\x7f"] as never },
+              value: "1.0.0",
+            },
+          }),
+        {
+          name: "TypeError",
+          message:
+            "Version command name must not contain control characters: " +
+            '"ver\\x7f".',
+        },
+      );
+    });
+
+    // Completion option names
+    it("should reject empty completion option names array", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: true },
+            completion: { option: { names: [] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Expected at least one completion option name.",
+        },
+      );
+    });
+
+    it("should reject completion option name containing space", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: true },
+            completion: {
+              option: { names: ["--comp lete"] as never },
+            },
+          }),
+        {
+          name: "TypeError",
+          message: "Completion option name must not contain whitespace: " +
+            '"--comp lete".',
+        },
+      );
+    });
+
+    it("should reject completion option name without valid prefix", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: true },
+            completion: { option: { names: ["completion"] as never } },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Completion option name must start with "--", "-", "/", or "+": "completion".',
+        },
+      );
+    });
+
+    // Completion command names
+    it("should reject empty completion command names array", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: true },
+            completion: { command: { names: [] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Expected at least one completion command name.",
+        },
+      );
+    });
+
+    it("should reject completion command name that is empty string", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: true },
+            completion: { command: { names: [""] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Completion command name must not be empty.",
+        },
+      );
+    });
+  });
+
   describe("error handling", () => {
     it("should throw RunParserError by default on parse failure", () => {
       const parser = object({

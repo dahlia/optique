@@ -552,6 +552,13 @@ To be released.
     strings containing control characters, and non-string values are rejected
     with `TypeError`.  [[#439], [#645]]
 
+ -  `runParser()` now validates meta command and option names (for help,
+    version, and completion) eagerly at startup.  Empty arrays, empty
+    strings, whitespace-only names, and names containing whitespace or
+    control characters are rejected with `TypeError`.  Option names without
+    a valid prefix (`--`, `-`, `/`, or `+`) are also rejected.
+    [[#425], [#648]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -627,6 +634,7 @@ To be released.
 [#389]: https://github.com/dahlia/optique/issues/389
 [#395]: https://github.com/dahlia/optique/issues/395
 [#396]: https://github.com/dahlia/optique/issues/396
+[#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
 [#439]: https://github.com/dahlia/optique/issues/439
 [#490]: https://github.com/dahlia/optique/pull/490
@@ -697,6 +705,7 @@ To be released.
 [#645]: https://github.com/dahlia/optique/pull/645
 [#646]: https://github.com/dahlia/optique/pull/646
 [#647]: https://github.com/dahlia/optique/issues/647
+[#648]: https://github.com/dahlia/optique/pull/648
 [#650]: https://github.com/dahlia/optique/pull/650
 
 ### @optique/config
