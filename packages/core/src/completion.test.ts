@@ -1661,11 +1661,11 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
       );
     });
 
-    it("should preserve directory prefix in nested file completions", (t) => {
-      if (!isShellAvailable("pwsh")) {
-        t.skip("pwsh not available");
-        return;
-      }
+    it("should preserve directory prefix in nested file completions", {
+      skip: !isShellAvailable("pwsh"),
+    }, () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (!isShellAvailable("pwsh")) return;
 
       const tempDir = mkdtempSync(
         join(tmpdir(), "pwsh-nested-dir-"),
@@ -1721,15 +1721,12 @@ printf '__FILE__:file::src/:0\\n'
       }
     });
 
-    it("should preserve backslash directory prefix on Windows", (t) => {
-      if (process.platform !== "win32") {
-        t.skip("Windows-only test");
-        return;
-      }
-      if (!isShellAvailable("pwsh")) {
-        t.skip("pwsh not available");
-        return;
-      }
+    it("should preserve backslash directory prefix on Windows", {
+      skip: process.platform !== "win32" || !isShellAvailable("pwsh"),
+    }, () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform !== "win32") return;
+      if (!isShellAvailable("pwsh")) return;
 
       const tempDir = mkdtempSync(
         join(tmpdir(), "pwsh-nested-backslash-"),
