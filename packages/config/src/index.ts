@@ -1225,7 +1225,8 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
       configValue = options.key(configData, configMeta);
       if (
         configValue != null &&
-        typeof configValue === "object" &&
+        (typeof configValue === "object" ||
+          typeof configValue === "function") &&
         "then" in configValue &&
         typeof (configValue as Record<string, unknown>).then === "function"
       ) {
