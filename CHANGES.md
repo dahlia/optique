@@ -752,12 +752,18 @@ environment variable integration via source contexts.  [[#86], [#135]]
     instead of deferring the crash to environment lookup time.
     [[#398], [#627]]
 
+ -  `bindEnv()` now produces a clear failure when `EnvSource` returns
+    a non-string value, instead of leaking it through or crashing
+    downstream value parsers.  [[#399], [#633]]
+
 [#86]: https://github.com/dahlia/optique/issues/86
 [#135]: https://github.com/dahlia/optique/pull/135
 [#268]: https://github.com/dahlia/optique/issues/268
 [#390]: https://github.com/dahlia/optique/issues/390
+[#399]: https://github.com/dahlia/optique/issues/399
 [#562]: https://github.com/dahlia/optique/pull/562
 [#600]: https://github.com/dahlia/optique/pull/600
+[#633]: https://github.com/dahlia/optique/pull/633
 
 ### @optique/git
 

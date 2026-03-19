@@ -1149,6 +1149,62 @@ describe("bindEnv()", () => {
     });
   });
 
+  describe("non-string EnvSource value validation", () => {
+    it("fails when EnvSource returns an object", () => {
+      const context = createEnvContext({
+        source: () => ({ bad: true } as never),
+      });
+      const parser = bindEnv(option("--name", string()), {
+        context,
+        key: "NAME",
+        parser: string(),
+      });
+
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+    });
+
+    it("fails when EnvSource returns a number", () => {
+      const context = createEnvContext({
+        source: () => (123 as never),
+      });
+      const parser = bindEnv(option("--port", integer()), {
+        context,
+        key: "PORT",
+        parser: integer(),
+      });
+
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+    });
+
+    it("fails when EnvSource returns a Promise", () => {
+      const context = createEnvContext({
+        source: () => Promise.resolve("alice") as never,
+      });
+      const parser = bindEnv(option("--name", string()), {
+        context,
+        key: "NAME",
+        parser: string(),
+      });
+
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      const result = parse(parser, [], { annotations });
+      assert.ok(!result.success);
+    });
+  });
+
   it("propagates source errors from the annotation-backed env lookup", () => {
     const sourceError = new Error("Environment access failed.");
     const context = createEnvContext({
