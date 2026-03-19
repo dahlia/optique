@@ -840,6 +840,9 @@ environment variable integration via source contexts.  [[#86], [#135]]
  -  Added support for env-only values via `bindEnv(fail<T>(), ...)` when a
     value should not be exposed as a CLI option.
 
+ -  `createEnvContext()` now validates `prefix` at runtime, rejecting
+    non-string values with a `TypeError`.  [[#384], [#652]]
+
  -  `createEnvContext()` now throws a `TypeError` when `source` is not
     a function, instead of deferring the crash to environment lookup time.
     [[#390], [#600]]
@@ -859,6 +862,7 @@ environment variable integration via source contexts.  [[#86], [#135]]
 [#86]: https://github.com/dahlia/optique/issues/86
 [#135]: https://github.com/dahlia/optique/pull/135
 [#268]: https://github.com/dahlia/optique/issues/268
+[#384]: https://github.com/dahlia/optique/issues/384
 [#390]: https://github.com/dahlia/optique/issues/390
 [#399]: https://github.com/dahlia/optique/issues/399
 [#415]: https://github.com/dahlia/optique/issues/415
@@ -866,6 +870,7 @@ environment variable integration via source contexts.  [[#86], [#135]]
 [#600]: https://github.com/dahlia/optique/pull/600
 [#633]: https://github.com/dahlia/optique/pull/633
 [#637]: https://github.com/dahlia/optique/pull/637
+[#652]: https://github.com/dahlia/optique/pull/652
 
 ### @optique/git
 

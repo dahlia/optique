@@ -119,6 +119,7 @@ function defaultEnvSource(key: string): string | undefined {
  *
  * @param options Environment context options.
  * @returns A context that provides environment source annotations.
+ * @throws {TypeError} If `prefix` is not a string.
  * @throws {TypeError} If `source` is not a function.
  * @since 1.0.0
  */
@@ -137,7 +138,19 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
     );
   }
   const source = rawSource ?? defaultEnvSource;
-  const prefix = options.prefix ?? "";
+  const rawPrefix = options.prefix;
+  if (rawPrefix !== undefined && typeof rawPrefix !== "string") {
+    throw new TypeError(
+      `Expected prefix to be a string, but got: ${
+        rawPrefix === null
+          ? "null"
+          : Array.isArray(rawPrefix)
+          ? "array"
+          : typeof rawPrefix
+      }.`,
+    );
+  }
+  const prefix = rawPrefix ?? "";
 
   return {
     id: contextId,

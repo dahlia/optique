@@ -1485,6 +1485,51 @@ describe("createEnvContext defaults", () => {
     );
   });
 
+  it("throws TypeError when prefix is not a string", () => {
+    assert.throws(
+      () => createEnvContext({ prefix: 123 as never }),
+      {
+        name: "TypeError",
+        message: "Expected prefix to be a string, but got: number.",
+      },
+    );
+    assert.throws(
+      () => createEnvContext({ prefix: false as never }),
+      {
+        name: "TypeError",
+        message: "Expected prefix to be a string, but got: boolean.",
+      },
+    );
+    assert.throws(
+      () => createEnvContext({ prefix: { x: 1 } as never }),
+      {
+        name: "TypeError",
+        message: "Expected prefix to be a string, but got: object.",
+      },
+    );
+    assert.throws(
+      () => createEnvContext({ prefix: Symbol("P") as never }),
+      {
+        name: "TypeError",
+        message: "Expected prefix to be a string, but got: symbol.",
+      },
+    );
+    assert.throws(
+      () => createEnvContext({ prefix: null as never }),
+      {
+        name: "TypeError",
+        message: "Expected prefix to be a string, but got: null.",
+      },
+    );
+    assert.throws(
+      () => createEnvContext({ prefix: [] as never }),
+      {
+        name: "TypeError",
+        message: "Expected prefix to be a string, but got: array.",
+      },
+    );
+  });
+
   it("falls back to process.env when Deno.env.get is unavailable", () => {
     const originalDeno = Object.getOwnPropertyDescriptor(globalThis, "Deno");
     const originalProcess = Object.getOwnPropertyDescriptor(
