@@ -803,7 +803,10 @@ describe("runParser", () => {
             version: { option: true, value: "" },
             stdout: () => {},
           }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Version value must not be empty.",
+        },
       );
     });
 
@@ -815,7 +818,10 @@ describe("runParser", () => {
             version: { option: true, value: "1.0\n2.0" },
             stdout: () => {},
           }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Version value must not contain control characters.",
+        },
       );
     });
 
@@ -827,7 +833,10 @@ describe("runParser", () => {
             version: { option: true, value: "1.0\t0" },
             stdout: () => {},
           }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Version value must not contain control characters.",
+        },
       );
     });
 
@@ -839,7 +848,10 @@ describe("runParser", () => {
             version: { option: true, value: "1.0\r\n" },
             stdout: () => {},
           }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Version value must not contain control characters.",
+        },
       );
     });
 
@@ -850,11 +862,14 @@ describe("runParser", () => {
           runParser(parser, "test", ["--version"], {
             version: {
               option: true,
-              value: 123 as unknown as string,
+              value: 123 as never,
             },
             stdout: () => {},
           }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Expected version value to be a string, but got number.",
+        },
       );
     });
   });
@@ -1673,25 +1688,6 @@ describe("runParser", () => {
       assert.equal(result, "help-shown");
       assert.ok(helpShown);
       assert.ok(helpOutput.includes("add") || helpOutput.includes("commit"));
-    });
-
-    it("should reject empty version string", () => {
-      const parser = object({
-        name: argument(string()),
-      });
-
-      assert.throws(
-        () =>
-          runParser(parser, "test", ["--version"], {
-            version: {
-              option: true,
-              value: "",
-              onShow: () => "version-shown",
-            },
-            stdout: () => {},
-          }),
-        TypeError,
-      );
     });
 
     it("should handle very long version strings", () => {
