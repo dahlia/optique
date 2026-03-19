@@ -1116,6 +1116,24 @@ describe("runParser", () => {
       );
     });
 
+    it("should reject version option name without valid prefix", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            version: {
+              option: { names: ["version"] as never },
+              value: "1.0.0",
+            },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Version option name must start with "--", "-", "/", or "+": "version".',
+        },
+      );
+    });
+
     // Version command names
     it("should reject empty version command names array", () => {
       const parser = object({ name: argument(string()) });
@@ -1180,6 +1198,22 @@ describe("runParser", () => {
           name: "TypeError",
           message: "Completion option name must not contain whitespace: " +
             '"--comp lete".',
+        },
+      );
+    });
+
+    it("should reject completion option name without valid prefix", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: true },
+            completion: { option: { names: ["completion"] as never } },
+          }),
+        {
+          name: "TypeError",
+          message:
+            'Completion option name must start with "--", "-", "/", or "+": "completion".',
         },
       );
     });
