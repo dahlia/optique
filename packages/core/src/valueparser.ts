@@ -2905,6 +2905,17 @@ export function email(
           );
         }
       }
+      // Reject IPv4-like dotted-quad domains (e.g., 192.168.0.1)
+      if (
+        labels.length === 4 &&
+        labels.every((label) => /^[0-9]+$/.test(label))
+      ) {
+        throw new TypeError(
+          `allowedDomains[${i}] is not a valid domain: ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
     }
   }
   const invalidEmail = options?.errors?.invalidEmail;

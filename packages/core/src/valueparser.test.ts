@@ -7215,6 +7215,15 @@ describe("email()", () => {
           }),
         TypeError,
       );
+      // IPv4-like dotted-quad
+      assert.throws(
+        () => email({ allowedDomains: ["192.168.0.1"] as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => email({ allowedDomains: ["999.999.999.999"] as never }),
+        TypeError,
+      );
     });
 
     it("should accept valid allowedDomains entries without throwing", () => {
