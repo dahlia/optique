@@ -11,6 +11,7 @@ import type {
 } from "@optique/core/parser";
 import {
   ensureNonEmptyString,
+  isValueParser,
   type NonEmptyString,
   type ValueParser,
   type ValueParserResult,
@@ -205,7 +206,8 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.
  * @returns A parser with environment fallback behavior.
- * @throws {TypeError} If `key` is not a string.
+ * @throws {TypeError} If `key` is not a string or `parser` is not a valid
+ *                    {@link ValueParser}.
  * @throws {Error} If the inner parser throws while parsing or completing a
  *                 value, if the environment source throws while reading a
  *                 variable, or if the environment value parser throws while
@@ -228,6 +230,18 @@ export function bindEnv<
           : Array.isArray(options.key)
           ? "array"
           : typeof options.key
+      }.`,
+    );
+  }
+
+  if (!isValueParser(options.parser)) {
+    throw new TypeError(
+      `Expected parser to be a ValueParser, but got: ${
+        options.parser === null
+          ? "null"
+          : Array.isArray(options.parser)
+          ? "array"
+          : typeof options.parser
       }.`,
     );
   }
