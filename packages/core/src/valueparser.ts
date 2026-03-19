@@ -2860,9 +2860,11 @@ export function email(
           `allowedDomains[${i}] must be a string, got ${typeof entry}.`,
         );
       }
-      if (entry === "") {
+      if (entry !== entry.trim()) {
         throw new TypeError(
-          `allowedDomains[${i}] must not be empty.`,
+          `allowedDomains[${i}] must not have leading or trailing whitespace: ${
+            JSON.stringify(entry)
+          }`,
         );
       }
       if (entry.startsWith("@")) {
@@ -2872,19 +2874,36 @@ export function email(
           }`,
         );
       }
-      if (entry.endsWith(".")) {
+      if (entry === "" || !entry.includes(".")) {
         throw new TypeError(
-          `allowedDomains[${i}] must not end with ".": ${
+          `allowedDomains[${i}] is not a valid domain: ${
             JSON.stringify(entry)
           }`,
         );
       }
-      if (entry !== entry.trim()) {
+      if (
+        entry.startsWith(".") || entry.endsWith(".") ||
+        entry.startsWith("-") || entry.endsWith("-")
+      ) {
         throw new TypeError(
-          `allowedDomains[${i}] must not have leading or trailing whitespace: ${
+          `allowedDomains[${i}] is not a valid domain: ${
             JSON.stringify(entry)
           }`,
         );
+      }
+      const labels = entry.split(".");
+      for (const label of labels) {
+        if (
+          label.length === 0 || label.length > 63 ||
+          label.startsWith("-") || label.endsWith("-") ||
+          !/^[a-zA-Z0-9-]+$/.test(label)
+        ) {
+          throw new TypeError(
+            `allowedDomains[${i}] is not a valid domain: ${
+              JSON.stringify(entry)
+            }`,
+          );
+        }
       }
     }
   }

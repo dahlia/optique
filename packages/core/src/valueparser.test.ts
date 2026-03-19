@@ -7176,9 +7176,56 @@ describe("email()", () => {
       );
     });
 
+    it("should throw TypeError for malformed domain syntax", () => {
+      // Leading dot
+      assert.throws(
+        () => email({ allowedDomains: [".example.com"] as never }),
+        TypeError,
+      );
+      // Consecutive dots
+      assert.throws(
+        () => email({ allowedDomains: ["foo..bar.com"] as never }),
+        TypeError,
+      );
+      // Embedded space
+      assert.throws(
+        () => email({ allowedDomains: ["exa mple.com"] as never }),
+        TypeError,
+      );
+      // No dot (bare label)
+      assert.throws(
+        () => email({ allowedDomains: ["localhost"] as never }),
+        TypeError,
+      );
+      // Leading hyphen
+      assert.throws(
+        () => email({ allowedDomains: ["-example.com"] as never }),
+        TypeError,
+      );
+      // Trailing hyphen
+      assert.throws(
+        () => email({ allowedDomains: ["example-.com"] as never }),
+        TypeError,
+      );
+      // Label exceeding 63 characters
+      assert.throws(
+        () =>
+          email({
+            allowedDomains: [`${"a".repeat(64)}.com`] as never,
+          }),
+        TypeError,
+      );
+    });
+
     it("should accept valid allowedDomains entries without throwing", () => {
       assert.doesNotThrow(
         () => email({ allowedDomains: ["example.com", "test.org"] }),
+      );
+      assert.doesNotThrow(
+        () => email({ allowedDomains: ["sub.example.com"] }),
+      );
+      assert.doesNotThrow(
+        () => email({ allowedDomains: ["my-domain.co.uk"] }),
       );
     });
   });
