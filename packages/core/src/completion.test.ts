@@ -2430,7 +2430,10 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
       }
     });
 
-    it("should preserve directory prefix in nested file completions", (t) => {
+    it("should preserve directory prefix in nested file completions", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;
       if (!isShellAvailable("nu")) {
         t.skip("nu not available");
@@ -2442,9 +2445,9 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
       );
 
       try {
-        // CLI that emits __FILE__:file::::0
+        // CLI that emits __FILE__:file:::0
         const cliScript = `#!/bin/bash
-printf '__FILE__:file::::0\\n'
+printf '__FILE__:file:::0\\n'
 `;
         const cliPath = join(tempDir, "nested-cli");
         writeFileSync(cliPath, cliScript, { mode: 0o755 });
@@ -2505,7 +2508,10 @@ do { ${functionName} "nested-cli src/" }
       }
     });
 
-    it("should not double slash for root-level absolute path prefix", (t) => {
+    it("should not double slash for root-level absolute path prefix", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;
       if (!isShellAvailable("nu")) {
         t.skip("nu not available");
@@ -2521,9 +2527,9 @@ do { ${functionName} "nested-cli src/" }
       );
 
       try {
-        // CLI that emits __FILE__:any::::0
+        // CLI that emits __FILE__:any:::0
         const cliScript = `#!/bin/bash
-printf '__FILE__:any::::0\\n'
+printf '__FILE__:any:::0\\n'
 `;
         const cliPath = join(nuTempDir, "root-cli");
         writeFileSync(cliPath, cliScript, { mode: 0o755 });
@@ -2565,7 +2571,10 @@ do { ${functionName} "root-cli /u" }
       }
     });
 
-    it("should not prefix bare relative path completions with slash", (t) => {
+    it("should not prefix bare relative path completions with slash", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;
       if (!isShellAvailable("nu")) {
         t.skip("nu not available");
@@ -2577,9 +2586,9 @@ do { ${functionName} "root-cli /u" }
       );
 
       try {
-        // CLI that emits __FILE__:file::::0
+        // CLI that emits __FILE__:file:::0
         const cliScript = `#!/bin/bash
-printf '__FILE__:file::::0\\n'
+printf '__FILE__:file:::0\\n'
 `;
         const cliPath = join(tempDir, "bare-cli");
         writeFileSync(cliPath, cliScript, { mode: 0o755 });
