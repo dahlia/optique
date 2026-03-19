@@ -1225,17 +1225,44 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("accepts thenable (cross-realm Promise) from load()", async () => {
+  test("rejects plain thenable return value from load()", () => {
     const schema = z.object({ name: z.string() });
     const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              then: (resolve: (value: unknown) => void) =>
+                resolve({ config: { name: "ALICE" }, meta: undefined }),
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return a plain object or Promise, " +
+          "but got a thenable. Use a real Promise instead.",
+      },
+    );
+  });
+
+  test("accepts cross-realm Promise from load()", async () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    // Simulate cross-realm Promise: has Symbol.toStringTag but fails
+    // instanceof Promise.
+    const crossRealmPromise = {
+      [Symbol.toStringTag]: "Promise",
+      then(
+        resolve: (value: { config: { name: string }; meta: undefined }) => void,
+      ) {
+        resolve({ config: { name: "ALICE" }, meta: undefined });
+      },
+    };
     const annotations = await context.getAnnotations(
       {},
-      {
-        load: (() => ({
-          then: (resolve: (value: unknown) => void) =>
-            resolve({ config: { name: "ALICE" }, meta: undefined }),
-        })) as never,
-      },
+      { load: (() => crossRealmPromise) as never },
     );
     assert.ok(annotations != null);
     const symbols = Object.getOwnPropertySymbols(annotations);
@@ -1246,10 +1273,10 @@ describe("load() return value validation", () => {
     assert.equal(entry.data.name, "ALICE");
   });
 
-  test("rejects thenable that resolves to non-object", async () => {
+  test("rejects thenable even if it would resolve to valid result", () => {
     const schema = z.object({ name: z.string() });
     const context = createConfigContext({ schema });
-    await assert.rejects(
+    assert.throws(
       () =>
         context.getAnnotations(
           {},
@@ -1258,10 +1285,11 @@ describe("load() return value validation", () => {
               then: (resolve: (value: unknown) => void) => resolve(123),
             })) as never,
           },
-        ) as Promise<unknown>,
+        ),
       {
         name: "TypeError",
-        message: "Expected load() to return an object, but got: number.",
+        message: "Expected load() to return a plain object or Promise, " +
+          "but got a thenable. Use a real Promise instead.",
       },
     );
   });
