@@ -160,7 +160,7 @@ function _${programName} () {
           __tilde_prefix=""
           __tilde_expanded=""
           __glob_current="$pattern"
-          if [[ "$pattern" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)$ ]]; then
+          if [[ "$pattern" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)?$ ]]; then
             __tilde_prefix="\${BASH_REMATCH[1]}"
             eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
             if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
@@ -812,9 +812,13 @@ ${
       # before comparing so that Windows backslashes match forward slashes
       # in the transported pattern.
       let glob_base = if ($pattern | is-not-empty) {
-        # Normalize separators, leading ./, and case so that SRC\ma matches src/
-        let norm_prefix = ($prefix | str replace -a '\\' '/' | str replace -r '^\\./' '' | str downcase)
-        let norm_pattern = ($pattern | str replace -a '\\' '/' | str replace -r '^\\./' '' | str downcase)
+        # Normalize separators and leading ./; downcase only on Windows
+        # where filesystems are typically case-insensitive
+        let norm_prefix_raw = ($prefix | str replace -a '\\' '/' | str replace -r '^\\./' '')
+        let norm_pattern_raw = ($pattern | str replace -a '\\' '/' | str replace -r '^\\./' '')
+        let is_win = (($nu.os-info.name | str downcase) == "windows")
+        let norm_prefix = (if $is_win { $norm_prefix_raw | str downcase } else { $norm_prefix_raw })
+        let norm_pattern = (if $is_win { $norm_pattern_raw | str downcase } else { $norm_pattern_raw })
         if ($norm_prefix | str starts-with $norm_pattern) and (($norm_prefix | str length) > ($norm_pattern | str length)) {
           $prefix
         } else {
@@ -1052,7 +1056,8 @@ ${
                 # in the transported pattern.
                 \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') -replace '^\\./','' } else { '' }
                 \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') -replace '^\\./','' } else { '' }
-                \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern, [System.StringComparison]::OrdinalIgnoreCase) -and \$normalizedWord.Length -gt \$normalizedPattern.Length) {
+                \$comparison = if (\$IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
+                \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern, \$comparison) -and \$normalizedWord.Length -gt \$normalizedPattern.Length) {
                     \$wordToComplete
                 } elseif (\$pattern) {
                     \$pattern
