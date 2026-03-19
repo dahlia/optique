@@ -23,7 +23,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 // Conditionally import Temporal polyfill only if not natively available
-if (!globalThis.Temporal) {
+const usingPolyfill = !globalThis.Temporal;
+if (usingPolyfill) {
   const polyfill = await import("@js-temporal/polyfill");
   globalThis.Temporal = polyfill.Temporal;
 }
@@ -189,13 +190,33 @@ describe("plainDate", () => {
       "2020-12-31",
       "1970-01-01",
       "2000-02-29",
+      "+010000-01-23",
+      "-000001-12-31",
+      "2020-01-23[u-ca=gregory]",
+      "2020-01-23[u-ca=GREGORY]",
+      "20200123", // basic (compact) ISO 8601
+      "+0100000123", // basic expanded year
+      "20200123[u-ca=gregory]", // basic with calendar
     ];
 
     for (const input of validInputs) {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainDate);
-      assert.equal(result.value.toString(), input);
+    }
+  });
+
+  it("should reject wider ISO forms", () => {
+    const widerInputs = [
+      "2020-01-23T17:04:36",
+      "2020-01-23T17:04:36.491865121",
+      "2020-01-23T00:00:00",
+      "20200123T170436", // compact datetime
+    ];
+
+    for (const input of widerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
     }
   });
 
@@ -237,12 +258,47 @@ describe("plainTime", () => {
       "23:59:59",
       "12:30:45.123",
       "17:04", // Temporal accepts this format
+      "17:04:36,123", // ISO 8601 allows comma as fractional separator
+      "170436", // basic (compact) ISO 8601
+      "1704", // compact HH:MM
+      "17", // reduced-precision hour-only
+      "T17:04", // T-prefixed extended
+      "T1704", // T-prefixed basic
     ];
 
     for (const input of validInputs) {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainTime);
+    }
+  });
+
+  it("should parse time strings with calendar annotations", {
+    // Deno's native Temporal rejects calendar annotations on PlainTime
+    skip: !usingPolyfill,
+  }, () => {
+    if (!usingPolyfill) return;
+    const inputs = [
+      "17:04:36[u-ca=gregory]",
+      "17:04:36[!u-ca=iso8601]",
+    ];
+    for (const input of inputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.ok(result.value instanceof Temporal.PlainTime);
+    }
+  });
+
+  it("should reject wider ISO forms", () => {
+    const widerInputs = [
+      "2020-01-23T17:04:36",
+      "2020-01-23T17:04:36.491865121",
+      "20200123T170436", // compact datetime
+    ];
+
+    for (const input of widerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
     }
   });
 
@@ -280,13 +336,39 @@ describe("plainDateTime", () => {
       "2020-01-23T17:04:36.491865121",
       "2020-01-23T00:00:00",
       "2020-12-31T23:59:59",
-      "2020-01-23", // Temporal accepts this format (converts to datetime with time 00:00:00)
+      "+010000-01-23T17:04:36",
+      "-000001-12-31T00:00:00",
+      "2020-01-23T17:04:36[u-ca=gregory]",
+      "2020-01-23T17:04:36,123", // ISO 8601 allows comma as fractional separator
+      "2020-01-23t17:04:36", // lowercase t separator
+      "2020-01-23 17:04:36", // space separator
+      "2020-01-23T17:04:36[u-ca=GREGORY]", // uppercase calendar
+      "20200123T170436", // basic (compact) ISO 8601
+      "2020-01-23T170436", // mixed extended date + basic time
+      "+0100000123T170436", // basic expanded year
+      "20200123T170436[u-ca=gregory]", // basic with calendar
+      "2020-01-23T17", // reduced-precision hour-only time
+      "20200123T17", // basic date + hour-only time
     ];
 
     for (const input of validInputs) {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainDateTime);
+    }
+  });
+
+  it("should reject narrower ISO forms", () => {
+    const narrowerInputs = [
+      "2020-01-23",
+      "20200123", // compact date without time
+      "17:04:36",
+      "170436", // compact time without date
+    ];
+
+    for (const input of narrowerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
     }
   });
 
@@ -324,13 +406,44 @@ describe("plainYearMonth", () => {
       "2020-12",
       "1970-01",
       "2000-02",
+      "+010000-01",
+      "-000001-12",
+      "202001", // basic (compact) ISO 8601
+      "+01000001", // basic expanded year
     ];
 
     for (const input of validInputs) {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainYearMonth);
-      assert.equal(result.value.toString(), input);
+    }
+  });
+
+  it("should parse non-ISO calendar year-month strings", {
+    // Deno's native Temporal panics on non-ISO calendars for PlainYearMonth
+    skip: !usingPolyfill,
+  }, () => {
+    if (!usingPolyfill) return;
+    const inputs = [
+      "2020-01-01[u-ca=gregory]",
+      "20200123[u-ca=gregory]", // basic with calendar
+    ];
+    for (const input of inputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.ok(result.value instanceof Temporal.PlainYearMonth);
+    }
+  });
+
+  it("should reject wider ISO forms", () => {
+    const widerInputs = [
+      "2020-01-23",
+      "2020-01-23T17:04:36",
+    ];
+
+    for (const input of widerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
     }
   });
 
@@ -372,12 +485,43 @@ describe("plainMonthDay", () => {
       "--06-15",
       "01-23",
       "12-31",
+      "--0123", // basic (compact) ISO 8601
+      "0123", // compact without --
     ];
 
     for (const input of validInputs) {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainMonthDay);
+    }
+  });
+
+  it("should parse non-ISO calendar month-day strings", {
+    // Deno's native Temporal panics on non-ISO calendars for PlainMonthDay
+    skip: !usingPolyfill,
+  }, () => {
+    if (!usingPolyfill) return;
+    const inputs = [
+      "1972-01-23[u-ca=gregory]",
+      "20200123[u-ca=gregory]", // basic with calendar
+      "+0100000123[u-ca=gregory]", // basic expanded year with calendar
+    ];
+    for (const input of inputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.ok(result.value instanceof Temporal.PlainMonthDay);
+    }
+  });
+
+  it("should reject wider ISO forms", () => {
+    const widerInputs = [
+      "2020-01-23",
+      "2020-01-23T17:04:36",
+    ];
+
+    for (const input of widerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
     }
   });
 

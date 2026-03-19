@@ -407,6 +407,87 @@ export function zonedDateTime(
 }
 
 /**
+ * Optional RFC 9557 calendar annotation suffix, e.g. `[u-ca=gregory]`.
+ * Accepts case-insensitive values and the optional critical flag (`!`).
+ * Used by all plain Temporal regexes to accept `toString()` output for
+ * non-ISO calendars.
+ */
+const CALENDAR_ANNOTATION = String.raw`(\[!?u-ca=[a-zA-Z0-9\-]+\])?`;
+
+/**
+ * Required RFC 9557 calendar annotation (non-optional variant used when the
+ * annotation must be present, e.g. for reference-day/year forms).
+ */
+const CALENDAR_ANNOTATION_REQUIRED = String.raw`\[!?u-ca=[a-zA-Z0-9\-]+\]`;
+
+/**
+ * Year portion: either 4 digits (`YYYY`) or a sign-prefixed 6-digit expanded
+ * year (`+YYYYYY` / `-YYYYYY`).
+ */
+const YEAR = String.raw`([+-]\d{6}|\d{4})`;
+
+/** ISO 8601 fractional seconds with `.` or `,` separator. */
+const FRACTIONAL = String.raw`[.,]\d+`;
+
+/** Extended date: `YYYY-MM-DD` or `±YYYYYY-MM-DD`. */
+const DATE_EXTENDED = `${YEAR}-\\d{2}-\\d{2}`;
+
+/** Basic date: `YYYYMMDD` or `±YYYYYYMMDD`. */
+const DATE_BASIC = `${YEAR}\\d{4}`;
+
+/** Extended time: `HH:MM[:SS[.frac]]`. */
+const TIME_EXTENDED = `\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?`;
+
+/** Basic time: `HH`, `HHMM`, or `HHMMSS[.frac]`. */
+const TIME_BASIC = `\\d{2}(\\d{2}(\\d{2}(${FRACTIONAL})?)?)?`;
+
+/**
+ * Matches YYYY-MM-DD (extended) or YYYYMMDD (basic) date forms only (no time
+ * component).  Both forms accept expanded years and calendar annotations.
+ */
+const PLAIN_DATE_RE = new RegExp(
+  `^(${DATE_EXTENDED}|${DATE_BASIC})${CALENDAR_ANNOTATION}$`,
+);
+
+/**
+ * Matches time forms only (no date prefix).  Accepts extended
+ * (`HH:MM[:SS[.frac]]`), basic (`HH`, `HHMM`, `HHMMSS[.frac]`), and
+ * `T`-prefixed variants.  Calendar annotations are accepted for consistency
+ * with `Temporal.PlainTime.from()` on polyfill runtimes.
+ */
+const PLAIN_TIME_RE = new RegExp(
+  `^[Tt]?(${TIME_EXTENDED}|${TIME_BASIC})${CALENDAR_ANNOTATION}$`,
+);
+
+/**
+ * Matches date-time strings with both date and time parts.  Accepts extended,
+ * basic, and mixed forms (e.g. `2020-01-23T170436`).  The separator may be
+ * `T`, `t`, or a space.  The time portion may be reduced-precision (hour
+ * only).
+ */
+const PLAIN_DATETIME_RE = new RegExp(
+  `^(${DATE_EXTENDED}|${DATE_BASIC})[Tt ](${TIME_EXTENDED}|${TIME_BASIC})${CALENDAR_ANNOTATION}$`,
+);
+
+/**
+ * Matches YYYY-MM (extended) or YYYYMM (basic), or a full date
+ * (extended or basic) with a required calendar annotation (the reference day
+ * is emitted by `toString()` for non-ISO calendars).
+ */
+const PLAIN_YEAR_MONTH_RE = new RegExp(
+  `^(${YEAR}-\\d{2}(${CALENDAR_ANNOTATION}|-\\d{2}${CALENDAR_ANNOTATION_REQUIRED})|${YEAR}\\d{2}(${CALENDAR_ANNOTATION}|\\d{2}${CALENDAR_ANNOTATION_REQUIRED}))$`,
+);
+
+/**
+ * Matches MM-DD, --MM-DD, MMDD, or --MMDD month-day forms, or a full date
+ * (extended or basic) with a required calendar annotation (the reference year
+ * is emitted by `toString()` for non-ISO calendars).
+ */
+const PLAIN_MONTH_DAY_RE = new RegExp(
+  `^((--)?(\\d{2}-\\d{2}|\\d{4})${CALENDAR_ANNOTATION}|(${DATE_EXTENDED}|${DATE_BASIC})${CALENDAR_ANNOTATION_REQUIRED})$`,
+);
+
+/**
  * Creates a ValueParser for parsing Temporal.PlainDate from ISO 8601 date strings.
  *
  * Accepts strings like:
@@ -430,6 +511,7 @@ export function plainDate(
     parse(input: string): ValueParserResult<Temporal.PlainDate> {
       ensureTemporal();
       try {
+        if (!PLAIN_DATE_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainDate.from(input);
         return { success: true, value };
       } catch {
@@ -473,6 +555,7 @@ export function plainTime(
     parse(input: string): ValueParserResult<Temporal.PlainTime> {
       ensureTemporal();
       try {
+        if (!PLAIN_TIME_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainTime.from(input);
         return { success: true, value };
       } catch {
@@ -516,6 +599,7 @@ export function plainDateTime(
     parse(input: string): ValueParserResult<Temporal.PlainDateTime> {
       ensureTemporal();
       try {
+        if (!PLAIN_DATETIME_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainDateTime.from(input);
         return { success: true, value };
       } catch {
@@ -559,6 +643,7 @@ export function plainYearMonth(
     parse(input: string): ValueParserResult<Temporal.PlainYearMonth> {
       ensureTemporal();
       try {
+        if (!PLAIN_YEAR_MONTH_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainYearMonth.from(input);
         return { success: true, value };
       } catch {
@@ -602,6 +687,7 @@ export function plainMonthDay(
     parse(input: string): ValueParserResult<Temporal.PlainMonthDay> {
       ensureTemporal();
       try {
+        if (!PLAIN_MONTH_DAY_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainMonthDay.from(input);
         return { success: true, value };
       } catch {
