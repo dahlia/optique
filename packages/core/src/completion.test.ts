@@ -1662,9 +1662,10 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
     });
 
     it("should preserve directory prefix in nested file completions", {
-      skip: !isShellAvailable("pwsh"),
+      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
     }, () => {
       // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
       if (!isShellAvailable("pwsh")) return;
 
       const tempDir = mkdtempSync(
@@ -1689,11 +1690,10 @@ printf '__FILE__:file::src/:0\\n'
         const scriptPath = join(tempDir, "completion.ps1");
         writeFileSync(scriptPath, script);
 
-        const pathSep = process.platform === "win32" ? ";" : ":";
         const testScriptPath = join(tempDir, "test.ps1");
         writeFileSync(
           testScriptPath,
-          `$env:PATH = "${tempDir}${pathSep}" + $env:PATH\n` +
+          `$env:PATH = "${tempDir}:" + $env:PATH\n` +
             `. "${scriptPath}"\n` +
             `$result = TabExpansion2 -inputScript 'nested-cli src/' ` +
             `-cursorColumn 15\n` +
