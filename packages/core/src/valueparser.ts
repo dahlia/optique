@@ -2608,6 +2608,8 @@ export interface HostnameOptions {
  * - Labels can contain alphanumeric characters and hyphens
  * - Labels cannot start or end with a hyphen
  * - Total length ≤ 253 characters (default)
+ * - Dotted all-numeric strings (e.g., `192.168.0.1`) are rejected as they
+ *   resemble IPv4 addresses rather than DNS hostnames
  *
  * @param options - Options for hostname validation.
  * @returns A value parser for hostnames.
@@ -2764,6 +2766,18 @@ export function hostname(
               message`Expected a valid hostname, but got ${input}.`;
           return { success: false, error: msg };
         }
+      }
+
+      // Reject dotted all-numeric strings (e.g., IPv4 addresses like
+      // 192.168.0.1).  Single-label numeric names are allowed so that
+      // hostname() can still accept values like "123".
+      if (labels.length >= 2 && labels.every((l) => /^[0-9]+$/.test(l))) {
+        const errorMsg = options?.errors?.invalidHostname;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input)
+          : errorMsg ??
+            message`Expected a valid hostname, but got ${input}.`;
+        return { success: false, error: msg };
       }
 
       return { success: true, value: input };

@@ -6500,12 +6500,33 @@ describe("hostname()", () => {
       assert.ok(!result2.success);
     });
 
-    it("should handle numeric-only labels", () => {
+    it("should reject dotted all-numeric strings (IPv4-like)", () => {
       const parser = hostname();
 
-      // Numeric labels are valid in hostnames (not IPs though)
-      const result = parser.parse("123.456.789");
-      assert.ok(result.success);
+      // Dotted all-numeric patterns should be rejected
+      assert.ok(!parser.parse("192.168.0.1").success);
+      assert.ok(!parser.parse("127.0.0.1").success);
+      assert.ok(!parser.parse("999.999.999.999").success);
+      assert.ok(!parser.parse("1.2.3.4").success);
+      assert.ok(!parser.parse("123.456.789").success);
+      assert.ok(!parser.parse("0.0").success);
+    });
+
+    it("should accept single numeric labels", () => {
+      const parser = hostname();
+
+      // A single numeric label is fine (not dotted)
+      assert.ok(parser.parse("123").success);
+      assert.ok(parser.parse("0").success);
+    });
+
+    it("should accept mixed numeric and alphabetic labels", () => {
+      const parser = hostname();
+
+      // At least one label has a non-digit character
+      assert.ok(parser.parse("server1.123.com").success);
+      assert.ok(parser.parse("1a.2b.3c.4d").success);
+      assert.ok(parser.parse("192.168.0.example").success);
     });
   });
 });
