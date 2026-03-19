@@ -731,7 +731,7 @@ ${
         $prefix
       } else {
         let parsed = ($prefix | path parse)
-        if ($parsed.parent == ".") { "" } else if ($parsed.parent | str ends-with "/") { $parsed.parent } else { $parsed.parent + "/" }
+        if ($parsed.parent | is-empty) { "" } else if ($parsed.parent | str ends-with "/") { $parsed.parent } else { $parsed.parent + "/" }
       }
 
       # Format file completions

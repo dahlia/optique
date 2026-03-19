@@ -2565,6 +2565,74 @@ do { ${functionName} "root-cli /u" }
       }
     });
 
+    it("should not prefix bare relative path completions with slash", (t) => {
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "nu-bare-prefix-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:file::::0
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::::0\\n'
+`;
+        const cliPath = join(tempDir, "bare-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create a file that starts with "re"
+        writeFileSync(join(tempDir, "readme.txt"), "");
+
+        const script = nu.generateScript("bare-cli");
+
+        const nuTempDir = mkdtempSync(
+          join(tmpdir(), "nu-bare-test-"),
+        );
+        try {
+          const scriptPath = join(nuTempDir, "completion.nu");
+          writeFileSync(scriptPath, script);
+
+          const functionName = "nu-complete-bare-cli";
+          const testScript = `
+$env.PATH = ($env.PATH | prepend "${tempDir}")
+source ${scriptPath}
+
+do { ${functionName} "bare-cli re" }
+`;
+          const testScriptPath = join(nuTempDir, "test.nu");
+          writeFileSync(testScriptPath, testScript);
+
+          const result = runCommand("nu", [testScriptPath], {
+            cwd: tempDir,
+          });
+
+          const lines = result.trim().split("\n");
+          for (const line of lines) {
+            const match = line.match(
+              /│\s*\d+\s*│\s*([^│]+)\s*│/,
+            );
+            if (match) {
+              const value = match[1]?.trim();
+              if (value) {
+                ok(
+                  !value.startsWith("/"),
+                  `Completion "${value}" should not start with "/"`,
+                );
+              }
+            }
+          }
+        } finally {
+          rmSync(nuTempDir, { recursive: true, force: true });
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should enumerate hidden files without dot prefix when includeHidden is true", (t) => {
       if (!isShellAvailable("nu")) {
         t.skip("nu not available");
