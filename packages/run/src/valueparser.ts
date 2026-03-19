@@ -234,7 +234,7 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
   }
   if (extensions) {
     for (const ext of extensions) {
-      if (!ext.startsWith(".")) {
+      if (typeof ext !== "string" || !ext.startsWith(".")) {
         throw new TypeError(
           `Each extension must start with a dot, got: ${JSON.stringify(ext)}`,
         );

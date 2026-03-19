@@ -1052,6 +1052,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     JavaScript truthiness silently coerced invalid values like `"no"` into
     `true`.  [[#383], [#591]]
 
+ -  Fixed `path()` to reject non-string extension entries at construction
+    time.  Previously, non-string values (e.g., numbers) bypassed the
+    leading-dot validation and leaked into error messages and completion
+    payloads.  [[#346], [#651]]
+
 [#112]: https://github.com/dahlia/optique/issues/112
 [#160]: https://github.com/dahlia/optique/issues/160
 [#163]: https://github.com/dahlia/optique/pull/163
@@ -1059,6 +1064,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#258]: https://github.com/dahlia/optique/issues/258
 [#309]: https://github.com/dahlia/optique/issues/309
 [#343]: https://github.com/dahlia/optique/issues/343
+[#346]: https://github.com/dahlia/optique/issues/346
 [#358]: https://github.com/dahlia/optique/issues/358
 [#361]: https://github.com/dahlia/optique/issues/361
 [#383]: https://github.com/dahlia/optique/issues/383
@@ -1069,6 +1075,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#543]: https://github.com/dahlia/optique/pull/543
 [#545]: https://github.com/dahlia/optique/pull/545
 [#591]: https://github.com/dahlia/optique/pull/591
+[#651]: https://github.com/dahlia/optique/pull/651
 
 ### @optique/man
 
