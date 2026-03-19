@@ -890,6 +890,20 @@ describe("runParser", () => {
         },
       );
     });
+
+    it("should eagerly reject invalid version value even without --version flag", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["Alice"], {
+            version: { option: true, value: "" },
+          }),
+        {
+          name: "TypeError",
+          message: "Version value must not be empty.",
+        },
+      );
+    });
   });
 
   describe("error handling", () => {
