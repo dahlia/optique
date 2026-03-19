@@ -2693,7 +2693,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.equal(result, "completion-shown");
       assert.ok(completionShown);
       assert.ok(completionOutput.includes("function _myapp"));
-      assert.ok(completionOutput.includes("complete -F _myapp myapp"));
+      assert.ok(completionOutput.includes("complete -F _myapp -- myapp"));
       assert.ok(completionOutput.includes("myapp 'completion' 'bash'"));
     });
 
@@ -2785,7 +2785,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       });
 
       assert.ok(completionOutput.includes("function _myapp"));
-      assert.ok(completionOutput.includes("complete -F _myapp myapp"));
+      assert.ok(completionOutput.includes("complete -F _myapp -- myapp"));
     });
 
     it("should work with separated --completion option format", () => {

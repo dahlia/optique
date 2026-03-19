@@ -234,7 +234,7 @@ function _${programName} () {
   done < <(${programName} ${escapedArgs} "\${prev[@]}" "$current" 2>/dev/null)
 }
 
-complete -F _${programName} ${programName}
+complete -F _${programName} -- ${programName}
     `;
   },
   *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {
