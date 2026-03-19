@@ -855,6 +855,21 @@ describe("runParser", () => {
       );
     });
 
+    it("should reject version value containing DEL control character", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: { option: true, value: "1.0\x7f0" },
+            stdout: () => {},
+          }),
+        {
+          name: "TypeError",
+          message: "Version value must not contain control characters.",
+        },
+      );
+    });
+
     it("should reject non-string version value at runtime", () => {
       const parser = object({ name: argument(string()) });
       assert.throws(
