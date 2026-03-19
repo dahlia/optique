@@ -279,9 +279,28 @@ in a single, well-documented location.
 
  -  Use the `node:test` and `node:assert/strict` APIs to ensure tests run
     across all runtimes (Node.js, Deno, and Bun).
+
  -  Test files are co-located with source files using `.test.ts` suffix.
+
  -  Avoid the `assert.equal(..., true)` or `assert.equal(..., false)` patterns.
     Use `assert.ok(...)` and `assert.ok(!...)` instead.
+
+ -  To conditionally skip tests (e.g., platform-specific or tool-dependent
+    tests), use *both* the `skip` option *and* an early return.  The `skip`
+    option ensures Deno and Node.js report the test as skipped, while the
+    early return is needed because Bun ignores the `skip` option and runs
+    the test body regardless:
+
+    ~~~~ typescript
+    it("should work on Windows only", {
+      skip: process.platform !== "win32",
+    }, () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform !== "win32") return;
+
+      // test body ...
+    });
+    ~~~~
 
 ### Error messages
 

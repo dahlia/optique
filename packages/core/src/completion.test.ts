@@ -1660,6 +1660,124 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
         "Expected Get-ChildItem to use @forceParam splatting.",
       );
     });
+
+    it("should preserve directory prefix in nested file completions", {
+      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+    }, () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("pwsh")) return;
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "pwsh-nested-dir-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:file with src/ prefix already typed
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::src/:0\\n'
+`;
+        const cliPath = join(tempDir, "nested-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create src/ directory with a file inside
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir, { recursive: true });
+        writeFileSync(join(srcDir, "alpha.txt"), "");
+
+        const script = pwsh.generateScript("nested-cli");
+
+        const scriptPath = join(tempDir, "completion.ps1");
+        writeFileSync(scriptPath, script);
+
+        const testScriptPath = join(tempDir, "test.ps1");
+        writeFileSync(
+          testScriptPath,
+          `$env:PATH = "${tempDir}:" + $env:PATH\n` +
+            `. "${scriptPath}"\n` +
+            `$result = TabExpansion2 -inputScript 'nested-cli src/' ` +
+            `-cursorColumn 15\n` +
+            `$result.CompletionMatches | ` +
+            `ForEach-Object { $_.CompletionText }\n`,
+        );
+
+        const result = runCommand(
+          "pwsh",
+          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+          { cwd: tempDir },
+        );
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(
+          completions.some((c) => c.trim() === "src/alpha.txt"),
+          `Expected "src/alpha.txt" in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should preserve backslash directory prefix on Windows", {
+      skip: process.platform !== "win32" || !isShellAvailable("pwsh"),
+    }, () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform !== "win32") return;
+      if (!isShellAvailable("pwsh")) return;
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "pwsh-nested-backslash-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:file with src\ prefix (Windows-style)
+        const cliScript = `@echo off\r\necho __FILE__:file::src\\:0\r\n`;
+        const cliPath = join(tempDir, "nested-cli.cmd");
+        writeFileSync(cliPath, cliScript);
+
+        // Create src\ directory with a file inside
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir, { recursive: true });
+        writeFileSync(join(srcDir, "alpha.txt"), "");
+
+        const script = pwsh.generateScript("nested-cli");
+
+        const scriptPath = join(tempDir, "completion.ps1");
+        writeFileSync(scriptPath, script);
+
+        const testScriptPath = join(tempDir, "test.ps1");
+        writeFileSync(
+          testScriptPath,
+          `$env:PATH = "${tempDir};" + $env:PATH\n` +
+            `. "${scriptPath}"\n` +
+            `$result = TabExpansion2 -inputScript 'nested-cli src\\' ` +
+            `-cursorColumn 16\n` +
+            `$result.CompletionMatches | ` +
+            `ForEach-Object { $_.CompletionText }\n`,
+        );
+
+        const result = runCommand(
+          "pwsh",
+          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+          { cwd: tempDir },
+        );
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(
+          completions.some((c) => c.trim() === "src\\alpha.txt"),
+          `Expected "src\\alpha.txt" in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("fish shell completion", () => {

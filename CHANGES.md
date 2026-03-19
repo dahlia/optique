@@ -195,6 +195,10 @@ To be released.
     could infer `-` as the program name, producing broken completion
     scripts.  [[#235], [#568]]
 
+ -  Fixed PowerShell file completion stripping directory prefixes from nested
+    path suggestions.  Completing `src/` now returns `src/alpha.txt` instead
+    of bare `alpha.txt`.  [[#253], [#632]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -531,6 +535,7 @@ To be released.
 [#249]: https://github.com/dahlia/optique/issues/249
 [#250]: https://github.com/dahlia/optique/issues/250
 [#252]: https://github.com/dahlia/optique/issues/252
+[#253]: https://github.com/dahlia/optique/issues/253
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
 [#307]: https://github.com/dahlia/optique/issues/307
@@ -618,6 +623,7 @@ To be released.
 [#629]: https://github.com/dahlia/optique/pull/629
 [#630]: https://github.com/dahlia/optique/pull/630
 [#631]: https://github.com/dahlia/optique/pull/631
+[#632]: https://github.com/dahlia/optique/pull/632
 
 ### @optique/config
 
