@@ -408,10 +408,17 @@ export function zonedDateTime(
 
 /**
  * Optional RFC 9557 calendar annotation suffix, e.g. `[u-ca=gregory]`.
+ * Accepts case-insensitive values and the optional critical flag (`!`).
  * Used by all plain Temporal regexes to accept `toString()` output for
  * non-ISO calendars.
  */
-const CALENDAR_ANNOTATION = String.raw`(\[u-ca=[a-z0-9\-]+\])?`;
+const CALENDAR_ANNOTATION = String.raw`(\[!?u-ca=[a-zA-Z0-9\-]+\])?`;
+
+/**
+ * Required RFC 9557 calendar annotation (non-optional variant used when the
+ * annotation must be present, e.g. for reference-day/year forms).
+ */
+const CALENDAR_ANNOTATION_REQUIRED = String.raw`\[!?u-ca=[a-zA-Z0-9\-]+\]`;
 
 /**
  * Year portion: either 4 digits (`YYYY`) or a sign-prefixed 6-digit expanded
@@ -433,11 +440,13 @@ const PLAIN_TIME_RE = new RegExp(
 );
 
 /**
- * Matches YYYY-MM-DDTHH:MM, YYYY-MM-DDTHH:MM:SS,
- * or YYYY-MM-DDTHH:MM:SS.fractional (must have both date and time parts).
+ * Matches YYYY-MM-DD[T| |t]HH:MM, YYYY-MM-DD[T| |t]HH:MM:SS,
+ * or YYYY-MM-DD[T| |t]HH:MM:SS.fractional (must have both date and time
+ * parts).  Accepts uppercase `T`, lowercase `t`, or space as the date-time
+ * separator per ISO 8601.
  */
 const PLAIN_DATETIME_RE = new RegExp(
-  `^${YEAR}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?${CALENDAR_ANNOTATION}$`,
+  `^${YEAR}-\\d{2}-\\d{2}[Tt ]\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?${CALENDAR_ANNOTATION}$`,
 );
 
 /**
@@ -445,7 +454,7 @@ const PLAIN_DATETIME_RE = new RegExp(
  * reference day is emitted by `toString()` for non-ISO calendars).
  */
 const PLAIN_YEAR_MONTH_RE = new RegExp(
-  `^${YEAR}-\\d{2}(-\\d{2}\\[u-ca=[a-z0-9\\-]+\\]|${CALENDAR_ANNOTATION})$`,
+  `^${YEAR}-\\d{2}(-\\d{2}${CALENDAR_ANNOTATION_REQUIRED}|${CALENDAR_ANNOTATION})$`,
 );
 
 /**
@@ -453,7 +462,7 @@ const PLAIN_YEAR_MONTH_RE = new RegExp(
  * (the reference year is emitted by `toString()` for non-ISO calendars).
  */
 const PLAIN_MONTH_DAY_RE = new RegExp(
-  `^((--)?(\\d{2}-\\d{2})${CALENDAR_ANNOTATION}|${YEAR}-\\d{2}-\\d{2}\\[u-ca=[a-z0-9\\-]+\\])$`,
+  `^((--)?(\\d{2}-\\d{2})${CALENDAR_ANNOTATION}|${YEAR}-\\d{2}-\\d{2}${CALENDAR_ANNOTATION_REQUIRED})$`,
 );
 
 /**

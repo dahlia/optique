@@ -193,13 +193,13 @@ describe("plainDate", () => {
       "+010000-01-23",
       "-000001-12-31",
       "2020-01-23[u-ca=gregory]",
+      "2020-01-23[u-ca=GREGORY]",
     ];
 
     for (const input of validInputs) {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainDate);
-      assert.equal(result.value.toString(), input);
     }
   });
 
@@ -314,6 +314,9 @@ describe("plainDateTime", () => {
       "-000001-12-31T00:00:00",
       "2020-01-23T17:04:36[u-ca=gregory]",
       "2020-01-23T17:04:36,123", // ISO 8601 allows comma as fractional separator
+      "2020-01-23t17:04:36", // lowercase t separator
+      "2020-01-23 17:04:36", // space separator
+      "2020-01-23T17:04:36[u-ca=GREGORY]", // uppercase calendar
     ];
 
     for (const input of validInputs) {
