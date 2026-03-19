@@ -4182,6 +4182,12 @@ export interface DomainOptions {
   readonly minLabels?: number;
 
   /**
+   * Maximum domain length in characters.
+   * @default 253
+   */
+  readonly maxLength?: number;
+
+  /**
    * If `true`, converts domain to lowercase.
    *
    * @default false
@@ -4219,6 +4225,13 @@ export interface DomainOptions {
      * and minimum labels.
      */
     tooFewLabels?: Message | ((domain: string, minLabels: number) => Message);
+
+    /**
+     * Custom error message when domain is too long.
+     * Can be a static message or a function that receives the domain
+     * and max length.
+     */
+    tooLong?: Message | ((domain: string, maxLength: number) => Message);
   };
 }
 
@@ -4231,6 +4244,7 @@ export interface DomainOptions {
  *
  * @param options Parser options for domain validation.
  * @returns A parser that accepts valid domain names as strings.
+ * @throws {RangeError} If `maxLength` is not a positive integer.
  * @throws {RangeError} If `minLabels` is not a positive integer.
  * @throws {TypeError} If `allowSubdomains` is `false` and `minLabels` is
  *   greater than 2, since non-subdomain domains have exactly 2 labels.
@@ -4264,7 +4278,13 @@ export function domain(
     ? Object.freeze([...options.allowedTLDs])
     : undefined;
   const minLabels = options?.minLabels ?? 2;
+  const maxLength = options?.maxLength ?? 253;
   const lowercase = options?.lowercase ?? false;
+  if (!Number.isInteger(maxLength) || maxLength < 1) {
+    throw new RangeError(
+      "maxLength must be an integer greater than or equal to 1.",
+    );
+  }
   if (!Number.isInteger(minLabels) || minLabels < 1) {
     throw new RangeError(
       "minLabels must be an integer greater than or equal to 1.",
@@ -4277,6 +4297,7 @@ export function domain(
     );
   }
   const invalidDomain = options?.errors?.invalidDomain;
+  const tooLong = options?.errors?.tooLong;
   const tooFewLabels = options?.errors?.tooFewLabels;
   const subdomainsNotAllowed = options?.errors?.subdomainsNotAllowed;
   const tldNotAllowed = options?.errors?.tldNotAllowed;
@@ -4289,6 +4310,18 @@ export function domain(
     $mode: "sync",
     metavar,
     parse(input: string): ValueParserResult<string> {
+      // Check length constraint first
+      if (input.length > maxLength) {
+        const errorMsg = tooLong;
+        const msg = typeof errorMsg === "function"
+          ? errorMsg(input, maxLength)
+          : errorMsg ??
+            message`Domain ${input} is too long (maximum ${
+              text(maxLength.toString())
+            } characters).`;
+        return { success: false, error: msg };
+      }
+
       // Basic validation
       if (input.length === 0 || input.startsWith(".") || input.endsWith(".")) {
         const errorMsg = invalidDomain;

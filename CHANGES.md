@@ -477,6 +477,11 @@ To be released.
     two or more labels are present.  Single-label numeric domains
     (e.g., `"123"`) remain valid.  [[#375], [#634]]
 
+ -  Fixed `domain()` not enforcing the 253-octet total domain length
+    limit.  `domain()` now rejects domains exceeding 253 characters by
+    default, matching `hostname()`'s existing behavior.  A `maxLength`
+    option is also available for custom limits.  [[#395], [#635]]
+
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
     Colons in the pattern field are now percent-encoded (`%3A`) so that the
@@ -571,6 +576,7 @@ To be released.
 [#387]: https://github.com/dahlia/optique/issues/387
 [#388]: https://github.com/dahlia/optique/issues/388
 [#389]: https://github.com/dahlia/optique/issues/389
+[#395]: https://github.com/dahlia/optique/issues/395
 [#396]: https://github.com/dahlia/optique/issues/396
 [#429]: https://github.com/dahlia/optique/issues/429
 [#490]: https://github.com/dahlia/optique/pull/490
@@ -632,6 +638,7 @@ To be released.
 [#631]: https://github.com/dahlia/optique/pull/631
 [#632]: https://github.com/dahlia/optique/pull/632
 [#634]: https://github.com/dahlia/optique/pull/634
+[#635]: https://github.com/dahlia/optique/pull/635
 
 ### @optique/config
 
