@@ -594,6 +594,36 @@ describe("path", () => {
         { name: "TypeError" },
       );
     });
+
+    it("should throw on non-string extension (number)", () => {
+      assert.throws(
+        () => path({ extensions: [123 as never] }),
+        {
+          name: "TypeError",
+          message: /must start with a dot/,
+        },
+      );
+    });
+
+    it("should throw on non-string extension (null)", () => {
+      assert.throws(
+        () => path({ extensions: [null as never] }),
+        {
+          name: "TypeError",
+          message: /must start with a dot/,
+        },
+      );
+    });
+
+    it("should throw on non-string extension mixed with valid entries", () => {
+      assert.throws(
+        () => path({ extensions: [".json", 456 as never] }),
+        {
+          name: "TypeError",
+          message: /must start with a dot/,
+        },
+      );
+    });
   });
 
   describe("combined validations", () => {
