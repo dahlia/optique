@@ -148,7 +148,10 @@ function _${programName} () {
       # pattern="src/" and current="src/ma"), preserve the typed suffix
       # for incremental filtering.
       if [[ -n "$pattern" ]]; then
-        if [[ \${#current} -gt \${#pattern} && "\${current:0:\${#pattern}}" == "$pattern" ]]; then
+        # Normalize leading ./ so that ./src/ma matches pattern src/
+        local __norm_current="\${current#./}"
+        local __norm_pattern="\${pattern#./}"
+        if [[ \${#__norm_current} -gt \${#__norm_pattern} && "\${__norm_current:0:\${#__norm_pattern}}" == "$__norm_pattern" ]]; then
           # User has typed beyond the pattern — keep current for narrowing
           true
         else
@@ -357,8 +360,13 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         # current word.  If the user has already typed beyond the pattern,
         # keep PREFIX unchanged for incremental narrowing.
         local __saved_prefix="\$PREFIX"
-        if [[ -n "\$pattern" && ! ( \${#PREFIX} -gt \${#pattern} && "\${PREFIX[1,\${#pattern}]}" == "\$pattern" ) ]]; then
-          PREFIX="\$pattern"
+        if [[ -n "\$pattern" ]]; then
+          # Normalize leading ./ so that ./src/ma matches pattern src/
+          local __norm_prefix="\${PREFIX#./}"
+          local __norm_pattern="\${pattern#./}"
+          if [[ ! ( \${#__norm_prefix} -gt \${#__norm_pattern} && "\${__norm_prefix[1,\${#__norm_pattern}]}" == "\$__norm_pattern" ) ]]; then
+            PREFIX="\$pattern"
+          fi
         fi
 
         # Use zsh's native file completion
@@ -492,10 +500,13 @@ ${
             set -l glob_base $current
             set -l __tilde_prefix ""
             if test -n "$pattern"
-                set -l __pat_len (string length -- "$pattern")
-                set -l __cur_len (string length -- "$current")
-                if test $__cur_len -gt $__pat_len
-                    and test (string sub -l $__pat_len -- "$current") = "$pattern"
+                # Normalize leading ./ so that ./src/ma matches pattern src/
+                set -l __norm_current (string replace -r '^\\./' '' -- "$current")
+                set -l __norm_pattern (string replace -r '^\\./' '' -- "$pattern")
+                set -l __np_len (string length -- "$__norm_pattern")
+                set -l __nc_len (string length -- "$__norm_current")
+                if test $__nc_len -gt $__np_len
+                    and test (string sub -l $__np_len -- "$__norm_current") = "$__norm_pattern"
                     set glob_base $current
                 else
                     set glob_base $pattern
@@ -801,8 +812,9 @@ ${
       # before comparing so that Windows backslashes match forward slashes
       # in the transported pattern.
       let glob_base = if ($pattern | is-not-empty) {
-        let norm_prefix = ($prefix | str replace -a '\\' '/')
-        let norm_pattern = ($pattern | str replace -a '\\' '/')
+        # Normalize separators and leading ./ so that ./src/ma matches src/
+        let norm_prefix = ($prefix | str replace -a '\\' '/' | str replace -r '^\\./' '')
+        let norm_pattern = ($pattern | str replace -a '\\' '/' | str replace -r '^\\./' '')
         if ($norm_prefix | str starts-with $norm_pattern) and (($norm_prefix | str length) > ($norm_pattern | str length)) {
           $prefix
         } else {
@@ -1038,8 +1050,8 @@ ${
                 # incremental narrowing.  Normalize path separators before
                 # comparing so that Windows backslashes match forward slashes
                 # in the transported pattern.
-                \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') } else { '' }
-                \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') } else { '' }
+                \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') -replace '^\\./','' } else { '' }
+                \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') -replace '^\\./','' } else { '' }
                 \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern, [System.StringComparison]::OrdinalIgnoreCase) -and \$normalizedWord.Length -gt \$normalizedPattern.Length) {
                     \$wordToComplete
                 } elseif (\$pattern) {

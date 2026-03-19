@@ -818,6 +818,64 @@ fi
       }
     });
 
+    it("should narrow with ./ prefix when pattern omits it in bash", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-dotslash-"),
+      );
+
+      try {
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir);
+        writeFileSync(join(srcDir, "main.ts"), "");
+        writeFileSync(join(srcDir, "util.ts"), "");
+
+        // pattern is "src/" without ./
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::src/:0\\n'
+`;
+        const cliPath = join(tempDir, "dot-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const script = bash.generateScript("dot-cli");
+
+        // User typed "./src/ma" — should still narrow to main.ts
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("dot-cli" "./src/ma")
+COMP_CWORD=1
+_dot-cli 2>&1
+if [ \${#COMPREPLY[@]} -gt 0 ]; then
+  printf "%s\\n" "\${COMPREPLY[@]}"
+else
+  echo "__NO_COMPLETIONS__"
+fi
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes("main.ts")));
+        ok(!completions.some((c) => c.includes("util.ts")));
+        // Should preserve the user's ./ prefix
+        ok(completions.some((c) => c.startsWith("./")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include hidden files when includeHidden is true", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");
