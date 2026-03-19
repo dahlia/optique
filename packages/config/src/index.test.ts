@@ -204,6 +204,51 @@ describe("bindConfig", () => {
         })
       );
     });
+
+    test("rejects async key callback at parse time", async () => {
+      const schema = z.object({ name: z.string() });
+      const context = createConfigContext({ schema });
+      const parser = bindConfig(option("--name", string()), {
+        context,
+        // deno-lint-ignore require-await
+        key: (async (config: { name: string }) =>
+          config.name.toUpperCase()) as never,
+      });
+      const annotations = await context.getAnnotations({} as never, {
+        load: () => ({ config: { name: "alice" }, meta: undefined }),
+      });
+      assert.throws(
+        () => parse(parser, [], { annotations }),
+        {
+          name: "TypeError",
+          message:
+            "The key callback must return a synchronous value, but got a thenable.",
+        },
+      );
+    });
+
+    test("rejects thenable-returning key callback at parse time", async () => {
+      const schema = z.object({ name: z.string() });
+      const context = createConfigContext({ schema });
+      const thenable = {
+        then: (resolve: (value: string) => void) => resolve("ALICE"),
+      };
+      const parser = bindConfig(option("--name", string()), {
+        context,
+        key: (() => thenable) as never,
+      });
+      const annotations = await context.getAnnotations({} as never, {
+        load: () => ({ config: { name: "alice" }, meta: undefined }),
+      });
+      assert.throws(
+        () => parse(parser, [], { annotations }),
+        {
+          name: "TypeError",
+          message:
+            "The key callback must return a synchronous value, but got a thenable.",
+        },
+      );
+    });
   });
 
   test("uses CLI value when provided", () => {

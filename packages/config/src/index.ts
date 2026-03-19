@@ -1223,6 +1223,17 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
     // Extract value from config
     if (typeof options.key === "function") {
       configValue = options.key(configData, configMeta);
+      if (
+        configValue != null &&
+        typeof configValue === "object" &&
+        "then" in configValue &&
+        typeof (configValue as Record<string, unknown>).then === "function"
+      ) {
+        throw new TypeError(
+          "The key callback must return a synchronous value, " +
+            "but got a thenable.",
+        );
+      }
     } else {
       configValue = configData[options.key] as TValue;
     }

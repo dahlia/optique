@@ -678,6 +678,10 @@ To be released.
     property key (string, number, or symbol) or function, instead of
     silently coercing the value.  [[#398], [#627]]
 
+ -  `bindConfig()` now throws a `TypeError` at parse time when a `key`
+    callback returns a `Promise` or thenable object, instead of silently
+    leaking the thenable as the parsed value.  [[#400], [#628]]
+
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
 [#155]: https://github.com/dahlia/optique/issues/155
@@ -688,11 +692,13 @@ To be released.
 [#259]: https://github.com/dahlia/optique/issues/259
 [#391]: https://github.com/dahlia/optique/issues/391
 [#398]: https://github.com/dahlia/optique/issues/398
+[#400]: https://github.com/dahlia/optique/issues/400
 [#416]: https://github.com/dahlia/optique/issues/416
 [#549]: https://github.com/dahlia/optique/pull/549
 [#605]: https://github.com/dahlia/optique/pull/605
 [#609]: https://github.com/dahlia/optique/pull/609
 [#627]: https://github.com/dahlia/optique/pull/627
+[#628]: https://github.com/dahlia/optique/pull/628
 
 ### @optique/env
 
