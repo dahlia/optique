@@ -3032,40 +3032,61 @@ describe("url", () => {
     it("should reject non-string entries", () => {
       assert.throws(
         () => url({ allowedProtocols: [123 as never] }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /got: 123\./,
+        },
       );
       assert.throws(
         () => url({ allowedProtocols: [null as never] }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /got: null\./,
+        },
       );
       assert.throws(
         () => url({ allowedProtocols: [undefined as never] }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /got: undefined\./,
+        },
       );
     });
 
     it("should reject entries missing the trailing colon", () => {
       assert.throws(
         () => url({ allowedProtocols: ["https" as never] }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /got: "https"\./,
+        },
       );
       assert.throws(
         () => url({ allowedProtocols: ["http" as never] }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /got: "http"\./,
+        },
       );
     });
 
     it("should reject entries with :// suffix", () => {
       assert.throws(
         () => url({ allowedProtocols: ["https://" as never] }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /got: "https:\/\/"\./,
+        },
       );
     });
 
     it("should reject empty string", () => {
       assert.throws(
         () => url({ allowedProtocols: ["" as never] }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /got: ""\./,
+        },
       );
     });
 

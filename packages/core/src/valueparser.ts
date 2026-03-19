@@ -1282,9 +1282,12 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
         typeof protocol !== "string" ||
         !/^[a-z][a-z0-9+\-.]*:$/i.test(protocol)
       ) {
+        const rendered = typeof protocol === "string"
+          ? JSON.stringify(protocol)
+          : String(protocol);
         throw new TypeError(
           `Each allowed protocol must be a valid protocol ending with a colon` +
-            ` (e.g., "https:"), got: ${JSON.stringify(protocol)}.`,
+            ` (e.g., "https:"), got: ${rendered}.`,
         );
       }
     }
