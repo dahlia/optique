@@ -1009,8 +1009,12 @@ ${
                 # When a pattern is specified, use it as the file matching
                 # prefix instead of the current word.  If the user has
                 # already typed beyond the pattern, keep their input for
-                # incremental narrowing.
-                \$prefix = if (\$pattern -and \$wordToComplete -and \$wordToComplete.StartsWith(\$pattern) -and \$wordToComplete.Length -gt \$pattern.Length) {
+                # incremental narrowing.  Normalize path separators before
+                # comparing so that Windows backslashes match forward slashes
+                # in the transported pattern.
+                \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') } else { '' }
+                \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') } else { '' }
+                \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern) -and \$normalizedWord.Length -gt \$normalizedPattern.Length) {
                     \$wordToComplete
                 } elseif (\$pattern) {
                     \$pattern
