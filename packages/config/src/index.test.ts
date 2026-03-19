@@ -1161,9 +1161,13 @@ describe("createConfigContext input validation", () => {
 });
 
 describe("load() return value validation", () => {
-  test("rejects non-object return value from load()", () => {
+  const createNameContext = () => {
     const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    return createConfigContext({ schema });
+  };
+
+  test("rejects non-object return value from load()", () => {
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1178,8 +1182,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects null return value from load()", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1194,8 +1197,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects array return value from load()", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1210,8 +1212,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects load() result missing config property", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1226,8 +1227,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects plain thenable return value from load()", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1248,8 +1248,7 @@ describe("load() return value validation", () => {
   });
 
   test("accepts cross-realm Promise from load()", async () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     // Simulate a cross-realm Promise: Symbol.toStringTag is "Promise"
     // but instanceof Promise is false.
     const crossRealmPromise = {
@@ -1274,8 +1273,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects thenable even if it would resolve to valid result", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1295,8 +1293,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects Promise-valued config in load() result", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1317,8 +1314,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects Promise-valued meta in load() result", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1362,8 +1358,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects cross-realm Promise config (Symbol.toStringTag)", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1388,8 +1383,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects cross-realm Promise meta (Symbol.toStringTag)", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1414,8 +1408,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects non-object resolved value from async load()", async () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     await assert.rejects(
       () =>
         context.getAnnotations(
@@ -1430,8 +1423,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects missing config in resolved value from async load()", async () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     await assert.rejects(
       () =>
         context.getAnnotations(
@@ -1448,8 +1440,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects Promise-valued config in resolved value from async load()", async () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     await assert.rejects(
       () =>
         context.getAnnotations(
@@ -1471,8 +1462,7 @@ describe("load() return value validation", () => {
   });
 
   test("rejects Promise-valued meta in resolved value from async load()", async () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
+    const context = createNameContext();
     await assert.rejects(
       () =>
         context.getAnnotations(
