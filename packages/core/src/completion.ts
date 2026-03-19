@@ -51,6 +51,18 @@ function encodePattern(pattern: string): string {
 }
 
 /**
+ * Replaces control characters that would corrupt shell completion protocols.
+ * Shell completion formats use tabs as field delimiters and newlines as record
+ * delimiters.  Null bytes are used as delimiters in zsh's format.
+ * @param description The description string to sanitize.
+ * @returns The sanitized description with control characters replaced by spaces.
+ * @internal
+ */
+function sanitizeDescription(description: string): string {
+  return description.replace(/[\t\n\r\0]/g, " ");
+}
+
+/**
  * A shell completion generator.
  * @since 0.6.0
  */
@@ -360,7 +372,9 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
       if (suggestion.kind === "literal") {
         const description = suggestion.description == null
           ? ""
-          : formatMessage(suggestion.description, { colors: false });
+          : sanitizeDescription(
+            formatMessage(suggestion.description, { colors: false }),
+          );
         yield `${suggestion.text}\0${description}\0`;
       } else {
         // Emit special marker for native file completion
@@ -368,7 +382,9 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
-          : formatMessage(suggestion.description, { colors: false });
+          : sanitizeDescription(
+            formatMessage(suggestion.description, { colors: false }),
+          );
         const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\0${description}\0`;
       }
@@ -542,7 +558,9 @@ complete -c ${programName} -f -a '(${functionName})'
       if (suggestion.kind === "literal") {
         const description = suggestion.description == null
           ? ""
-          : formatMessage(suggestion.description, { colors: false });
+          : sanitizeDescription(
+            formatMessage(suggestion.description, { colors: false }),
+          );
         // Format: value\tdescription
         yield `${suggestion.text}\t${description}`;
       } else {
@@ -551,7 +569,9 @@ complete -c ${programName} -f -a '(${functionName})'
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
-          : formatMessage(suggestion.description, { colors: false });
+          : sanitizeDescription(
+            formatMessage(suggestion.description, { colors: false }),
+          );
         const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t${description}`;
       }
@@ -799,7 +819,9 @@ ${functionName}-external
       if (suggestion.kind === "literal") {
         const description = suggestion.description == null
           ? ""
-          : formatMessage(suggestion.description, { colors: false });
+          : sanitizeDescription(
+            formatMessage(suggestion.description, { colors: false }),
+          );
         // Format: value\tdescription
         yield `${suggestion.text}\t${description}`;
       } else {
@@ -808,7 +830,9 @@ ${functionName}-external
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
-          : formatMessage(suggestion.description, { colors: false });
+          : sanitizeDescription(
+            formatMessage(suggestion.description, { colors: false }),
+          );
         const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t${description}`;
       }
@@ -981,7 +1005,9 @@ ${
       if (suggestion.kind === "literal") {
         const description = suggestion.description == null
           ? ""
-          : formatMessage(suggestion.description, { colors: false });
+          : sanitizeDescription(
+            formatMessage(suggestion.description, { colors: false }),
+          );
         // Format: text\tlistItemText\tdescription
         yield `${suggestion.text}\t${suggestion.text}\t${description}`;
       } else {
@@ -990,7 +1016,9 @@ ${
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
-          : formatMessage(suggestion.description, { colors: false });
+          : sanitizeDescription(
+            formatMessage(suggestion.description, { colors: false }),
+          );
         const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t[file]\t${description}`;
       }
