@@ -159,7 +159,7 @@ function _${programName} () {
           __compare_pattern="\${__compare_pattern%%[\*\?]*}"
           [[ "$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
         fi
-        if [[ \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$current" != "$pattern" ]]; then
+        if [[ ( -n "$__compare_pattern" || -n "$__norm_current" ) && \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$current" != "$pattern" ]]; then
           # User has typed beyond or an equivalent form of the pattern
           true
         else
@@ -413,7 +413,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             __compare_pattern="\${__compare_pattern%%[\*\?]*}"
             [[ "\$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
           fi
-          if [[ \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$PREFIX" != "\$pattern" ]]; then
+          if [[ ( -n "\$__compare_pattern" || -n "\$__norm_prefix" ) && \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$PREFIX" != "\$pattern" ]]; then
             # User typed an equivalent or extended form — keep PREFIX
             true
           else
@@ -568,7 +568,8 @@ ${
                 end
                 set -l __cp_len (string length -- "$__compare_pattern")
                 set -l __nc_len (string length -- "$__norm_current")
-                if test $__nc_len -ge $__cp_len
+                if begin; test -n "$__compare_pattern"; or test -n "$__norm_current"; end
+                    and test $__nc_len -ge $__cp_len
                     and test (string sub -l $__cp_len -- "$__norm_current") = "$__compare_pattern"
                     and test "$current" != "$pattern"
                     set glob_base $current
@@ -953,7 +954,7 @@ ${
         } else {
           $norm_pattern
         }
-        if ($norm_prefix | str starts-with $compare_pattern) and (($norm_prefix | str length) >= ($compare_pattern | str length)) and ($prefix != $pattern) {
+        if (($compare_pattern | is-not-empty) or ($norm_prefix | is-not-empty)) and ($norm_prefix | str starts-with $compare_pattern) and (($norm_prefix | str length) >= ($compare_pattern | str length)) and ($prefix != $pattern) {
           $prefix
         } else {
           $pattern
@@ -1242,7 +1243,7 @@ ${
                         \$comparePattern = ''
                     }
                 }
-                \$prefix = if (\$comparePattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$comparePattern, \$comparison) -and \$normalizedWord.Length -ge \$comparePattern.Length -and \$wordToComplete -ne \$pattern) {
+                \$prefix = if ((\$comparePattern -or \$normalizedWord) -and \$normalizedWord -and \$normalizedWord.StartsWith(\$comparePattern, \$comparison) -and \$normalizedWord.Length -ge \$comparePattern.Length -and \$wordToComplete -ne \$pattern) {
                     \$wordToComplete
                 } elseif (\$pattern) {
                     \$pattern
