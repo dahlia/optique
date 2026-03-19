@@ -1766,6 +1766,33 @@ function handleCompletion<M extends Mode, THelp, TError>(
 }
 
 /**
+ * Validates the configured version value.
+ *
+ * @param value Runtime version value from configuration.
+ * @returns The validated version string.
+ * @throws {TypeError} If the value is not a string, is empty, or contains
+ *         ASCII control characters.
+ */
+function validateVersionValue(value: unknown): string {
+  if (typeof value !== "string") {
+    const type = Array.isArray(value) ? "array" : typeof value;
+    throw new TypeError(
+      `Expected version value to be a string, but got ${type}.`,
+    );
+  }
+  if (value === "") {
+    throw new TypeError("Version value must not be empty.");
+  }
+  // deno-lint-ignore no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(value)) {
+    throw new TypeError(
+      "Version value must not contain control characters.",
+    );
+  }
+  return value;
+}
+
+/**
  * Runs a parser against command-line arguments with built-in help and error
  * handling.
  *
@@ -1792,6 +1819,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
  * @param options Configuration options for output formatting and callbacks.
  * @returns The parsed result value, or the return value of `onHelp`/`onError`
  *          callbacks.
+ * @throws {TypeError} If `options.version.value` is not a non-empty string
+ *          without ASCII control characters.
  * @throws {RunParserError} When parsing fails and no `onError` callback is
  *          provided.
  * @since 0.10.0 Added support for {@link Program} objects.
@@ -1924,7 +1953,9 @@ export function runParser<
   // Extract version configuration
   const versionCommandConfig = norm<CommandSubConfig>(options.version?.command);
   const versionOptionConfig = norm<OptionSubConfig>(options.version?.option);
-  const versionValue = options.version?.value ?? "";
+  const versionValue = options.version
+    ? validateVersionValue(options.version.value)
+    : undefined;
   const onVersion = options.version?.onShow ?? (() => ({} as THelp));
 
   // Extract completion configuration
@@ -2135,7 +2166,7 @@ export function runParser<
         return classified.value;
 
       case "version":
-        stdout(versionValue);
+        stdout(versionValue!);
         return onVersion(0);
 
       case "completion":

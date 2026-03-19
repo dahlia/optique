@@ -536,6 +536,10 @@ To be released.
     `glob_dots` before calling `_files` or `_directories` when hidden
     files are requested.  [[#262], [#641]]
 
+ -  `runParser()` now validates version values at runtime — empty strings,
+    strings containing control characters, and non-string values are rejected
+    with `TypeError`.  [[#439], [#645]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -611,6 +615,7 @@ To be released.
 [#395]: https://github.com/dahlia/optique/issues/395
 [#396]: https://github.com/dahlia/optique/issues/396
 [#429]: https://github.com/dahlia/optique/issues/429
+[#439]: https://github.com/dahlia/optique/issues/439
 [#490]: https://github.com/dahlia/optique/pull/490
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
@@ -676,6 +681,7 @@ To be released.
 [#639]: https://github.com/dahlia/optique/pull/639
 [#641]: https://github.com/dahlia/optique/pull/641
 [#642]: https://github.com/dahlia/optique/pull/642
+[#645]: https://github.com/dahlia/optique/pull/645
 
 ### @optique/config
 
