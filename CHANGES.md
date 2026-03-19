@@ -480,7 +480,8 @@ To be released.
  -  Fixed `domain()` not enforcing the 253-octet total domain length
     limit.  `domain()` now rejects domains exceeding 253 octets by
     default, matching `hostname()`'s existing behavior.  A `maxLength`
-    option is also available for custom limits.  [[#395], [#635]]
+    option is available for custom limits, and a `tooLong` entry in
+    `errors` allows customizing the error message.  [[#395], [#635]]
 
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).

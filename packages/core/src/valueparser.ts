@@ -4184,6 +4184,7 @@ export interface DomainOptions {
   /**
    * Maximum domain length in characters.
    * @default 253
+   * @since 1.0.0
    */
   readonly maxLength?: number;
 
@@ -4230,6 +4231,7 @@ export interface DomainOptions {
      * Custom error message when domain is too long.
      * Can be a static message or a function that receives the domain
      * and max length.
+     * @since 1.0.0
      */
     tooLong?: Message | ((domain: string, maxLength: number) => Message);
   };
