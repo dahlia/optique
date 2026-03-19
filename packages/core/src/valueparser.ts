@@ -1276,7 +1276,10 @@ export interface UrlOptions {
  *   string ending with a colon (e.g., `"https:"`).
  */
 export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
+  const originalProtocolsList: string[] = [];
+  const normalizedProtocolsList: string[] = [];
   if (options.allowedProtocols != null) {
+    const seen = new Set<string>();
     for (const protocol of options.allowedProtocols) {
       if (
         typeof protocol !== "string" ||
@@ -1290,15 +1293,20 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
             ` (e.g., "https:"), got: ${rendered}.`,
         );
       }
+      const normalized = protocol.toLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      originalProtocolsList.push(protocol);
+      normalizedProtocolsList.push(normalized);
     }
   }
   // Snapshot the original protocols for callback arguments (preserves casing),
   // and a normalized copy for internal matching.
   const originalProtocols = options.allowedProtocols != null
-    ? Object.freeze([...options.allowedProtocols])
+    ? Object.freeze(originalProtocolsList)
     : undefined;
   const allowedProtocols = options.allowedProtocols != null
-    ? Object.freeze(options.allowedProtocols.map((p) => p.toLowerCase()))
+    ? Object.freeze(normalizedProtocolsList)
     : undefined;
   const metavar = options.metavar ?? "URL";
   ensureNonEmptyString(metavar);

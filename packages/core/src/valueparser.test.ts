@@ -3101,10 +3101,12 @@ describe("url", () => {
       );
     });
 
-    it("should accept case-only duplicates", () => {
-      assert.doesNotThrow(
-        () => url({ allowedProtocols: ["HTTP:", "http:"] }),
-      );
+    it("should deduplicate case-only duplicates", () => {
+      const parser = url({ allowedProtocols: ["HTTP:", "http:"] });
+      const suggestions = [...parser.suggest!("ht")]
+        .filter((s) => s.kind === "literal")
+        .map((s) => s.text);
+      assert.deepEqual(suggestions, ["http://"]);
     });
   });
 });
