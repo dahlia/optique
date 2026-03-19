@@ -4225,6 +4225,8 @@ export interface DomainOptions {
  *
  * @param options Parser options for domain validation.
  * @returns A parser that accepts valid domain names as strings.
+ * @throws {TypeError} If `allowSubdomains` is `false` and `minLabels` is
+ *   greater than 2, since non-subdomain domains have exactly 2 labels.
  *
  * @example
  * ``` typescript
@@ -4256,6 +4258,12 @@ export function domain(
     : undefined;
   const minLabels = options?.minLabels ?? 2;
   const lowercase = options?.lowercase ?? false;
+  if (!allowSubdomains && minLabels > 2) {
+    throw new TypeError(
+      "allowSubdomains: false is incompatible with minLabels > 2, " +
+        "as non-subdomain domains have exactly 2 labels.",
+    );
+  }
   const invalidDomain = options?.errors?.invalidDomain;
   const tooFewLabels = options?.errors?.tooFewLabels;
   const subdomainsNotAllowed = options?.errors?.subdomainsNotAllowed;
