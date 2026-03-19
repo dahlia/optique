@@ -261,6 +261,9 @@ describe("plainTime", () => {
       "17:04:36,123", // ISO 8601 allows comma as fractional separator
       "170436", // basic (compact) ISO 8601
       "1704", // compact HH:MM
+      "17", // reduced-precision hour-only
+      "T17:04", // T-prefixed extended
+      "T1704", // T-prefixed basic
     ];
 
     for (const input of validInputs) {
@@ -328,6 +331,8 @@ describe("plainDateTime", () => {
       "2020-01-23T170436", // mixed extended date + basic time
       "+0100000123T170436", // basic expanded year
       "20200123T170436[u-ca=gregory]", // basic with calendar
+      "2020-01-23T17", // reduced-precision hour-only time
+      "20200123T17", // basic date + hour-only time
     ];
 
     for (const input of validInputs) {

@@ -438,8 +438,8 @@ const DATE_BASIC = `${YEAR}\\d{4}`;
 /** Extended time: `HH:MM[:SS[.frac]]`. */
 const TIME_EXTENDED = `\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?`;
 
-/** Basic time: `HHMM` or `HHMMSS[.frac]`. */
-const TIME_BASIC = `\\d{4}(\\d{2}(${FRACTIONAL})?)?`;
+/** Basic time: `HH`, `HHMM`, or `HHMMSS[.frac]`. */
+const TIME_BASIC = `\\d{2}(\\d{2}(\\d{2}(${FRACTIONAL})?)?)?`;
 
 /**
  * Matches YYYY-MM-DD (extended) or YYYYMMDD (basic) date forms only (no time
@@ -450,17 +450,19 @@ const PLAIN_DATE_RE = new RegExp(
 );
 
 /**
- * Matches extended (HH:MM[:SS[.frac]]) or basic (HHMM, HHMMSS[.frac]) time
- * forms only (no date prefix).
+ * Matches time forms only (no date prefix).  Accepts extended
+ * (`HH:MM[:SS[.frac]]`), basic (`HH`, `HHMM`, `HHMMSS[.frac]`), and
+ * `T`-prefixed variants.
  */
 const PLAIN_TIME_RE = new RegExp(
-  `^(${TIME_EXTENDED}|${TIME_BASIC})$`,
+  `^[Tt]?(${TIME_EXTENDED}|${TIME_BASIC})$`,
 );
 
 /**
  * Matches date-time strings with both date and time parts.  Accepts extended,
  * basic, and mixed forms (e.g. `2020-01-23T170436`).  The separator may be
- * `T`, `t`, or a space.
+ * `T`, `t`, or a space.  The time portion may be reduced-precision (hour
+ * only).
  */
 const PLAIN_DATETIME_RE = new RegExp(
   `^(${DATE_EXTENDED}|${DATE_BASIC})[Tt ](${TIME_EXTENDED}|${TIME_BASIC})${CALENDAR_ANNOTATION}$`,
