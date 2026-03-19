@@ -8954,6 +8954,61 @@ describe("domain()", () => {
       assert.ok(result.success);
       assert.strictEqual(result.value, "www.example.org");
     });
+
+    it("should throw TypeError for non-string entry", () => {
+      assert.throws(
+        () => domain({ allowedTLDs: [123 as never] }),
+        {
+          name: "TypeError",
+          message: "Each allowedTLDs entry must be a non-empty string " +
+            "without dots or surrounding whitespace.",
+        },
+      );
+    });
+
+    it("should throw TypeError for entry containing a dot", () => {
+      assert.throws(
+        () => domain({ allowedTLDs: [".com"] as never }),
+        {
+          name: "TypeError",
+          message: "Each allowedTLDs entry must be a non-empty string " +
+            "without dots or surrounding whitespace.",
+        },
+      );
+    });
+
+    it("should throw TypeError for entry with leading whitespace", () => {
+      assert.throws(
+        () => domain({ allowedTLDs: [" com"] as never }),
+        {
+          name: "TypeError",
+          message: "Each allowedTLDs entry must be a non-empty string " +
+            "without dots or surrounding whitespace.",
+        },
+      );
+    });
+
+    it("should throw TypeError for entry with trailing whitespace", () => {
+      assert.throws(
+        () => domain({ allowedTLDs: ["com "] as never }),
+        {
+          name: "TypeError",
+          message: "Each allowedTLDs entry must be a non-empty string " +
+            "without dots or surrounding whitespace.",
+        },
+      );
+    });
+
+    it("should throw TypeError for empty string entry", () => {
+      assert.throws(
+        () => domain({ allowedTLDs: [""] as never }),
+        {
+          name: "TypeError",
+          message: "Each allowedTLDs entry must be a non-empty string " +
+            "without dots or surrounding whitespace.",
+        },
+      );
+    });
   });
 
   describe("minLabels option", () => {

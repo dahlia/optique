@@ -4248,6 +4248,8 @@ export interface DomainOptions {
  * @returns A parser that accepts valid domain names as strings.
  * @throws {RangeError} If `maxLength` is not a positive integer.
  * @throws {RangeError} If `minLabels` is not a positive integer.
+ * @throws {TypeError} If any `allowedTLDs` entry is not a non-empty string,
+ *   contains dots, or has leading/trailing whitespace.
  * @throws {TypeError} If `allowSubdomains` is `false` and `minLabels` is
  *   greater than 2, since non-subdomain domains have exactly 2 labels.
  *
@@ -4279,6 +4281,21 @@ export function domain(
   const allowedTLDs = options?.allowedTLDs != null
     ? Object.freeze([...options.allowedTLDs])
     : undefined;
+  if (allowedTLDs !== undefined) {
+    for (const tld of allowedTLDs) {
+      if (
+        typeof tld !== "string" ||
+        tld.length === 0 ||
+        tld.includes(".") ||
+        tld !== tld.trim()
+      ) {
+        throw new TypeError(
+          "Each allowedTLDs entry must be a non-empty string " +
+            "without dots or surrounding whitespace.",
+        );
+      }
+    }
+  }
   const minLabels = options?.minLabels ?? 2;
   const maxLength = options?.maxLength ?? 253;
   const lowercase = options?.lowercase ?? false;

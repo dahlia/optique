@@ -469,6 +469,10 @@ To be released.
     `" example.com "`, or non-string values now throw a `TypeError`.
     [[#348], [#629]]
 
+ -  Fixed `domain()` not validating malformed `allowedTLDs` entries at
+    construction time; entries like `".com"`, `" com "`, or non-string
+    values now throw a `TypeError`.  [[#345], [#638]]
+
  -  Fixed `domain()` accepting contradictory configuration such as
     `allowSubdomains: false` with `minLabels: 3`.  This combination creates
     an unsatisfiable parser, so it is now rejected at construction time with
@@ -569,6 +573,7 @@ To be released.
 [#332]: https://github.com/dahlia/optique/issues/332
 [#338]: https://github.com/dahlia/optique/issues/338
 [#341]: https://github.com/dahlia/optique/issues/341
+[#345]: https://github.com/dahlia/optique/issues/345
 [#348]: https://github.com/dahlia/optique/issues/348
 [#349]: https://github.com/dahlia/optique/issues/349
 [#350]: https://github.com/dahlia/optique/issues/350
@@ -651,6 +656,7 @@ To be released.
 [#634]: https://github.com/dahlia/optique/pull/634
 [#635]: https://github.com/dahlia/optique/pull/635
 [#636]: https://github.com/dahlia/optique/pull/636
+[#638]: https://github.com/dahlia/optique/pull/638
 [#639]: https://github.com/dahlia/optique/pull/639
 
 ### @optique/config
