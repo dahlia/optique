@@ -406,8 +406,23 @@ export function zonedDateTime(
   };
 }
 
+/**
+ * Optional RFC 9557 calendar annotation suffix, e.g. `[u-ca=gregory]`.
+ * Used by all plain Temporal regexes to accept `toString()` output for
+ * non-ISO calendars.
+ */
+const CALENDAR_ANNOTATION = String.raw`(\[u-ca=[a-z0-9\-]+\])?`;
+
+/**
+ * Year portion: either 4 digits (`YYYY`) or a sign-prefixed 6-digit expanded
+ * year (`+YYYYYY` / `-YYYYYY`).
+ */
+const YEAR = String.raw`([+-]\d{6}|\d{4})`;
+
 /** Matches YYYY-MM-DD only (no time component). */
-const PLAIN_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const PLAIN_DATE_RE = new RegExp(
+  `^${YEAR}-\\d{2}-\\d{2}${CALENDAR_ANNOTATION}$`,
+);
 
 /** Matches HH:MM, HH:MM:SS, or HH:MM:SS.fractional (no date prefix). */
 const PLAIN_TIME_RE = /^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
@@ -416,13 +431,19 @@ const PLAIN_TIME_RE = /^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
  * Matches YYYY-MM-DDTHH:MM, YYYY-MM-DDTHH:MM:SS,
  * or YYYY-MM-DDTHH:MM:SS.fractional (must have both date and time parts).
  */
-const PLAIN_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+const PLAIN_DATETIME_RE = new RegExp(
+  `^${YEAR}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?${CALENDAR_ANNOTATION}$`,
+);
 
 /** Matches YYYY-MM only. */
-const PLAIN_YEAR_MONTH_RE = /^\d{4}-\d{2}$/;
+const PLAIN_YEAR_MONTH_RE = new RegExp(
+  `^${YEAR}-\\d{2}${CALENDAR_ANNOTATION}$`,
+);
 
 /** Matches MM-DD or --MM-DD only. */
-const PLAIN_MONTH_DAY_RE = /^(--)?\d{2}-\d{2}$/;
+const PLAIN_MONTH_DAY_RE = new RegExp(
+  `^(--)?(\\d{2}-\\d{2})${CALENDAR_ANNOTATION}$`,
+);
 
 /**
  * Creates a ValueParser for parsing Temporal.PlainDate from ISO 8601 date strings.
