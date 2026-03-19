@@ -1193,6 +1193,7 @@ export function bindConfig<
  * Checks both annotations (for top-level parsers) and the active config
  * registry (for parsers nested inside object() when used with context-aware
  * runners).
+ * @throws {TypeError} If the key callback returns a Promise or thenable.
  */
 function getConfigOrDefault<T, TValue, TConfigMeta>(
   state: unknown,
@@ -1223,6 +1224,18 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
     // Extract value from config
     if (typeof options.key === "function") {
       configValue = options.key(configData, configMeta);
+      if (
+        configValue != null &&
+        (typeof configValue === "object" ||
+          typeof configValue === "function") &&
+        "then" in configValue &&
+        typeof (configValue as Record<string, unknown>).then === "function"
+      ) {
+        throw new TypeError(
+          "The key callback must return a synchronous value, " +
+            "but got a thenable.",
+        );
+      }
     } else {
       configValue = configData[options.key] as TValue;
     }
