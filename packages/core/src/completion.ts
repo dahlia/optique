@@ -148,7 +148,7 @@ function _${programName} () {
       # pattern="src/" and current="src/ma"), preserve the typed suffix
       # for incremental filtering.
       if [[ -n "$pattern" ]]; then
-        if [[ "$current" == "$pattern"* && \${#current} -gt \${#pattern} ]]; then
+        if [[ \${#current} -gt \${#pattern} && "\${current:0:\${#pattern}}" == "$pattern" ]]; then
           # User has typed beyond the pattern — keep current for narrowing
           true
         else
@@ -357,7 +357,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         # current word.  If the user has already typed beyond the pattern,
         # keep PREFIX unchanged for incremental narrowing.
         local __saved_prefix="\$PREFIX"
-        if [[ -n "\$pattern" && ! ( "\$PREFIX" == "\$pattern"* && \${#PREFIX} -gt \${#pattern} ) ]]; then
+        if [[ -n "\$pattern" && ! ( \${#PREFIX} -gt \${#pattern} && "\${PREFIX[1,\${#pattern}]}" == "\$pattern" ) ]]; then
           PREFIX="\$pattern"
         fi
 
@@ -492,8 +492,10 @@ ${
             set -l glob_base $current
             set -l __tilde_prefix ""
             if test -n "$pattern"
-                if string match -q "$pattern*" -- "$current"
-                    and test (string length -- "$current") -gt (string length -- "$pattern")
+                set -l __pat_len (string length -- "$pattern")
+                set -l __cur_len (string length -- "$current")
+                if test $__cur_len -gt $__pat_len
+                    and test (string sub -l $__pat_len -- "$current") = "$pattern"
                     set glob_base $current
                 else
                     set glob_base $pattern
@@ -795,9 +797,13 @@ ${
       # When a pattern is specified, use it as the glob base instead of
       # the user-typed prefix.  If the user has already typed beyond the
       # pattern (e.g., pattern="src/" and prefix="src/ma"), keep the
-      # prefix for incremental narrowing.
+      # prefix for incremental narrowing.  Normalize path separators
+      # before comparing so that Windows backslashes match forward slashes
+      # in the transported pattern.
       let glob_base = if ($pattern | is-not-empty) {
-        if ($prefix | str starts-with $pattern) and (($prefix | str length) > ($pattern | str length)) {
+        let norm_prefix = ($prefix | str replace -a '\\' '/')
+        let norm_pattern = ($pattern | str replace -a '\\' '/')
+        if ($norm_prefix | str starts-with $norm_pattern) and (($norm_prefix | str length) > ($norm_pattern | str length)) {
           $prefix
         } else {
           $pattern
@@ -1034,7 +1040,7 @@ ${
                 # in the transported pattern.
                 \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') } else { '' }
                 \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') } else { '' }
-                \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern) -and \$normalizedWord.Length -gt \$normalizedPattern.Length) {
+                \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern, [System.StringComparison]::OrdinalIgnoreCase) -and \$normalizedWord.Length -gt \$normalizedPattern.Length) {
                     \$wordToComplete
                 } elseif (\$pattern) {
                     \$pattern
