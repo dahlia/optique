@@ -3027,6 +3027,88 @@ describe("url", () => {
       if (!result2.success) assert.equal(result2.error, "original error");
     });
   });
+
+  describe("allowedProtocols validation", () => {
+    it("should reject non-string entries", () => {
+      assert.throws(
+        () => url({ allowedProtocols: [123 as never] }),
+        {
+          name: "TypeError",
+          message: /got: 123\./,
+        },
+      );
+      assert.throws(
+        () => url({ allowedProtocols: [null as never] }),
+        {
+          name: "TypeError",
+          message: /got: null\./,
+        },
+      );
+      assert.throws(
+        () => url({ allowedProtocols: [undefined as never] }),
+        {
+          name: "TypeError",
+          message: /got: undefined\./,
+        },
+      );
+    });
+
+    it("should reject entries missing the trailing colon", () => {
+      assert.throws(
+        () => url({ allowedProtocols: ["https" as never] }),
+        {
+          name: "TypeError",
+          message: /got: "https"\./,
+        },
+      );
+      assert.throws(
+        () => url({ allowedProtocols: ["http" as never] }),
+        {
+          name: "TypeError",
+          message: /got: "http"\./,
+        },
+      );
+    });
+
+    it("should reject entries with :// suffix", () => {
+      assert.throws(
+        () => url({ allowedProtocols: ["https://" as never] }),
+        {
+          name: "TypeError",
+          message: /got: "https:\/\/"\./,
+        },
+      );
+    });
+
+    it("should reject empty string", () => {
+      assert.throws(
+        () => url({ allowedProtocols: ["" as never] }),
+        {
+          name: "TypeError",
+          message: /got: ""\./,
+        },
+      );
+    });
+
+    it("should accept valid protocol entries", () => {
+      assert.doesNotThrow(() => url({ allowedProtocols: ["https:"] }));
+      assert.doesNotThrow(() => url({ allowedProtocols: ["HTTP:"] }));
+      assert.doesNotThrow(
+        () => url({ allowedProtocols: ["https:", "http:", "ftp:"] }),
+      );
+      assert.doesNotThrow(
+        () => url({ allowedProtocols: ["custom+proto:"] }),
+      );
+    });
+
+    it("should deduplicate case-only duplicates", () => {
+      const parser = url({ allowedProtocols: ["HTTP:", "http:"] });
+      const suggestions = [...parser.suggest!("ht")]
+        .filter((s) => s.kind === "literal")
+        .map((s) => s.text);
+      assert.deepEqual(suggestions, ["http://"]);
+    });
+  });
 });
 
 describe("locale", () => {

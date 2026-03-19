@@ -1272,15 +1272,41 @@ export interface UrlOptions {
  * object.
  * @param options Configuration options for the URL parser.
  * @returns A {@link ValueParser} that converts string input to `URL` objects.
+ * @throws {TypeError} If any `allowedProtocols` entry is not a valid protocol
+ *   string ending with a colon (e.g., `"https:"`).
  */
 export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
+  const originalProtocolsList: string[] = [];
+  const normalizedProtocolsList: string[] = [];
+  if (options.allowedProtocols != null) {
+    const seen = new Set<string>();
+    for (const protocol of options.allowedProtocols) {
+      if (
+        typeof protocol !== "string" ||
+        !/^[a-z][a-z0-9+\-.]*:$/i.test(protocol)
+      ) {
+        const rendered = typeof protocol === "string"
+          ? JSON.stringify(protocol)
+          : String(protocol);
+        throw new TypeError(
+          `Each allowed protocol must be a valid protocol ending with a colon` +
+            ` (e.g., "https:"), got: ${rendered}.`,
+        );
+      }
+      const normalized = protocol.toLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      originalProtocolsList.push(protocol);
+      normalizedProtocolsList.push(normalized);
+    }
+  }
   // Snapshot the original protocols for callback arguments (preserves casing),
   // and a normalized copy for internal matching.
   const originalProtocols = options.allowedProtocols != null
-    ? Object.freeze([...options.allowedProtocols])
+    ? Object.freeze(originalProtocolsList)
     : undefined;
   const allowedProtocols = options.allowedProtocols != null
-    ? Object.freeze(options.allowedProtocols.map((p) => p.toLowerCase()))
+    ? Object.freeze(normalizedProtocolsList)
     : undefined;
   const metavar = options.metavar ?? "URL";
   ensureNonEmptyString(metavar);

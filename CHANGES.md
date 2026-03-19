@@ -559,6 +559,11 @@ To be released.
     a valid prefix (`--`, `-`, `/`, or `+`) are also rejected.
     [[#425], [#648]]
 
+ -  Fixed `url()` not validating malformed `allowedProtocols` entries at
+    construction time; entries like `"https"` (missing trailing colon),
+    `"https://"`, or non-string values now throw a `TypeError`.
+    [[#344], [#653]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -613,6 +618,7 @@ To be released.
 [#332]: https://github.com/dahlia/optique/issues/332
 [#338]: https://github.com/dahlia/optique/issues/338
 [#341]: https://github.com/dahlia/optique/issues/341
+[#344]: https://github.com/dahlia/optique/issues/344
 [#345]: https://github.com/dahlia/optique/issues/345
 [#348]: https://github.com/dahlia/optique/issues/348
 [#349]: https://github.com/dahlia/optique/issues/349
@@ -707,6 +713,7 @@ To be released.
 [#647]: https://github.com/dahlia/optique/issues/647
 [#648]: https://github.com/dahlia/optique/pull/648
 [#650]: https://github.com/dahlia/optique/pull/650
+[#653]: https://github.com/dahlia/optique/pull/653
 
 ### @optique/config
 
