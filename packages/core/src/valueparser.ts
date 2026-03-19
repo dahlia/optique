@@ -2585,6 +2585,7 @@ export interface HostnameOptions {
  *
  * @param options - Options for hostname validation.
  * @returns A value parser for hostnames.
+ * @throws {RangeError} If `maxLength` is less than 1.
  * @since 0.10.0
  *
  * @example
@@ -4228,6 +4229,7 @@ export interface DomainOptions {
  *
  * @param options Parser options for domain validation.
  * @returns A parser that accepts valid domain names as strings.
+ * @throws {RangeError} If `minLabels` is less than 1.
  * @throws {TypeError} If `allowSubdomains` is `false` and `minLabels` is
  *   greater than 2, since non-subdomain domains have exactly 2 labels.
  *
