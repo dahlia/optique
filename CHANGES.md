@@ -478,7 +478,7 @@ To be released.
     (e.g., `"123"`) remain valid.  [[#375], [#634]]
 
  -  Fixed `domain()` not enforcing the 253-octet total domain length
-    limit.  `domain()` now rejects domains exceeding 253 characters by
+    limit.  `domain()` now rejects domains exceeding 253 octets by
     default, matching `hostname()`'s existing behavior.  A `maxLength`
     option is also available for custom limits.  [[#395], [#635]]
 
