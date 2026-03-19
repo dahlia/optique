@@ -231,8 +231,8 @@ export interface PlainMonthDayOptions {
   /**
    * The metavariable name for this parser. This is used in help messages to
    * indicate what kind of value this parser expects. Usually a single
-   * word in uppercase, like `--MONTH-DAY`.
-   * @default `"--MONTH-DAY"`
+   * word in uppercase, like `MONTH-DAY`.
+   * @default `"MONTH-DAY"`
    */
   readonly metavar?: NonEmptyString;
 
@@ -583,8 +583,8 @@ export function plainYearMonth(
  *
  * Accepts strings like:
  *
- * - `"--01-23"`
- * - `"--12-31"`
+ * - `"01-23"`
+ * - `"12-31"`
  *
  * @param options Configuration options for the plain month-day parser.
  * @returns A ValueParser that parses strings into Temporal.PlainMonthDay values.
@@ -594,7 +594,7 @@ export function plainYearMonth(
 export function plainMonthDay(
   options: PlainMonthDayOptions = {},
 ): ValueParser<"sync", Temporal.PlainMonthDay> {
-  const metavar = options.metavar ?? "--MONTH-DAY";
+  const metavar = options.metavar ?? "MONTH-DAY";
   ensureNonEmptyString(metavar);
   return {
     $mode: "sync",
@@ -611,7 +611,7 @@ export function plainMonthDay(
             ? (typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
               : options.errors.invalidFormat)
-            : message`Invalid month-day: ${input}. Expected ISO 8601 format like ${"--01-23"}.`,
+            : message`Invalid month-day: ${input}. Expected ISO 8601 format like ${"01-23"}.`,
         };
       }
     },
