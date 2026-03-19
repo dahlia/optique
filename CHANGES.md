@@ -219,6 +219,12 @@ To be released.
     fish, Nushell, PowerShell) now include directories as navigation targets
     alongside files.  [[#294], [#646]]
 
+ -  Fixed `encodeSuggestions()` not stripping leading dots from
+    `Suggestion.extensions`, which caused extension filtering to silently
+    fail in all five shell backends.  Extensions like `[".ts", ".json"]`
+    (as produced by `path()`) are now normalized to `["ts", "json"]` before
+    encoding.  [[#647], [#650]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -690,6 +696,8 @@ To be released.
 [#642]: https://github.com/dahlia/optique/pull/642
 [#645]: https://github.com/dahlia/optique/pull/645
 [#646]: https://github.com/dahlia/optique/pull/646
+[#647]: https://github.com/dahlia/optique/issues/647
+[#650]: https://github.com/dahlia/optique/pull/650
 
 ### @optique/config
 

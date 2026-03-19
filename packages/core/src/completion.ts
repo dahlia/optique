@@ -50,6 +50,12 @@ function encodePattern(pattern: string): string {
   return pattern.replace(/%/g, "%25").replace(/:/g, "%3A");
 }
 
+function encodeExtensions(
+  extensions: readonly string[] | undefined,
+): string {
+  return extensions?.map((ext) => ext.replace(/^\./, "")).join(",") ?? "";
+}
+
 /**
  * Replaces control characters that would corrupt shell completion protocols.
  * Shell completion formats use tabs as field delimiters and newlines as record
@@ -253,7 +259,7 @@ complete -F _${programName} -- ${programName}
         yield `${suggestion.text}`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}`;
@@ -386,7 +392,7 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
         yield `${suggestion.text}\0${description}\0`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
@@ -577,7 +583,7 @@ complete -c ${programName} -f -a '(${functionName})'
         yield `${suggestion.text}\t${description}`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
@@ -842,7 +848,7 @@ ${functionName}-external
         yield `${suggestion.text}\t${description}`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
@@ -1028,7 +1034,7 @@ ${
         yield `${suggestion.text}\t${suggestion.text}\t${description}`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""

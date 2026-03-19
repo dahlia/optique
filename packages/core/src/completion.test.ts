@@ -474,6 +474,21 @@ describe("completion module", () => {
       deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0"]);
     });
 
+    it("should strip leading dots from extensions in bash", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: [".json", ".yaml"],
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(bash.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0"]);
+    });
+
     it("should encode file suggestions with colon in pattern", () => {
       const suggestions: Suggestion[] = [
         {
@@ -1431,6 +1446,21 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       deepStrictEqual(encoded, ["__FILE__:directory:::1\0\0"]);
     });
 
+    it("should strip leading dots from extensions in zsh", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: [".json", ".yaml"],
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(zsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0\0\0"]);
+    });
+
     it("should encode file suggestions with colon in pattern", () => {
       const suggestions: Suggestion[] = [
         {
@@ -1773,6 +1803,24 @@ _nohidden_cli 2>/dev/null
       const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
 
       deepStrictEqual(encoded, ["__FILE__:directory:::1\t[file]\t"]);
+    });
+
+    it("should strip leading dots from extensions in pwsh", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: [".json", ".yaml"],
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+
+      deepStrictEqual(
+        encoded[0],
+        "__FILE__:file:json,yaml::0\t[file]\t",
+      );
     });
 
     it("should encode file suggestions with colon in pattern", () => {
@@ -2206,6 +2254,21 @@ printf '__FILE__:file::src/:0\\n'
       deepStrictEqual(encoded, ["__FILE__:directory:::1\t"]);
     });
 
+    it("should strip leading dots from extensions in fish", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: [".json", ".yaml"],
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0\t"]);
+    });
+
     it("should encode file suggestions with colon in pattern", () => {
       const suggestions: Suggestion[] = [
         {
@@ -2591,6 +2654,21 @@ ${functionName}
       const encoded = Array.from(nu.encodeSuggestions(suggestions));
 
       deepStrictEqual(encoded, ["__FILE__:directory:::1\t"]);
+    });
+
+    it("should strip leading dots from extensions in nu", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "file",
+          type: "file",
+          extensions: [".json", ".yaml"],
+          includeHidden: false,
+        },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+
+      deepStrictEqual(encoded, ["__FILE__:file:json,yaml::0\t"]);
     });
 
     it("should encode file suggestions with colon in pattern", () => {
