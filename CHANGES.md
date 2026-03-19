@@ -810,9 +810,10 @@ To be released.
     leaking the thenable as the parsed value.  [[#400], [#628]]
 
  -  `createConfigContext()` now validates `load()` return values at runtime.
-    Malformed results (missing `config` property, non-object returns,
-    thenables, or Promise-valued `config`/`meta` fields) now throw
-    `TypeError` instead of causing silent failures.  [[#411], [#655]]
+    Malformed results (missing `config` property, non-object or array returns,
+    plain thenables returned directly from `load()`, or Promise-valued
+    `config`/`meta` fields) now throw `TypeError` instead of causing silent
+    failures.  [[#411], [#655]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
