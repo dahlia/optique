@@ -9026,6 +9026,36 @@ describe("domain()", () => {
         },
       );
     });
+
+    it("should throw TypeError for entry starting with hyphen", () => {
+      assert.throws(
+        () => domain({ allowedTlds: ["-com"] as never }),
+        {
+          name: "TypeError",
+          message: 'allowedTlds[0] is not a valid DNS label: "-com".',
+        },
+      );
+    });
+
+    it("should throw TypeError for entry ending with hyphen", () => {
+      assert.throws(
+        () => domain({ allowedTlds: ["com-"] as never }),
+        {
+          name: "TypeError",
+          message: 'allowedTlds[0] is not a valid DNS label: "com-".',
+        },
+      );
+    });
+
+    it("should throw TypeError for entry with underscore", () => {
+      assert.throws(
+        () => domain({ allowedTlds: ["co_m"] as never }),
+        {
+          name: "TypeError",
+          message: 'allowedTlds[0] is not a valid DNS label: "co_m".',
+        },
+      );
+    });
   });
 
   describe("minLabels option", () => {

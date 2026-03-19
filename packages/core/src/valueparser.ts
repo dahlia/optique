@@ -4249,7 +4249,8 @@ export interface DomainOptions {
  * @throws {RangeError} If `maxLength` is not a positive integer.
  * @throws {RangeError} If `minLabels` is not a positive integer.
  * @throws {TypeError} If any `allowedTlds` entry is not a string, is empty,
- *   contains dots, or has leading/trailing whitespace.
+ *   contains dots, has leading/trailing whitespace, or is not a valid DNS
+ *   label.
  * @throws {TypeError} If `allowSubdomains` is `false` and `minLabels` is
  *   greater than 2, since non-subdomain domains have exactly 2 labels.
  *
@@ -4281,6 +4282,9 @@ export function domain(
   const allowedTlds = options?.allowedTlds != null
     ? Object.freeze([...options.allowedTlds])
     : undefined;
+  // Domain label regex: 1-63 alphanumeric characters and hyphens,
+  // cannot start or end with hyphen
+  const labelRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
   if (allowedTlds !== undefined) {
     for (const [i, tld] of allowedTlds.entries()) {
       if (typeof tld !== "string") {
@@ -4304,6 +4308,11 @@ export function domain(
           `allowedTlds[${i}] must not have leading or trailing whitespace: ${
             JSON.stringify(tld)
           }.`,
+        );
+      }
+      if (!labelRegex.test(tld)) {
+        throw new TypeError(
+          `allowedTlds[${i}] is not a valid DNS label: ${JSON.stringify(tld)}.`,
         );
       }
     }
@@ -4332,10 +4341,6 @@ export function domain(
   const tooFewLabels = options?.errors?.tooFewLabels;
   const subdomainsNotAllowed = options?.errors?.subdomainsNotAllowed;
   const tldNotAllowed = options?.errors?.tldNotAllowed;
-
-  // Domain label regex: 1-63 alphanumeric characters and hyphens,
-  // cannot start or end with hyphen
-  const labelRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
 
   return {
     $mode: "sync",
