@@ -350,10 +350,10 @@ describe("completion module", () => {
       const script = bash.generateScript("myapp");
 
       // Check for essential bash completion components
-      deepStrictEqual(script.includes("function _myapp ()"), true);
-      deepStrictEqual(script.includes("COMPREPLY=()"), true);
-      deepStrictEqual(script.includes("COMP_WORDS"), true);
-      deepStrictEqual(script.includes("complete -F _myapp -- myapp"), true);
+      ok(script.includes("function _myapp ()"));
+      ok(script.includes("COMPREPLY=()"));
+      ok(script.includes("COMP_WORDS"));
+      ok(script.includes("complete -F _myapp -- myapp"));
     });
 
     it("should work with actual bash shell", (t) => {
