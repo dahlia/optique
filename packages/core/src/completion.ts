@@ -53,7 +53,7 @@ function encodePattern(pattern: string): string {
 function encodeExtensions(
   extensions: readonly string[] | undefined,
 ): string {
-  return extensions?.map((ext) => ext.replace(/^\./, "")).join(",") || "";
+  return extensions?.map((ext) => ext.replace(/^\./, "")).join(",") ?? "";
 }
 
 /**
