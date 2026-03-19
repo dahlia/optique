@@ -384,6 +384,22 @@ describe("bindEnv()", () => {
         },
       );
     });
+
+    it("throws TypeError when parser is an array", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: [] as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected parser to be a ValueParser, but got: array.",
+        },
+      );
+    });
   });
 
   it("uses CLI value when provided", () => {
