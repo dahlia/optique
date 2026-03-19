@@ -4317,6 +4317,9 @@ export function domain(
       }
     }
   }
+  const allowedTldsLower = allowedTlds != null
+    ? Object.freeze(allowedTlds.map((t) => t.toLowerCase()))
+    : undefined;
   const minLabels = options?.minLabels ?? 2;
   const maxLength = options?.maxLength ?? 253;
   const lowercase = options?.lowercase ?? false;
@@ -4453,10 +4456,9 @@ export function domain(
       }
 
       // Check TLD restriction
-      if (allowedTlds !== undefined) {
+      if (allowedTlds !== undefined && allowedTldsLower !== undefined) {
         const tld = labels[labels.length - 1];
         const tldLower = tld.toLowerCase();
-        const allowedTldsLower = allowedTlds.map((t) => t.toLowerCase());
 
         if (!allowedTldsLower.includes(tldLower)) {
           const errorMsg = tldNotAllowed;
