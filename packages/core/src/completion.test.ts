@@ -1237,12 +1237,16 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       deepStrictEqual(script.includes("compdef _myapp myapp"), true);
     });
 
-    it("should expand $ext_pattern variable in _files calls", () => {
+    it("should expand extensions variable in ext_pattern assignment", () => {
       const script = zsh.generateScript("myapp");
 
-      // The generated script should use $ext_pattern (expanded variable),
-      // not a literal \$ext_pattern string.
+      // ext_pattern must use a real zsh parameter expansion so extensions
+      // like "json,yaml" are turned into the glob "*(json|yaml)".
+      // A backslash before ${ would prevent expansion and leave the literal
+      // text "${extensions//,/|}" in the variable value.
       // https://github.com/dahlia/optique/issues/256
+      ok(script.includes('ext_pattern="*.(${extensions//,/|})"'));
+      ok(!script.includes('ext_pattern="*.(\\${extensions//,/|})"'));
       ok(script.includes('_files -g "$ext_pattern"'));
       ok(!script.includes('_files -g "\\$ext_pattern"'));
     });

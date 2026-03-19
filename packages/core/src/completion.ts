@@ -298,7 +298,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
           file)
             if [[ -n "\$extensions" ]]; then
               # Complete files with extension filtering
-              local ext_pattern="*.(\\$\{extensions//,/|\})"
+              local ext_pattern="*.(\$\{extensions//,/|\})"
               _files -g "\$ext_pattern"
             else
               _files -g "*"
@@ -310,7 +310,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
           any)
             if [[ -n "\$extensions" ]]; then
               # Complete both files and directories, with extension filtering for files
-              local ext_pattern="*.(\\$\{extensions//,/|\})"
+              local ext_pattern="*.(\$\{extensions//,/|\})"
               _files -g "\$ext_pattern" && _directories
             else
               _files
