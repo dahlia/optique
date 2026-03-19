@@ -9233,6 +9233,41 @@ describe("domain()", () => {
       assert.strictEqual(result.value, "example.123");
     });
 
+    it("should reject all-numeric domains like IPv4 addresses", () => {
+      const parser = domain();
+      for (
+        const input of [
+          "192.168.0.1",
+          "127.0.0.1",
+          "999.999.999.999",
+          "1.2",
+          "12.34.56",
+        ]
+      ) {
+        const result = parser.parse(input);
+        assert.ok(!result.success, `Expected ${input} to be rejected`);
+        assert.deepStrictEqual(result.error, [
+          { type: "text", text: "Expected a valid domain name, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ]);
+      }
+    });
+
+    it("should accept domains with some numeric labels", () => {
+      const parser = domain();
+      for (
+        const input of [
+          "123.456.com",
+          "example.123",
+          "1.example.com",
+        ]
+      ) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Expected ${input} to be accepted`);
+      }
+    });
+
     it("should work with allowSubdomains and allowedTLDs together", () => {
       const parser = domain({
         allowSubdomains: false,

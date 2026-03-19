@@ -4336,6 +4336,20 @@ export function domain(
         }
       }
 
+      // Reject all-numeric domains (e.g., IPv4 addresses like 192.168.0.1)
+      if (labels.every((label) => /^[0-9]+$/.test(label))) {
+        const errorMsg = invalidDomain;
+        if (typeof errorMsg === "function") {
+          return { success: false, error: errorMsg(input) };
+        }
+        const msg = errorMsg ?? [
+          { type: "text", text: "Expected a valid domain name, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message;
+        return { success: false, error: msg };
+      }
+
       // Check minimum labels
       if (labels.length < minLabels) {
         const errorMsg = tooFewLabels;

@@ -471,6 +471,10 @@ To be released.
     or `maxLength: 1.5`.  These values are now rejected at construction
     time with a `RangeError`.  [[#351], [#631]]
 
+ -  Fixed `domain()` accepting dotted-quad numeric strings such as
+    `192.168.0.1` or `999.999.999.999` as valid domains.  Inputs where
+    every label is purely numeric are now rejected.  [[#375], [#634]]
+
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
     Colons in the pattern field are now percent-encoded (`%3A`) so that the
@@ -559,6 +563,7 @@ To be released.
 [#368]: https://github.com/dahlia/optique/issues/368
 [#370]: https://github.com/dahlia/optique/issues/370
 [#371]: https://github.com/dahlia/optique/issues/371
+[#375]: https://github.com/dahlia/optique/issues/375
 [#378]: https://github.com/dahlia/optique/issues/378
 [#385]: https://github.com/dahlia/optique/issues/385
 [#387]: https://github.com/dahlia/optique/issues/387
@@ -624,6 +629,7 @@ To be released.
 [#630]: https://github.com/dahlia/optique/pull/630
 [#631]: https://github.com/dahlia/optique/pull/631
 [#632]: https://github.com/dahlia/optique/pull/632
+[#634]: https://github.com/dahlia/optique/pull/634
 
 ### @optique/config
 
