@@ -1269,6 +1269,7 @@ describe("load() return value validation", () => {
     const entry = (annotations as Record<symbol, { data: { name: string } }>)[
       symbols[0]
     ];
+    assert.ok(entry != null);
     assert.equal(entry.data.name, "ALICE");
   });
 
