@@ -457,6 +457,11 @@ To be released.
     `" example.com "`, or non-string values now throw a `TypeError`.
     [[#348], [#629]]
 
+ -  Fixed `domain()` accepting contradictory configuration such as
+    `allowSubdomains: false` with `minLabels: 3`.  This combination creates
+    an unsatisfiable parser, so it is now rejected at construction time with
+    a `TypeError`.  [[#350], [#630]]
+
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
     Colons in the pattern field are now percent-encoded (`%3A`) so that the
@@ -526,6 +531,7 @@ To be released.
 [#341]: https://github.com/dahlia/optique/issues/341
 [#348]: https://github.com/dahlia/optique/issues/348
 [#349]: https://github.com/dahlia/optique/issues/349
+[#350]: https://github.com/dahlia/optique/issues/350
 [#352]: https://github.com/dahlia/optique/issues/352
 [#353]: https://github.com/dahlia/optique/issues/353
 [#354]: https://github.com/dahlia/optique/issues/354
@@ -594,6 +600,7 @@ To be released.
 [#622]: https://github.com/dahlia/optique/pull/622
 [#626]: https://github.com/dahlia/optique/pull/626
 [#629]: https://github.com/dahlia/optique/pull/629
+[#630]: https://github.com/dahlia/optique/pull/630
 
 ### @optique/config
 

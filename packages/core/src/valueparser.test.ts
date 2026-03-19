@@ -8795,6 +8795,36 @@ describe("domain()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should throw TypeError when allowSubdomains is false and minLabels > 2", () => {
+      assert.throws(
+        () => domain({ allowSubdomains: false, minLabels: 3 }),
+        {
+          name: "TypeError",
+          message:
+            "allowSubdomains: false is incompatible with minLabels > 2, " +
+            "as non-subdomain domains have exactly 2 labels.",
+        },
+      );
+    });
+
+    it("should not throw when allowSubdomains is false and minLabels is 2", () => {
+      assert.doesNotThrow(
+        () => domain({ allowSubdomains: false, minLabels: 2 }),
+      );
+    });
+
+    it("should not throw when allowSubdomains is false and minLabels is 1", () => {
+      assert.doesNotThrow(
+        () => domain({ allowSubdomains: false, minLabels: 1 }),
+      );
+    });
+
+    it("should not throw when allowSubdomains is true and minLabels > 2", () => {
+      assert.doesNotThrow(
+        () => domain({ allowSubdomains: true, minLabels: 3 }),
+      );
+    });
   });
 
   describe("allowedTLDs option", () => {
