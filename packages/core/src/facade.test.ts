@@ -794,6 +794,69 @@ describe("runParser", () => {
         `--version should appear in help page options list, but got:\n${helpOutput}`,
       );
     });
+
+    it("should reject empty string version value", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: { option: true, value: "" },
+            stdout: () => {},
+          }),
+        TypeError,
+      );
+    });
+
+    it("should reject version value containing newline", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: { option: true, value: "1.0\n2.0" },
+            stdout: () => {},
+          }),
+        TypeError,
+      );
+    });
+
+    it("should reject version value containing tab", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: { option: true, value: "1.0\t0" },
+            stdout: () => {},
+          }),
+        TypeError,
+      );
+    });
+
+    it("should reject version value containing carriage return", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: { option: true, value: "1.0\r\n" },
+            stdout: () => {},
+          }),
+        TypeError,
+      );
+    });
+
+    it("should reject non-string version value at runtime", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: {
+              option: true,
+              value: 123 as unknown as string,
+            },
+            stdout: () => {},
+          }),
+        TypeError,
+      );
+    });
   });
 
   describe("error handling", () => {
@@ -1612,26 +1675,23 @@ describe("runParser", () => {
       assert.ok(helpOutput.includes("add") || helpOutput.includes("commit"));
     });
 
-    it("should handle empty version string", () => {
+    it("should reject empty version string", () => {
       const parser = object({
         name: argument(string()),
       });
 
-      let versionOutput = "";
-
-      const result = runParser(parser, "test", ["--version"], {
-        version: {
-          option: true,
-          value: "",
-          onShow: () => "version-shown",
-        },
-        stdout: (text) => {
-          versionOutput = text;
-        },
-      });
-
-      assert.equal(result, "version-shown");
-      assert.equal(versionOutput, "");
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: {
+              option: true,
+              value: "",
+              onShow: () => "version-shown",
+            },
+            stdout: () => {},
+          }),
+        TypeError,
+      );
     });
 
     it("should handle very long version strings", () => {

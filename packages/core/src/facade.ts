@@ -1765,6 +1765,24 @@ function handleCompletion<M extends Mode, THelp, TError>(
   );
 }
 
+function validateVersionValue(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new TypeError(
+      `Expected version value to be a string, but got ${typeof value}.`,
+    );
+  }
+  if (value === "") {
+    throw new TypeError("Version value must not be empty.");
+  }
+  // deno-lint-ignore no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(value)) {
+    throw new TypeError(
+      "Version value must not contain control characters.",
+    );
+  }
+  return value;
+}
+
 /**
  * Runs a parser against command-line arguments with built-in help and error
  * handling.
@@ -1924,7 +1942,9 @@ export function runParser<
   // Extract version configuration
   const versionCommandConfig = norm<CommandSubConfig>(options.version?.command);
   const versionOptionConfig = norm<OptionSubConfig>(options.version?.option);
-  const versionValue = options.version?.value ?? "";
+  const versionValue = options.version
+    ? validateVersionValue(options.version.value)
+    : undefined;
   const onVersion = options.version?.onShow ?? (() => ({} as THelp));
 
   // Extract completion configuration
@@ -2135,7 +2155,7 @@ export function runParser<
         return classified.value;
 
       case "version":
-        stdout(versionValue);
+        stdout(versionValue!);
         return onVersion(0);
 
       case "completion":
