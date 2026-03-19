@@ -152,7 +152,14 @@ function _${programName} () {
         # Normalize leading ./ so that ./src/ma matches pattern src/
         local __norm_current="\${current#./}"
         local __norm_pattern="\${pattern#./}"
-        if [[ \${#__norm_current} -ge \${#__norm_pattern} && "\${__norm_current:0:\${#__norm_pattern}}" == "$__norm_pattern" && "$current" != "$pattern" ]]; then
+        # For wildcard patterns, compare only the directory prefix before
+        # any wildcards so that typing src/ma narrows src/*.ts correctly
+        local __compare_pattern="$__norm_pattern"
+        if [[ "$__compare_pattern" == *[\*\?]* ]]; then
+          __compare_pattern="\${__compare_pattern%%[\*\?]*}"
+          [[ "$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
+        fi
+        if [[ \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$current" != "$pattern" ]]; then
           # User has typed beyond or an equivalent form of the pattern
           true
         else
@@ -401,7 +408,12 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
           # Normalize leading ./ so that ./src/ma matches pattern src/
           local __norm_prefix="\${PREFIX#./}"
           local __norm_pattern="\${pattern#./}"
-          if [[ \${#__norm_prefix} -ge \${#__norm_pattern} && "\${__norm_prefix[1,\${#__norm_pattern}]}" == "\$__norm_pattern" && "\$PREFIX" != "\$pattern" ]]; then
+          local __compare_pattern="\$__norm_pattern"
+          if [[ "\$__compare_pattern" == *[\*\?]* ]]; then
+            __compare_pattern="\${__compare_pattern%%[\*\?]*}"
+            [[ "\$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
+          fi
+          if [[ \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$PREFIX" != "\$pattern" ]]; then
             # User typed an equivalent or extended form — keep PREFIX
             true
           else
@@ -544,10 +556,20 @@ ${
                 # Normalize leading ./ so that ./src/ma matches pattern src/
                 set -l __norm_current (string replace -r '^\\./' '' -- "$current")
                 set -l __norm_pattern (string replace -r '^\\./' '' -- "$pattern")
-                set -l __np_len (string length -- "$__norm_pattern")
+                # For wildcard patterns, compare only the directory prefix
+                set -l __compare_pattern "$__norm_pattern"
+                if string match -q '*[*?]*' -- "$__compare_pattern"
+                    set __compare_pattern (string replace -r '[*?].*' '' -- "$__compare_pattern")
+                    if string match -q '*/*' -- "$__compare_pattern"
+                        set __compare_pattern (string replace -r '/[^/]*$' '/' -- "$__compare_pattern")
+                    else
+                        set __compare_pattern ""
+                    end
+                end
+                set -l __cp_len (string length -- "$__compare_pattern")
                 set -l __nc_len (string length -- "$__norm_current")
-                if test $__nc_len -ge $__np_len
-                    and test (string sub -l $__np_len -- "$__norm_current") = "$__norm_pattern"
+                if test $__nc_len -ge $__cp_len
+                    and test (string sub -l $__cp_len -- "$__norm_current") = "$__compare_pattern"
                     and test "$current" != "$pattern"
                     set glob_base $current
                 else
@@ -924,7 +946,14 @@ ${
         let is_win = (($nu.os-info.name | str downcase) == "windows")
         let norm_prefix = (if $is_win { $norm_prefix_raw | str downcase } else { $norm_prefix_raw })
         let norm_pattern = (if $is_win { $norm_pattern_raw | str downcase } else { $norm_pattern_raw })
-        if ($norm_prefix | str starts-with $norm_pattern) and (($norm_prefix | str length) >= ($norm_pattern | str length)) and ($prefix != $pattern) {
+        # For wildcard patterns, compare only the directory prefix
+        let compare_pattern = if ($norm_pattern =~ '[*?]') {
+          let before_wild = ($norm_pattern | str replace -r '[*?].*' '')
+          if ($before_wild =~ '/') { $before_wild | str replace -r '/[^/]*$' '/' } else { "" }
+        } else {
+          $norm_pattern
+        }
+        if ($norm_prefix | str starts-with $compare_pattern) and (($norm_prefix | str length) >= ($compare_pattern | str length)) and ($prefix != $pattern) {
           $prefix
         } else {
           $pattern
@@ -1203,7 +1232,17 @@ ${
                 \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') -replace '^\\./','' } else { '' }
                 \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') -replace '^\\./','' } else { '' }
                 \$comparison = if (\$IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
-                \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern, \$comparison) -and \$normalizedWord.Length -ge \$normalizedPattern.Length -and \$wordToComplete -ne \$pattern) {
+                # For wildcard patterns, compare only the directory prefix
+                \$comparePattern = \$normalizedPattern
+                if (\$comparePattern -match '[\*\?]') {
+                    \$beforeWild = \$comparePattern -replace '[\*\?].*', ''
+                    if (\$beforeWild.Contains('/')) {
+                        \$comparePattern = \$beforeWild.Substring(0, \$beforeWild.LastIndexOf('/') + 1)
+                    } else {
+                        \$comparePattern = ''
+                    }
+                }
+                \$prefix = if (\$comparePattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$comparePattern, \$comparison) -and \$normalizedWord.Length -ge \$comparePattern.Length -and \$wordToComplete -ne \$pattern) {
                     \$wordToComplete
                 } elseif (\$pattern) {
                     \$pattern
@@ -1260,6 +1299,15 @@ ${
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
                         }
                     }
+                }
+
+                # For file/any modes with glob patterns, also add directories
+                # from the base directory for navigation
+                if (\$prefix -match '[\*\?]' -and \$type -ne 'directory') {
+                    \$globDir = Split-Path -Parent \$prefix
+                    if (-not \$globDir) { \$globDir = '.' }
+                    \$extraDirs = Get-ChildItem @forceParam -Directory -Path "\$globDir/*" -ErrorAction SilentlyContinue
+                    if (\$extraDirs) { \$items = @(\$items) + @(\$extraDirs) | Select-Object -Unique }
                 }
 
                 # Filter hidden files unless requested or the prefix targets dotfiles
