@@ -2815,6 +2815,9 @@ export interface EmailOptions {
  *
  * @param options - Options for email validation.
  * @returns A value parser for email addresses.
+ * @throws {TypeError} If any `allowedDomains` entry is not a string, has
+ *   leading/trailing whitespace, starts with `"@"`, is empty, lacks a dot,
+ *   has invalid hostname label syntax, or is an IPv4-like dotted-quad.
  * @since 0.10.0
  *
  * @example
