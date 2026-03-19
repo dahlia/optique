@@ -1166,6 +1166,13 @@ describe("bindEnv()", () => {
       }
       const result = parse(parser, [], { annotations });
       assert.ok(!result.success);
+      const errorText = result.error
+        .map((s) => s.type === "text" ? s.text : "")
+        .join("");
+      assert.match(
+        errorText,
+        /must be a string, but got a non-string value\./u,
+      );
     });
 
     it("fails when EnvSource returns a number", () => {
@@ -1184,6 +1191,13 @@ describe("bindEnv()", () => {
       }
       const result = parse(parser, [], { annotations });
       assert.ok(!result.success);
+      const errorText = result.error
+        .map((s) => s.type === "text" ? s.text : "")
+        .join("");
+      assert.match(
+        errorText,
+        /must be a string, but got a non-string value\./u,
+      );
     });
 
     it("fails when EnvSource returns a Promise", () => {
@@ -1202,6 +1216,13 @@ describe("bindEnv()", () => {
       }
       const result = parse(parser, [], { annotations });
       assert.ok(!result.success);
+      const errorText = result.error
+        .map((s) => s.type === "text" ? s.text : "")
+        .join("");
+      assert.match(
+        errorText,
+        /must be a string, but got a non-string value\./u,
+      );
     });
   });
 
