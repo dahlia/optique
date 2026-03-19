@@ -700,23 +700,6 @@ function isThenable(value: unknown): boolean {
     typeof (value as Record<string, unknown>).then === "function";
 }
 
-/**
- * Detects native Promises and cross-realm Promises without rejecting
- * domain objects that merely have a `then()` method.  Cross-realm
- * Promises fail `instanceof Promise` but still carry
- * `Symbol.toStringTag === "Promise"`.
- */
-function isPromiseLike(value: unknown): boolean {
-  if (value instanceof Promise) return true;
-  if (
-    value == null ||
-    (typeof value !== "object" && typeof value !== "function")
-  ) {
-    return false;
-  }
-  return (value as Record<symbol, unknown>)[Symbol.toStringTag] === "Promise";
-}
-
 function validateLoadResult<TConfigMeta>(
   loaded: unknown,
 ): { config: unknown; meta: TConfigMeta | undefined } {
@@ -731,13 +714,13 @@ function validateLoadResult<TConfigMeta>(
     );
   }
   const result = loaded as Record<string, unknown>;
-  if (isPromiseLike(result.config)) {
+  if (result.config instanceof Promise || isThenable(result.config)) {
     throw new TypeError(
       "Expected config in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
     );
   }
-  if (isPromiseLike(result.meta)) {
+  if (result.meta instanceof Promise || isThenable(result.meta)) {
     throw new TypeError(
       "Expected meta in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
@@ -959,19 +942,18 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       if (opts.load) {
         // Custom load mode
         const loaded = opts.load(parsedPlaceholder);
-        // Accept native Promises and cross-realm Promises (detected via
-        // Symbol.toStringTag).  Plain thenables are not valid return values.
-        if (isPromiseLike(loaded)) {
-          return Promise.resolve(loaded as Promise<unknown>).then(
-            (resolved) => {
-              const validated = validateLoadResult<TConfigMeta>(resolved);
-              return validateAndBuildAnnotations(
-                validated.config,
-                validated.meta,
-              );
-            },
-          );
+        if (loaded instanceof Promise) {
+          return loaded.then((resolved) => {
+            const validated = validateLoadResult<TConfigMeta>(resolved);
+            return validateAndBuildAnnotations(
+              validated.config,
+              validated.meta,
+            );
+          });
         }
+        // Reject thenables (including cross-realm Promises).  The API
+        // contract is Promise | ConfigLoadResult; cross-realm callers
+        // should wrap their result with Promise.resolve() before returning.
         if (isThenable(loaded)) {
           throw new TypeError(
             "Expected load() to return a plain object or Promise, " +
