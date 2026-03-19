@@ -53,11 +53,30 @@ import { string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./annotations.ts";
 import {
   isPlaceholderValue,
+  isSourceContext,
   type ParserValuePlaceholder,
   type SourceContext,
 } from "./context.ts";
 
 export type { ParserValuePlaceholder, SourceContext };
+
+function validateContexts(
+  contexts: readonly unknown[],
+): void {
+  for (let i = 0; i < contexts.length; i++) {
+    if (!isSourceContext(contexts[i])) {
+      const value = contexts[i];
+      const type = value === null
+        ? "null"
+        : Array.isArray(value)
+        ? "array"
+        : typeof value;
+      throw new TypeError(
+        `Expected each context to be a SourceContext, but got: ${type} at index ${i}.`,
+      );
+    }
+  }
+}
 
 function isPlainObject(value: object): boolean {
   const proto = Object.getPrototypeOf(value);
@@ -3236,6 +3255,7 @@ export async function runWith<
     & RunWithOptions<THelp, TError>
     & ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): Promise<InferValue<TParser>> {
+  validateContexts(contexts);
   const args = options?.args ?? [];
 
   // Early exit: skip context processing for help/version/completion
@@ -3417,6 +3437,7 @@ export function runWithSync<
     & RunWithOptions<THelp, TError>
     & ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): InferValue<TParser> {
+  validateContexts(contexts);
   const args = options?.args ?? [];
 
   // Early exit: skip context processing for help/version/completion

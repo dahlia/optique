@@ -264,6 +264,29 @@ export function isPlaceholderValue(value: unknown): boolean {
  * @returns `true` if the context is static, `false` otherwise.
  * @since 0.10.0
  */
+/**
+ * Checks whether the given value conforms to the {@link SourceContext}
+ * interface at runtime.
+ *
+ * This validates the minimum required shape: an object with a `symbol`-typed
+ * `id` property and a `getAnnotations` method.
+ *
+ * @param object The value to check.
+ * @returns `true` if the value is a valid {@link SourceContext}, `false`
+ *          otherwise.
+ * @since 1.0.0
+ */
+export function isSourceContext(
+  object: unknown,
+): object is SourceContext<unknown> {
+  return typeof object === "object" && object != null &&
+    !Array.isArray(object) &&
+    "id" in object &&
+    typeof (object as SourceContext<unknown>).id === "symbol" &&
+    "getAnnotations" in object &&
+    typeof (object as SourceContext<unknown>).getAnnotations === "function";
+}
+
 export function isStaticContext(context: SourceContext<unknown>): boolean {
   // If the context explicitly declares its static-ness, use that directly
   // to avoid calling getAnnotations() and triggering any side effects it
