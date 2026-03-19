@@ -715,7 +715,9 @@ function isPromise(value: unknown): boolean {
   ) {
     return false;
   }
-  return (value as Record<symbol, unknown>)[Symbol.toStringTag] === "Promise";
+  return isPromiseLike(value) &&
+    (value as unknown as Record<symbol, unknown>)[Symbol.toStringTag] ===
+      "Promise";
 }
 
 function validateLoadResult<TConfigMeta>(
