@@ -7124,6 +7124,164 @@ describe("email()", () => {
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
     });
+
+    it("should throw TypeError for non-string allowedDomains entries", () => {
+      assert.throws(
+        () => email({ allowedDomains: [123 as never] }),
+        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
+      );
+      assert.throws(
+        () => email({ allowedDomains: [null as never] }),
+        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
+      );
+      assert.throws(
+        () => email({ allowedDomains: [undefined as never] }),
+        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
+      );
+    });
+
+    it("should throw TypeError for allowedDomains entries with leading @", () => {
+      assert.throws(
+        () => email({ allowedDomains: ["@example.com"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*must not start with "@"/,
+        },
+      );
+    });
+
+    it("should throw TypeError for allowedDomains entries with trailing dot", () => {
+      assert.throws(
+        () => email({ allowedDomains: ["example.com."] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+    });
+
+    it("should throw TypeError for allowedDomains entries with whitespace", () => {
+      assert.throws(
+        () => email({ allowedDomains: [" example.com "] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*whitespace/,
+        },
+      );
+      assert.throws(
+        () => email({ allowedDomains: [" example.com"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*whitespace/,
+        },
+      );
+      assert.throws(
+        () => email({ allowedDomains: ["example.com "] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*whitespace/,
+        },
+      );
+    });
+
+    it("should throw TypeError for empty string allowedDomains entries", () => {
+      assert.throws(
+        () => email({ allowedDomains: [""] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+    });
+
+    it("should throw TypeError for malformed domain syntax", () => {
+      // Leading dot
+      assert.throws(
+        () => email({ allowedDomains: [".example.com"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+      // Consecutive dots
+      assert.throws(
+        () => email({ allowedDomains: ["foo..bar.com"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+      // Embedded space
+      assert.throws(
+        () => email({ allowedDomains: ["exa mple.com"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+      // No dot (bare label)
+      assert.throws(
+        () => email({ allowedDomains: ["localhost"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+      // Leading hyphen
+      assert.throws(
+        () => email({ allowedDomains: ["-example.com"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+      // Trailing hyphen
+      assert.throws(
+        () => email({ allowedDomains: ["example-.com"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+      // Label exceeding 63 characters
+      assert.throws(
+        () =>
+          email({
+            allowedDomains: [`${"a".repeat(64)}.com`] as never,
+          }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+      // IPv4-like dotted-quad
+      assert.throws(
+        () => email({ allowedDomains: ["192.168.0.1"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+      assert.throws(
+        () => email({ allowedDomains: ["999.999.999.999"] as never }),
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
+      );
+    });
+
+    it("should accept valid allowedDomains entries without throwing", () => {
+      assert.doesNotThrow(
+        () => email({ allowedDomains: ["example.com", "test.org"] }),
+      );
+      assert.doesNotThrow(
+        () => email({ allowedDomains: ["sub.example.com"] }),
+      );
+      assert.doesNotThrow(
+        () => email({ allowedDomains: ["my-domain.co.uk"] }),
+      );
+    });
   });
 });
 

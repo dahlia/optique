@@ -2815,6 +2815,9 @@ export interface EmailOptions {
  *
  * @param options - Options for email validation.
  * @returns A value parser for email addresses.
+ * @throws {TypeError} If any `allowedDomains` entry is not a string, has
+ *   leading/trailing whitespace, starts with `"@"`, is empty, lacks a dot,
+ *   has invalid hostname label syntax, or is an IPv4-like dotted-quad.
  * @since 0.10.0
  *
  * @example
@@ -2852,6 +2855,72 @@ export function email(
   const allowedDomains = options?.allowedDomains != null
     ? Object.freeze([...options.allowedDomains])
     : undefined;
+  if (allowedDomains != null) {
+    for (let i = 0; i < allowedDomains.length; i++) {
+      const entry = allowedDomains[i];
+      if (typeof entry !== "string") {
+        throw new TypeError(
+          `allowedDomains[${i}] must be a string, got ${typeof entry}.`,
+        );
+      }
+      if (entry !== entry.trim()) {
+        throw new TypeError(
+          `allowedDomains[${i}] must not have leading or trailing whitespace: ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
+      if (entry.startsWith("@")) {
+        throw new TypeError(
+          `allowedDomains[${i}] must not start with "@": ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
+      if (entry === "" || !entry.includes(".")) {
+        throw new TypeError(
+          `allowedDomains[${i}] is not a valid domain: ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
+      if (
+        entry.startsWith(".") || entry.endsWith(".") ||
+        entry.startsWith("-") || entry.endsWith("-")
+      ) {
+        throw new TypeError(
+          `allowedDomains[${i}] is not a valid domain: ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
+      const labels = entry.split(".");
+      for (const label of labels) {
+        if (
+          label.length === 0 || label.length > 63 ||
+          label.startsWith("-") || label.endsWith("-") ||
+          !/^[a-zA-Z0-9-]+$/.test(label)
+        ) {
+          throw new TypeError(
+            `allowedDomains[${i}] is not a valid domain: ${
+              JSON.stringify(entry)
+            }`,
+          );
+        }
+      }
+      // Reject IPv4-like dotted-quad domains (e.g., 192.168.0.1)
+      if (
+        labels.length === 4 &&
+        labels.every((label) => /^[0-9]+$/.test(label))
+      ) {
+        throw new TypeError(
+          `allowedDomains[${i}] is not a valid domain: ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
+    }
+  }
   const invalidEmail = options?.errors?.invalidEmail;
   const domainNotAllowed = options?.errors?.domainNotAllowed;
 

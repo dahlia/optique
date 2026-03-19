@@ -452,6 +452,11 @@ To be released.
     parts containing commas (e.g., `"Doe, John"@example.com`) survive a
     `format()` → `parse()` cycle.  [[#354], [#626]]
 
+ -  Fixed `email()` not validating malformed `allowedDomains` entries at
+    construction time; entries like `"@example.com"`, `"example.com."`,
+    `" example.com "`, or non-string values now throw a `TypeError`.
+    [[#348], [#629]]
+
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).
     Colons in the pattern field are now percent-encoded (`%3A`) so that the
@@ -519,6 +524,7 @@ To be released.
 [#332]: https://github.com/dahlia/optique/issues/332
 [#338]: https://github.com/dahlia/optique/issues/338
 [#341]: https://github.com/dahlia/optique/issues/341
+[#348]: https://github.com/dahlia/optique/issues/348
 [#349]: https://github.com/dahlia/optique/issues/349
 [#352]: https://github.com/dahlia/optique/issues/352
 [#353]: https://github.com/dahlia/optique/issues/353
@@ -587,6 +593,7 @@ To be released.
 [#619]: https://github.com/dahlia/optique/pull/619
 [#622]: https://github.com/dahlia/optique/pull/622
 [#626]: https://github.com/dahlia/optique/pull/626
+[#629]: https://github.com/dahlia/optique/pull/629
 
 ### @optique/config
 
