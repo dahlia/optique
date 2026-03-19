@@ -471,9 +471,11 @@ To be released.
     or `maxLength: 1.5`.  These values are now rejected at construction
     time with a `RangeError`.  [[#351], [#631]]
 
- -  Fixed `domain()` accepting dotted-quad numeric strings such as
-    `192.168.0.1` or `999.999.999.999` as valid domains.  Inputs where
-    every label is purely numeric are now rejected.  [[#375], [#634]]
+ -  Fixed `domain()` accepting dotted numeric strings such as
+    `192.168.0.1`, `999.999.999.999`, or `1.2` as valid domains.
+    Inputs where every label is purely numeric are now rejected when
+    two or more labels are present.  Single-label numeric domains
+    (e.g., `"123"`) remain valid.  [[#375], [#634]]
 
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).

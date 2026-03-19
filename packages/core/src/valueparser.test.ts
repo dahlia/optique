@@ -9273,6 +9273,12 @@ describe("domain()", () => {
       const result = parser.parse("123");
       assert.ok(result.success);
       assert.strictEqual(result.value, "123");
+
+      const multiLabel = parser.parse("1.2");
+      assert.ok(
+        !multiLabel.success,
+        "Expected all-numeric multi-label domains to be rejected even when minLabels is 1",
+      );
     });
 
     it("should work with allowSubdomains and allowedTLDs together", () => {
