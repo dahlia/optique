@@ -1223,7 +1223,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       ok(
         script.includes('[[ -d "$item" ]]') ||
           script.includes('[[ -d "$file" ]]'),
-        "bash file case should include directory check for navigation",
+        "bash file case should include directory check for navigation.",
       );
 
       // Verify directories get trailing slash in file mode
@@ -1236,7 +1236,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       );
       ok(
         fileCaseBlock.includes("-d"),
-        "file) case should check for directories",
+        "file) case should check for directories.",
       );
     });
 
@@ -1259,7 +1259,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       // Should check for directories even in extension-filtered mode
       ok(
         extBranch.includes("-d"),
-        "file) extensions branch should still check for directories",
+        "file) extensions branch should still check for directories.",
       );
     });
   });
@@ -1624,12 +1624,12 @@ _nohidden_cli 2>/dev/null
       // Should include _directories to allow directory navigation
       ok(
         fileCaseBlock.includes("_directories"),
-        "zsh file) case should include _directories for navigation",
+        "zsh file) case should include _directories for navigation.",
       );
       // _directories must run unconditionally (semicolon, not &&)
       ok(
         !fileCaseBlock.includes("&& _directories"),
-        "zsh file) case should use unconditional _directories (not &&)",
+        "zsh file) case should use unconditional _directories (not &&).",
       );
     });
   });
@@ -2036,12 +2036,19 @@ printf '__FILE__:file::src/:0\\n'
         fileCase.indexOf("'file'"),
         fileCase.indexOf("'directory'"),
       );
-      // Should include directories for navigation (via PSIsContainer check
-      // or by not restricting to -File only)
+      // Should include explicit directory handling for navigation
       ok(
-        fileCaseBlock.includes("PSIsContainer") ||
-          !fileCaseBlock.includes("-File"),
-        "pwsh file case should include directories for navigation",
+        fileCaseBlock.includes("PSIsContainer"),
+        "pwsh file case should include directories for navigation.",
+      );
+      // Extension-filtered path must also keep directories
+      const extBranch = fileCaseBlock.substring(
+        fileCaseBlock.indexOf("if ($extensions)"),
+        fileCaseBlock.indexOf("} else {"),
+      );
+      ok(
+        extBranch.includes("PSIsContainer"),
+        "pwsh file extensions branch should include directories for navigation.",
       );
     });
   });
@@ -2424,7 +2431,7 @@ ${functionName}
       // Should check for directories (-d) to allow navigation
       ok(
         fileCaseBlock.includes("test -d"),
-        "fish file case should include directory check for navigation",
+        "fish file case should include directory check for navigation.",
       );
     });
   });
@@ -3002,7 +3009,7 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
       // Should include dir type in both branches
       ok(
         fileCaseBlock.includes("type == dir"),
-        "nushell file case should include dir type for navigation",
+        "nushell file case should include dir type for navigation.",
       );
       // Narrow to extensions branch specifically
       const extBranch = fileCaseBlock.substring(
@@ -3010,7 +3017,7 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
       );
       ok(
         extBranch.includes("type == dir"),
-        "nushell file extensions branch should include dir type for navigation",
+        "nushell file extensions branch should include dir type for navigation.",
       );
     });
   });
