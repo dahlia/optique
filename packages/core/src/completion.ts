@@ -154,17 +154,25 @@ function _${programName} () {
       # Generate file completions based on type
       case "$type" in
         file)
-          # Complete files only
+          # Complete files and directories (directories for navigation)
           if [[ -n "$extensions" ]]; then
-            # Complete with extension filtering
+            # Files with extension filtering + directories
             local ext_pattern="\${extensions//,/|}"
-            for file in "$__glob_current"*; do
-              [[ -f "$file" && "$file" =~ \\.($ext_pattern)$ ]] && COMPREPLY+=("$file")
+            for item in "$__glob_current"*; do
+              if [[ -d "$item" ]]; then
+                COMPREPLY+=("$item/")
+              elif [[ -f "$item" && "$item" =~ \\.($ext_pattern)$ ]]; then
+                COMPREPLY+=("$item")
+              fi
             done
           else
-            # Complete files only, exclude directories
+            # Complete files and directories for navigation
             for item in "$__glob_current"*; do
-              [[ -f "$item" ]] && COMPREPLY+=("$item")
+              if [[ -d "$item" ]]; then
+                COMPREPLY+=("$item/")
+              elif [[ -f "$item" ]]; then
+                COMPREPLY+=("$item")
+              fi
             done
           fi
           ;;
@@ -315,11 +323,11 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         case "\$type" in
           file)
             if [[ -n "\$extensions" ]]; then
-              # Complete files with extension filtering
+              # Complete files with extension filtering + directories for navigation
               local ext_pattern="*.(\$\{extensions//,/|\})"
-              _files -g "\$ext_pattern"
+              _files -g "\$ext_pattern" && _directories
             else
-              _files -g "*"
+              _files
             fi
             ;;
           directory)
@@ -438,9 +446,11 @@ ${
             set -l items
             switch $type
                 case file
-                    # Complete files only
+                    # Complete files and directories (directories for navigation)
                     for item in $current*
-                        if test -f $item
+                        if test -d $item
+                            set -a items $item/
+                        else if test -f $item
                             set -a items $item
                         end
                     end
@@ -453,7 +463,9 @@ ${
                     if test "$hidden" = "1"
                         if test -z "$current"; or string match -q '*/' -- "$current"
                             for item in $current.*
-                                if test -f $item
+                                if test -d $item
+                                    set -a items $item/
+                                else if test -f $item
                                     set -a items $item
                                 end
                             end
@@ -710,13 +722,15 @@ ${
         match $type {
           "file" => {
             if ($extensions | is-empty) {
-              (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file
+              (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file or type == dir
             } else {
               let ext_list = ($extensions | split row ',')
-              (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file | where {|f|
+              let dirs = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == dir
+              let files = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file | where {|f|
                 let ext = ($f.name | path parse | get extension)
                 $ext in $ext_list
               }
+              $dirs | append $files
             }
           },
           "directory" => {
@@ -923,16 +937,19 @@ ${
                 \$items = @()
                 switch (\$type) {
                     'file' {
+                        \$dirs = Get-ChildItem @forceParam -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
                         if (\$extensions) {
                             # Filter by extensions
                             \$extList = \$extensions -split ','
-                            \$items = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$files = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
                                 Where-Object {
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
+                            \$items = @(\$dirs) + @(\$files)
                         } else {
-                            \$items = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$files = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$items = @(\$dirs) + @(\$files)
                         }
                     }
                     'directory' {

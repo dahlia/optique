@@ -1213,6 +1213,50 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         rmSync(hiddenDir, { recursive: true, force: true });
       }
     });
+
+    it("should include directories for navigation in file type completion", () => {
+      const script = bash.generateScript("filedir-cli");
+
+      // The bash file case should include a directory check (-d) alongside
+      // the file check (-f), so users can navigate into subdirectories
+      // when completing file paths
+      ok(
+        script.includes('[[ -d "$item" ]]') ||
+          script.includes('[[ -d "$file" ]]'),
+        "bash file case should include directory check for navigation",
+      );
+
+      // Verify directories get trailing slash in file mode
+      const typeCaseStart = script.indexOf('case "$type" in');
+      const typeCaseEnd = script.indexOf("esac", typeCaseStart);
+      const typeCase = script.substring(typeCaseStart, typeCaseEnd);
+      const fileCaseBlock = typeCase.substring(
+        typeCase.indexOf("file)"),
+        typeCase.indexOf("directory)"),
+      );
+      ok(
+        fileCaseBlock.includes("-d"),
+        "file) case should check for directories",
+      );
+    });
+
+    it("should include directories for navigation in file type completion with extensions", () => {
+      const script = bash.generateScript("fileext-cli");
+
+      // Extract the file case with extensions block
+      const typeCaseStart2 = script.indexOf('case "$type" in');
+      const typeCaseEnd2 = script.indexOf("esac", typeCaseStart2);
+      const typeCase2 = script.substring(typeCaseStart2, typeCaseEnd2);
+      const fileCaseBlock2 = typeCase2.substring(
+        typeCase2.indexOf("file)"),
+        typeCase2.indexOf("directory)"),
+      );
+      // Should check for directories even in extension-filtered mode
+      ok(
+        fileCaseBlock2.includes("-d"),
+        "file) case with extensions should still check for directories",
+      );
+    });
   });
 
   describe("zsh shell completion", () => {
@@ -1558,6 +1602,25 @@ _nohidden_cli 2>/dev/null
 
       const encoded = Array.from(zsh.encodeSuggestions(suggestions));
       deepStrictEqual(encoded, ["--opt\0Line 1 Line 2\0"]);
+    });
+
+    it("should include directories for navigation in file type completion", () => {
+      const script = zsh.generateScript("filedir-cli");
+
+      // Extract the file case block from the zsh script
+      const fileCase = script.substring(
+        script.indexOf('case "$type" in'),
+        script.indexOf("esac"),
+      );
+      const fileCaseBlock = fileCase.substring(
+        fileCase.indexOf("file)"),
+        fileCase.indexOf("directory)"),
+      );
+      // Should include _directories to allow directory navigation
+      ok(
+        fileCaseBlock.includes("_directories"),
+        "zsh file) case should include _directories for navigation",
+      );
     });
   });
 
@@ -1950,6 +2013,25 @@ printf '__FILE__:file::src/:0\\n'
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should include directories for navigation in file type completion", () => {
+      const script = pwsh.generateScript("filedir-cli");
+
+      // Extract the file case block from the PowerShell script
+      const fileCase = script.substring(
+        script.indexOf("switch ($type)"),
+        script.lastIndexOf("}"),
+      );
+      const fileCaseBlock = fileCase.substring(
+        fileCase.indexOf("'file'"),
+        fileCase.indexOf("'directory'"),
+      );
+      // Should include -Directory to retrieve directories for navigation
+      ok(
+        fileCaseBlock.includes("-Directory"),
+        "pwsh file case should include -Directory for navigation",
+      );
+    });
   });
 
   describe("fish shell completion", () => {
@@ -2318,6 +2400,20 @@ ${functionName}
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
+    });
+
+    it("should include directories for navigation in file type completion", () => {
+      const script = fish.generateScript("filedir-cli");
+
+      // Extract the file case block between "case file" and "case directory"
+      const caseFileIdx = script.indexOf("case file");
+      const caseDirIdx = script.indexOf("case directory");
+      const fileCaseBlock = script.substring(caseFileIdx, caseDirIdx);
+      // Should check for directories (-d) to allow navigation
+      ok(
+        fileCaseBlock.includes("test -d"),
+        "fish file case should include directory check for navigation",
+      );
     });
   });
 
@@ -2878,6 +2974,24 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
+    });
+
+    it("should include directories for navigation in file type completion", () => {
+      const script = nu.generateScript("filedir-cli");
+
+      // Extract the file case block from the nushell script
+      const matchIdx = script.indexOf("match $type");
+      const catchIdx = script.indexOf("} catch", matchIdx);
+      const fileCase = script.substring(matchIdx, catchIdx);
+      const fileCaseBlock = fileCase.substring(
+        fileCase.indexOf('"file"'),
+        fileCase.indexOf('"directory"'),
+      );
+      // Should include dir type to allow directory navigation
+      ok(
+        fileCaseBlock.includes("type == dir"),
+        "nushell file case should include dir type for navigation",
+      );
     });
   });
 
