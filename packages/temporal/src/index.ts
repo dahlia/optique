@@ -452,10 +452,11 @@ const PLAIN_DATE_RE = new RegExp(
 /**
  * Matches time forms only (no date prefix).  Accepts extended
  * (`HH:MM[:SS[.frac]]`), basic (`HH`, `HHMM`, `HHMMSS[.frac]`), and
- * `T`-prefixed variants.
+ * `T`-prefixed variants.  Calendar annotations are accepted for consistency
+ * with `Temporal.PlainTime.from()` on polyfill runtimes.
  */
 const PLAIN_TIME_RE = new RegExp(
-  `^[Tt]?(${TIME_EXTENDED}|${TIME_BASIC})$`,
+  `^[Tt]?(${TIME_EXTENDED}|${TIME_BASIC})${CALENDAR_ANNOTATION}$`,
 );
 
 /**

@@ -273,6 +273,22 @@ describe("plainTime", () => {
     }
   });
 
+  it("should parse time strings with calendar annotations", {
+    // Deno's native Temporal rejects calendar annotations on PlainTime
+    skip: !usingPolyfill,
+  }, () => {
+    if (!usingPolyfill) return;
+    const inputs = [
+      "17:04:36[u-ca=gregory]",
+      "17:04:36[!u-ca=iso8601]",
+    ];
+    for (const input of inputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.ok(result.value instanceof Temporal.PlainTime);
+    }
+  });
+
   it("should reject wider ISO forms", () => {
     const widerInputs = [
       "2020-01-23T17:04:36",
