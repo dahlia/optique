@@ -490,6 +490,7 @@ ${
             # pattern (e.g., pattern="src/" and current="src/ma"), keep the
             # current word for incremental narrowing.
             set -l glob_base $current
+            set -l __tilde_prefix ""
             if test -n "$pattern"
                 if string match -q "$pattern*" -- "$current"
                     and test (string length -- "$current") -gt (string length -- "$pattern")
@@ -497,6 +498,16 @@ ${
                 else
                     set glob_base $pattern
                 end
+            end
+
+            # Expand tilde prefix for globbing — fish does not expand ~
+            # inside variable substitutions, so replace it with $HOME
+            if string match -q '~/*' -- "$glob_base"
+                set __tilde_prefix "~"
+                set glob_base (string replace -r '^~' "$HOME" -- "$glob_base")
+            else if string match -q '~' -- "$glob_base"
+                set __tilde_prefix "~"
+                set glob_base "$HOME"
             end
 
             # Generate file completions based on type
@@ -600,6 +611,15 @@ ${
                     end
                 end
                 set items $filtered
+            end
+
+            # Restore tilde prefix in completion results
+            if test -n "$__tilde_prefix"
+                set -l restored
+                for item in $items
+                    set -a restored (string replace "$HOME" "~" -- $item)
+                end
+                set items $restored
             end
 
             # Output file completions

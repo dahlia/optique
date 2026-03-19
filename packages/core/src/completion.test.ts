@@ -2655,6 +2655,71 @@ ${functionName}
       }
     });
 
+    it("should expand tilde in pattern for file globbing in fish", (t) => {
+      if (!isShellAvailable("fish")) {
+        t.skip("fish not available");
+        return;
+      }
+
+      const home = process.env.HOME;
+      if (!home) {
+        t.skip("HOME not set");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(home, ".optique-fish-tilde-"));
+
+      try {
+        const tildeDir = tempDir.replace(home, "~") + "/";
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::${tildeDir}:0\\tFile\\n'
+`;
+        const cliPath = join(tempDir, "tilde-fish-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "testfile.txt"), "");
+
+        const script = fish.generateScript("tilde-fish-cli");
+        const scriptPath = join(tempDir, "completion.fish");
+        writeFileSync(scriptPath, script);
+
+        const functionMatch = script.match(/function ([^\s]+)/);
+        const functionName = functionMatch
+          ? functionMatch[1]
+          : "__tilde_fish_cli_complete";
+        const testScript = `
+set -x PATH "${tempDir}" $PATH
+source "${scriptPath}"
+
+function commandline
+    switch $argv[1]
+        case '-poc'
+            echo "tilde-fish-cli"
+        case '-ct'
+            echo ""
+    end
+end
+
+${functionName}
+`;
+        const testScriptPath = join(tempDir, "test.fish");
+        writeFileSync(testScriptPath, testScript);
+        const result = runCommand("fish", [testScriptPath], {
+          cwd: tempDir,
+        });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        // Should find the file via tilde-expanded pattern
+        ok(completions.some((c) => c.includes("testfile.txt")));
+        // Results should use tilde prefix, not expanded home
+        ok(completions.some((c) => c.startsWith("~/")));
+        ok(!completions.some((c) => c.startsWith(home)));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should preserve hidden-basename matches in pattern for fish", (t) => {
       if (!isShellAvailable("fish")) {
         t.skip("fish not available");
