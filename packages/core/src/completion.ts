@@ -725,8 +725,9 @@ ${
               (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file or type == dir
             } else {
               let ext_list = ($extensions | split row ',')
-              let dirs = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == dir
-              let files = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file | where {|f|
+              let all_items = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern })
+              let dirs = $all_items | where type == dir
+              let files = $all_items | where type == file | where {|f|
                 let ext = ($f.name | path parse | get extension)
                 $ext in $ext_list
               }
@@ -741,8 +742,9 @@ ${
               if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }
             } else {
               let ext_list = ($extensions | split row ',')
-              let dirs = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == dir
-              let files = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file | where {|f|
+              let all_items = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern })
+              let dirs = $all_items | where type == dir
+              let files = $all_items | where type == file | where {|f|
                 let ext = ($f.name | path parse | get extension)
                 $ext in $ext_list
               }
