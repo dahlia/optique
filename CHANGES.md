@@ -883,30 +883,41 @@ environment variable integration via source contexts.  [[#86], [#135]]
 
  -  Fixed `gitRef()` emitting duplicate completion suggestions when a branch
     and tag share the same name.  [[#284], [#569]]
+
  -  Fixed `gitCommit()` and `gitRef()` suggesting abbreviated commit SHAs
     shorter than the typed prefix, which caused shell completion frontends
     to drop the suggestions.  Suggested OIDs are now at least as long as
     the prefix.  [[#569]]
+
  -  `gitCommit()`, `gitRef()`, and other git parser functions now throw
     a `RangeError` when `suggestionDepth` is not a positive integer,
     instead of silently accepting invalid values.  [[#377], [#570]]
+
  -  Fixed `gitCommit()` and `gitRef()` suggesting ambiguous 7-character SHA
     prefixes when multiple recent commits share the same short prefix.
     Short SHAs are now lengthened until each suggestion is unique.
     [[#331], [#571]]
+
  -  Fixed `gitRemoteBranch()` reporting a misleading “branch not found” error
     when the specified remote does not exist.  The parser now correctly
     diagnoses the missing remote.  Added `remoteNotFound` to
     `GitParserErrors` for custom error messages in this case.  [[#308], [#603]]
 
+ -  `gitRemoteBranch()` now validates the `remote` parameter at construction
+    time, rejecting empty, whitespace-only, control-character-containing,
+    multiline, or non-string values
+    with a `TypeError`.  [[#464], [#654]]
+
 [#284]: https://github.com/dahlia/optique/issues/284
 [#308]: https://github.com/dahlia/optique/issues/308
 [#331]: https://github.com/dahlia/optique/issues/331
 [#377]: https://github.com/dahlia/optique/issues/377
+[#464]: https://github.com/dahlia/optique/issues/464
 [#569]: https://github.com/dahlia/optique/pull/569
 [#570]: https://github.com/dahlia/optique/pull/570
 [#571]: https://github.com/dahlia/optique/pull/571
 [#603]: https://github.com/dahlia/optique/pull/603
+[#654]: https://github.com/dahlia/optique/pull/654
 
 ### @optique/inquirer
 

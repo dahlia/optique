@@ -155,6 +155,8 @@ export interface GitParsers {
    * @param remote The remote name to validate against.
    * @param options Configuration options for the parser.
    * @returns A value parser that accepts existing remote branch names.
+   * @throws {TypeError} If `remote` is not a valid non-empty string without
+   *   whitespace or control characters.
    * @throws {RangeError} If `suggestionDepth` is not a positive integer.
    */
   remoteBranch(
@@ -439,6 +441,8 @@ export function gitBranch(
  * @param remote The remote name to validate against.
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing remote branch names.
+ * @throws {TypeError} If `remote` is not a valid non-empty string without
+ *   whitespace or control characters.
  * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  *
@@ -454,6 +458,26 @@ export function gitRemoteBranch(
   remote: string,
   options?: GitParserOptions,
 ): ValueParser<"async", string> {
+  const expectedMessage =
+    "Expected remote to be a non-empty string without whitespace" +
+    " or control characters";
+  if (typeof remote !== "string") {
+    throw new TypeError(
+      `${expectedMessage}, but got: ${
+        remote === null
+          ? "null"
+          : Array.isArray(remote)
+          ? "array"
+          : typeof remote
+      }.`,
+    );
+  }
+  // deno-lint-ignore no-control-regex
+  if (remote === "" || /[\s\x00-\x1f]/.test(remote)) {
+    throw new TypeError(
+      `${expectedMessage}, but got: ${JSON.stringify(remote)}.`,
+    );
+  }
   const metavar: NonEmptyString = options?.metavar ?? METAVAR_BRANCH;
   return createAsyncValueParser(
     options,
@@ -850,7 +874,8 @@ export function gitRef(
  * @param options Shared configuration for the parsers.
  * @returns An object containing git parsers.  Each returned method may throw
  *   a {@link RangeError} if the merged `suggestionDepth` is not a positive
- *   integer.
+ *   integer.  `remoteBranch()` may also throw a {@link TypeError} if `remote`
+ *   is not a valid non-empty string without whitespace or control characters.
  * @since 0.9.0
  */
 export function createGitParsers(options?: GitParserOptions): GitParsers {
