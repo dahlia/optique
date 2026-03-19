@@ -195,6 +195,8 @@ describe("plainDate", () => {
       "2020-01-23[u-ca=gregory]",
       "2020-01-23[u-ca=GREGORY]",
       "20200123", // basic (compact) ISO 8601
+      "+0100000123", // basic expanded year
+      "20200123[u-ca=gregory]", // basic with calendar
     ];
 
     for (const input of validInputs) {
@@ -324,6 +326,8 @@ describe("plainDateTime", () => {
       "2020-01-23T17:04:36[u-ca=GREGORY]", // uppercase calendar
       "20200123T170436", // basic (compact) ISO 8601
       "2020-01-23T170436", // mixed extended date + basic time
+      "+0100000123T170436", // basic expanded year
+      "20200123T170436[u-ca=gregory]", // basic with calendar
     ];
 
     for (const input of validInputs) {
@@ -384,6 +388,7 @@ describe("plainYearMonth", () => {
       "+010000-01",
       "-000001-12",
       "202001", // basic (compact) ISO 8601
+      "+01000001", // basic expanded year
     ];
 
     for (const input of validInputs) {
@@ -398,9 +403,15 @@ describe("plainYearMonth", () => {
     skip: !usingPolyfill,
   }, () => {
     if (!usingPolyfill) return;
-    const result = parser.parse("2020-01-01[u-ca=gregory]");
-    assert.ok(result.success, "Failed to parse: 2020-01-01[u-ca=gregory]");
-    assert.ok(result.value instanceof Temporal.PlainYearMonth);
+    const inputs = [
+      "2020-01-01[u-ca=gregory]",
+      "20200123[u-ca=gregory]", // basic with calendar
+    ];
+    for (const input of inputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.ok(result.value instanceof Temporal.PlainYearMonth);
+    }
   });
 
   it("should reject wider ISO forms", () => {
@@ -469,9 +480,16 @@ describe("plainMonthDay", () => {
     skip: !usingPolyfill,
   }, () => {
     if (!usingPolyfill) return;
-    const result = parser.parse("1972-01-23[u-ca=gregory]");
-    assert.ok(result.success, "Failed to parse: 1972-01-23[u-ca=gregory]");
-    assert.ok(result.value instanceof Temporal.PlainMonthDay);
+    const inputs = [
+      "1972-01-23[u-ca=gregory]",
+      "20200123[u-ca=gregory]", // basic with calendar
+      "+0100000123[u-ca=gregory]", // basic expanded year with calendar
+    ];
+    for (const input of inputs) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse: ${input}`);
+      assert.ok(result.value instanceof Temporal.PlainMonthDay);
+    }
   });
 
   it("should reject wider ISO forms", () => {
