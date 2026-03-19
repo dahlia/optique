@@ -8919,23 +8919,23 @@ describe("domain()", () => {
     });
   });
 
-  describe("allowedTLDs option", () => {
+  describe("allowedTlds option", () => {
     it("should accept domain with allowed TLD", () => {
-      const parser = domain({ allowedTLDs: ["com", "org", "net"] });
+      const parser = domain({ allowedTlds: ["com", "org", "net"] });
       const result = parser.parse("example.com");
       assert.ok(result.success);
       assert.strictEqual(result.value, "example.com");
     });
 
     it("should accept domain with allowed TLD (case-insensitive)", () => {
-      const parser = domain({ allowedTLDs: ["com", "org", "net"] });
+      const parser = domain({ allowedTlds: ["com", "org", "net"] });
       const result = parser.parse("example.COM");
       assert.ok(result.success);
       assert.strictEqual(result.value, "example.COM");
     });
 
     it("should reject domain with disallowed TLD", () => {
-      const parser = domain({ allowedTLDs: ["com", "org", "net"] });
+      const parser = domain({ allowedTlds: ["com", "org", "net"] });
       const result = parser.parse("example.io");
       assert.ok(!result.success);
       assert.deepStrictEqual(result.error, [
@@ -8949,7 +8949,7 @@ describe("domain()", () => {
     });
 
     it("should accept subdomain with allowed TLD", () => {
-      const parser = domain({ allowedTLDs: ["com", "org"] });
+      const parser = domain({ allowedTlds: ["com", "org"] });
       const result = parser.parse("www.example.org");
       assert.ok(result.success);
       assert.strictEqual(result.value, "www.example.org");
@@ -8957,10 +8957,10 @@ describe("domain()", () => {
 
     it("should throw TypeError for non-string entry", () => {
       assert.throws(
-        () => domain({ allowedTLDs: [123 as never] }),
+        () => domain({ allowedTlds: [123 as never] }),
         {
           name: "TypeError",
-          message: "Each allowedTLDs entry must be a non-empty string " +
+          message: "Each allowedTlds entry must be a non-empty string " +
             "without dots or surrounding whitespace.",
         },
       );
@@ -8968,10 +8968,10 @@ describe("domain()", () => {
 
     it("should throw TypeError for entry containing a dot", () => {
       assert.throws(
-        () => domain({ allowedTLDs: [".com"] as never }),
+        () => domain({ allowedTlds: [".com"] as never }),
         {
           name: "TypeError",
-          message: "Each allowedTLDs entry must be a non-empty string " +
+          message: "Each allowedTlds entry must be a non-empty string " +
             "without dots or surrounding whitespace.",
         },
       );
@@ -8979,10 +8979,10 @@ describe("domain()", () => {
 
     it("should throw TypeError for entry with leading whitespace", () => {
       assert.throws(
-        () => domain({ allowedTLDs: [" com"] as never }),
+        () => domain({ allowedTlds: [" com"] as never }),
         {
           name: "TypeError",
-          message: "Each allowedTLDs entry must be a non-empty string " +
+          message: "Each allowedTlds entry must be a non-empty string " +
             "without dots or surrounding whitespace.",
         },
       );
@@ -8990,10 +8990,10 @@ describe("domain()", () => {
 
     it("should throw TypeError for entry with trailing whitespace", () => {
       assert.throws(
-        () => domain({ allowedTLDs: ["com "] as never }),
+        () => domain({ allowedTlds: ["com "] as never }),
         {
           name: "TypeError",
-          message: "Each allowedTLDs entry must be a non-empty string " +
+          message: "Each allowedTlds entry must be a non-empty string " +
             "without dots or surrounding whitespace.",
         },
       );
@@ -9001,10 +9001,10 @@ describe("domain()", () => {
 
     it("should throw TypeError for empty string entry", () => {
       assert.throws(
-        () => domain({ allowedTLDs: [""] as never }),
+        () => domain({ allowedTlds: [""] as never }),
         {
           name: "TypeError",
-          message: "Each allowedTLDs entry must be a non-empty string " +
+          message: "Each allowedTlds entry must be a non-empty string " +
             "without dots or surrounding whitespace.",
         },
       );
@@ -9217,7 +9217,7 @@ describe("domain()", () => {
 
     it("should use custom tldNotAllowed message", () => {
       const parser = domain({
-        allowedTLDs: ["com", "org"],
+        allowedTlds: ["com", "org"],
         errors: {
           tldNotAllowed: (tld, allowed) =>
             message`${text(tld)} not in ${text(allowed.join(", "))}`,
@@ -9336,10 +9336,10 @@ describe("domain()", () => {
       );
     });
 
-    it("should work with allowSubdomains and allowedTLDs together", () => {
+    it("should work with allowSubdomains and allowedTlds together", () => {
       const parser = domain({
         allowSubdomains: false,
-        allowedTLDs: ["com", "org"],
+        allowedTlds: ["com", "org"],
       });
       const result = parser.parse("example.com");
       assert.ok(result.success);
@@ -9349,7 +9349,7 @@ describe("domain()", () => {
     it("should reject subdomain with restricted TLDs", () => {
       const parser = domain({
         allowSubdomains: false,
-        allowedTLDs: ["com", "org"],
+        allowedTlds: ["com", "org"],
       });
       const result = parser.parse("www.example.com");
       assert.ok(!result.success);
@@ -9363,7 +9363,7 @@ describe("domain()", () => {
     it("should work with all options combined", () => {
       const parser = domain({
         allowSubdomains: true,
-        allowedTLDs: ["com", "org", "net"],
+        allowedTlds: ["com", "org", "net"],
         minLabels: 2,
         lowercase: true,
       });
@@ -9372,9 +9372,9 @@ describe("domain()", () => {
       assert.strictEqual(result.value, "api.example.com");
     });
 
-    it("should snapshot allowedTLDs at construction time", () => {
+    it("should snapshot allowedTlds at construction time", () => {
       const tlds = ["com"];
-      const parser = domain({ allowedTLDs: tlds });
+      const parser = domain({ allowedTlds: tlds });
       assert.ok(parser.parse("example.com").success);
       assert.ok(!parser.parse("example.org").success);
       // Mutate tlds after construction
@@ -9403,7 +9403,7 @@ describe("domain()", () => {
         tldNotAllowed: "original error",
       };
       const parser = domain({
-        allowedTLDs: ["com"],
+        allowedTlds: ["com"],
         errors: errors as never,
       });
       const result = parser.parse("example.org");

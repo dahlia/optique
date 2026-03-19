@@ -4172,7 +4172,7 @@ export interface DomainOptions {
    * List of allowed top-level domains (e.g., ["com", "org", "net"]).
    * If specified, only domains with these TLDs are accepted.
    */
-  readonly allowedTLDs?: readonly string[];
+  readonly allowedTlds?: readonly string[];
 
   /**
    * Minimum number of domain labels (parts separated by dots).
@@ -4218,7 +4218,7 @@ export interface DomainOptions {
      */
     tldNotAllowed?:
       | Message
-      | ((tld: string, allowedTLDs: readonly string[]) => Message);
+      | ((tld: string, allowedTlds: readonly string[]) => Message);
 
     /**
      * Custom error message when domain has too few labels.
@@ -4248,7 +4248,7 @@ export interface DomainOptions {
  * @returns A parser that accepts valid domain names as strings.
  * @throws {RangeError} If `maxLength` is not a positive integer.
  * @throws {RangeError} If `minLabels` is not a positive integer.
- * @throws {TypeError} If any `allowedTLDs` entry is not a non-empty string,
+ * @throws {TypeError} If any `allowedTlds` entry is not a non-empty string,
  *   contains dots, or has leading/trailing whitespace.
  * @throws {TypeError} If `allowSubdomains` is `false` and `minLabels` is
  *   greater than 2, since non-subdomain domains have exactly 2 labels.
@@ -4265,7 +4265,7 @@ export interface DomainOptions {
  * option("--root", domain({ allowSubdomains: false }))
  *
  * // Restrict to specific TLDs
- * option("--domain", domain({ allowedTLDs: ["com", "org", "net"] }))
+ * option("--domain", domain({ allowedTlds: ["com", "org", "net"] }))
  *
  * // Normalize to lowercase
  * option("--domain", domain({ lowercase: true }))
@@ -4278,11 +4278,11 @@ export function domain(
 ): ValueParser<"sync", string> {
   const metavar = options?.metavar ?? "DOMAIN";
   const allowSubdomains = options?.allowSubdomains ?? true;
-  const allowedTLDs = options?.allowedTLDs != null
-    ? Object.freeze([...options.allowedTLDs])
+  const allowedTlds = options?.allowedTlds != null
+    ? Object.freeze([...options.allowedTlds])
     : undefined;
-  if (allowedTLDs !== undefined) {
-    for (const tld of allowedTLDs) {
+  if (allowedTlds !== undefined) {
+    for (const tld of allowedTlds) {
       if (
         typeof tld !== "string" ||
         tld.length === 0 ||
@@ -4290,7 +4290,7 @@ export function domain(
         tld !== tld.trim()
       ) {
         throw new TypeError(
-          "Each allowedTLDs entry must be a non-empty string " +
+          "Each allowedTlds entry must be a non-empty string " +
             "without dots or surrounding whitespace.",
         );
       }
@@ -4436,22 +4436,22 @@ export function domain(
       }
 
       // Check TLD restriction
-      if (allowedTLDs !== undefined) {
+      if (allowedTlds !== undefined) {
         const tld = labels[labels.length - 1];
         const tldLower = tld.toLowerCase();
-        const allowedTLDsLower = allowedTLDs.map((t) => t.toLowerCase());
+        const allowedTldsLower = allowedTlds.map((t) => t.toLowerCase());
 
-        if (!allowedTLDsLower.includes(tldLower)) {
+        if (!allowedTldsLower.includes(tldLower)) {
           const errorMsg = tldNotAllowed;
           if (typeof errorMsg === "function") {
-            return { success: false, error: errorMsg(tld, allowedTLDs) };
+            return { success: false, error: errorMsg(tld, allowedTlds) };
           }
           const msg = errorMsg ?? [
             { type: "text", text: "Top-level domain " },
             { type: "value", value: tld },
             {
               type: "text",
-              text: ` is not allowed. Allowed TLDs: ${allowedTLDs.join(", ")}.`,
+              text: ` is not allowed. Allowed TLDs: ${allowedTlds.join(", ")}.`,
             },
           ] as Message;
           return { success: false, error: msg };

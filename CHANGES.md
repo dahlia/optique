@@ -469,7 +469,10 @@ To be released.
     `" example.com "`, or non-string values now throw a `TypeError`.
     [[#348], [#629]]
 
- -  Fixed `domain()` not validating malformed `allowedTLDs` entries at
+ -  Renamed `DomainOptions.allowedTLDs` to `allowedTlds` for naming
+    consistency.  [[#345], [#638]]
+
+ -  Fixed `domain()` not validating malformed `allowedTlds` entries at
     construction time; entries like `".com"`, `" com "`, or non-string
     values now throw a `TypeError`.  [[#345], [#638]]
 
