@@ -23,7 +23,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 // Conditionally import Temporal polyfill only if not natively available
-if (!globalThis.Temporal) {
+const usingPolyfill = !globalThis.Temporal;
+if (usingPolyfill) {
   const polyfill = await import("@js-temporal/polyfill");
   globalThis.Temporal = polyfill.Temporal;
 }
@@ -253,6 +254,7 @@ describe("plainTime", () => {
       "23:59:59",
       "12:30:45.123",
       "17:04", // Temporal accepts this format
+      "17:04:36,123", // ISO 8601 allows comma as fractional separator
     ];
 
     for (const input of validInputs) {
@@ -311,6 +313,7 @@ describe("plainDateTime", () => {
       "+010000-01-23T17:04:36",
       "-000001-12-31T00:00:00",
       "2020-01-23T17:04:36[u-ca=gregory]",
+      "2020-01-23T17:04:36,123", // ISO 8601 allows comma as fractional separator
     ];
 
     for (const input of validInputs) {
@@ -378,6 +381,16 @@ describe("plainYearMonth", () => {
     }
   });
 
+  it("should parse non-ISO calendar year-month strings", {
+    // Deno's native Temporal panics on non-ISO calendars for PlainYearMonth
+    skip: !usingPolyfill,
+  }, () => {
+    if (!usingPolyfill) return;
+    const result = parser.parse("2020-01-01[u-ca=gregory]");
+    assert.ok(result.success, "Failed to parse: 2020-01-01[u-ca=gregory]");
+    assert.ok(result.value instanceof Temporal.PlainYearMonth);
+  });
+
   it("should reject wider ISO forms", () => {
     const widerInputs = [
       "2020-01-23",
@@ -435,6 +448,16 @@ describe("plainMonthDay", () => {
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainMonthDay);
     }
+  });
+
+  it("should parse non-ISO calendar month-day strings", {
+    // Deno's native Temporal panics on non-ISO calendars for PlainMonthDay
+    skip: !usingPolyfill,
+  }, () => {
+    if (!usingPolyfill) return;
+    const result = parser.parse("1972-01-23[u-ca=gregory]");
+    assert.ok(result.success, "Failed to parse: 1972-01-23[u-ca=gregory]");
+    assert.ok(result.value instanceof Temporal.PlainMonthDay);
   });
 
   it("should reject wider ISO forms", () => {

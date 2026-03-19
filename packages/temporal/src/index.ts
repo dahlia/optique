@@ -419,30 +419,41 @@ const CALENDAR_ANNOTATION = String.raw`(\[u-ca=[a-z0-9\-]+\])?`;
  */
 const YEAR = String.raw`([+-]\d{6}|\d{4})`;
 
+/** ISO 8601 fractional seconds with `.` or `,` separator. */
+const FRACTIONAL = String.raw`[.,]\d+`;
+
 /** Matches YYYY-MM-DD only (no time component). */
 const PLAIN_DATE_RE = new RegExp(
   `^${YEAR}-\\d{2}-\\d{2}${CALENDAR_ANNOTATION}$`,
 );
 
 /** Matches HH:MM, HH:MM:SS, or HH:MM:SS.fractional (no date prefix). */
-const PLAIN_TIME_RE = /^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+const PLAIN_TIME_RE = new RegExp(
+  `^\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?$`,
+);
 
 /**
  * Matches YYYY-MM-DDTHH:MM, YYYY-MM-DDTHH:MM:SS,
  * or YYYY-MM-DDTHH:MM:SS.fractional (must have both date and time parts).
  */
 const PLAIN_DATETIME_RE = new RegExp(
-  `^${YEAR}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?${CALENDAR_ANNOTATION}$`,
+  `^${YEAR}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?${CALENDAR_ANNOTATION}$`,
 );
 
-/** Matches YYYY-MM only. */
+/**
+ * Matches YYYY-MM, or YYYY-MM-DD with a required calendar annotation (the
+ * reference day is emitted by `toString()` for non-ISO calendars).
+ */
 const PLAIN_YEAR_MONTH_RE = new RegExp(
-  `^${YEAR}-\\d{2}${CALENDAR_ANNOTATION}$`,
+  `^${YEAR}-\\d{2}(-\\d{2}\\[u-ca=[a-z0-9\\-]+\\]|${CALENDAR_ANNOTATION})$`,
 );
 
-/** Matches MM-DD or --MM-DD only. */
+/**
+ * Matches MM-DD or --MM-DD, or YYYY-MM-DD with a required calendar annotation
+ * (the reference year is emitted by `toString()` for non-ISO calendars).
+ */
 const PLAIN_MONTH_DAY_RE = new RegExp(
-  `^(--)?(\\d{2}-\\d{2})${CALENDAR_ANNOTATION}$`,
+  `^((--)?(\\d{2}-\\d{2})${CALENDAR_ANNOTATION}|${YEAR}-\\d{2}-\\d{2}\\[u-ca=[a-z0-9\\-]+\\])$`,
 );
 
 /**
