@@ -9007,6 +9007,17 @@ describe("domain()", () => {
       );
     });
 
+    it("should throw TypeError for entry with leading and trailing whitespace", () => {
+      assert.throws(
+        () => domain({ allowedTlds: [" com "] as never }),
+        {
+          name: "TypeError",
+          message: "allowedTlds[0] must not have leading or trailing " +
+            'whitespace: " com ".',
+        },
+      );
+    });
+
     it("should throw TypeError for empty string entry", () => {
       assert.throws(
         () => domain({ allowedTlds: [""] as never }),
