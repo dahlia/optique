@@ -203,6 +203,15 @@ function _${programName} () {
       local -a __candidates=()
       if [[ "$__from_pattern" == "1" && "$__glob_current" == *[\*\?]* ]]; then
         mapfile -t __candidates < <(compgen -G "$__glob_current" 2>/dev/null)
+        # Also include directories from the base directory for navigation
+        # (file/any completion modes list directories even when the glob
+        # itself does not match directory names)
+        local __glob_dir="\${__glob_current%/*}"
+        [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
+        local __d
+        for __d in "$__glob_dir"/*/; do
+          [[ -d "$__d" ]] && __candidates+=("\${__d%/}")
+        done
       else
         __candidates=("$__glob_current"*)
         # Remove no-match sentinel (bash returns the literal pattern).
@@ -572,9 +581,29 @@ ${
             end
             set -l __candidates
             if test $__has_glob -eq 1
-                # Only program-supplied patterns reach here (__from_pattern=1),
-                # so eval is safe — user input never enters this path
-                eval "set __candidates $glob_base" 2>/dev/null
+                # Safe glob expansion without eval: split the pattern into
+                # directory and filter parts, list the directory, then use
+                # string match for wildcard filtering
+                set -l __glob_dir (string replace -r '/[^/]*$' '' -- "$glob_base")
+                set -l __glob_filter (string replace -r '.*/' '' -- "$glob_base")
+                if test -z "$__glob_dir"; or test "$__glob_dir" = "$glob_base"
+                    set __glob_dir "."
+                end
+                # Match files by the glob filter
+                for __item in $__glob_dir/*
+                    if test -e "$__item"
+                        set -l __bn (basename "$__item")
+                        if string match -q "$__glob_filter" -- "$__bn"
+                            set -a __candidates "$__item"
+                        end
+                    end
+                end
+                # Also include directories for navigation
+                for __item in $__glob_dir/*/
+                    if test -d "$__item"
+                        set -a __candidates (string replace -r '/$' '' -- "$__item")
+                    end
+                end
             else
                 set __candidates $glob_base*
             end
@@ -897,12 +926,23 @@ ${
       # When the glob base contains wildcard characters, use it as-is;
       # otherwise append * to treat it as a prefix.
       # Note: into glob is required so that ls expands wildcards from a variable
+      let has_glob = ($glob_base =~ '[*?]')
       let ls_pattern = if ($glob_base | is-empty) {
         "."
-      } else if ($glob_base =~ '[*?]') {
+      } else if $has_glob {
         ($glob_base | into glob)
       } else {
         ($glob_base + "*" | into glob)
+      }
+
+      # When using a glob pattern, also compute a directory listing pattern
+      # so that file/any modes can include directories for navigation
+      let glob_dir_pattern = if $has_glob {
+        let dir_part = ($glob_base | path dirname)
+        let dir = if ($dir_part | is-empty) or ($dir_part == $glob_base) { "." } else { $dir_part }
+        ($dir + "/*" | into glob)
+      } else {
+        null
       }
 
       # Use ls -a to include hidden files when requested
@@ -942,6 +982,20 @@ ${
         }
       } catch {
         []
+      }
+
+      # When using a glob pattern, also add directories from the base
+      # directory for navigation (file/any modes should list directories
+      # even when the glob itself does not match directory names)
+      let items = if ($glob_dir_pattern != null) and ($type != "directory") {
+        let extra_dirs = try {
+          (if $hidden { ls -a $glob_dir_pattern } else { ls $glob_dir_pattern }) | where type == dir
+        } catch {
+          []
+        }
+        $items | append $extra_dirs | uniq-by name
+      } else {
+        $items
       }
 
       # Filter out hidden files unless requested.
