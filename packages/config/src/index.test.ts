@@ -1313,19 +1313,22 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("rejects thenable config (cross-realm Promise)", () => {
+  test("rejects cross-realm Promise config (Symbol.toStringTag)", () => {
     const schema = z.object({ name: z.string() });
     const context = createConfigContext({ schema });
+    // Simulate a cross-realm Promise: has Symbol.toStringTag but fails
+    // instanceof Promise.
+    const crossRealmPromise = {
+      [Symbol.toStringTag]: "Promise",
+      then: (resolve: (v: unknown) => void) => resolve({ name: "ALICE" }),
+    };
     assert.throws(
       () =>
         context.getAnnotations(
           {},
           {
             load: (() => ({
-              config: {
-                then: (resolve: (v: unknown) => void) =>
-                  resolve({ name: "ALICE" }),
-              },
+              config: crossRealmPromise,
               meta: undefined,
             })) as never,
           },
@@ -1338,9 +1341,14 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("rejects thenable meta (cross-realm Promise)", () => {
+  test("rejects cross-realm Promise meta (Symbol.toStringTag)", () => {
     const schema = z.object({ name: z.string() });
     const context = createConfigContext({ schema });
+    const crossRealmPromise = {
+      [Symbol.toStringTag]: "Promise",
+      then: (resolve: (v: unknown) => void) =>
+        resolve({ configPath: "x", configDir: "." }),
+    };
     assert.throws(
       () =>
         context.getAnnotations(
@@ -1348,10 +1356,7 @@ describe("load() return value validation", () => {
           {
             load: (() => ({
               config: { name: "ALICE" },
-              meta: {
-                then: (resolve: (v: unknown) => void) =>
-                  resolve({ configPath: "x", configDir: "." }),
-              },
+              meta: crossRealmPromise,
             })) as never,
           },
         ),
@@ -1361,6 +1366,26 @@ describe("load() return value validation", () => {
           "Resolve the Promise before returning.",
       },
     );
+  });
+
+  test("accepts config object with then method (not a Promise)", () => {
+    const schema = z.object({
+      name: z.string(),
+      then: z.function(),
+    });
+    const context = createConfigContext({ schema });
+    const annotations = context.getAnnotations(
+      {},
+      {
+        load: (() => ({
+          config: { name: "ALICE", then: () => "not a promise" },
+          meta: undefined,
+        })) as never,
+      },
+    );
+    assert.ok(annotations != null);
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
   });
 
   test("rejects non-object resolved value from async load()", async () => {

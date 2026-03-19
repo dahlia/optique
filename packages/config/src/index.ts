@@ -700,6 +700,23 @@ function isThenable(value: unknown): boolean {
     typeof (value as Record<string, unknown>).then === "function";
 }
 
+/**
+ * Detects native Promises and cross-realm Promises without rejecting
+ * domain objects that merely have a `then()` method.  Cross-realm
+ * Promises fail `instanceof Promise` but still carry
+ * `Symbol.toStringTag === "Promise"`.
+ */
+function isPromiseLike(value: unknown): boolean {
+  if (value instanceof Promise) return true;
+  if (
+    value == null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return false;
+  }
+  return (value as Record<symbol, unknown>)[Symbol.toStringTag] === "Promise";
+}
+
 function validateLoadResult<TConfigMeta>(
   loaded: unknown,
 ): { config: unknown; meta: TConfigMeta | undefined } {
@@ -714,13 +731,13 @@ function validateLoadResult<TConfigMeta>(
     );
   }
   const result = loaded as Record<string, unknown>;
-  if (result.config instanceof Promise || isThenable(result.config)) {
+  if (isPromiseLike(result.config)) {
     throw new TypeError(
       "Expected config in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
     );
   }
-  if (result.meta instanceof Promise || isThenable(result.meta)) {
+  if (isPromiseLike(result.meta)) {
     throw new TypeError(
       "Expected meta in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
