@@ -456,9 +456,12 @@ export function gitRemoteBranch(
   remote: string,
   options?: GitParserOptions,
 ): ValueParser<"async", string> {
+  const expectedMessage =
+    "Expected remote to be a non-empty string without whitespace" +
+    " or control characters";
   if (typeof remote !== "string") {
     throw new TypeError(
-      `Expected remote to be a non-empty string without whitespace or control characters, but got: ${
+      `${expectedMessage}, but got: ${
         remote === null
           ? "null"
           : Array.isArray(remote)
@@ -470,9 +473,7 @@ export function gitRemoteBranch(
   // deno-lint-ignore no-control-regex
   if (remote === "" || /[\s\x00-\x1f]/.test(remote)) {
     throw new TypeError(
-      `Expected remote to be a non-empty string without whitespace or control characters, but got: ${
-        JSON.stringify(remote)
-      }.`,
+      `${expectedMessage}, but got: ${JSON.stringify(remote)}.`,
     );
   }
   const metavar: NonEmptyString = options?.metavar ?? METAVAR_BRANCH;
