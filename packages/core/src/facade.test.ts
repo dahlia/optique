@@ -9161,7 +9161,7 @@ describe("runWith/runWithSync context validation", () => {
         {
           name: "TypeError",
           message:
-            /Expected each context to be a SourceContext, but got: object at index 0\./,
+            "Expected each context to be a SourceContext, but got: object at index 0.",
         },
       );
     });
@@ -9172,7 +9172,7 @@ describe("runWith/runWithSync context validation", () => {
         {
           name: "TypeError",
           message:
-            /Expected each context to be a SourceContext, but got: null at index 0\./,
+            "Expected each context to be a SourceContext, but got: null at index 0.",
         },
       );
     });
@@ -9183,7 +9183,7 @@ describe("runWith/runWithSync context validation", () => {
         {
           name: "TypeError",
           message:
-            /Expected each context to be a SourceContext, but got: number at index 0\./,
+            "Expected each context to be a SourceContext, but got: number at index 0.",
         },
       );
     });
@@ -9194,7 +9194,7 @@ describe("runWith/runWithSync context validation", () => {
         {
           name: "TypeError",
           message:
-            /Expected each context to be a SourceContext, but got: array at index 0\./,
+            "Expected each context to be a SourceContext, but got: array at index 0.",
         },
       );
     });
@@ -9214,7 +9214,8 @@ describe("runWith/runWithSync context validation", () => {
           ),
         {
           name: "TypeError",
-          message: /at index 1\./,
+          message:
+            "Expected each context to be a SourceContext, but got: object at index 1.",
         },
       );
     });
@@ -9227,7 +9228,7 @@ describe("runWith/runWithSync context validation", () => {
         {
           name: "TypeError",
           message:
-            /Expected each context to be a SourceContext, but got: object at index 0\./,
+            "Expected each context to be a SourceContext, but got: object at index 0.",
         },
       );
     });
@@ -9238,7 +9239,7 @@ describe("runWith/runWithSync context validation", () => {
         {
           name: "TypeError",
           message:
-            /Expected each context to be a SourceContext, but got: array at index 0\./,
+            "Expected each context to be a SourceContext, but got: array at index 0.",
         },
       );
     });
