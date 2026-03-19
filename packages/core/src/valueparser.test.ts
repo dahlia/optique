@@ -7124,6 +7124,63 @@ describe("email()", () => {
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
     });
+
+    it("should throw TypeError for non-string allowedDomains entries", () => {
+      assert.throws(
+        () => email({ allowedDomains: [123 as never] }),
+        TypeError,
+      );
+      assert.throws(
+        () => email({ allowedDomains: [null as never] }),
+        TypeError,
+      );
+      assert.throws(
+        () => email({ allowedDomains: [undefined as never] }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for allowedDomains entries with leading @", () => {
+      assert.throws(
+        () => email({ allowedDomains: ["@example.com"] as never }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for allowedDomains entries with trailing dot", () => {
+      assert.throws(
+        () => email({ allowedDomains: ["example.com."] as never }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for allowedDomains entries with whitespace", () => {
+      assert.throws(
+        () => email({ allowedDomains: [" example.com "] as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => email({ allowedDomains: [" example.com"] as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => email({ allowedDomains: ["example.com "] as never }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for empty string allowedDomains entries", () => {
+      assert.throws(
+        () => email({ allowedDomains: [""] as never }),
+        TypeError,
+      );
+    });
+
+    it("should accept valid allowedDomains entries without throwing", () => {
+      assert.doesNotThrow(
+        () => email({ allowedDomains: ["example.com", "test.org"] }),
+      );
+    });
   });
 });
 

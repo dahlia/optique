@@ -2852,6 +2852,42 @@ export function email(
   const allowedDomains = options?.allowedDomains != null
     ? Object.freeze([...options.allowedDomains])
     : undefined;
+  if (allowedDomains != null) {
+    for (let i = 0; i < allowedDomains.length; i++) {
+      const entry = allowedDomains[i];
+      if (typeof entry !== "string") {
+        throw new TypeError(
+          `allowedDomains[${i}] must be a string, got ${typeof entry}.`,
+        );
+      }
+      if (entry === "") {
+        throw new TypeError(
+          `allowedDomains[${i}] must not be empty.`,
+        );
+      }
+      if (entry.startsWith("@")) {
+        throw new TypeError(
+          `allowedDomains[${i}] must not start with "@": ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
+      if (entry.endsWith(".")) {
+        throw new TypeError(
+          `allowedDomains[${i}] must not end with ".": ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
+      if (entry !== entry.trim()) {
+        throw new TypeError(
+          `allowedDomains[${i}] must not have leading or trailing whitespace: ${
+            JSON.stringify(entry)
+          }`,
+        );
+      }
+    }
+  }
   const invalidEmail = options?.errors?.invalidEmail;
   const domainNotAllowed = options?.errors?.domainNotAllowed;
 
