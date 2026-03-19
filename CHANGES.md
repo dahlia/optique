@@ -213,6 +213,12 @@ To be released.
     characters replaced with spaces so the shell completion protocol is not
     corrupted.  [[#247], [#642]]
 
+ -  Fixed shell completion for file-only `Suggestion.file` entries (`type: "file"`)
+    excluding directories entirely, which prevented users from descending into
+    subdirectories during path completion.  All five shell backends (Bash, zsh,
+    fish, Nushell, PowerShell) now include directories as navigation targets
+    alongside files.  [[#294], [#646]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -582,6 +588,7 @@ To be released.
 [#254]: https://github.com/dahlia/optique/issues/254
 [#256]: https://github.com/dahlia/optique/issues/256
 [#262]: https://github.com/dahlia/optique/issues/262
+[#294]: https://github.com/dahlia/optique/issues/294
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
 [#307]: https://github.com/dahlia/optique/issues/307
@@ -682,6 +689,7 @@ To be released.
 [#641]: https://github.com/dahlia/optique/pull/641
 [#642]: https://github.com/dahlia/optique/pull/642
 [#645]: https://github.com/dahlia/optique/pull/645
+[#646]: https://github.com/dahlia/optique/pull/646
 
 ### @optique/config
 
