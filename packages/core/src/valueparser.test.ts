@@ -3027,6 +3027,65 @@ describe("url", () => {
       if (!result2.success) assert.equal(result2.error, "original error");
     });
   });
+
+  describe("allowedProtocols validation", () => {
+    it("should reject non-string entries", () => {
+      assert.throws(
+        () => url({ allowedProtocols: [123 as never] }),
+        TypeError,
+      );
+      assert.throws(
+        () => url({ allowedProtocols: [null as never] }),
+        TypeError,
+      );
+      assert.throws(
+        () => url({ allowedProtocols: [undefined as never] }),
+        TypeError,
+      );
+    });
+
+    it("should reject entries missing the trailing colon", () => {
+      assert.throws(
+        () => url({ allowedProtocols: ["https" as never] }),
+        TypeError,
+      );
+      assert.throws(
+        () => url({ allowedProtocols: ["http" as never] }),
+        TypeError,
+      );
+    });
+
+    it("should reject entries with :// suffix", () => {
+      assert.throws(
+        () => url({ allowedProtocols: ["https://" as never] }),
+        TypeError,
+      );
+    });
+
+    it("should reject empty string", () => {
+      assert.throws(
+        () => url({ allowedProtocols: ["" as never] }),
+        TypeError,
+      );
+    });
+
+    it("should accept valid protocol entries", () => {
+      assert.doesNotThrow(() => url({ allowedProtocols: ["https:"] }));
+      assert.doesNotThrow(() => url({ allowedProtocols: ["HTTP:"] }));
+      assert.doesNotThrow(
+        () => url({ allowedProtocols: ["https:", "http:", "ftp:"] }),
+      );
+      assert.doesNotThrow(
+        () => url({ allowedProtocols: ["custom+proto:"] }),
+      );
+    });
+
+    it("should accept case-only duplicates", () => {
+      assert.doesNotThrow(
+        () => url({ allowedProtocols: ["HTTP:", "http:"] }),
+      );
+    });
+  });
 });
 
 describe("locale", () => {

@@ -1272,8 +1272,23 @@ export interface UrlOptions {
  * object.
  * @param options Configuration options for the URL parser.
  * @returns A {@link ValueParser} that converts string input to `URL` objects.
+ * @throws {TypeError} If any `allowedProtocols` entry is not a valid protocol
+ *   string ending with a colon (e.g., `"https:"`).
  */
 export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
+  if (options.allowedProtocols != null) {
+    for (const protocol of options.allowedProtocols) {
+      if (
+        typeof protocol !== "string" ||
+        !/^[a-z][a-z0-9+\-.]*:$/i.test(protocol)
+      ) {
+        throw new TypeError(
+          `Each allowed protocol must be a valid protocol ending with a colon` +
+            ` (e.g., "https:"), got: ${JSON.stringify(protocol)}.`,
+        );
+      }
+    }
+  }
   // Snapshot the original protocols for callback arguments (preserves casing),
   // and a normalized copy for internal matching.
   const originalProtocols = options.allowedProtocols != null
