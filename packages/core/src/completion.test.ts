@@ -1660,6 +1660,66 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
         "Expected Get-ChildItem to use @forceParam splatting.",
       );
     });
+
+    it("should preserve directory prefix in nested file completions", (t) => {
+      if (!isShellAvailable("pwsh")) {
+        t.skip("pwsh not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "pwsh-nested-dir-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:file with src/ prefix already typed
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::src/:0\\n'
+`;
+        const cliPath = join(tempDir, "nested-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create src/ directory with a file inside
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir, { recursive: true });
+        writeFileSync(join(srcDir, "alpha.txt"), "");
+
+        const script = pwsh.generateScript("nested-cli");
+
+        const scriptPath = join(tempDir, "completion.ps1");
+        writeFileSync(scriptPath, script);
+
+        const pathSep = process.platform === "win32" ? ";" : ":";
+        const testScriptPath = join(tempDir, "test.ps1");
+        writeFileSync(
+          testScriptPath,
+          `$env:PATH = "${tempDir}${pathSep}" + $env:PATH\n` +
+            `. "${scriptPath}"\n` +
+            `$result = TabExpansion2 -inputScript 'nested-cli src/' ` +
+            `-cursorColumn 15\n` +
+            `$result.CompletionMatches | ` +
+            `ForEach-Object { $_.CompletionText }\n`,
+        );
+
+        const result = runCommand(
+          "pwsh",
+          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+          { cwd: tempDir },
+        );
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(
+          completions.some((c) => c.trim() === "src/alpha.txt"),
+          `Expected "src/alpha.txt" in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("fish shell completion", () => {

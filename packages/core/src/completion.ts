@@ -919,9 +919,15 @@ ${
                     \$items = \$items | Where-Object { -not \$_.Attributes.HasFlag([System.IO.FileAttributes]::Hidden) }
                 }
 
+                # Extract directory prefix to preserve in completion text
+                \$dirPrefix = if (\$prefix -and (\$prefix.Contains('/') -or \$prefix.Contains('\\'))) {
+                    \$slashIdx = [Math]::Max(\$prefix.LastIndexOf('/'), \$prefix.LastIndexOf('\\'))
+                    \$prefix.Substring(0, \$slashIdx + 1)
+                } else { '' }
+
                 # Create completion results for files
                 \$items | ForEach-Object {
-                    \$completionText = if (\$_.PSIsContainer) { "\$(\$_.Name)/" } else { \$_.Name }
+                    \$completionText = if (\$_.PSIsContainer) { "\$dirPrefix\$(\$_.Name)/" } else { "\$dirPrefix\$(\$_.Name)" }
                     \$itemType = if (\$_.PSIsContainer) { 'Directory' } else { 'File' }
                     [System.Management.Automation.CompletionResult]::new(
                         \$completionText,
