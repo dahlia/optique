@@ -325,7 +325,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         esac
 
         # Restore glob_dots to its previous state
-        if [[ "\$__was_glob_dots" == "0" ]]; then unsetopt glob_dots; fi
+        if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
       else
         # Regular literal completion
         if [[ -n "\$value" ]]; then
