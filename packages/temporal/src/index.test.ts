@@ -199,6 +199,19 @@ describe("plainDate", () => {
     }
   });
 
+  it("should reject wider ISO forms", () => {
+    const widerInputs = [
+      "2020-01-23T17:04:36",
+      "2020-01-23T17:04:36.491865121",
+      "2020-01-23T00:00:00",
+    ];
+
+    for (const input of widerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
+    }
+  });
+
   it("should reject invalid date strings", () => {
     const invalidInputs = [
       "2020-13-01",
@@ -246,6 +259,18 @@ describe("plainTime", () => {
     }
   });
 
+  it("should reject wider ISO forms", () => {
+    const widerInputs = [
+      "2020-01-23T17:04:36",
+      "2020-01-23T17:04:36.491865121",
+    ];
+
+    for (const input of widerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
+    }
+  });
+
   it("should reject invalid time strings", () => {
     const invalidInputs = [
       "25:04:36",
@@ -280,13 +305,24 @@ describe("plainDateTime", () => {
       "2020-01-23T17:04:36.491865121",
       "2020-01-23T00:00:00",
       "2020-12-31T23:59:59",
-      "2020-01-23", // Temporal accepts this format (converts to datetime with time 00:00:00)
     ];
 
     for (const input of validInputs) {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainDateTime);
+    }
+  });
+
+  it("should reject narrower ISO forms", () => {
+    const narrowerInputs = [
+      "2020-01-23",
+      "17:04:36",
+    ];
+
+    for (const input of narrowerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
     }
   });
 
@@ -334,6 +370,18 @@ describe("plainYearMonth", () => {
     }
   });
 
+  it("should reject wider ISO forms", () => {
+    const widerInputs = [
+      "2020-01-23",
+      "2020-01-23T17:04:36",
+    ];
+
+    for (const input of widerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
+    }
+  });
+
   it("should reject invalid year-month strings", () => {
     const invalidInputs = [
       "2020-13",
@@ -378,6 +426,18 @@ describe("plainMonthDay", () => {
       const result = parser.parse(input);
       assert.ok(result.success, `Failed to parse: ${input}`);
       assert.ok(result.value instanceof Temporal.PlainMonthDay);
+    }
+  });
+
+  it("should reject wider ISO forms", () => {
+    const widerInputs = [
+      "2020-01-23",
+      "2020-01-23T17:04:36",
+    ];
+
+    for (const input of widerInputs) {
+      const result = parser.parse(input);
+      assert.ok(!result.success, `Should not parse: ${input}`);
     }
   });
 

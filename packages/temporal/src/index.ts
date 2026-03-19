@@ -406,6 +406,24 @@ export function zonedDateTime(
   };
 }
 
+/** Matches YYYY-MM-DD only (no time component). */
+const PLAIN_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Matches HH:MM, HH:MM:SS, or HH:MM:SS.fractional (no date prefix). */
+const PLAIN_TIME_RE = /^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+/**
+ * Matches YYYY-MM-DDTHH:MM, YYYY-MM-DDTHH:MM:SS,
+ * or YYYY-MM-DDTHH:MM:SS.fractional (must have both date and time parts).
+ */
+const PLAIN_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+/** Matches YYYY-MM only. */
+const PLAIN_YEAR_MONTH_RE = /^\d{4}-\d{2}$/;
+
+/** Matches MM-DD or --MM-DD only. */
+const PLAIN_MONTH_DAY_RE = /^(--)?\d{2}-\d{2}$/;
+
 /**
  * Creates a ValueParser for parsing Temporal.PlainDate from ISO 8601 date strings.
  *
@@ -430,6 +448,7 @@ export function plainDate(
     parse(input: string): ValueParserResult<Temporal.PlainDate> {
       ensureTemporal();
       try {
+        if (!PLAIN_DATE_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainDate.from(input);
         return { success: true, value };
       } catch {
@@ -473,6 +492,7 @@ export function plainTime(
     parse(input: string): ValueParserResult<Temporal.PlainTime> {
       ensureTemporal();
       try {
+        if (!PLAIN_TIME_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainTime.from(input);
         return { success: true, value };
       } catch {
@@ -516,6 +536,7 @@ export function plainDateTime(
     parse(input: string): ValueParserResult<Temporal.PlainDateTime> {
       ensureTemporal();
       try {
+        if (!PLAIN_DATETIME_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainDateTime.from(input);
         return { success: true, value };
       } catch {
@@ -559,6 +580,7 @@ export function plainYearMonth(
     parse(input: string): ValueParserResult<Temporal.PlainYearMonth> {
       ensureTemporal();
       try {
+        if (!PLAIN_YEAR_MONTH_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainYearMonth.from(input);
         return { success: true, value };
       } catch {
@@ -602,6 +624,7 @@ export function plainMonthDay(
     parse(input: string): ValueParserResult<Temporal.PlainMonthDay> {
       ensureTemporal();
       try {
+        if (!PLAIN_MONTH_DAY_RE.test(input)) throw new RangeError();
         const value = Temporal.PlainMonthDay.from(input);
         return { success: true, value };
       } catch {
