@@ -1674,7 +1674,7 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
       try {
         // CLI that emits __FILE__:file with src/ prefix already typed
         const cliScript = `#!/bin/bash
-printf '__FILE__:file:::src/:0\\n'
+printf '__FILE__:file::src/:0\\n'
 `;
         const cliPath = join(tempDir, "nested-cli");
         writeFileSync(cliPath, cliScript, { mode: 0o755 });
