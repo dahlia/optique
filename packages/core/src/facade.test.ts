@@ -9148,3 +9148,99 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(methodIdentityHeld);
   });
 });
+
+describe("runWith/runWithSync context validation", () => {
+  const parser = option("--name", string());
+
+  const baseOptions = { args: [] as string[] };
+
+  describe("runWithSync", () => {
+    it("throws TypeError for empty object context", () => {
+      assert.throws(
+        () => runWithSync(parser, "test", [{} as never], baseOptions),
+        {
+          name: "TypeError",
+          message:
+            /Expected each context to be a SourceContext, but got: object at index 0\./,
+        },
+      );
+    });
+
+    it("throws TypeError for null context", () => {
+      assert.throws(
+        () => runWithSync(parser, "test", [null as never], baseOptions),
+        {
+          name: "TypeError",
+          message:
+            /Expected each context to be a SourceContext, but got: null at index 0\./,
+        },
+      );
+    });
+
+    it("throws TypeError for number context", () => {
+      assert.throws(
+        () => runWithSync(parser, "test", [42 as never], baseOptions),
+        {
+          name: "TypeError",
+          message:
+            /Expected each context to be a SourceContext, but got: number at index 0\./,
+        },
+      );
+    });
+
+    it("throws TypeError for array context", () => {
+      assert.throws(
+        () => runWithSync(parser, "test", [[] as never], baseOptions),
+        {
+          name: "TypeError",
+          message:
+            /Expected each context to be a SourceContext, but got: array at index 0\./,
+        },
+      );
+    });
+
+    it("reports correct index for second invalid context", () => {
+      const validContext: SourceContext = {
+        id: Symbol("valid"),
+        getAnnotations: () => ({}),
+      };
+      assert.throws(
+        () =>
+          runWithSync(
+            parser,
+            "test",
+            [validContext, {} as never],
+            baseOptions,
+          ),
+        {
+          name: "TypeError",
+          message: /at index 1\./,
+        },
+      );
+    });
+  });
+
+  describe("runWith", () => {
+    it("rejects with TypeError for empty object context", async () => {
+      await assert.rejects(
+        () => runWith(parser, "test", [{} as never], baseOptions),
+        {
+          name: "TypeError",
+          message:
+            /Expected each context to be a SourceContext, but got: object at index 0\./,
+        },
+      );
+    });
+
+    it("rejects with TypeError for array context", async () => {
+      await assert.rejects(
+        () => runWith(parser, "test", [[] as never], baseOptions),
+        {
+          name: "TypeError",
+          message:
+            /Expected each context to be a SourceContext, but got: array at index 0\./,
+        },
+      );
+    });
+  });
+});
