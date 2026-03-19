@@ -518,6 +518,66 @@ describe("git parsers", () => {
       }
       assert.deepEqual(suggestions, []);
     });
+
+    it("should reject empty string remote", () => {
+      assert.throws(
+        () => gitRemoteBranch("", { dir: "/tmp/dummy" }),
+        {
+          name: "TypeError",
+          message:
+            "Expected remote to be a non-empty string without whitespace " +
+            'or control characters, but got: "".',
+        },
+      );
+    });
+
+    it("should reject whitespace-only remote", () => {
+      assert.throws(
+        () => gitRemoteBranch("   ", { dir: "/tmp/dummy" }),
+        {
+          name: "TypeError",
+          message:
+            "Expected remote to be a non-empty string without whitespace " +
+            'or control characters, but got: "   ".',
+        },
+      );
+    });
+
+    it("should reject remote with newlines", () => {
+      assert.throws(
+        () => gitRemoteBranch("bad\nname", { dir: "/tmp/dummy" }),
+        {
+          name: "TypeError",
+          message:
+            "Expected remote to be a non-empty string without whitespace " +
+            'or control characters, but got: "bad\\nname".',
+        },
+      );
+    });
+
+    it("should reject non-string remote (number)", () => {
+      assert.throws(
+        () => gitRemoteBranch(123 as never, { dir: "/tmp/dummy" }),
+        {
+          name: "TypeError",
+          message:
+            "Expected remote to be a non-empty string without whitespace " +
+            "or control characters, but got: number.",
+        },
+      );
+    });
+
+    it("should reject non-string remote (symbol)", () => {
+      assert.throws(
+        () => gitRemoteBranch(Symbol("x") as never, { dir: "/tmp/dummy" }),
+        {
+          name: "TypeError",
+          message:
+            "Expected remote to be a non-empty string without whitespace " +
+            "or control characters, but got: symbol.",
+        },
+      );
+    });
   });
 
   describe("gitCommit()", () => {

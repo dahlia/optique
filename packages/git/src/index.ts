@@ -439,6 +439,8 @@ export function gitBranch(
  * @param remote The remote name to validate against.
  * @param options Configuration options for the parser.
  * @returns A value parser that accepts existing remote branch names.
+ * @throws {TypeError} If `remote` is not a valid non-empty string without
+ *   whitespace or control characters.
  * @throws {RangeError} If `suggestionDepth` is not a positive integer.
  * @since 0.9.0
  *
@@ -454,6 +456,25 @@ export function gitRemoteBranch(
   remote: string,
   options?: GitParserOptions,
 ): ValueParser<"async", string> {
+  if (typeof remote !== "string") {
+    throw new TypeError(
+      `Expected remote to be a non-empty string without whitespace or control characters, but got: ${
+        remote === null
+          ? "null"
+          : Array.isArray(remote)
+          ? "array"
+          : typeof remote
+      }.`,
+    );
+  }
+  // deno-lint-ignore no-control-regex
+  if (remote === "" || /[\s\x00-\x1f]/.test(remote)) {
+    throw new TypeError(
+      `Expected remote to be a non-empty string without whitespace or control characters, but got: ${
+        JSON.stringify(remote)
+      }.`,
+    );
+  }
   const metavar: NonEmptyString = options?.metavar ?? METAVAR_BRANCH;
   return createAsyncValueParser(
     options,
