@@ -376,11 +376,16 @@ function getEnvOrDefault<M extends Mode, TValue>(
   const rawValue = sourceData?.source(fullKey);
   if (rawValue !== undefined) {
     if (typeof rawValue !== "string") {
+      const type = rawValue === null
+        ? "null"
+        : Array.isArray(rawValue)
+        ? "array"
+        : typeof rawValue;
       return wrapForMode(mode, {
         success: false as const,
         error: message`Environment variable ${
           envVar(fullKey)
-        } must be a string, but got a non-string value.`,
+        } must be a string, but got: ${type}.`,
       });
     }
     const parsed = options.parser.parse(rawValue);

@@ -1171,7 +1171,7 @@ describe("bindEnv()", () => {
         .join("");
       assert.match(
         errorText,
-        /must be a string, but got a non-string value\./u,
+        /must be a string, but got: /u,
       );
     });
 
@@ -1196,7 +1196,7 @@ describe("bindEnv()", () => {
         .join("");
       assert.match(
         errorText,
-        /must be a string, but got a non-string value\./u,
+        /must be a string, but got: /u,
       );
     });
 
@@ -1221,7 +1221,7 @@ describe("bindEnv()", () => {
         .join("");
       assert.match(
         errorText,
-        /must be a string, but got a non-string value\./u,
+        /must be a string, but got: /u,
       );
     });
   });
