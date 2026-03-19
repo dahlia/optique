@@ -142,6 +142,12 @@ function _${programName} () {
         fi
       fi
 
+      # When a pattern is specified, use it as the glob base instead of the
+      # current word so that completions enumerate the pattern's directory
+      if [[ -n "$pattern" ]]; then
+        __glob_current="$pattern"
+      fi
+
       # Enable dotglob when hidden files are requested, or when the user
       # is already navigating inside a hidden directory (e.g., ~/.config/nvim/)
       # This runs after tilde expansion so that paths like ~/.config/ are
@@ -325,6 +331,14 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         [[ -o glob_dots ]] && __was_glob_dots=1
         if [[ "\$hidden" == "1" ]]; then setopt glob_dots; fi
 
+        # When a pattern is specified, override PREFIX so that _files and
+        # _directories enumerate the pattern's directory instead of the
+        # current word
+        local __saved_prefix="\$PREFIX"
+        if [[ -n "\$pattern" ]]; then
+          PREFIX="\$pattern"
+        fi
+
         # Use zsh's native file completion
         case "\$type" in
           file)
@@ -350,7 +364,8 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             ;;
         esac
 
-        # Restore glob_dots to its previous state
+        # Restore PREFIX and glob_dots to their previous state
+        PREFIX="\$__saved_prefix"
         if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
       else
         # Regular literal completion
@@ -448,12 +463,19 @@ ${
             set -l pattern (string replace -a '%25' '%' -- (string replace -a '%3A' ':' -- $parts[4]))
             set -l hidden $parts[5]
 
+            # When a pattern is specified, use it as the glob base instead
+            # of the current word
+            set -l glob_base $current
+            if test -n "$pattern"
+                set glob_base $pattern
+            end
+
             # Generate file completions based on type
             set -l items
             switch $type
                 case file
                     # Complete files and directories (directories for navigation)
-                    for item in $current*
+                    for item in $glob_base*
                         if test -d $item
                             set -a items $item/
                         else if test -f $item
@@ -461,14 +483,14 @@ ${
                         end
                     end
                     # Fish's * glob does not match dotfiles; add them
-                    # explicitly when the basename is empty (i.e., $current
+                    # explicitly when the basename is empty (i.e., $glob_base
                     # is "" or ends with "/"), because only then are * and
                     # .* complementary.  When a non-empty basename is present
                     # (e.g., "foo"), foo* already covers foo.txt, so foo.*
                     # would just produce duplicates.
                     if test "$hidden" = "1"
-                        if test -z "$current"; or string match -q '*/' -- "$current"
-                            for item in $current.*
+                        if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
+                            for item in $glob_base.*
                                 if test -d $item
                                     set -a items $item/
                                 else if test -f $item
@@ -479,14 +501,14 @@ ${
                     end
                 case directory
                     # Complete directories only
-                    for item in $current*
+                    for item in $glob_base*
                         if test -d $item
                             set -a items $item/
                         end
                     end
                     if test "$hidden" = "1"
-                        if test -z "$current"; or string match -q '*/' -- "$current"
-                            for item in $current.*
+                        if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
+                            for item in $glob_base.*
                                 if test -d $item
                                     set -a items $item/
                                 end
@@ -495,7 +517,7 @@ ${
                     end
                 case any
                     # Complete both files and directories
-                    for item in $current*
+                    for item in $glob_base*
                         if test -d $item
                             set -a items $item/
                         else if test -f $item
@@ -503,8 +525,8 @@ ${
                         end
                     end
                     if test "$hidden" = "1"
-                        if test -z "$current"; or string match -q '*/' -- "$current"
-                            for item in $current.*
+                        if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
+                            for item in $glob_base.*
                                 if test -d $item
                                     set -a items $item/
                                 else if test -f $item
@@ -537,7 +559,7 @@ ${
             end
 
             # Filter out hidden files unless requested
-            if test "$hidden" != "1" -a (string sub -l 1 -- $current) != "."
+            if test "$hidden" != "1" -a (string sub -l 1 -- $glob_base) != "."
                 set -l filtered
                 for item in $items
                     set -l basename (basename $item)
@@ -718,10 +740,14 @@ ${
         ""
       }
 
+      # When a pattern is specified, use it as the glob base instead of
+      # the user-typed prefix
+      let glob_base = if ($pattern | is-not-empty) { $pattern } else { $prefix }
+
       # Generate file completions based on type
-      # Use current directory if prefix is empty
+      # Use current directory if glob_base is empty
       # Note: into glob is required so that ls expands wildcards from a variable
-      let ls_pattern = if ($prefix | is-empty) { "." } else { ($prefix + "*" | into glob) }
+      let ls_pattern = if ($glob_base | is-empty) { "." } else { ($glob_base + "*" | into glob) }
 
       # Use ls -a to include hidden files when requested
       let items = try {
@@ -763,7 +789,7 @@ ${
       }
 
       # Filter out hidden files unless requested
-      let filtered = if $hidden or ($prefix | str starts-with '.') {
+      let filtered = if $hidden or ($glob_base | str starts-with '.') {
         $items
       } else {
         $items | where {|item|
@@ -773,12 +799,12 @@ ${
       }
 
       # Extract directory prefix to preserve in completion text
-      let dir_prefix = if ($prefix | is-empty) {
+      let dir_prefix = if ($glob_base | is-empty) {
         ""
-      } else if ($prefix | str ends-with "/") {
-        $prefix
+      } else if ($glob_base | str ends-with "/") {
+        $glob_base
       } else {
-        let parsed = ($prefix | path parse)
+        let parsed = ($glob_base | path parse)
         if ($parsed.parent | is-empty) { "" } else if ($parsed.parent | str ends-with "/") { $parsed.parent } else { $parsed.parent + "/" }
       }
 
@@ -935,8 +961,9 @@ ${
                 \$pattern = \$parts[3] -replace '%3A', ':' -replace '%25', '%'
                 \$hidden = \$parts[4] -eq '1'
 
-                # Determine current prefix for file matching
-                \$prefix = if (\$wordToComplete) { \$wordToComplete } else { '' }
+                # When a pattern is specified, use it as the file matching
+                # prefix instead of the current word
+                \$prefix = if (\$pattern) { \$pattern } elseif (\$wordToComplete) { \$wordToComplete } else { '' }
 
                 # Use -Force to include hidden files when requested
                 \$forceParam = if (\$hidden) { @{Force = \$true} } else { @{} }

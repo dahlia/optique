@@ -586,6 +586,66 @@ fi
       }
     });
 
+    it("should use pattern for file globbing instead of current word in bash", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-pattern-completion-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with pattern=src/ so completions should
+        // enumerate files under src/, not the current directory
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::src/:0\\n'
+`;
+        const cliPath = join(tempDir, "patapp");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create directory structure
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir);
+        writeFileSync(join(srcDir, "main.ts"), "");
+        writeFileSync(join(srcDir, "util.ts"), "");
+        writeFileSync(join(tempDir, "README.md"), "");
+
+        const script = bash.generateScript("patapp");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("patapp" "")
+COMP_CWORD=1
+_patapp 2>&1
+if [ \${#COMPREPLY[@]} -gt 0 ]; then
+  printf "%s\\n" "\${COMPREPLY[@]}"
+else
+  echo "__NO_COMPLETIONS__"
+fi
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find files under src/ (from pattern), not root-level files
+        ok(completions.some((c) => c.includes("main.ts")));
+        ok(completions.some((c) => c.includes("util.ts")));
+        ok(!completions.some((c) => c.includes("README.md")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include hidden files when includeHidden is true", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");
@@ -2358,6 +2418,71 @@ printf '__FILE__:file::src/:0\\n'
       ok(fileBlock.includes("string split \\t"));
     });
 
+    it("should use pattern for file globbing instead of current word in fish", (t) => {
+      if (!isShellAvailable("fish")) {
+        t.skip("fish not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "fish-pattern-completion-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with pattern=src/
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::src/:0\\tFile\\n'
+`;
+        const cliPath = join(tempDir, "patapp");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create directory structure
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir);
+        writeFileSync(join(srcDir, "main.ts"), "");
+        writeFileSync(join(srcDir, "util.ts"), "");
+        writeFileSync(join(tempDir, "README.md"), "");
+
+        const script = fish.generateScript("patapp");
+        const scriptPath = join(tempDir, "completion.fish");
+        writeFileSync(scriptPath, script);
+
+        const functionMatch = script.match(/function ([^\s]+)/);
+        const functionName = functionMatch
+          ? functionMatch[1]
+          : "__patapp_complete";
+        const testScript = `
+set -x PATH "${tempDir}" $PATH
+source "${scriptPath}"
+cd "${tempDir}"
+
+function commandline
+    switch $argv[1]
+        case '-poc'
+            echo "patapp"
+        case '-ct'
+            echo ""
+    end
+end
+
+${functionName}
+`;
+        const testScriptPath = join(tempDir, "test.fish");
+        writeFileSync(testScriptPath, testScript);
+        const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        // Should find files under src/ (from pattern), not root-level files
+        ok(completions.some((c) => c.includes("main.ts")));
+        ok(completions.some((c) => c.includes("util.ts")));
+        ok(!completions.some((c) => c.includes("README.md")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include hidden files when includeHidden is true", (t) => {
       if (!isShellAvailable("fish")) {
         t.skip("fish not available");
@@ -2759,7 +2884,7 @@ ${functionName}
       deepStrictEqual(script.includes("__FILE__:"), true);
       deepStrictEqual(script.includes("split row ':'"), true);
       deepStrictEqual(script.includes("ls $ls_pattern"), true);
-      deepStrictEqual(script.includes("if ($prefix | is-empty)"), true);
+      deepStrictEqual(script.includes("if ($glob_base | is-empty)"), true);
     });
 
     it("should support context-aware completion", () => {
