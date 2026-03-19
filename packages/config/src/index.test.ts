@@ -1160,6 +1160,221 @@ describe("createConfigContext input validation", () => {
   });
 });
 
+describe("load() return value validation", () => {
+  test("rejects non-object return value from load()", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => 123) as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return an object, but got: number.",
+      },
+    );
+  });
+
+  test("rejects null return value from load()", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => null) as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return an object, but got: null.",
+      },
+    );
+  });
+
+  test("rejects array return value from load()", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => []) as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return an object, but got: array.",
+      },
+    );
+  });
+
+  test("rejects load() result missing config property", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => ({ meta: { source: "x" } })) as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() result to have a config property.",
+      },
+    );
+  });
+
+  test("rejects thenable return value from load()", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              then: (resolve: (value: unknown) => void) =>
+                resolve({ config: { name: "ALICE" }, meta: undefined }),
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return a plain object or Promise, " +
+          "but got a thenable. Use a real Promise instead.",
+      },
+    );
+  });
+
+  test("rejects Promise-valued config in load() result", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: Promise.resolve({ name: "ALICE" }) as never,
+              meta: undefined,
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected config in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("rejects Promise-valued meta in load() result", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: { name: "ALICE" },
+              meta: Promise.resolve({
+                configPath: "x",
+                configDir: ".",
+              }) as never,
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected meta in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("rejects non-object resolved value from async load()", async () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    await assert.rejects(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => Promise.resolve(123)) as never },
+        ) as Promise<unknown>,
+      {
+        name: "TypeError",
+        message: "Expected load() to return an object, but got: number.",
+      },
+    );
+  });
+
+  test("rejects missing config in resolved value from async load()", async () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    await assert.rejects(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => Promise.resolve({ meta: undefined })) as never,
+          },
+        ) as Promise<unknown>,
+      {
+        name: "TypeError",
+        message: "Expected load() result to have a config property.",
+      },
+    );
+  });
+
+  test("rejects Promise-valued config in resolved value from async load()", async () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    await assert.rejects(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() =>
+              Promise.resolve({
+                config: Promise.resolve({ name: "ALICE" }),
+                meta: undefined,
+              })) as never,
+          },
+        ) as Promise<unknown>,
+      {
+        name: "TypeError",
+        message: "Expected config in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("rejects Promise-valued meta in resolved value from async load()", async () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    await assert.rejects(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() =>
+              Promise.resolve({
+                config: { name: "ALICE" },
+                meta: Promise.resolve({ configPath: "x", configDir: "." }),
+              })) as never,
+          },
+        ) as Promise<unknown>,
+      {
+        name: "TypeError",
+        message: "Expected meta in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+});
+
 describe("createConfigContext error paths", () => {
   test("supports async Standard Schema validation result", async () => {
     const asyncSchema = {

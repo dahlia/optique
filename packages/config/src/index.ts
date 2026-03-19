@@ -693,6 +693,42 @@ function getTypeName(value: unknown): string {
   return typeof value;
 }
 
+function isThenable(value: unknown): boolean {
+  return value != null &&
+    (typeof value === "object" || typeof value === "function") &&
+    "then" in value &&
+    typeof (value as Record<string, unknown>).then === "function";
+}
+
+function validateLoadResult<TConfigMeta>(
+  loaded: unknown,
+): { config: unknown; meta: TConfigMeta | undefined } {
+  if (loaded == null || typeof loaded !== "object" || Array.isArray(loaded)) {
+    throw new TypeError(
+      `Expected load() to return an object, but got: ${getTypeName(loaded)}.`,
+    );
+  }
+  if (!("config" in loaded)) {
+    throw new TypeError(
+      "Expected load() result to have a config property.",
+    );
+  }
+  const result = loaded as Record<string, unknown>;
+  if (result.config instanceof Promise || isThenable(result.config)) {
+    throw new TypeError(
+      "Expected config in load() result to not be a Promise. " +
+        "Resolve the Promise before returning.",
+    );
+  }
+  if (result.meta instanceof Promise || isThenable(result.meta)) {
+    throw new TypeError(
+      "Expected meta in load() result to not be a Promise. " +
+        "Resolve the Promise before returning.",
+    );
+  }
+  return loaded as { config: unknown; meta: TConfigMeta | undefined };
+}
+
 function isStandardSchema(value: unknown): value is StandardSchemaV1 {
   if (
     value == null || (typeof value !== "object" && typeof value !== "function")
@@ -907,12 +943,22 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         // Custom load mode
         const loaded = opts.load(parsedPlaceholder);
         if (loaded instanceof Promise) {
-          return loaded.then(({ config, meta }) =>
-            validateAndBuildAnnotations(config, meta)
+          return loaded.then((resolved) => {
+            const validated = validateLoadResult<TConfigMeta>(resolved);
+            return validateAndBuildAnnotations(
+              validated.config,
+              validated.meta,
+            );
+          });
+        }
+        if (isThenable(loaded)) {
+          throw new TypeError(
+            "Expected load() to return a plain object or Promise, " +
+              "but got a thenable. Use a real Promise instead.",
           );
         }
-
-        return validateAndBuildAnnotations(loaded.config, loaded.meta);
+        const validated = validateLoadResult<TConfigMeta>(loaded);
+        return validateAndBuildAnnotations(validated.config, validated.meta);
       }
 
       if (opts.getConfigPath) {
@@ -1224,13 +1270,7 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
     // Extract value from config
     if (typeof options.key === "function") {
       configValue = options.key(configData, configMeta);
-      if (
-        configValue != null &&
-        (typeof configValue === "object" ||
-          typeof configValue === "function") &&
-        "then" in configValue &&
-        typeof (configValue as Record<string, unknown>).then === "function"
-      ) {
+      if (isThenable(configValue)) {
         throw new TypeError(
           "The key callback must return a synchronous value, " +
             "but got a thenable.",
