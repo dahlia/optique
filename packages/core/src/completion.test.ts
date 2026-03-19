@@ -2026,10 +2026,12 @@ printf '__FILE__:file::src/:0\\n'
         fileCase.indexOf("'file'"),
         fileCase.indexOf("'directory'"),
       );
-      // Should include -Directory to retrieve directories for navigation
+      // Should include directories for navigation (via PSIsContainer check
+      // or by not restricting to -File only)
       ok(
-        fileCaseBlock.includes("-Directory"),
-        "pwsh file case should include -Directory for navigation",
+        fileCaseBlock.includes("PSIsContainer") ||
+          !fileCaseBlock.includes("-File"),
+        "pwsh file case should include directories for navigation",
       );
     });
   });

@@ -939,19 +939,17 @@ ${
                 \$items = @()
                 switch (\$type) {
                     'file' {
-                        \$dirs = Get-ChildItem @forceParam -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
                         if (\$extensions) {
-                            # Filter by extensions
+                            # Filter by extensions, always include directories
                             \$extList = \$extensions -split ','
-                            \$files = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue |
                                 Where-Object {
+                                    if (\$_.PSIsContainer) { return \$true }
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
-                            \$items = @(\$dirs) + @(\$files)
                         } else {
-                            \$files = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue
-                            \$items = @(\$dirs) + @(\$files)
+                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue
                         }
                     }
                     'directory' {
@@ -959,15 +957,14 @@ ${
                     }
                     'any' {
                         if (\$extensions) {
-                            # Get directories and filtered files
-                            \$dirs = Get-ChildItem @forceParam -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            # Filter by extensions, always include directories
                             \$extList = \$extensions -split ','
-                            \$files = Get-ChildItem @forceParam -File -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue |
                                 Where-Object {
+                                    if (\$_.PSIsContainer) { return \$true }
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
-                            \$items = \$dirs + \$files
                         } else {
                             \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue
                         }
