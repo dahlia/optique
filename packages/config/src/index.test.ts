@@ -1225,24 +1225,43 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("rejects thenable return value from load()", () => {
+  test("accepts thenable (cross-realm Promise) from load()", async () => {
     const schema = z.object({ name: z.string() });
     const context = createConfigContext({ schema });
-    assert.throws(
+    const annotations = await context.getAnnotations(
+      {},
+      {
+        load: (() => ({
+          then: (resolve: (value: unknown) => void) =>
+            resolve({ config: { name: "ALICE" }, meta: undefined }),
+        })) as never,
+      },
+    );
+    assert.ok(annotations != null);
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
+    const entry = (annotations as Record<symbol, { data: { name: string } }>)[
+      symbols[0]
+    ];
+    assert.equal(entry.data.name, "ALICE");
+  });
+
+  test("rejects thenable that resolves to non-object", async () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    await assert.rejects(
       () =>
         context.getAnnotations(
           {},
           {
             load: (() => ({
-              then: (resolve: (value: unknown) => void) =>
-                resolve({ config: { name: "ALICE" }, meta: undefined }),
+              then: (resolve: (value: unknown) => void) => resolve(123),
             })) as never,
           },
-        ),
+        ) as Promise<unknown>,
       {
         name: "TypeError",
-        message: "Expected load() to return a plain object or Promise, " +
-          "but got a thenable. Use a real Promise instead.",
+        message: "Expected load() to return an object, but got: number.",
       },
     );
   });

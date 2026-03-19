@@ -942,20 +942,16 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       if (opts.load) {
         // Custom load mode
         const loaded = opts.load(parsedPlaceholder);
-        if (loaded instanceof Promise) {
-          return loaded.then((resolved) => {
+        // Accept both native Promises and cross-realm Promises (which
+        // fail instanceof but are thenable).
+        if (loaded instanceof Promise || isThenable(loaded)) {
+          return Promise.resolve(loaded).then((resolved) => {
             const validated = validateLoadResult<TConfigMeta>(resolved);
             return validateAndBuildAnnotations(
               validated.config,
               validated.meta,
             );
           });
-        }
-        if (isThenable(loaded)) {
-          throw new TypeError(
-            "Expected load() to return a plain object or Promise, " +
-              "but got a thenable. Use a real Promise instead.",
-          );
         }
         const validated = validateLoadResult<TConfigMeta>(loaded);
         return validateAndBuildAnnotations(validated.config, validated.meta);
