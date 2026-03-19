@@ -147,6 +147,7 @@ function _${programName} () {
       # However, if the user has already typed beyond the pattern (e.g.,
       # pattern="src/" and current="src/ma"), preserve the typed suffix
       # for incremental filtering.
+      local __from_pattern=0
       if [[ -n "$pattern" ]]; then
         # Normalize leading ./ so that ./src/ma matches pattern src/
         local __norm_current="\${current#./}"
@@ -155,6 +156,7 @@ function _${programName} () {
           # User has typed beyond or an equivalent form of the pattern
           true
         else
+          __from_pattern=1
           # Reset tilde state from the current-word expansion so that a
           # non-tilde pattern is not rewritten through stale tilde state
           __tilde_prefix=""
@@ -192,24 +194,22 @@ function _${programName} () {
       [[ "$__prefix_base" == .* ]] && __prefix_targets_hidden=1
       if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" || "$__prefix_targets_hidden" == "1" ]]; then shopt -s dotglob; fi
 
-      # Pre-expand file candidates.  When the glob base contains wildcard
-      # characters (e.g., *.txt), use it as-is; otherwise append * to
-      # treat it as a prefix.
+      # Pre-expand file candidates.  When the glob base came from the
+      # program's pattern and contains wildcard characters (* or ?),
+      # use it as-is via compgen -G (safe — no command substitution).
+      # Otherwise append * to treat it as a prefix.
+      # Note: [ is NOT treated as a glob indicator because it commonly
+      # appears in literal filenames like [draft] or foo[1].txt.
       local -a __candidates=()
-      case "$__glob_current" in
-        *[\*\?\[]*)
-          # Escape spaces and other word-splitting characters while
-          # preserving glob wildcards so eval expands them correctly
-          local __safe_glob="\${__glob_current// /\\\\ }"
-          eval '__candidates=('"$__safe_glob"')' 2>/dev/null || true
-          ;;
-        *)
-          __candidates=("$__glob_current"*)
-          ;;
-      esac
-      # Remove no-match sentinel (bash returns the literal pattern)
-      if [[ \${#__candidates[@]} -eq 1 && ! -e "\${__candidates[0]}" ]]; then
-        __candidates=()
+      if [[ "$__from_pattern" == "1" && "$__glob_current" == *[\*\?]* ]]; then
+        mapfile -t __candidates < <(compgen -G "$__glob_current" 2>/dev/null)
+      else
+        __candidates=("$__glob_current"*)
+        # Remove no-match sentinel (bash returns the literal pattern).
+        # Also check -L for dangling symlinks which are valid candidates.
+        if [[ \${#__candidates[@]} -eq 1 && ! -e "\${__candidates[0]}" && ! -L "\${__candidates[0]}" ]]; then
+          __candidates=()
+        fi
       fi
 
       # Generate file completions based on type
@@ -527,6 +527,7 @@ ${
             # current word for incremental narrowing.
             set -l glob_base $current
             set -l __tilde_prefix ""
+            set -l __from_pattern 0
             if test -n "$pattern"
                 # Normalize leading ./ so that ./src/ma matches pattern src/
                 set -l __norm_current (string replace -r '^\\./' '' -- "$current")
@@ -539,6 +540,7 @@ ${
                     set glob_base $current
                 else
                     set glob_base $pattern
+                    set __from_pattern 1
                 end
             end
 
@@ -558,14 +560,20 @@ ${
                 set glob_base "$glob_base/"
             end
 
-            # Pre-expand file candidates.  When the glob base contains
-            # wildcard characters, use it as-is; otherwise append *.
+            # Pre-expand file candidates.  When the glob base came from
+            # the program's pattern and contains * or ?, use it as the
+            # complete glob expression.  Otherwise append * as a prefix.
+            # Note: [ is NOT treated as a glob because it commonly
+            # appears in literal filenames like [draft] or foo[1].txt.
             set -l __has_glob 0
-            if string match -q '*[*?\\[]*' -- "$glob_base"
+            if test $__from_pattern -eq 1
+                and string match -q '*[*?]*' -- "$glob_base"
                 set __has_glob 1
             end
             set -l __candidates
             if test $__has_glob -eq 1
+                # Only program-supplied patterns reach here (__from_pattern=1),
+                # so eval is safe — user input never enters this path
                 eval "set __candidates $glob_base" 2>/dev/null
             else
                 set __candidates $glob_base*
@@ -891,7 +899,7 @@ ${
       # Note: into glob is required so that ls expands wildcards from a variable
       let ls_pattern = if ($glob_base | is-empty) {
         "."
-      } else if ($glob_base =~ '[*?\\[]') {
+      } else if ($glob_base =~ '[*?]') {
         ($glob_base | into glob)
       } else {
         ($glob_base + "*" | into glob)
@@ -1142,7 +1150,7 @@ ${
 
                 # Build the glob path — when the prefix contains wildcard
                 # characters, use it as-is; otherwise append *
-                \$globPath = if (\$prefix -match '[\*\?\[]') { \$prefix } else { "\${prefix}*" }
+                \$globPath = if (\$prefix -match '[\*\?]') { \$prefix } else { "\${prefix}*" }
 
                 # Get file system items based on type
                 \$items = @()
