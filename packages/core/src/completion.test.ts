@@ -1414,6 +1414,138 @@ printf "%s\\n" "\${COMPREPLY[@]}"
 
       deepStrictEqual(encoded, ["__FILE__:file::100%25done:0\0\0"]);
     });
+
+    it("should enable glob_dots when hidden is true", () => {
+      const script = zsh.generateScript("myapp");
+
+      // The generated script must enable glob_dots when hidden == "1"
+      // so that _files and _directories include dotfiles
+      ok(script.includes("glob_dots"));
+    });
+
+    it("should include hidden files when includeHidden is true", (t) => {
+      if (!isShellAvailable("zsh")) {
+        t.skip("zsh not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "zsh-hidden-completion-"));
+
+      try {
+        // CLI that emits __FILE__ with hidden=1 using null-terminated format
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\0\\0\\n'
+`;
+        const cliPath = join(tempDir, "hidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create visible and hidden files
+        writeFileSync(join(tempDir, "visible.txt"), "");
+        writeFileSync(join(tempDir, ".hidden"), "");
+        writeFileSync(join(tempDir, ".env"), "");
+
+        const script = zsh.generateScript("hidden-cli");
+
+        // We can't easily test zsh's _files in a non-interactive context,
+        // so extract and test the glob_dots logic directly.  The generated
+        // function body contains a while-read loop that parses __FILE__
+        // directives.  We override _files/_directories with a function that
+        // globs the current directory to verify glob_dots is active.
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+autoload -U compinit && compinit -D 2>/dev/null
+
+# Override _files to manually list files using the current glob settings
+function _files() {
+  local f
+  for f in ${tempDir}/*; do
+    [[ -f "$f" ]] && echo "$f"
+  done
+}
+
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+
+cd "${tempDir}"
+words=("hidden-cli" "")
+CURRENT=2
+_hidden_cli 2>/dev/null
+`;
+
+        const result = runCommand("zsh", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes(".hidden")));
+        ok(completions.some((c) => c.includes(".env")));
+        ok(completions.some((c) => c.includes("visible.txt")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should not include hidden files when includeHidden is false", (t) => {
+      if (!isShellAvailable("zsh")) {
+        t.skip("zsh not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "zsh-no-hidden-completion-"),
+      );
+
+      try {
+        // CLI that emits __FILE__ with hidden=0
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\0\\0\\n'
+`;
+        const cliPath = join(tempDir, "nohidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create visible and hidden files
+        writeFileSync(join(tempDir, "visible.txt"), "");
+        writeFileSync(join(tempDir, ".hidden"), "");
+
+        const script = zsh.generateScript("nohidden-cli");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+autoload -U compinit && compinit -D 2>/dev/null
+
+function _files() {
+  local f
+  for f in ${tempDir}/*; do
+    [[ -f "$f" ]] && echo "$f"
+  done
+}
+
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+
+cd "${tempDir}"
+words=("nohidden-cli" "")
+CURRENT=2
+_nohidden_cli 2>/dev/null
+`;
+
+        const result = runCommand("zsh", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(!completions.some((c) => c.includes(".hidden")));
+        ok(completions.some((c) => c.includes("visible.txt")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("pwsh shell completion", () => {

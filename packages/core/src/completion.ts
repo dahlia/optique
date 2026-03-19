@@ -293,6 +293,12 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
         has_file_completion=1
 
+        # Enable glob_dots when hidden files are requested so that
+        # _files and _directories include dot-prefixed entries
+        local __was_glob_dots=0
+        [[ -o glob_dots ]] && __was_glob_dots=1
+        if [[ "\$hidden" == "1" ]]; then setopt glob_dots; fi
+
         # Use zsh's native file completion
         case "\$type" in
           file)
@@ -318,8 +324,8 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             ;;
         esac
 
-        # Note: zsh's _files and _directories handle hidden file filtering automatically
-        # based on the completion context and user settings
+        # Restore glob_dots to its previous state
+        if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
       else
         # Regular literal completion
         if [[ -n "\$value" ]]; then

@@ -525,6 +525,11 @@ To be released.
     PowerShell passes `-Force` to `Get-ChildItem` when hidden files are
     requested.  [[#623], [#624]]
 
+ -  Fixed zsh completion not including hidden (dot-prefixed) files when
+    `includeHidden` is `true`.  The zsh backend now temporarily enables
+    `glob_dots` before calling `_files` or `_directories` when hidden
+    files are requested.  [[#262], [#641]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -565,6 +570,7 @@ To be released.
 [#253]: https://github.com/dahlia/optique/issues/253
 [#254]: https://github.com/dahlia/optique/issues/254
 [#256]: https://github.com/dahlia/optique/issues/256
+[#262]: https://github.com/dahlia/optique/issues/262
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
 [#307]: https://github.com/dahlia/optique/issues/307
@@ -661,6 +667,7 @@ To be released.
 [#636]: https://github.com/dahlia/optique/pull/636
 [#638]: https://github.com/dahlia/optique/pull/638
 [#639]: https://github.com/dahlia/optique/pull/639
+[#641]: https://github.com/dahlia/optique/pull/641
 
 ### @optique/config
 
