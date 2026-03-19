@@ -198,7 +198,10 @@ function _${programName} () {
       local -a __candidates=()
       case "$__glob_current" in
         *[\*\?\[]*)
-          eval '__candidates=('"$__glob_current"')' 2>/dev/null || true
+          # Escape spaces and other word-splitting characters while
+          # preserving glob wildcards so eval expands them correctly
+          local __safe_glob="\${__glob_current// /\\\\ }"
+          eval '__candidates=('"$__safe_glob"')' 2>/dev/null || true
           ;;
         *)
           __candidates=("$__glob_current"*)
@@ -1177,8 +1180,8 @@ ${
                     }
                 }
 
-                # Filter hidden files unless requested
-                if (-not \$hidden) {
+                # Filter hidden files unless requested or the prefix targets dotfiles
+                if (-not \$hidden -and -not (\$prefixBasename -and \$prefixBasename.StartsWith('.'))) {
                     \$items = \$items | Where-Object { -not \$_.Attributes.HasFlag([System.IO.FileAttributes]::Hidden) }
                 }
 
