@@ -9377,6 +9377,140 @@ describe("domain()", () => {
       if (!result2.success) assert.equal(result2.error, "original error");
     });
   });
+
+  describe("maxLength option", () => {
+    it("should reject domain exceeding default 253-character limit", () => {
+      const parser = domain();
+      const label = "a".repeat(63);
+      const longDomain = `${label}.${label}.${label}.${label}.com`;
+      assert.ok(longDomain.length > 253);
+      const result = parser.parse(longDomain);
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Domain " },
+        { type: "value", value: longDomain },
+        { type: "text", text: " is too long (maximum " },
+        { type: "text", text: "253" },
+        { type: "text", text: " characters)." },
+      ]);
+    });
+
+    it("should accept domain at exactly 253 characters", () => {
+      const parser = domain();
+      // 63 + 1 + 63 + 1 + 63 + 1 + 58 + 1 + 2 = 253
+      const domain253 = `${"a".repeat(63)}.${"b".repeat(63)}.${
+        "c".repeat(63)
+      }.${"d".repeat(58)}.co`;
+      assert.strictEqual(domain253.length, 253);
+      const result = parser.parse(domain253);
+      assert.ok(result.success);
+      assert.strictEqual(result.value, domain253);
+    });
+
+    it("should reject domain exceeding custom maxLength", () => {
+      const parser = domain({ maxLength: 50 });
+      const longDomain =
+        "abcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuvwx.com";
+      assert.ok(longDomain.length > 50);
+      const result = parser.parse(longDomain);
+      assert.ok(!result.success);
+    });
+
+    it("should accept domain within custom maxLength", () => {
+      const parser = domain({ maxLength: 50 });
+      const result = parser.parse("example.com");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "example.com");
+    });
+
+    it("should use custom tooLong error function", () => {
+      const parser = domain({
+        maxLength: 20,
+        errors: {
+          tooLong: (domain, maxLen) =>
+            message`${text(domain)} exceeds ${text(maxLen.toString())}`,
+        },
+      });
+      const result = parser.parse("this-is-a-long-name.example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "this-is-a-long-name.example.com" },
+        { type: "text", text: " exceeds " },
+        { type: "text", text: "20" },
+      ]);
+    });
+
+    it("should use static tooLong error message", () => {
+      const parser = domain({
+        maxLength: 20,
+        errors: {
+          tooLong: message`Domain is too long.`,
+        },
+      });
+      const result = parser.parse("this-is-a-long-name.example.com");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Domain is too long." },
+      ]);
+    });
+
+    it("should throw RangeError when maxLength is 0", () => {
+      assert.throws(
+        () => domain({ maxLength: 0 }),
+        {
+          name: "RangeError",
+          message: "maxLength must be an integer greater than or equal to 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when maxLength is negative", () => {
+      assert.throws(
+        () => domain({ maxLength: -1 }),
+        {
+          name: "RangeError",
+          message: "maxLength must be an integer greater than or equal to 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when maxLength is NaN", () => {
+      assert.throws(
+        () => domain({ maxLength: NaN }),
+        {
+          name: "RangeError",
+          message: "maxLength must be an integer greater than or equal to 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when maxLength is fractional", () => {
+      assert.throws(
+        () => domain({ maxLength: 1.5 }),
+        {
+          name: "RangeError",
+          message: "maxLength must be an integer greater than or equal to 1.",
+        },
+      );
+    });
+
+    it("should snapshot errors.tooLong at construction time", () => {
+      const errors: { tooLong: string } = {
+        tooLong: "original error",
+      };
+      const parser = domain({
+        maxLength: 10,
+        errors: errors as never,
+      });
+      const result = parser.parse("this-is-long.example.com");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.tooLong = "mutated error";
+      const result2 = parser.parse("this-is-long.example.com");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+  });
 });
 
 describe("ipv6()", () => {
