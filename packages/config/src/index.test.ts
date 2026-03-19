@@ -1313,24 +1313,54 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("accepts config object with then method (not a Promise)", () => {
-    const schema = z.object({
-      name: z.string(),
-      then: z.function(),
-    });
+  test("rejects thenable config (cross-realm Promise)", () => {
+    const schema = z.object({ name: z.string() });
     const context = createConfigContext({ schema });
-    const annotations = context.getAnnotations(
-      {},
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: {
+                then: (resolve: (v: unknown) => void) =>
+                  resolve({ name: "ALICE" }),
+              },
+              meta: undefined,
+            })) as never,
+          },
+        ),
       {
-        load: (() => ({
-          config: { name: "ALICE", then: () => "not a promise" },
-          meta: undefined,
-        })) as never,
+        name: "TypeError",
+        message: "Expected config in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
       },
     );
-    assert.ok(annotations != null);
-    const symbols = Object.getOwnPropertySymbols(annotations);
-    assert.equal(symbols.length, 1);
+  });
+
+  test("rejects thenable meta (cross-realm Promise)", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: { name: "ALICE" },
+              meta: {
+                then: (resolve: (v: unknown) => void) =>
+                  resolve({ configPath: "x", configDir: "." }),
+              },
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected meta in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
   });
 
   test("rejects non-object resolved value from async load()", async () => {

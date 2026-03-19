@@ -714,13 +714,13 @@ function validateLoadResult<TConfigMeta>(
     );
   }
   const result = loaded as Record<string, unknown>;
-  if (result.config instanceof Promise) {
+  if (result.config instanceof Promise || isThenable(result.config)) {
     throw new TypeError(
       "Expected config in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
     );
   }
-  if (result.meta instanceof Promise) {
+  if (result.meta instanceof Promise || isThenable(result.meta)) {
     throw new TypeError(
       "Expected meta in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
