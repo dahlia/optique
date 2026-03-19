@@ -555,7 +555,9 @@ To be released.
  -  `runParser()` now validates meta command and option names (for help,
     version, and completion) eagerly at startup.  Empty arrays, empty
     strings, whitespace-only names, and names containing whitespace or
-    control characters are rejected with `TypeError`.  [[#425], [#648]]
+    control characters are rejected with `TypeError`.  Option names without
+    a valid prefix (`--`, `-`, `/`, or `+`) are also rejected.
+    [[#425], [#648]]
 
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
