@@ -1840,7 +1840,8 @@ function validateOptionNames(
     }
     if (/^\s+$/.test(name)) {
       throw new TypeError(
-        `${label} name must not be whitespace-only: "${name}".`,
+        `${label} name must not be whitespace-only: ` +
+          `"${escapeControlChars(name)}".`,
       );
     }
     // deno-lint-ignore no-control-regex
@@ -1852,7 +1853,8 @@ function validateOptionNames(
     }
     if (/\s/.test(name)) {
       throw new TypeError(
-        `${label} name must not contain whitespace: "${name}".`,
+        `${label} name must not contain whitespace: ` +
+          `"${escapeControlChars(name)}".`,
       );
     }
     if (!/^(--|[-/+])/.test(name)) {
@@ -1887,7 +1889,8 @@ function validateCommandNames(
     }
     if (/^\s+$/.test(name)) {
       throw new TypeError(
-        `${label} name must not be whitespace-only: "${name}".`,
+        `${label} name must not be whitespace-only: ` +
+          `"${escapeControlChars(name)}".`,
       );
     }
     // deno-lint-ignore no-control-regex
@@ -1899,7 +1902,8 @@ function validateCommandNames(
     }
     if (/\s/.test(name)) {
       throw new TypeError(
-        `${label} name must not contain whitespace: "${name}".`,
+        `${label} name must not contain whitespace: ` +
+          `"${escapeControlChars(name)}".`,
       );
     }
   }
