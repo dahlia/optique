@@ -2505,6 +2505,66 @@ do { ${functionName} "nested-cli src/" }
       }
     });
 
+    it("should not double slash for root-level absolute path prefix", (t) => {
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const script = nu.generateScript("root-cli");
+
+      // Verify the generated script does not produce "//" for root paths
+      // by checking the dir_prefix logic handles parent == "/" correctly
+      const nuTempDir = mkdtempSync(
+        join(tmpdir(), "nu-root-prefix-"),
+      );
+
+      try {
+        // CLI that emits __FILE__:any::::0
+        const cliScript = `#!/bin/bash
+printf '__FILE__:any::::0\\n'
+`;
+        const cliPath = join(nuTempDir, "root-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const scriptPath = join(nuTempDir, "completion.nu");
+        writeFileSync(scriptPath, script);
+
+        const functionName = "nu-complete-root-cli";
+        const testScript = `
+$env.PATH = ($env.PATH | prepend "${nuTempDir}")
+source ${scriptPath}
+
+do { ${functionName} "root-cli /u" }
+`;
+        const testScriptPath = join(nuTempDir, "test.nu");
+        writeFileSync(testScriptPath, testScript);
+
+        const result = runCommand("nu", [testScriptPath], {
+          cwd: nuTempDir,
+        });
+
+        const lines = result.trim().split("\n");
+        for (const line of lines) {
+          const match = line.match(
+            /│\s*\d+\s*│\s*([^│]+)\s*│/,
+          );
+          if (match) {
+            const value = match[1]?.trim();
+            if (value) {
+              ok(
+                !value.startsWith("//"),
+                `Completion "${value}" has double-slash prefix`,
+              );
+            }
+          }
+        }
+      } finally {
+        rmSync(nuTempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should enumerate hidden files without dot prefix when includeHidden is true", (t) => {
       if (!isShellAvailable("nu")) {
         t.skip("nu not available");
