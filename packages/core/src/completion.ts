@@ -143,9 +143,19 @@ function _${programName} () {
       fi
 
       # When a pattern is specified, use it as the glob base instead of the
-      # current word so that completions enumerate the pattern's directory
+      # current word so that completions enumerate the pattern's directory.
+      # Apply tilde expansion to the pattern as well.
       if [[ -n "$pattern" ]]; then
         __glob_current="$pattern"
+        if [[ "$pattern" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)$ ]]; then
+          __tilde_prefix="\${BASH_REMATCH[1]}"
+          eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
+          if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
+            __glob_current="\${__tilde_expanded}\${pattern#\$__tilde_prefix}"
+          else
+            __tilde_prefix=""
+          fi
+        fi
       fi
 
       # Enable dotglob when hidden files are requested, or when the user

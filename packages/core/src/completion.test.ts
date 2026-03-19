@@ -646,6 +646,62 @@ fi
       }
     });
 
+    it("should expand tilde in pattern for file globbing in bash", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const home = process.env.HOME;
+      if (!home) {
+        t.skip("HOME not set");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(home, ".optique-tilde-pattern-"));
+
+      try {
+        // Compute the tilde-relative path for the pattern
+        const tildeDir = tempDir.replace(home, "~") + "/";
+        // CLI emits __FILE__ with a tilde-prefixed pattern
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::${tildeDir}:0\\n'
+`;
+        const cliPath = join(tempDir, "tilde-pat-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+        writeFileSync(join(tempDir, "testfile.txt"), "");
+
+        const script = bash.generateScript("tilde-pat-cli");
+
+        // Current word is empty — the pattern should drive the glob
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+COMP_WORDS=("tilde-pat-cli" "")
+COMP_CWORD=1
+_tilde-pat-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find the file via tilde-expanded pattern
+        ok(completions.some((c) => c.includes("testfile.txt")));
+        // Results should use tilde prefix, not expanded home
+        ok(completions.some((c) => c.startsWith("~/")));
+        ok(!completions.some((c) => c.startsWith(home)));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include hidden files when includeHidden is true", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");
