@@ -938,6 +938,20 @@ describe("runParser", () => {
       );
     });
 
+    it("should reject empty string help option name", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: { names: [""] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: "Help option name must not be empty.",
+        },
+      );
+    });
+
     it("should reject help option name containing space", () => {
       const parser = object({ name: argument(string()) });
       assert.throws(

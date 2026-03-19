@@ -1885,16 +1885,16 @@ function validateCommandNames(
     if (name === "") {
       throw new TypeError(`${label} name must not be empty.`);
     }
+    if (/^\s+$/.test(name)) {
+      throw new TypeError(
+        `${label} name must not be whitespace-only: "${name}".`,
+      );
+    }
     // deno-lint-ignore no-control-regex
     if (/[\x00-\x1f\x7f]/.test(name)) {
       throw new TypeError(
         `${label} name must not contain control characters: ` +
           `"${escapeControlChars(name)}".`,
-      );
-    }
-    if (/^\s+$/.test(name)) {
-      throw new TypeError(
-        `${label} name must not be whitespace-only: "${name}".`,
       );
     }
     if (/\s/.test(name)) {
