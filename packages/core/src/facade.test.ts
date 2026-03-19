@@ -9244,4 +9244,17 @@ describe("runWith/runWithSync context validation", () => {
       );
     });
   });
+
+  describe("runWithAsync", () => {
+    it("rejects with TypeError for null context", async () => {
+      await assert.rejects(
+        () => runWithAsync(parser, "test", [null as never], baseOptions),
+        {
+          name: "TypeError",
+          message:
+            "Expected each context to be a SourceContext, but got: null at index 0.",
+        },
+      );
+    });
+  });
 });
