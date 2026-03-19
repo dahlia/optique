@@ -1991,13 +1991,13 @@ if (!result2.success) {
 
 ### TLD restrictions
 
-Use the `allowedTLDs` option to restrict accepted top-level domains:
+Use the `allowedTlds` option to restrict accepted top-level domains:
 
 ~~~~ typescript twoslash
 import { domain } from "@optique/core/valueparser";
 // ---cut-before---
 // Accept only specific TLDs
-const restrictedTLD = domain({ allowedTLDs: ["com", "org", "net"] });
+const restrictedTLD = domain({ allowedTlds: ["com", "org", "net"] });
 
 const result1 = restrictedTLD.parse("example.com");
 if (result1.success) {
@@ -2092,7 +2092,7 @@ import { message, text } from "@optique/core/message";
 // ---cut-before---
 const parser = domain({
   allowSubdomains: false,
-  allowedTLDs: ["com", "org"],
+  allowedTlds: ["com", "org"],
   errors: {
     invalidDomain: (input) =>
       message`Invalid domain: ${text(input)}`,
@@ -2129,7 +2129,7 @@ import { domain } from "@optique/core/valueparser";
 // ---cut-before---
 // Restrict to specific TLDs for corporate email
 const emailDomain = domain({
-  allowedTLDs: ["com", "org", "edu"],
+  allowedTlds: ["com", "org", "edu"],
   lowercase: true,
 });
 ~~~~
