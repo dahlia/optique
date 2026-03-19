@@ -968,6 +968,20 @@ describe("runParser", () => {
       );
     });
 
+    it("should reject whitespace-only help option name", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", [], {
+            help: { option: { names: ["   "] as never } },
+          }),
+        {
+          name: "TypeError",
+          message: 'Help option name must not be whitespace-only: "   ".',
+        },
+      );
+    });
+
     it("should reject help option name without valid prefix", () => {
       const parser = object({ name: argument(string()) });
       assert.throws(
