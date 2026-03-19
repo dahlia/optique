@@ -1193,6 +1193,7 @@ export function bindConfig<
  * Checks both annotations (for top-level parsers) and the active config
  * registry (for parsers nested inside object() when used with context-aware
  * runners).
+ * @throws {TypeError} If the key callback returns a Promise or thenable.
  */
 function getConfigOrDefault<T, TValue, TConfigMeta>(
   state: unknown,
