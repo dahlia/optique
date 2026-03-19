@@ -904,7 +904,8 @@ environment variable integration via source contexts.  [[#86], [#135]]
     `GitParserErrors` for custom error messages in this case.  [[#308], [#603]]
 
  -  `gitRemoteBranch()` now validates the `remote` parameter at construction
-    time, rejecting empty, whitespace-only, multiline, or non-string values
+    time, rejecting empty, whitespace-only, control-character-containing,
+    multiline, or non-string values
     with a `TypeError`.  [[#464], [#654]]
 
 [#284]: https://github.com/dahlia/optique/issues/284
