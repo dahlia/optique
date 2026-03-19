@@ -192,6 +192,23 @@ function _${programName} () {
       [[ "$__prefix_base" == .* ]] && __prefix_targets_hidden=1
       if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" || "$__prefix_targets_hidden" == "1" ]]; then shopt -s dotglob; fi
 
+      # Pre-expand file candidates.  When the glob base contains wildcard
+      # characters (e.g., *.txt), use it as-is; otherwise append * to
+      # treat it as a prefix.
+      local -a __candidates=()
+      case "$__glob_current" in
+        *[\*\?\[]*)
+          eval '__candidates=('"$__glob_current"')' 2>/dev/null || true
+          ;;
+        *)
+          __candidates=("$__glob_current"*)
+          ;;
+      esac
+      # Remove no-match sentinel (bash returns the literal pattern)
+      if [[ \${#__candidates[@]} -eq 1 && ! -e "\${__candidates[0]}" ]]; then
+        __candidates=()
+      fi
+
       # Generate file completions based on type
       case "$type" in
         file)
@@ -199,7 +216,7 @@ function _${programName} () {
           if [[ -n "$extensions" ]]; then
             # Files with extension filtering + directories
             local ext_pattern="\${extensions//,/|}"
-            for item in "$__glob_current"*; do
+            for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               elif [[ -f "$item" && "$item" =~ \\.($ext_pattern)$ ]]; then
@@ -208,7 +225,7 @@ function _${programName} () {
             done
           else
             # Complete files and directories for navigation
-            for item in "$__glob_current"*; do
+            for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               elif [[ -f "$item" ]]; then
@@ -219,7 +236,7 @@ function _${programName} () {
           ;;
         directory)
           # Complete directories only
-          for dir in "$__glob_current"*; do
+          for dir in "\${__candidates[@]}"; do
             [[ -d "$dir" ]] && COMPREPLY+=("$dir/")
           done
           ;;
@@ -229,7 +246,7 @@ function _${programName} () {
             # Files with extension filtering + directories
             # Files with extension filtering
             local ext_pattern="\${extensions//,/|}"
-            for item in "$__glob_current"*; do
+            for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               elif [[ ( -e "$item" || -L "$item" ) && "$item" =~ \\.($ext_pattern)$ ]]; then
@@ -238,7 +255,7 @@ function _${programName} () {
             done
           else
             # Complete files and directories, add slash to directories
-            for item in "$__glob_current"*; do
+            for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               # Use -e || -L to include non-regular files (sockets, FIFOs, dangling symlinks)
@@ -538,12 +555,25 @@ ${
                 set glob_base "$glob_base/"
             end
 
+            # Pre-expand file candidates.  When the glob base contains
+            # wildcard characters, use it as-is; otherwise append *.
+            set -l __has_glob 0
+            if string match -q '*[*?\\[]*' -- "$glob_base"
+                set __has_glob 1
+            end
+            set -l __candidates
+            if test $__has_glob -eq 1
+                eval "set __candidates $glob_base" 2>/dev/null
+            else
+                set __candidates $glob_base*
+            end
+
             # Generate file completions based on type
             set -l items
             switch $type
                 case file
                     # Complete files and directories (directories for navigation)
-                    for item in $glob_base*
+                    for item in $__candidates
                         if test -d $item
                             set -a items $item/
                         else if test -f $item
@@ -556,7 +586,7 @@ ${
                     # .* complementary.  When a non-empty basename is present
                     # (e.g., "foo"), foo* already covers foo.txt, so foo.*
                     # would just produce duplicates.
-                    if test "$hidden" = "1"
+                    if test "$hidden" = "1" -a $__has_glob -eq 0
                         if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
                             for item in $glob_base.*
                                 if test -d $item
@@ -569,12 +599,12 @@ ${
                     end
                 case directory
                     # Complete directories only
-                    for item in $glob_base*
+                    for item in $__candidates
                         if test -d $item
                             set -a items $item/
                         end
                     end
-                    if test "$hidden" = "1"
+                    if test "$hidden" = "1" -a $__has_glob -eq 0
                         if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
                             for item in $glob_base.*
                                 if test -d $item
@@ -585,14 +615,14 @@ ${
                     end
                 case any
                     # Complete both files and directories
-                    for item in $glob_base*
+                    for item in $__candidates
                         if test -d $item
                             set -a items $item/
                         else if test -f $item
                             set -a items $item
                         end
                     end
-                    if test "$hidden" = "1"
+                    if test "$hidden" = "1" -a $__has_glob -eq 0
                         if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
                             for item in $glob_base.*
                                 if test -d $item
@@ -843,10 +873,26 @@ ${
         $prefix
       }
 
-      # Generate file completions based on type
-      # Use current directory if glob_base is empty
+      # If the glob base is a directory without a trailing slash (e.g., "src"),
+      # append one so that ls enumerates its contents instead of matching
+      # siblings like "src-old"
+      let glob_base = if ($glob_base | is-not-empty) and ($glob_base | path type) == "dir" and (not ($glob_base | str ends-with "/")) {
+        $glob_base + "/"
+      } else {
+        $glob_base
+      }
+
+      # Generate file completions based on type.
+      # When the glob base contains wildcard characters, use it as-is;
+      # otherwise append * to treat it as a prefix.
       # Note: into glob is required so that ls expands wildcards from a variable
-      let ls_pattern = if ($glob_base | is-empty) { "." } else { ($glob_base + "*" | into glob) }
+      let ls_pattern = if ($glob_base | is-empty) {
+        "."
+      } else if ($glob_base =~ '[*?\\[]') {
+        ($glob_base | into glob)
+      } else {
+        ($glob_base + "*" | into glob)
+      }
 
       # Use ls -a to include hidden files when requested
       let items = try {
@@ -1085,6 +1131,16 @@ ${
                 \$prefixBasename = Split-Path -Leaf \$prefix 2>\$null
                 \$forceParam = if (\$hidden -or (\$prefixBasename -and \$prefixBasename.StartsWith('.'))) { @{Force = \$true} } else { @{} }
 
+                # If prefix is a directory without trailing slash, append
+                # one so Get-ChildItem lists its contents
+                if (\$prefix -and (Test-Path -Path \$prefix -PathType Container) -and -not \$prefix.EndsWith('/') -and -not \$prefix.EndsWith('\\')) {
+                    \$prefix = \$prefix + '/'
+                }
+
+                # Build the glob path — when the prefix contains wildcard
+                # characters, use it as-is; otherwise append *
+                \$globPath = if (\$prefix -match '[\*\?\[]') { \$prefix } else { "\${prefix}*" }
+
                 # Get file system items based on type
                 \$items = @()
                 switch (\$type) {
@@ -1092,31 +1148,31 @@ ${
                         if (\$extensions) {
                             # Filter by extensions, always include directories
                             \$extList = \$extensions -split ','
-                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
                                     if (\$_.PSIsContainer) { return \$true }
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
                         } else {
-                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
                         }
                     }
                     'directory' {
-                        \$items = Get-ChildItem @forceParam -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                        \$items = Get-ChildItem @forceParam -Directory -Path \$globPath -ErrorAction SilentlyContinue
                     }
                     'any' {
                         if (\$extensions) {
                             # Filter by extensions, always include directories
                             \$extList = \$extensions -split ','
-                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
                                     if (\$_.PSIsContainer) { return \$true }
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
                         } else {
-                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
                         }
                     }
                 }
