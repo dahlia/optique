@@ -693,7 +693,7 @@ function getTypeName(value: unknown): string {
   return typeof value;
 }
 
-function isThenable(value: unknown): boolean {
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return value != null &&
     (typeof value === "object" || typeof value === "function") &&
     "then" in value &&
@@ -707,7 +707,7 @@ function isThenable(value: unknown): boolean {
  * define a `then()` method are not matched unless they also set
  * `Symbol.toStringTag` to `"Promise"`.
  */
-function isPromiseLike(value: unknown): boolean {
+function isPromise(value: unknown): boolean {
   if (value instanceof Promise) return true;
   if (
     value == null ||
@@ -732,16 +732,16 @@ function validateLoadResult<TConfigMeta>(
     );
   }
   const result = loaded as Record<string, unknown>;
-  // Use isPromiseLike() to catch both same-realm and cross-realm
+  // Use isPromise() to catch both same-realm and cross-realm
   // Promises without rejecting domain objects that merely have a
   // then() method.
-  if (isPromiseLike(result.config)) {
+  if (isPromise(result.config)) {
     throw new TypeError(
       "Expected config in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
     );
   }
-  if (isPromiseLike(result.meta)) {
+  if (isPromise(result.meta)) {
     throw new TypeError(
       "Expected meta in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
@@ -965,7 +965,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         const loaded = opts.load(parsedPlaceholder);
         // Accept native Promises and cross-realm Promises (detected via
         // Symbol.toStringTag).
-        if (isPromiseLike(loaded)) {
+        if (isPromise(loaded)) {
           return Promise.resolve(loaded as Promise<unknown>).then(
             (resolved) => {
               const validated = validateLoadResult<TConfigMeta>(resolved);
@@ -978,7 +978,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         }
         // Reject plain thenables that are neither native nor cross-realm
         // Promises.  The API contract is Promise | ConfigLoadResult.
-        if (isThenable(loaded)) {
+        if (isPromiseLike(loaded)) {
           throw new TypeError(
             "Expected load() to return a plain object or Promise, " +
               "but got a thenable. Use a real Promise instead.",
