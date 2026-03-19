@@ -2611,6 +2611,9 @@ export function hostname(
   const allowUnderscore = options?.allowUnderscore ?? false;
   const allowLocalhost = options?.allowLocalhost ?? true;
   const maxLength = options?.maxLength ?? 253;
+  if (maxLength < 1) {
+    throw new RangeError("maxLength must be at least 1.");
+  }
 
   return {
     $mode: "sync",
@@ -4258,6 +4261,9 @@ export function domain(
     : undefined;
   const minLabels = options?.minLabels ?? 2;
   const lowercase = options?.lowercase ?? false;
+  if (minLabels < 1) {
+    throw new RangeError("minLabels must be at least 1.");
+  }
   if (!allowSubdomains && minLabels > 2) {
     throw new TypeError(
       "allowSubdomains: false is incompatible with minLabels > 2, " +

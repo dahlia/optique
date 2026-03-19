@@ -6193,6 +6193,32 @@ describe("hostname()", () => {
       ]);
     });
 
+    it("should throw RangeError when maxLength is 0", () => {
+      assert.throws(
+        () => hostname({ maxLength: 0 }),
+        {
+          name: "RangeError",
+          message: "maxLength must be at least 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when maxLength is negative", () => {
+      assert.throws(
+        () => hostname({ maxLength: -1 }),
+        {
+          name: "RangeError",
+          message: "maxLength must be at least 1.",
+        },
+      );
+    });
+
+    it("should not throw when maxLength is 1", () => {
+      assert.doesNotThrow(
+        () => hostname({ maxLength: 1 }),
+      );
+    });
+
     it("should default to 253 characters", () => {
       const parser = hostname();
 
@@ -8823,6 +8849,32 @@ describe("domain()", () => {
     it("should not throw when allowSubdomains is true and minLabels > 2", () => {
       assert.doesNotThrow(
         () => domain({ allowSubdomains: true, minLabels: 3 }),
+      );
+    });
+
+    it("should throw RangeError when minLabels is 0", () => {
+      assert.throws(
+        () => domain({ minLabels: 0 }),
+        {
+          name: "RangeError",
+          message: "minLabels must be at least 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when minLabels is negative", () => {
+      assert.throws(
+        () => domain({ minLabels: -1 }),
+        {
+          name: "RangeError",
+          message: "minLabels must be at least 1.",
+        },
+      );
+    });
+
+    it("should not throw when minLabels is 1", () => {
+      assert.doesNotThrow(
+        () => domain({ minLabels: 1 }),
       );
     });
   });
