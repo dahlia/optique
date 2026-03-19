@@ -429,40 +429,47 @@ const YEAR = String.raw`([+-]\d{6}|\d{4})`;
 /** ISO 8601 fractional seconds with `.` or `,` separator. */
 const FRACTIONAL = String.raw`[.,]\d+`;
 
-/** Matches YYYY-MM-DD only (no time component). */
+/**
+ * Matches YYYY-MM-DD (extended) or YYYYMMDD (basic) date forms only (no time
+ * component).
+ */
 const PLAIN_DATE_RE = new RegExp(
-  `^${YEAR}-\\d{2}-\\d{2}${CALENDAR_ANNOTATION}$`,
-);
-
-/** Matches HH:MM, HH:MM:SS, or HH:MM:SS.fractional (no date prefix). */
-const PLAIN_TIME_RE = new RegExp(
-  `^\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?$`,
+  `^(${YEAR}-\\d{2}-\\d{2}${CALENDAR_ANNOTATION}|\\d{8})$`,
 );
 
 /**
- * Matches YYYY-MM-DD[T| |t]HH:MM, YYYY-MM-DD[T| |t]HH:MM:SS,
- * or YYYY-MM-DD[T| |t]HH:MM:SS.fractional (must have both date and time
- * parts).  Accepts uppercase `T`, lowercase `t`, or space as the date-time
- * separator per ISO 8601.
+ * Matches extended (HH:MM[:SS[.frac]]) or basic (HHMM, HHMMSS[.frac]) time
+ * forms only (no date prefix).
+ */
+const PLAIN_TIME_RE = new RegExp(
+  `^(\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?|\\d{4}(\\d{2}(${FRACTIONAL})?)?)$`,
+);
+
+/**
+ * Matches date-time strings with both date and time parts.  Accepts extended,
+ * basic, and mixed forms (e.g. `2020-01-23T170436`).  The separator may be
+ * `T`, `t`, or a space.
  */
 const PLAIN_DATETIME_RE = new RegExp(
-  `^${YEAR}-\\d{2}-\\d{2}[Tt ]\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?${CALENDAR_ANNOTATION}$`,
+  `^(${YEAR}-\\d{2}-\\d{2}|\\d{8})[Tt ](\\d{2}:\\d{2}(:\\d{2}(${FRACTIONAL})?)?|\\d{4}(\\d{2}(${FRACTIONAL})?)?)${CALENDAR_ANNOTATION}$`,
 );
 
 /**
- * Matches YYYY-MM, or YYYY-MM-DD with a required calendar annotation (the
- * reference day is emitted by `toString()` for non-ISO calendars).
+ * Matches YYYY-MM (extended) or YYYYMM (basic), or YYYY-MM-DD with a required
+ * calendar annotation (the reference day is emitted by `toString()` for
+ * non-ISO calendars).
  */
 const PLAIN_YEAR_MONTH_RE = new RegExp(
-  `^${YEAR}-\\d{2}(-\\d{2}${CALENDAR_ANNOTATION_REQUIRED}|${CALENDAR_ANNOTATION})$`,
+  `^(${YEAR}-\\d{2}(-\\d{2}${CALENDAR_ANNOTATION_REQUIRED}|${CALENDAR_ANNOTATION})|\\d{6})$`,
 );
 
 /**
- * Matches MM-DD or --MM-DD, or YYYY-MM-DD with a required calendar annotation
- * (the reference year is emitted by `toString()` for non-ISO calendars).
+ * Matches MM-DD, --MM-DD, MMDD, or --MMDD month-day forms, or YYYY-MM-DD with
+ * a required calendar annotation (the reference year is emitted by
+ * `toString()` for non-ISO calendars).
  */
 const PLAIN_MONTH_DAY_RE = new RegExp(
-  `^((--)?(\\d{2}-\\d{2})${CALENDAR_ANNOTATION}|${YEAR}-\\d{2}-\\d{2}${CALENDAR_ANNOTATION_REQUIRED})$`,
+  `^((--)?(\\d{2}-\\d{2}|\\d{4})${CALENDAR_ANNOTATION}|${YEAR}-\\d{2}-\\d{2}${CALENDAR_ANNOTATION_REQUIRED})$`,
 );
 
 /**
