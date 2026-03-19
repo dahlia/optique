@@ -1065,8 +1065,10 @@ ${
                     \$wordToComplete
                 } else { '' }
 
-                # Use -Force to include hidden files when requested
-                \$forceParam = if (\$hidden) { @{Force = \$true} } else { @{} }
+                # Use -Force to include hidden files when requested, or when
+                # the prefix basename targets dotfiles (e.g., src/.e)
+                \$prefixBasename = Split-Path -Leaf \$prefix 2>\$null
+                \$forceParam = if (\$hidden -or (\$prefixBasename -and \$prefixBasename.StartsWith('.'))) { @{Force = \$true} } else { @{} }
 
                 # Get file system items based on type
                 \$items = @()
