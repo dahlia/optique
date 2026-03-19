@@ -791,14 +791,20 @@ environment variable integration via source contexts.  [[#86], [#135]]
     a non-string value, instead of leaking it through or crashing
     downstream value parsers.  [[#399], [#633]]
 
+ -  `bindEnv()` now throws a `TypeError` when `parser` is not a valid
+    `ValueParser`, instead of deferring the crash to environment lookup
+    time.  [[#415], [#637]]
+
 [#86]: https://github.com/dahlia/optique/issues/86
 [#135]: https://github.com/dahlia/optique/pull/135
 [#268]: https://github.com/dahlia/optique/issues/268
 [#390]: https://github.com/dahlia/optique/issues/390
 [#399]: https://github.com/dahlia/optique/issues/399
+[#415]: https://github.com/dahlia/optique/issues/415
 [#562]: https://github.com/dahlia/optique/pull/562
 [#600]: https://github.com/dahlia/optique/pull/600
 [#633]: https://github.com/dahlia/optique/pull/633
+[#637]: https://github.com/dahlia/optique/pull/637
 
 ### @optique/git
 

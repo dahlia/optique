@@ -320,6 +320,88 @@ describe("bindEnv()", () => {
     });
   });
 
+  describe("parser validation", () => {
+    it("throws TypeError when parser is an empty object", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: {} as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected parser to be a ValueParser, but got: object.",
+        },
+      );
+    });
+
+    it("throws TypeError when parser is null", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: null as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected parser to be a ValueParser, but got: null.",
+        },
+      );
+    });
+
+    it("throws TypeError when parser is a number", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: 42 as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected parser to be a ValueParser, but got: number.",
+        },
+      );
+    });
+
+    it("throws TypeError when parser is a string", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: "not a parser" as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected parser to be a ValueParser, but got: string.",
+        },
+      );
+    });
+
+    it("throws TypeError when parser is an array", () => {
+      const context = createEnvContext();
+      assert.throws(
+        () =>
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: [] as never,
+          }),
+        {
+          name: "TypeError",
+          message: "Expected parser to be a ValueParser, but got: array.",
+        },
+      );
+    });
+  });
+
   it("uses CLI value when provided", () => {
     const context = createEnvContext({
       source: (key) => ({ APP_PORT: "8080" })[key],
