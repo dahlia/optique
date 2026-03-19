@@ -169,6 +169,11 @@ function _${programName} () {
               __tilde_prefix=""
             fi
           fi
+          # If the glob base is a directory without a trailing slash,
+          # append one so that the glob enumerates its contents
+          if [[ -d "$__glob_current" && "$__glob_current" != */ ]]; then
+            __glob_current="$__glob_current/"
+          fi
         fi
       fi
 
@@ -524,7 +529,13 @@ ${
                 set glob_base (string replace -r '^~' "$HOME" -- "$glob_base")
             else if string match -q '~' -- "$glob_base"
                 set __tilde_prefix "~"
-                set glob_base "$HOME"
+                set glob_base "$HOME/"
+            end
+
+            # If the glob base is a directory without a trailing slash,
+            # append one so that the glob enumerates its contents
+            if test -d "$glob_base"; and not string match -q '*/' -- "$glob_base"
+                set glob_base "$glob_base/"
             end
 
             # Generate file completions based on type
