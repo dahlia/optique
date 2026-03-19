@@ -1850,14 +1850,14 @@ function validateOptionNames(
           `"${escapeControlChars(name)}".`,
       );
     }
-    if (!/^(--|[-/+])/.test(name)) {
-      throw new TypeError(
-        `${label} name must start with "--", "-", "/", or "+": "${name}".`,
-      );
-    }
     if (/\s/.test(name)) {
       throw new TypeError(
         `${label} name must not contain whitespace: "${name}".`,
+      );
+    }
+    if (!/^(--|[-/+])/.test(name)) {
+      throw new TypeError(
+        `${label} name must start with "--", "-", "/", or "+": "${name}".`,
       );
     }
   }
