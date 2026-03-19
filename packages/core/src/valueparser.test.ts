@@ -9268,6 +9268,13 @@ describe("domain()", () => {
       }
     });
 
+    it("should accept single-label numeric names with minLabels: 1", () => {
+      const parser = domain({ minLabels: 1 });
+      const result = parser.parse("123");
+      assert.ok(result.success);
+      assert.strictEqual(result.value, "123");
+    });
+
     it("should work with allowSubdomains and allowedTLDs together", () => {
       const parser = domain({
         allowSubdomains: false,

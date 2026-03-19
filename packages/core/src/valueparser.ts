@@ -4336,8 +4336,10 @@ export function domain(
         }
       }
 
-      // Reject all-numeric domains (e.g., IPv4 addresses like 192.168.0.1)
-      if (labels.every((label) => /^[0-9]+$/.test(label))) {
+      // Reject dotted all-numeric domains (e.g., IPv4 addresses like
+      // 192.168.0.1).  Single-label numeric names are allowed so that
+      // domain({ minLabels: 1 }) can still accept values like "123".
+      if (labels.length >= 2 && labels.every((l) => /^[0-9]+$/.test(l))) {
         const errorMsg = invalidDomain;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
