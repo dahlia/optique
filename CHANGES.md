@@ -964,12 +964,20 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     inconsistent with the canonical format `"01-23"` produced by
     `format()`.  [[#306], [#643]]
 
+ -  Temporal plain parsers now enforce strict input shapes matching their
+    advertised types, rejecting wider ISO forms that were previously silently
+    accepted.  For example, `plainDate()` no longer accepts datetime strings
+    like `"2020-01-23T17:04:36"`, and `plainDateTime()` no longer accepts
+    date-only strings like `"2020-01-23"`.  [[#314], [#649]]
+
 [#282]: https://github.com/dahlia/optique/issues/282
 [#304]: https://github.com/dahlia/optique/issues/304
 [#306]: https://github.com/dahlia/optique/issues/306
+[#314]: https://github.com/dahlia/optique/issues/314
 [#561]: https://github.com/dahlia/optique/pull/561
 [#596]: https://github.com/dahlia/optique/pull/596
 [#643]: https://github.com/dahlia/optique/pull/643
+[#649]: https://github.com/dahlia/optique/pull/649
 
 ### @optique/run
 

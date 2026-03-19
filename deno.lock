@@ -7,6 +7,8 @@
     "jsr:@std/path@^1.1.1": "1.1.1",
     "jsr:@valibot/valibot@^1.2.0": "1.2.0",
     "npm:@inquirer/prompts@^8.3.0": "8.3.0_@types+node@20.19.9",
+    "npm:@js-temporal/polyfill@*": "0.5.1",
+    "npm:@js-temporal/polyfill@0.5.1": "0.5.1",
     "npm:@js-temporal/polyfill@~0.5.1": "0.5.1",
     "npm:@standard-schema/spec@^1.1.0": "1.1.0",
     "npm:@types/node@^20.19.9": "20.19.9",
