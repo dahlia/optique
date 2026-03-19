@@ -203,6 +203,10 @@ To be released.
     prefixes.  Completing `src/` now correctly returns files under that
     directory.  [[#254], [#636]]
 
+ -  Fixed zsh file completion passing literal `$ext_pattern` to `_files`
+    instead of expanding the variable, so extension filtering (e.g.,
+    `*.json`, `*.yaml`) now works correctly.  [[#256], [#639]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -553,6 +557,7 @@ To be released.
 [#252]: https://github.com/dahlia/optique/issues/252
 [#253]: https://github.com/dahlia/optique/issues/253
 [#254]: https://github.com/dahlia/optique/issues/254
+[#256]: https://github.com/dahlia/optique/issues/256
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
 [#307]: https://github.com/dahlia/optique/issues/307
@@ -646,6 +651,7 @@ To be released.
 [#634]: https://github.com/dahlia/optique/pull/634
 [#635]: https://github.com/dahlia/optique/pull/635
 [#636]: https://github.com/dahlia/optique/pull/636
+[#639]: https://github.com/dahlia/optique/pull/639
 
 ### @optique/config
 

@@ -1237,6 +1237,16 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       deepStrictEqual(script.includes("compdef _myapp myapp"), true);
     });
 
+    it("should expand $ext_pattern variable in _files calls", () => {
+      const script = zsh.generateScript("myapp");
+
+      // The generated script should use $ext_pattern (expanded variable),
+      // not a literal \$ext_pattern string.
+      // https://github.com/dahlia/optique/issues/256
+      ok(script.includes('_files -g "$ext_pattern"'));
+      ok(!script.includes('_files -g "\\$ext_pattern"'));
+    });
+
     it("should work with actual zsh shell", (t) => {
       if (!isShellAvailable("zsh")) {
         t.skip("zsh not available");
