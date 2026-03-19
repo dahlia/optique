@@ -7128,51 +7128,69 @@ describe("email()", () => {
     it("should throw TypeError for non-string allowedDomains entries", () => {
       assert.throws(
         () => email({ allowedDomains: [123 as never] }),
-        TypeError,
+        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
       );
       assert.throws(
         () => email({ allowedDomains: [null as never] }),
-        TypeError,
+        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
       );
       assert.throws(
         () => email({ allowedDomains: [undefined as never] }),
-        TypeError,
+        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
       );
     });
 
     it("should throw TypeError for allowedDomains entries with leading @", () => {
       assert.throws(
         () => email({ allowedDomains: ["@example.com"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*must not start with "@"/,
+        },
       );
     });
 
     it("should throw TypeError for allowedDomains entries with trailing dot", () => {
       assert.throws(
         () => email({ allowedDomains: ["example.com."] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
     });
 
     it("should throw TypeError for allowedDomains entries with whitespace", () => {
       assert.throws(
         () => email({ allowedDomains: [" example.com "] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*whitespace/,
+        },
       );
       assert.throws(
         () => email({ allowedDomains: [" example.com"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*whitespace/,
+        },
       );
       assert.throws(
         () => email({ allowedDomains: ["example.com "] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*whitespace/,
+        },
       );
     });
 
     it("should throw TypeError for empty string allowedDomains entries", () => {
       assert.throws(
         () => email({ allowedDomains: [""] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
     });
 
@@ -7180,32 +7198,50 @@ describe("email()", () => {
       // Leading dot
       assert.throws(
         () => email({ allowedDomains: [".example.com"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
       // Consecutive dots
       assert.throws(
         () => email({ allowedDomains: ["foo..bar.com"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
       // Embedded space
       assert.throws(
         () => email({ allowedDomains: ["exa mple.com"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
       // No dot (bare label)
       assert.throws(
         () => email({ allowedDomains: ["localhost"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
       // Leading hyphen
       assert.throws(
         () => email({ allowedDomains: ["-example.com"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
       // Trailing hyphen
       assert.throws(
         () => email({ allowedDomains: ["example-.com"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
       // Label exceeding 63 characters
       assert.throws(
@@ -7213,16 +7249,25 @@ describe("email()", () => {
           email({
             allowedDomains: [`${"a".repeat(64)}.com`] as never,
           }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
       // IPv4-like dotted-quad
       assert.throws(
         () => email({ allowedDomains: ["192.168.0.1"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
       assert.throws(
         () => email({ allowedDomains: ["999.999.999.999"] as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: /allowedDomains\[0\].*not a valid domain/,
+        },
       );
     });
 
