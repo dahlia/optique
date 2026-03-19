@@ -6198,7 +6198,7 @@ describe("hostname()", () => {
         () => hostname({ maxLength: 0 }),
         {
           name: "RangeError",
-          message: "maxLength must be at least 1.",
+          message: "maxLength must be an integer greater than or equal to 1.",
         },
       );
     });
@@ -6208,7 +6208,27 @@ describe("hostname()", () => {
         () => hostname({ maxLength: -1 }),
         {
           name: "RangeError",
-          message: "maxLength must be at least 1.",
+          message: "maxLength must be an integer greater than or equal to 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when maxLength is NaN", () => {
+      assert.throws(
+        () => hostname({ maxLength: NaN }),
+        {
+          name: "RangeError",
+          message: "maxLength must be an integer greater than or equal to 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when maxLength is fractional", () => {
+      assert.throws(
+        () => hostname({ maxLength: 1.5 }),
+        {
+          name: "RangeError",
+          message: "maxLength must be an integer greater than or equal to 1.",
         },
       );
     });
@@ -8857,7 +8877,7 @@ describe("domain()", () => {
         () => domain({ minLabels: 0 }),
         {
           name: "RangeError",
-          message: "minLabels must be at least 1.",
+          message: "minLabels must be an integer greater than or equal to 1.",
         },
       );
     });
@@ -8867,7 +8887,27 @@ describe("domain()", () => {
         () => domain({ minLabels: -1 }),
         {
           name: "RangeError",
-          message: "minLabels must be at least 1.",
+          message: "minLabels must be an integer greater than or equal to 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when minLabels is NaN", () => {
+      assert.throws(
+        () => domain({ minLabels: NaN }),
+        {
+          name: "RangeError",
+          message: "minLabels must be an integer greater than or equal to 1.",
+        },
+      );
+    });
+
+    it("should throw RangeError when minLabels is fractional", () => {
+      assert.throws(
+        () => domain({ minLabels: 1.5 }),
+        {
+          name: "RangeError",
+          message: "minLabels must be an integer greater than or equal to 1.",
         },
       );
     });

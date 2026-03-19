@@ -462,9 +462,10 @@ To be released.
     an unsatisfiable parser, so it is now rejected at construction time with
     a `TypeError`.  [[#350], [#630]]
 
- -  Fixed `domain()` and `hostname()` accepting non-positive structural
-    constraints such as `minLabels: 0` or `maxLength: -1`.  These values
-    are now rejected at construction time with a `RangeError`.  [[#351], [#631]]
+ -  Fixed `domain()` and `hostname()` accepting invalid structural
+    constraints such as `minLabels: 0`, `maxLength: -1`, `minLabels: NaN`,
+    or `maxLength: 1.5`.  These values are now rejected at construction
+    time with a `RangeError`.  [[#351], [#631]]
 
  -  Fixed `__FILE__` completion transport unable to represent `pattern` values
     containing `:` (e.g., Windows drive-letter prefixes like `C:/...`).

@@ -2585,7 +2585,7 @@ export interface HostnameOptions {
  *
  * @param options - Options for hostname validation.
  * @returns A value parser for hostnames.
- * @throws {RangeError} If `maxLength` is less than 1.
+ * @throws {RangeError} If `maxLength` is not a positive integer.
  * @since 0.10.0
  *
  * @example
@@ -2612,8 +2612,10 @@ export function hostname(
   const allowUnderscore = options?.allowUnderscore ?? false;
   const allowLocalhost = options?.allowLocalhost ?? true;
   const maxLength = options?.maxLength ?? 253;
-  if (maxLength < 1) {
-    throw new RangeError("maxLength must be at least 1.");
+  if (!Number.isInteger(maxLength) || maxLength < 1) {
+    throw new RangeError(
+      "maxLength must be an integer greater than or equal to 1.",
+    );
   }
 
   return {
@@ -4229,7 +4231,7 @@ export interface DomainOptions {
  *
  * @param options Parser options for domain validation.
  * @returns A parser that accepts valid domain names as strings.
- * @throws {RangeError} If `minLabels` is less than 1.
+ * @throws {RangeError} If `minLabels` is not a positive integer.
  * @throws {TypeError} If `allowSubdomains` is `false` and `minLabels` is
  *   greater than 2, since non-subdomain domains have exactly 2 labels.
  *
@@ -4263,8 +4265,10 @@ export function domain(
     : undefined;
   const minLabels = options?.minLabels ?? 2;
   const lowercase = options?.lowercase ?? false;
-  if (minLabels < 1) {
-    throw new RangeError("minLabels must be at least 1.");
+  if (!Number.isInteger(minLabels) || minLabels < 1) {
+    throw new RangeError(
+      "minLabels must be an integer greater than or equal to 1.",
+    );
   }
   if (!allowSubdomains && minLabels > 2) {
     throw new TypeError(
