@@ -253,7 +253,9 @@ complete -F _${programName} -- ${programName}
         yield `${suggestion.text}`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = suggestion.extensions
+          ?.map((ext) => ext.replace(/^\./, ""))
+          .join(",") || "";
         const hidden = suggestion.includeHidden ? "1" : "0";
         const pattern = encodePattern(suggestion.pattern ?? "");
         yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}`;
@@ -386,7 +388,9 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
         yield `${suggestion.text}\0${description}\0`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = suggestion.extensions
+          ?.map((ext) => ext.replace(/^\./, ""))
+          .join(",") || "";
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
@@ -577,7 +581,9 @@ complete -c ${programName} -f -a '(${functionName})'
         yield `${suggestion.text}\t${description}`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = suggestion.extensions
+          ?.map((ext) => ext.replace(/^\./, ""))
+          .join(",") || "";
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
@@ -842,7 +848,9 @@ ${functionName}-external
         yield `${suggestion.text}\t${description}`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = suggestion.extensions
+          ?.map((ext) => ext.replace(/^\./, ""))
+          .join(",") || "";
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
@@ -1028,7 +1036,9 @@ ${
         yield `${suggestion.text}\t${suggestion.text}\t${description}`;
       } else {
         // Emit special marker for native file completion
-        const extensions = suggestion.extensions?.join(",") || "";
+        const extensions = suggestion.extensions
+          ?.map((ext) => ext.replace(/^\./, ""))
+          .join(",") || "";
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
