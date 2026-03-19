@@ -952,10 +952,18 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `"Japan"` and `"Cuba"`.  These were already accepted at runtime by the
     `timeZone()` parser but excluded from the static type.  [[#304], [#596]]
 
+ -  Changed the default metavar for `plainMonthDay()` from `"--MONTH-DAY"` to
+    `"MONTH-DAY"`.  The previous metavar confused help text because it looked
+    like a CLI option flag (e.g., `--birthday --MONTH-DAY`), and was
+    inconsistent with the canonical format `"01-23"` produced by
+    `format()`.  [[#306], [#643]]
+
 [#282]: https://github.com/dahlia/optique/issues/282
 [#304]: https://github.com/dahlia/optique/issues/304
+[#306]: https://github.com/dahlia/optique/issues/306
 [#561]: https://github.com/dahlia/optique/pull/561
 [#596]: https://github.com/dahlia/optique/pull/596
+[#643]: https://github.com/dahlia/optique/pull/643
 
 ### @optique/run
 

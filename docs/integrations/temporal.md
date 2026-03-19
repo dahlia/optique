@@ -264,10 +264,11 @@ The parser accepts month-day format:
 
 ~~~~ typescript
 // Valid month-day formats
-"--12-25"         // Christmas (December 25)
-"--01-01"         // New Year's Day (January 1)
-"--07-04"         // Independence Day (July 4)
-"--02-29"         // Leap day (February 29)
+"12-25"           // Christmas (December 25)
+"01-01"           // New Year's Day (January 1)
+"07-04"           // Independence Day (July 4)
+"02-29"           // Leap day (February 29)
+"--12-25"         // ISO 8601 format with -- prefix is also accepted
 ~~~~
 
 [`Temporal.PlainMonthDay`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/PlainMonthDay

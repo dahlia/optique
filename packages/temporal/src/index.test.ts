@@ -361,7 +361,7 @@ describe("plainMonthDay", () => {
   const parser = plainMonthDay();
 
   it("should have correct metavar", () => {
-    assert.equal(parser.metavar, "--MONTH-DAY");
+    assert.equal(parser.metavar, "MONTH-DAY");
   });
 
   it("should parse valid month-day strings", () => {
@@ -370,6 +370,8 @@ describe("plainMonthDay", () => {
       "--12-31",
       "--02-29",
       "--06-15",
+      "01-23",
+      "12-31",
     ];
 
     for (const input of validInputs) {
