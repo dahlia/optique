@@ -518,6 +518,15 @@ To be released.
     PowerShell passes `-Force` to `Get-ChildItem` when hidden files are
     requested.  [[#623], [#624]]
 
+ -  Added `isSourceContext()` predicate to `@optique/core/context` for
+    runtime validation of `SourceContext` objects.  [[#424], [#640]]
+
+ -  `runWith()`, `runWithSync()`, and `runWithAsync()` now validate that
+    every entry in the `contexts` array is a valid `SourceContext` before
+    processing.  Malformed entries are rejected with a clear `TypeError`
+    instead of crashing with raw errors like
+    `TypeError: context.getAnnotations is not a function`.  [[#424], [#640]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -589,6 +598,7 @@ To be released.
 [#389]: https://github.com/dahlia/optique/issues/389
 [#395]: https://github.com/dahlia/optique/issues/395
 [#396]: https://github.com/dahlia/optique/issues/396
+[#424]: https://github.com/dahlia/optique/issues/424
 [#429]: https://github.com/dahlia/optique/issues/429
 [#490]: https://github.com/dahlia/optique/pull/490
 [#507]: https://github.com/dahlia/optique/issues/507
@@ -652,6 +662,7 @@ To be released.
 [#635]: https://github.com/dahlia/optique/pull/635
 [#636]: https://github.com/dahlia/optique/pull/636
 [#639]: https://github.com/dahlia/optique/pull/639
+[#640]: https://github.com/dahlia/optique/pull/640
 
 ### @optique/config
 
