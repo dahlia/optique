@@ -812,9 +812,9 @@ ${
       # before comparing so that Windows backslashes match forward slashes
       # in the transported pattern.
       let glob_base = if ($pattern | is-not-empty) {
-        # Normalize separators and leading ./ so that ./src/ma matches src/
-        let norm_prefix = ($prefix | str replace -a '\\' '/' | str replace -r '^\\./' '')
-        let norm_pattern = ($pattern | str replace -a '\\' '/' | str replace -r '^\\./' '')
+        # Normalize separators, leading ./, and case so that SRC\ma matches src/
+        let norm_prefix = ($prefix | str replace -a '\\' '/' | str replace -r '^\\./' '' | str downcase)
+        let norm_pattern = ($pattern | str replace -a '\\' '/' | str replace -r '^\\./' '' | str downcase)
         if ($norm_prefix | str starts-with $norm_pattern) and (($norm_prefix | str length) > ($norm_pattern | str length)) {
           $prefix
         } else {
