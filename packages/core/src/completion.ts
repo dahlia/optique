@@ -151,8 +151,8 @@ function _${programName} () {
         # Normalize leading ./ so that ./src/ma matches pattern src/
         local __norm_current="\${current#./}"
         local __norm_pattern="\${pattern#./}"
-        if [[ \${#__norm_current} -gt \${#__norm_pattern} && "\${__norm_current:0:\${#__norm_pattern}}" == "$__norm_pattern" ]]; then
-          # User has typed beyond the pattern — keep current for narrowing
+        if [[ \${#__norm_current} -ge \${#__norm_pattern} && "\${__norm_current:0:\${#__norm_pattern}}" == "$__norm_pattern" && "$current" != "$pattern" ]]; then
+          # User has typed beyond or an equivalent form of the pattern
           true
         else
           # Reset tilde state from the current-word expansion so that a
@@ -364,7 +364,10 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
           # Normalize leading ./ so that ./src/ma matches pattern src/
           local __norm_prefix="\${PREFIX#./}"
           local __norm_pattern="\${pattern#./}"
-          if [[ ! ( \${#__norm_prefix} -gt \${#__norm_pattern} && "\${__norm_prefix[1,\${#__norm_pattern}]}" == "\$__norm_pattern" ) ]]; then
+          if [[ \${#__norm_prefix} -ge \${#__norm_pattern} && "\${__norm_prefix[1,\${#__norm_pattern}]}" == "\$__norm_pattern" && "\$PREFIX" != "\$pattern" ]]; then
+            # User typed an equivalent or extended form — keep PREFIX
+            true
+          else
             PREFIX="\$pattern"
           fi
         fi
@@ -505,8 +508,9 @@ ${
                 set -l __norm_pattern (string replace -r '^\\./' '' -- "$pattern")
                 set -l __np_len (string length -- "$__norm_pattern")
                 set -l __nc_len (string length -- "$__norm_current")
-                if test $__nc_len -gt $__np_len
+                if test $__nc_len -ge $__np_len
                     and test (string sub -l $__np_len -- "$__norm_current") = "$__norm_pattern"
+                    and test "$current" != "$pattern"
                     set glob_base $current
                 else
                     set glob_base $pattern
@@ -819,7 +823,7 @@ ${
         let is_win = (($nu.os-info.name | str downcase) == "windows")
         let norm_prefix = (if $is_win { $norm_prefix_raw | str downcase } else { $norm_prefix_raw })
         let norm_pattern = (if $is_win { $norm_pattern_raw | str downcase } else { $norm_pattern_raw })
-        if ($norm_prefix | str starts-with $norm_pattern) and (($norm_prefix | str length) > ($norm_pattern | str length)) {
+        if ($norm_prefix | str starts-with $norm_pattern) and (($norm_prefix | str length) >= ($norm_pattern | str length)) and ($prefix != $pattern) {
           $prefix
         } else {
           $pattern
@@ -1057,7 +1061,7 @@ ${
                 \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') -replace '^\\./','' } else { '' }
                 \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') -replace '^\\./','' } else { '' }
                 \$comparison = if (\$IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
-                \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern, \$comparison) -and \$normalizedWord.Length -gt \$normalizedPattern.Length) {
+                \$prefix = if (\$normalizedPattern -and \$normalizedWord -and \$normalizedWord.StartsWith(\$normalizedPattern, \$comparison) -and \$normalizedWord.Length -ge \$normalizedPattern.Length -and \$wordToComplete -ne \$pattern) {
                     \$wordToComplete
                 } elseif (\$pattern) {
                     \$pattern
