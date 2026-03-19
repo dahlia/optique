@@ -714,13 +714,17 @@ function validateLoadResult<TConfigMeta>(
     );
   }
   const result = loaded as Record<string, unknown>;
-  if (result.config instanceof Promise || isThenable(result.config)) {
+  // Only check instanceof Promise here — not isThenable() — because
+  // config or meta objects may legitimately define a `then` method for
+  // domain reasons.  The top-level load() return is the place where
+  // thenables are rejected; nested fields only reject native Promises.
+  if (result.config instanceof Promise) {
     throw new TypeError(
       "Expected config in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
     );
   }
-  if (result.meta instanceof Promise || isThenable(result.meta)) {
+  if (result.meta instanceof Promise) {
     throw new TypeError(
       "Expected meta in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",

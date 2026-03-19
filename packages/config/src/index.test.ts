@@ -1338,79 +1338,24 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("rejects thenable config", () => {
-    const schema = z.object({ name: z.string() });
+  test("accepts config object with then method (not a Promise)", () => {
+    const schema = z.object({
+      name: z.string(),
+      then: z.function(),
+    });
     const context = createConfigContext({ schema });
-    assert.throws(
-      () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              config: {
-                then: (resolve: (v: unknown) => void) =>
-                  resolve({ name: "ALICE" }),
-              },
-              meta: undefined,
-            })) as never,
-          },
-        ),
+    const annotations = context.getAnnotations(
+      {},
       {
-        name: "TypeError",
-        message: "Expected config in load() result to not be a Promise. " +
-          "Resolve the Promise before returning.",
+        load: (() => ({
+          config: { name: "ALICE", then: () => "domain method" },
+          meta: undefined,
+        })) as never,
       },
     );
-  });
-
-  test("rejects thenable meta", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
-    assert.throws(
-      () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              config: { name: "ALICE" },
-              meta: {
-                then: (resolve: (v: unknown) => void) =>
-                  resolve({ configPath: "x", configDir: "." }),
-              },
-            })) as never,
-          },
-        ),
-      {
-        name: "TypeError",
-        message: "Expected meta in load() result to not be a Promise. " +
-          "Resolve the Promise before returning.",
-      },
-    );
-  });
-
-  test("rejects thenable config without Symbol.toStringTag", () => {
-    const schema = z.object({ name: z.string() });
-    const context = createConfigContext({ schema });
-    assert.throws(
-      () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              config: {
-                name: "ALICE",
-                then: () => "not a promise but still thenable",
-              },
-              meta: undefined,
-            })) as never,
-          },
-        ),
-      {
-        name: "TypeError",
-        message: "Expected config in load() result to not be a Promise. " +
-          "Resolve the Promise before returning.",
-      },
-    );
+    assert.ok(annotations != null);
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
   });
 
   test("rejects non-object resolved value from async load()", async () => {
