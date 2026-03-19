@@ -146,6 +146,10 @@ function _${programName} () {
       # current word so that completions enumerate the pattern's directory.
       # Apply tilde expansion to the pattern as well.
       if [[ -n "$pattern" ]]; then
+        # Reset tilde state from the current-word expansion so that a
+        # non-tilde pattern is not rewritten through stale tilde state
+        __tilde_prefix=""
+        __tilde_expanded=""
         __glob_current="$pattern"
         if [[ "$pattern" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)$ ]]; then
           __tilde_prefix="\${BASH_REMATCH[1]}"
@@ -568,8 +572,11 @@ ${
                 set items $filtered
             end
 
-            # Filter out hidden files unless requested
-            if test "$hidden" != "1" -a (string sub -l 1 -- $glob_base) != "."
+            # Filter out hidden files unless requested.
+            # Check the basename of glob_base so that patterns like
+            # "src/.e" correctly target hidden entries.
+            set -l __glob_basename (string replace -r '.*/(.*)' '$1' -- $glob_base)
+            if test "$hidden" != "1" -a (string sub -l 1 -- $__glob_basename) != "."
                 set -l filtered
                 for item in $items
                     set -l basename (basename $item)
@@ -798,8 +805,11 @@ ${
         []
       }
 
-      # Filter out hidden files unless requested
-      let filtered = if $hidden or ($glob_base | str starts-with '.') {
+      # Filter out hidden files unless requested.
+      # Check the basename of glob_base so that patterns like "src/.e"
+      # correctly target hidden entries.
+      let glob_basename = ($glob_base | path basename)
+      let filtered = if $hidden or ($glob_basename | str starts-with '.') {
         $items
       } else {
         $items | where {|item|

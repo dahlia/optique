@@ -702,6 +702,63 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       }
     });
 
+    it("should not apply stale tilde rewrite to absolute pattern in bash", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const home = process.env.HOME;
+      if (!home) {
+        t.skip("HOME not set");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-tilde-stale-"));
+
+      try {
+        // CLI emits __FILE__ with an absolute (non-tilde) pattern
+        const absSrcDir = join(tempDir, "src");
+        mkdirSync(absSrcDir);
+        writeFileSync(join(absSrcDir, "app.ts"), "");
+
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::${absSrcDir}/:0\\n'
+`;
+        const cliPath = join(tempDir, "abs-pat-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const script = bash.generateScript("abs-pat-cli");
+
+        // Current word starts with ~ so tilde state is set,
+        // but the pattern is absolute — results must not be tilde-rewritten
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+COMP_WORDS=("abs-pat-cli" "~/bogus")
+COMP_CWORD=1
+_abs-pat-cli 2>&1
+printf "%s\\n" "\${COMPREPLY[@]}"
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        // Should find file via absolute pattern
+        ok(completions.some((c) => c.includes("app.ts")));
+        // Results must NOT be rewritten to tilde prefix
+        ok(!completions.some((c) => c.startsWith("~/")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include hidden files when includeHidden is true", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");
@@ -2534,6 +2591,72 @@ ${functionName}
         ok(completions.some((c) => c.includes("main.ts")));
         ok(completions.some((c) => c.includes("util.ts")));
         ok(!completions.some((c) => c.includes("README.md")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should preserve hidden-basename matches in pattern for fish", (t) => {
+      if (!isShellAvailable("fish")) {
+        t.skip("fish not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "fish-hidden-pattern-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with pattern=src/.e (hidden basename under
+        // a non-hidden parent) and hidden=0
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir);
+        writeFileSync(join(srcDir, ".env"), "");
+        writeFileSync(join(srcDir, ".eslintrc"), "");
+        writeFileSync(join(srcDir, "main.ts"), "");
+
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::src/.e:0\\tFile\\n'
+`;
+        const cliPath = join(tempDir, "dotpat");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const script = fish.generateScript("dotpat");
+        const scriptPath = join(tempDir, "completion.fish");
+        writeFileSync(scriptPath, script);
+
+        const functionMatch = script.match(/function ([^\s]+)/);
+        const functionName = functionMatch
+          ? functionMatch[1]
+          : "__dotpat_complete";
+        const testScript = `
+set -x PATH "${tempDir}" $PATH
+source "${scriptPath}"
+cd "${tempDir}"
+
+function commandline
+    switch $argv[1]
+        case '-poc'
+            echo "dotpat"
+        case '-ct'
+            echo ""
+    end
+end
+
+${functionName}
+`;
+        const testScriptPath = join(tempDir, "test.fish");
+        writeFileSync(testScriptPath, testScript);
+        const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        // Pattern "src/.e" targets hidden files — they must not be filtered out
+        ok(completions.some((c) => c.includes(".env")));
+        ok(completions.some((c) => c.includes(".eslintrc")));
+        // Non-matching files should not appear
+        ok(!completions.some((c) => c.includes("main.ts")));
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
