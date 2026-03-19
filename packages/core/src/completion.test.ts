@@ -14,7 +14,7 @@ import {
   zsh,
 } from "./completion.ts";
 import type { Suggestion } from "./parser.ts";
-import { message } from "./message.ts";
+import { lineBreak, message, text } from "./message.ts";
 
 // Helper functions for shell availability and testing
 function getStdoutFromExecError(error: unknown): string | undefined {
@@ -1546,6 +1546,19 @@ _nohidden_cli 2>/dev/null
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should sanitize tabs and newlines in descriptions", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--opt",
+          description: [text("Line 1"), lineBreak(), text("Line\t2")],
+        },
+      ];
+
+      const encoded = Array.from(zsh.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, ["--opt\0Line 1 Line 2\0"]);
+    });
   });
 
   describe("pwsh shell completion", () => {
@@ -1742,6 +1755,19 @@ _nohidden_cli 2>/dev/null
       deepStrictEqual(encoded[0].includes("Enable verbose mode"), true);
       // Should not contain ANSI color codes
       deepStrictEqual(encoded[0].includes("\x1b["), false);
+    });
+
+    it("should sanitize tabs and newlines in descriptions", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--opt",
+          description: [text("Line 1"), lineBreak(), text("Line\t2")],
+        },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, ["--opt\t--opt\tLine 1 Line 2"]);
     });
 
     it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
@@ -2134,6 +2160,19 @@ printf '__FILE__:file::src/:0\\n'
       deepStrictEqual(encoded[0].includes("\x1b["), false);
     });
 
+    it("should sanitize tabs and newlines in descriptions", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--opt",
+          description: [text("Line 1"), lineBreak(), text("Line\t2")],
+        },
+      ];
+
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, ["--opt\tLine 1 Line 2"]);
+    });
+
     it("should sanitize program names with special characters", () => {
       const script = fish.generateScript("my-app.js");
 
@@ -2492,6 +2531,19 @@ ${functionName}
       deepStrictEqual(encoded[0].includes("Enable verbose mode"), true);
       // Should not contain ANSI color codes
       deepStrictEqual(encoded[0].includes("\x1b["), false);
+    });
+
+    it("should sanitize tabs and newlines in descriptions", () => {
+      const suggestions: Suggestion[] = [
+        {
+          kind: "literal",
+          text: "--opt",
+          description: [text("Line 1"), lineBreak(), text("Line\t2")],
+        },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, ["--opt\tLine 1 Line 2"]);
     });
 
     it("should use 2-space indentation in generated script", () => {

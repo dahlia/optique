@@ -207,6 +207,12 @@ To be released.
     instead of expanding the variable, so extension filtering (e.g.,
     `*.json`, `*.yaml`) now works correctly.  [[#256], [#639]]
 
+ -  Fixed `encodeSuggestions()` for zsh, fish, Nushell, and PowerShell not
+    escaping tabs and newlines in completion descriptions.  Descriptions
+    containing `lineBreak()` terms or tab characters now have those
+    characters replaced with spaces so the shell completion protocol is not
+    corrupted.  [[#247], [#642]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -563,6 +569,7 @@ To be released.
 [#241]: https://github.com/dahlia/optique/issues/241
 [#242]: https://github.com/dahlia/optique/issues/242
 [#245]: https://github.com/dahlia/optique/issues/245
+[#247]: https://github.com/dahlia/optique/issues/247
 [#248]: https://github.com/dahlia/optique/issues/248
 [#249]: https://github.com/dahlia/optique/issues/249
 [#250]: https://github.com/dahlia/optique/issues/250
@@ -668,6 +675,7 @@ To be released.
 [#638]: https://github.com/dahlia/optique/pull/638
 [#639]: https://github.com/dahlia/optique/pull/639
 [#641]: https://github.com/dahlia/optique/pull/641
+[#642]: https://github.com/dahlia/optique/pull/642
 
 ### @optique/config
 
