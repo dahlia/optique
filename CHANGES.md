@@ -199,6 +199,10 @@ To be released.
     path suggestions.  Completing `src/` now returns `src/alpha.txt` instead
     of bare `alpha.txt`.  [[#253], [#632]]
 
+ -  Fixed Nushell file completion returning an empty list for non-empty path
+    prefixes.  Completing `src/` now correctly returns files under that
+    directory.  [[#254], [#636]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -548,6 +552,7 @@ To be released.
 [#250]: https://github.com/dahlia/optique/issues/250
 [#252]: https://github.com/dahlia/optique/issues/252
 [#253]: https://github.com/dahlia/optique/issues/253
+[#254]: https://github.com/dahlia/optique/issues/254
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
 [#307]: https://github.com/dahlia/optique/issues/307
@@ -640,6 +645,7 @@ To be released.
 [#632]: https://github.com/dahlia/optique/pull/632
 [#634]: https://github.com/dahlia/optique/pull/634
 [#635]: https://github.com/dahlia/optique/pull/635
+[#636]: https://github.com/dahlia/optique/pull/636
 
 ### @optique/config
 

@@ -676,7 +676,8 @@ ${
 
       # Generate file completions based on type
       # Use current directory if prefix is empty
-      let ls_pattern = if ($prefix | is-empty) { "." } else { $prefix + "*" }
+      # Note: into glob is required so that ls expands wildcards from a variable
+      let ls_pattern = if ($prefix | is-empty) { "." } else { ($prefix + "*" | into glob) }
 
       # Use ls -a to include hidden files when requested
       let items = try {
@@ -723,12 +724,22 @@ ${
         }
       }
 
+      # Extract directory prefix to preserve in completion text
+      let dir_prefix = if ($prefix | is-empty) {
+        ""
+      } else if ($prefix | str ends-with "/") {
+        $prefix
+      } else {
+        let parsed = ($prefix | path parse)
+        if ($parsed.parent == ".") { "" } else { $parsed.parent + "/" }
+      }
+
       # Format file completions
       $filtered | each {|item|
         let name = if $item.type == dir {
-          ($item.name | path basename) + "/"
+          $dir_prefix + ($item.name | path basename) + "/"
         } else {
-          $item.name | path basename
+          $dir_prefix + ($item.name | path basename)
         }
         { value: $name }
       }
