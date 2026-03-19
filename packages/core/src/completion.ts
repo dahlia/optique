@@ -203,15 +203,18 @@ function _${programName} () {
       local -a __candidates=()
       if [[ "$__from_pattern" == "1" && "$__glob_current" == *[\*\?]* ]]; then
         mapfile -t __candidates < <(compgen -G "$__glob_current" 2>/dev/null)
-        # Also include directories from the base directory for navigation
-        # (file/any completion modes list directories even when the glob
-        # itself does not match directory names)
-        local __glob_dir="\${__glob_current%/*}"
-        [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
-        local __d
-        for __d in "$__glob_dir"/*/; do
-          [[ -d "$__d" ]] && __candidates+=("\${__d%/}")
-        done
+        # For file/any modes, also include directories from the base
+        # directory for navigation even when the glob itself does not
+        # match directory names.  Skip this for directory mode so that
+        # the pattern's basename filter is respected.
+        if [[ "$type" != "directory" ]]; then
+          local __glob_dir="\${__glob_current%/*}"
+          [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
+          local __d
+          for __d in "$__glob_dir"/*/; do
+            [[ -d "$__d" ]] && __candidates+=("\${__d%/}")
+          done
+        fi
       else
         __candidates=("$__glob_current"*)
         # Remove no-match sentinel (bash returns the literal pattern).
@@ -589,7 +592,8 @@ ${
                 if test -z "$__glob_dir"; or test "$__glob_dir" = "$glob_base"
                     set __glob_dir "."
                 end
-                # Match files by the glob filter
+                # Match files by the glob filter.  Fish's * does not match
+                # dotfiles, so also scan .* when the filter targets them.
                 for __item in $__glob_dir/*
                     if test -e "$__item"
                         set -l __bn (basename "$__item")
@@ -598,10 +602,26 @@ ${
                         end
                     end
                 end
-                # Also include directories for navigation
-                for __item in $__glob_dir/*/
-                    if test -d "$__item"
-                        set -a __candidates (string replace -r '/$' '' -- "$__item")
+                if string match -q '.*' -- "$__glob_filter"
+                    for __item in $__glob_dir/.*
+                        if test -e "$__item"
+                            set -l __bn (basename "$__item")
+                            if test "$__bn" = "." -o "$__bn" = ".."
+                                continue
+                            end
+                            if string match -q "$__glob_filter" -- "$__bn"
+                                set -a __candidates "$__item"
+                            end
+                        end
+                    end
+                end
+                # For file/any modes, also include directories for navigation.
+                # Skip for directory mode so the pattern filter is respected.
+                if test "$type" != "directory"
+                    for __item in $__glob_dir/*/
+                        if test -d "$__item"
+                            set -a __candidates (string replace -r '/$' '' -- "$__item")
+                        end
                     end
                 end
             else
