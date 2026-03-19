@@ -8960,8 +8960,17 @@ describe("domain()", () => {
         () => domain({ allowedTlds: [123 as never] }),
         {
           name: "TypeError",
-          message: "Each allowedTlds entry must be a non-empty string " +
-            "without dots or surrounding whitespace.",
+          message: "allowedTlds[0] must be a string, but got number.",
+        },
+      );
+    });
+
+    it("should throw TypeError for array entry", () => {
+      assert.throws(
+        () => domain({ allowedTlds: [["com"] as never] }),
+        {
+          name: "TypeError",
+          message: "allowedTlds[0] must be a string, but got array.",
         },
       );
     });
@@ -8971,8 +8980,7 @@ describe("domain()", () => {
         () => domain({ allowedTlds: [".com"] as never }),
         {
           name: "TypeError",
-          message: "Each allowedTlds entry must be a non-empty string " +
-            "without dots or surrounding whitespace.",
+          message: 'allowedTlds[0] must not contain dots: ".com".',
         },
       );
     });
@@ -8982,8 +8990,8 @@ describe("domain()", () => {
         () => domain({ allowedTlds: [" com"] as never }),
         {
           name: "TypeError",
-          message: "Each allowedTlds entry must be a non-empty string " +
-            "without dots or surrounding whitespace.",
+          message: "allowedTlds[0] must not have leading or trailing " +
+            'whitespace: " com".',
         },
       );
     });
@@ -8993,8 +9001,8 @@ describe("domain()", () => {
         () => domain({ allowedTlds: ["com "] as never }),
         {
           name: "TypeError",
-          message: "Each allowedTlds entry must be a non-empty string " +
-            "without dots or surrounding whitespace.",
+          message: "allowedTlds[0] must not have leading or trailing " +
+            'whitespace: "com ".',
         },
       );
     });
@@ -9004,8 +9012,17 @@ describe("domain()", () => {
         () => domain({ allowedTlds: [""] as never }),
         {
           name: "TypeError",
-          message: "Each allowedTlds entry must be a non-empty string " +
-            "without dots or surrounding whitespace.",
+          message: "allowedTlds[0] must not be an empty string.",
+        },
+      );
+    });
+
+    it("should include index in error message", () => {
+      assert.throws(
+        () => domain({ allowedTlds: ["com", "org", 42 as never] }),
+        {
+          name: "TypeError",
+          message: "allowedTlds[2] must be a string, but got number.",
         },
       );
     });

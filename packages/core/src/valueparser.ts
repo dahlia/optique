@@ -4248,7 +4248,7 @@ export interface DomainOptions {
  * @returns A parser that accepts valid domain names as strings.
  * @throws {RangeError} If `maxLength` is not a positive integer.
  * @throws {RangeError} If `minLabels` is not a positive integer.
- * @throws {TypeError} If any `allowedTlds` entry is not a non-empty string,
+ * @throws {TypeError} If any `allowedTlds` entry is not a string, is empty,
  *   contains dots, or has leading/trailing whitespace.
  * @throws {TypeError} If `allowSubdomains` is `false` and `minLabels` is
  *   greater than 2, since non-subdomain domains have exactly 2 labels.
@@ -4282,16 +4282,28 @@ export function domain(
     ? Object.freeze([...options.allowedTlds])
     : undefined;
   if (allowedTlds !== undefined) {
-    for (const tld of allowedTlds) {
-      if (
-        typeof tld !== "string" ||
-        tld.length === 0 ||
-        tld.includes(".") ||
-        tld !== tld.trim()
-      ) {
+    for (const [i, tld] of allowedTlds.entries()) {
+      if (typeof tld !== "string") {
+        const actualType = Array.isArray(tld) ? "array" : typeof tld;
         throw new TypeError(
-          "Each allowedTlds entry must be a non-empty string " +
-            "without dots or surrounding whitespace.",
+          `allowedTlds[${i}] must be a string, but got ${actualType}.`,
+        );
+      }
+      if (tld.length === 0) {
+        throw new TypeError(
+          `allowedTlds[${i}] must not be an empty string.`,
+        );
+      }
+      if (tld.includes(".")) {
+        throw new TypeError(
+          `allowedTlds[${i}] must not contain dots: ${JSON.stringify(tld)}.`,
+        );
+      }
+      if (tld !== tld.trim()) {
+        throw new TypeError(
+          `allowedTlds[${i}] must not have leading or trailing whitespace: ${
+            JSON.stringify(tld)
+          }.`,
         );
       }
     }
