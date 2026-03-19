@@ -1243,7 +1243,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
     it("should include directories for navigation in file type completion with extensions", () => {
       const script = bash.generateScript("fileext-cli");
 
-      // Extract the file case with extensions block
+      // Extract the file case block
       const typeCaseStart2 = script.indexOf('case "$type" in');
       const typeCaseEnd2 = script.indexOf("esac", typeCaseStart2);
       const typeCase2 = script.substring(typeCaseStart2, typeCaseEnd2);
@@ -1251,10 +1251,15 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         typeCase2.indexOf("file)"),
         typeCase2.indexOf("directory)"),
       );
+      // Narrow to the extensions branch (the if block with ext_pattern)
+      const extBranch = fileCaseBlock2.substring(
+        fileCaseBlock2.indexOf("ext_pattern"),
+        fileCaseBlock2.indexOf("else"),
+      );
       // Should check for directories even in extension-filtered mode
       ok(
-        fileCaseBlock2.includes("-d"),
-        "file) case with extensions should still check for directories",
+        extBranch.includes("-d"),
+        "file) extensions branch should still check for directories",
       );
     });
   });
@@ -1620,6 +1625,11 @@ _nohidden_cli 2>/dev/null
       ok(
         fileCaseBlock.includes("_directories"),
         "zsh file) case should include _directories for navigation",
+      );
+      // _directories must run unconditionally (semicolon, not &&)
+      ok(
+        !fileCaseBlock.includes("&& _directories"),
+        "zsh file) case should use unconditional _directories (not &&)",
       );
     });
   });
@@ -2989,10 +2999,18 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
         fileCase.indexOf('"file"'),
         fileCase.indexOf('"directory"'),
       );
-      // Should include dir type to allow directory navigation
+      // Should include dir type in both branches
       ok(
         fileCaseBlock.includes("type == dir"),
         "nushell file case should include dir type for navigation",
+      );
+      // Narrow to extensions branch specifically
+      const extBranch = fileCaseBlock.substring(
+        fileCaseBlock.indexOf("ext_list"),
+      );
+      ok(
+        extBranch.includes("type == dir"),
+        "nushell file extensions branch should include dir type for navigation",
       );
     });
   });
