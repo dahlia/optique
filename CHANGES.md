@@ -679,7 +679,7 @@ To be released.
     silently coercing the value.  [[#398], [#627]]
 
  -  `bindConfig()` now throws a `TypeError` at parse time when a `key`
-    callback returns a `Promise` or thenable object, instead of silently
+    callback returns a `Promise` or thenable, instead of silently
     leaking the thenable as the parsed value.  [[#400], [#628]]
 
 [#111]: https://github.com/dahlia/optique/issues/111
