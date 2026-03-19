@@ -872,6 +872,24 @@ describe("runParser", () => {
         },
       );
     });
+
+    it("should reject array version value at runtime", () => {
+      const parser = object({ name: argument(string()) });
+      assert.throws(
+        () =>
+          runParser(parser, "test", ["--version"], {
+            version: {
+              option: true,
+              value: ["1.0.0"] as never,
+            },
+            stdout: () => {},
+          }),
+        {
+          name: "TypeError",
+          message: "Expected version value to be a string, but got array.",
+        },
+      );
+    });
   });
 
   describe("error handling", () => {

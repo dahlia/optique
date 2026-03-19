@@ -1767,8 +1767,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
 function validateVersionValue(value: unknown): string {
   if (typeof value !== "string") {
+    const type = Array.isArray(value) ? "array" : typeof value;
     throw new TypeError(
-      `Expected version value to be a string, but got ${typeof value}.`,
+      `Expected version value to be a string, but got ${type}.`,
     );
   }
   if (value === "") {
