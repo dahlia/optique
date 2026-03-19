@@ -1247,27 +1247,30 @@ describe("load() return value validation", () => {
     );
   });
 
-  test("rejects spoofed Promise (Symbol.toStringTag) from load()", () => {
+  test("accepts cross-realm Promise from load()", async () => {
     const schema = z.object({ name: z.string() });
     const context = createConfigContext({ schema });
-    assert.throws(
-      () =>
-        context.getAnnotations(
-          {},
-          {
-            load: (() => ({
-              [Symbol.toStringTag]: "Promise",
-              then: (resolve: (value: unknown) => void) =>
-                resolve({ config: { name: "ALICE" }, meta: undefined }),
-            })) as never,
-          },
-        ),
-      {
-        name: "TypeError",
-        message: "Expected load() to return a plain object or Promise, " +
-          "but got a thenable. Use a real Promise instead.",
+    // Simulate a cross-realm Promise: Symbol.toStringTag is "Promise"
+    // but instanceof Promise is false.
+    const crossRealmPromise = {
+      [Symbol.toStringTag]: "Promise",
+      then(
+        resolve: (value: { config: { name: string }; meta: undefined }) => void,
+      ) {
+        resolve({ config: { name: "ALICE" }, meta: undefined });
       },
+    };
+    const annotations = await context.getAnnotations(
+      {},
+      { load: (() => crossRealmPromise) as never },
     );
+    assert.ok(annotations != null);
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
+    const entry = (annotations as Record<symbol, { data: { name: string } }>)[
+      symbols[0]
+    ];
+    assert.equal(entry.data.name, "ALICE");
   });
 
   test("rejects thenable even if it would resolve to valid result", () => {
@@ -1356,6 +1359,58 @@ describe("load() return value validation", () => {
     assert.ok(annotations != null);
     const symbols = Object.getOwnPropertySymbols(annotations);
     assert.equal(symbols.length, 1);
+  });
+
+  test("rejects cross-realm Promise config (Symbol.toStringTag)", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: {
+                [Symbol.toStringTag]: "Promise",
+                then: (resolve: (v: unknown) => void) =>
+                  resolve({ name: "ALICE" }),
+              },
+              meta: undefined,
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected config in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("rejects cross-realm Promise meta (Symbol.toStringTag)", () => {
+    const schema = z.object({ name: z.string() });
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: { name: "ALICE" },
+              meta: {
+                [Symbol.toStringTag]: "Promise",
+                then: (resolve: (v: unknown) => void) =>
+                  resolve({ configPath: "x", configDir: "." }),
+              },
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected meta in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
   });
 
   test("rejects non-object resolved value from async load()", async () => {
