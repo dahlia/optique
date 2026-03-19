@@ -759,6 +759,65 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       }
     });
 
+    it("should preserve user suffix for incremental filtering in bash", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-incremental-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with pattern=src/
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir);
+        writeFileSync(join(srcDir, "main.ts"), "");
+        writeFileSync(join(srcDir, "util.ts"), "");
+        writeFileSync(join(srcDir, "model.ts"), "");
+
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::src/:0\\n'
+`;
+        const cliPath = join(tempDir, "incr-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const script = bash.generateScript("incr-cli");
+
+        // User has typed "src/ma" — should narrow to main.ts only
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("incr-cli" "src/ma")
+COMP_CWORD=1
+_incr-cli 2>&1
+if [ \${#COMPREPLY[@]} -gt 0 ]; then
+  printf "%s\\n" "\${COMPREPLY[@]}"
+else
+  echo "__NO_COMPLETIONS__"
+fi
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+        ok(completions.some((c) => c.includes("main.ts")));
+        // util.ts and model.ts should NOT appear
+        ok(!completions.some((c) => c.includes("util.ts")));
+        ok(!completions.some((c) => c.includes("model.ts")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include hidden files when includeHidden is true", (t) => {
       if (!isShellAvailable("bash")) {
         t.skip("bash not available");
@@ -2657,6 +2716,72 @@ ${functionName}
         ok(completions.some((c) => c.includes(".eslintrc")));
         // Non-matching files should not appear
         ok(!completions.some((c) => c.includes("main.ts")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should preserve user suffix for incremental filtering in fish", (t) => {
+      if (!isShellAvailable("fish")) {
+        t.skip("fish not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "fish-incremental-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with pattern=src/
+        const srcDir = join(tempDir, "src");
+        mkdirSync(srcDir);
+        writeFileSync(join(srcDir, "main.ts"), "");
+        writeFileSync(join(srcDir, "util.ts"), "");
+        writeFileSync(join(srcDir, "model.ts"), "");
+
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file::src/:0\\tFile\\n'
+`;
+        const cliPath = join(tempDir, "incr-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        const script = fish.generateScript("incr-cli");
+        const scriptPath = join(tempDir, "completion.fish");
+        writeFileSync(scriptPath, script);
+
+        const functionMatch = script.match(/function ([^\s]+)/);
+        const functionName = functionMatch
+          ? functionMatch[1]
+          : "__incr_cli_complete";
+
+        // User has typed "src/ma" — should narrow to main.ts only
+        const testScript = `
+set -x PATH "${tempDir}" $PATH
+source "${scriptPath}"
+cd "${tempDir}"
+
+function commandline
+    switch $argv[1]
+        case '-poc'
+            echo "incr-cli"
+            echo "src/ma"
+        case '-ct'
+            echo "src/ma"
+    end
+end
+
+${functionName}
+`;
+        const testScriptPath = join(tempDir, "test.fish");
+        writeFileSync(testScriptPath, testScript);
+        const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        ok(completions.some((c) => c.includes("main.ts")));
+        ok(!completions.some((c) => c.includes("util.ts")));
+        ok(!completions.some((c) => c.includes("model.ts")));
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }

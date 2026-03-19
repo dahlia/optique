@@ -144,20 +144,27 @@ function _${programName} () {
 
       # When a pattern is specified, use it as the glob base instead of the
       # current word so that completions enumerate the pattern's directory.
-      # Apply tilde expansion to the pattern as well.
+      # However, if the user has already typed beyond the pattern (e.g.,
+      # pattern="src/" and current="src/ma"), preserve the typed suffix
+      # for incremental filtering.
       if [[ -n "$pattern" ]]; then
-        # Reset tilde state from the current-word expansion so that a
-        # non-tilde pattern is not rewritten through stale tilde state
-        __tilde_prefix=""
-        __tilde_expanded=""
-        __glob_current="$pattern"
-        if [[ "$pattern" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)$ ]]; then
-          __tilde_prefix="\${BASH_REMATCH[1]}"
-          eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
-          if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
-            __glob_current="\${__tilde_expanded}\${pattern#\$__tilde_prefix}"
-          else
-            __tilde_prefix=""
+        if [[ "$current" == "$pattern"* && \${#current} -gt \${#pattern} ]]; then
+          # User has typed beyond the pattern — keep current for narrowing
+          true
+        else
+          # Reset tilde state from the current-word expansion so that a
+          # non-tilde pattern is not rewritten through stale tilde state
+          __tilde_prefix=""
+          __tilde_expanded=""
+          __glob_current="$pattern"
+          if [[ "$pattern" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)$ ]]; then
+            __tilde_prefix="\${BASH_REMATCH[1]}"
+            eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
+            if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
+              __glob_current="\${__tilde_expanded}\${pattern#\$__tilde_prefix}"
+            else
+              __tilde_prefix=""
+            fi
           fi
         fi
       fi
@@ -347,9 +354,10 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
 
         # When a pattern is specified, override PREFIX so that _files and
         # _directories enumerate the pattern's directory instead of the
-        # current word
+        # current word.  If the user has already typed beyond the pattern,
+        # keep PREFIX unchanged for incremental narrowing.
         local __saved_prefix="\$PREFIX"
-        if [[ -n "\$pattern" ]]; then
+        if [[ -n "\$pattern" && ! ( "\$PREFIX" == "\$pattern"* && \${#PREFIX} -gt \${#pattern} ) ]]; then
           PREFIX="\$pattern"
         fi
 
@@ -478,10 +486,17 @@ ${
             set -l hidden $parts[5]
 
             # When a pattern is specified, use it as the glob base instead
-            # of the current word
+            # of the current word.  If the user has already typed beyond the
+            # pattern (e.g., pattern="src/" and current="src/ma"), keep the
+            # current word for incremental narrowing.
             set -l glob_base $current
             if test -n "$pattern"
-                set glob_base $pattern
+                if string match -q "$pattern*" -- "$current"
+                    and test (string length -- "$current") -gt (string length -- "$pattern")
+                    set glob_base $current
+                else
+                    set glob_base $pattern
+                end
             end
 
             # Generate file completions based on type
@@ -758,8 +773,18 @@ ${
       }
 
       # When a pattern is specified, use it as the glob base instead of
-      # the user-typed prefix
-      let glob_base = if ($pattern | is-not-empty) { $pattern } else { $prefix }
+      # the user-typed prefix.  If the user has already typed beyond the
+      # pattern (e.g., pattern="src/" and prefix="src/ma"), keep the
+      # prefix for incremental narrowing.
+      let glob_base = if ($pattern | is-not-empty) {
+        if ($prefix | str starts-with $pattern) and (($prefix | str length) > ($pattern | str length)) {
+          $prefix
+        } else {
+          $pattern
+        }
+      } else {
+        $prefix
+      }
 
       # Generate file completions based on type
       # Use current directory if glob_base is empty
@@ -982,8 +1007,16 @@ ${
                 \$hidden = \$parts[4] -eq '1'
 
                 # When a pattern is specified, use it as the file matching
-                # prefix instead of the current word
-                \$prefix = if (\$pattern) { \$pattern } elseif (\$wordToComplete) { \$wordToComplete } else { '' }
+                # prefix instead of the current word.  If the user has
+                # already typed beyond the pattern, keep their input for
+                # incremental narrowing.
+                \$prefix = if (\$pattern -and \$wordToComplete -and \$wordToComplete.StartsWith(\$pattern) -and \$wordToComplete.Length -gt \$pattern.Length) {
+                    \$wordToComplete
+                } elseif (\$pattern) {
+                    \$pattern
+                } elseif (\$wordToComplete) {
+                    \$wordToComplete
+                } else { '' }
 
                 # Use -Force to include hidden files when requested
                 \$forceParam = if (\$hidden) { @{Force = \$true} } else { @{} }
