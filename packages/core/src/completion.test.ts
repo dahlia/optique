@@ -1639,6 +1639,27 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should use -Force on Get-ChildItem when hidden is true", () => {
+      const script = pwsh.generateScript("myapp");
+
+      // Extract the __FILE__ handling block from the generated script
+      const fileBlock = script.substring(
+        script.indexOf("__FILE__:"),
+        script.indexOf("# Create completion results for files"),
+      );
+
+      // The script should use -Force with Get-ChildItem when $hidden is true:
+      // $forceParam is set from $hidden, then splatted into Get-ChildItem
+      ok(
+        /\$hidden\b[\s\S]*Force/.test(fileBlock),
+        "Expected Force parameter derived from $hidden.",
+      );
+      ok(
+        /Get-ChildItem\s+@forceParam/.test(fileBlock),
+        "Expected Get-ChildItem to use @forceParam splatting.",
+      );
+    });
   });
 
   describe("fish shell completion", () => {
@@ -1934,6 +1955,67 @@ ${functionName}
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    it("should enumerate hidden files without dot prefix when includeHidden is true", (t) => {
+      if (!isShellAvailable("fish")) {
+        t.skip("fish not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "fish-hidden-no-dot-"),
+      );
+
+      try {
+        // CLI that emits __FILE__ with hidden=1
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\tConfiguration file\\n'
+`;
+        const cliPath = join(tempDir, "hidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        writeFileSync(join(tempDir, "visible.txt"), "");
+        writeFileSync(join(tempDir, ".hidden"), "");
+
+        const script = fish.generateScript("hidden-cli");
+        const scriptPath = join(tempDir, "completion.fish");
+        writeFileSync(scriptPath, script);
+
+        const functionMatch = script.match(/function ([^\s]+)/);
+        const functionName = functionMatch
+          ? functionMatch[1]
+          : "__hidden_cli_complete";
+        // Mock commandline with empty current token (no dot prefix)
+        const testScript = `
+set -x PATH "${tempDir}" $PATH
+source "${scriptPath}"
+cd "${tempDir}"
+
+function commandline
+    switch $argv[1]
+        case '-poc'
+            echo "hidden-cli"
+        case '-ct'
+            echo ""
+    end
+end
+
+${functionName}
+`;
+        const testScriptPath = join(tempDir, "test.fish");
+        writeFileSync(testScriptPath, testScript);
+        const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        // With hidden=1 and no dot prefix, hidden files must still be included
+        ok(completions.some((c) => c.includes(".hidden")));
+        ok(completions.some((c) => c.includes("visible.txt")));
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("nu shell completion", () => {
@@ -2223,6 +2305,46 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
         // Verify that completions were returned (nu helper may return empty
         // on some environments, so only assert when results are available)
         if (completions.length > 0) {
+          ok(completions.some((c) => c.includes("visible.txt")));
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should enumerate hidden files without dot prefix when includeHidden is true", (t) => {
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "nu-hidden-no-dot-"),
+      );
+
+      try {
+        // CLI that emits __FILE__ with hidden=1
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:::1\\tConfiguration file\\n'
+`;
+        const cliPath = join(tempDir, "hidden-cli");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        writeFileSync(join(tempDir, "visible.txt"), "");
+        writeFileSync(join(tempDir, ".hidden"), "");
+
+        const script = nu.generateScript("hidden-cli");
+        const completions = testNuCompletion(script, "hidden-cli", tempDir);
+
+        if (completions.length === 0) {
+          // Fallback: verify the generated script uses ls -a for hidden files
+          ok(
+            script.includes("ls -a"),
+            "Generated Nushell script must enumerate hidden entries with ls -a.",
+          );
+        } else {
+          // With hidden=1, hidden files must be included even without dot prefix
+          ok(completions.some((c) => c.includes(".hidden")));
           ok(completions.some((c) => c.includes("visible.txt")));
         }
       } finally {

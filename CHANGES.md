@@ -476,6 +476,14 @@ To be released.
     re-source their shell completion script after upgrading for this fix to
     take effect.  [[#618], [#619]]
 
+ -  Fixed fish, Nushell, and PowerShell completions not enumerating hidden
+    (dot-prefixed) files even when `includeHidden` is `true`.  The parsed
+    `hidden` flag only controlled the post-enumeration filter, but each
+    shell's native file listing command excluded hidden files by default.
+    Fish now additionally globs `$current.*`, Nushell uses `ls -a`, and
+    PowerShell passes `-Force` to `Get-ChildItem` when hidden files are
+    requested.  [[#623], [#624]]
+
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -592,6 +600,8 @@ To be released.
 [#618]: https://github.com/dahlia/optique/issues/618
 [#619]: https://github.com/dahlia/optique/pull/619
 [#622]: https://github.com/dahlia/optique/pull/622
+[#623]: https://github.com/dahlia/optique/issues/623
+[#624]: https://github.com/dahlia/optique/pull/624
 [#626]: https://github.com/dahlia/optique/pull/626
 [#629]: https://github.com/dahlia/optique/pull/629
 
