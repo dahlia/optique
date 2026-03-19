@@ -1356,6 +1356,15 @@ describe("load() return value validation", () => {
     assert.ok(annotations != null);
     const symbols = Object.getOwnPropertySymbols(annotations);
     assert.equal(symbols.length, 1);
+    const entry = (
+      annotations as Record<
+        symbol,
+        { data: { name: string; then: () => string } }
+      >
+    )[symbols[0]];
+    assert.ok(entry != null);
+    assert.equal(entry.data.name, "ALICE");
+    assert.equal(typeof entry.data.then, "function");
   });
 
   test("rejects cross-realm Promise config (Symbol.toStringTag)", () => {
