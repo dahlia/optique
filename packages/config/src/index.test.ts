@@ -123,6 +123,89 @@ describe("createConfigContext", () => {
 });
 
 describe("bindConfig", () => {
+  describe("key validation", () => {
+    test("throws TypeError when key is an object", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string() }),
+      });
+      assert.throws(
+        () =>
+          bindConfig(option("--name", string()), {
+            context,
+            key: {} as never,
+          }),
+        {
+          name: "TypeError",
+          message:
+            "Expected key to be a property key or function, but got: object.",
+        },
+      );
+    });
+
+    test("throws TypeError when key is null", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string() }),
+      });
+      assert.throws(
+        () =>
+          bindConfig(option("--name", string()), {
+            context,
+            key: null as never,
+          }),
+        {
+          name: "TypeError",
+          message:
+            "Expected key to be a property key or function, but got: null.",
+        },
+      );
+    });
+
+    test("throws TypeError when key is an array", () => {
+      const context = createConfigContext({
+        schema: z.object({ name: z.string() }),
+      });
+      assert.throws(
+        () =>
+          bindConfig(option("--name", string()), {
+            context,
+            key: [] as never,
+          }),
+        {
+          name: "TypeError",
+          message:
+            "Expected key to be a property key or function, but got: array.",
+        },
+      );
+    });
+
+    test("accepts symbol keys", () => {
+      const sym = Symbol("KEY");
+      const context = createConfigContext<{ [sym]: string }>({
+        schema: z.object({}) as never,
+      });
+      // Should not throw — symbol is a valid property key
+      assert.doesNotThrow(() =>
+        bindConfig(option("--name", string()), {
+          context,
+          key: sym,
+        })
+      );
+    });
+
+    test("accepts numeric keys", () => {
+      const context = createConfigContext<{ 0: string }>({
+        schema: z.object({}) as never,
+      });
+      // Should not throw — number is a valid property key
+      assert.doesNotThrow(() =>
+        bindConfig(option("--name", string()), {
+          context,
+          key: 0,
+        })
+      );
+    });
+  });
+
   test("uses CLI value when provided", () => {
     const schema = z.object({
       host: z.string(),

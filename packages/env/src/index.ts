@@ -205,6 +205,7 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.
  * @returns A parser with environment fallback behavior.
+ * @throws {TypeError} If `key` is not a string.
  * @throws {Error} If the inner parser throws while parsing or completing a
  *                 value, if the environment source throws while reading a
  *                 variable, or if the environment value parser throws while
@@ -219,6 +220,18 @@ export function bindEnv<
   parser: Parser<M, TValue, TState>,
   options: BindEnvOptions<M, TValue>,
 ): Parser<M, TValue, TState> {
+  if (typeof options.key !== "string") {
+    throw new TypeError(
+      `Expected key to be a string, but got: ${
+        options.key === null
+          ? "null"
+          : Array.isArray(options.key)
+          ? "array"
+          : typeof options.key
+      }.`,
+    );
+  }
+
   const envBindStateKey: unique symbol = Symbol("@optique/env/bindState");
 
   type EnvBindState =
