@@ -714,13 +714,13 @@ function validateLoadResult<TConfigMeta>(
     );
   }
   const result = loaded as Record<string, unknown>;
-  if (result.config instanceof Promise || isThenable(result.config)) {
+  if (result.config instanceof Promise) {
     throw new TypeError(
       "Expected config in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
     );
   }
-  if (result.meta instanceof Promise || isThenable(result.meta)) {
+  if (result.meta instanceof Promise) {
     throw new TypeError(
       "Expected meta in load() result to not be a Promise. " +
         "Resolve the Promise before returning.",
@@ -1266,7 +1266,13 @@ function getConfigOrDefault<T, TValue, TConfigMeta>(
     // Extract value from config
     if (typeof options.key === "function") {
       configValue = options.key(configData, configMeta);
-      if (isThenable(configValue)) {
+      if (
+        configValue != null &&
+        (typeof configValue === "object" ||
+          typeof configValue === "function") &&
+        "then" in configValue &&
+        typeof (configValue as Record<string, unknown>).then === "function"
+      ) {
         throw new TypeError(
           "The key callback must return a synchronous value, " +
             "but got a thenable.",

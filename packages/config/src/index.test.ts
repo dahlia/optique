@@ -1313,6 +1313,26 @@ describe("load() return value validation", () => {
     );
   });
 
+  test("accepts config object with then method (not a Promise)", () => {
+    const schema = z.object({
+      name: z.string(),
+      then: z.function(),
+    });
+    const context = createConfigContext({ schema });
+    const annotations = context.getAnnotations(
+      {},
+      {
+        load: (() => ({
+          config: { name: "ALICE", then: () => "not a promise" },
+          meta: undefined,
+        })) as never,
+      },
+    );
+    assert.ok(annotations != null);
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
+  });
+
   test("rejects non-object resolved value from async load()", async () => {
     const schema = z.object({ name: z.string() });
     const context = createConfigContext({ schema });
