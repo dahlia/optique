@@ -1765,6 +1765,14 @@ function handleCompletion<M extends Mode, THelp, TError>(
   );
 }
 
+/**
+ * Validates the configured version value.
+ *
+ * @param value Runtime version value from configuration.
+ * @returns The validated version string.
+ * @throws {TypeError} If the value is not a string, is empty, or contains
+ *         ASCII control characters.
+ */
 function validateVersionValue(value: unknown): string {
   if (typeof value !== "string") {
     const type = Array.isArray(value) ? "array" : typeof value;
@@ -1811,6 +1819,8 @@ function validateVersionValue(value: unknown): string {
  * @param options Configuration options for output formatting and callbacks.
  * @returns The parsed result value, or the return value of `onHelp`/`onError`
  *          callbacks.
+ * @throws {TypeError} If `options.version.value` is not a non-empty string
+ *          without ASCII control characters.
  * @throws {RunParserError} When parsing fails and no `onError` callback is
  *          provided.
  * @since 0.10.0 Added support for {@link Program} objects.
