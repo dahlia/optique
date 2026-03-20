@@ -4048,6 +4048,16 @@ describe("uuid", () => {
       assert.ok(result.success);
     });
 
+    it("should accept nil and max UUIDs with allowedVersions and strict: false", () => {
+      const parser = uuid({ allowedVersions: [4], strict: false });
+      assert.ok(
+        parser.parse("00000000-0000-0000-0000-000000000000").success,
+      );
+      assert.ok(
+        parser.parse("ffffffff-ffff-ffff-ffff-ffffffffffff").success,
+      );
+    });
+
     it("should provide default error message for invalid variant", () => {
       const parser = uuid({});
       const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
