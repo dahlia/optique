@@ -1817,7 +1817,9 @@ export interface UuidOptions {
  * By default, the parser enforces strict [RFC 9562] validation: it requires
  * a standardized version digit (1 through 8) and the RFC 9562 variant bits
  * (`10xx`).  The nil and max UUIDs are accepted as special standard values.
- * Set `strict: false` to disable version and variant validation.
+ * Set `strict: false` to disable the default RFC 9562 version/variant
+ * checks.  An explicit {@link UuidOptions.allowedVersions} list still
+ * constrains the version nibble even in lenient mode.
  *
  * [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
  * @param options Configuration options for the UUID parser.

@@ -4136,6 +4136,21 @@ describe("uuid", () => {
       );
     });
 
+    it("should reject non-boolean strict option", () => {
+      assert.throws(
+        () => uuid({ strict: 1 as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => uuid({ strict: "true" as never }),
+        TypeError,
+      );
+      assert.throws(
+        () => uuid({ strict: 0 as never }),
+        TypeError,
+      );
+    });
+
     it("should snapshot errors.invalidVariant at construction time", () => {
       const errors: { invalidVariant: string } = {
         invalidVariant: "original error",
