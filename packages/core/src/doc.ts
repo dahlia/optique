@@ -393,7 +393,9 @@ export function formatDocPage(
       );
     // Compute minimum description column width for showDefault/showChoices.
     // The description column must be wide enough to fit the fixed prefix
-    // strings without exceeding maxWidth.
+    // and suffix on a single line.  When the rendered value is non-empty,
+    // word-wrapping separates content across lines, so no extra character
+    // beyond prefix + suffix (or prefix + label + suffix) is needed.
     let minDescWidth = 1;
     if (needsDescColumn) {
       if (
@@ -408,7 +410,7 @@ export function formatDocPage(
           : "]";
         minDescWidth = Math.max(
           minDescWidth,
-          prefix.length + suffix.length + 1,
+          prefix.length + suffix.length,
         );
       }
       if (
@@ -426,7 +428,7 @@ export function formatDocPage(
           : "choices: ";
         minDescWidth = Math.max(
           minDescWidth,
-          prefix.length + label.length + suffix.length + 1,
+          prefix.length + label.length + suffix.length,
         );
       }
     }
