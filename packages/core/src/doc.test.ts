@@ -185,7 +185,7 @@ describe("formatDocPage", () => {
     };
 
     const result = formatDocPage("myapp", page);
-    const expected = "\n  command                     \n";
+    const expected = "\n  command                   \n";
     assert.equal(result, expected);
   });
 
@@ -1601,6 +1601,195 @@ describe("formatDocPage", () => {
       }],
     };
     assert.doesNotThrow(() => formatDocPage("myapp", page));
+  });
+
+  describe("small maxWidth graceful degradation", () => {
+    const simplePage: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-v", "--verbose"] },
+          description: [{ type: "text", text: "Enable verbose output" }],
+        }],
+      }],
+    };
+
+    function assertLinesWithinMaxWidth(
+      result: string,
+      maxWidth: number,
+    ): void {
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= maxWidth,
+          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
+        );
+      }
+    }
+
+    it("should not exceed maxWidth when smaller than default layout budget", () => {
+      const maxWidth = 20;
+      const result = formatDocPage("myapp", simplePage, { maxWidth });
+      assertLinesWithinMaxWidth(result, maxWidth);
+      assert.ok(result.includes("--verbose"));
+    });
+
+    it("should degrade gracefully with very small maxWidth", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "abc def ghi" }],
+          }],
+        }],
+      };
+      const maxWidth = 15;
+      const result = formatDocPage("app", page, { maxWidth });
+      assertLinesWithinMaxWidth(result, maxWidth);
+    });
+
+    it("should handle maxWidth exactly equal to default layout budget", () => {
+      // default termIndent=2, termWidth=26, gap=2 → budget=30
+      const maxWidth = 30;
+      const result = formatDocPage("myapp", simplePage, { maxWidth });
+      assertLinesWithinMaxWidth(result, maxWidth);
+    });
+
+    it("should not exceed small maxWidth with showDefault", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["--port"] },
+            description: [{ type: "text", text: "Port number" }],
+            default: [{ type: "text", text: "3000" }],
+          }],
+        }],
+      };
+      const maxWidth = 20;
+      const result = formatDocPage("myapp", page, {
+        maxWidth,
+        showDefault: true,
+      });
+      assertLinesWithinMaxWidth(result, maxWidth);
+    });
+
+    it("should not add extra blank lines for long terms that fit in line", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["--longoption123"] },
+            description: [{ type: "text", text: "A long option" }],
+          }],
+        }],
+      };
+      const maxWidth = 20;
+      const result = formatDocPage("myapp", page, { maxWidth });
+      // The term "--longoption123" (15 chars) fits in maxWidth - termIndent
+      // (20 - 2 = 18), so it should appear on a single line without a
+      // leading blank line or missing indent.
+      const lines = result.split("\n");
+      const termLine = lines.find((l) => l.includes("--longoption123"));
+      assert.ok(termLine != null, "Term should appear in output");
+      const termIndex = result.indexOf(termLine!);
+      assert.ok(
+        !result.slice(0, termIndex).endsWith("\n\n"),
+        "Should not have a blank line before the term",
+      );
+      assert.ok(
+        termLine.startsWith("  "),
+        `Term line should have left indent: "${termLine}"`,
+      );
+    });
+
+    it("should respect maxWidth with custom termWidth and termIndent exceeding it", () => {
+      const maxWidth = 25;
+      const result = formatDocPage("myapp", simplePage, {
+        maxWidth,
+        termIndent: 4,
+        termWidth: 30,
+      });
+      assertLinesWithinMaxWidth(result, maxWidth);
+    });
+
+    it("should throw RangeError when maxWidth is too small for any layout", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "desc" }],
+          }],
+        }],
+      };
+      // default termIndent=2, minimum for desc entries = 2 + 4 = 6
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: 5 }),
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 6, got 5.",
+        },
+      );
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: 1 }),
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 6, got 1.",
+        },
+      );
+      // maxWidth=6 is the minimum feasible value with default termIndent
+      assert.doesNotThrow(
+        () => formatDocPage("app", page, { maxWidth: 6 }),
+      );
+      // Pages without entries accept maxWidth=1
+      const emptyPage: DocPage = {
+        brief: [{ type: "text", text: "A brief description" }],
+        sections: [],
+      };
+      assert.doesNotThrow(
+        () => formatDocPage("app", emptyPage, { maxWidth: 1 }),
+      );
+      // Bare-term entries (including empty description) need termIndent + 1 = 3
+      const bareTermPage: DocPage = {
+        sections: [{
+          entries: [
+            { term: { type: "argument", metavar: "X" } },
+            { term: { type: "argument", metavar: "Y" }, description: [] },
+          ],
+        }],
+      };
+      assert.doesNotThrow(
+        () => formatDocPage("app", bareTermPage, { maxWidth: 3 }),
+      );
+      assert.throws(
+        () => formatDocPage("app", bareTermPage, { maxWidth: 2 }),
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 3, got 2.",
+        },
+      );
+    });
+
+    it("should throw TypeError for non-finite or non-integer maxWidth", () => {
+      const page: DocPage = { sections: [] };
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: NaN }),
+        {
+          name: "TypeError",
+          message: "maxWidth must be a finite integer, got NaN.",
+        },
+      );
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: Infinity }),
+        {
+          name: "TypeError",
+          message: "maxWidth must be a finite integer, got Infinity.",
+        },
+      );
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: 20.5 }),
+        {
+          name: "TypeError",
+          message: "maxWidth must be a finite integer, got 20.5.",
+        },
+      );
+    });
   });
 });
 

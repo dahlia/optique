@@ -629,6 +629,12 @@ To be released.
     lenient behavior that accepts any hex digit in the version and variant
     positions.  [[#334], [#336], [#670], [#674]]
 
+ -  Fixed `formatDocPage()` ignoring small `maxWidth` values.  When `maxWidth`
+    was smaller than the layout budget (`termIndent + termWidth + 2`), the
+    formatter produced lines far wider than requested.  The term column now
+    dynamically shrinks to share the available width with the description
+    column.  [[#513], [#669]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -725,6 +731,7 @@ To be released.
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
 [#512]: https://github.com/dahlia/optique/pull/512
+[#513]: https://github.com/dahlia/optique/issues/513
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
 [#523]: https://github.com/dahlia/optique/pull/523
@@ -800,6 +807,7 @@ To be released.
 [#663]: https://github.com/dahlia/optique/pull/663
 [#664]: https://github.com/dahlia/optique/pull/664
 [#668]: https://github.com/dahlia/optique/pull/668
+[#669]: https://github.com/dahlia/optique/pull/669
 [#670]: https://github.com/dahlia/optique/pull/670
 [#674]: https://github.com/dahlia/optique/pull/674
 

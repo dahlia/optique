@@ -330,9 +330,11 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @param page The documentation page to format
  * @param options Formatting options to customize the output
  * @returns A formatted string representation of the documentation page
- * @throws {TypeError} If `programName` contains a CR or LF character, or if
+ * @throws {TypeError} If `programName` contains a CR or LF character, if
  * any non-empty section's title is empty, whitespace-only, or contains a CR
- * or LF character.
+ * or LF character, or if `maxWidth` is not a finite integer.
+ * @throws {RangeError} If any entry needs a description column and `maxWidth`
+ * is too small to fit the minimum layout (less than `termIndent + 4`).
  *
  * @example
  * ```typescript
@@ -362,6 +364,55 @@ export function formatDocPage(
   }
   const termIndent = options.termIndent ?? 2;
   const termWidth = options.termWidth ?? 26;
+  if (
+    options.maxWidth != null &&
+    (!Number.isFinite(options.maxWidth) || !Number.isInteger(options.maxWidth))
+  ) {
+    throw new TypeError(
+      `maxWidth must be a finite integer, got ${options.maxWidth}.`,
+    );
+  }
+  // Validate maxWidth against the minimum feasible layout.  Entries with a
+  // description column need termIndent + 4 (1 term + 2 gap + 1 desc);
+  // bare-term entries need termIndent + 1 (just 1 term char).
+  if (options.maxWidth != null) {
+    const hasEntries = page.sections.some((s) => s.entries.length > 0);
+    const hasContent = (msg: unknown): msg is readonly unknown[] =>
+      Array.isArray(msg) && msg.length > 0;
+    const needsDescColumn = hasEntries &&
+      page.sections.some((s) =>
+        s.entries.some((e) =>
+          hasContent(e.description) ||
+          (options.showDefault && hasContent(e.default)) ||
+          (options.showChoices && hasContent(e.choices))
+        )
+      );
+    const minWidth = needsDescColumn
+      ? termIndent + 4
+      : hasEntries
+      ? termIndent + 1
+      : 1;
+    if (options.maxWidth < minWidth) {
+      throw new RangeError(
+        `maxWidth must be at least ${minWidth}, got ${options.maxWidth}.`,
+      );
+    }
+  }
+  // When maxWidth constrains the layout, shrink the term column so that
+  // the description column gets a reasonable share of the available width.
+  // Layout: <termIndent><term><2-space gap><description>
+  // When the normal termWidth fits (leaving >= 1 char for description),
+  // keep it unchanged.  Otherwise, split the available space evenly
+  // between term and description columns.
+  let effectiveTermWidth: number;
+  if (options.maxWidth == null) {
+    effectiveTermWidth = termWidth;
+  } else {
+    const availableForColumns = options.maxWidth - termIndent - 2;
+    effectiveTermWidth = availableForColumns >= termWidth + 1
+      ? termWidth
+      : Math.max(1, Math.floor(availableForColumns / 2));
+  }
   let output = "";
   if (page.brief != null) {
     output += formatMessage(page.brief, {
@@ -438,7 +489,7 @@ export function formatDocPage(
 
       const descColumnWidth = options.maxWidth == null
         ? undefined
-        : options.maxWidth - termIndent - termWidth - 2;
+        : options.maxWidth - termIndent - effectiveTermWidth - 2;
 
       // When the rendered term is physically wider than termWidth, the
       // description column starts further right on the first output line,
@@ -447,13 +498,14 @@ export function formatDocPage(
       // word-wrapping account for the narrower first-line space.
       const termVisibleWidth = lastLineVisibleLength(term);
       const extraTermOffset = descColumnWidth != null
-        ? Math.max(0, termVisibleWidth - termWidth)
+        ? Math.max(0, termVisibleWidth - effectiveTermWidth)
         : 0;
 
       // Once any content has caused a line break inside the description
       // string, the extra physical offset no longer applies — subsequent
       // content lands on a fresh continuation line indented by
-      // termIndent + termWidth + 2, not by termIndent + termVisibleWidth + 2.
+      // termIndent + effectiveTermWidth + 2, not by
+      // termIndent + termVisibleWidth + 2.
       const currentExtraOffset = () =>
         description.includes("\n") ? 0 : extraTermOffset;
 
@@ -611,12 +663,14 @@ export function formatDocPage(
       }
 
       output += `${" ".repeat(termIndent)}${
-        ansiAwareRightPad(term, termWidth)
-      }  ${
-        description === "" ? "" : indentLines(
-          description,
-          termIndent + termWidth + 2,
-        )
+        ansiAwareRightPad(term, effectiveTermWidth)
+      }${
+        description === "" ? "" : `  ${
+          indentLines(
+            description,
+            termIndent + effectiveTermWidth + 2,
+          )
+        }`
       }\n`;
     }
   }
