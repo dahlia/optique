@@ -537,6 +537,28 @@ export function choice<const T extends string | number>(
 }
 
 /**
+ * Validates that an option value, if present, is a boolean.
+ * Throws a {@link TypeError} if the value is defined but not a boolean.
+ *
+ * @param options The options object to check.
+ * @param key The key of the option to validate.
+ * @throws {TypeError} If the option value is defined but not a boolean.
+ * @since 0.11.0
+ */
+export function checkBooleanOption(
+  options: Record<string, unknown> | undefined,
+  key: string,
+): void {
+  const value = options?.[key];
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new TypeError(
+      `Expected ${key} to be a boolean, but got ` +
+        `${typeof value}: ${String(value)}.`,
+    );
+  }
+}
+
+/**
  * Expands a numeric string in scientific notation (e.g., `"1e+21"`,
  * `"1.5e-3"`, `".1e-6"`) into plain decimal form for normalization.
  * Used for both canonical `String(number)` output and user input.

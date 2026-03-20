@@ -1,4 +1,5 @@
 import {
+  checkBooleanOption,
   choice,
   cidr,
   domain,
@@ -11492,6 +11493,44 @@ describe("branch coverage regressions", () => {
 
     const result = parser.parse("not-an-ip-literal");
     assert.ok(!result.success);
+  });
+});
+
+describe("checkBooleanOption", () => {
+  it("should not throw when options is undefined", () => {
+    assert.doesNotThrow(() => checkBooleanOption(undefined, "foo"));
+  });
+
+  it("should not throw when the key is not present", () => {
+    assert.doesNotThrow(() => checkBooleanOption({}, "foo"));
+  });
+
+  it("should not throw when the value is true", () => {
+    assert.doesNotThrow(() => checkBooleanOption({ foo: true }, "foo"));
+  });
+
+  it("should not throw when the value is false", () => {
+    assert.doesNotThrow(() => checkBooleanOption({ foo: false }, "foo"));
+  });
+
+  it("should throw TypeError for a string value", () => {
+    assert.throws(
+      () => checkBooleanOption({ foo: "yes" }, "foo"),
+      {
+        name: "TypeError",
+        message: "Expected foo to be a boolean, but got string: yes.",
+      },
+    );
+  });
+
+  it("should throw TypeError for a number value", () => {
+    assert.throws(
+      () => checkBooleanOption({ foo: 1 }, "foo"),
+      {
+        name: "TypeError",
+        message: "Expected foo to be a boolean, but got number: 1.",
+      },
+    );
   });
 });
 
