@@ -1847,7 +1847,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
     ? (() => {
       const unique = new Set<number>();
       for (const v of options.allowedVersions) {
-        if (typeof v !== "number" || !Number.isInteger(v)) {
+        if (!Number.isInteger(v)) {
           throw new TypeError(
             `Expected every element of allowedVersions to be an integer, but got: ${
               String(v)
