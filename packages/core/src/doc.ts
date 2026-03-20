@@ -333,8 +333,8 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @throws {TypeError} If `programName` contains a CR or LF character, if
  * any non-empty section's title is empty, whitespace-only, or contains a CR
  * or LF character, or if `maxWidth` is not a finite integer.
- * @throws {RangeError} If the page has section entries and `maxWidth` is too
- * small to fit even the minimum layout (less than `termIndent + 4`).
+ * @throws {RangeError} If any entry needs a description column and `maxWidth`
+ * is too small to fit the minimum layout (less than `termIndent + 4`).
  *
  * @example
  * ```typescript
@@ -374,10 +374,18 @@ export function formatDocPage(
   }
   // The minimum feasible maxWidth is termIndent + 4: at least 1 char for
   // the term column, 2 chars for the gap, and 1 char for the description.
-  // Only enforce this when the page actually has section entries to render.
-  const hasEntries = page.sections.some((s) => s.entries.length > 0);
+  // Only enforce this when some entry actually needs a description column
+  // (has description, or has default/choices that showDefault/showChoices
+  // would render).  Bare-term entries only need termIndent + 1.
+  const needsDescColumn = page.sections.some((s) =>
+    s.entries.some((e) =>
+      e.description != null ||
+      (options.showDefault && e.default != null) ||
+      (options.showChoices && e.choices != null)
+    )
+  );
   if (
-    hasEntries &&
+    needsDescColumn &&
     options.maxWidth != null &&
     options.maxWidth < termIndent + 4
   ) {

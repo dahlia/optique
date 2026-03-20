@@ -1745,6 +1745,15 @@ describe("formatDocPage", () => {
       assert.doesNotThrow(
         () => formatDocPage("app", emptyPage, { maxWidth: 3 }),
       );
+      // Bare-term entries (no description) should not throw either
+      const bareTermPage: DocPage = {
+        sections: [{
+          entries: [{ term: { type: "argument", metavar: "X" } }],
+        }],
+      };
+      assert.doesNotThrow(
+        () => formatDocPage("app", bareTermPage, { maxWidth: 3 }),
+      );
     });
 
     it("should throw TypeError for non-finite or non-integer maxWidth", () => {
