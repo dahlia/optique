@@ -2199,6 +2199,9 @@ export function runParser<
     }
 
     // Handle completion option format: "--completion=<shell> [args...]"
+    // The first --completion match is the meta option; everything after it
+    // (including the shell name) is opaque completion payload and must not
+    // be re-interpreted as another meta option.
     if (completionOptionConfig) {
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];

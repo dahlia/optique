@@ -270,6 +270,12 @@ To be released.
     follow-up help at all, and both-mode showed only the command form.
     [[#275], [#668]]
 
+ -  Clarified that the `--completion` early-return scanner intentionally uses
+    first-match semantics: the first `--completion` is the meta option and
+    all subsequent arguments (including tokens that look like `--completion`)
+    are treated as opaque completion payload.  Added tests to document this
+    behavior.  [[#364], [#670]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -687,6 +693,7 @@ To be released.
 [#355]: https://github.com/dahlia/optique/issues/355
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
+[#364]: https://github.com/dahlia/optique/issues/364
 [#366]: https://github.com/dahlia/optique/issues/366
 [#368]: https://github.com/dahlia/optique/issues/368
 [#370]: https://github.com/dahlia/optique/issues/370
@@ -783,6 +790,7 @@ To be released.
 [#663]: https://github.com/dahlia/optique/pull/663
 [#664]: https://github.com/dahlia/optique/pull/664
 [#668]: https://github.com/dahlia/optique/pull/668
+[#670]: https://github.com/dahlia/optique/pull/670
 
 ### @optique/config
 

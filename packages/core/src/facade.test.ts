@@ -3253,6 +3253,68 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
+    it("should treat --completion in payload as opaque args, not as duplicate meta option", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+        completion: option("--completion"),
+      });
+
+      let completionResult: unknown;
+
+      // "myapp --completion bash --completion" means:
+      // complete the partial input "--completion" using bash completion
+      runParser(
+        parser,
+        "myapp",
+        ["--completion", "bash", "--completion"],
+        {
+          completion: {
+            option: true,
+            onShow: (exitCode: number) => {
+              completionResult = `completion-${exitCode}`;
+              return completionResult;
+            },
+          },
+        },
+      );
+
+      // Should invoke completion (not error) — the first --completion is the
+      // meta option; the second --completion is completion payload
+      assert.equal(completionResult, "completion-0");
+    });
+
+    it("should treat --completion=<shell> in payload as opaque args", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      // "myapp --completion=bash --completion=zsh" means:
+      // complete the partial input "--completion=zsh" using bash completion.
+      // The first --completion=bash is the meta option; "--completion=zsh"
+      // is passed as a completion payload argument.
+      runParser(
+        parser,
+        "myapp",
+        ["--completion=bash", "--completion=zsh"],
+        {
+          completion: {
+            option: true,
+          },
+          stdout: (text) => {
+            completionOutput = text;
+          },
+        },
+      );
+
+      // If this were last-option-wins, --completion=zsh would be the meta
+      // option with no payload, producing a zsh completion script containing
+      // "compdef".  With first-match, --completion=bash is the meta option
+      // and "--completion=zsh" is payload, so no zsh script is generated.
+      assert.ok(!completionOutput.includes("compdef"));
+    });
+
     it("should report missing shell for separated --completion option", () => {
       const parser = object({
         verbose: option("--verbose"),
