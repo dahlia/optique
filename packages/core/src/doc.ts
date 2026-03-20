@@ -388,7 +388,7 @@ export function formatDocPage(
     const availableForColumns = options.maxWidth - termIndent - 2;
     effectiveTermWidth = availableForColumns >= termWidth + 1
       ? termWidth
-      : Math.min(termWidth, Math.max(1, Math.floor(availableForColumns / 2)));
+      : Math.max(1, Math.floor(availableForColumns / 2));
   }
   let output = "";
   if (page.brief != null) {

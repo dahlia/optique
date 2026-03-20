@@ -1729,11 +1729,17 @@ describe("formatDocPage", () => {
       // default termIndent=2, minimum = 2 + 4 = 6
       assert.throws(
         () => formatDocPage("app", page, { maxWidth: 5 }),
-        RangeError,
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 6 (termIndent 2 + 4), got 5.",
+        },
       );
       assert.throws(
         () => formatDocPage("app", page, { maxWidth: 1 }),
-        RangeError,
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 6 (termIndent 2 + 4), got 1.",
+        },
       );
       // maxWidth=6 is the minimum feasible value with default termIndent
       assert.doesNotThrow(
