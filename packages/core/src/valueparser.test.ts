@@ -6191,6 +6191,36 @@ describe("hostname()", () => {
       const result2 = parser.parse("*.*");
       assert.ok(!result2.success);
     });
+
+    it("should reject wildcard outside leftmost position", () => {
+      const parser = hostname({ allowWildcard: true });
+
+      const result1 = parser.parse("foo.*.com");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("example.*");
+      assert.ok(!result2.success);
+    });
+
+    it("should reject bare wildcard", () => {
+      const parser = hostname({ allowWildcard: true });
+
+      const result = parser.parse("*");
+      assert.ok(!result.success);
+    });
+
+    it("should reject wildcard forms when allowWildcard is false", () => {
+      const parser = hostname();
+
+      const result1 = parser.parse("*");
+      assert.ok(!result1.success);
+
+      const result2 = parser.parse("foo.*.com");
+      assert.ok(!result2.success);
+
+      const result3 = parser.parse("example.*");
+      assert.ok(!result3.success);
+    });
   });
 
   describe("allowUnderscore option", () => {
