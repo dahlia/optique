@@ -4282,21 +4282,21 @@ describe("uuid", () => {
         (e: unknown) =>
           e instanceof TypeError &&
           e.message ===
-            "Expected every element of allowedVersions to be an integer, but got: 4.5.",
+            'Expected every element of allowedVersions to be an integer, but got value "4.5" of type "number".',
       );
       assert.throws(
         () => uuid({ allowedVersions: [NaN] as never }),
         (e: unknown) =>
           e instanceof TypeError &&
           e.message ===
-            "Expected every element of allowedVersions to be an integer, but got: NaN.",
+            'Expected every element of allowedVersions to be an integer, but got value "NaN" of type "number".',
       );
       assert.throws(
         () => uuid({ allowedVersions: ["4" as never] }),
         (e: unknown) =>
           e instanceof TypeError &&
           e.message ===
-            "Expected every element of allowedVersions to be an integer, but got: 4.",
+            'Expected every element of allowedVersions to be an integer, but got value "4" of type "string".',
       );
     });
 
