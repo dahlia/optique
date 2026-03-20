@@ -270,10 +270,9 @@ To be released.
     follow-up help at all, and both-mode showed only the command form.
     [[#275], [#668]]
 
- -  Fixed repeated `--completion` options to follow last-option-wins semantics,
-    consistent with `--help` and `--version` meta options.  Previously,
-    `--completion bash --completion zsh` would use the first occurrence (`bash`)
-    instead of the last (`zsh`).  [[#364]]
+ -  Fixed repeated `--completion` options silently using the first occurrence
+    instead of reporting an error.  `--completion bash --completion zsh` now
+    fails with a clear error message.  [[#364]]
 
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state

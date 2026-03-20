@@ -2199,11 +2199,11 @@ export function runParser<
     }
 
     // Handle completion option format: "--completion=<shell> [args...]"
-    // Scan all args to implement last-option-wins, consistent with
-    // help/version meta options
+    // Scan all args and reject duplicates as conflicting requests
     if (completionOptionConfig) {
-      let lastCompletionShell: string | undefined;
-      let lastCompletionArgs: string[] = [];
+      let completionShell: string | undefined;
+      let completionArgs: string[] = [];
+      let completionMatchName: string | undefined;
 
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
@@ -2213,28 +2213,48 @@ export function runParser<
           arg.startsWith(n + "=")
         );
         if (equalsMatch) {
-          lastCompletionShell = arg.slice(equalsMatch.length + 1);
-          lastCompletionArgs = args.slice(i + 1);
+          if (completionShell !== undefined) {
+            stderr(
+              `Error: ${completionMatchName} cannot be specified more than once.\n`,
+            );
+            return onErrorResult(1) as ModeValue<
+              InferMode<TParser>,
+              InferValue<TParser>
+            >;
+          }
+          completionShell = arg.slice(equalsMatch.length + 1);
+          completionArgs = args.slice(i + 1);
+          completionMatchName = equalsMatch;
           continue;
         }
 
         // Check for "--completion <shell>" format (separate arg)
         const exactMatch = completionOptionNames.includes(arg);
         if (exactMatch) {
-          lastCompletionShell = i + 1 < args.length ? args[i + 1] : "";
-          lastCompletionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
+          if (completionShell !== undefined) {
+            stderr(
+              `Error: ${completionMatchName} cannot be specified more than once.\n`,
+            );
+            return onErrorResult(1) as ModeValue<
+              InferMode<TParser>,
+              InferValue<TParser>
+            >;
+          }
+          completionShell = i + 1 < args.length ? args[i + 1] : "";
+          completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
+          completionMatchName = arg;
           i++; // skip the shell argument
           continue;
         }
       }
 
-      if (lastCompletionShell !== undefined) {
+      if (completionShell !== undefined) {
         return handleCompletion<
           InferMode<TParser>,
           InferValue<TParser>,
           InferValue<TParser>
         >(
-          [lastCompletionShell, ...lastCompletionArgs],
+          [completionShell, ...completionArgs],
           programName,
           parser,
           completionParsers.completionOption,

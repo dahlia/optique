@@ -3253,12 +3253,13 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
-    it("should follow last-option-wins for repeated --completion <shell>", () => {
+    it("should error on repeated --completion <shell>", () => {
       const parser = object({
         verbose: option("--verbose"),
       });
 
-      let completionOutput = "";
+      let errorOutput = "";
+      let errorResult: unknown;
 
       runParser(
         parser,
@@ -3268,23 +3269,27 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           completion: {
             option: true,
           },
-          stdout: (text) => {
-            completionOutput = text;
+          onError: (exitCode: number) => {
+            errorResult = `error-${exitCode}`;
+            return errorResult;
+          },
+          stderr: (text: string) => {
+            errorOutput += text;
           },
         },
       );
 
-      // zsh should win (last option): compdef is zsh-specific
-      assert.ok(completionOutput.includes("compdef"));
-      assert.ok(!completionOutput.includes("complete -F"));
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("--completion"));
     });
 
-    it("should follow last-option-wins for repeated --completion=<shell>", () => {
+    it("should error on repeated --completion=<shell>", () => {
       const parser = object({
         verbose: option("--verbose"),
       });
 
-      let completionOutput = "";
+      let errorOutput = "";
+      let errorResult: unknown;
 
       runParser(
         parser,
@@ -3294,23 +3299,27 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           completion: {
             option: true,
           },
-          stdout: (text) => {
-            completionOutput = text;
+          onError: (exitCode: number) => {
+            errorResult = `error-${exitCode}`;
+            return errorResult;
+          },
+          stderr: (text: string) => {
+            errorOutput += text;
           },
         },
       );
 
-      // zsh should win (last option): compdef is zsh-specific
-      assert.ok(completionOutput.includes("compdef"));
-      assert.ok(!completionOutput.includes("complete -F"));
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("--completion"));
     });
 
-    it("should follow last-option-wins for mixed --completion forms", () => {
+    it("should error on repeated --completion with mixed forms", () => {
       const parser = object({
         verbose: option("--verbose"),
       });
 
-      let completionOutput = "";
+      let errorOutput = "";
+      let errorResult: unknown;
 
       runParser(
         parser,
@@ -3320,15 +3329,18 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           completion: {
             option: true,
           },
-          stdout: (text) => {
-            completionOutput = text;
+          onError: (exitCode: number) => {
+            errorResult = `error-${exitCode}`;
+            return errorResult;
+          },
+          stderr: (text: string) => {
+            errorOutput += text;
           },
         },
       );
 
-      // zsh should win (last option): compdef is zsh-specific
-      assert.ok(completionOutput.includes("compdef"));
-      assert.ok(!completionOutput.includes("complete -F"));
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("--completion"));
     });
 
     it("should report missing shell for separated --completion option", () => {
