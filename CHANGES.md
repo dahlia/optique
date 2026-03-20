@@ -487,6 +487,12 @@ To be released.
     a CR or LF character, or when a section title is empty, whitespace-only,
     or contains a CR or LF character.  [[#429], [#479], [#580]]
 
+ -  Fixed `formatDocPage()` ignoring small `maxWidth` values.  When `maxWidth`
+    was smaller than the layout budget (`termIndent + termWidth + 2`), the
+    formatter produced lines far wider than requested.  The term column now
+    dynamically shrinks to share the available width with the description
+    column.  [[#513], [#669]]
+
  -  Numeric parsers (`integer()`, `float()`, `port()`, `portRange()`,
     `cidr()`) now throw `RangeError` at construction time when given
     contradictory range configurations (e.g., `min > max`).  Previously,
@@ -640,11 +646,9 @@ To be released.
     lenient behavior that accepts any hex digit in the version and variant
     positions.  [[#334], [#336], [#670], [#674]]
 
- -  Fixed `formatDocPage()` ignoring small `maxWidth` values.  When `maxWidth`
-    was smaller than the layout budget (`termIndent + termWidth + 2`), the
-    formatter produced lines far wider than requested.  The term column now
-    dynamically shrinks to share the available width with the description
-    column.  [[#513], [#669]]
+ -  `uuid()` now validates `allowedVersions` at construction time: each
+    version must be an integer between 1 and 8, and duplicates are
+    automatically removed.  [[#357], [#675]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
@@ -720,6 +724,7 @@ To be released.
 [#353]: https://github.com/dahlia/optique/issues/353
 [#354]: https://github.com/dahlia/optique/issues/354
 [#355]: https://github.com/dahlia/optique/issues/355
+[#357]: https://github.com/dahlia/optique/issues/357
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
 [#364]: https://github.com/dahlia/optique/issues/364
@@ -824,6 +829,7 @@ To be released.
 [#670]: https://github.com/dahlia/optique/pull/670
 [#673]: https://github.com/dahlia/optique/pull/673
 [#674]: https://github.com/dahlia/optique/pull/674
+[#675]: https://github.com/dahlia/optique/pull/675
 [#676]: https://github.com/dahlia/optique/pull/676
 
 ### @optique/config
