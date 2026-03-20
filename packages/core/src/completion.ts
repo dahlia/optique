@@ -115,6 +115,7 @@ function _${programName} () {
     if [[ "$line" == __FILE__:* ]]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
+      extensions="\${extensions//,\\./,}"; extensions="\${extensions#.}"
       pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
 
       # Save and adjust glob/shell options for safe file completion
@@ -721,7 +722,7 @@ ${
             # Filter by extensions if specified
             if test -n "$extensions" -a "$type" != directory
                 set -l filtered
-                set -l ext_list (string split ',' -- $extensions)
+                set -l ext_list (string replace -r '^\\.' '' -- (string split ',' -- $extensions))
                 for item in $items
                     # Skip directories, they don't have extensions
                     if string match -q '*/' -- $item
@@ -1002,7 +1003,7 @@ ${
             if ($extensions | is-empty) {
               (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file or type == dir
             } else {
-              let ext_list = ($extensions | split row ',')
+              let ext_list = ($extensions | split row ',' | each {|e| $e | str replace -r '^\\.' '' })
               let all_items = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern })
               let dirs = $all_items | where type == dir
               let files = $all_items | where type == file | where {|f|
@@ -1019,7 +1020,7 @@ ${
             if ($extensions | is-empty) {
               if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }
             } else {
-              let ext_list = ($extensions | split row ',')
+              let ext_list = ($extensions | split row ',' | each {|e| $e | str replace -r '^\\.' '' })
               let all_items = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern })
               let dirs = $all_items | where type == dir
               let files = $all_items | where type == file | where {|f|
@@ -1253,7 +1254,7 @@ ${
 
                 # Use -Force to include hidden files when requested, or when
                 # the prefix basename targets dotfiles (e.g., src/.e)
-                \$prefixBasename = Split-Path -Leaf \$prefix 2>\$null
+                \$prefixBasename = if (\$prefix) { Split-Path -Leaf \$prefix } else { '' }
                 \$forceParam = if (\$hidden -or (\$prefixBasename -and \$prefixBasename.StartsWith('.'))) { @{Force = \$true} } else { @{} }
 
                 # If prefix is a directory without trailing slash, append
@@ -1272,12 +1273,10 @@ ${
                     'file' {
                         if (\$extensions) {
                             # Filter by extensions, always include directories
-                            \$extList = \$extensions -split ','
+                            \$extList = (\$extensions -split ',') -replace '^\\.',''
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
-                                    if (\$_.PSIsContainer) { return \$true }
-                                    \$ext = \$_.Extension
-                                    \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
+                                    \$_.PSIsContainer -or ((\$_.Extension -replace '^\\.','' ) -in \$extList)
                                 }
                         } else {
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
@@ -1289,12 +1288,10 @@ ${
                     'any' {
                         if (\$extensions) {
                             # Filter by extensions, always include directories
-                            \$extList = \$extensions -split ','
+                            \$extList = (\$extensions -split ',') -replace '^\\.',''
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
-                                    if (\$_.PSIsContainer) { return \$true }
-                                    \$ext = \$_.Extension
-                                    \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
+                                    \$_.PSIsContainer -or ((\$_.Extension -replace '^\\.','' ) -in \$extList)
                                 }
                         } else {
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
