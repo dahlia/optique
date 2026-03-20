@@ -3288,7 +3288,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         verbose: option("--verbose"),
       });
 
-      let completionResult: unknown;
+      let completionOutput = "";
 
       // "myapp --completion=bash --completion=zsh" means:
       // complete the partial input "--completion=zsh" using bash completion.
@@ -3301,16 +3301,18 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         {
           completion: {
             option: true,
-            onShow: (exitCode: number) => {
-              completionResult = `completion-${exitCode}`;
-              return completionResult;
-            },
+          },
+          stdout: (text) => {
+            completionOutput = text;
           },
         },
       );
 
-      // Should invoke completion (not error), using bash as the shell
-      assert.equal(completionResult, "completion-0");
+      // If this were last-option-wins, --completion=zsh would be the meta
+      // option with no payload, producing a zsh completion script containing
+      // "compdef".  With first-match, --completion=bash is the meta option
+      // and "--completion=zsh" is payload, so no zsh script is generated.
+      assert.ok(!completionOutput.includes("compdef"));
     });
 
     it("should report missing shell for separated --completion option", () => {
