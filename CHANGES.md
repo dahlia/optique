@@ -141,6 +141,10 @@ To be released.
     `host: { type: "hostname", hostname: { allowLocalhost: false } }`.
     [[#321], [#659]]
 
+ -  Fixed `hostname()` accepting wildcard labels (`*`) outside the leftmost
+    position (e.g., `foo.*.com`, `example.*`) and even when `allowWildcard`
+    is `false` (e.g., bare `*`).  [[#355], [#661]]
+
  -  Fixed `locale()` value parser's `format()` method dropping Unicode
     extension subtags (e.g., `en-US-u-ca-buddhist` was formatted as `en-US`).
     The method now uses `Intl.Locale.toString()` instead of `baseName` to
@@ -657,6 +661,7 @@ To be released.
 [#352]: https://github.com/dahlia/optique/issues/352
 [#353]: https://github.com/dahlia/optique/issues/353
 [#354]: https://github.com/dahlia/optique/issues/354
+[#355]: https://github.com/dahlia/optique/issues/355
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
 [#368]: https://github.com/dahlia/optique/issues/368
@@ -749,6 +754,7 @@ To be released.
 [#657]: https://github.com/dahlia/optique/pull/657
 [#659]: https://github.com/dahlia/optique/pull/659
 [#660]: https://github.com/dahlia/optique/pull/660
+[#661]: https://github.com/dahlia/optique/pull/661
 
 ### @optique/config
 
