@@ -9874,7 +9874,10 @@ describe("runParserSync", () => {
 
     assert.throws(
       () => runParserSync(parser as never, "test", ["hello"]),
-      TypeError,
+      {
+        name: "TypeError",
+        message: /runParser\(\) or runParserAsync\(\)/,
+      },
     );
   });
 });
@@ -9901,7 +9904,10 @@ describe("runWithSync async parser rejection", () => {
 
     assert.throws(
       () => runWithSync(parser as never, "test", [ctx], { args: ["hello"] }),
-      TypeError,
+      {
+        name: "TypeError",
+        message: /runWith\(\) or runWithAsync\(\)/,
+      },
     );
   });
 });

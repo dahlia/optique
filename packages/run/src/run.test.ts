@@ -2556,7 +2556,10 @@ describe("runSync async parser rejection", () => {
           args: ["hello"],
           programName: "test",
         }),
-      TypeError,
+      {
+        name: "TypeError",
+        message: /run\(\) or runAsync\(\)/,
+      },
     );
   });
 
@@ -2572,7 +2575,10 @@ describe("runSync async parser rejection", () => {
         runSync(program as never, {
           args: ["hello"],
         }),
-      TypeError,
+      {
+        name: "TypeError",
+        message: /run\(\) or runAsync\(\)/,
+      },
     );
   });
 });
