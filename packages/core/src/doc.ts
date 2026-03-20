@@ -330,9 +330,9 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @param page The documentation page to format
  * @param options Formatting options to customize the output
  * @returns A formatted string representation of the documentation page
- * @throws {TypeError} If `programName` contains a CR or LF character, or if
+ * @throws {TypeError} If `programName` contains a CR or LF character, if
  * any non-empty section's title is empty, whitespace-only, or contains a CR
- * or LF character.
+ * or LF character, or if `maxWidth` is not a finite integer.
  * @throws {RangeError} If `maxWidth` is too small to fit even the minimum
  * layout (less than `termIndent + 4`).
  *
@@ -364,6 +364,14 @@ export function formatDocPage(
   }
   const termIndent = options.termIndent ?? 2;
   const termWidth = options.termWidth ?? 26;
+  if (
+    options.maxWidth != null &&
+    (!Number.isFinite(options.maxWidth) || !Number.isInteger(options.maxWidth))
+  ) {
+    throw new TypeError(
+      `maxWidth must be a finite integer, got ${options.maxWidth}.`,
+    );
+  }
   // The minimum feasible maxWidth is termIndent + 4: at least 1 char for
   // the term column, 2 chars for the gap, and 1 char for the description.
   if (

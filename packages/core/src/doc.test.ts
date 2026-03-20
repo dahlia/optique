@@ -1693,7 +1693,11 @@ describe("formatDocPage", () => {
       // The term "--longoption123" (15 chars) fits in maxWidth - termIndent
       // (20 - 2 = 18), so it should appear on a single line without a
       // leading blank line or missing indent.
-      const lines = result.split("\n").filter((l) => l.length > 0);
+      assert.ok(
+        !result.includes("\n\n\n"),
+        "Should not include extra blank lines",
+      );
+      const lines = result.split("\n");
       const termLine = lines.find((l) => l.includes("--longoption123"));
       assert.ok(termLine != null, "Term should appear in output");
       assert.ok(
@@ -1744,6 +1748,31 @@ describe("formatDocPage", () => {
       // maxWidth=6 is the minimum feasible value with default termIndent
       assert.doesNotThrow(
         () => formatDocPage("app", page, { maxWidth: 6 }),
+      );
+    });
+
+    it("should throw TypeError for non-finite or non-integer maxWidth", () => {
+      const page: DocPage = { sections: [] };
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: NaN }),
+        {
+          name: "TypeError",
+          message: "maxWidth must be a finite integer, got NaN.",
+        },
+      );
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: Infinity }),
+        {
+          name: "TypeError",
+          message: "maxWidth must be a finite integer, got Infinity.",
+        },
+      );
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: 20.5 }),
+        {
+          name: "TypeError",
+          message: "maxWidth must be a finite integer, got 20.5.",
+        },
       );
     });
   });
