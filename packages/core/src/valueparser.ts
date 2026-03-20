@@ -1748,9 +1748,34 @@ export interface UuidOptions {
   /**
    * List of allowed UUID versions (e.g., `[4, 5]` for UUIDs version 4 and 5).
    * If specified, the parser will validate that the UUID matches one of the
-   * allowed versions. If not specified, any valid UUID format is accepted.
+   * allowed versions.  If not specified, the accepted versions depend on
+   * the {@link strict} option.
    */
   readonly allowedVersions?: readonly number[];
+
+  /**
+   * Whether to enforce strict [RFC 9562] validation.  When `true` (the
+   * default), the parser validates that the version digit is one of the
+   * currently standardized versions (1 through 8) and that the variant bits
+   * follow the RFC 9562 layout (`10xx`, i.e., hex digits `8`, `9`, `a`,
+   * or `b` at position 20 of the UUID string).
+   *
+   * The nil UUID (`00000000-0000-0000-0000-000000000000`) and max UUID
+   * (`ffffffff-ffff-ffff-ffff-ffffffffffff`) are accepted as special
+   * standard values regardless of this setting.
+   *
+   * When `false`, the parser only validates the UUID format without
+   * checking version or variant fields.
+   *
+   * When {@link allowedVersions} is provided, it takes precedence over the
+   * strict version check, but variant bit validation still applies if
+   * `strict` is `true`.
+   *
+   * [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
+   * @default true
+   * @since 1.0.0
+   */
+  readonly strict?: boolean;
 
   /**
    * Custom error messages for UUID parsing failures.
@@ -1772,6 +1797,13 @@ export interface UuidOptions {
     disallowedVersion?:
       | Message
       | ((version: number, allowedVersions: readonly number[]) => Message);
+
+    /**
+     * Custom error message when UUID variant bits are not RFC 9562 compliant.
+     * Can be a static message or a function that receives the input.
+     * @since 1.0.0
+     */
+    invalidVariant?: Message | ((input: string) => Message);
   };
 }
 
@@ -1780,9 +1812,16 @@ export interface UuidOptions {
  *
  * This parser validates that the input is a well-formed UUID string in the
  * standard format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` where each `x`
- * is a hexadecimal digit.  The parser can optionally restrict to specific
- * UUID versions.
+ * is a hexadecimal digit.
  *
+ * By default, the parser enforces strict [RFC 9562] validation: it requires
+ * a standardized version digit (1 through 8) and the RFC 9562 variant bits
+ * (`10xx`).  The nil and max UUIDs are accepted as special standard values.
+ * Set `strict: false` to disable the default RFC 9562 version/variant
+ * checks.  An explicit {@link UuidOptions.allowedVersions} list still
+ * constrains the version nibble even in lenient mode.
+ *
+ * [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
  * @param options Configuration options for the UUID parser.
  * @returns A {@link ValueParser} that converts string input to {@link Uuid}
  *          strings.
@@ -1793,12 +1832,15 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const metavar = options.metavar ?? "UUID";
   ensureNonEmptyString(metavar);
+  checkBooleanOption(options, "strict");
   // Snapshot mutable config at construction time
+  const strict = options.strict !== false;
   const allowedVersions = options.allowedVersions != null
     ? Object.freeze([...options.allowedVersions])
     : null;
   const invalidUuid = options.errors?.invalidUuid;
   const disallowedVersion = options.errors?.disallowedVersion;
+  const invalidVariant = options.errors?.invalidVariant;
 
   return {
     $mode: "sync",
@@ -1815,12 +1857,21 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
         };
       }
 
-      // Check version if specified
-      if (allowedVersions != null && allowedVersions.length > 0) {
-        // Extract version from the first character of the third group
-        const versionChar = input.charAt(14); // Position of version digit
-        const version = parseInt(versionChar, 16);
+      // Accept nil and max UUIDs as special standard values
+      const lower = input.toLowerCase();
+      if (
+        lower === "00000000-0000-0000-0000-000000000000" ||
+        lower === "ffffffff-ffff-ffff-ffff-ffffffffffff"
+      ) {
+        return { success: true, value: input as Uuid };
+      }
 
+      // Extract version from the first character of the third group
+      const versionChar = input.charAt(14);
+      const version = parseInt(versionChar, 16);
+
+      // Check version against allowedVersions if specified
+      if (allowedVersions != null && allowedVersions.length > 0) {
         if (!allowedVersions.includes(version)) {
           return {
             success: false,
@@ -1843,6 +1894,36 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
                   version.toLocaleString("en")
                 }.`;
               })(),
+          };
+        }
+      } else if (strict && (version < 1 || version > 8)) {
+        // In strict mode without allowedVersions, require RFC 9562 versions
+        return {
+          success: false,
+          error: disallowedVersion
+            ? (typeof disallowedVersion === "function"
+              ? disallowedVersion(version, [1, 2, 3, 4, 5, 6, 7, 8])
+              : disallowedVersion)
+            : message`Expected UUID version 1 through 8, but got version ${
+              version.toLocaleString("en")
+            }.`,
+        };
+      }
+
+      // Validate RFC 9562 variant bits in strict mode
+      if (strict) {
+        const variantChar = input.charAt(19).toLowerCase();
+        if (
+          variantChar !== "8" && variantChar !== "9" &&
+          variantChar !== "a" && variantChar !== "b"
+        ) {
+          return {
+            success: false,
+            error: invalidVariant
+              ? (typeof invalidVariant === "function"
+                ? invalidVariant(input)
+                : invalidVariant)
+              : message`Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ${variantChar} in ${input}.`,
           };
         }
       }
