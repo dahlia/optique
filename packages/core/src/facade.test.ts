@@ -9120,13 +9120,15 @@ describe("branch coverage: facade.ts edge cases", () => {
         runParser(parser, "myapp", ["completion", "bash"], {
           completion: {
             command: true,
-            onShow: () => Promise.resolve("async-show") as unknown as string,
+            onShow: () => Promise.resolve("async-show") as never,
           },
           stdout: () => {},
           stderr: () => {},
         }),
-      RunParserError,
-      "Synchronous parser returned async result.",
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
     );
   });
 
@@ -9138,13 +9140,15 @@ describe("branch coverage: facade.ts edge cases", () => {
         runParser(parser, "myapp", ["completion", "bash", "--"], {
           completion: {
             command: true,
-            onShow: () => Promise.resolve("async-show") as unknown as string,
+            onShow: () => Promise.resolve("async-show") as never,
           },
           stdout: () => {},
           stderr: () => {},
         }),
-      RunParserError,
-      "Synchronous parser returned async result.",
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
     );
   });
 
@@ -9155,12 +9159,14 @@ describe("branch coverage: facade.ts edge cases", () => {
       () =>
         runParser(parser, "myapp", ["completion"], {
           completion: { command: true },
-          onError: () => Promise.resolve("async-error") as unknown as never,
+          onError: () => Promise.resolve("async-error") as never,
           stdout: () => {},
           stderr: () => {},
         }),
-      RunParserError,
-      "Synchronous parser returned async result.",
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
     );
   });
 
@@ -9171,12 +9177,14 @@ describe("branch coverage: facade.ts edge cases", () => {
       () =>
         runParser(parser, "myapp", ["completion", "unknownshell"], {
           completion: { command: true },
-          onError: () => Promise.resolve("async-error") as unknown as never,
+          onError: () => Promise.resolve("async-error") as never,
           stdout: () => {},
           stderr: () => {},
         }),
-      RunParserError,
-      "Synchronous parser returned async result.",
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
     );
   });
 
@@ -9188,13 +9196,15 @@ describe("branch coverage: facade.ts edge cases", () => {
         runParser(parser, "myapp", ["--completion", "bash"], {
           completion: {
             option: true,
-            onShow: () => Promise.resolve("async-show") as unknown as string,
+            onShow: () => Promise.resolve("async-show") as never,
           },
           stdout: () => {},
           stderr: () => {},
         }),
-      RunParserError,
-      "Synchronous parser returned async result.",
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
     );
   });
 
