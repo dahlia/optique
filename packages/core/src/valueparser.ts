@@ -2613,6 +2613,8 @@ export interface HostnameOptions {
  *
  * @param options - Options for hostname validation.
  * @returns A value parser for hostnames.
+ * @throws {TypeError} If `allowWildcard`, `allowUnderscore`, or
+ *   `allowLocalhost` is not a boolean.
  * @throws {RangeError} If `maxLength` is not a positive integer.
  * @since 0.10.0
  *
@@ -4332,6 +4334,7 @@ export interface DomainOptions {
  * @returns A parser that accepts valid domain names as strings.
  * @throws {RangeError} If `maxLength` is not a positive integer.
  * @throws {RangeError} If `minLabels` is not a positive integer.
+ * @throws {TypeError} If `allowSubdomains` or `lowercase` is not a boolean.
  * @throws {TypeError} If any `allowedTlds` entry is not a string, is empty,
  *   contains dots, has leading/trailing whitespace, or is not a valid DNS
  *   label.
