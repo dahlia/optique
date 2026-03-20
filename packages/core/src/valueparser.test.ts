@@ -4344,7 +4344,7 @@ describe("uuid", () => {
       assert.ok(!result.success);
       if (!result.success) {
         assert.equal(
-          formatMessage(result.error),
+          formatMessage(result.error, { quotes: false }),
           "Expected UUID version 4, but got version 1.",
         );
       }

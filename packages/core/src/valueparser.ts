@@ -1747,9 +1747,13 @@ export interface UuidOptions {
 
   /**
    * List of allowed UUID versions (e.g., `[4, 5]` for UUIDs version 4 and 5).
+   * Each version must be an integer between 1 and 8 (the standardized
+   * [RFC 9562] versions).  Duplicate entries are automatically removed.
    * If specified, the parser will validate that the UUID matches one of the
    * allowed versions.  If not specified, the accepted versions depend on
    * the {@link strict} option.
+   *
+   * [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
    */
   readonly allowedVersions?: readonly number[];
 
@@ -1825,6 +1829,10 @@ export interface UuidOptions {
  * @param options Configuration options for the UUID parser.
  * @returns A {@link ValueParser} that converts string input to {@link Uuid}
  *          strings.
+ * @throws {TypeError} If any element of
+ *   {@link UuidOptions.allowedVersions} is not an integer.
+ * @throws {RangeError} If any element of
+ *   {@link UuidOptions.allowedVersions} is outside the range 1 to 8.
  */
 export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   // UUID regex pattern: 8-4-4-4-12 hex digits with dashes
@@ -1836,7 +1844,23 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   // Snapshot mutable config at construction time
   const strict = options.strict !== false;
   const allowedVersions = options.allowedVersions != null
-    ? Object.freeze([...options.allowedVersions])
+    ? (() => {
+      for (const v of options.allowedVersions) {
+        if (typeof v !== "number" || !Number.isInteger(v)) {
+          throw new TypeError(
+            `Expected every element of allowedVersions to be an integer, but got: ${
+              String(v)
+            }.`,
+          );
+        }
+        if (v < 1 || v > 8) {
+          throw new RangeError(
+            `Expected every element of allowedVersions to be between 1 and 8, but got: ${v}.`,
+          );
+        }
+      }
+      return Object.freeze([...new Set(options.allowedVersions)]);
+    })()
     : null;
   const invalidUuid = options.errors?.invalidUuid;
   const disallowedVersion = options.errors?.disallowedVersion;
