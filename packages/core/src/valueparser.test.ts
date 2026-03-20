@@ -3990,9 +3990,9 @@ describe("uuid", () => {
       ];
 
       for (const input of cases) {
-        assert.equal(
-          defaultParser.parse(input).success,
-          strictParser.parse(input).success,
+        assert.deepEqual(
+          defaultParser.parse(input),
+          strictParser.parse(input),
           `Mismatch for: ${input}`,
         );
       }
@@ -4027,6 +4027,13 @@ describe("uuid", () => {
       // v4 UUID with invalid variant nibble (0)
       const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
       assert.ok(result.success);
+    });
+
+    it("should still reject disallowed versions with strict: false", () => {
+      const parser = uuid({ allowedVersions: [4], strict: false });
+      // v1 UUID should be rejected by allowedVersions
+      const result = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+      assert.ok(!result.success);
     });
 
     it("should accept nil UUID even with allowedVersions", () => {

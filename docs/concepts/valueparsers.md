@@ -512,14 +512,14 @@ The parser validates the standard UUID format:
 
 By default, the parser enforces strict RFC 9562 compliance:
 
- -  The *version digit* (position 14) must be one of the currently
+ -  The *version digit* (index 14, 0-based) must be one of the currently
     standardized versions: 1 through 8.
- -  The *variant nibble* (position 19) must have the RFC 9562 layout
-    (`10xx` in binary), meaning hex digits `8`, `9`, `a`, or `b`.
+ -  The *variant nibble* (index 19) must have the RFC 9562 layout (`10xx`
+    in binary), meaning hex digits `8`, `9`, `a`, or `b`.
 
 The *nil UUID* (`00000000-0000-0000-0000-000000000000`) and *max UUID*
 (`ffffffff-ffff-ffff-ffff-ffffffffffff`) are accepted as special standard
-values regardless of strict mode.
+values regardless of strict mode or `allowedVersions`.
 
 Set `strict: false` to disable version and variant validation, accepting
 any well-formed UUID string:
@@ -534,7 +534,7 @@ const lenient = uuid({ strict: false });
 ### Version validation
 
 When `allowedVersions` is specified, the parser checks the version digit
-(character 14) and validates it matches one of the allowed versions.
+(index 14) and validates it matches one of the allowed versions.
 This takes precedence over the strict default version set (1-8), but
 variant validation still applies in strict mode:
 

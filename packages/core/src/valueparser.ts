@@ -1830,6 +1830,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const metavar = options.metavar ?? "UUID";
   ensureNonEmptyString(metavar);
+  checkBooleanOption(options, "strict");
   // Snapshot mutable config at construction time
   const strict = options.strict !== false;
   const allowedVersions = options.allowedVersions != null
