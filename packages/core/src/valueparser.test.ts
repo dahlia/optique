@@ -4058,6 +4058,71 @@ describe("uuid", () => {
       );
     });
 
+    it("should reject non-RFC variant in default strict mode (issue #334)", () => {
+      const parser = uuid();
+      // variant 'c' is outside RFC 9562 set {8, 9, a, b}
+      const r1 = parser.parse("123e4567-e89b-12d3-c456-426614174000");
+      assert.ok(!r1.success);
+      if (!r1.success) {
+        assert.deepEqual(
+          r1.error,
+          [
+            {
+              type: "text",
+              text:
+                "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
+            },
+            { type: "value", value: "c" },
+            { type: "text", text: " in " },
+            { type: "value", value: "123e4567-e89b-12d3-c456-426614174000" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+      // variant 'f' is outside RFC 9562 set
+      const r2 = parser.parse("123e4567-e89b-12d3-f456-426614174000");
+      assert.ok(!r2.success);
+      if (!r2.success) {
+        assert.deepEqual(
+          r2.error,
+          [
+            {
+              type: "text",
+              text:
+                "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
+            },
+            { type: "value", value: "f" },
+            { type: "text", text: " in " },
+            { type: "value", value: "123e4567-e89b-12d3-f456-426614174000" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should reject non-RFC variant even with allowedVersions (issue #334)", () => {
+      const parser = uuid({ allowedVersions: [1] });
+      // version 1 matches, but variant 'f' is invalid
+      const result = parser.parse("123e4567-e89b-12d3-f456-426614174000");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            {
+              type: "text",
+              text:
+                "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
+            },
+            { type: "value", value: "f" },
+            { type: "text", text: " in " },
+            { type: "value", value: "123e4567-e89b-12d3-f456-426614174000" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
     it("should provide default error message for invalid variant", () => {
       const parser = uuid({});
       const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");

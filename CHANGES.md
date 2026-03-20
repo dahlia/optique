@@ -627,7 +627,7 @@ To be released.
     the RFC 9562 layout (`10xx`).  The nil and max UUIDs are accepted as
     special standard values.  Use `uuid({ strict: false })` for the previous
     lenient behavior that accepts any hex digit in the version and variant
-    positions.  [[#336], [#670]]
+    positions.  [[#334], [#336], [#670], [#674]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
@@ -686,6 +686,7 @@ To be released.
 [#321]: https://github.com/dahlia/optique/issues/321
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
+[#334]: https://github.com/dahlia/optique/issues/334
 [#336]: https://github.com/dahlia/optique/issues/336
 [#337]: https://github.com/dahlia/optique/issues/337
 [#338]: https://github.com/dahlia/optique/issues/338
@@ -800,6 +801,7 @@ To be released.
 [#664]: https://github.com/dahlia/optique/pull/664
 [#668]: https://github.com/dahlia/optique/pull/668
 [#670]: https://github.com/dahlia/optique/pull/670
+[#674]: https://github.com/dahlia/optique/pull/674
 
 ### @optique/config
 
