@@ -616,6 +616,14 @@ To be released.
     `"https://"`, or non-string values now throw a `TypeError`.
     [[#344], [#653]]
 
+ -  `uuid()` now enforces strict [RFC 9562] validation by default: the
+    version digit must be 1 through 8, and the variant nibble must follow
+    the RFC 9562 layout (`10xx`).  The nil and max UUIDs are accepted as
+    special standard values.  Use `uuid({ strict: false })` for the previous
+    lenient behavior that accepts any hex digit in the version and variant
+    positions.  [[#336], [#670]]
+
+[RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
 [#115]: https://github.com/dahlia/optique/issues/115
@@ -672,6 +680,7 @@ To be released.
 [#321]: https://github.com/dahlia/optique/issues/321
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
+[#336]: https://github.com/dahlia/optique/issues/336
 [#337]: https://github.com/dahlia/optique/issues/337
 [#338]: https://github.com/dahlia/optique/issues/338
 [#341]: https://github.com/dahlia/optique/issues/341
@@ -783,6 +792,7 @@ To be released.
 [#663]: https://github.com/dahlia/optique/pull/663
 [#664]: https://github.com/dahlia/optique/pull/664
 [#668]: https://github.com/dahlia/optique/pull/668
+[#670]: https://github.com/dahlia/optique/pull/670
 
 ### @optique/config
 

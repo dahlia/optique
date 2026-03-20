@@ -466,13 +466,13 @@ messages for invalid locale identifiers.
 ---------------
 
 The `uuid()` parser validates [UUID] (Universally Unique Identifier) strings
-according to the standard format and optionally restricts to specific UUID
-versions. It returns a branded `Uuid` string type for additional type safety.
+according to [RFC 9562] and optionally restricts to specific UUID versions.
+It returns a branded `Uuid` string type for additional type safety.
 
 ~~~~ typescript twoslash
 import { uuid } from "@optique/core/valueparser";
 
-// Basic UUID parser
+// Basic UUID parser (strict RFC 9562 validation by default)
 const id = uuid();
 
 // UUID with version restrictions
@@ -488,6 +488,7 @@ const trackingId = uuid({
 ~~~~
 
 [UUID]: https://en.wikipedia.org/wiki/Universally_unique_identifier
+[RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 
 ### UUID format validation
 
@@ -496,7 +497,7 @@ The parser validates the standard UUID format:
 
 ~~~~
 # Valid UUID formats
-550e8400-e29b-41d4-a716-446655440000  # Version 1
+550e8400-e29b-41d4-a716-446655440000  # Version 4
 123e4567-e89b-12d3-a456-426614174000  # Version 1
 6ba7b810-9dad-11d1-80b4-00c04fd430c8  # Version 1
 6ba7b811-9dad-11d1-80b4-00c04fd430c8  # Version 1
@@ -507,10 +508,35 @@ The parser validates the standard UUID format:
 550e8400e29b41d4a716446655440000       # Missing hyphens
 ~~~~
 
+### Strict RFC 9562 validation
+
+By default, the parser enforces strict RFC 9562 compliance:
+
+ -  The *version digit* (position 14) must be one of the currently
+    standardized versions: 1 through 8.
+ -  The *variant nibble* (position 19) must have the RFC 9562 layout
+    (`10xx` in binary), meaning hex digits `8`, `9`, `a`, or `b`.
+
+The *nil UUID* (`00000000-0000-0000-0000-000000000000`) and *max UUID*
+(`ffffffff-ffff-ffff-ffff-ffffffffffff`) are accepted as special standard
+values regardless of strict mode.
+
+Set `strict: false` to disable version and variant validation, accepting
+any well-formed UUID string:
+
+~~~~ typescript twoslash
+import { uuid } from "@optique/core/valueparser";
+// ---cut-before---
+// Accept any UUID-like string without RFC 9562 checks
+const lenient = uuid({ strict: false });
+~~~~
+
 ### Version validation
 
 When `allowedVersions` is specified, the parser checks the version digit
-(character 14) and validates it matches one of the allowed versions:
+(character 14) and validates it matches one of the allowed versions.
+This takes precedence over the strict default version set (1-8), but
+variant validation still applies in strict mode:
 
 ~~~~ typescript twoslash
 import { uuid } from "@optique/core/valueparser";
@@ -553,7 +579,7 @@ processUuid("not-a-uuid");  // ✗ Type error
 ~~~~
 
 The parser uses `"UUID"` as its default metavar and provides specific error
-messages for format violations and version mismatches.
+messages for format violations, version mismatches, and variant violations.
 
 
 `port()` parser
