@@ -392,10 +392,9 @@ export function formatDocPage(
         )
       );
     // Compute minimum description column width for showDefault/showChoices.
-    // The description column must be wide enough to fit the fixed prefix
-    // and suffix on a single line.  When the rendered value is non-empty,
-    // word-wrapping separates content across lines, so no extra character
-    // beyond prefix + suffix (or prefix + label + suffix) is needed.
+    // Only the prefix (or prefix + label for choices) must fit on one
+    // line; the suffix ends up on the last line of the rendered content,
+    // which is already formatted within descColumnWidth - suffix.length.
     let minDescWidth = 1;
     if (needsDescColumn) {
       if (
@@ -405,13 +404,7 @@ export function formatDocPage(
         const prefix = typeof options.showDefault === "object"
           ? options.showDefault.prefix ?? " ["
           : " [";
-        const suffix = typeof options.showDefault === "object"
-          ? options.showDefault.suffix ?? "]"
-          : "]";
-        minDescWidth = Math.max(
-          minDescWidth,
-          prefix.length + suffix.length,
-        );
+        minDescWidth = Math.max(minDescWidth, prefix.length);
       }
       if (
         options.showChoices &&
@@ -420,15 +413,12 @@ export function formatDocPage(
         const prefix = typeof options.showChoices === "object"
           ? options.showChoices.prefix ?? " ("
           : " (";
-        const suffix = typeof options.showChoices === "object"
-          ? options.showChoices.suffix ?? ")"
-          : ")";
         const label = typeof options.showChoices === "object"
           ? options.showChoices.label ?? "choices: "
           : "choices: ";
         minDescWidth = Math.max(
           minDescWidth,
-          prefix.length + label.length + suffix.length,
+          prefix.length + label.length,
         );
       }
     }

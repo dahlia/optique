@@ -1871,21 +1871,21 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // showDefault prefix " [" (2) + suffix "]" (1) = 3
-      // minDescWidth=3, minimum = termIndent(2) + max(4, 2*3+1) = 2 + 7 = 9
+      // showDefault prefix " [" (2), suffix wraps with content
+      // minDescWidth=2, minimum = termIndent(2) + max(4, 2*2+1) = 2 + 5 = 7
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 8, showDefault: true }),
+        () => formatDocPage("app", page, { maxWidth: 6, showDefault: true }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 9, got 8.",
+          message: "maxWidth must be at least 7, got 6.",
         },
       );
       // At minimum, output should not exceed maxWidth
       const result = formatDocPage("app", page, {
-        maxWidth: 9,
+        maxWidth: 7,
         showDefault: true,
       });
-      assertLinesWithinMaxWidth(result, 9);
+      assertLinesWithinMaxWidth(result, 7);
     });
 
     it("should throw RangeError when maxWidth is too small for showChoices", () => {
@@ -1898,20 +1898,21 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // showChoices prefix " (" (2) + label "choices: " (9) + suffix ")" (1) = 12
-      // minDescWidth=12, minimum = termIndent(2) + max(4, 2*12+1) = 2 + 25 = 27
+      // showChoices prefix " (" (2) + label "choices: " (9) = 11
+      // suffix wraps with content
+      // minDescWidth=11, minimum = termIndent(2) + max(4, 2*11+1) = 2 + 23 = 25
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 26, showChoices: true }),
+        () => formatDocPage("app", page, { maxWidth: 24, showChoices: true }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 27, got 26.",
+          message: "maxWidth must be at least 25, got 24.",
         },
       );
       const result = formatDocPage("app", page, {
-        maxWidth: 27,
+        maxWidth: 25,
         showChoices: true,
       });
-      assertLinesWithinMaxWidth(result, 27);
+      assertLinesWithinMaxWidth(result, 25);
     });
 
     it("should reject maxWidth in the gap between split and non-split ranges", () => {
@@ -1925,53 +1926,53 @@ describe("formatDocPage", () => {
         }],
       };
       // Default termWidth=26, termIndent=2.
-      // showChoices prefix+label+suffix = 2+9+1 = 12
-      // Split range works at small maxWidth (e.g. 27).
-      // Non-split needs: 2 + 26 + 2 + 12 = 42.
-      // Gap: 28..41 should be rejected.
-      const result27 = formatDocPage("app", page, {
-        maxWidth: 27,
+      // showChoices prefix+label = 2+9 = 11
+      // Split range works at small maxWidth (e.g. 25).
+      // Non-split needs: 2 + 26 + 2 + 11 = 41.
+      // Gap: 26..40 should be rejected.
+      const result25 = formatDocPage("app", page, {
+        maxWidth: 25,
         showChoices: true,
       });
-      assertLinesWithinMaxWidth(result27, 27);
+      assertLinesWithinMaxWidth(result25, 25);
       assert.throws(
         () => formatDocPage("app", page, { maxWidth: 31, showChoices: true }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 42, got 31.",
+          message: "maxWidth must be at least 41, got 31.",
         },
       );
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 41, showChoices: true }),
+        () => formatDocPage("app", page, { maxWidth: 40, showChoices: true }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 42, got 41.",
+          message: "maxWidth must be at least 41, got 40.",
         },
       );
-      const result42 = formatDocPage("app", page, {
-        maxWidth: 42,
+      const result41 = formatDocPage("app", page, {
+        maxWidth: 41,
         showChoices: true,
       });
-      assertLinesWithinMaxWidth(result42, 42);
+      assertLinesWithinMaxWidth(result41, 41);
     });
 
-    it("should not reject empty-string defaults at the minimum width", () => {
+    it("should allow non-empty showDefault at narrow width", () => {
       const page: DocPage = {
         sections: [{
           entries: [{
             term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            default: [{ type: "text", text: "" }],
+            default: [{ type: "text", text: "0" }],
           }],
         }],
       };
-      // minDescWidth = prefix(2) + suffix(1) = 3
-      // minimum = termIndent(2) + max(4, 2*3+1) = 9
+      // minDescWidth = prefix.length = 2
+      // minimum = termIndent(2) + max(4, 2*2+1) = 7
+      // Suffix wraps onto the content line, so this fits
       const result = formatDocPage("app", page, {
-        maxWidth: 9,
+        maxWidth: 7,
         showDefault: true,
       });
-      assertLinesWithinMaxWidth(result, 9);
+      assertLinesWithinMaxWidth(result, 7);
     });
 
     it("should use max of all applicable minimums", () => {
@@ -1997,7 +1998,7 @@ describe("formatDocPage", () => {
       assertLinesWithinMaxWidth(result, 11);
     });
 
-    it("should respect custom showDefault prefix/suffix in minWidth", () => {
+    it("should respect custom showDefault prefix in minWidth", () => {
       const page: DocPage = {
         sections: [{
           entries: [{
@@ -2007,24 +2008,24 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // Custom prefix "<<" (2) + suffix ">>" (2) = 4
-      // minDescWidth=4, minimum = termIndent(2) + max(4, 2*4+1) = 2 + 9 = 11
+      // Custom prefix "<<<" (3), suffix wraps with content
+      // minDescWidth=3, minimum = termIndent(2) + max(4, 2*3+1) = 2 + 7 = 9
       assert.throws(
         () =>
           formatDocPage("app", page, {
-            maxWidth: 10,
-            showDefault: { prefix: "<<", suffix: ">>" },
+            maxWidth: 8,
+            showDefault: { prefix: "<<<", suffix: ">>" },
           }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 11, got 10.",
+          message: "maxWidth must be at least 9, got 8.",
         },
       );
       const result = formatDocPage("app", page, {
-        maxWidth: 11,
-        showDefault: { prefix: "<<", suffix: ">>" },
+        maxWidth: 9,
+        showDefault: { prefix: "<<<", suffix: ">>" },
       });
-      assertLinesWithinMaxWidth(result, 11);
+      assertLinesWithinMaxWidth(result, 9);
     });
 
     it("should respect custom showChoices label in minWidth", () => {
@@ -2037,25 +2038,25 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // Custom label "v: " (3), prefix " (" (2), suffix ")" (1)
-      // minDescWidth = 2 + 3 + 1 = 6
-      // minimum = termIndent(2) + max(4, 2*6+1) = 2 + 13 = 15
+      // Custom label "v: " (3), prefix " (" (2), suffix wraps with content
+      // minDescWidth = 2 + 3 = 5
+      // minimum = termIndent(2) + max(4, 2*5+1) = 2 + 11 = 13
       assert.throws(
         () =>
           formatDocPage("app", page, {
-            maxWidth: 14,
+            maxWidth: 12,
             showChoices: { label: "v: " },
           }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 15, got 14.",
+          message: "maxWidth must be at least 13, got 12.",
         },
       );
       const result = formatDocPage("app", page, {
-        maxWidth: 15,
+        maxWidth: 13,
         showChoices: { label: "v: " },
       });
-      assertLinesWithinMaxWidth(result, 15);
+      assertLinesWithinMaxWidth(result, 13);
     });
   });
 });
