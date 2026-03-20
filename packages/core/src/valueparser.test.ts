@@ -6612,21 +6612,33 @@ describe("hostname()", () => {
     it("should throw TypeError for non-boolean allowWildcard", () => {
       assert.throws(
         () => hostname({ allowWildcard: "yes" as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message:
+            "Expected allowWildcard to be a boolean, but got string: yes.",
+        },
       );
     });
 
     it("should throw TypeError for non-boolean allowUnderscore", () => {
       assert.throws(
         () => hostname({ allowUnderscore: "yes" as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message:
+            "Expected allowUnderscore to be a boolean, but got string: yes.",
+        },
       );
     });
 
     it("should throw TypeError for non-boolean allowLocalhost", () => {
       assert.throws(
         () => hostname({ allowLocalhost: "no" as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message:
+            "Expected allowLocalhost to be a boolean, but got string: no.",
+        },
       );
     });
   });
@@ -9833,14 +9845,21 @@ describe("domain()", () => {
     it("should throw TypeError for non-boolean allowSubdomains", () => {
       assert.throws(
         () => domain({ allowSubdomains: "no" as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message:
+            "Expected allowSubdomains to be a boolean, but got string: no.",
+        },
       );
     });
 
     it("should throw TypeError for non-boolean lowercase", () => {
       assert.throws(
         () => domain({ lowercase: "yes" as never }),
-        TypeError,
+        {
+          name: "TypeError",
+          message: "Expected lowercase to be a boolean, but got string: yes.",
+        },
       );
     });
   });
