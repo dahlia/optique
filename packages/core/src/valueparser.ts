@@ -470,16 +470,7 @@ export function choice<const T extends string | number>(
     ...new Set(choices as readonly string[]),
   ]);
   const stringOptions = options as ChoiceOptionsString;
-  if (
-    stringOptions.caseInsensitive !== undefined &&
-    typeof stringOptions.caseInsensitive !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected caseInsensitive to be a boolean, but got ` +
-        `${typeof stringOptions.caseInsensitive}: ` +
-        `${String(stringOptions.caseInsensitive)}.`,
-    );
-  }
+  checkBooleanOption(stringOptions, "caseInsensitive");
   const caseInsensitive = stringOptions.caseInsensitive ?? false;
   const normalizedValues = caseInsensitive
     ? stringChoices.map((v) => v.toLowerCase())
@@ -546,10 +537,10 @@ export function choice<const T extends string | number>(
  * @since 0.11.0
  */
 export function checkBooleanOption(
-  options: Record<string, unknown> | undefined,
+  options: object | undefined,
   key: string,
 ): void {
-  const value = options?.[key];
+  const value = options?.[key as keyof typeof options];
   if (value !== undefined && typeof value !== "boolean") {
     throw new TypeError(
       `Expected ${key} to be a boolean, but got ` +
@@ -2070,16 +2061,7 @@ export function port(
 export function port(
   options?: PortOptionsNumber | PortOptionsBigInt,
 ): ValueParser<"sync", number> | ValueParser<"sync", bigint> {
-  if (
-    options?.disallowWellKnown !== undefined &&
-    typeof options.disallowWellKnown !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected disallowWellKnown to be a boolean, but got ` +
-        `${typeof options.disallowWellKnown}: ` +
-        `${String(options.disallowWellKnown)}.`,
-    );
-  }
+  checkBooleanOption(options, "disallowWellKnown");
   if (
     options?.type !== undefined &&
     options.type !== "number" &&
@@ -2660,36 +2642,9 @@ export function hostname(
   const metavar: NonEmptyString = options?.metavar ?? "HOST";
   ensureNonEmptyString(metavar);
 
-  if (
-    options?.allowWildcard !== undefined &&
-    typeof options.allowWildcard !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected allowWildcard to be a boolean, but got ` +
-        `${typeof options.allowWildcard}: ` +
-        `${String(options.allowWildcard)}.`,
-    );
-  }
-  if (
-    options?.allowUnderscore !== undefined &&
-    typeof options.allowUnderscore !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected allowUnderscore to be a boolean, but got ` +
-        `${typeof options.allowUnderscore}: ` +
-        `${String(options.allowUnderscore)}.`,
-    );
-  }
-  if (
-    options?.allowLocalhost !== undefined &&
-    typeof options.allowLocalhost !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected allowLocalhost to be a boolean, but got ` +
-        `${typeof options.allowLocalhost}: ` +
-        `${String(options.allowLocalhost)}.`,
-    );
-  }
+  checkBooleanOption(options, "allowWildcard");
+  checkBooleanOption(options, "allowUnderscore");
+  checkBooleanOption(options, "allowLocalhost");
 
   const allowWildcard = options?.allowWildcard ?? false;
   const allowUnderscore = options?.allowUnderscore ?? false;
@@ -3883,26 +3838,8 @@ export function portRange(
 export function portRange(
   options?: PortRangeOptionsNumber | PortRangeOptionsBigInt,
 ): ValueParser<"sync", PortRangeValueNumber | PortRangeValueBigInt> {
-  if (
-    options?.disallowWellKnown !== undefined &&
-    typeof options.disallowWellKnown !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected disallowWellKnown to be a boolean, but got ` +
-        `${typeof options.disallowWellKnown}: ` +
-        `${String(options.disallowWellKnown)}.`,
-    );
-  }
-  if (
-    options?.allowSingle !== undefined &&
-    typeof options.allowSingle !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected allowSingle to be a boolean, but got ` +
-        `${typeof options.allowSingle}: ` +
-        `${String(options.allowSingle)}.`,
-    );
-  }
+  checkBooleanOption(options, "disallowWellKnown");
+  checkBooleanOption(options, "allowSingle");
   if (
     options?.type !== undefined &&
     options.type !== "number" &&
@@ -4387,26 +4324,8 @@ export function domain(
   options?: DomainOptions & { readonly metavar?: NonEmptyString },
 ): ValueParser<"sync", string> {
   const metavar = options?.metavar ?? "DOMAIN";
-  if (
-    options?.allowSubdomains !== undefined &&
-    typeof options.allowSubdomains !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected allowSubdomains to be a boolean, but got ` +
-        `${typeof options.allowSubdomains}: ` +
-        `${String(options.allowSubdomains)}.`,
-    );
-  }
-  if (
-    options?.lowercase !== undefined &&
-    typeof options.lowercase !== "boolean"
-  ) {
-    throw new TypeError(
-      `Expected lowercase to be a boolean, but got ` +
-        `${typeof options.lowercase}: ` +
-        `${String(options.lowercase)}.`,
-    );
-  }
+  checkBooleanOption(options, "allowSubdomains");
+  checkBooleanOption(options, "lowercase");
   const allowSubdomains = options?.allowSubdomains ?? true;
   const allowedTlds = options?.allowedTlds != null
     ? Object.freeze([...options.allowedTlds])
