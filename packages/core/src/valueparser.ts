@@ -2748,8 +2748,12 @@ export function hostname(
           return { success: false, error: msg };
         }
 
-        // Skip wildcard label (already validated above)
-        if (label === "*") {
+        // Skip the leftmost wildcard label only when wildcard is allowed
+        // and the input starts with "*." (already validated above)
+        if (
+          label === "*" && allowWildcard && input.startsWith("*.") &&
+          label === labels[0]
+        ) {
           continue;
         }
 
