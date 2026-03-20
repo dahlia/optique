@@ -4362,6 +4362,26 @@ export function domain(
   options?: DomainOptions & { readonly metavar?: NonEmptyString },
 ): ValueParser<"sync", string> {
   const metavar = options?.metavar ?? "DOMAIN";
+  if (
+    options?.allowSubdomains !== undefined &&
+    typeof options.allowSubdomains !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowSubdomains to be a boolean, but got ` +
+        `${typeof options.allowSubdomains}: ` +
+        `${String(options.allowSubdomains)}.`,
+    );
+  }
+  if (
+    options?.lowercase !== undefined &&
+    typeof options.lowercase !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected lowercase to be a boolean, but got ` +
+        `${typeof options.lowercase}: ` +
+        `${String(options.lowercase)}.`,
+    );
+  }
   const allowSubdomains = options?.allowSubdomains ?? true;
   const allowedTlds = options?.allowedTlds != null
     ? Object.freeze([...options.allowedTlds])
