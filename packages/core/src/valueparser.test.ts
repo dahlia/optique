@@ -6607,6 +6607,29 @@ describe("hostname()", () => {
       assert.ok(parser.parse("192.168.0.example").success);
     });
   });
+
+  describe("runtime option type validation", () => {
+    it("should throw TypeError for non-boolean allowWildcard", () => {
+      assert.throws(
+        () => hostname({ allowWildcard: "yes" as never }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for non-boolean allowUnderscore", () => {
+      assert.throws(
+        () => hostname({ allowUnderscore: "yes" as never }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for non-boolean allowLocalhost", () => {
+      assert.throws(
+        () => hostname({ allowLocalhost: "no" as never }),
+        TypeError,
+      );
+    });
+  });
 });
 
 describe("email()", () => {
@@ -9803,6 +9826,22 @@ describe("domain()", () => {
       const result2 = parser.parse("this-is-long.example.com");
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
+    });
+  });
+
+  describe("runtime option type validation", () => {
+    it("should throw TypeError for non-boolean allowSubdomains", () => {
+      assert.throws(
+        () => domain({ allowSubdomains: "no" as never }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for non-boolean lowercase", () => {
+      assert.throws(
+        () => domain({ lowercase: "yes" as never }),
+        TypeError,
+      );
     });
   });
 });
