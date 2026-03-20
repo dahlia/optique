@@ -523,10 +523,20 @@ describe("completion module", () => {
       const suggestions: Suggestion[] = [
         { kind: "literal", text: "alpha\tbeta" },
         { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
       ];
 
       const encoded = Array.from(bash.encodeSuggestions(suggestions));
-      deepStrictEqual(encoded, ["alpha beta", "\n", "line1 line2"]);
+      deepStrictEqual(encoded, [
+        "alpha beta",
+        "\n",
+        "line1 line2",
+        "\n",
+        "car riage",
+        "\n",
+        "nul byte",
+      ]);
     });
 
     it("should not use compgen -z flag", () => {
@@ -2022,12 +2032,16 @@ _nohidden_cli 2>/dev/null
       const suggestions: Suggestion[] = [
         { kind: "literal", text: "alpha\tbeta" },
         { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
       ];
 
       const encoded = Array.from(zsh.encodeSuggestions(suggestions));
       deepStrictEqual(encoded, [
         "alpha beta\0\0",
         "line1 line2\0\0",
+        "car riage\0\0",
+        "nul byte\0\0",
       ]);
     });
 
@@ -2287,6 +2301,8 @@ _nohidden_cli 2>/dev/null
       const suggestions: Suggestion[] = [
         { kind: "literal", text: "alpha\tbeta" },
         { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
       ];
 
       const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
@@ -2294,6 +2310,10 @@ _nohidden_cli 2>/dev/null
         "alpha beta\talpha beta\t",
         "\n",
         "line1 line2\tline1 line2\t",
+        "\n",
+        "car riage\tcar riage\t",
+        "\n",
+        "nul byte\tnul byte\t",
       ]);
     });
 
@@ -2828,6 +2848,8 @@ printf '__FILE__:file:.json,.yaml::0\\n'
       const suggestions: Suggestion[] = [
         { kind: "literal", text: "alpha\tbeta" },
         { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
       ];
 
       const encoded = Array.from(fish.encodeSuggestions(suggestions));
@@ -2835,6 +2857,10 @@ printf '__FILE__:file:.json,.yaml::0\\n'
         "alpha beta\t",
         "\n",
         "line1 line2\t",
+        "\n",
+        "car riage\t",
+        "\n",
+        "nul byte\t",
       ]);
     });
 
@@ -3591,6 +3617,8 @@ ${functionName}
       const suggestions: Suggestion[] = [
         { kind: "literal", text: "alpha\tbeta" },
         { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
       ];
 
       const encoded = Array.from(nu.encodeSuggestions(suggestions));
@@ -3598,6 +3626,10 @@ ${functionName}
         "alpha beta\t",
         "\n",
         "line1 line2\t",
+        "\n",
+        "car riage\t",
+        "\n",
+        "nul byte\t",
       ]);
     });
 
