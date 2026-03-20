@@ -1745,10 +1745,13 @@ describe("formatDocPage", () => {
       assert.doesNotThrow(
         () => formatDocPage("app", emptyPage, { maxWidth: 1 }),
       );
-      // Bare-term entries need termIndent + 1 = 3
+      // Bare-term entries (including empty description) need termIndent + 1 = 3
       const bareTermPage: DocPage = {
         sections: [{
-          entries: [{ term: { type: "argument", metavar: "X" } }],
+          entries: [
+            { term: { type: "argument", metavar: "X" } },
+            { term: { type: "argument", metavar: "Y" }, description: [] },
+          ],
         }],
       };
       assert.doesNotThrow(

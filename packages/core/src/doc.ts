@@ -377,12 +377,14 @@ export function formatDocPage(
   // bare-term entries need termIndent + 1 (just 1 term char).
   if (options.maxWidth != null) {
     const hasEntries = page.sections.some((s) => s.entries.length > 0);
+    const hasContent = (msg: unknown): msg is readonly unknown[] =>
+      Array.isArray(msg) && msg.length > 0;
     const needsDescColumn = hasEntries &&
       page.sections.some((s) =>
         s.entries.some((e) =>
-          e.description != null ||
-          (options.showDefault && e.default != null) ||
-          (options.showChoices && e.choices != null)
+          hasContent(e.description) ||
+          (options.showDefault && hasContent(e.default)) ||
+          (options.showChoices && hasContent(e.choices))
         )
       );
     const minWidth = needsDescColumn
