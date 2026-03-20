@@ -1693,13 +1693,14 @@ describe("formatDocPage", () => {
       // The term "--longoption123" (15 chars) fits in maxWidth - termIndent
       // (20 - 2 = 18), so it should appear on a single line without a
       // leading blank line or missing indent.
-      assert.ok(
-        !result.includes("\n\n\n"),
-        "Should not include extra blank lines",
-      );
       const lines = result.split("\n");
       const termLine = lines.find((l) => l.includes("--longoption123"));
       assert.ok(termLine != null, "Term should appear in output");
+      const termIndex = result.indexOf(termLine!);
+      assert.ok(
+        !result.slice(0, termIndex).endsWith("\n\n"),
+        "Should not have a blank line before the term",
+      );
       assert.ok(
         termLine.startsWith("  "),
         `Term line should have left indent: "${termLine}"`,
