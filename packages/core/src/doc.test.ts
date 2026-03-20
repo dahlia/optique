@@ -1956,6 +1956,45 @@ describe("formatDocPage", () => {
       assertLinesWithinMaxWidth(result41, 41);
     });
 
+    it("should validate empty-array defaults and choices", () => {
+      // default: [] triggers showDefault rendering (prefix+suffix with no
+      // content), so validation must account for it.
+      const defaultPage: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "d" }],
+            default: [],
+          }],
+        }],
+      };
+      assert.throws(
+        () =>
+          formatDocPage("app", defaultPage, {
+            maxWidth: 6,
+            showDefault: true,
+          }),
+        { name: "RangeError" },
+      );
+      const choicesPage: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "d" }],
+            choices: [],
+          }],
+        }],
+      };
+      assert.throws(
+        () =>
+          formatDocPage("app", choicesPage, {
+            maxWidth: 6,
+            showChoices: true,
+          }),
+        { name: "RangeError" },
+      );
+    });
+
     it("should allow non-empty showDefault at narrow width", () => {
       const page: DocPage = {
         sections: [{
