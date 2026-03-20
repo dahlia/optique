@@ -3777,6 +3777,46 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 0);
     });
 
+    it("does not duplicate prompts under concurrent object() parses", async () => {
+      let promptCount = 0;
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      const parser = object({
+        name: prompt(fail<string>(), {
+          type: "input",
+          message: "name?",
+          prompter: async () => {
+            promptCount++;
+            if (promptCount === 1) {
+              await gate;
+              return "first";
+            }
+            return `value-${promptCount}`;
+          },
+        }),
+      });
+
+      const p1 = parseAsync(parser, []);
+      const p2 = parseAsync(parser, []);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      release();
+
+      const [r1, r2] = await Promise.all([p1, p2]);
+
+      // Each parse should trigger exactly one prompt execution (total 2).
+      assert.equal(promptCount, 2);
+      assert.ok(r1.success);
+      assert.ok(r2.success);
+      if (r1.success && r2.success) {
+        // Values should not be mixed up across parses.
+        const values = new Set([r1.value.name, r2.value.name]);
+        assert.equal(values.size, 2);
+      }
+    });
+
     it("keeps concurrent non-plain prompt annotations isolated", async () => {
       const marker = Symbol.for("@test/prompt-concurrent-class-state");
 

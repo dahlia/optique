@@ -673,14 +673,13 @@ export function prompt<M extends Mode, TValue, TState>(
   // 1. completability check (inside object.parse): sets this cache
   // 2. actual complete (inside object.complete): reads and clears this cache
   //
-  // The cache is scoped to a specific sentinel state instance so values from
-  // one completion cycle are never replayed for another parse invocation.
-  let promptCache:
-    | {
-      readonly state: InstanceType<typeof PromptBindInitialStateClass>;
-      readonly result: Promise<ValueParserResult<TValue>>;
-    }
-    | null = null;
+  // Uses a WeakMap keyed by sentinel state instance so concurrent parse
+  // invocations maintain independent caches.  WeakMap ensures entries are
+  // garbage-collected if phase 2 never fires (e.g., after a parse failure).
+  const promptCache = new WeakMap<
+    InstanceType<typeof PromptBindInitialStateClass>,
+    Promise<ValueParserResult<TValue>>
+  >();
 
   function shouldAttemptInnerCompletion(
     cliState: unknown,
@@ -1019,10 +1018,10 @@ export function prompt<M extends Mode, TValue, TState>(
       // was provided, avoiding unnecessary interactive prompts.  The cache
       // deduplicates the two calls so the prompt (or inner complete) runs once.
       if (state instanceof PromptBindInitialStateClass) {
-        if (promptCache?.state === state) {
+        if (promptCache.has(state)) {
           // Second call (real complete phase): consume the cache.
-          const cached = promptCache.result;
-          promptCache = null;
+          const cached = promptCache.get(state)!;
+          promptCache.delete(state);
           return cached;
         }
         // First call: try inner parser, fall back to prompt if it fails.
@@ -1066,7 +1065,7 @@ export function prompt<M extends Mode, TValue, TState>(
             : usePromptOrDeferSentinel(
               annotatedR as ValueParserResult<TValue>,
             );
-          promptCache = { state, result: cachedResult };
+          promptCache.set(state, cachedResult);
           return cachedResult;
         }
 
@@ -1175,7 +1174,7 @@ export function prompt<M extends Mode, TValue, TState>(
         const cachedResult = simParseR instanceof Promise
           ? (simParseR as Promise<ParserResult<TState>>).then(decideFromParse)
           : decideFromParse(simParseR as ParserResult<TState>);
-        promptCache = { state, result: cachedResult };
+        promptCache.set(state, cachedResult);
         return cachedResult;
       }
 
