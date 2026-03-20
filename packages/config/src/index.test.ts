@@ -1160,6 +1160,340 @@ describe("createConfigContext input validation", () => {
   });
 });
 
+describe("load() return value validation", () => {
+  const createNameContext = () => {
+    const schema = z.object({ name: z.string() });
+    return createConfigContext({ schema });
+  };
+
+  test("rejects non-object return value from load()", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => 123) as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return an object, but got: number.",
+      },
+    );
+  });
+
+  test("rejects null return value from load()", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => null) as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return an object, but got: null.",
+      },
+    );
+  });
+
+  test("rejects array return value from load()", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => []) as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return an object, but got: array.",
+      },
+    );
+  });
+
+  test("rejects load() result missing config property", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => ({ meta: { source: "x" } })) as never },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() result to have a config property.",
+      },
+    );
+  });
+
+  test("rejects plain thenable return value from load()", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              then: (resolve: (value: unknown) => void) =>
+                resolve({ config: { name: "ALICE" }, meta: undefined }),
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return a plain object or Promise, " +
+          "but got a thenable. Use a real Promise instead.",
+      },
+    );
+  });
+
+  test("accepts cross-realm Promise from load()", async () => {
+    const context = createNameContext();
+    // Simulate a cross-realm Promise: Symbol.toStringTag is "Promise"
+    // but instanceof Promise is false.
+    const crossRealmPromise = {
+      [Symbol.toStringTag]: "Promise",
+      then(
+        resolve: (value: { config: { name: string }; meta: undefined }) => void,
+      ) {
+        resolve({ config: { name: "ALICE" }, meta: undefined });
+      },
+    };
+    const annotations = await context.getAnnotations(
+      {},
+      { load: (() => crossRealmPromise) as never },
+    );
+    assert.ok(annotations != null);
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
+    const entry = (annotations as Record<symbol, { data: { name: string } }>)[
+      symbols[0]
+    ];
+    assert.ok(entry != null);
+    assert.equal(entry.data.name, "ALICE");
+  });
+
+  test("rejects thenable even if it would resolve to valid result", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              then: (resolve: (value: unknown) => void) => resolve(123),
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected load() to return a plain object or Promise, " +
+          "but got a thenable. Use a real Promise instead.",
+      },
+    );
+  });
+
+  test("rejects Promise-valued config in load() result", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: Promise.resolve({ name: "ALICE" }) as never,
+              meta: undefined,
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected config in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("rejects Promise-valued meta in load() result", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: { name: "ALICE" },
+              meta: Promise.resolve({
+                configPath: "x",
+                configDir: ".",
+              }) as never,
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected meta in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("accepts config object with then method (not a Promise)", () => {
+    const schema = z.object({
+      name: z.string(),
+      then: z.function(),
+    });
+    const context = createConfigContext({ schema });
+    const annotations = context.getAnnotations(
+      {},
+      {
+        load: (() => ({
+          config: { name: "ALICE", then: () => "domain method" },
+          meta: undefined,
+        })) as never,
+      },
+    );
+    assert.ok(annotations != null);
+    const symbols = Object.getOwnPropertySymbols(annotations);
+    assert.equal(symbols.length, 1);
+    const entry = (
+      annotations as Record<
+        symbol,
+        { data: { name: string; then: () => string } }
+      >
+    )[symbols[0]];
+    assert.ok(entry != null);
+    assert.equal(entry.data.name, "ALICE");
+    assert.equal(typeof entry.data.then, "function");
+  });
+
+  test("rejects cross-realm Promise config (Symbol.toStringTag)", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: {
+                [Symbol.toStringTag]: "Promise",
+                then: (resolve: (v: unknown) => void) =>
+                  resolve({ name: "ALICE" }),
+              },
+              meta: undefined,
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected config in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("rejects cross-realm Promise meta (Symbol.toStringTag)", () => {
+    const context = createNameContext();
+    assert.throws(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => ({
+              config: { name: "ALICE" },
+              meta: {
+                [Symbol.toStringTag]: "Promise",
+                then: (resolve: (v: unknown) => void) =>
+                  resolve({ configPath: "x", configDir: "." }),
+              },
+            })) as never,
+          },
+        ),
+      {
+        name: "TypeError",
+        message: "Expected meta in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("rejects non-object resolved value from async load()", async () => {
+    const context = createNameContext();
+    await assert.rejects(
+      () =>
+        context.getAnnotations(
+          {},
+          { load: (() => Promise.resolve(123)) as never },
+        ) as Promise<unknown>,
+      {
+        name: "TypeError",
+        message: "Expected load() to return an object, but got: number.",
+      },
+    );
+  });
+
+  test("rejects missing config in resolved value from async load()", async () => {
+    const context = createNameContext();
+    await assert.rejects(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() => Promise.resolve({ meta: undefined })) as never,
+          },
+        ) as Promise<unknown>,
+      {
+        name: "TypeError",
+        message: "Expected load() result to have a config property.",
+      },
+    );
+  });
+
+  test("rejects Promise-valued config in resolved value from async load()", async () => {
+    const context = createNameContext();
+    await assert.rejects(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() =>
+              Promise.resolve({
+                config: Promise.resolve({ name: "ALICE" }),
+                meta: undefined,
+              })) as never,
+          },
+        ) as Promise<unknown>,
+      {
+        name: "TypeError",
+        message: "Expected config in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+
+  test("rejects Promise-valued meta in resolved value from async load()", async () => {
+    const context = createNameContext();
+    await assert.rejects(
+      () =>
+        context.getAnnotations(
+          {},
+          {
+            load: (() =>
+              Promise.resolve({
+                config: { name: "ALICE" },
+                meta: Promise.resolve({ configPath: "x", configDir: "." }),
+              })) as never,
+          },
+        ) as Promise<unknown>,
+      {
+        name: "TypeError",
+        message: "Expected meta in load() result to not be a Promise. " +
+          "Resolve the Promise before returning.",
+      },
+    );
+  });
+});
+
 describe("createConfigContext error paths", () => {
   test("supports async Standard Schema validation result", async () => {
     const asyncSchema = {

@@ -817,6 +817,12 @@ To be released.
     callback returns a `Promise` or thenable, instead of silently
     leaking the thenable as the parsed value.  [[#400], [#628]]
 
+ -  `createConfigContext()` now validates `load()` return values at runtime.
+    Malformed results (missing `config` property, non-object or array returns,
+    plain thenables returned directly from `load()`, or Promise-valued
+    `config`/`meta` fields) now throw `TypeError` instead of causing silent
+    failures.  [[#411], [#655]]
+
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
 [#155]: https://github.com/dahlia/optique/issues/155
@@ -828,12 +834,14 @@ To be released.
 [#391]: https://github.com/dahlia/optique/issues/391
 [#398]: https://github.com/dahlia/optique/issues/398
 [#400]: https://github.com/dahlia/optique/issues/400
+[#411]: https://github.com/dahlia/optique/issues/411
 [#416]: https://github.com/dahlia/optique/issues/416
 [#549]: https://github.com/dahlia/optique/pull/549
 [#605]: https://github.com/dahlia/optique/pull/605
 [#609]: https://github.com/dahlia/optique/pull/609
 [#627]: https://github.com/dahlia/optique/pull/627
 [#628]: https://github.com/dahlia/optique/pull/628
+[#655]: https://github.com/dahlia/optique/pull/655
 
 ### @optique/env
 

@@ -693,6 +693,65 @@ function getTypeName(value: unknown): string {
   return typeof value;
 }
 
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return value != null &&
+    (typeof value === "object" || typeof value === "function") &&
+    "then" in value &&
+    typeof (value as Record<string, unknown>).then === "function";
+}
+
+/**
+ * Detects native Promises and cross-realm Promises.  Cross-realm
+ * Promises fail `instanceof Promise` but still carry the spec-required
+ * `Symbol.toStringTag === "Promise"`.  Domain objects that merely
+ * define a `then()` method are not matched unless they also set
+ * `Symbol.toStringTag` to `"Promise"`.
+ */
+function isPromise(value: unknown): boolean {
+  if (value instanceof Promise) return true;
+  if (
+    value == null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return false;
+  }
+  return isPromiseLike(value) &&
+    (value as unknown as Record<symbol, unknown>)[Symbol.toStringTag] ===
+      "Promise";
+}
+
+function validateLoadResult<TConfigMeta>(
+  loaded: unknown,
+): { config: unknown; meta: TConfigMeta | undefined } {
+  if (loaded == null || typeof loaded !== "object" || Array.isArray(loaded)) {
+    throw new TypeError(
+      `Expected load() to return an object, but got: ${getTypeName(loaded)}.`,
+    );
+  }
+  if (!("config" in loaded)) {
+    throw new TypeError(
+      "Expected load() result to have a config property.",
+    );
+  }
+  const result = loaded as Record<string, unknown>;
+  // Use isPromise() to catch both same-realm and cross-realm
+  // Promises without rejecting domain objects that merely have a
+  // then() method.
+  if (isPromise(result.config)) {
+    throw new TypeError(
+      "Expected config in load() result to not be a Promise. " +
+        "Resolve the Promise before returning.",
+    );
+  }
+  if (isPromise(result.meta)) {
+    throw new TypeError(
+      "Expected meta in load() result to not be a Promise. " +
+        "Resolve the Promise before returning.",
+    );
+  }
+  return loaded as { config: unknown; meta: TConfigMeta | undefined };
+}
+
 function isStandardSchema(value: unknown): value is StandardSchemaV1 {
   if (
     value == null || (typeof value !== "object" && typeof value !== "function")
@@ -906,13 +965,29 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
       if (opts.load) {
         // Custom load mode
         const loaded = opts.load(parsedPlaceholder);
-        if (loaded instanceof Promise) {
-          return loaded.then(({ config, meta }) =>
-            validateAndBuildAnnotations(config, meta)
+        // Accept native Promises and cross-realm Promises (detected via
+        // Symbol.toStringTag).
+        if (isPromise(loaded)) {
+          return Promise.resolve(loaded as Promise<unknown>).then(
+            (resolved) => {
+              const validated = validateLoadResult<TConfigMeta>(resolved);
+              return validateAndBuildAnnotations(
+                validated.config,
+                validated.meta,
+              );
+            },
           );
         }
-
-        return validateAndBuildAnnotations(loaded.config, loaded.meta);
+        // Reject plain thenables that are neither native nor cross-realm
+        // Promises.  The API contract is Promise | ConfigLoadResult.
+        if (isPromiseLike(loaded)) {
+          throw new TypeError(
+            "Expected load() to return a plain object or Promise, " +
+              "but got a thenable. Use a real Promise instead.",
+          );
+        }
+        const validated = validateLoadResult<TConfigMeta>(loaded);
+        return validateAndBuildAnnotations(validated.config, validated.meta);
       }
 
       if (opts.getConfigPath) {
