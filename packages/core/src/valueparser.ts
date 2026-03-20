@@ -2636,6 +2636,37 @@ export function hostname(
   const metavar: NonEmptyString = options?.metavar ?? "HOST";
   ensureNonEmptyString(metavar);
 
+  if (
+    options?.allowWildcard !== undefined &&
+    typeof options.allowWildcard !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowWildcard to be a boolean, but got ` +
+        `${typeof options.allowWildcard}: ` +
+        `${String(options.allowWildcard)}.`,
+    );
+  }
+  if (
+    options?.allowUnderscore !== undefined &&
+    typeof options.allowUnderscore !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowUnderscore to be a boolean, but got ` +
+        `${typeof options.allowUnderscore}: ` +
+        `${String(options.allowUnderscore)}.`,
+    );
+  }
+  if (
+    options?.allowLocalhost !== undefined &&
+    typeof options.allowLocalhost !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowLocalhost to be a boolean, but got ` +
+        `${typeof options.allowLocalhost}: ` +
+        `${String(options.allowLocalhost)}.`,
+    );
+  }
+
   const allowWildcard = options?.allowWildcard ?? false;
   const allowUnderscore = options?.allowUnderscore ?? false;
   const allowLocalhost = options?.allowLocalhost ?? true;
