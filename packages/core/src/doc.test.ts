@@ -1737,6 +1737,14 @@ describe("formatDocPage", () => {
       assert.doesNotThrow(
         () => formatDocPage("app", page, { maxWidth: 6 }),
       );
+      // Pages without entries should not throw even with very small maxWidth
+      const emptyPage: DocPage = {
+        brief: [{ type: "text", text: "A brief description" }],
+        sections: [],
+      };
+      assert.doesNotThrow(
+        () => formatDocPage("app", emptyPage, { maxWidth: 3 }),
+      );
     });
 
     it("should throw TypeError for non-finite or non-integer maxWidth", () => {
