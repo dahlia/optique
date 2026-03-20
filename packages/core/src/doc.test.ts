@@ -1914,6 +1914,47 @@ describe("formatDocPage", () => {
       assertLinesWithinMaxWidth(result, 27);
     });
 
+    it("should reject maxWidth in the gap between split and non-split ranges", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "d" }],
+            choices: valueSet(["a", "b"]),
+          }],
+        }],
+      };
+      // Default termWidth=26, termIndent=2.
+      // showChoices prefix+label+suffix = 2+9+1 = 12
+      // Split range works at small maxWidth (e.g. 27).
+      // Non-split needs: 2 + 26 + 2 + 12 = 42.
+      // Gap: 28..41 should be rejected.
+      const result27 = formatDocPage("app", page, {
+        maxWidth: 27,
+        showChoices: true,
+      });
+      assertLinesWithinMaxWidth(result27, 27);
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: 31, showChoices: true }),
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 42, got 31.",
+        },
+      );
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: 41, showChoices: true }),
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 42, got 41.",
+        },
+      );
+      const result42 = formatDocPage("app", page, {
+        maxWidth: 42,
+        showChoices: true,
+      });
+      assertLinesWithinMaxWidth(result42, 42);
+    });
+
     it("should not reject empty-string defaults at the minimum width", () => {
       const page: DocPage = {
         sections: [{

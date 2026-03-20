@@ -432,11 +432,16 @@ export function formatDocPage(
         );
       }
     }
-    // Entry minimum: with description, the effectiveTermWidth splitting
-    // logic yields descColumnWidth = ceil(a/2) where a = maxWidth -
-    // termIndent - 2.  For descColumnWidth >= minDescWidth we need
-    // a >= max(2, 2*minDescWidth - 1), i.e. maxWidth >= termIndent +
-    // max(4, 2*minDescWidth + 1).
+    // Entry minimum: the layout needs enough space for the term column,
+    // the 2-char gap, and at least minDescWidth for the description.
+    // When maxWidth is small enough, the formatter splits the available
+    // space evenly between term and description columns, yielding
+    // descColumnWidth = ceil(a/2) where a = maxWidth - termIndent - 2.
+    // When maxWidth is large enough to keep the configured termWidth,
+    // descColumnWidth = maxWidth - termIndent - termWidth - 2.  Because
+    // this function is non-monotonic (it drops at the transition point),
+    // we compute the actual descColumnWidth for the given maxWidth and
+    // validate it directly.
     const entryMin = needsDescColumn
       ? termIndent + Math.max(4, 2 * minDescWidth + 1)
       : hasEntries
@@ -456,6 +461,23 @@ export function formatDocPage(
       throw new RangeError(
         `maxWidth must be at least ${minWidth}, got ${options.maxWidth}.`,
       );
+    }
+    // Second check: even if maxWidth passes the formula-based minimum,
+    // the actual layout may use the full termWidth, giving a description
+    // column of only maxWidth - termIndent - termWidth - 2 chars.  When
+    // this is smaller than minDescWidth, the fixed prefixes overflow.
+    if (needsDescColumn && minDescWidth > 1) {
+      const avail = options.maxWidth - termIndent - 2;
+      const effTW = avail >= termWidth + 1
+        ? termWidth
+        : Math.max(1, Math.floor(avail / 2));
+      const descW = avail - effTW;
+      if (descW < minDescWidth) {
+        const needed = termIndent + termWidth + 2 + minDescWidth;
+        throw new RangeError(
+          `maxWidth must be at least ${needed}, got ${options.maxWidth}.`,
+        );
+      }
     }
   }
   // When maxWidth constrains the layout, shrink the term column so that
