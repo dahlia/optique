@@ -142,6 +142,50 @@ function _${programName} () {
         fi
       fi
 
+      # When a pattern is specified, use it as the glob base instead of the
+      # current word so that completions enumerate the pattern's directory.
+      # However, if the user has already typed beyond the pattern (e.g.,
+      # pattern="src/" and current="src/ma"), preserve the typed suffix
+      # for incremental filtering.
+      local __from_pattern=0
+      if [[ -n "$pattern" ]]; then
+        # Normalize leading ./ so that ./src/ma matches pattern src/
+        local __norm_current="\${current#./}"
+        local __norm_pattern="\${pattern#./}"
+        # For wildcard patterns, compare only the directory prefix before
+        # any wildcards so that typing src/ma narrows src/*.ts correctly
+        local __compare_pattern="$__norm_pattern"
+        if [[ "$__compare_pattern" == *[\*\?]* ]]; then
+          __compare_pattern="\${__compare_pattern%%[\*\?]*}"
+          [[ "$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
+        fi
+        if [[ ( -n "$__compare_pattern" || -n "$__norm_current" ) && \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$current" != "$pattern" ]]; then
+          # User has typed beyond or an equivalent form of the pattern
+          true
+        else
+          __from_pattern=1
+          # Reset tilde state from the current-word expansion so that a
+          # non-tilde pattern is not rewritten through stale tilde state
+          __tilde_prefix=""
+          __tilde_expanded=""
+          __glob_current="$pattern"
+          if [[ "$pattern" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)?$ ]]; then
+            __tilde_prefix="\${BASH_REMATCH[1]}"
+            eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
+            if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
+              __glob_current="\${__tilde_expanded}\${pattern#\$__tilde_prefix}"
+            else
+              __tilde_prefix=""
+            fi
+          fi
+          # If the glob base is a directory without a trailing slash,
+          # append one so that the glob enumerates its contents
+          if [[ -d "$__glob_current" && "$__glob_current" != */ ]]; then
+            __glob_current="$__glob_current/"
+          fi
+        fi
+      fi
+
       # Enable dotglob when hidden files are requested, or when the user
       # is already navigating inside a hidden directory (e.g., ~/.config/nvim/)
       # This runs after tilde expansion so that paths like ~/.config/ are
@@ -157,6 +201,36 @@ function _${programName} () {
       [[ "$__prefix_base" == .* ]] && __prefix_targets_hidden=1
       if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" || "$__prefix_targets_hidden" == "1" ]]; then shopt -s dotglob; fi
 
+      # Pre-expand file candidates.  When the glob base came from the
+      # program's pattern and contains wildcard characters (* or ?),
+      # use it as-is via compgen -G (safe — no command substitution).
+      # Otherwise append * to treat it as a prefix.
+      # Note: [ is NOT treated as a glob indicator because it commonly
+      # appears in literal filenames like [draft] or foo[1].txt.
+      local -a __candidates=()
+      if [[ "$__from_pattern" == "1" && "$__glob_current" == *[\*\?]* ]]; then
+        mapfile -t __candidates < <(compgen -G "$__glob_current" 2>/dev/null)
+        # For file/any modes, also include directories from the base
+        # directory for navigation even when the glob itself does not
+        # match directory names.  Skip this for directory mode so that
+        # the pattern's basename filter is respected.
+        if [[ "$type" != "directory" ]]; then
+          local __glob_dir="\${__glob_current%/*}"
+          [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
+          local __d
+          for __d in "$__glob_dir"/*/; do
+            [[ -d "$__d" ]] && __candidates+=("\${__d%/}")
+          done
+        fi
+      else
+        __candidates=("$__glob_current"*)
+        # Remove no-match sentinel (bash returns the literal pattern).
+        # Also check -L for dangling symlinks which are valid candidates.
+        if [[ \${#__candidates[@]} -eq 1 && ! -e "\${__candidates[0]}" && ! -L "\${__candidates[0]}" ]]; then
+          __candidates=()
+        fi
+      fi
+
       # Generate file completions based on type
       case "$type" in
         file)
@@ -164,7 +238,7 @@ function _${programName} () {
           if [[ -n "$extensions" ]]; then
             # Files with extension filtering + directories
             local ext_pattern="\${extensions//,/|}"
-            for item in "$__glob_current"*; do
+            for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               elif [[ -f "$item" && "$item" =~ \\.($ext_pattern)$ ]]; then
@@ -173,7 +247,7 @@ function _${programName} () {
             done
           else
             # Complete files and directories for navigation
-            for item in "$__glob_current"*; do
+            for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               elif [[ -f "$item" ]]; then
@@ -184,7 +258,7 @@ function _${programName} () {
           ;;
         directory)
           # Complete directories only
-          for dir in "$__glob_current"*; do
+          for dir in "\${__candidates[@]}"; do
             [[ -d "$dir" ]] && COMPREPLY+=("$dir/")
           done
           ;;
@@ -194,7 +268,7 @@ function _${programName} () {
             # Files with extension filtering + directories
             # Files with extension filtering
             local ext_pattern="\${extensions//,/|}"
-            for item in "$__glob_current"*; do
+            for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               elif [[ ( -e "$item" || -L "$item" ) && "$item" =~ \\.($ext_pattern)$ ]]; then
@@ -203,7 +277,7 @@ function _${programName} () {
             done
           else
             # Complete files and directories, add slash to directories
-            for item in "$__glob_current"*; do
+            for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
               # Use -e || -L to include non-regular files (sockets, FIFOs, dangling symlinks)
@@ -325,6 +399,28 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         [[ -o glob_dots ]] && __was_glob_dots=1
         if [[ "\$hidden" == "1" ]]; then setopt glob_dots; fi
 
+        # When a pattern is specified, override PREFIX so that _files and
+        # _directories enumerate the pattern's directory instead of the
+        # current word.  If the user has already typed beyond the pattern,
+        # keep PREFIX unchanged for incremental narrowing.
+        local __saved_prefix="\$PREFIX"
+        if [[ -n "\$pattern" ]]; then
+          # Normalize leading ./ so that ./src/ma matches pattern src/
+          local __norm_prefix="\${PREFIX#./}"
+          local __norm_pattern="\${pattern#./}"
+          local __compare_pattern="\$__norm_pattern"
+          if [[ "\$__compare_pattern" == *[\*\?]* ]]; then
+            __compare_pattern="\${__compare_pattern%%[\*\?]*}"
+            [[ "\$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
+          fi
+          if [[ ( -n "\$__compare_pattern" || -n "\$__norm_prefix" ) && \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$PREFIX" != "\$pattern" ]]; then
+            # User typed an equivalent or extended form — keep PREFIX
+            true
+          else
+            PREFIX="\$pattern"
+          fi
+        fi
+
         # Use zsh's native file completion
         case "\$type" in
           file)
@@ -350,7 +446,8 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
             ;;
         esac
 
-        # Restore glob_dots to its previous state
+        # Restore PREFIX and glob_dots to their previous state
+        PREFIX="\$__saved_prefix"
         if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
       else
         # Regular literal completion
@@ -448,12 +545,118 @@ ${
             set -l pattern (string replace -a '%25' '%' -- (string replace -a '%3A' ':' -- $parts[4]))
             set -l hidden $parts[5]
 
+            # When a pattern is specified, use it as the glob base instead
+            # of the current word.  If the user has already typed beyond the
+            # pattern (e.g., pattern="src/" and current="src/ma"), keep the
+            # current word for incremental narrowing.
+            set -l glob_base $current
+            set -l __tilde_prefix ""
+            set -l __from_pattern 0
+            if test -n "$pattern"
+                # Normalize leading ./ so that ./src/ma matches pattern src/
+                set -l __norm_current (string replace -r '^\\./' '' -- "$current")
+                set -l __norm_pattern (string replace -r '^\\./' '' -- "$pattern")
+                # For wildcard patterns, compare only the directory prefix
+                set -l __compare_pattern "$__norm_pattern"
+                if string match -q '*[*?]*' -- "$__compare_pattern"
+                    set __compare_pattern (string replace -r '[*?].*' '' -- "$__compare_pattern")
+                    if string match -q '*/*' -- "$__compare_pattern"
+                        set __compare_pattern (string replace -r '/[^/]*$' '/' -- "$__compare_pattern")
+                    else
+                        set __compare_pattern ""
+                    end
+                end
+                set -l __cp_len (string length -- "$__compare_pattern")
+                set -l __nc_len (string length -- "$__norm_current")
+                if begin; test -n "$__compare_pattern"; or test -n "$__norm_current"; end
+                    and test $__nc_len -ge $__cp_len
+                    and test (string sub -l $__cp_len -- "$__norm_current") = "$__compare_pattern"
+                    and test "$current" != "$pattern"
+                    set glob_base $current
+                else
+                    set glob_base $pattern
+                    set __from_pattern 1
+                end
+            end
+
+            # Expand tilde prefix for globbing — fish does not expand ~
+            # inside variable substitutions, so replace it with $HOME
+            if string match -q '~/*' -- "$glob_base"
+                set __tilde_prefix "~"
+                set glob_base (string replace -r '^~' "$HOME" -- "$glob_base")
+            else if string match -q '~' -- "$glob_base"
+                set __tilde_prefix "~"
+                set glob_base "$HOME/"
+            end
+
+            # If the glob base is a directory without a trailing slash,
+            # append one so that the glob enumerates its contents
+            if test -d "$glob_base"; and not string match -q '*/' -- "$glob_base"
+                set glob_base "$glob_base/"
+            end
+
+            # Pre-expand file candidates.  When the glob base came from
+            # the program's pattern and contains * or ?, use it as the
+            # complete glob expression.  Otherwise append * as a prefix.
+            # Note: [ is NOT treated as a glob because it commonly
+            # appears in literal filenames like [draft] or foo[1].txt.
+            set -l __has_glob 0
+            if test $__from_pattern -eq 1
+                and string match -q '*[*?]*' -- "$glob_base"
+                set __has_glob 1
+            end
+            set -l __candidates
+            if test $__has_glob -eq 1
+                # Safe glob expansion without eval: split the pattern into
+                # directory and filter parts, list the directory, then use
+                # string match for wildcard filtering
+                set -l __glob_dir (string replace -r '/[^/]*$' '' -- "$glob_base")
+                set -l __glob_filter (string replace -r '.*/' '' -- "$glob_base")
+                if test -z "$__glob_dir"; or test "$__glob_dir" = "$glob_base"
+                    set __glob_dir "."
+                end
+                # Match files by the glob filter.  Fish's * does not match
+                # dotfiles, so also scan .* when the filter targets them.
+                for __item in $__glob_dir/*
+                    if test -e "$__item"
+                        set -l __bn (basename "$__item")
+                        if string match -q "$__glob_filter" -- "$__bn"
+                            set -a __candidates "$__item"
+                        end
+                    end
+                end
+                if string match -q '.*' -- "$__glob_filter"
+                    for __item in $__glob_dir/.*
+                        if test -e "$__item"
+                            set -l __bn (basename "$__item")
+                            if test "$__bn" = "." -o "$__bn" = ".."
+                                continue
+                            end
+                            if string match -q "$__glob_filter" -- "$__bn"
+                                set -a __candidates "$__item"
+                            end
+                        end
+                    end
+                end
+                # For file/any modes, also include directories for navigation.
+                # Skip for directory mode so the pattern filter is respected.
+                if test "$type" != "directory"
+                    for __item in $__glob_dir/*/
+                        if test -d "$__item"
+                            set -a __candidates (string replace -r '/$' '' -- "$__item")
+                        end
+                    end
+                end
+            else
+                set __candidates $glob_base*
+            end
+
             # Generate file completions based on type
             set -l items
             switch $type
                 case file
                     # Complete files and directories (directories for navigation)
-                    for item in $current*
+                    for item in $__candidates
                         if test -d $item
                             set -a items $item/
                         else if test -f $item
@@ -461,14 +664,14 @@ ${
                         end
                     end
                     # Fish's * glob does not match dotfiles; add them
-                    # explicitly when the basename is empty (i.e., $current
+                    # explicitly when the basename is empty (i.e., $glob_base
                     # is "" or ends with "/"), because only then are * and
                     # .* complementary.  When a non-empty basename is present
                     # (e.g., "foo"), foo* already covers foo.txt, so foo.*
                     # would just produce duplicates.
-                    if test "$hidden" = "1"
-                        if test -z "$current"; or string match -q '*/' -- "$current"
-                            for item in $current.*
+                    if test "$hidden" = "1" -a $__has_glob -eq 0
+                        if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
+                            for item in $glob_base.*
                                 if test -d $item
                                     set -a items $item/
                                 else if test -f $item
@@ -479,14 +682,14 @@ ${
                     end
                 case directory
                     # Complete directories only
-                    for item in $current*
+                    for item in $__candidates
                         if test -d $item
                             set -a items $item/
                         end
                     end
-                    if test "$hidden" = "1"
-                        if test -z "$current"; or string match -q '*/' -- "$current"
-                            for item in $current.*
+                    if test "$hidden" = "1" -a $__has_glob -eq 0
+                        if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
+                            for item in $glob_base.*
                                 if test -d $item
                                     set -a items $item/
                                 end
@@ -495,16 +698,16 @@ ${
                     end
                 case any
                     # Complete both files and directories
-                    for item in $current*
+                    for item in $__candidates
                         if test -d $item
                             set -a items $item/
                         else if test -f $item
                             set -a items $item
                         end
                     end
-                    if test "$hidden" = "1"
-                        if test -z "$current"; or string match -q '*/' -- "$current"
-                            for item in $current.*
+                    if test "$hidden" = "1" -a $__has_glob -eq 0
+                        if test -z "$glob_base"; or string match -q '*/' -- "$glob_base"
+                            for item in $glob_base.*
                                 if test -d $item
                                     set -a items $item/
                                 else if test -f $item
@@ -536,8 +739,11 @@ ${
                 set items $filtered
             end
 
-            # Filter out hidden files unless requested
-            if test "$hidden" != "1" -a (string sub -l 1 -- $current) != "."
+            # Filter out hidden files unless requested.
+            # Check the basename of glob_base so that patterns like
+            # "src/.e" correctly target hidden entries.
+            set -l __glob_basename (string replace -r '.*/(.*)' '$1' -- $glob_base)
+            if test "$hidden" != "1" -a (string sub -l 1 -- $__glob_basename) != "."
                 set -l filtered
                 for item in $items
                     set -l basename (basename $item)
@@ -546,6 +752,15 @@ ${
                     end
                 end
                 set items $filtered
+            end
+
+            # Restore tilde prefix in completion results
+            if test -n "$__tilde_prefix"
+                set -l restored
+                for item in $items
+                    set -a restored (string replace "$HOME" "~" -- $item)
+                end
+                set items $restored
             end
 
             # Output file completions
@@ -718,10 +933,67 @@ ${
         ""
       }
 
-      # Generate file completions based on type
-      # Use current directory if prefix is empty
+      # When a pattern is specified, use it as the glob base instead of
+      # the user-typed prefix.  If the user has already typed beyond the
+      # pattern (e.g., pattern="src/" and prefix="src/ma"), keep the
+      # prefix for incremental narrowing.  Normalize path separators
+      # before comparing so that Windows backslashes match forward slashes
+      # in the transported pattern.
+      let glob_base = if ($pattern | is-not-empty) {
+        # Normalize separators and leading ./; downcase only on Windows
+        # where filesystems are typically case-insensitive
+        let norm_prefix_raw = ($prefix | str replace -a '\\' '/' | str replace -r '^\\./' '')
+        let norm_pattern_raw = ($pattern | str replace -a '\\' '/' | str replace -r '^\\./' '')
+        let is_win = (($nu.os-info.name | str downcase) == "windows")
+        let norm_prefix = (if $is_win { $norm_prefix_raw | str downcase } else { $norm_prefix_raw })
+        let norm_pattern = (if $is_win { $norm_pattern_raw | str downcase } else { $norm_pattern_raw })
+        # For wildcard patterns, compare only the directory prefix
+        let compare_pattern = if ($norm_pattern =~ '[*?]') {
+          let before_wild = ($norm_pattern | str replace -r '[*?].*' '')
+          if ($before_wild =~ '/') { $before_wild | str replace -r '/[^/]*$' '/' } else { "" }
+        } else {
+          $norm_pattern
+        }
+        if (($compare_pattern | is-not-empty) or ($norm_prefix | is-not-empty)) and ($norm_prefix | str starts-with $compare_pattern) and (($norm_prefix | str length) >= ($compare_pattern | str length)) and ($prefix != $pattern) {
+          $prefix
+        } else {
+          $pattern
+        }
+      } else {
+        $prefix
+      }
+
+      # If the glob base is a directory without a trailing slash (e.g., "src"),
+      # append one so that ls enumerates its contents instead of matching
+      # siblings like "src-old"
+      let glob_base = if ($glob_base | is-not-empty) and ($glob_base | path type) == "dir" and (not ($glob_base | str ends-with "/")) {
+        $glob_base + "/"
+      } else {
+        $glob_base
+      }
+
+      # Generate file completions based on type.
+      # When the glob base contains wildcard characters, use it as-is;
+      # otherwise append * to treat it as a prefix.
       # Note: into glob is required so that ls expands wildcards from a variable
-      let ls_pattern = if ($prefix | is-empty) { "." } else { ($prefix + "*" | into glob) }
+      let has_glob = ($glob_base =~ '[*?]')
+      let ls_pattern = if ($glob_base | is-empty) {
+        "."
+      } else if $has_glob {
+        ($glob_base | into glob)
+      } else {
+        ($glob_base + "*" | into glob)
+      }
+
+      # When using a glob pattern, also compute a directory listing pattern
+      # so that file/any modes can include directories for navigation
+      let glob_dir_pattern = if $has_glob {
+        let dir_part = ($glob_base | path dirname)
+        let dir = if ($dir_part | is-empty) or ($dir_part == $glob_base) { "." } else { $dir_part }
+        ($dir + "/*" | into glob)
+      } else {
+        null
+      }
 
       # Use ls -a to include hidden files when requested
       let items = try {
@@ -762,8 +1034,25 @@ ${
         []
       }
 
-      # Filter out hidden files unless requested
-      let filtered = if $hidden or ($prefix | str starts-with '.') {
+      # When using a glob pattern, also add directories from the base
+      # directory for navigation (file/any modes should list directories
+      # even when the glob itself does not match directory names)
+      let items = if ($glob_dir_pattern != null) and ($type != "directory") {
+        let extra_dirs = try {
+          (if $hidden { ls -a $glob_dir_pattern } else { ls $glob_dir_pattern }) | where type == dir
+        } catch {
+          []
+        }
+        $items | append $extra_dirs | uniq-by name
+      } else {
+        $items
+      }
+
+      # Filter out hidden files unless requested.
+      # Check the basename of glob_base so that patterns like "src/.e"
+      # correctly target hidden entries.
+      let glob_basename = ($glob_base | path basename)
+      let filtered = if $hidden or ($glob_basename | str starts-with '.') {
         $items
       } else {
         $items | where {|item|
@@ -773,12 +1062,12 @@ ${
       }
 
       # Extract directory prefix to preserve in completion text
-      let dir_prefix = if ($prefix | is-empty) {
+      let dir_prefix = if ($glob_base | is-empty) {
         ""
-      } else if ($prefix | str ends-with "/") {
-        $prefix
+      } else if ($glob_base | str ends-with "/") {
+        $glob_base
       } else {
-        let parsed = ($prefix | path parse)
+        let parsed = ($glob_base | path parse)
         if ($parsed.parent | is-empty) { "" } else if ($parsed.parent | str ends-with "/") { $parsed.parent } else { $parsed.parent + "/" }
       }
 
@@ -935,11 +1224,47 @@ ${
                 \$pattern = \$parts[3] -replace '%3A', ':' -replace '%25', '%'
                 \$hidden = \$parts[4] -eq '1'
 
-                # Determine current prefix for file matching
-                \$prefix = if (\$wordToComplete) { \$wordToComplete } else { '' }
+                # When a pattern is specified, use it as the file matching
+                # prefix instead of the current word.  If the user has
+                # already typed beyond the pattern, keep their input for
+                # incremental narrowing.  Normalize path separators before
+                # comparing so that Windows backslashes match forward slashes
+                # in the transported pattern.
+                \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') -replace '^\\./','' } else { '' }
+                \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') -replace '^\\./','' } else { '' }
+                \$comparison = if (\$IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
+                # For wildcard patterns, compare only the directory prefix
+                \$comparePattern = \$normalizedPattern
+                if (\$comparePattern -match '[\*\?]') {
+                    \$beforeWild = \$comparePattern -replace '[\*\?].*', ''
+                    if (\$beforeWild.Contains('/')) {
+                        \$comparePattern = \$beforeWild.Substring(0, \$beforeWild.LastIndexOf('/') + 1)
+                    } else {
+                        \$comparePattern = ''
+                    }
+                }
+                \$prefix = if ((\$comparePattern -or \$normalizedWord) -and \$normalizedWord -and \$normalizedWord.StartsWith(\$comparePattern, \$comparison) -and \$normalizedWord.Length -ge \$comparePattern.Length -and \$wordToComplete -ne \$pattern) {
+                    \$wordToComplete
+                } elseif (\$pattern) {
+                    \$pattern
+                } elseif (\$wordToComplete) {
+                    \$wordToComplete
+                } else { '' }
 
-                # Use -Force to include hidden files when requested
-                \$forceParam = if (\$hidden) { @{Force = \$true} } else { @{} }
+                # Use -Force to include hidden files when requested, or when
+                # the prefix basename targets dotfiles (e.g., src/.e)
+                \$prefixBasename = Split-Path -Leaf \$prefix 2>\$null
+                \$forceParam = if (\$hidden -or (\$prefixBasename -and \$prefixBasename.StartsWith('.'))) { @{Force = \$true} } else { @{} }
+
+                # If prefix is a directory without trailing slash, append
+                # one so Get-ChildItem lists its contents
+                if (\$prefix -and (Test-Path -Path \$prefix -PathType Container) -and -not \$prefix.EndsWith('/') -and -not \$prefix.EndsWith('\\')) {
+                    \$prefix = \$prefix + '/'
+                }
+
+                # Build the glob path — when the prefix contains wildcard
+                # characters, use it as-is; otherwise append *
+                \$globPath = if (\$prefix -match '[\*\?]') { \$prefix } else { "\${prefix}*" }
 
                 # Get file system items based on type
                 \$items = @()
@@ -948,37 +1273,46 @@ ${
                         if (\$extensions) {
                             # Filter by extensions, always include directories
                             \$extList = \$extensions -split ','
-                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
                                     if (\$_.PSIsContainer) { return \$true }
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
                         } else {
-                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
                         }
                     }
                     'directory' {
-                        \$items = Get-ChildItem @forceParam -Directory -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                        \$items = Get-ChildItem @forceParam -Directory -Path \$globPath -ErrorAction SilentlyContinue
                     }
                     'any' {
                         if (\$extensions) {
                             # Filter by extensions, always include directories
                             \$extList = \$extensions -split ','
-                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue |
+                            \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
                                     if (\$_.PSIsContainer) { return \$true }
                                     \$ext = \$_.Extension
                                     \$extList | ForEach-Object { if (\$ext -eq ".\$_") { return \$true } }
                                 }
                         } else {
-                            \$items = Get-ChildItem @forceParam -Path "\${prefix}*" -ErrorAction SilentlyContinue
+                            \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
                         }
                     }
                 }
 
-                # Filter hidden files unless requested
-                if (-not \$hidden) {
+                # For file/any modes with glob patterns, also add directories
+                # from the base directory for navigation
+                if (\$prefix -match '[\*\?]' -and \$type -ne 'directory') {
+                    \$globDir = Split-Path -Parent \$prefix
+                    if (-not \$globDir) { \$globDir = '.' }
+                    \$extraDirs = Get-ChildItem @forceParam -Directory -Path "\$globDir/*" -ErrorAction SilentlyContinue
+                    if (\$extraDirs) { \$items = @(\$items) + @(\$extraDirs) | Select-Object -Unique }
+                }
+
+                # Filter hidden files unless requested or the prefix targets dotfiles
+                if (-not \$hidden -and -not (\$prefixBasename -and \$prefixBasename.StartsWith('.'))) {
                     \$items = \$items | Where-Object { -not \$_.Attributes.HasFlag([System.IO.FileAttributes]::Hidden) }
                 }
 

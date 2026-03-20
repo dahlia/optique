@@ -225,6 +225,12 @@ To be released.
     (as produced by `path()`) are now normalized to `["ts", "json"]` before
     encoding.  [[#647], [#650]]
 
+ -  Fixed shell completion scripts ignoring `Suggestion.file.pattern`, which
+    caused file completions to enumerate the current directory instead of the
+    pattern-specified path.  All five shell backends (Bash, zsh, fish, Nushell,
+    PowerShell) now use the transported pattern as the glob base when it is
+    non-empty.  [[#251], [#656]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -601,6 +607,7 @@ To be released.
 [#248]: https://github.com/dahlia/optique/issues/248
 [#249]: https://github.com/dahlia/optique/issues/249
 [#250]: https://github.com/dahlia/optique/issues/250
+[#251]: https://github.com/dahlia/optique/issues/251
 [#252]: https://github.com/dahlia/optique/issues/252
 [#253]: https://github.com/dahlia/optique/issues/253
 [#254]: https://github.com/dahlia/optique/issues/254
@@ -714,6 +721,7 @@ To be released.
 [#648]: https://github.com/dahlia/optique/pull/648
 [#650]: https://github.com/dahlia/optique/pull/650
 [#653]: https://github.com/dahlia/optique/pull/653
+[#656]: https://github.com/dahlia/optique/pull/656
 
 ### @optique/config
 
