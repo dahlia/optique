@@ -452,9 +452,9 @@ To be released.
     now defaults to `PORT:PORT` instead of always using `PORT-PORT`).
     [[#323], [#579]]
 
- -  `formatDocPage()` now throws `TypeError` when `programName` or a section
-    title is empty, whitespace-only, or contains a CR or LF character.
-    [[#429], [#479], [#580], [#662]]
+ -  `formatDocPage()` now throws `TypeError` when `programName` contains
+    a CR or LF character, or when a section title is empty, whitespace-only,
+    or contains a CR or LF character.  [[#429], [#479], [#580]]
 
  -  Numeric parsers (`integer()`, `float()`, `port()`, `portRange()`,
     `cidr()`) now throw `RangeError` at construction time when given
@@ -757,7 +757,6 @@ To be released.
 [#659]: https://github.com/dahlia/optique/pull/659
 [#660]: https://github.com/dahlia/optique/pull/660
 [#661]: https://github.com/dahlia/optique/pull/661
-[#662]: https://github.com/dahlia/optique/pull/662
 
 ### @optique/config
 

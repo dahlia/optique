@@ -330,8 +330,9 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @param page The documentation page to format
  * @param options Formatting options to customize the output
  * @returns A formatted string representation of the documentation page
- * @throws {TypeError} If `programName` or any non-empty section's title
- * is empty, whitespace-only, or contains a CR or LF character.
+ * @throws {TypeError} If `programName` contains a CR or LF character, or if
+ * any non-empty section's title is empty, whitespace-only, or contains a CR
+ * or LF character.
  *
  * @example
  * ```typescript
