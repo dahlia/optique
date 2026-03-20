@@ -1850,7 +1850,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
         if (!Number.isInteger(v)) {
           throw new TypeError(
             `Expected every element of allowedVersions to be an integer, but got value "${
-              String(v)
+              typeof v === "symbol" ? (v as symbol).toString() : String(v)
             }" of type "${
               Array.isArray(v) ? "array" : (v === null ? "null" : typeof v)
             }".`,
