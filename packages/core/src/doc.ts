@@ -372,9 +372,13 @@ export function formatDocPage(
       `maxWidth must be a finite integer, got ${options.maxWidth}.`,
     );
   }
-  // Validate maxWidth against the minimum feasible layout.  Entries with a
-  // description column need termIndent + 4 (1 term + 2 gap + 1 desc);
-  // bare-term entries need termIndent + 1 (just 1 term char).
+  // Validate maxWidth against the minimum feasible layout.  The minimum
+  // depends on which page features are active:
+  //  - Entries with a description column need enough space for term +
+  //    gap + description, plus any showDefault/showChoices prefixes.
+  //  - Bare-term entries need termIndent + 1 (just 1 term char).
+  //  - "Usage: " label is 7 chars wide, so maxWidth >= 8.
+  //  - Examples/Author/Bugs sections indent content by 2, so maxWidth >= 3.
   if (options.maxWidth != null) {
     const hasEntries = page.sections.some((s) => s.entries.length > 0);
     const hasContent = (msg: unknown): msg is readonly unknown[] =>
@@ -387,11 +391,65 @@ export function formatDocPage(
           (options.showChoices && hasContent(e.choices))
         )
       );
-    const minWidth = needsDescColumn
-      ? termIndent + 4
+    // Compute minimum description column width for showDefault/showChoices.
+    // The description column must be wide enough to fit the fixed prefix
+    // strings without exceeding maxWidth.
+    let minDescWidth = 1;
+    if (needsDescColumn) {
+      if (
+        options.showDefault &&
+        page.sections.some((s) => s.entries.some((e) => hasContent(e.default)))
+      ) {
+        const prefix = typeof options.showDefault === "object"
+          ? options.showDefault.prefix ?? " ["
+          : " [";
+        const suffix = typeof options.showDefault === "object"
+          ? options.showDefault.suffix ?? "]"
+          : "]";
+        minDescWidth = Math.max(
+          minDescWidth,
+          prefix.length + suffix.length + 1,
+        );
+      }
+      if (
+        options.showChoices &&
+        page.sections.some((s) => s.entries.some((e) => hasContent(e.choices)))
+      ) {
+        const prefix = typeof options.showChoices === "object"
+          ? options.showChoices.prefix ?? " ("
+          : " (";
+        const suffix = typeof options.showChoices === "object"
+          ? options.showChoices.suffix ?? ")"
+          : ")";
+        const label = typeof options.showChoices === "object"
+          ? options.showChoices.label ?? "choices: "
+          : "choices: ";
+        minDescWidth = Math.max(
+          minDescWidth,
+          prefix.length + label.length + suffix.length + 1,
+        );
+      }
+    }
+    // Entry minimum: with description, the effectiveTermWidth splitting
+    // logic yields descColumnWidth = ceil(a/2) where a = maxWidth -
+    // termIndent - 2.  For descColumnWidth >= minDescWidth we need
+    // a >= max(2, 2*minDescWidth - 1), i.e. maxWidth >= termIndent +
+    // max(4, 2*minDescWidth + 1).
+    const entryMin = needsDescColumn
+      ? termIndent + Math.max(4, 2 * minDescWidth + 1)
       : hasEntries
       ? termIndent + 1
       : 1;
+    // "Usage: " (7 chars) + programName + " " is the minimum first line.
+    const usageMin = page.usage != null ? 8 + programName.length : 1;
+    // Examples/Author/Bugs have fixed-width label lines that cannot be
+    // wrapped.  The content is indented by 2 chars (needing maxWidth >= 3),
+    // but the label width is always the binding constraint.
+    let sectionMin = 1;
+    if (page.examples != null) sectionMin = Math.max(sectionMin, 9);
+    if (page.author != null) sectionMin = Math.max(sectionMin, 7);
+    if (page.bugs != null) sectionMin = Math.max(sectionMin, 5);
+    const minWidth = Math.max(entryMin, usageMin, sectionMin);
     if (options.maxWidth < minWidth) {
       throw new RangeError(
         `maxWidth must be at least ${minWidth}, got ${options.maxWidth}.`,
