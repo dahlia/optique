@@ -1545,6 +1545,85 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       );
     });
 
+    it("should filter files by dot-prefixed extensions in bash", (t) => {
+      if (!isShellAvailable("bash")) {
+        t.skip("bash not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "bash-ext-dot-filter-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:.json,.yaml::0\\n'
+`;
+        const cliPath = join(tempDir, "extapp");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create test files
+        writeFileSync(join(tempDir, "data.json"), "");
+        writeFileSync(join(tempDir, "config.yaml"), "");
+        writeFileSync(join(tempDir, "readme.txt"), "");
+        const subDir = join(tempDir, "subdir");
+        mkdirSync(subDir);
+
+        const script = bash.generateScript("extapp");
+
+        const testScript = `
+export PATH="${tempDir}:$PATH"
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${script}
+COMPLETION_SCRIPT
+cd "${tempDir}"
+COMP_WORDS=("extapp" "")
+COMP_CWORD=1
+_extapp 2>&1
+if [ \${#COMPREPLY[@]} -gt 0 ]; then
+  printf "%s\\n" "\${COMPREPLY[@]}"
+else
+  echo "__NO_COMPLETIONS__"
+fi
+`;
+
+        const result = runCommand("bash", ["-c", testScript], {
+          cwd: tempDir,
+        });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        ok(
+          completions.some((c) => c.includes("data.json")),
+          `Expected data.json in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          completions.some((c) => c.includes("config.yaml")),
+          `Expected config.yaml in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          !completions.some((c) => c.includes("readme.txt")),
+          `Should not include readme.txt in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          completions.some((c) => c.includes("subdir")),
+          `Expected subdir/ in completions for navigation, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include directories for navigation in file type completion with extensions", () => {
       const script = bash.generateScript("fileext-cli");
 
@@ -2362,6 +2441,87 @@ printf '__FILE__:file::src/:0\\n'
       }
     });
 
+    it("should filter files by dot-prefixed extensions in pwsh", {
+      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+    }, () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("pwsh")) return;
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "pwsh-ext-dot-filter-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:.json,.yaml::0\\n'
+`;
+        const cliPath = join(tempDir, "extapp");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create test files
+        writeFileSync(join(tempDir, "data.json"), "");
+        writeFileSync(join(tempDir, "config.yaml"), "");
+        writeFileSync(join(tempDir, "readme.txt"), "");
+        const subDir = join(tempDir, "subdir");
+        mkdirSync(subDir);
+
+        const script = pwsh.generateScript("extapp");
+
+        const scriptPath = join(tempDir, "completion.ps1");
+        writeFileSync(scriptPath, script);
+
+        const testScriptPath = join(tempDir, "test.ps1");
+        writeFileSync(
+          testScriptPath,
+          `$env:PATH = "${tempDir}:" + $env:PATH\n` +
+            `. "${scriptPath}"\n` +
+            `$result = TabExpansion2 -inputScript 'extapp ' ` +
+            `-cursorColumn 7\n` +
+            `$result.CompletionMatches | ` +
+            `ForEach-Object { $_.CompletionText }\n`,
+        );
+
+        const result = runCommand(
+          "pwsh",
+          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+          { cwd: tempDir },
+        );
+
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        ok(
+          completions.some((c) => c.includes("data.json")),
+          `Expected data.json in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          completions.some((c) => c.includes("config.yaml")),
+          `Expected config.yaml in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          !completions.some((c) => c.includes("readme.txt")),
+          `Should not include readme.txt in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          completions.some((c) => c.includes("subdir")),
+          `Expected subdir/ in completions for navigation, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include directories for navigation in file type completion", () => {
       const script = pwsh.generateScript("filedir-cli");
 
@@ -3036,6 +3196,91 @@ ${functionName}
       }
     });
 
+    it("should filter files by dot-prefixed extensions in fish", (t) => {
+      if (!isShellAvailable("fish")) {
+        t.skip("fish not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "fish-ext-dot-filter-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:.json,.yaml::0\\tFile\\n'
+`;
+        const cliPath = join(tempDir, "extapp");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create test files
+        writeFileSync(join(tempDir, "data.json"), "");
+        writeFileSync(join(tempDir, "config.yaml"), "");
+        writeFileSync(join(tempDir, "readme.txt"), "");
+        const subDir = join(tempDir, "subdir");
+        mkdirSync(subDir);
+
+        const script = fish.generateScript("extapp");
+        const scriptPath = join(tempDir, "completion.fish");
+        writeFileSync(scriptPath, script);
+
+        const functionMatch = script.match(/function ([^\s]+)/);
+        const functionName = functionMatch
+          ? functionMatch[1]
+          : "__extapp_complete";
+        const testScript = `
+set -x PATH "${tempDir}" $PATH
+source "${scriptPath}"
+cd "${tempDir}"
+
+function commandline
+    switch $argv[1]
+        case '-poc'
+            echo "extapp"
+        case '-ct'
+            echo ""
+    end
+end
+
+${functionName}
+`;
+        const testScriptPath = join(tempDir, "test.fish");
+        writeFileSync(testScriptPath, testScript);
+        const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
+        const completions = result.trim().split("\n").filter((l) =>
+          l.length > 0
+        );
+
+        ok(
+          completions.some((c) => c.includes("data.json")),
+          `Expected data.json in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          completions.some((c) => c.includes("config.yaml")),
+          `Expected config.yaml in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          !completions.some((c) => c.includes("readme.txt")),
+          `Should not include readme.txt in completions, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+        ok(
+          completions.some((c) => c.includes("subdir")),
+          `Expected subdir/ in completions for navigation, got: ${
+            JSON.stringify(completions)
+          }`,
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("should include directories for navigation in file type completion", () => {
       const script = fish.generateScript("filedir-cli");
 
@@ -3619,6 +3864,103 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
           // With hidden=1, hidden files must be included even without dot prefix
           ok(completions.some((c) => c.includes(".hidden")));
           ok(completions.some((c) => c.includes("visible.txt")));
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should filter files by dot-prefixed extensions in nu", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(
+        join(tmpdir(), "nu-ext-dot-filter-"),
+      );
+
+      try {
+        // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
+        const cliScript = `#!/bin/bash
+printf '__FILE__:file:.json,.yaml::0\\n'
+`;
+        const cliPath = join(tempDir, "extapp");
+        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+        // Create test files
+        writeFileSync(join(tempDir, "data.json"), "");
+        writeFileSync(join(tempDir, "config.yaml"), "");
+        writeFileSync(join(tempDir, "readme.txt"), "");
+        const subDir = join(tempDir, "subdir");
+        mkdirSync(subDir);
+
+        const script = nu.generateScript("extapp");
+
+        const nuTempDir = mkdtempSync(
+          join(tmpdir(), "nu-ext-dot-test-"),
+        );
+        try {
+          const scriptPath = join(nuTempDir, "completion.nu");
+          writeFileSync(scriptPath, script);
+
+          const safeName = "extapp".replace(/[^a-zA-Z0-9]+/g, "-");
+          const functionName = `nu-complete-${safeName}`;
+          const testScript = `
+$env.PATH = ($env.PATH | prepend "${tempDir}")
+source ${scriptPath}
+
+do { ${functionName} "extapp " }
+`;
+          const testScriptPath = join(nuTempDir, "test.nu");
+          writeFileSync(testScriptPath, testScript);
+
+          const result = runCommand("nu", [testScriptPath], {
+            cwd: tempDir,
+          });
+
+          const lines = result.trim().split("\n");
+          const completions: string[] = [];
+          for (const line of lines) {
+            const match = line.match(
+              /│\s*\d+\s*│\s*([^│]+)\s*│/,
+            );
+            if (match) {
+              const value = match[1]?.trim();
+              if (value) completions.push(value);
+            }
+          }
+
+          ok(
+            completions.some((c) => c.includes("data.json")),
+            `Expected data.json in completions, got: ${
+              JSON.stringify(completions)
+            }`,
+          );
+          ok(
+            completions.some((c) => c.includes("config.yaml")),
+            `Expected config.yaml in completions, got: ${
+              JSON.stringify(completions)
+            }`,
+          );
+          ok(
+            !completions.some((c) => c.includes("readme.txt")),
+            `Should not include readme.txt in completions, got: ${
+              JSON.stringify(completions)
+            }`,
+          );
+          ok(
+            completions.some((c) => c.includes("subdir")),
+            `Expected subdir/ in completions for navigation, got: ${
+              JSON.stringify(completions)
+            }`,
+          );
+        } finally {
+          rmSync(nuTempDir, { recursive: true, force: true });
         }
       } finally {
         rmSync(tempDir, { recursive: true, force: true });

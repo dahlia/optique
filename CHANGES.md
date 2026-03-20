@@ -238,6 +238,14 @@ To be released.
     (as produced by `path()`) are now normalized to `["ts", "json"]` before
     encoding.  [[#647], [#650]]
 
+ -  Fixed generated shell completion scripts not stripping leading dots from
+    extension filters, so that dot-prefixed extensions (e.g., `.json`) in the
+    transport protocol are handled correctly in Bash, fish, Nushell, and
+    PowerShell.  Also fixed a `Split-Path` error in PowerShell that caused
+    extension filtering to silently fail when the completion prefix was empty,
+    and rewrote the PowerShell extension matching to use the `-in` operator
+    instead of nested `ForEach-Object` pipelines.  [[#255], [#660]]
+
  -  Fixed shell completion scripts ignoring `Suggestion.file.pattern`, which
     caused file completions to enumerate the current directory instead of the
     pattern-specified path.  All five shell backends (Bash, zsh, fish, Nushell,
@@ -624,6 +632,7 @@ To be released.
 [#252]: https://github.com/dahlia/optique/issues/252
 [#253]: https://github.com/dahlia/optique/issues/253
 [#254]: https://github.com/dahlia/optique/issues/254
+[#255]: https://github.com/dahlia/optique/issues/255
 [#256]: https://github.com/dahlia/optique/issues/256
 [#262]: https://github.com/dahlia/optique/issues/262
 [#294]: https://github.com/dahlia/optique/issues/294
@@ -739,6 +748,7 @@ To be released.
 [#656]: https://github.com/dahlia/optique/pull/656
 [#657]: https://github.com/dahlia/optique/pull/657
 [#659]: https://github.com/dahlia/optique/pull/659
+[#660]: https://github.com/dahlia/optique/pull/660
 
 ### @optique/config
 
