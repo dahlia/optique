@@ -6607,6 +6607,41 @@ describe("hostname()", () => {
       assert.ok(parser.parse("192.168.0.example").success);
     });
   });
+
+  describe("runtime option type validation", () => {
+    it("should throw TypeError for non-boolean allowWildcard", () => {
+      assert.throws(
+        () => hostname({ allowWildcard: "yes" as never }),
+        {
+          name: "TypeError",
+          message:
+            "Expected allowWildcard to be a boolean, but got string: yes.",
+        },
+      );
+    });
+
+    it("should throw TypeError for non-boolean allowUnderscore", () => {
+      assert.throws(
+        () => hostname({ allowUnderscore: "yes" as never }),
+        {
+          name: "TypeError",
+          message:
+            "Expected allowUnderscore to be a boolean, but got string: yes.",
+        },
+      );
+    });
+
+    it("should throw TypeError for non-boolean allowLocalhost", () => {
+      assert.throws(
+        () => hostname({ allowLocalhost: "no" as never }),
+        {
+          name: "TypeError",
+          message:
+            "Expected allowLocalhost to be a boolean, but got string: no.",
+        },
+      );
+    });
+  });
 });
 
 describe("email()", () => {
@@ -9803,6 +9838,29 @@ describe("domain()", () => {
       const result2 = parser.parse("this-is-long.example.com");
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
+    });
+  });
+
+  describe("runtime option type validation", () => {
+    it("should throw TypeError for non-boolean allowSubdomains", () => {
+      assert.throws(
+        () => domain({ allowSubdomains: "no" as never }),
+        {
+          name: "TypeError",
+          message:
+            "Expected allowSubdomains to be a boolean, but got string: no.",
+        },
+      );
+    });
+
+    it("should throw TypeError for non-boolean lowercase", () => {
+      assert.throws(
+        () => domain({ lowercase: "yes" as never }),
+        {
+          name: "TypeError",
+          message: "Expected lowercase to be a boolean, but got string: yes.",
+        },
+      );
     });
   });
 });

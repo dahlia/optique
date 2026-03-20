@@ -2613,6 +2613,8 @@ export interface HostnameOptions {
  *
  * @param options - Options for hostname validation.
  * @returns A value parser for hostnames.
+ * @throws {TypeError} If `allowWildcard`, `allowUnderscore`, or
+ *   `allowLocalhost` is not a boolean.
  * @throws {RangeError} If `maxLength` is not a positive integer.
  * @since 0.10.0
  *
@@ -2635,6 +2637,37 @@ export function hostname(
 ): ValueParser<"sync", string> {
   const metavar: NonEmptyString = options?.metavar ?? "HOST";
   ensureNonEmptyString(metavar);
+
+  if (
+    options?.allowWildcard !== undefined &&
+    typeof options.allowWildcard !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowWildcard to be a boolean, but got ` +
+        `${typeof options.allowWildcard}: ` +
+        `${String(options.allowWildcard)}.`,
+    );
+  }
+  if (
+    options?.allowUnderscore !== undefined &&
+    typeof options.allowUnderscore !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowUnderscore to be a boolean, but got ` +
+        `${typeof options.allowUnderscore}: ` +
+        `${String(options.allowUnderscore)}.`,
+    );
+  }
+  if (
+    options?.allowLocalhost !== undefined &&
+    typeof options.allowLocalhost !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowLocalhost to be a boolean, but got ` +
+        `${typeof options.allowLocalhost}: ` +
+        `${String(options.allowLocalhost)}.`,
+    );
+  }
 
   const allowWildcard = options?.allowWildcard ?? false;
   const allowUnderscore = options?.allowUnderscore ?? false;
@@ -4301,6 +4334,7 @@ export interface DomainOptions {
  * @returns A parser that accepts valid domain names as strings.
  * @throws {RangeError} If `maxLength` is not a positive integer.
  * @throws {RangeError} If `minLabels` is not a positive integer.
+ * @throws {TypeError} If `allowSubdomains` or `lowercase` is not a boolean.
  * @throws {TypeError} If any `allowedTlds` entry is not a string, is empty,
  *   contains dots, has leading/trailing whitespace, or is not a valid DNS
  *   label.
@@ -4331,6 +4365,26 @@ export function domain(
   options?: DomainOptions & { readonly metavar?: NonEmptyString },
 ): ValueParser<"sync", string> {
   const metavar = options?.metavar ?? "DOMAIN";
+  if (
+    options?.allowSubdomains !== undefined &&
+    typeof options.allowSubdomains !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected allowSubdomains to be a boolean, but got ` +
+        `${typeof options.allowSubdomains}: ` +
+        `${String(options.allowSubdomains)}.`,
+    );
+  }
+  if (
+    options?.lowercase !== undefined &&
+    typeof options.lowercase !== "boolean"
+  ) {
+    throw new TypeError(
+      `Expected lowercase to be a boolean, but got ` +
+        `${typeof options.lowercase}: ` +
+        `${String(options.lowercase)}.`,
+    );
+  }
   const allowSubdomains = options?.allowSubdomains ?? true;
   const allowedTlds = options?.allowedTlds != null
     ? Object.freeze([...options.allowedTlds])
