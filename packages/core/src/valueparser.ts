@@ -1845,6 +1845,7 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   const strict = options.strict !== false;
   const allowedVersions = options.allowedVersions != null
     ? (() => {
+      const unique = new Set<number>();
       for (const v of options.allowedVersions) {
         if (typeof v !== "number" || !Number.isInteger(v)) {
           throw new TypeError(
@@ -1858,8 +1859,9 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
             `Expected every element of allowedVersions to be between 1 and 8, but got: ${v}.`,
           );
         }
+        unique.add(v);
       }
-      return Object.freeze([...new Set(options.allowedVersions)]);
+      return Object.freeze([...unique]);
     })()
     : null;
   const invalidUuid = options.errors?.invalidUuid;
