@@ -11498,11 +11498,9 @@ describe("branch coverage regressions", () => {
 
 describe("checkBooleanOption", () => {
   it("should not throw when options is undefined", () => {
-    assert.doesNotThrow(() => checkBooleanOption(undefined, "foo"));
-  });
-
-  it("should not throw when the key is not present", () => {
-    assert.doesNotThrow(() => checkBooleanOption({}, "foo"));
+    assert.doesNotThrow(() =>
+      checkBooleanOption<{ foo?: boolean }>(undefined, "foo")
+    );
   });
 
   it("should not throw when the value is true", () => {

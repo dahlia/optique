@@ -531,19 +531,20 @@ export function choice<const T extends string | number>(
  * Validates that an option value, if present, is a boolean.
  * Throws a {@link TypeError} if the value is defined but not a boolean.
  *
+ * @template T The type of the options object.
  * @param options The options object to check.
  * @param key The key of the option to validate.
  * @throws {TypeError} If the option value is defined but not a boolean.
- * @since 0.11.0
+ * @since 1.0.0
  */
-export function checkBooleanOption(
-  options: object | undefined,
-  key: string,
+export function checkBooleanOption<T extends object>(
+  options: T | undefined,
+  key: keyof T,
 ): void {
-  const value = options?.[key as keyof typeof options];
+  const value = options?.[key];
   if (value !== undefined && typeof value !== "boolean") {
     throw new TypeError(
-      `Expected ${key} to be a boolean, but got ` +
+      `Expected ${String(key)} to be a boolean, but got ` +
         `${typeof value}: ${String(value)}.`,
     );
   }
