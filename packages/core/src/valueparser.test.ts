@@ -3800,10 +3800,10 @@ describe("uuid", () => {
       }
     });
 
-    it("should handle database-generated UUIDs", () => {
-      const parser = uuid({});
+    it("should handle database-generated UUIDs with strict: false", () => {
+      const parser = uuid({ strict: false });
 
-      // Simulate UUIDs that might come from different databases/systems
+      // These UUIDs have non-standard version/variant values
       const dbUuids = [
         "01234567-89ab-cdef-0123-456789abcdef", // all hex digits
         "fedcba98-7654-3210-fedc-ba9876543210", // reverse pattern
@@ -3896,6 +3896,254 @@ describe("uuid", () => {
     });
   });
 
+  describe("strict mode", () => {
+    it("should reject version 0 by default", () => {
+      const parser = uuid({});
+      const result = parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8");
+      assert.ok(!result.success);
+    });
+
+    it("should reject versions 9 through f by default", () => {
+      const parser = uuid({});
+      const hexDigits = "9abcdef";
+      for (const digit of hexDigits) {
+        const input = `6ba7b800-9dad-${digit}1d1-80b4-00c04fd430c8` as const;
+        const result = parser.parse(input);
+        assert.ok(
+          !result.success,
+          `Should reject version ${digit}: ${input}`,
+        );
+      }
+    });
+
+    it("should accept versions 1 through 8 by default", () => {
+      const parser = uuid({});
+      for (let v = 1; v <= 8; v++) {
+        const input = `6ba7b800-9dad-${
+          v.toString(16)
+        }1d1-80b4-00c04fd430c8` as const;
+        const result = parser.parse(input);
+        assert.ok(result.success, `Should accept version ${v}: ${input}`);
+      }
+    });
+
+    it("should reject non-RFC 9562 variant nibbles by default", () => {
+      const parser = uuid({});
+      const invalidVariants = ["0", "3", "7", "c", "d", "f"];
+      for (const v of invalidVariants) {
+        const input = `550e8400-e29b-41d4-${v}716-446655440000` as const;
+        const result = parser.parse(input);
+        assert.ok(
+          !result.success,
+          `Should reject variant ${v}: ${input}`,
+        );
+      }
+    });
+
+    it("should accept valid RFC 9562 variant nibbles", () => {
+      const parser = uuid({});
+      const validVariants = ["8", "9", "a", "b", "A", "B"];
+      for (const v of validVariants) {
+        const input = `550e8400-e29b-41d4-${v}716-446655440000` as const;
+        const result = parser.parse(input);
+        assert.ok(
+          result.success,
+          `Should accept variant ${v}: ${input}`,
+        );
+      }
+    });
+
+    it("should accept nil UUID as special standard value", () => {
+      const parser = uuid({});
+      const result = parser.parse("00000000-0000-0000-0000-000000000000");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "00000000-0000-0000-0000-000000000000");
+      }
+    });
+
+    it("should accept max UUID as special standard value", () => {
+      const parser = uuid({});
+      const result = parser.parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "ffffffff-ffff-ffff-ffff-ffffffffffff");
+      }
+    });
+
+    it("should accept uppercase max UUID", () => {
+      const parser = uuid({});
+      const result = parser.parse("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF");
+      assert.ok(result.success);
+    });
+
+    it("should behave the same with strict: true as default", () => {
+      const defaultParser = uuid({});
+      const strictParser = uuid({ strict: true });
+
+      const cases = [
+        "550e8400-e29b-41d4-a716-446655440000", // valid v4
+        "6ba7b800-9dad-01d1-80b4-00c04fd430c8", // invalid v0
+        "550e8400-e29b-41d4-0716-446655440000", // invalid variant
+        "00000000-0000-0000-0000-000000000000", // nil
+        "ffffffff-ffff-ffff-ffff-ffffffffffff", // max
+      ];
+
+      for (const input of cases) {
+        assert.equal(
+          defaultParser.parse(input).success,
+          strictParser.parse(input).success,
+          `Mismatch for: ${input}`,
+        );
+      }
+    });
+
+    it("should accept any version and variant with strict: false", () => {
+      const parser = uuid({ strict: false });
+
+      const cases = [
+        "6ba7b800-9dad-01d1-80b4-00c04fd430c8", // v0
+        "6ba7b800-9dad-f1d1-80b4-00c04fd430c8", // v15
+        "550e8400-e29b-41d4-0716-446655440000", // variant 0
+        "550e8400-e29b-41d4-f716-446655440000", // variant f
+        "01234567-89ab-cdef-0123-456789abcdef", // non-standard
+      ];
+
+      for (const input of cases) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Should accept with strict: false: ${input}`);
+      }
+    });
+
+    it("should still validate variant bits with allowedVersions in strict mode", () => {
+      const parser = uuid({ allowedVersions: [4] });
+      // v4 UUID with invalid variant nibble (0)
+      const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
+      assert.ok(!result.success);
+    });
+
+    it("should skip variant check with allowedVersions and strict: false", () => {
+      const parser = uuid({ allowedVersions: [4], strict: false });
+      // v4 UUID with invalid variant nibble (0)
+      const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
+      assert.ok(result.success);
+    });
+
+    it("should accept nil UUID even with allowedVersions", () => {
+      const parser = uuid({ allowedVersions: [4] });
+      const result = parser.parse("00000000-0000-0000-0000-000000000000");
+      assert.ok(result.success);
+    });
+
+    it("should accept max UUID even with allowedVersions", () => {
+      const parser = uuid({ allowedVersions: [4] });
+      const result = parser.parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+      assert.ok(result.success);
+    });
+
+    it("should provide default error message for invalid variant", () => {
+      const parser = uuid({});
+      const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            {
+              type: "text",
+              text:
+                "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
+            },
+            { type: "value", value: "0" },
+            { type: "text", text: " in " },
+            { type: "value", value: "550e8400-e29b-41d4-0716-446655440000" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should provide default error message for invalid version", () => {
+      const parser = uuid({});
+      const result = parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            {
+              type: "text",
+              text: "Expected UUID version 1 through 8, but got version ",
+            },
+            { type: "value", value: "0" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should use custom invalidVariant error message", () => {
+      const parser = uuid({
+        errors: {
+          invalidVariant: message`Bad variant bits.`,
+        },
+      });
+      const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Bad variant bits." },
+        ]);
+      }
+    });
+
+    it("should use custom invalidVariant function error", () => {
+      const parser = uuid({
+        errors: {
+          invalidVariant: (input) => message`Invalid variant in ${input}.`,
+        },
+      });
+      const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Invalid variant in " },
+          { type: "value", value: "550e8400-e29b-41d4-0716-446655440000" },
+          { type: "text", text: "." },
+        ]);
+      }
+    });
+
+    it("should snapshot strict option at construction time", () => {
+      const options: { strict: boolean } = { strict: false };
+      const parser = uuid(options);
+      // v0 UUID should pass with strict: false
+      assert.ok(
+        parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8").success,
+      );
+      // Mutate strict after construction
+      options.strict = true;
+      // Parser should still accept v0
+      assert.ok(
+        parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8").success,
+      );
+    });
+
+    it("should snapshot errors.invalidVariant at construction time", () => {
+      const errors: { invalidVariant: string } = {
+        invalidVariant: "original error",
+      };
+      const parser = uuid({ errors: errors as never });
+      const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
+      assert.ok(!result.success);
+      if (!result.success) assert.equal(result.error, "original error");
+      errors.invalidVariant = "mutated error";
+      const result2 = parser.parse("550e8400-e29b-41d4-0716-446655440000");
+      assert.ok(!result2.success);
+      if (!result2.success) assert.equal(result2.error, "original error");
+    });
+  });
+
   describe("edge cases", () => {
     it("should handle nil UUID", () => {
       const parser = uuid({});
@@ -3917,11 +4165,18 @@ describe("uuid", () => {
       }
     });
 
-    it("should handle version 0 (invalid but format-correct)", () => {
+    it("should reject version 0 in strict mode", () => {
       const parser = uuid({});
       const result = parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8"); // v0
 
-      assert.ok(result.success); // Format is correct, even if version is unusual
+      assert.ok(!result.success);
+    });
+
+    it("should accept version 0 with strict: false", () => {
+      const parser = uuid({ strict: false });
+      const result = parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8"); // v0
+
+      assert.ok(result.success);
     });
 
     it("should handle version validation edge cases", () => {
