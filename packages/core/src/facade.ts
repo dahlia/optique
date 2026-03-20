@@ -2199,7 +2199,12 @@ export function runParser<
     }
 
     // Handle completion option format: "--completion=<shell> [args...]"
+    // Scan all args to implement last-option-wins, consistent with
+    // help/version meta options
     if (completionOptionConfig) {
+      let lastCompletionShell: string | undefined;
+      let lastCompletionArgs: string[] = [];
+
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
 
@@ -2208,58 +2213,43 @@ export function runParser<
           arg.startsWith(n + "=")
         );
         if (equalsMatch) {
-          const shell = arg.slice(equalsMatch.length + 1);
-          const completionArgs = args.slice(i + 1);
-          return handleCompletion<
-            InferMode<TParser>,
-            InferValue<TParser>,
-            InferValue<TParser>
-          >(
-            [shell, ...completionArgs],
-            programName,
-            parser,
-            completionParsers.completionOption,
-            stdout,
-            stderr,
-            onCompletionResult,
-            onErrorResult,
-            availableShells,
-            colors,
-            maxWidth,
-            completionCommandNames[0],
-            completionOptionNames[0],
-            true,
-            sectionOrder,
-          ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
+          lastCompletionShell = arg.slice(equalsMatch.length + 1);
+          lastCompletionArgs = args.slice(i + 1);
+          continue;
         }
 
         // Check for "--completion <shell>" format (separate arg)
         const exactMatch = completionOptionNames.includes(arg);
         if (exactMatch) {
-          const shell = i + 1 < args.length ? args[i + 1] : "";
-          const completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
-          return handleCompletion<
-            InferMode<TParser>,
-            InferValue<TParser>,
-            InferValue<TParser>
-          >(
-            [shell, ...completionArgs],
-            programName,
-            parser,
-            completionParsers.completionOption,
-            stdout,
-            stderr,
-            onCompletionResult,
-            onErrorResult,
-            availableShells,
-            colors,
-            maxWidth,
-            completionCommandNames[0],
-            completionOptionNames[0],
-            true,
-            sectionOrder,
-          ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
+          lastCompletionShell = i + 1 < args.length ? args[i + 1] : "";
+          lastCompletionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
+          i++; // skip the shell argument
+          continue;
         }
+      }
+
+      if (lastCompletionShell !== undefined) {
+        return handleCompletion<
+          InferMode<TParser>,
+          InferValue<TParser>,
+          InferValue<TParser>
+        >(
+          [lastCompletionShell, ...lastCompletionArgs],
+          programName,
+          parser,
+          completionParsers.completionOption,
+          stdout,
+          stderr,
+          onCompletionResult,
+          onErrorResult,
+          availableShells,
+          colors,
+          maxWidth,
+          completionCommandNames[0],
+          completionOptionNames[0],
+          true,
+          sectionOrder,
+        ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
       }
     }
   }

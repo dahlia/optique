@@ -270,6 +270,11 @@ To be released.
     follow-up help at all, and both-mode showed only the command form.
     [[#275], [#668]]
 
+ -  Fixed repeated `--completion` options to follow last-option-wins semantics,
+    consistent with `--help` and `--version` meta options.  Previously,
+    `--completion bash --completion zsh` would use the first occurrence (`bash`)
+    instead of the last (`zsh`).  [[#364]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -687,6 +692,7 @@ To be released.
 [#355]: https://github.com/dahlia/optique/issues/355
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
+[#364]: https://github.com/dahlia/optique/issues/364
 [#366]: https://github.com/dahlia/optique/issues/366
 [#368]: https://github.com/dahlia/optique/issues/368
 [#370]: https://github.com/dahlia/optique/issues/370

@@ -3253,6 +3253,84 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
+    it("should follow last-option-wins for repeated --completion <shell>", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(
+        parser,
+        "myapp",
+        ["--completion", "bash", "--completion", "zsh"],
+        {
+          completion: {
+            option: true,
+          },
+          stdout: (text) => {
+            completionOutput = text;
+          },
+        },
+      );
+
+      // zsh should win (last option): compdef is zsh-specific
+      assert.ok(completionOutput.includes("compdef"));
+      assert.ok(!completionOutput.includes("complete -F"));
+    });
+
+    it("should follow last-option-wins for repeated --completion=<shell>", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(
+        parser,
+        "myapp",
+        ["--completion=bash", "--completion=zsh"],
+        {
+          completion: {
+            option: true,
+          },
+          stdout: (text) => {
+            completionOutput = text;
+          },
+        },
+      );
+
+      // zsh should win (last option): compdef is zsh-specific
+      assert.ok(completionOutput.includes("compdef"));
+      assert.ok(!completionOutput.includes("complete -F"));
+    });
+
+    it("should follow last-option-wins for mixed --completion forms", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionOutput = "";
+
+      runParser(
+        parser,
+        "myapp",
+        ["--completion", "bash", "--completion=zsh"],
+        {
+          completion: {
+            option: true,
+          },
+          stdout: (text) => {
+            completionOutput = text;
+          },
+        },
+      );
+
+      // zsh should win (last option): compdef is zsh-specific
+      assert.ok(completionOutput.includes("compdef"));
+      assert.ok(!completionOutput.includes("complete -F"));
+    });
+
     it("should report missing shell for separated --completion option", () => {
       const parser = object({
         verbose: option("--verbose"),
