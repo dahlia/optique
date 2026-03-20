@@ -65,7 +65,7 @@ function encodeExtensions(
  * @returns The sanitized string with control characters replaced by spaces.
  * @internal
  */
-function sanitizeDescription(text: string): string {
+function sanitizeForTransport(text: string): string {
   return text.replace(/[\t\n\r\0]/g, " ");
 }
 
@@ -332,7 +332,7 @@ complete -F _${programName} -- ${programName}
     for (const suggestion of suggestions) {
       if (i > 0) yield "\n";
       if (suggestion.kind === "literal") {
-        yield sanitizeDescription(suggestion.text);
+        yield sanitizeForTransport(suggestion.text);
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
@@ -485,17 +485,17 @@ compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
       if (suggestion.kind === "literal") {
         const description = suggestion.description == null
           ? ""
-          : sanitizeDescription(
+          : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
-        yield `${sanitizeDescription(suggestion.text)}\0${description}\0`;
+        yield `${sanitizeForTransport(suggestion.text)}\0${description}\0`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
-          : sanitizeDescription(
+          : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
         const pattern = encodePattern(suggestion.pattern ?? "");
@@ -793,18 +793,18 @@ complete -c ${programName} -f -a '(${functionName})'
       if (suggestion.kind === "literal") {
         const description = suggestion.description == null
           ? ""
-          : sanitizeDescription(
+          : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
         // Format: value\tdescription
-        yield `${sanitizeDescription(suggestion.text)}\t${description}`;
+        yield `${sanitizeForTransport(suggestion.text)}\t${description}`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
-          : sanitizeDescription(
+          : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
         const pattern = encodePattern(suggestion.pattern ?? "");
@@ -1132,18 +1132,18 @@ ${functionName}-external
       if (suggestion.kind === "literal") {
         const description = suggestion.description == null
           ? ""
-          : sanitizeDescription(
+          : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
         // Format: value\tdescription
-        yield `${sanitizeDescription(suggestion.text)}\t${description}`;
+        yield `${sanitizeForTransport(suggestion.text)}\t${description}`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
-          : sanitizeDescription(
+          : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
         const pattern = encodePattern(suggestion.pattern ?? "");
@@ -1359,11 +1359,11 @@ ${
       if (suggestion.kind === "literal") {
         const description = suggestion.description == null
           ? ""
-          : sanitizeDescription(
+          : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
         // Format: text\tlistItemText\tdescription
-        const text = sanitizeDescription(suggestion.text);
+        const text = sanitizeForTransport(suggestion.text);
         yield `${text}\t${text}\t${description}`;
       } else {
         // Emit special marker for native file completion
@@ -1371,7 +1371,7 @@ ${
         const hidden = suggestion.includeHidden ? "1" : "0";
         const description = suggestion.description == null
           ? ""
-          : sanitizeDescription(
+          : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
         const pattern = encodePattern(suggestion.pattern ?? "");
