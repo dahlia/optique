@@ -145,6 +145,12 @@ To be released.
     position (e.g., `foo.*.com`, `example.*`) and even when `allowWildcard`
     is `false` (e.g., bare `*`).  [[#355], [#661]]
 
+ -  Fixed `hostname()` and `domain()` silently coercing invalid runtime
+    option types.  Non-boolean values for `allowWildcard`, `allowUnderscore`,
+    `allowLocalhost`, `allowSubdomains`, and `lowercase` are now rejected
+    with a `TypeError` instead of being silently coerced by JavaScript
+    truthiness.  [[#366], [#664]]
+
  -  Fixed `locale()` value parser's `format()` method dropping Unicode
     extension subtags (e.g., `en-US-u-ca-buddhist` was formatted as `en-US`).
     The method now uses `Intl.Locale.toString()` instead of `baseName` to
@@ -664,6 +670,7 @@ To be released.
 [#355]: https://github.com/dahlia/optique/issues/355
 [#362]: https://github.com/dahlia/optique/issues/362
 [#363]: https://github.com/dahlia/optique/issues/363
+[#366]: https://github.com/dahlia/optique/issues/366
 [#368]: https://github.com/dahlia/optique/issues/368
 [#370]: https://github.com/dahlia/optique/issues/370
 [#371]: https://github.com/dahlia/optique/issues/371
@@ -755,6 +762,7 @@ To be released.
 [#659]: https://github.com/dahlia/optique/pull/659
 [#660]: https://github.com/dahlia/optique/pull/660
 [#661]: https://github.com/dahlia/optique/pull/661
+[#664]: https://github.com/dahlia/optique/pull/664
 
 ### @optique/config
 
