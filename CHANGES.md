@@ -586,6 +586,12 @@ To be released.
     `glob_dots` before calling `_files` or `_directories` when hidden
     files are requested.  [[#262], [#641]]
 
+ -  Fixed shell completion transports emitting raw tabs and newlines in
+    literal suggestion text, which corrupted shell-specific transport
+    framing.  Control characters in `Suggestion.text` are now replaced
+    with spaces, matching the existing description sanitization.
+    [[#337], [#663]]
+
  -  `runParser()` now validates version values at runtime — empty strings,
     strings containing control characters, and non-string values are rejected
     with `TypeError`.  [[#439], [#645]]
@@ -657,6 +663,7 @@ To be released.
 [#321]: https://github.com/dahlia/optique/issues/321
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
+[#337]: https://github.com/dahlia/optique/issues/337
 [#338]: https://github.com/dahlia/optique/issues/338
 [#341]: https://github.com/dahlia/optique/issues/341
 [#344]: https://github.com/dahlia/optique/issues/344
@@ -764,6 +771,7 @@ To be released.
 [#659]: https://github.com/dahlia/optique/pull/659
 [#660]: https://github.com/dahlia/optique/pull/660
 [#661]: https://github.com/dahlia/optique/pull/661
+[#663]: https://github.com/dahlia/optique/pull/663
 [#664]: https://github.com/dahlia/optique/pull/664
 
 ### @optique/config

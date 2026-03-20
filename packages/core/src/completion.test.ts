@@ -519,6 +519,26 @@ describe("completion module", () => {
       deepStrictEqual(encoded, ["__FILE__:file::100%25done:0"]);
     });
 
+    it("should sanitize tabs and newlines in literal text", () => {
+      const suggestions: Suggestion[] = [
+        { kind: "literal", text: "alpha\tbeta" },
+        { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
+      ];
+
+      const encoded = Array.from(bash.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, [
+        "alpha beta",
+        "\n",
+        "line1 line2",
+        "\n",
+        "car riage",
+        "\n",
+        "nul byte",
+      ]);
+    });
+
     it("should not use compgen -z flag", () => {
       const script = bash.generateScript("myapp");
 
@@ -2008,6 +2028,23 @@ _nohidden_cli 2>/dev/null
       deepStrictEqual(encoded, ["--opt\0Line 1 Line 2\0"]);
     });
 
+    it("should sanitize tabs and newlines in literal text", () => {
+      const suggestions: Suggestion[] = [
+        { kind: "literal", text: "alpha\tbeta" },
+        { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
+      ];
+
+      const encoded = Array.from(zsh.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, [
+        "alpha beta\0\0",
+        "line1 line2\0\0",
+        "car riage\0\0",
+        "nul byte\0\0",
+      ]);
+    });
+
     it("should include directories for navigation in file type completion", () => {
       const script = zsh.generateScript("filedir-cli");
 
@@ -2258,6 +2295,26 @@ _nohidden_cli 2>/dev/null
 
       const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
       deepStrictEqual(encoded, ["--opt\t--opt\tLine 1 Line 2"]);
+    });
+
+    it("should sanitize tabs and newlines in literal text", () => {
+      const suggestions: Suggestion[] = [
+        { kind: "literal", text: "alpha\tbeta" },
+        { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
+      ];
+
+      const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, [
+        "alpha beta\talpha beta\t",
+        "\n",
+        "line1 line2\tline1 line2\t",
+        "\n",
+        "car riage\tcar riage\t",
+        "\n",
+        "nul byte\tnul byte\t",
+      ]);
     });
 
     it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
@@ -2785,6 +2842,26 @@ printf '__FILE__:file:.json,.yaml::0\\n'
 
       const encoded = Array.from(fish.encodeSuggestions(suggestions));
       deepStrictEqual(encoded, ["--opt\tLine 1 Line 2"]);
+    });
+
+    it("should sanitize tabs and newlines in literal text", () => {
+      const suggestions: Suggestion[] = [
+        { kind: "literal", text: "alpha\tbeta" },
+        { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
+      ];
+
+      const encoded = Array.from(fish.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, [
+        "alpha beta\t",
+        "\n",
+        "line1 line2\t",
+        "\n",
+        "car riage\t",
+        "\n",
+        "nul byte\t",
+      ]);
     });
 
     it("should sanitize program names with special characters", () => {
@@ -3534,6 +3611,26 @@ ${functionName}
 
       const encoded = Array.from(nu.encodeSuggestions(suggestions));
       deepStrictEqual(encoded, ["--opt\tLine 1 Line 2"]);
+    });
+
+    it("should sanitize tabs and newlines in literal text", () => {
+      const suggestions: Suggestion[] = [
+        { kind: "literal", text: "alpha\tbeta" },
+        { kind: "literal", text: "line1\nline2" },
+        { kind: "literal", text: "car\rriage" },
+        { kind: "literal", text: "nul\0byte" },
+      ];
+
+      const encoded = Array.from(nu.encodeSuggestions(suggestions));
+      deepStrictEqual(encoded, [
+        "alpha beta\t",
+        "\n",
+        "line1 line2\t",
+        "\n",
+        "car riage\t",
+        "\n",
+        "nul byte\t",
+      ]);
     });
 
     it("should use 2-space indentation in generated script", () => {
