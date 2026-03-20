@@ -2215,7 +2215,12 @@ export function runParser<
         if (equalsMatch) {
           if (completionShell !== undefined) {
             stderr(
-              `Error: ${completionMatchName} cannot be specified more than once.\n`,
+              formatMessage(
+                message`Error: ${
+                  optionName(completionMatchName!)
+                } cannot be specified more than once.\n`,
+                { colors, quotes: !colors },
+              ),
             );
             return onErrorResult(1) as ModeValue<
               InferMode<TParser>,
@@ -2233,7 +2238,12 @@ export function runParser<
         if (exactMatch) {
           if (completionShell !== undefined) {
             stderr(
-              `Error: ${completionMatchName} cannot be specified more than once.\n`,
+              formatMessage(
+                message`Error: ${
+                  optionName(completionMatchName!)
+                } cannot be specified more than once.\n`,
+                { colors, quotes: !colors },
+              ),
             );
             return onErrorResult(1) as ModeValue<
               InferMode<TParser>,
