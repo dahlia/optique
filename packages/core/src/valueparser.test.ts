@@ -11503,6 +11503,10 @@ describe("checkBooleanOption", () => {
     );
   });
 
+  it("should not throw when the key is absent", () => {
+    assert.doesNotThrow(() => checkBooleanOption<{ foo?: boolean }>({}, "foo"));
+  });
+
   it("should not throw when the value is true", () => {
     assert.doesNotThrow(() => checkBooleanOption({ foo: true }, "foo"));
   });
