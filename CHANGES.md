@@ -133,6 +133,14 @@ To be released.
     than DNS hostnames.  This also affects `socketAddress()` with
     `host: { type: "hostname" }`.  [[#376], [#657]]
 
+ -  Fixed `hostname()` accepting case variants of `localhost` (e.g.,
+    `LOCALHOST`, `LocalHost`) and wildcard-localhost forms (e.g.,
+    `*.localhost`) when `allowLocalhost` is set to `false`.  DNS hostnames
+    are case-insensitive, so all variants are now correctly rejected.
+    This also affects `socketAddress()` with
+    `host: { type: "hostname", hostname: { allowLocalhost: false } }`.
+    [[#321], [#659]]
+
  -  Fixed `locale()` value parser's `format()` method dropping Unicode
     extension subtags (e.g., `en-US-u-ca-buddhist` was formatted as `en-US`).
     The method now uses `Intl.Locale.toString()` instead of `baseName` to
@@ -626,6 +634,7 @@ To be released.
 [#315]: https://github.com/dahlia/optique/issues/315
 [#317]: https://github.com/dahlia/optique/issues/317
 [#320]: https://github.com/dahlia/optique/issues/320
+[#321]: https://github.com/dahlia/optique/issues/321
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
 [#338]: https://github.com/dahlia/optique/issues/338
@@ -729,6 +738,7 @@ To be released.
 [#653]: https://github.com/dahlia/optique/pull/653
 [#656]: https://github.com/dahlia/optique/pull/656
 [#657]: https://github.com/dahlia/optique/pull/657
+[#659]: https://github.com/dahlia/optique/pull/659
 
 ### @optique/config
 

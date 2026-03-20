@@ -6251,6 +6251,54 @@ describe("hostname()", () => {
       const result2 = parser.parse("my-localhost.com");
       assert.ok(result2.success);
     });
+
+    it("should reject case variants of localhost", () => {
+      const parser = hostname({ allowLocalhost: false });
+
+      for (const variant of ["LOCALHOST", "LocalHost", "Localhost"]) {
+        const result = parser.parse(variant);
+        assert.ok(!result.success, `expected ${variant} to be rejected`);
+        assert.deepStrictEqual(result.error, [
+          { type: "text", text: "Hostname 'localhost' is not allowed." },
+        ]);
+      }
+    });
+
+    it("should accept case variants when allowLocalhost is true", () => {
+      const parser = hostname({ allowLocalhost: true });
+
+      for (const variant of ["LOCALHOST", "LocalHost", "Localhost"]) {
+        const result = parser.parse(variant);
+        assert.ok(result.success, `expected ${variant} to be accepted`);
+      }
+    });
+
+    it("should reject wildcard localhost when allowLocalhost is false", () => {
+      const parser = hostname({
+        allowLocalhost: false,
+        allowWildcard: true,
+      });
+
+      for (
+        const variant of ["*.localhost", "*.LOCALHOST", "*.LocalHost"]
+      ) {
+        const result = parser.parse(variant);
+        assert.ok(!result.success, `expected ${variant} to be rejected`);
+        assert.deepStrictEqual(result.error, [
+          { type: "text", text: "Hostname 'localhost' is not allowed." },
+        ]);
+      }
+    });
+
+    it("should accept wildcard localhost when allowLocalhost is true", () => {
+      const parser = hostname({
+        allowLocalhost: true,
+        allowWildcard: true,
+      });
+
+      const result = parser.parse("*.localhost");
+      assert.ok(result.success);
+    });
   });
 
   describe("maxLength option", () => {

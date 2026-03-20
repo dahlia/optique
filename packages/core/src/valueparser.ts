@@ -2663,7 +2663,7 @@ export function hostname(
       }
 
       // Check for localhost
-      if (!allowLocalhost && input === "localhost") {
+      if (!allowLocalhost && input.toLowerCase() === "localhost") {
         const errorMsg = options?.errors?.localhostNotAllowed;
         const msg = typeof errorMsg === "function"
           ? errorMsg(input)
@@ -2690,6 +2690,15 @@ export function hostname(
             ? errorMsg(input)
             : errorMsg ??
               message`Expected a valid hostname, but got ${input}.`;
+          return { success: false, error: msg };
+        }
+
+        // Check for wildcard localhost (e.g., *.localhost)
+        if (!allowLocalhost && rest.toLowerCase() === "localhost") {
+          const errorMsg = options?.errors?.localhostNotAllowed;
+          const msg = typeof errorMsg === "function"
+            ? errorMsg(input)
+            : errorMsg ?? message`Hostname 'localhost' is not allowed.`;
           return { success: false, error: msg };
         }
       }
