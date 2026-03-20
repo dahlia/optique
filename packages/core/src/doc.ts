@@ -446,7 +446,9 @@ export function formatDocPage(
       const term = formatUsageTerm(entry.term, {
         colors: options.colors,
         optionsSeparator: ", ",
-        maxWidth: options.maxWidth == null ? undefined : effectiveTermWidth,
+        maxWidth: options.maxWidth == null
+          ? undefined
+          : options.maxWidth - termIndent,
       });
 
       const descColumnWidth = options.maxWidth == null

@@ -1679,6 +1679,29 @@ describe("formatDocPage", () => {
       }
     });
 
+    it("should not add extra blank lines for long terms that fit in line", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["--longoption123"] },
+            description: [{ type: "text", text: "A long option" }],
+          }],
+        }],
+      };
+      const maxWidth = 20;
+      const result = formatDocPage("myapp", page, { maxWidth });
+      // The term "--longoption123" (15 chars) fits in maxWidth - termIndent
+      // (20 - 2 = 18), so it should appear on a single line without a
+      // leading blank line or missing indent.
+      const lines = result.split("\n").filter((l) => l.length > 0);
+      const termLine = lines.find((l) => l.includes("--longoption123"));
+      assert.ok(termLine != null, "Term should appear in output");
+      assert.ok(
+        termLine.startsWith("  "),
+        `Term line should have left indent: "${termLine}"`,
+      );
+    });
+
     it("should respect maxWidth with custom termWidth and termIndent exceeding it", () => {
       const maxWidth = 25;
       const result = formatDocPage("myapp", simplePage, {
