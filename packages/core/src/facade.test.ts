@@ -3253,44 +3253,47 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
-    it("should error on repeated --completion <shell>", () => {
+    it("should treat --completion in payload as opaque args, not as duplicate meta option", () => {
       const parser = object({
         verbose: option("--verbose"),
+        completion: option("--completion"),
       });
 
-      let errorOutput = "";
-      let errorResult: unknown;
+      let completionResult: unknown;
 
+      // "myapp --completion bash --completion" means:
+      // complete the partial input "--completion" using bash completion
       runParser(
         parser,
         "myapp",
-        ["--completion", "bash", "--completion", "zsh"],
+        ["--completion", "bash", "--completion"],
         {
           completion: {
             option: true,
-          },
-          onError: (exitCode: number) => {
-            errorResult = `error-${exitCode}`;
-            return errorResult;
-          },
-          stderr: (text: string) => {
-            errorOutput += text;
+            onShow: (exitCode: number) => {
+              completionResult = `completion-${exitCode}`;
+              return completionResult;
+            },
           },
         },
       );
 
-      assert.equal(errorResult, "error-1");
-      assert.ok(errorOutput.includes("--completion"));
+      // Should invoke completion (not error) — the first --completion is the
+      // meta option; the second --completion is completion payload
+      assert.equal(completionResult, "completion-0");
     });
 
-    it("should error on repeated --completion=<shell>", () => {
+    it("should treat --completion=<shell> in payload as opaque args", () => {
       const parser = object({
         verbose: option("--verbose"),
       });
 
-      let errorOutput = "";
-      let errorResult: unknown;
+      let completionResult: unknown;
 
+      // "myapp --completion=bash --completion=zsh" means:
+      // complete the partial input "--completion=zsh" using bash completion.
+      // The first --completion=bash is the meta option; "--completion=zsh"
+      // is passed as a completion payload argument.
       runParser(
         parser,
         "myapp",
@@ -3298,49 +3301,16 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         {
           completion: {
             option: true,
-          },
-          onError: (exitCode: number) => {
-            errorResult = `error-${exitCode}`;
-            return errorResult;
-          },
-          stderr: (text: string) => {
-            errorOutput += text;
+            onShow: (exitCode: number) => {
+              completionResult = `completion-${exitCode}`;
+              return completionResult;
+            },
           },
         },
       );
 
-      assert.equal(errorResult, "error-1");
-      assert.ok(errorOutput.includes("--completion"));
-    });
-
-    it("should error on repeated --completion with mixed forms", () => {
-      const parser = object({
-        verbose: option("--verbose"),
-      });
-
-      let errorOutput = "";
-      let errorResult: unknown;
-
-      runParser(
-        parser,
-        "myapp",
-        ["--completion", "bash", "--completion=zsh"],
-        {
-          completion: {
-            option: true,
-          },
-          onError: (exitCode: number) => {
-            errorResult = `error-${exitCode}`;
-            return errorResult;
-          },
-          stderr: (text: string) => {
-            errorOutput += text;
-          },
-        },
-      );
-
-      assert.equal(errorResult, "error-1");
-      assert.ok(errorOutput.includes("--completion"));
+      // Should invoke completion (not error), using bash as the shell
+      assert.equal(completionResult, "completion-0");
     });
 
     it("should report missing shell for separated --completion option", () => {

@@ -270,9 +270,11 @@ To be released.
     follow-up help at all, and both-mode showed only the command form.
     [[#275], [#668]]
 
- -  Fixed repeated `--completion` options silently using the first occurrence
-    instead of reporting an error.  `--completion bash --completion zsh` now
-    fails with a clear error message.  [[#364]]
+ -  Clarified that the `--completion` early-return scanner intentionally uses
+    first-match semantics: the first `--completion` is the meta option and
+    all subsequent arguments (including tokens that look like `--completion`)
+    are treated as opaque completion payload.  Added tests to document this
+    behavior.  [[#364], [#670]]
 
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
@@ -788,6 +790,7 @@ To be released.
 [#663]: https://github.com/dahlia/optique/pull/663
 [#664]: https://github.com/dahlia/optique/pull/664
 [#668]: https://github.com/dahlia/optique/pull/668
+[#670]: https://github.com/dahlia/optique/pull/670
 
 ### @optique/config
 

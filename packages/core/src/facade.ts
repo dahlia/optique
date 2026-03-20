@@ -2199,12 +2199,10 @@ export function runParser<
     }
 
     // Handle completion option format: "--completion=<shell> [args...]"
-    // Scan all args and reject duplicates as conflicting requests
+    // The first --completion match is the meta option; everything after it
+    // (including the shell name) is opaque completion payload and must not
+    // be re-interpreted as another meta option.
     if (completionOptionConfig) {
-      let completionShell: string | undefined;
-      let completionArgs: string[] = [];
-      let completionMatchName: string | undefined;
-
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
 
@@ -2213,73 +2211,58 @@ export function runParser<
           arg.startsWith(n + "=")
         );
         if (equalsMatch) {
-          if (completionShell !== undefined) {
-            stderr(
-              formatMessage(
-                message`Error: ${
-                  optionName(completionMatchName!)
-                } cannot be specified more than once.\n`,
-                { colors, quotes: !colors },
-              ),
-            );
-            return onErrorResult(1) as ModeValue<
-              InferMode<TParser>,
-              InferValue<TParser>
-            >;
-          }
-          completionShell = arg.slice(equalsMatch.length + 1);
-          completionArgs = args.slice(i + 1);
-          completionMatchName = equalsMatch;
-          continue;
+          const shell = arg.slice(equalsMatch.length + 1);
+          const completionArgs = args.slice(i + 1);
+          return handleCompletion<
+            InferMode<TParser>,
+            InferValue<TParser>,
+            InferValue<TParser>
+          >(
+            [shell, ...completionArgs],
+            programName,
+            parser,
+            completionParsers.completionOption,
+            stdout,
+            stderr,
+            onCompletionResult,
+            onErrorResult,
+            availableShells,
+            colors,
+            maxWidth,
+            completionCommandNames[0],
+            completionOptionNames[0],
+            true,
+            sectionOrder,
+          ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
         }
 
         // Check for "--completion <shell>" format (separate arg)
         const exactMatch = completionOptionNames.includes(arg);
         if (exactMatch) {
-          if (completionShell !== undefined) {
-            stderr(
-              formatMessage(
-                message`Error: ${
-                  optionName(completionMatchName!)
-                } cannot be specified more than once.\n`,
-                { colors, quotes: !colors },
-              ),
-            );
-            return onErrorResult(1) as ModeValue<
-              InferMode<TParser>,
-              InferValue<TParser>
-            >;
-          }
-          completionShell = i + 1 < args.length ? args[i + 1] : "";
-          completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
-          completionMatchName = arg;
-          i++; // skip the shell argument
-          continue;
+          const shell = i + 1 < args.length ? args[i + 1] : "";
+          const completionArgs = i + 1 < args.length ? args.slice(i + 2) : [];
+          return handleCompletion<
+            InferMode<TParser>,
+            InferValue<TParser>,
+            InferValue<TParser>
+          >(
+            [shell, ...completionArgs],
+            programName,
+            parser,
+            completionParsers.completionOption,
+            stdout,
+            stderr,
+            onCompletionResult,
+            onErrorResult,
+            availableShells,
+            colors,
+            maxWidth,
+            completionCommandNames[0],
+            completionOptionNames[0],
+            true,
+            sectionOrder,
+          ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
         }
-      }
-
-      if (completionShell !== undefined) {
-        return handleCompletion<
-          InferMode<TParser>,
-          InferValue<TParser>,
-          InferValue<TParser>
-        >(
-          [completionShell, ...completionArgs],
-          programName,
-          parser,
-          completionParsers.completionOption,
-          stdout,
-          stderr,
-          onCompletionResult,
-          onErrorResult,
-          availableShells,
-          colors,
-          maxWidth,
-          completionCommandNames[0],
-          completionOptionNames[0],
-          true,
-          sectionOrder,
-        ) as ModeValue<InferMode<TParser>, InferValue<TParser>>;
       }
     }
   }
