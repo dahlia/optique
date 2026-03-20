@@ -2529,3 +2529,50 @@ describe("runAsync with contexts", () => {
     void assertWidenedOptionsAreRejected;
   });
 });
+
+describe("runSync async parser rejection", () => {
+  function asyncString(): ValueParser<"async", string> {
+    return {
+      $mode: "async",
+      metavar: "STRING",
+      parse(input: string) {
+        return Promise.resolve({
+          success: true as const,
+          value: input.toLowerCase(),
+        });
+      },
+      format(value: string) {
+        return value;
+      },
+    };
+  }
+
+  it("should reject async parser at runtime", () => {
+    const parser = object({ name: argument(asyncString()) });
+
+    assert.throws(
+      () =>
+        runSync(parser as never, {
+          args: ["hello"],
+          programName: "test",
+        }),
+      TypeError,
+    );
+  });
+
+  it("should reject Program wrapping async parser at runtime", () => {
+    const parser = object({ name: argument(asyncString()) });
+    const program: Program<"async", { readonly name: string }> = {
+      parser,
+      metadata: { name: "test" },
+    };
+
+    assert.throws(
+      () =>
+        runSync(program as never, {
+          args: ["hello"],
+        }),
+      TypeError,
+    );
+  });
+});

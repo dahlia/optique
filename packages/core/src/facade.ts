@@ -2795,6 +2795,12 @@ export function runParserSync<
   args: readonly string[],
   options?: RunOptions<THelp, TError>,
 ): InferValue<TParser> {
+  if (parser.$mode !== "sync") {
+    throw new TypeError(
+      "Cannot use an async parser with runParserSync(). " +
+        "Use runParser() or runParserAsync() instead.",
+    );
+  }
   return runParser(parser, programName, args, options);
 }
 
@@ -3618,6 +3624,13 @@ export function runWithSync<
     & RunWithOptions<THelp, TError>
     & ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): InferValue<TParser> {
+  if (parser.$mode !== "sync") {
+    throw new TypeError(
+      "Cannot use an async parser with runWithSync(). " +
+        "Use runWith() or runWithAsync() instead.",
+    );
+  }
+
   const args = options?.args ?? [];
 
   // Early exit: skip context processing for help/version/completion

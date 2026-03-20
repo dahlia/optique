@@ -7,6 +7,7 @@ import {
   type RunOptions,
   runParser,
   RunParserError,
+  runParserSync,
   runWith,
   runWithAsync,
   runWithSync,
@@ -21,6 +22,7 @@ import {
   option,
 } from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
+import type { ValueParser } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -9853,5 +9855,53 @@ describe("branch coverage: facade.ts edge cases", () => {
     });
 
     assert.ok(methodIdentityHeld);
+  });
+});
+
+describe("runParserSync", () => {
+  it("should reject async parser at runtime", () => {
+    const asyncVp: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "STR",
+      parse(input: string) {
+        return Promise.resolve({ success: true as const, value: input });
+      },
+      format(value: string) {
+        return value;
+      },
+    };
+    const parser = object({ name: argument(asyncVp) });
+
+    assert.throws(
+      () => runParserSync(parser as never, "test", ["hello"]),
+      TypeError,
+    );
+  });
+});
+
+describe("runWithSync async parser rejection", () => {
+  it("should reject async parser at runtime", () => {
+    const asyncVp: ValueParser<"async", string> = {
+      $mode: "async",
+      metavar: "STR",
+      parse(input: string) {
+        return Promise.resolve({ success: true as const, value: input });
+      },
+      format(value: string) {
+        return value;
+      },
+    };
+    const parser = object({ name: argument(asyncVp) });
+    const ctx: SourceContext = {
+      id: Symbol.for("@test/async-reject"),
+      getAnnotations() {
+        return {};
+      },
+    };
+
+    assert.throws(
+      () => runWithSync(parser as never, "test", [ctx], { args: ["hello"] }),
+      TypeError,
+    );
   });
 });

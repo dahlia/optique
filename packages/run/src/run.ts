@@ -667,6 +667,16 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
   parserOrProgram: T | Program<"sync", unknown>,
   options: RunOptions = {},
 ): InferValue<T> {
+  const parserToCheck = "parser" in parserOrProgram &&
+      "metadata" in parserOrProgram
+    ? parserOrProgram.parser
+    : parserOrProgram;
+  if (parserToCheck.$mode !== "sync") {
+    throw new TypeError(
+      "Cannot use an async parser with runSync(). " +
+        "Use run() or runAsync() instead.",
+    );
+  }
   // For sync parsers with contexts, use runWithSync() instead of async runWith()
   const contexts = options.contexts;
   if (contexts && contexts.length > 0) {
