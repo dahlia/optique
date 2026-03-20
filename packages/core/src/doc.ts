@@ -372,27 +372,29 @@ export function formatDocPage(
       `maxWidth must be a finite integer, got ${options.maxWidth}.`,
     );
   }
-  // The minimum feasible maxWidth is termIndent + 4: at least 1 char for
-  // the term column, 2 chars for the gap, and 1 char for the description.
-  // Only enforce this when some entry actually needs a description column
-  // (has description, or has default/choices that showDefault/showChoices
-  // would render).  Bare-term entries only need termIndent + 1.
-  const needsDescColumn = page.sections.some((s) =>
-    s.entries.some((e) =>
-      e.description != null ||
-      (options.showDefault && e.default != null) ||
-      (options.showChoices && e.choices != null)
-    )
-  );
-  if (
-    needsDescColumn &&
-    options.maxWidth != null &&
-    options.maxWidth < termIndent + 4
-  ) {
-    throw new RangeError(
-      `maxWidth must be at least ${termIndent + 4} ` +
-        `(termIndent ${termIndent} + 4), got ${options.maxWidth}.`,
-    );
+  // Validate maxWidth against the minimum feasible layout.  Entries with a
+  // description column need termIndent + 4 (1 term + 2 gap + 1 desc);
+  // bare-term entries need termIndent + 1 (just 1 term char).
+  if (options.maxWidth != null) {
+    const hasEntries = page.sections.some((s) => s.entries.length > 0);
+    const needsDescColumn = hasEntries &&
+      page.sections.some((s) =>
+        s.entries.some((e) =>
+          e.description != null ||
+          (options.showDefault && e.default != null) ||
+          (options.showChoices && e.choices != null)
+        )
+      );
+    const minWidth = needsDescColumn
+      ? termIndent + 4
+      : hasEntries
+      ? termIndent + 1
+      : 1;
+    if (options.maxWidth < minWidth) {
+      throw new RangeError(
+        `maxWidth must be at least ${minWidth}, got ${options.maxWidth}.`,
+      );
+    }
   }
   // When maxWidth constrains the layout, shrink the term column so that
   // the description column gets a reasonable share of the available width.

@@ -1718,34 +1718,34 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // default termIndent=2, minimum = 2 + 4 = 6
+      // default termIndent=2, minimum for desc entries = 2 + 4 = 6
       assert.throws(
         () => formatDocPage("app", page, { maxWidth: 5 }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 6 (termIndent 2 + 4), got 5.",
+          message: "maxWidth must be at least 6, got 5.",
         },
       );
       assert.throws(
         () => formatDocPage("app", page, { maxWidth: 1 }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 6 (termIndent 2 + 4), got 1.",
+          message: "maxWidth must be at least 6, got 1.",
         },
       );
       // maxWidth=6 is the minimum feasible value with default termIndent
       assert.doesNotThrow(
         () => formatDocPage("app", page, { maxWidth: 6 }),
       );
-      // Pages without entries should not throw even with very small maxWidth
+      // Pages without entries accept maxWidth=1
       const emptyPage: DocPage = {
         brief: [{ type: "text", text: "A brief description" }],
         sections: [],
       };
       assert.doesNotThrow(
-        () => formatDocPage("app", emptyPage, { maxWidth: 3 }),
+        () => formatDocPage("app", emptyPage, { maxWidth: 1 }),
       );
-      // Bare-term entries (no description) should not throw either
+      // Bare-term entries need termIndent + 1 = 3
       const bareTermPage: DocPage = {
         sections: [{
           entries: [{ term: { type: "argument", metavar: "X" } }],
@@ -1753,6 +1753,13 @@ describe("formatDocPage", () => {
       };
       assert.doesNotThrow(
         () => formatDocPage("app", bareTermPage, { maxWidth: 3 }),
+      );
+      assert.throws(
+        () => formatDocPage("app", bareTermPage, { maxWidth: 2 }),
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 3, got 2.",
+        },
       );
     });
 
