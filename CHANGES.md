@@ -146,10 +146,10 @@ To be released.
     is `false` (e.g., bare `*`).  [[#355], [#661]]
 
  -  Fixed `hostname()` and `domain()` silently coercing invalid runtime
-    option types.  Non-boolean values for `allowWildcard`, `allowUnderscore`,
-    `allowLocalhost`, `allowSubdomains`, and `lowercase` are now rejected
-    with a `TypeError` instead of being silently coerced by JavaScript
-    truthiness.  [[#366], [#664]]
+    option types.  Non-boolean values for `allowWildcard`,
+    `allowUnderscore`, `allowLocalhost`, `allowSubdomains`, and `lowercase`
+    are now rejected with a `TypeError` instead of being silently coerced
+    by JavaScript truthiness.  [[#366], [#664]]
 
  -  Fixed `locale()` value parser's `format()` method dropping Unicode
     extension subtags (e.g., `en-US-u-ca-buddhist` was formatted as `en-US`).
