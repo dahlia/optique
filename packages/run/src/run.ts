@@ -608,6 +608,8 @@ export function run<T extends Parser<Mode, unknown, unknown>>(
  * @param parser The synchronous command-line parser to execute.
  * @param options Configuration options for customizing behavior.
  * @returns The parsed result if successful.
+ * @throws {TypeError} If an async parser (or a {@link Program} wrapping one)
+ * is passed at runtime.  Use {@link run} or {@link runAsync} instead.
  * @since 0.9.0
  */
 // Overload: parser with contexts
