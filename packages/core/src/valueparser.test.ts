@@ -21,7 +21,7 @@ import {
   url,
   uuid,
 } from "@optique/core/valueparser";
-import { message, text, values } from "@optique/core/message";
+import { formatMessage, message, text, values } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -4276,17 +4276,83 @@ describe("uuid", () => {
       assert.ok(result.success);
     });
 
-    it("should handle version validation edge cases", () => {
-      const parser = uuid({ allowedVersions: [0, 15] }); // Edge versions
+    it("should reject non-integer allowedVersions", () => {
+      assert.throws(
+        () => uuid({ allowedVersions: [4.5] as never }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            "Expected every element of allowedVersions to be an integer, but got: 4.5.",
+      );
+      assert.throws(
+        () => uuid({ allowedVersions: [NaN] as never }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            "Expected every element of allowedVersions to be an integer, but got: NaN.",
+      );
+      assert.throws(
+        () => uuid({ allowedVersions: ["4" as never] }),
+        (e: unknown) =>
+          e instanceof TypeError &&
+          e.message ===
+            "Expected every element of allowedVersions to be an integer, but got: 4.",
+      );
+    });
 
-      const result1 = parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8"); // v0
-      assert.ok(result1.success);
+    it("should reject out-of-range allowedVersions", () => {
+      assert.throws(
+        () => uuid({ allowedVersions: [0] as never }),
+        (e: unknown) =>
+          e instanceof RangeError &&
+          e.message ===
+            "Expected every element of allowedVersions to be between 1 and 8, but got: 0.",
+      );
+      assert.throws(
+        () => uuid({ allowedVersions: [9] as never }),
+        (e: unknown) =>
+          e instanceof RangeError &&
+          e.message ===
+            "Expected every element of allowedVersions to be between 1 and 8, but got: 9.",
+      );
+      assert.throws(
+        () => uuid({ allowedVersions: [-1] as never }),
+        (e: unknown) =>
+          e instanceof RangeError &&
+          e.message ===
+            "Expected every element of allowedVersions to be between 1 and 8, but got: -1.",
+      );
+      assert.throws(
+        () => uuid({ allowedVersions: [99] as never }),
+        (e: unknown) =>
+          e instanceof RangeError &&
+          e.message ===
+            "Expected every element of allowedVersions to be between 1 and 8, but got: 99.",
+      );
+      assert.throws(
+        () => uuid({ allowedVersions: [15] as never }),
+        (e: unknown) =>
+          e instanceof RangeError &&
+          e.message ===
+            "Expected every element of allowedVersions to be between 1 and 8, but got: 15.",
+      );
+    });
 
-      const result2 = parser.parse("6ba7b8f0-9dad-f1d1-80b4-00c04fd430c8"); // v15 (f in hex)
-      assert.ok(result2.success);
+    it("should deduplicate allowedVersions", () => {
+      const parser = uuid({ allowedVersions: [4, 4, 4] as never });
+      const result = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"); // v1
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          "Expected UUID version 4, but got version 1.",
+        );
+      }
+    });
 
-      const result3 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"); // v1
-      assert.ok(!result3.success);
+    it("should accept valid allowedVersions", () => {
+      assert.doesNotThrow(() => uuid({ allowedVersions: [1, 4, 7] }));
+      assert.doesNotThrow(() => uuid({ allowedVersions: [] }));
     });
 
     it("should snapshot allowedVersions at construction time", () => {
