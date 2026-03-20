@@ -185,7 +185,7 @@ describe("formatDocPage", () => {
     };
 
     const result = formatDocPage("myapp", page);
-    const expected = "\n  command                     \n";
+    const expected = "\n  command                   \n";
     assert.equal(result, expected);
   });
 

@@ -647,9 +647,10 @@ export function formatDocPage(
         description += formattedChoices;
       }
 
+      const separator = description === "" ? "" : "  ";
       output += `${" ".repeat(termIndent)}${
         ansiAwareRightPad(term, effectiveTermWidth)
-      }  ${
+      }${separator}${
         description === "" ? "" : indentLines(
           description,
           termIndent + effectiveTermWidth + 2,
