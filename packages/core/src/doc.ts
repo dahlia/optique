@@ -362,6 +362,21 @@ export function formatDocPage(
   }
   const termIndent = options.termIndent ?? 2;
   const termWidth = options.termWidth ?? 26;
+  // When maxWidth constrains the layout, shrink the term column so that
+  // the description column gets a reasonable share of the available width.
+  // Layout: <termIndent><term><2-space gap><description>
+  // When the normal termWidth fits (leaving >= 1 char for description),
+  // keep it unchanged.  Otherwise, split the available space evenly
+  // between term and description columns.
+  let effectiveTermWidth: number;
+  if (options.maxWidth == null) {
+    effectiveTermWidth = termWidth;
+  } else {
+    const availableForColumns = options.maxWidth - termIndent - 2;
+    effectiveTermWidth = availableForColumns >= termWidth + 1
+      ? termWidth
+      : Math.min(termWidth, Math.max(1, Math.floor(availableForColumns / 2)));
+  }
   let output = "";
   if (page.brief != null) {
     output += formatMessage(page.brief, {
@@ -431,14 +446,12 @@ export function formatDocPage(
       const term = formatUsageTerm(entry.term, {
         colors: options.colors,
         optionsSeparator: ", ",
-        maxWidth: options.maxWidth == null
-          ? undefined
-          : options.maxWidth - termIndent,
+        maxWidth: options.maxWidth == null ? undefined : effectiveTermWidth,
       });
 
       const descColumnWidth = options.maxWidth == null
         ? undefined
-        : options.maxWidth - termIndent - termWidth - 2;
+        : Math.max(1, options.maxWidth - termIndent - effectiveTermWidth - 2);
 
       // When the rendered term is physically wider than termWidth, the
       // description column starts further right on the first output line,
@@ -447,13 +460,14 @@ export function formatDocPage(
       // word-wrapping account for the narrower first-line space.
       const termVisibleWidth = lastLineVisibleLength(term);
       const extraTermOffset = descColumnWidth != null
-        ? Math.max(0, termVisibleWidth - termWidth)
+        ? Math.max(0, termVisibleWidth - effectiveTermWidth)
         : 0;
 
       // Once any content has caused a line break inside the description
       // string, the extra physical offset no longer applies — subsequent
       // content lands on a fresh continuation line indented by
-      // termIndent + termWidth + 2, not by termIndent + termVisibleWidth + 2.
+      // termIndent + effectiveTermWidth + 2, not by
+      // termIndent + termVisibleWidth + 2.
       const currentExtraOffset = () =>
         description.includes("\n") ? 0 : extraTermOffset;
 
@@ -611,11 +625,11 @@ export function formatDocPage(
       }
 
       output += `${" ".repeat(termIndent)}${
-        ansiAwareRightPad(term, termWidth)
+        ansiAwareRightPad(term, effectiveTermWidth)
       }  ${
         description === "" ? "" : indentLines(
           description,
-          termIndent + termWidth + 2,
+          termIndent + effectiveTermWidth + 2,
         )
       }\n`;
     }

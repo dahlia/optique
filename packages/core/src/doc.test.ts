@@ -1602,6 +1602,98 @@ describe("formatDocPage", () => {
     };
     assert.doesNotThrow(() => formatDocPage("myapp", page));
   });
+
+  describe("small maxWidth graceful degradation", () => {
+    const simplePage: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-v", "--verbose"] },
+          description: [{ type: "text", text: "Enable verbose output" }],
+        }],
+      }],
+    };
+
+    it("should not exceed maxWidth when smaller than default layout budget", () => {
+      const maxWidth = 20;
+      const result = formatDocPage("myapp", simplePage, { maxWidth });
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= maxWidth,
+          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
+        );
+      }
+      assert.ok(result.includes("--verbose"));
+    });
+
+    it("should degrade gracefully with very small maxWidth", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "abc def ghi" }],
+          }],
+        }],
+      };
+      const maxWidth = 15;
+      const result = formatDocPage("app", page, { maxWidth });
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= maxWidth,
+          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should handle maxWidth exactly equal to default layout budget", () => {
+      // default termIndent=2, termWidth=26, gap=2 → budget=30
+      const maxWidth = 30;
+      const result = formatDocPage("myapp", simplePage, { maxWidth });
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= maxWidth,
+          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should not exceed small maxWidth with showDefault", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["--port"] },
+            description: [{ type: "text", text: "Port number" }],
+            default: [{ type: "text", text: "3000" }],
+          }],
+        }],
+      };
+      const maxWidth = 20;
+      const result = formatDocPage("myapp", page, {
+        maxWidth,
+        showDefault: true,
+      });
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= maxWidth,
+          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+
+    it("should respect maxWidth with custom termWidth and termIndent exceeding it", () => {
+      const maxWidth = 25;
+      const result = formatDocPage("myapp", simplePage, {
+        maxWidth,
+        termIndent: 4,
+        termWidth: 30,
+      });
+      for (const line of result.split("\n")) {
+        assert.ok(
+          line.length <= maxWidth,
+          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
+        );
+      }
+    });
+  });
 });
 
 describe("branch coverage: doc.ts edge cases", () => {
