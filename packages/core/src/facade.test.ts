@@ -3338,6 +3338,109 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(errorOutput.includes("zsh"));
     });
 
+    it("should show option-form help when --completion is missing shell in option-only mode", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let errorOutput = "";
+      let errorResult: unknown;
+
+      runParser(parser, "myapp", ["--completion"], {
+        completion: {
+          option: true,
+        },
+        onError: (exitCode) => {
+          errorResult = `error-${exitCode}`;
+          return errorResult;
+        },
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("Missing shell name"));
+      // Should show option-form usage, not command-form
+      assert.ok(
+        errorOutput.includes("--completion"),
+        "Should include '--completion' in help output",
+      );
+      assert.ok(
+        !errorOutput.includes("Usage: myapp completion "),
+        "Should not show command-form usage",
+      );
+    });
+
+    it("should show option-form help when --completion is missing shell in both mode", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let errorOutput = "";
+      let errorResult: unknown;
+
+      runParser(parser, "myapp", ["--completion"], {
+        completion: {
+          command: true,
+          option: true,
+        },
+        onError: (exitCode) => {
+          errorResult = `error-${exitCode}`;
+          return errorResult;
+        },
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("Missing shell name"));
+      // Should show option-form usage since --completion was used
+      assert.ok(
+        errorOutput.includes("--completion"),
+        "Should include '--completion' in help output",
+      );
+      assert.ok(
+        !errorOutput.includes("Usage: myapp completion "),
+        "Should not show command-form usage",
+      );
+    });
+
+    it("should show custom option name in help when missing shell", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let errorOutput = "";
+      let errorResult: unknown;
+
+      runParser(parser, "myapp", ["--completions"], {
+        completion: {
+          option: { names: ["--completions"] },
+        },
+        onError: (exitCode) => {
+          errorResult = `error-${exitCode}`;
+          return errorResult;
+        },
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.equal(errorResult, "error-1");
+      assert.ok(errorOutput.includes("Missing shell name"));
+      // Should use the custom option name
+      assert.ok(
+        errorOutput.includes("--completions"),
+        "Should include custom option name '--completions' in help output",
+      );
+      assert.ok(
+        !errorOutput.includes("Usage: myapp completion "),
+        "Should not show command-form usage",
+      );
+    });
+
     it("should support both command and option modes", () => {
       const parser = object({
         verbose: option("--verbose"),

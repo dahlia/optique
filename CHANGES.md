@@ -262,6 +262,14 @@ To be released.
     PowerShell) now use the transported pattern as the glob base when it is
     non-empty.  [[#251], [#656]]
 
+ -  Fixed `runParser()` missing-shell help for `--completion` rendering
+    in command form (`myapp completion [SHELL] [ARG...]`) instead of
+    option form.  When the user invokes `--completion` without a shell name,
+    the error message now shows option-form usage and respects custom option
+    names (e.g., `--completions`).  Previously, option-only mode showed no
+    follow-up help at all, and both-mode showed only the command form.
+    [[#275], [#668]]
+
  -  Fixed duplicate detection for equals-joined option syntax in `option()`
     when the value parser produces deferred or dependency-source state
     (for example, `DerivedValueParser` or `DependencySource`).  Repeated
@@ -652,6 +660,7 @@ To be released.
 [#255]: https://github.com/dahlia/optique/issues/255
 [#256]: https://github.com/dahlia/optique/issues/256
 [#262]: https://github.com/dahlia/optique/issues/262
+[#275]: https://github.com/dahlia/optique/issues/275
 [#294]: https://github.com/dahlia/optique/issues/294
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
@@ -773,6 +782,7 @@ To be released.
 [#661]: https://github.com/dahlia/optique/pull/661
 [#663]: https://github.com/dahlia/optique/pull/663
 [#664]: https://github.com/dahlia/optique/pull/664
+[#668]: https://github.com/dahlia/optique/pull/668
 
 ### @optique/config
 
