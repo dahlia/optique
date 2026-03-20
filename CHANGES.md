@@ -128,6 +128,11 @@ To be released.
     annotation object).  This affects annotation-enabled parse/run paths,
     including `runWith()` and `runWithSync()`.  [[#146]]
 
+ -  Fixed `hostname()` accepting dotted all-numeric strings (e.g.,
+    `192.168.0.1`, `999.999.999.999`) that resemble IPv4 addresses rather
+    than DNS hostnames.  This also affects `socketAddress()` with
+    `host: { type: "hostname" }`.  [[#376], [#657]]
+
  -  Fixed `locale()` value parser's `format()` method dropping Unicode
     extension subtags (e.g., `en-US-u-ca-buddhist` was formatted as `en-US`).
     The method now uses `Intl.Locale.toString()` instead of `baseName` to
@@ -640,6 +645,7 @@ To be released.
 [#370]: https://github.com/dahlia/optique/issues/370
 [#371]: https://github.com/dahlia/optique/issues/371
 [#375]: https://github.com/dahlia/optique/issues/375
+[#376]: https://github.com/dahlia/optique/issues/376
 [#378]: https://github.com/dahlia/optique/issues/378
 [#385]: https://github.com/dahlia/optique/issues/385
 [#387]: https://github.com/dahlia/optique/issues/387
@@ -722,6 +728,7 @@ To be released.
 [#650]: https://github.com/dahlia/optique/pull/650
 [#653]: https://github.com/dahlia/optique/pull/653
 [#656]: https://github.com/dahlia/optique/pull/656
+[#657]: https://github.com/dahlia/optique/pull/657
 
 ### @optique/config
 
