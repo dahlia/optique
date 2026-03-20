@@ -333,6 +333,8 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @throws {TypeError} If `programName` contains a CR or LF character, or if
  * any non-empty section's title is empty, whitespace-only, or contains a CR
  * or LF character.
+ * @throws {RangeError} If `maxWidth` is too small to fit even the minimum
+ * layout (less than `termIndent + 4`).
  *
  * @example
  * ```typescript
@@ -362,6 +364,17 @@ export function formatDocPage(
   }
   const termIndent = options.termIndent ?? 2;
   const termWidth = options.termWidth ?? 26;
+  // The minimum feasible maxWidth is termIndent + 4: at least 1 char for
+  // the term column, 2 chars for the gap, and 1 char for the description.
+  if (
+    options.maxWidth != null &&
+    options.maxWidth < termIndent + 4
+  ) {
+    throw new RangeError(
+      `maxWidth must be at least ${termIndent + 4} ` +
+        `(termIndent ${termIndent} + 4), got ${options.maxWidth}.`,
+    );
+  }
   // When maxWidth constrains the layout, shrink the term column so that
   // the description column gets a reasonable share of the available width.
   // Layout: <termIndent><term><2-space gap><description>
@@ -453,7 +466,7 @@ export function formatDocPage(
 
       const descColumnWidth = options.maxWidth == null
         ? undefined
-        : Math.max(1, options.maxWidth - termIndent - effectiveTermWidth - 2);
+        : options.maxWidth - termIndent - effectiveTermWidth - 2;
 
       // When the rendered term is physically wider than termWidth, the
       // description column starts further right on the first output line,

@@ -1716,6 +1716,30 @@ describe("formatDocPage", () => {
         );
       }
     });
+
+    it("should throw RangeError when maxWidth is too small for any layout", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "X" },
+            description: [{ type: "text", text: "desc" }],
+          }],
+        }],
+      };
+      // default termIndent=2, minimum = 2 + 4 = 6
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: 5 }),
+        RangeError,
+      );
+      assert.throws(
+        () => formatDocPage("app", page, { maxWidth: 1 }),
+        RangeError,
+      );
+      // maxWidth=6 is the minimum feasible value with default termIndent
+      assert.doesNotThrow(
+        () => formatDocPage("app", page, { maxWidth: 6 }),
+      );
+    });
   });
 });
 
