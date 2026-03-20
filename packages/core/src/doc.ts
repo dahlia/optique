@@ -331,7 +331,7 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * @param options Formatting options to customize the output
  * @returns A formatted string representation of the documentation page
  * @throws {TypeError} If `programName` or any non-empty section's title
- * contains a CR or LF character.
+ * is empty, whitespace-only, or contains a CR or LF character.
  *
  * @example
  * ```typescript
@@ -416,8 +416,10 @@ export function formatDocPage(
     if (section.entries.length < 1) continue;
     output += "\n";
     if (section.title != null) {
-      if (/[\r\n]/.test(section.title)) {
-        throw new TypeError("Section title must not contain newlines.");
+      if (section.title.trim() === "" || /[\r\n]/.test(section.title)) {
+        throw new TypeError(
+          "Section title must not be empty, whitespace-only, or contain newlines.",
+        );
       }
       const sectionLabel = options.colors
         ? `\x1b[1;2m${section.title}:\x1b[0m\n`

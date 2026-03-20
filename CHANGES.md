@@ -453,7 +453,8 @@ To be released.
     [[#323], [#579]]
 
  -  `formatDocPage()` now throws `TypeError` when `programName` or a section
-    title contains a CR or LF character.  [[#429], [#580]]
+    title is empty, whitespace-only, or contains a CR or LF character.
+    [[#429], [#479], [#580], [#662]]
 
  -  Numeric parsers (`integer()`, `float()`, `port()`, `portRange()`,
     `cidr()`) now throw `RangeError` at construction time when given
@@ -679,6 +680,7 @@ To be released.
 [#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
 [#439]: https://github.com/dahlia/optique/issues/439
+[#479]: https://github.com/dahlia/optique/issues/479
 [#490]: https://github.com/dahlia/optique/pull/490
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
@@ -755,6 +757,7 @@ To be released.
 [#659]: https://github.com/dahlia/optique/pull/659
 [#660]: https://github.com/dahlia/optique/pull/660
 [#661]: https://github.com/dahlia/optique/pull/661
+[#662]: https://github.com/dahlia/optique/pull/662
 
 ### @optique/config
 

@@ -1552,6 +1552,47 @@ describe("formatDocPage", () => {
     );
   });
 
+  it("should throw TypeError when section title is empty", () => {
+    const page: DocPage = {
+      sections: [{
+        title: "",
+        entries: [{
+          term: { type: "argument", metavar: "X" },
+          description: [{ type: "text", text: "desc" }],
+        }],
+      }],
+    };
+    assert.throws(
+      () => formatDocPage("myapp", page),
+      TypeError,
+    );
+  });
+
+  it("should throw TypeError when section title is whitespace-only", () => {
+    const page: DocPage = {
+      sections: [{
+        title: "   ",
+        entries: [{
+          term: { type: "argument", metavar: "X" },
+          description: [{ type: "text", text: "desc" }],
+        }],
+      }],
+    };
+    assert.throws(
+      () => formatDocPage("myapp", page),
+      TypeError,
+    );
+  });
+
+  it("should not throw for empty title in empty section", () => {
+    for (const title of ["", "   "]) {
+      const page: DocPage = {
+        sections: [{ title, entries: [] }],
+      };
+      assert.doesNotThrow(() => formatDocPage("myapp", page));
+    }
+  });
+
   it("should not throw for newline in title of empty section", () => {
     const page: DocPage = {
       sections: [{
