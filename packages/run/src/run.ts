@@ -471,7 +471,9 @@ function resolveProgramInput<
  * // myapp --format=<TAB>                                # Use completion
  * ```
  *
- * @since 0.11.0 Added support for {@link Program} objects.
+ * Supports {@link Program} objects.
+ *
+ * @since 1.0.0
  */
 // Overload: parser with statically non-empty contexts — returns Promise
 export function run<

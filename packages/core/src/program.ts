@@ -89,7 +89,7 @@ export interface ProgramMetadata {
  * };
  * ```
  *
- * @since 0.11.0
+ * @since 1.0.0
  */
 export interface Program<M extends Mode, T> {
   /**
@@ -137,7 +137,7 @@ export interface Program<M extends Mode, T> {
  * // Program<"sync", { readonly name: string }>
  * ```
  *
- * @since 0.11.0
+ * @since 1.0.0
  */
 export function defineProgram<M extends Mode, T>(
   program: Program<M, T>,
