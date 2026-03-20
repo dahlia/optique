@@ -1686,7 +1686,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
     // Show help for completion command if parser is available
     if (completionParser) {
-      const displayName = completionCommandDisplayName ?? "completion";
+      const displayName = isOptionMode
+        ? (completionOptionDisplayName ?? "--completion")
+        : (completionCommandDisplayName ?? "completion");
       const doc = getDocPage(completionParser, [displayName]);
       if (doc) {
         stderr(
@@ -2216,7 +2218,7 @@ export function runParser<
             [shell, ...completionArgs],
             programName,
             parser,
-            completionParsers.completionCommand,
+            completionParsers.completionOption,
             stdout,
             stderr,
             onCompletionResult,
@@ -2244,7 +2246,7 @@ export function runParser<
             [shell, ...completionArgs],
             programName,
             parser,
-            completionParsers.completionCommand,
+            completionParsers.completionOption,
             stdout,
             stderr,
             onCompletionResult,
