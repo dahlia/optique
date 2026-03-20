@@ -1613,15 +1613,22 @@ describe("formatDocPage", () => {
       }],
     };
 
-    it("should not exceed maxWidth when smaller than default layout budget", () => {
-      const maxWidth = 20;
-      const result = formatDocPage("myapp", simplePage, { maxWidth });
+    function assertLinesWithinMaxWidth(
+      result: string,
+      maxWidth: number,
+    ): void {
       for (const line of result.split("\n")) {
         assert.ok(
           line.length <= maxWidth,
           `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
         );
       }
+    }
+
+    it("should not exceed maxWidth when smaller than default layout budget", () => {
+      const maxWidth = 20;
+      const result = formatDocPage("myapp", simplePage, { maxWidth });
+      assertLinesWithinMaxWidth(result, maxWidth);
       assert.ok(result.includes("--verbose"));
     });
 
@@ -1636,24 +1643,14 @@ describe("formatDocPage", () => {
       };
       const maxWidth = 15;
       const result = formatDocPage("app", page, { maxWidth });
-      for (const line of result.split("\n")) {
-        assert.ok(
-          line.length <= maxWidth,
-          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
-        );
-      }
+      assertLinesWithinMaxWidth(result, maxWidth);
     });
 
     it("should handle maxWidth exactly equal to default layout budget", () => {
       // default termIndent=2, termWidth=26, gap=2 → budget=30
       const maxWidth = 30;
       const result = formatDocPage("myapp", simplePage, { maxWidth });
-      for (const line of result.split("\n")) {
-        assert.ok(
-          line.length <= maxWidth,
-          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
-        );
-      }
+      assertLinesWithinMaxWidth(result, maxWidth);
     });
 
     it("should not exceed small maxWidth with showDefault", () => {
@@ -1671,12 +1668,7 @@ describe("formatDocPage", () => {
         maxWidth,
         showDefault: true,
       });
-      for (const line of result.split("\n")) {
-        assert.ok(
-          line.length <= maxWidth,
-          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
-        );
-      }
+      assertLinesWithinMaxWidth(result, maxWidth);
     });
 
     it("should not add extra blank lines for long terms that fit in line", () => {
@@ -1714,12 +1706,7 @@ describe("formatDocPage", () => {
         termIndent: 4,
         termWidth: 30,
       });
-      for (const line of result.split("\n")) {
-        assert.ok(
-          line.length <= maxWidth,
-          `Line exceeds maxWidth ${maxWidth}: "${line}" (${line.length} chars)`,
-        );
-      }
+      assertLinesWithinMaxWidth(result, maxWidth);
     });
 
     it("should throw RangeError when maxWidth is too small for any layout", () => {
