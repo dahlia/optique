@@ -1706,7 +1706,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
-      () => Promise.resolve(callOnError(1)),
+      // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
+      async () => callOnError(1),
     );
   }
 
@@ -1733,7 +1734,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
-      () => Promise.resolve(callOnError(1)),
+      // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
+      async () => callOnError(1),
     );
   }
 
@@ -1757,7 +1759,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
-      () => Promise.resolve(callOnCompletion(0)),
+      // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
+      async () => callOnCompletion(0),
     );
   }
 
