@@ -113,6 +113,12 @@ To be released.
     `Usage: myapp config ...` without changing parse behavior or
     completion behavior.  [[#139]]
 
+ -  Fixed sync completion paths in `runParser()`, `runParserSync()`, and
+    `runWithSync()` silently returning `Promise` objects when a completion
+    callback (`onShow` or `onError`) returns a `Promise`.  These paths now
+    throw `RunParserError` consistently with the existing sync/async mismatch
+    guard on help and parse-error paths.  [[#264], [#673]]
+
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
     discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
@@ -680,6 +686,7 @@ To be released.
 [#255]: https://github.com/dahlia/optique/issues/255
 [#256]: https://github.com/dahlia/optique/issues/256
 [#262]: https://github.com/dahlia/optique/issues/262
+[#264]: https://github.com/dahlia/optique/issues/264
 [#275]: https://github.com/dahlia/optique/issues/275
 [#294]: https://github.com/dahlia/optique/issues/294
 [#296]: https://github.com/dahlia/optique/issues/296
@@ -809,6 +816,7 @@ To be released.
 [#668]: https://github.com/dahlia/optique/pull/668
 [#669]: https://github.com/dahlia/optique/pull/669
 [#670]: https://github.com/dahlia/optique/pull/670
+[#673]: https://github.com/dahlia/optique/pull/673
 [#674]: https://github.com/dahlia/optique/pull/674
 
 ### @optique/config

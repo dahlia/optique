@@ -1699,8 +1699,15 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
     return dispatchByMode(
       parser.$mode,
-      () => callOnError(1),
-      () => Promise.resolve(callOnError(1)),
+      () => {
+        const result = callOnError(1);
+        if (result instanceof Promise) {
+          throw new RunParserError("Synchronous parser returned async result.");
+        }
+        return result;
+      },
+      // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
+      async () => callOnError(1),
     );
   }
 
@@ -1720,8 +1727,15 @@ function handleCompletion<M extends Mode, THelp, TError>(
     );
     return dispatchByMode(
       parser.$mode,
-      () => callOnError(1),
-      () => Promise.resolve(callOnError(1)),
+      () => {
+        const result = callOnError(1);
+        if (result instanceof Promise) {
+          throw new RunParserError("Synchronous parser returned async result.");
+        }
+        return result;
+      },
+      // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
+      async () => callOnError(1),
     );
   }
 
@@ -1738,8 +1752,15 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
     return dispatchByMode(
       parser.$mode,
-      () => callOnCompletion(0),
-      () => Promise.resolve(callOnCompletion(0)),
+      () => {
+        const result = callOnCompletion(0);
+        if (result instanceof Promise) {
+          throw new RunParserError("Synchronous parser returned async result.");
+        }
+        return result;
+      },
+      // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
+      async () => callOnCompletion(0),
     );
   }
 
@@ -1752,7 +1773,11 @@ function handleCompletion<M extends Mode, THelp, TError>(
       for (const chunk of shell.encodeSuggestions(suggestions)) {
         stdout(chunk);
       }
-      return callOnCompletion(0);
+      const result = callOnCompletion(0);
+      if (result instanceof Promise) {
+        throw new RunParserError("Synchronous parser returned async result.");
+      }
+      return result;
     },
     async () => {
       const suggestions = await suggestAsync(

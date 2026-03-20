@@ -9112,6 +9112,102 @@ describe("branch coverage: facade.ts edge cases", () => {
     );
   });
 
+  it("throws when sync completion onShow returns a Promise (script generation)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/264
+    const parser = object({});
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["completion", "bash"], {
+          completion: {
+            command: true,
+            onShow: () => Promise.resolve("async-show") as never,
+          },
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
+    );
+  });
+
+  it("throws when sync completion onShow returns a Promise (suggestions)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/264
+    const parser = object({});
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["completion", "bash", "--"], {
+          completion: {
+            command: true,
+            onShow: () => Promise.resolve("async-show") as never,
+          },
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
+    );
+  });
+
+  it("throws when sync completion onError returns a Promise (missing shell)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/264
+    const parser = object({});
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["completion"], {
+          completion: { command: true },
+          onError: () => Promise.resolve("async-error") as never,
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
+    );
+  });
+
+  it("throws when sync completion onError returns a Promise (unsupported shell)", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/264
+    const parser = object({});
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["completion", "unknownshell"], {
+          completion: { command: true },
+          onError: () => Promise.resolve("async-error") as never,
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
+    );
+  });
+
+  it("throws when sync completion option onShow returns a Promise", () => {
+    // Regression test for https://github.com/dahlia/optique/issues/264
+    const parser = object({});
+    assert.throws(
+      () =>
+        runParser(parser, "myapp", ["--completion", "bash"], {
+          completion: {
+            option: true,
+            onShow: () => Promise.resolve("async-show") as never,
+          },
+          stdout: () => {},
+          stderr: () => {},
+        }),
+      {
+        name: "RunParserError",
+        message: "Synchronous parser returned async result.",
+      },
+    );
+  });
+
   it("uses option-mode completion script path without swallowing callback errors", () => {
     const parser = object({ verbose: option("--verbose") });
     assert.throws(
