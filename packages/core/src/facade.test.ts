@@ -9981,6 +9981,42 @@ describe("options terminator (--) handling", () => {
   });
 
   // https://github.com/dahlia/optique/issues/228
+  it("runWith ignores --completion=bash after -- terminator", async () => {
+    const parser = object({ args: multiple(argument(string())) });
+    const result = await runWith(parser, "test", [], {
+      args: ["--", "--completion=bash"],
+      completion: { option: true },
+      stdout: () => {},
+      stderr: () => {},
+    });
+    assert.deepEqual(result, { args: ["--completion=bash"] });
+  });
+
+  // https://github.com/dahlia/optique/issues/228
+  it("runWithSync ignores --completion=bash after -- terminator", () => {
+    const parser = object({ args: multiple(argument(string())) });
+    const result = runWithSync(parser, "test", [], {
+      args: ["--", "--completion=bash"],
+      completion: { option: true },
+      stdout: () => {},
+      stderr: () => {},
+    });
+    assert.deepEqual(result, { args: ["--completion=bash"] });
+  });
+
+  // https://github.com/dahlia/optique/issues/228
+  it("runWith ignores custom completion alias after -- terminator", async () => {
+    const parser = object({ args: multiple(argument(string())) });
+    const result = await runWith(parser, "test", [], {
+      args: ["--", "--completions", "bash"],
+      completion: { option: { names: ["--completions"] } },
+      stdout: () => {},
+      stderr: () => {},
+    });
+    assert.deepEqual(result, { args: ["--completions", "bash"] });
+  });
+
+  // https://github.com/dahlia/optique/issues/228
   it("runParser ignores --help after -- terminator", () => {
     const parser = object({ args: multiple(argument(string())) });
     const result = runParser(parser, "test", ["--", "--help"], {
