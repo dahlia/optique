@@ -399,6 +399,7 @@ function inferChoices(
  * }));
  * ```
  *
+ * @throws {TypeError} If the resolved `metavar` is an empty string.
  * @since 0.7.0
  */
 export function zod<T>(
