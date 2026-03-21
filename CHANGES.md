@@ -734,6 +734,10 @@ To be released.
     as malformed suffixes (e.g., `(choices: )`, `[]`) when the `Message`
     array was empty.  Empty arrays are now treated as absent.  [[#469], [#692]]
 
+ -  Fixed `formatDocPage()` producing malformed output `(choices: , ...)`
+    when `showChoices.maxItems` is `0`.  `maxItems` must now be at least `1`;
+    values below `1` throw a `RangeError`.  [[#471], [#694]]
+
  -  Fixed `deduplicateSuggestions()` silently dropping `includeHidden: true`
     when merging file suggestions that differ only in `includeHidden`.
     Duplicates are now merged with `includeHidden: true` preferred, since
@@ -846,6 +850,7 @@ To be released.
 [#429]: https://github.com/dahlia/optique/issues/429
 [#439]: https://github.com/dahlia/optique/issues/439
 [#469]: https://github.com/dahlia/optique/issues/469
+[#471]: https://github.com/dahlia/optique/issues/471
 [#479]: https://github.com/dahlia/optique/issues/479
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
@@ -952,6 +957,7 @@ To be released.
 [#690]: https://github.com/dahlia/optique/pull/690
 [#692]: https://github.com/dahlia/optique/pull/692
 [#693]: https://github.com/dahlia/optique/pull/693
+[#694]: https://github.com/dahlia/optique/pull/694
 [#695]: https://github.com/dahlia/optique/pull/695
 
 ### @optique/config

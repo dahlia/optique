@@ -171,9 +171,10 @@ export interface ShowChoicesOptions {
 
   /**
    * Maximum number of choice values to display before truncating with
-   * `...`.  Set to `Infinity` to show all choices.
+   * `...`.  Must be at least `1`.  Set to `Infinity` to show all choices.
    *
    * @default `8`
+   * @throws {RangeError} If the value is less than `1`.
    */
   readonly maxItems?: number;
 }
@@ -334,7 +335,8 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * any non-empty section's title is empty, whitespace-only, or contains a CR
  * or LF character, or if `maxWidth` is not a finite integer.
  * @throws {RangeError} If any entry needs a description column and `maxWidth`
- * is too small to fit the minimum layout (less than `termIndent + 4`).
+ * is too small to fit the minimum layout (less than `termIndent + 4`), or if
+ * `showChoices.maxItems` is less than `1`.
  *
  * @example
  * ```typescript
@@ -385,6 +387,19 @@ export function formatDocPage(
     }),
   }));
   page = { ...page, sections: filteredSections };
+
+  // Validate showChoices.maxItems before any per-entry rendering.
+  if (
+    typeof options.showChoices === "object" &&
+    options.showChoices.maxItems != null
+  ) {
+    const maxItems = options.showChoices.maxItems;
+    if (maxItems < 1) {
+      throw new RangeError(
+        `showChoices.maxItems must be at least 1, but got ${maxItems}.`,
+      );
+    }
+  }
 
   // Validate maxWidth against the minimum feasible layout.  The minimum
   // depends on which page features are active:
