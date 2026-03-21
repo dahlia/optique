@@ -551,6 +551,34 @@ export function checkBooleanOption<T extends object>(
 }
 
 /**
+ * Validates that an option value, if present, is one of the allowed values.
+ * Throws a {@link TypeError} if the value is defined but not in the allowed
+ * list.
+ *
+ * @template T The type of the options object.
+ * @param options The options object to check.
+ * @param key The key of the option to validate.
+ * @param allowed The list of allowed values.
+ * @throws {TypeError} If the option value is defined but not in the allowed
+ *   list.
+ * @since 1.0.0
+ */
+export function checkEnumOption<T extends object>(
+  options: T | undefined,
+  key: keyof T,
+  allowed: readonly string[],
+): void {
+  const value = options?.[key];
+  if (value !== undefined && !allowed.includes(value as string)) {
+    throw new TypeError(
+      `Expected ${String(key)} to be one of ${
+        allowed.map((v) => JSON.stringify(v)).join(", ")
+      }, but got ${typeof value}: ${JSON.stringify(value)}.`,
+    );
+  }
+}
+
+/**
  * Expands a numeric string in scientific notation (e.g., `"1e+21"`,
  * `"1.5e-3"`, `".1e-6"`) into plain decimal form for normalization.
  * Used for both canonical `String(number)` output and user input.
@@ -4197,6 +4225,9 @@ export interface MacAddressOptions {
 export function macAddress(
   options?: MacAddressOptions,
 ): ValueParser<"sync", string> {
+  checkEnumOption(options, "separator", [":", "-", ".", "none", "any"]);
+  checkEnumOption(options, "outputSeparator", [":", "-", ".", "none"]);
+  checkEnumOption(options, "case", ["preserve", "upper", "lower"]);
   const separator = options?.separator ?? "any";
   const caseOption = options?.case ?? "preserve";
   const outputSeparator = options?.outputSeparator;
