@@ -4,7 +4,7 @@ import {
   type DocSection,
   formatDocPage,
 } from "@optique/core/doc";
-import { type Message, message, valueSet } from "@optique/core/message";
+import { message, valueSet } from "@optique/core/message";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -2335,7 +2335,7 @@ describe("branch coverage: doc.ts edge cases", () => {
         entries: [{
           term: { type: "option", names: ["--mode"] },
           // Runtime guard path: choices is non-null but not an array.
-          choices: "dev,prod" as unknown as Message,
+          choices: "dev,prod" as never,
         }],
       }],
     };
@@ -2352,7 +2352,7 @@ describe("branch coverage: doc.ts edge cases", () => {
       sections: [{
         entries: [{
           term: { type: "option", names: ["-m"] },
-          choices: "dev,prod" as unknown as Message,
+          choices: "dev,prod" as never,
         }],
       }],
     };
