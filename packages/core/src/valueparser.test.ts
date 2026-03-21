@@ -11304,6 +11304,69 @@ describe("cidr()", () => {
         version: 4,
       });
     });
+
+    it("should use custom privateNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        errors: {
+          privateNotAllowed: (ip) =>
+            message`Private IP ${ip} not allowed in CIDR.`,
+        },
+      });
+      const result = parser.parse("192.168.0.0/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Private IP " },
+        { type: "value", value: "192.168.0.0" },
+        { type: "text", text: " not allowed in CIDR." },
+      ]);
+    });
+
+    it("should use custom loopbackNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowLoopback: false },
+        errors: {
+          loopbackNotAllowed: message`Loopback denied.`,
+        },
+      });
+      const result = parser.parse("127.0.0.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Loopback denied." },
+      ]);
+    });
+
+    it("should use custom multicastNotAllowed error for IPv6", () => {
+      const parser = cidr({
+        version: 6,
+        ipv6: { allowMulticast: false },
+        errors: {
+          multicastNotAllowed: (ip) => message`Multicast ${ip} rejected.`,
+        },
+      });
+      const result = parser.parse("ff00::/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Multicast " },
+        { type: "value", value: "ff00::" },
+        { type: "text", text: " rejected." },
+      ]);
+    });
+
+    it("should use custom uniqueLocalNotAllowed error for IPv6", () => {
+      const parser = cidr({
+        version: 6,
+        ipv6: { allowUniqueLocal: false },
+        errors: {
+          uniqueLocalNotAllowed: message`Unique local denied.`,
+        },
+      });
+      const result = parser.parse("fd00::/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Unique local denied." },
+      ]);
+    });
   });
 });
 

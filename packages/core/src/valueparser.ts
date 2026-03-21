@@ -5364,6 +5364,50 @@ export interface CidrOptions {
      * Can be a static message or a function that receives the prefix and maximum.
      */
     prefixAboveMaximum?: Message | ((prefix: number, max: number) => Message);
+
+    /**
+     * Custom error message when a private IPv4 address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    privateNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when a loopback address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    loopbackNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when a link-local address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    linkLocalNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when a multicast address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    multicastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when the broadcast address is used but disallowed
+     * (IPv4 only).
+     * Can be a static message or a function that receives the IP.
+     */
+    broadcastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when the zero address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     */
+    zeroNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when a unique local address is used but disallowed
+     * (IPv6 only).
+     * Can be a static message or a function that receives the IP.
+     */
+    uniqueLocalNotAllowed?: Message | ((ip: string) => Message);
   };
 }
 
@@ -5441,13 +5485,33 @@ export function cidr(
   const errors = options?.errors;
   const metavar = options?.metavar ?? "CIDR";
 
-  // Create IP parsers for address validation
+  // Create IP parsers for address validation, forwarding restriction
+  // error hooks from CidrOptions.errors to the nested parsers
   const ipv4Parser = (version === 4 || version === "both")
-    ? ipv4(options?.ipv4)
+    ? ipv4({
+      ...options?.ipv4,
+      errors: {
+        privateNotAllowed: errors?.privateNotAllowed,
+        loopbackNotAllowed: errors?.loopbackNotAllowed,
+        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+        multicastNotAllowed: errors?.multicastNotAllowed,
+        broadcastNotAllowed: errors?.broadcastNotAllowed,
+        zeroNotAllowed: errors?.zeroNotAllowed,
+      },
+    })
     : null;
 
   const ipv6Parser = (version === 6 || version === "both")
-    ? ipv6(options?.ipv6)
+    ? ipv6({
+      ...options?.ipv6,
+      errors: {
+        loopbackNotAllowed: errors?.loopbackNotAllowed,
+        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+        multicastNotAllowed: errors?.multicastNotAllowed,
+        zeroNotAllowed: errors?.zeroNotAllowed,
+        uniqueLocalNotAllowed: errors?.uniqueLocalNotAllowed,
+      },
+    })
     : null;
 
   return {
