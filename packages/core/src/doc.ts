@@ -396,9 +396,11 @@ export function formatDocPage(
         )
       );
     // Compute minimum description column width for showDefault/showChoices.
-    // Only the prefix (or prefix + label for choices) must fit on one
-    // line; the suffix ends up on the last line of the rendered content,
-    // which is already formatted within descColumnWidth - suffix.length.
+    // When the rendered content is non-empty, only the prefix (or
+    // prefix + label for choices) must fit on one line; the suffix
+    // trails the content's last line.  When the content is empty
+    // (e.g., default: []), prefix + suffix land on the same line, so
+    // the suffix must be included in the minimum.
     let minDescWidth = 1;
     if (needsDescColumn) {
       if (
@@ -408,7 +410,19 @@ export function formatDocPage(
         const prefix = typeof options.showDefault === "object"
           ? options.showDefault.prefix ?? " ["
           : " [";
-        minDescWidth = Math.max(minDescWidth, prefix.length);
+        const suffix = typeof options.showDefault === "object"
+          ? options.showDefault.suffix ?? "]"
+          : "]";
+        const hasEmptyDefault = page.sections.some((s) =>
+          s.entries.some((e) =>
+            e.default != null && Array.isArray(e.default) &&
+            e.default.length === 0
+          )
+        );
+        minDescWidth = Math.max(
+          minDescWidth,
+          hasEmptyDefault ? prefix.length + suffix.length : prefix.length,
+        );
       }
       if (
         options.showChoices &&
@@ -417,12 +431,23 @@ export function formatDocPage(
         const prefix = typeof options.showChoices === "object"
           ? options.showChoices.prefix ?? " ("
           : " (";
+        const suffix = typeof options.showChoices === "object"
+          ? options.showChoices.suffix ?? ")"
+          : ")";
         const label = typeof options.showChoices === "object"
           ? options.showChoices.label ?? "choices: "
           : "choices: ";
+        const hasEmptyChoices = page.sections.some((s) =>
+          s.entries.some((e) =>
+            e.choices != null && Array.isArray(e.choices) &&
+            e.choices.length === 0
+          )
+        );
         minDescWidth = Math.max(
           minDescWidth,
-          prefix.length + label.length,
+          hasEmptyChoices
+            ? prefix.length + label.length + suffix.length
+            : prefix.length + label.length,
         );
       }
     }

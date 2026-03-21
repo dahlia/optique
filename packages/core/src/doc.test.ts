@@ -1959,6 +1959,8 @@ describe("formatDocPage", () => {
     it("should validate empty-array defaults and choices", () => {
       // default: [] triggers showDefault rendering (prefix+suffix with no
       // content), so validation must account for it.
+      // minDescWidth = prefix(2) + suffix(1) = 3 (includes suffix for empty)
+      // splitEntryMin = 2 + 2 + max(2, 5) = 9
       const defaultPage: DocPage = {
         sections: [{
           entries: [{
@@ -1971,14 +1973,22 @@ describe("formatDocPage", () => {
       assert.throws(
         () =>
           formatDocPage("app", defaultPage, {
-            maxWidth: 6,
+            maxWidth: 8,
             showDefault: true,
           }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 7, got 6.",
+          message: "maxWidth must be at least 9, got 8.",
         },
       );
+      const defaultResult = formatDocPage("app", defaultPage, {
+        maxWidth: 9,
+        showDefault: true,
+      });
+      assertLinesWithinMaxWidth(defaultResult, 9);
+      // choices: [] renders " (choices: )" on one line
+      // minDescWidth = prefix(2) + label(9) + suffix(1) = 12
+      // splitEntryMin = 2 + 2 + max(2, 23) = 27
       const choicesPage: DocPage = {
         sections: [{
           entries: [{
@@ -1991,14 +2001,19 @@ describe("formatDocPage", () => {
       assert.throws(
         () =>
           formatDocPage("app", choicesPage, {
-            maxWidth: 6,
+            maxWidth: 26,
             showChoices: true,
           }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 25, got 6.",
+          message: "maxWidth must be at least 27, got 26.",
         },
       );
+      const choicesResult = formatDocPage("app", choicesPage, {
+        maxWidth: 27,
+        showChoices: true,
+      });
+      assertLinesWithinMaxWidth(choicesResult, 27);
     });
 
     it("should allow non-empty showDefault at narrow width", () => {
