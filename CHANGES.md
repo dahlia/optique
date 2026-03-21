@@ -694,6 +694,11 @@ To be released.
     exactly two hexadecimal digits, matching the documented MAC-48 validation
     behavior.  [[#319], [#683]]
 
+ -  Fixed `macAddress()` to validate `separator`, `outputSeparator`, and `case`
+    options at construction time.  Unsupported runtime values now throw
+    `TypeError` instead of silently falling through to arbitrary behavior.
+    [[#347], [#685]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -764,6 +769,7 @@ To be released.
 [#342]: https://github.com/dahlia/optique/issues/342
 [#344]: https://github.com/dahlia/optique/issues/344
 [#345]: https://github.com/dahlia/optique/issues/345
+[#347]: https://github.com/dahlia/optique/issues/347
 [#348]: https://github.com/dahlia/optique/issues/348
 [#349]: https://github.com/dahlia/optique/issues/349
 [#350]: https://github.com/dahlia/optique/issues/350
@@ -887,6 +893,7 @@ To be released.
 [#682]: https://github.com/dahlia/optique/pull/682
 [#683]: https://github.com/dahlia/optique/pull/683
 [#684]: https://github.com/dahlia/optique/issues/684
+[#685]: https://github.com/dahlia/optique/pull/685
 
 ### @optique/config
 

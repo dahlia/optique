@@ -1,5 +1,6 @@
 import {
   checkBooleanOption,
+  checkEnumOption,
   choice,
   cidr,
   domain,
@@ -9470,6 +9471,64 @@ describe("macAddress()", () => {
       assert.strictEqual(result.value, "AA:BB:CC:DD:EE:FF");
     });
   });
+
+  describe("option validation", () => {
+    it("should throw TypeError for invalid separator value", () => {
+      assert.throws(
+        () => macAddress({ separator: "foo" as never }),
+        {
+          name: "TypeError",
+          message:
+            'Expected separator to be one of ":", "-", ".", "none", "any", but got string: "foo".',
+        },
+      );
+    });
+
+    it("should throw TypeError for invalid outputSeparator value", () => {
+      assert.throws(
+        () => macAddress({ outputSeparator: "any" as never }),
+        {
+          name: "TypeError",
+          message:
+            'Expected outputSeparator to be one of ":", "-", ".", "none", but got string: "any".',
+        },
+      );
+    });
+
+    it("should throw TypeError for invalid case value", () => {
+      assert.throws(
+        () => macAddress({ case: "weird" as never }),
+        {
+          name: "TypeError",
+          message:
+            'Expected case to be one of "preserve", "upper", "lower", but got string: "weird".',
+        },
+      );
+    });
+
+    it("should accept all valid separator values", () => {
+      for (const sep of [":", "-", ".", "none", "any"] as const) {
+        macAddress({ separator: sep });
+      }
+    });
+
+    it("should accept all valid outputSeparator values", () => {
+      for (const sep of [":", "-", ".", "none"] as const) {
+        macAddress({ outputSeparator: sep });
+      }
+    });
+
+    it("should accept all valid case values", () => {
+      for (const c of ["preserve", "upper", "lower"] as const) {
+        macAddress({ case: c });
+      }
+    });
+
+    it("should accept undefined options", () => {
+      macAddress();
+      macAddress({});
+    });
+  });
 });
 
 describe("domain()", () => {
@@ -12287,6 +12346,49 @@ describe("checkBooleanOption", () => {
       {
         name: "TypeError",
         message: "Expected foo to be a boolean, but got number: 1.",
+      },
+    );
+  });
+});
+
+describe("checkEnumOption", () => {
+  const allowed = ["a", "b", "c"] as const;
+
+  it("should not throw when options is undefined", () => {
+    assert.doesNotThrow(() =>
+      checkEnumOption<{ foo?: string }>(undefined, "foo", allowed)
+    );
+  });
+
+  it("should not throw when the key is absent", () => {
+    assert.doesNotThrow(() =>
+      checkEnumOption<{ foo?: string }>({}, "foo", allowed)
+    );
+  });
+
+  it("should not throw when the value is one of the allowed values", () => {
+    for (const v of allowed) {
+      assert.doesNotThrow(() => checkEnumOption({ foo: v }, "foo", allowed));
+    }
+  });
+
+  it("should throw TypeError for an invalid string value", () => {
+    assert.throws(
+      () => checkEnumOption({ foo: "x" }, "foo", allowed),
+      {
+        name: "TypeError",
+        message:
+          'Expected foo to be one of "a", "b", "c", but got string: "x".',
+      },
+    );
+  });
+
+  it("should throw TypeError for a non-string value", () => {
+    assert.throws(
+      () => checkEnumOption({ foo: 42 }, "foo", allowed),
+      {
+        name: "TypeError",
+        message: 'Expected foo to be one of "a", "b", "c", but got number: 42.',
       },
     );
   });
