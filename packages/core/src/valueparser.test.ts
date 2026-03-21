@@ -11238,6 +11238,73 @@ describe("cidr()", () => {
       );
     });
   });
+
+  describe("nested IP validation error propagation", () => {
+    it("should preserve private IP error from IPv4", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("192.168.0.0/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.0.0" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should preserve loopback error from IPv4", () => {
+      const parser = cidr({ ipv4: { allowLoopback: false } });
+      const result = parser.parse("127.0.0.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "127.0.0.0" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should preserve multicast error from IPv6", () => {
+      const parser = cidr({
+        version: 6,
+        ipv6: { allowMulticast: false },
+      });
+      const result = parser.parse("ff00::/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "ff00::" },
+        { type: "text", text: " is a multicast address." },
+      ]);
+    });
+
+    it("should preserve loopback error from IPv6", () => {
+      const parser = cidr({ ipv6: { allowLoopback: false } });
+      const result = parser.parse("::1/128");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::1" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should return generic CIDR error for structurally invalid IP", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("not-an-ip/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a valid CIDR notation, but got " },
+        { type: "value", value: "not-an-ip/24" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should still succeed when no restrictions are violated", () => {
+      const parser = cidr({ version: 4 });
+      const result = parser.parse("192.168.0.0/24");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "192.168.0.0",
+        prefix: 24,
+        version: 4,
+      });
+    });
+  });
 });
 
 describe("branch coverage regressions", () => {
