@@ -2235,12 +2235,13 @@ export function runParser<
     // (including the shell name) is opaque completion payload and must not
     // be re-interpreted as another meta option.
     if (completionOptionConfig) {
-      for (let i = 0; i < args.length; i++) {
+      // Only scan args before the options terminator; reuse the index
+      // already computed for the hasHelpOption check above.
+      const loopBound = helpTerminatorIndex >= 0
+        ? helpTerminatorIndex
+        : args.length;
+      for (let i = 0; i < loopBound; i++) {
         const arg = args[i];
-
-        // Stop scanning at options terminator; tokens after "--" are
-        // positional data and must not be treated as completion options.
-        if (arg === "--") break;
 
         // Check for "--completion=<shell>" format
         const equalsMatch = completionOptionNames.find((n) =>
