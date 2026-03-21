@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
-import { object } from "@optique/core/constructs";
+import { merge, object } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
@@ -2056,6 +2056,73 @@ describe("bindConfig() with dependency sources", () => {
     const result = parse(parser, ["--level", "debug"], { annotations });
     assert.ok(result.success);
     assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
+  });
+});
+
+// https://github.com/dahlia/optique/issues/681
+describe("bindConfig() with dependency sources across merge() boundaries", () => {
+  const mode = dependency(choice(["dev", "prod"] as const));
+  const level = mode.derive({
+    metavar: "LEVEL",
+    mode: "sync",
+    factory: (value: "dev" | "prod") =>
+      choice(
+        value === "dev"
+          ? (["debug", "verbose"] as const)
+          : (["silent", "strict"] as const),
+      ),
+    defaultValue: () => "dev" as const,
+  });
+
+  const schema = z.object({ mode: z.enum(["dev", "prod"]) });
+
+  function createMergedParser(
+    configData: { readonly mode: "dev" | "prod" } | undefined,
+  ) {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = configData
+      ? { [context.id]: { data: configData } }
+      : {};
+    const parser = merge(
+      object({
+        mode: bindConfig(option("--mode", mode), {
+          context,
+          key: "mode",
+        }),
+      }),
+      object({
+        level: option("--level", level),
+      }),
+    );
+    return { parser, annotations };
+  }
+
+  test("propagates config value as dependency across merged children (parse)", () => {
+    const { parser, annotations } = createMergedParser({ mode: "prod" });
+    const result = parse(parser, ["--level", "silent"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  test("propagates config value as dependency across merged children (suggest)", () => {
+    const { parser, annotations } = createMergedParser({ mode: "prod" });
+    const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
+    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    assert.ok(texts.includes("silent"));
+    assert.ok(texts.includes("strict"));
+    assert.ok(!texts.includes("debug"));
+    assert.ok(!texts.includes("verbose"));
+  });
+
+  test("CLI value takes priority over config across merged children", () => {
+    const { parser, annotations } = createMergedParser({ mode: "prod" });
+    const result = parse(parser, ["--mode", "dev", "--level", "debug"], {
+      annotations,
+    });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
     assert.equal(result.value.level, "debug");
   });
 });
