@@ -615,22 +615,13 @@ function filterUsageForDisplay(
 function* formatUsageTerms(
   terms: readonly UsageTerm[],
   options: UsageFormatOptions,
-  isHidden: (hidden?: HiddenVisibility) => boolean = isUsageHidden,
 ): Generator<{ text: string; width: number }> {
   let i = 0;
   for (const t of terms) {
-    if (
-      "hidden" in t &&
-      (t.type === "argument" || t.type === "option" || t.type === "command" ||
-        t.type === "passthrough") &&
-      isHidden(t.hidden)
-    ) {
-      continue;
-    }
     if (i > 0) {
       yield { text: " ", width: 1 };
     }
-    yield* formatUsageTermInternal(t, options, isHidden);
+    yield* formatUsageTermInternal(t, options);
     i++;
   }
 }
@@ -677,11 +668,7 @@ export function formatUsageTerm(
   let lineWidth = 0;
   let output = "";
   for (
-    const { text, width } of formatUsageTermInternal(
-      visibleTerms[0],
-      options,
-      hiddenCheck,
-    )
+    const { text, width } of formatUsageTermInternal(visibleTerms[0], options)
   ) {
     if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
       output += "\n";
@@ -697,7 +684,6 @@ export function formatUsageTerm(
 function* formatUsageTermInternal(
   term: UsageTerm,
   options: UsageTermFormatOptions,
-  isHidden: (hidden?: HiddenVisibility) => boolean = isUsageHidden,
 ): Generator<{ text: string; width: number }> {
   const optionsSeparator = options.optionsSeparator ?? "/";
   if (term.type === "argument") {
@@ -763,7 +749,7 @@ function* formatUsageTermInternal(
       text: options?.colors ? `\x1b[2m[\x1b[0m` : "[", // Dim
       width: 1,
     };
-    yield* formatUsageTerms(term.terms, options, isHidden);
+    yield* formatUsageTerms(term.terms, options);
     yield {
       text: options?.colors ? `\x1b[2m]\x1b[0m` : "]", // Dim
       width: 1,
@@ -780,7 +766,7 @@ function* formatUsageTermInternal(
         yield { text: "|", width: 1 };
         yield { text: " ", width: 1 };
       }
-      yield* formatUsageTerms(termGroup, options, isHidden);
+      yield* formatUsageTerms(termGroup, options);
       i++;
     }
     yield {
@@ -798,7 +784,7 @@ function* formatUsageTermInternal(
       if (i > 0) {
         yield { text: " ", width: 1 };
       }
-      yield* formatUsageTerms(term.terms, options, isHidden);
+      yield* formatUsageTerms(term.terms, options);
     }
     yield {
       text: options?.colors ? `\x1b[2m...\x1b[0m` : "...", // Dim
