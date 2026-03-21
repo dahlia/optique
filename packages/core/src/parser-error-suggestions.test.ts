@@ -395,6 +395,30 @@ describe("Parser error suggestions", () => {
       }
     });
 
+    it("should still suggest hidden: 'doc' options", () => {
+      const parser = or(
+        option("--secret", string(), { hidden: "doc" }),
+        option("--verbose", string()),
+      );
+      const context: ParserContext<typeof parser.initialState> = {
+        buffer: ["--secert"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorMsg = formatMessage(result.error, {
+          quotes: false,
+          colors: false,
+        });
+        assert.match(errorMsg, /Did you mean/);
+        assert.match(errorMsg, /--secret/);
+      }
+    });
+
     it("should not suggest hidden: true commands via longestMatch()", () => {
       const parser = longestMatch(
         command("secret", object({}), { hidden: true }),
