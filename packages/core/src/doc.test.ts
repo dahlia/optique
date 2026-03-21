@@ -2323,4 +2323,132 @@ describe("branch coverage: doc.ts edge cases", () => {
     assert.ok(result.includes("--mode"));
     assert.ok(result.includes("choices:"));
   });
+
+  describe("degenerate and hidden entries", () => {
+    it("should skip entries with hidden: true terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [
+            {
+              term: { type: "option", names: ["--secret"], hidden: true },
+              description: [{ type: "text", text: "Secret option" }],
+            },
+            {
+              term: { type: "option", names: ["--visible"] },
+              description: [{ type: "text", text: "Visible option" }],
+            },
+          ],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(!result.includes("--secret"));
+      assert.ok(!result.includes("Secret option"));
+      assert.ok(result.includes("--visible"));
+    });
+
+    it("should skip entries with hidden: 'doc' terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "command",
+              name: "internal",
+              hidden: "doc",
+            } as never,
+            description: [{ type: "text", text: "Internal command" }],
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(!result.includes("internal"));
+    });
+
+    it("should show entries with hidden: 'usage' terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["--verbose"],
+              hidden: "usage",
+            } as never,
+            description: [{ type: "text", text: "Verbose output" }],
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(result.includes("--verbose"));
+      assert.ok(result.includes("Verbose output"));
+    });
+
+    it("should skip entries with option term having empty names", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: [] as never,
+              metavar: "X",
+            } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      // Should not contain any non-empty content lines in the section
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should skip entries with empty command name", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "command", name: "" } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should skip entries with empty argument metavar", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "" } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should skip entries with empty literal value", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "literal", value: "" } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should skip entries with exclusive term having empty branches", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "exclusive", terms: [] } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+  });
 });

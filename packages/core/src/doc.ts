@@ -585,10 +585,14 @@ export function formatDocPage(
       const term = formatUsageTerm(entry.term, {
         colors: options.colors,
         optionsSeparator: ", ",
+        context: "doc",
         maxWidth: options.maxWidth == null
           ? undefined
           : options.maxWidth - termIndent,
       });
+
+      // Skip entries whose term renders blank (hidden or degenerate)
+      if (term.replace(ansiEscapeCodeRegex, "").trim() === "") continue;
 
       const descColumnWidth = options.maxWidth == null
         ? undefined

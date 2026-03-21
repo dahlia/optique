@@ -711,6 +711,21 @@ To be released.
     remain opaque completion payload and are not re-interpreted as meta flags.
     [[#229], [#689]]
 
+ -  Fixed `formatDocPage()` rendering blank or malformed rows for degenerate
+    entry terms (e.g., option with empty names, empty command/argument/literal,
+    empty exclusive branches) and hidden entries in custom `DocPage` input.
+    Such entries are now silently skipped.  [[#488], [#687]]
+
+ -  Fixed `formatDocPage()` using the wrong hidden visibility check: it applied
+    usage-level filtering (`isUsageHidden()`) instead of doc-level filtering
+    (`isDocHidden()`).  As a result, `hidden: "doc"` terms leaked into doc
+    output, while `hidden: "usage"` terms were incorrectly omitted.
+    [[#488], [#687]]
+
+ -  Added `context` option to `UsageTermFormatOptions` for `formatUsageTerm()`.
+    Set `context: "doc"` to apply doc-level hidden filtering instead of the
+    default usage-level filtering.  [[#488], [#687]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -813,6 +828,7 @@ To be released.
 [#429]: https://github.com/dahlia/optique/issues/429
 [#439]: https://github.com/dahlia/optique/issues/439
 [#479]: https://github.com/dahlia/optique/issues/479
+[#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
@@ -909,6 +925,7 @@ To be released.
 [#684]: https://github.com/dahlia/optique/issues/684
 [#685]: https://github.com/dahlia/optique/pull/685
 [#686]: https://github.com/dahlia/optique/pull/686
+[#687]: https://github.com/dahlia/optique/pull/687
 [#689]: https://github.com/dahlia/optique/pull/689
 
 ### @optique/config

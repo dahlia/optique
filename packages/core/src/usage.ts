@@ -558,25 +558,28 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
   }
 }
 
-function filterUsageForDisplay(usage: Usage): Usage {
+function filterUsageForDisplay(
+  usage: Usage,
+  isHidden: (hidden?: HiddenVisibility) => boolean = isUsageHidden,
+): Usage {
   const terms: UsageTerm[] = [];
   for (const term of usage) {
     if (
       (term.type === "argument" || term.type === "option" ||
         term.type === "command" || term.type === "passthrough") &&
-      isUsageHidden(term.hidden)
+      isHidden(term.hidden)
     ) {
       continue;
     }
     if (term.type === "optional") {
-      const filtered = filterUsageForDisplay(term.terms);
+      const filtered = filterUsageForDisplay(term.terms, isHidden);
       if (filtered.length > 0) {
         terms.push({ type: "optional", terms: filtered });
       }
       continue;
     }
     if (term.type === "multiple") {
-      const filtered = filterUsageForDisplay(term.terms);
+      const filtered = filterUsageForDisplay(term.terms, isHidden);
       if (filtered.length > 0) {
         terms.push({ type: "multiple", terms: filtered, min: term.min });
       }
@@ -588,11 +591,11 @@ function filterUsageForDisplay(usage: Usage): Usage {
           const first = branch[0];
           if (
             first?.type === "command" &&
-            isUsageHidden(first.hidden)
+            isHidden(first.hidden)
           ) {
             return [] as Usage;
           }
-          return filterUsageForDisplay(branch);
+          return filterUsageForDisplay(branch, isHidden);
         })
         .filter((branch) => branch.length > 0);
       if (filteredBranches.length > 0) {
@@ -608,6 +611,7 @@ function filterUsageForDisplay(usage: Usage): Usage {
 function* formatUsageTerms(
   terms: readonly UsageTerm[],
   options: UsageFormatOptions,
+  isHidden: (hidden?: HiddenVisibility) => boolean = isUsageHidden,
 ): Generator<{ text: string; width: number }> {
   let i = 0;
   for (const t of terms) {
@@ -615,14 +619,14 @@ function* formatUsageTerms(
       "hidden" in t &&
       (t.type === "argument" || t.type === "option" || t.type === "command" ||
         t.type === "passthrough") &&
-      isUsageHidden(t.hidden)
+      isHidden(t.hidden)
     ) {
       continue;
     }
     if (i > 0) {
       yield { text: " ", width: 1 };
     }
-    yield* formatUsageTermInternal(t, options);
+    yield* formatUsageTermInternal(t, options, isHidden);
     i++;
   }
 }
@@ -636,6 +640,17 @@ export interface UsageTermFormatOptions extends UsageFormatOptions {
    * @default `"/"`
    */
   readonly optionsSeparator?: string;
+
+  /**
+   * The rendering context, which determines which hidden visibility values
+   * cause terms to be filtered out.
+   *
+   * - `"usage"` (default): filters terms hidden from usage output
+   * - `"doc"`: filters terms hidden from documentation output
+   * @default `"usage"`
+   * @since 0.11.0
+   */
+  readonly context?: "usage" | "doc";
 }
 
 /**
@@ -651,13 +666,18 @@ export function formatUsageTerm(
   term: UsageTerm,
   options: UsageTermFormatOptions = {},
 ): string {
-  const visibleTerms = filterUsageForDisplay([term]);
+  const hiddenCheck = options.context === "doc" ? isDocHidden : isUsageHidden;
+  const visibleTerms = filterUsageForDisplay([term], hiddenCheck);
   if (visibleTerms.length < 1) return "";
 
   let lineWidth = 0;
   let output = "";
   for (
-    const { text, width } of formatUsageTermInternal(visibleTerms[0], options)
+    const { text, width } of formatUsageTermInternal(
+      visibleTerms[0],
+      options,
+      hiddenCheck,
+    )
   ) {
     if (options.maxWidth != null && lineWidth + width > options.maxWidth) {
       output += "\n";
@@ -673,6 +693,7 @@ export function formatUsageTerm(
 function* formatUsageTermInternal(
   term: UsageTerm,
   options: UsageTermFormatOptions,
+  isHidden: (hidden?: HiddenVisibility) => boolean = isUsageHidden,
 ): Generator<{ text: string; width: number }> {
   const optionsSeparator = options.optionsSeparator ?? "/";
   if (term.type === "argument") {
@@ -683,6 +704,7 @@ function* formatUsageTermInternal(
       width: term.metavar.length,
     };
   } else if (term.type === "option") {
+    if (term.names.length < 1) return;
     if (options?.onlyShortestOptions) {
       const shortestName = term.names.reduce((a, b) =>
         a.length <= b.length ? a : b
@@ -737,7 +759,7 @@ function* formatUsageTermInternal(
       text: options?.colors ? `\x1b[2m[\x1b[0m` : "[", // Dim
       width: 1,
     };
-    yield* formatUsageTerms(term.terms, options);
+    yield* formatUsageTerms(term.terms, options, isHidden);
     yield {
       text: options?.colors ? `\x1b[2m]\x1b[0m` : "]", // Dim
       width: 1,
@@ -754,7 +776,7 @@ function* formatUsageTermInternal(
         yield { text: "|", width: 1 };
         yield { text: " ", width: 1 };
       }
-      yield* formatUsageTerms(termGroup, options);
+      yield* formatUsageTerms(termGroup, options, isHidden);
       i++;
     }
     yield {
@@ -772,7 +794,7 @@ function* formatUsageTermInternal(
       if (i > 0) {
         yield { text: " ", width: 1 };
       }
-      yield* formatUsageTerms(term.terms, options);
+      yield* formatUsageTerms(term.terms, options, isHidden);
     }
     yield {
       text: options?.colors ? `\x1b[2m...\x1b[0m` : "...", // Dim
