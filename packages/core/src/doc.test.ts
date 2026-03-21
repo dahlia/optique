@@ -2363,6 +2363,24 @@ describe("branch coverage: doc.ts edge cases", () => {
       assert.ok(!result.includes("internal"));
     });
 
+    it("should skip entries with hidden: 'help' terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["--debug"],
+              hidden: "help",
+            } as never,
+            description: [{ type: "text", text: "Debug mode" }],
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(!result.includes("--debug"));
+      assert.ok(!result.includes("Debug mode"));
+    });
+
     it("should show entries with hidden: 'usage' terms", () => {
       const page: DocPage = {
         sections: [{
