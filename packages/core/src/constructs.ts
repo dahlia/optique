@@ -6689,6 +6689,16 @@ export function group<M extends Mode, TValue, TState>(
     priority: parser.priority,
     usage: applyHiddenToUsage(parser.usage, options.hidden),
     initialState: parser.initialState,
+    // Forward field parser pairs from inner parser so that merge()
+    // can pre-complete dependency source fields from grouped children.
+    // See: https://github.com/dahlia/optique/issues/681
+    ...(fieldParsersKey in parser
+      ? {
+        [fieldParsersKey]: (
+          parser as { [fieldParsersKey]: unknown }
+        )[fieldParsersKey],
+      }
+      : {}),
     // Forward completion deferral hook from inner parser so that
     // prompt(group("label", bindConfig(...))) defers correctly.
     ...(typeof parser.shouldDeferCompletion === "function"

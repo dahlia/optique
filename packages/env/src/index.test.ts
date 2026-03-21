@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { injectAnnotations } from "@optique/core/annotations";
-import { merge, object } from "@optique/core/constructs";
+import { group, merge, object } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -1795,6 +1795,37 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
     const result = parse(
       parser,
       ["--extra", "foo", "--level", "silent"],
+      { annotations },
+    );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("group()-wrapped child propagates env-backed dependency", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = merge(
+      group(
+        "source",
+        object({
+          mode: bindEnv(option("--mode", mode), {
+            context: envContext,
+            key: "MODE",
+            parser: choice(["dev", "prod"] as const),
+          }),
+        }),
+      ),
+      object({
+        level: option("--level", level),
+      }),
+    );
+    const result = parse(
+      parser,
+      ["--level", "silent"],
       { annotations },
     );
     assert.ok(result.success);
