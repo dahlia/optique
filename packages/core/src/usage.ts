@@ -558,25 +558,33 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
   }
 }
 
-function filterUsageForDisplay(usage: Usage): Usage {
+function filterUsageForDisplay(
+  usage: Usage,
+  isHidden: (hidden?: HiddenVisibility) => boolean = isUsageHidden,
+): Usage {
   const terms: UsageTerm[] = [];
   for (const term of usage) {
     if (
       (term.type === "argument" || term.type === "option" ||
         term.type === "command" || term.type === "passthrough") &&
-      isUsageHidden(term.hidden)
+      isHidden(term.hidden)
     ) {
       continue;
     }
+    // Skip degenerate zero-width leaf terms
+    if (term.type === "option" && term.names.length === 0) continue;
+    if (term.type === "command" && term.name === "") continue;
+    if (term.type === "argument" && term.metavar.length === 0) continue;
+    if (term.type === "literal" && term.value === "") continue;
     if (term.type === "optional") {
-      const filtered = filterUsageForDisplay(term.terms);
+      const filtered = filterUsageForDisplay(term.terms, isHidden);
       if (filtered.length > 0) {
         terms.push({ type: "optional", terms: filtered });
       }
       continue;
     }
     if (term.type === "multiple") {
-      const filtered = filterUsageForDisplay(term.terms);
+      const filtered = filterUsageForDisplay(term.terms, isHidden);
       if (filtered.length > 0) {
         terms.push({ type: "multiple", terms: filtered, min: term.min });
       }
@@ -588,11 +596,11 @@ function filterUsageForDisplay(usage: Usage): Usage {
           const first = branch[0];
           if (
             first?.type === "command" &&
-            isUsageHidden(first.hidden)
+            isHidden(first.hidden)
           ) {
             return [] as Usage;
           }
-          return filterUsageForDisplay(branch);
+          return filterUsageForDisplay(branch, isHidden);
         })
         .filter((branch) => branch.length > 0);
       if (filteredBranches.length > 0) {
@@ -611,14 +619,6 @@ function* formatUsageTerms(
 ): Generator<{ text: string; width: number }> {
   let i = 0;
   for (const t of terms) {
-    if (
-      "hidden" in t &&
-      (t.type === "argument" || t.type === "option" || t.type === "command" ||
-        t.type === "passthrough") &&
-      isUsageHidden(t.hidden)
-    ) {
-      continue;
-    }
     if (i > 0) {
       yield { text: " ", width: 1 };
     }
@@ -636,6 +636,17 @@ export interface UsageTermFormatOptions extends UsageFormatOptions {
    * @default `"/"`
    */
   readonly optionsSeparator?: string;
+
+  /**
+   * The rendering context, which determines which hidden visibility values
+   * cause terms to be filtered out.
+   *
+   * - `"usage"` (default): filters terms hidden from usage output
+   * - `"doc"`: filters terms hidden from documentation output
+   * @default `"usage"`
+   * @since 1.0.0
+   */
+  readonly context?: "usage" | "doc";
 }
 
 /**
@@ -651,7 +662,8 @@ export function formatUsageTerm(
   term: UsageTerm,
   options: UsageTermFormatOptions = {},
 ): string {
-  const visibleTerms = filterUsageForDisplay([term]);
+  const hiddenCheck = options.context === "doc" ? isDocHidden : isUsageHidden;
+  const visibleTerms = filterUsageForDisplay([term], hiddenCheck);
   if (visibleTerms.length < 1) return "";
 
   let lineWidth = 0;

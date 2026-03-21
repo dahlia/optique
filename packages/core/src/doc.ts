@@ -372,6 +372,20 @@ export function formatDocPage(
       `maxWidth must be a finite integer, got ${options.maxWidth}.`,
     );
   }
+  // Pre-filter sections: remove entries whose terms are hidden in doc context
+  // or structurally degenerate (e.g., option with no names, empty command).
+  // This must happen before maxWidth validation so width checks reflect the
+  // actual rendered output, and before rendering so empty sections (all
+  // entries filtered) do not emit dangling section headers.
+  const filteredSections: readonly DocSection[] = page.sections.map((s) => ({
+    ...s,
+    entries: s.entries.filter((e) => {
+      const rendered = formatUsageTerm(e.term, { context: "doc" });
+      return rendered.trim() !== "";
+    }),
+  }));
+  page = { ...page, sections: filteredSections };
+
   // Validate maxWidth against the minimum feasible layout.  The minimum
   // depends on which page features are active:
   //  - Entries with a description column need enough space for term +
@@ -585,6 +599,7 @@ export function formatDocPage(
       const term = formatUsageTerm(entry.term, {
         colors: options.colors,
         optionsSeparator: ", ",
+        context: "doc",
         maxWidth: options.maxWidth == null
           ? undefined
           : options.maxWidth - termIndent,

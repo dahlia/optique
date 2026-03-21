@@ -2323,4 +2323,192 @@ describe("branch coverage: doc.ts edge cases", () => {
     assert.ok(result.includes("--mode"));
     assert.ok(result.includes("choices:"));
   });
+
+  describe("degenerate and hidden entries", () => {
+    it("should skip entries with hidden: true terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [
+            {
+              term: { type: "option", names: ["--secret"], hidden: true },
+              description: [{ type: "text", text: "Secret option" }],
+            },
+            {
+              term: { type: "option", names: ["--visible"] },
+              description: [{ type: "text", text: "Visible option" }],
+            },
+          ],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(!result.includes("--secret"));
+      assert.ok(!result.includes("Secret option"));
+      assert.ok(result.includes("--visible"));
+    });
+
+    it("should skip entries with hidden: 'doc' terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "command",
+              name: "internal",
+              hidden: "doc",
+            } as never,
+            description: [{ type: "text", text: "Internal command" }],
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(!result.includes("internal"));
+    });
+
+    it("should skip entries with hidden: 'help' terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["--debug"],
+              hidden: "help",
+            } as never,
+            description: [{ type: "text", text: "Debug mode" }],
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(!result.includes("--debug"));
+      assert.ok(!result.includes("Debug mode"));
+    });
+
+    it("should show entries with hidden: 'usage' terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["--verbose"],
+              hidden: "usage",
+            } as never,
+            description: [{ type: "text", text: "Verbose output" }],
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(result.includes("--verbose"));
+      assert.ok(result.includes("Verbose output"));
+    });
+
+    it("should skip entries with option term having empty names", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: [] as never,
+              metavar: "X",
+            } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      // Should not contain any non-empty content lines in the section
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should skip entries with empty command name", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "command", name: "" } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should skip entries with empty argument metavar", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "argument", metavar: "" } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should skip entries with empty literal value", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "literal", value: "" } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should skip entries with exclusive term having empty branches", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "exclusive", terms: [] } as never,
+          }],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      const lines = result.split("\n").filter((l) => l.trim() !== "");
+      assert.equal(lines.length, 0);
+    });
+
+    it("should suppress section heading when all entries are filtered", () => {
+      const page: DocPage = {
+        sections: [{
+          title: "Secrets",
+          entries: [
+            {
+              term: { type: "option", names: ["--key"], hidden: true },
+              description: [{ type: "text", text: "Secret key" }],
+            },
+            {
+              term: {
+                type: "option",
+                names: ["--token"],
+                hidden: "doc",
+              } as never,
+              description: [{ type: "text", text: "Secret token" }],
+            },
+          ],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(!result.includes("Secrets"));
+      assert.ok(!result.includes("--key"));
+      assert.ok(!result.includes("--token"));
+    });
+
+    it("should not reject maxWidth when all entries are filtered", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["--secret"], hidden: true },
+            description: [{ type: "text", text: "This is a long description" }],
+          }],
+        }],
+      };
+      // maxWidth: 1 would normally be too small for entries, but since all
+      // entries are filtered out, it should not throw.
+      assert.doesNotThrow(() => {
+        formatDocPage("app", page, { colors: false, maxWidth: 1 });
+      });
+    });
+  });
 });

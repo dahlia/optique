@@ -507,6 +507,44 @@ describe("formatUsage", () => {
       );
     });
   });
+
+  describe("degenerate terms", () => {
+    it("should skip option with empty names", () => {
+      const usage: Usage = [
+        { type: "option", names: [] as never, metavar: "X" },
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
+    });
+
+    it("should skip command with empty name", () => {
+      const usage: Usage = [
+        { type: "command", name: "" } as never,
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
+    });
+
+    it("should skip literal with empty value", () => {
+      const usage: Usage = [
+        { type: "literal", value: "" } as never,
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
+    });
+
+    it("should skip argument with empty metavar", () => {
+      const usage: Usage = [
+        { type: "argument", metavar: "" } as never,
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
+    });
+  });
 });
 
 describe("UsageFormatOptions", () => {
@@ -1627,6 +1665,90 @@ describe("formatUsageTerm", () => {
       assert.equal(options.colors, true);
       assert.equal(options.maxWidth, 80);
       assert.equal(options.optionsSeparator, " | ");
+    });
+  });
+
+  describe("context option", () => {
+    it("should hide hidden: 'doc' terms in doc context", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose"],
+        hidden: "doc",
+      };
+      const result = formatUsageTerm(term, { context: "doc" });
+      assert.equal(result, "");
+    });
+
+    it("should show hidden: 'usage' terms in doc context", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose"],
+        hidden: "usage",
+      };
+      const result = formatUsageTerm(term, { context: "doc" });
+      assert.equal(result, "--verbose");
+    });
+
+    it("should hide hidden: 'help' terms in doc context", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose"],
+        hidden: "help",
+      };
+      const result = formatUsageTerm(term, { context: "doc" });
+      assert.equal(result, "");
+    });
+
+    it("should hide hidden: true terms in doc context", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose"],
+        hidden: true,
+      };
+      const result = formatUsageTerm(term, { context: "doc" });
+      assert.equal(result, "");
+    });
+
+    it("should hide hidden: 'usage' terms in default (usage) context", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose"],
+        hidden: "usage",
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "");
+    });
+
+    it("should show hidden: 'doc' terms in default (usage) context", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: ["--verbose"],
+        hidden: "doc",
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "--verbose");
+    });
+
+    it("should hide doc-hidden terms nested in exclusive in doc context", () => {
+      const term: UsageTerm = {
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--verbose"], hidden: "doc" }],
+          [{ type: "option", names: ["--quiet"] }],
+        ],
+      };
+      const result = formatUsageTerm(term, { context: "doc" });
+      assert.equal(result, "(--quiet)");
+    });
+
+    it("should return empty for option with empty names", () => {
+      const term: UsageTerm = {
+        type: "option",
+        names: [] as never,
+        metavar: "X",
+      };
+      const result = formatUsageTerm(term);
+      assert.equal(result, "");
     });
   });
 });
