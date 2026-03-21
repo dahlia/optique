@@ -620,7 +620,8 @@ export function formatDocPage(
 
       // Append default value if showDefault is enabled and default exists
       if (
-        options.showDefault && entry.default != null && entry.default.length > 0
+        options.showDefault && Array.isArray(entry.default) &&
+        entry.default.length > 0
       ) {
         const prefix = typeof options.showDefault === "object"
           ? options.showDefault.prefix ?? " ["
@@ -677,7 +678,8 @@ export function formatDocPage(
 
       // Append choices if showChoices is enabled and choices exist
       if (
-        options.showChoices && entry.choices != null && entry.choices.length > 0
+        options.showChoices && Array.isArray(entry.choices) &&
+        entry.choices.length > 0
       ) {
         const prefix = typeof options.showChoices === "object"
           ? options.showChoices.prefix ?? " ("

@@ -2339,11 +2339,29 @@ describe("branch coverage: doc.ts edge cases", () => {
         }],
       }],
     };
+    // Non-array choices should be treated as absent
     const result = formatDocPage("myapp", page, {
       showChoices: { maxItems: 1 },
     });
     assert.ok(result.includes("--mode"));
-    assert.ok(result.includes("choices:"));
+    assert.ok(!result.includes("choices:"));
+  });
+
+  it("showChoices non-array choices should not violate maxWidth", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-m"] },
+          choices: "dev,prod" as unknown as Message,
+        }],
+      }],
+    };
+    assert.doesNotThrow(() =>
+      formatDocPage("myapp", page, {
+        showChoices: true,
+        maxWidth: 8,
+      })
+    );
   });
 
   describe("degenerate and hidden entries", () => {
