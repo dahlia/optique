@@ -84,7 +84,8 @@ function asyncStringValue(): ValueParser<"async", string> {
 describe("or", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
-      () => (or as (...args: unknown[]) => unknown)(),
+      // @ts-expect-error - or() requires at least one parser argument.
+      () => or(),
       {
         name: "TypeError",
         message: "or() requires at least one parser argument.",
@@ -94,7 +95,8 @@ describe("or", () => {
 
   it("should throw TypeError when called with only options", () => {
     assert.throws(
-      () => (or as (...args: unknown[]) => unknown)({}),
+      // @ts-expect-error - or() requires at least one parser argument.
+      () => or({}),
       {
         name: "TypeError",
         message: "or() requires at least one parser argument.",
@@ -883,7 +885,8 @@ describe("or() error customization", () => {
 describe("longestMatch()", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
-      () => (longestMatch as (...args: unknown[]) => unknown)(),
+      // @ts-expect-error - longestMatch() requires at least one parser argument.
+      () => longestMatch(),
       {
         name: "TypeError",
         message: "longestMatch() requires at least one parser argument.",
@@ -893,7 +896,8 @@ describe("longestMatch()", () => {
 
   it("should throw TypeError when called with only options", () => {
     assert.throws(
-      () => (longestMatch as (...args: unknown[]) => unknown)({}),
+      // @ts-expect-error - longestMatch() requires at least one parser argument.
+      () => longestMatch({}),
       {
         name: "TypeError",
         message: "longestMatch() requires at least one parser argument.",
@@ -3120,7 +3124,8 @@ describe("tuple() - duplicate option detection", () => {
 describe("merge", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
-      () => (merge as (...args: unknown[]) => unknown)(),
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge(),
       {
         name: "TypeError",
         message: "merge() requires at least one parser argument.",
@@ -3130,7 +3135,8 @@ describe("merge", () => {
 
   it("should throw TypeError when called with only a label", () => {
     assert.throws(
-      () => (merge as (...args: unknown[]) => unknown)("label"),
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge("label"),
       {
         name: "TypeError",
         message: "merge() requires at least one parser argument.",
@@ -3140,7 +3146,8 @@ describe("merge", () => {
 
   it("should throw TypeError when called with only options", () => {
     assert.throws(
-      () => (merge as (...args: unknown[]) => unknown)({}),
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge({}),
       {
         name: "TypeError",
         message: "merge() requires at least one parser argument.",
@@ -3150,7 +3157,8 @@ describe("merge", () => {
 
   it("should throw TypeError when called with label and options but no parsers", () => {
     assert.throws(
-      () => (merge as (...args: unknown[]) => unknown)("label", {}),
+      // @ts-expect-error - merge() requires at least one parser argument.
+      () => merge("label", {}),
       {
         name: "TypeError",
         message: "merge() requires at least one parser argument.",
@@ -5059,7 +5067,8 @@ describe("merge() - duplicate option detection", () => {
 describe("concat", () => {
   it("should throw TypeError when called with no parsers", () => {
     assert.throws(
-      () => (concat as (...args: unknown[]) => unknown)(),
+      // @ts-expect-error - concat() requires at least one parser argument.
+      () => concat(),
       {
         name: "TypeError",
         message: "concat() requires at least one parser argument.",
@@ -10256,7 +10265,8 @@ describe("branch coverage: constructs.ts edge cases", () => {
     }
 
     assert.throws(
-      () => (concat as unknown as (...parsers: unknown[]) => unknown)(),
+      // @ts-expect-error - concat() requires at least one parser argument.
+      () => concat(),
       {
         name: "TypeError",
         message: "concat() requires at least one parser argument.",
