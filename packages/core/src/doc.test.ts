@@ -797,6 +797,41 @@ describe("formatDocPage", () => {
     assert.ok(result.includes("Enable verbose output"));
   });
 
+  it("should not render choices suffix for empty choices array", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          choices: [],
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showChoices: true });
+    assert.ok(!result.includes("choices"));
+    assert.ok(!result.includes("("));
+    assert.ok(!result.includes(")"));
+    assert.ok(result.includes("Output format"));
+  });
+
+  it("should not render default suffix for empty default array", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--format"] },
+          description: [{ type: "text", text: "Output format" }],
+          default: [],
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showDefault: true });
+    assert.ok(!result.includes("["));
+    assert.ok(!result.includes("]"));
+    assert.ok(result.includes("Output format"));
+  });
+
   it("should render description, default, then choices in order", () => {
     const page: DocPage = {
       sections: [{
@@ -1956,11 +1991,8 @@ describe("formatDocPage", () => {
       assertLinesWithinMaxWidth(result41, 41);
     });
 
-    it("should validate empty-array defaults and choices", () => {
-      // default: [] triggers showDefault rendering (prefix+suffix with no
-      // content), so validation must account for it.
-      // minDescWidth = prefix(2) + suffix(1) = 3 (includes suffix for empty)
-      // splitEntryMin = 2 + 2 + max(2, 5) = 9
+    it("should treat empty-array defaults and choices as absent", () => {
+      // Empty default: [] should not affect min width or produce output
       const defaultPage: DocPage = {
         sections: [{
           entries: [{
@@ -1970,25 +2002,12 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      assert.throws(
-        () =>
-          formatDocPage("app", defaultPage, {
-            maxWidth: 8,
-            showDefault: true,
-          }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 9, got 8.",
-        },
-      );
       const defaultResult = formatDocPage("app", defaultPage, {
-        maxWidth: 9,
         showDefault: true,
       });
-      assertLinesWithinMaxWidth(defaultResult, 9);
-      // choices: [] renders " (choices: )" on one line
-      // minDescWidth = prefix(2) + label(9) + suffix(1) = 12
-      // splitEntryMin = 2 + 2 + max(2, 23) = 27
+      assert.ok(!defaultResult.includes("["));
+      assert.ok(!defaultResult.includes("]"));
+      // Empty choices: [] should not affect min width or produce output
       const choicesPage: DocPage = {
         sections: [{
           entries: [{
@@ -1998,22 +2017,12 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      assert.throws(
-        () =>
-          formatDocPage("app", choicesPage, {
-            maxWidth: 26,
-            showChoices: true,
-          }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 27, got 26.",
-        },
-      );
       const choicesResult = formatDocPage("app", choicesPage, {
-        maxWidth: 27,
         showChoices: true,
       });
-      assertLinesWithinMaxWidth(choicesResult, 27);
+      assert.ok(!choicesResult.includes("choices"));
+      assert.ok(!choicesResult.includes("("));
+      assert.ok(!choicesResult.includes(")"));
     });
 
     it("should allow non-empty showDefault at narrow width", () => {

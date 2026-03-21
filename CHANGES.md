@@ -730,6 +730,10 @@ To be released.
     Set `context: "doc"` to apply doc-level hidden filtering instead of the
     default usage-level filtering.  [[#488], [#687]]
 
+ -  Fixed `formatDocPage()` rendering empty `choices` and `default` messages
+    as malformed suffixes (e.g., `(choices: )`, `[]`) when the `Message`
+    array was empty.  Empty arrays are now treated as absent.  [[#469], [#692]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -831,6 +835,7 @@ To be released.
 [#425]: https://github.com/dahlia/optique/issues/425
 [#429]: https://github.com/dahlia/optique/issues/429
 [#439]: https://github.com/dahlia/optique/issues/439
+[#469]: https://github.com/dahlia/optique/issues/469
 [#479]: https://github.com/dahlia/optique/issues/479
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
@@ -933,6 +938,7 @@ To be released.
 [#687]: https://github.com/dahlia/optique/pull/687
 [#689]: https://github.com/dahlia/optique/pull/689
 [#690]: https://github.com/dahlia/optique/pull/690
+[#692]: https://github.com/dahlia/optique/pull/692
 
 ### @optique/config
 
