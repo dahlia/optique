@@ -664,6 +664,10 @@ To be released.
     minimum `maxWidth` to account for all fixed-width labels actually in
     use.  [[#672], [#677]]
 
+ -  Fixed `cidr()` discarding specific nested IPv4/IPv6 validation errors
+    (e.g., private network, loopback, multicast restrictions) behind a
+    generic “Expected a valid CIDR notation” error message.  [[#333]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -723,6 +727,7 @@ To be released.
 [#321]: https://github.com/dahlia/optique/issues/321
 [#323]: https://github.com/dahlia/optique/issues/323
 [#332]: https://github.com/dahlia/optique/issues/332
+[#333]: https://github.com/dahlia/optique/issues/333
 [#334]: https://github.com/dahlia/optique/issues/334
 [#336]: https://github.com/dahlia/optique/issues/336
 [#337]: https://github.com/dahlia/optique/issues/337

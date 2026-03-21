@@ -5493,6 +5493,8 @@ export function cidr(
       // Try to parse as IPv4 first
       let ipVersion: 4 | 6 | null = null;
       let normalizedIp: string | null = null;
+      let ipv4Error: ValueParserResult<string> | null = null;
+      let ipv6Error: ValueParserResult<string> | null = null;
 
       if (ipv4Parser !== null) {
         const result = ipv4Parser.parse(ipPart);
@@ -5518,6 +5520,8 @@ export function cidr(
             ] as Message;
             return { success: false, error: msg };
           }
+        } else {
+          ipv4Error = result;
         }
       }
 
@@ -5546,11 +5550,25 @@ export function cidr(
             ] as Message;
             return { success: false, error: msg };
           }
+        } else {
+          ipv6Error = result;
         }
       }
 
       // Neither IPv4 nor IPv6 worked
       if (ipVersion === null || normalizedIp === null) {
+        // Prefer specific (non-generic) errors from nested IP parsers.
+        // Generic errors contain "Expected" text; specific restriction
+        // errors (private, loopback, multicast, etc.) do not.
+        for (const err of [ipv4Error, ipv6Error]) {
+          if (err !== null && !err.success) {
+            const isGeneric = err.error.some((term) =>
+              term.type === "text" && term.text.includes("Expected")
+            );
+            if (!isGeneric) return err;
+          }
+        }
+
         const errorMsg = errors?.invalidCidr;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
