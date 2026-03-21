@@ -4,42 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-catalogs:
-  default:
-    '@inquirer/prompts':
-      specifier: ^8.3.0
-      version: 8.3.0
-    '@logtape/logtape':
-      specifier: ^1.2.2
-      version: 1.2.2
-    '@standard-schema/spec':
-      specifier: ^1.1.0
-      version: 1.1.0
-    '@types/node':
-      specifier: ^20.19.9
-      version: 20.19.9
-    fast-check:
-      specifier: ^4.5.3
-      version: 4.5.3
-    isomorphic-git:
-      specifier: ^1.36.1
-      version: 1.36.1
-    tsdown:
-      specifier: ^0.13.0
-      version: 0.13.0
-    tsx:
-      specifier: ^4.21.0
-      version: 4.21.0
-    typescript:
-      specifier: ^5.8.3
-      version: 5.8.3
-    valibot:
-      specifier: ^1.2.0
-      version: 1.2.0
-    zod:
-      specifier: ^3.25.0 || ^4.0.0
-      version: 4.1.12
-
 importers:
 
   docs:
@@ -350,6 +314,12 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.1.12
+
+  tmp/review-zod3:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
 
 packages:
 
@@ -2471,6 +2441,9 @@ packages:
   yargs@17.7.2:
     resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
     engines: {node: '>=12'}
+
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
   zod@4.1.12:
     resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
@@ -4629,6 +4602,8 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+
+  zod@3.25.76: {}
 
   zod@4.1.12: {}
 

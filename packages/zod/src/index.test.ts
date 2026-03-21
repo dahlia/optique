@@ -235,9 +235,21 @@ describe("zod()", () => {
         assert.equal(parser.metavar, "VALUE");
       });
 
-      it("should infer VALUE for z.literal()", () => {
+      it("should infer CHOICE for z.literal()", () => {
         const parser = zod(z.literal("production"));
+        assert.equal(parser.metavar, "CHOICE");
+      });
+
+      it("should infer VALUE for z.nativeEnum() with numeric values", () => {
+        const NumericEnum = { A: 0, B: 1, 0: "A", 1: "B" } as const;
+        const parser = zod(z.nativeEnum(NumericEnum));
         assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should infer CHOICE for z.nativeEnum() with string values", () => {
+        const StringEnum = { Debug: "debug", Info: "info" } as const;
+        const parser = zod(z.nativeEnum(StringEnum));
+        assert.equal(parser.metavar, "CHOICE");
       });
     });
 
@@ -563,6 +575,115 @@ describe("zod()", () => {
 
       const invalidResult = parser.parse("ftp://example.com");
       assert.ok(!invalidResult.success);
+    });
+  });
+
+  describe("choices and suggest", () => {
+    it("should expose choices for z.enum()", () => {
+      const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+      assert.deepEqual(parser.choices, ["debug", "info", "warn", "error"]);
+    });
+
+    it("should provide suggest() for z.enum()", () => {
+      const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+      assert.ok(parser.suggest != null);
+      const suggestions = [...parser.suggest!("d")];
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "debug" }]);
+    });
+
+    it("should suggest all choices for empty prefix", () => {
+      const parser = zod(z.enum(["debug", "info", "warn", "error"]));
+      const suggestions = [...parser.suggest!("")];
+      assert.deepEqual(suggestions, [
+        { kind: "literal", text: "debug" },
+        { kind: "literal", text: "info" },
+        { kind: "literal", text: "warn" },
+        { kind: "literal", text: "error" },
+      ]);
+    });
+
+    it("should expose choices for z.literal()", () => {
+      const parser = zod(z.literal("production"));
+      assert.deepEqual(parser.choices, ["production"]);
+    });
+
+    it("should expose choices for z.literal() with empty string", () => {
+      const parser = zod(z.literal(""));
+      assert.deepEqual(parser.choices, [""]);
+      const suggestions = [...parser.suggest!("")];
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "" }]);
+    });
+
+    it("should not expose choices for z.literal() with number", () => {
+      const parser = zod(z.literal(42));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+      assert.equal(parser.metavar, "VALUE");
+    });
+
+    it("should expose choices for z.union() of literals", () => {
+      const parser = zod(z.union([z.literal("dev"), z.literal("prod")]));
+      assert.deepEqual(parser.choices, ["dev", "prod"]);
+    });
+
+    it("should not expose choices for z.union() with non-literal member", () => {
+      const parser = zod(z.union([z.literal("auto"), z.coerce.number()]));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should not expose choices for z.union() of numeric literals", () => {
+      const parser = zod(z.union([z.literal(1), z.literal(2)]));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should not expose choices for z.nativeEnum() with numeric values", () => {
+      // Simulate a numeric TypeScript enum with reverse mappings
+      const NumericEnum = { A: 0, B: 1, 0: "A", 1: "B" } as const;
+      const parser = zod(z.nativeEnum(NumericEnum));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should expose choices for z.nativeEnum() with string values", () => {
+      const StringEnum = { Debug: "debug", Info: "info" } as const;
+      const parser = zod(z.nativeEnum(StringEnum));
+      assert.deepEqual(parser.choices, ["debug", "info"]);
+    });
+
+    it("should preserve choices through z.optional()", () => {
+      const parser = zod(z.enum(["a", "b"]).optional());
+      assert.deepEqual(parser.choices, ["a", "b"]);
+    });
+
+    it("should preserve choices through z.nullable()", () => {
+      const parser = zod(z.enum(["a", "b"]).nullable());
+      assert.deepEqual(parser.choices, ["a", "b"]);
+    });
+
+    it("should preserve choices through z.default()", () => {
+      const parser = zod(z.enum(["a", "b"]).default("a"));
+      assert.deepEqual(parser.choices, ["a", "b"]);
+    });
+
+    it("should not expose choices through z.catch()", () => {
+      // .catch() makes any input valid (falls back to the default),
+      // so advertising a closed choice set would be misleading.
+      const parser = zod(z.enum(["a", "b"]).catch("a"));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should not expose choices for z.string()", () => {
+      const parser = zod(z.string());
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should infer CHOICE metavar for z.union() of literals", () => {
+      const parser = zod(z.union([z.literal("dev"), z.literal("prod")]));
+      assert.equal(parser.metavar, "CHOICE");
     });
   });
 });
