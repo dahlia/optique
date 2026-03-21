@@ -4,6 +4,7 @@ import type {
   ValueParserResult,
 } from "@optique/core/valueparser";
 import { type Message, message } from "@optique/core/message";
+import { ensureNonEmptyString } from "@optique/core/nonempty";
 import type { z } from "zod";
 
 /**
@@ -398,6 +399,7 @@ function inferChoices(
  * }));
  * ```
  *
+ * @throws {TypeError} If the resolved `metavar` is an empty string.
  * @since 0.7.0
  */
 export function zod<T>(
@@ -405,9 +407,11 @@ export function zod<T>(
   options: ZodParserOptions = {},
 ): ValueParser<"sync", T> {
   const choices = inferChoices(schema);
+  const metavar = options.metavar ?? inferMetavar(schema);
+  ensureNonEmptyString(metavar);
   const parser: ValueParser<"sync", T> = {
     $mode: "sync",
-    metavar: options.metavar ?? inferMetavar(schema),
+    metavar,
     ...(choices != null && choices.length > 0
       ? {
         // Safe cast: inferChoices() only extracts values from schemas
