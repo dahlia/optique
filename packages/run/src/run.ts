@@ -608,6 +608,8 @@ export function run<T extends Parser<Mode, unknown, unknown>>(
  * @param parser The synchronous command-line parser to execute.
  * @param options Configuration options for customizing behavior.
  * @returns The parsed result if successful.
+ * @throws {TypeError} If an async parser (or a {@link Program} wrapping one)
+ * is passed at runtime.  Use {@link run} or {@link runAsync} instead.
  * @since 0.9.0
  */
 // Overload: parser with contexts
@@ -667,6 +669,16 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
   parserOrProgram: T | Program<"sync", unknown>,
   options: RunOptions = {},
 ): InferValue<T> {
+  const parserToCheck = "parser" in parserOrProgram &&
+      "metadata" in parserOrProgram
+    ? parserOrProgram.parser
+    : parserOrProgram;
+  if (parserToCheck.$mode !== "sync") {
+    throw new TypeError(
+      "Cannot use an async parser with runSync(). " +
+        "Use run() or runAsync() instead.",
+    );
+  }
   // For sync parsers with contexts, use runWithSync() instead of async runWith()
   const contexts = options.contexts;
   if (contexts && contexts.length > 0) {

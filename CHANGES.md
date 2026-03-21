@@ -119,6 +119,11 @@ To be released.
     throw `RunParserError` consistently with the existing sync/async mismatch
     guard on help and parse-error paths.  [[#264], [#673]]
 
+ -  Fixed `runParserSync()` and `runWithSync()` accepting async parser objects
+    at runtime and returning `Promise`s instead of throwing.  These sync-only
+    APIs now validate `parser.$mode` at runtime and throw `TypeError` if the
+    parser is not synchronous.  [[#279], [#676]]
+
  -  Fixed `optional()` and `withDefault()` crashing when the parser's state
     is an annotation-injected object instead of `undefined`.  The state
     discrimination in `modifiers.ts` now uses `Array.isArray(state)` to
@@ -688,6 +693,7 @@ To be released.
 [#262]: https://github.com/dahlia/optique/issues/262
 [#264]: https://github.com/dahlia/optique/issues/264
 [#275]: https://github.com/dahlia/optique/issues/275
+[#279]: https://github.com/dahlia/optique/issues/279
 [#294]: https://github.com/dahlia/optique/issues/294
 [#296]: https://github.com/dahlia/optique/issues/296
 [#300]: https://github.com/dahlia/optique/issues/300
@@ -818,6 +824,7 @@ To be released.
 [#670]: https://github.com/dahlia/optique/pull/670
 [#673]: https://github.com/dahlia/optique/pull/673
 [#674]: https://github.com/dahlia/optique/pull/674
+[#676]: https://github.com/dahlia/optique/pull/676
 
 ### @optique/config
 
@@ -1167,6 +1174,11 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     The stricter plain-`Program` overloads also reject option variables
     whose types add keys outside `RunOptions`, preserving the tighter
     direct-call checks introduced by this change set.  [[#160], [#163]]
+
+ -  Fixed `runSync()` accepting async parser objects (including `Program`
+    wrapping async parsers) at runtime and returning `Promise`s instead of
+    throwing.  `runSync()` now validates `parser.$mode` at runtime and throws
+    `TypeError` if the parser is not synchronous.  [[#279], [#676]]
 
  -  Fixed `path()` extension validation for dotfiles (e.g., `.env`,
     `.gitignore`) and multi-part extensions (e.g., `.tar.gz`, `.d.ts`).

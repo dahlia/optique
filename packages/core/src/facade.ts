@@ -2783,6 +2783,8 @@ export function runParser<
  * @param args The command-line arguments to parse.
  * @param options Configuration options for customizing behavior.
  * @returns The parsed result if successful.
+ * @throws {TypeError} If an async parser is passed at runtime.  Use
+ * {@link runParser} or {@link runParserAsync} for async parsers.
  * @since 0.9.0
  */
 export function runParserSync<
@@ -2795,6 +2797,12 @@ export function runParserSync<
   args: readonly string[],
   options?: RunOptions<THelp, TError>,
 ): InferValue<TParser> {
+  if (parser.$mode !== "sync") {
+    throw new TypeError(
+      "Cannot use an async parser with runParserSync(). " +
+        "Use runParser() or runParserAsync() instead.",
+    );
+  }
   return runParser(parser, programName, args, options);
 }
 
@@ -3601,7 +3609,9 @@ export async function runWith<
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
  * @returns The parsed result.
- * @throws Error if any context returns a Promise or if a context's
+ * @throws {TypeError} If an async parser is passed at runtime.  Use
+ * {@link runWith} or {@link runWithAsync} for async parsers.
+ * @throws {Error} If any context returns a Promise or if a context's
  * `[Symbol.asyncDispose]` returns a Promise.
  * @since 0.10.0
  */
@@ -3618,6 +3628,13 @@ export function runWithSync<
     & RunWithOptions<THelp, TError>
     & ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): InferValue<TParser> {
+  if (parser.$mode !== "sync") {
+    throw new TypeError(
+      "Cannot use an async parser with runWithSync(). " +
+        "Use runWith() or runWithAsync() instead.",
+    );
+  }
+
   const args = options?.args ?? [];
 
   // Early exit: skip context processing for help/version/completion
