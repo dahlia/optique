@@ -11384,6 +11384,79 @@ describe("cidr()", () => {
         { type: "text", text: "." },
       ]);
     });
+
+    it("should report invalidPrefix over private restriction for IPv4", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("192.168.0.0/33");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length between 0 and ",
+        },
+        { type: "text", text: "32" },
+        { type: "text", text: " for IPv4, but got " },
+        { type: "text", text: "33" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report invalidPrefix over loopback restriction for IPv6", () => {
+      const parser = cidr({
+        version: 6,
+        ipv6: { allowLoopback: false },
+      });
+      const result = parser.parse("::1/129");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length between 0 and ",
+        },
+        { type: "text", text: "128" },
+        { type: "text", text: " for IPv6, but got " },
+        { type: "text", text: "129" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report prefixBelowMinimum over restriction error", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        minPrefix: 16,
+      });
+      const result = parser.parse("192.168.0.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length greater than or equal to ",
+        },
+        { type: "text", text: "16" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "8" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report prefixAboveMaximum over restriction error", () => {
+      const parser = cidr({
+        ipv4: { allowLoopback: false },
+        maxPrefix: 24,
+      });
+      const result = parser.parse("127.0.0.0/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length less than or equal to ",
+        },
+        { type: "text", text: "24" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "32" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 

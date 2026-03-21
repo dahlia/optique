@@ -5631,11 +5631,70 @@ export function cidr(
       // Neither IPv4 nor IPv6 worked
       if (ipVersion === null || normalizedIp === null) {
         // Prefer specific restriction errors (private, loopback, multicast,
-        // etc.) over the generic CIDR error.  Structural parse failures are
-        // identified by reference equality with genericIpSentinel, which was
-        // injected as the invalidIpv4/invalidIpv6 error hook above.
-        for (const err of [ipv4Error, ipv6Error]) {
+        // etc.) over the generic CIDR error, but only when the prefix is
+        // also valid for the implied IP version.  Structural parse failures
+        // are identified by reference equality with genericIpSentinel.
+        const candidates: readonly [
+          ValueParserResult<string> | null,
+          4 | 6,
+          number,
+        ][] = [[ipv4Error, 4, 32], [ipv6Error, 6, 128]];
+        for (const [err, ver, maxPfx] of candidates) {
           if (err !== null && !err.success && err.error !== genericIpSentinel) {
+            // The IP was structurally valid but violated a restriction.
+            // Validate the prefix before surfacing the restriction error,
+            // so prefix errors take precedence over restriction diagnostics.
+            if (prefix > maxPfx) {
+              const errorMsg = errors?.invalidPrefix;
+              if (typeof errorMsg === "function") {
+                return { success: false, error: errorMsg(prefix, ver) };
+              }
+              const msg = errorMsg ?? [
+                {
+                  type: "text",
+                  text: "Expected a prefix length between 0 and ",
+                },
+                { type: "text", text: maxPfx.toString() },
+                { type: "text", text: ` for IPv${ver}, but got ` },
+                { type: "text", text: prefix.toString() },
+                { type: "text", text: "." },
+              ] as Message;
+              return { success: false, error: msg };
+            }
+            if (minPrefix !== undefined && prefix < minPrefix) {
+              const errorMsg = errors?.prefixBelowMinimum;
+              if (typeof errorMsg === "function") {
+                return { success: false, error: errorMsg(prefix, minPrefix) };
+              }
+              const msg = errorMsg ?? [
+                {
+                  type: "text",
+                  text: "Expected a prefix length greater than or equal to ",
+                },
+                { type: "text", text: minPrefix.toString() },
+                { type: "text", text: ", but got " },
+                { type: "text", text: prefix.toString() },
+                { type: "text", text: "." },
+              ] as Message;
+              return { success: false, error: msg };
+            }
+            if (maxPrefix !== undefined && prefix > maxPrefix) {
+              const errorMsg = errors?.prefixAboveMaximum;
+              if (typeof errorMsg === "function") {
+                return { success: false, error: errorMsg(prefix, maxPrefix) };
+              }
+              const msg = errorMsg ?? [
+                {
+                  type: "text",
+                  text: "Expected a prefix length less than or equal to ",
+                },
+                { type: "text", text: maxPrefix.toString() },
+                { type: "text", text: ", but got " },
+                { type: "text", text: prefix.toString() },
+                { type: "text", text: "." },
+              ] as Message;
+              return { success: false, error: msg };
+            }
             return err;
           }
         }
