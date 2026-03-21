@@ -1507,8 +1507,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/valibot
 
- -  `valibot()` now exposes choice metadata for `v.picklist()`, `v.literal()`,
-    and `v.union()` of literal schemas.  Help text with `showChoices` enabled
+ -  `valibot()` now exposes choice metadata for `v.picklist()`,
+    string-valued `v.literal()` schemas, and `v.union()` schemas composed
+    entirely of string literals.  Help text with `showChoices` enabled
     now displays valid choices (e.g., `(choices: debug, info, warn, error)`),
     and shell completion suggests matching values.  [[#281], [#688]]
 
@@ -1521,9 +1522,10 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 ### @optique/zod
 
- -  `zod()` now exposes choice metadata for `z.enum()`, `z.nativeEnum()`,
-    `z.literal()`, and `z.union()` of literal schemas.  Help text with
-    `showChoices` enabled now displays valid choices (e.g.,
+ -  `zod()` now exposes choice metadata for `z.enum()`, string-valued
+    `z.nativeEnum()` and `z.literal()` schemas, and `z.union()` schemas
+    composed entirely of string literals.  Help text with `showChoices`
+    enabled now displays valid choices (e.g.,
     `(choices: debug, info, warn, error)`), and shell completion suggests
     matching values.  [[#281], [#688]]
 
