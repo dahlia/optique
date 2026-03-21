@@ -1,4 +1,6 @@
 import {
+  cloneUsage,
+  cloneUsageTerm,
   extractArgumentMetavars,
   extractCommandNames,
   extractOptionNames,
@@ -3057,5 +3059,136 @@ describe("property-based tests", () => {
       ),
       propertyParameters,
     );
+  });
+});
+
+describe("cloneUsageTerm", () => {
+  it("should clone an argument term", () => {
+    const term: UsageTerm = { type: "argument", metavar: "FILE" };
+    const cloned = cloneUsageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+  });
+
+  it("should clone an option term with names array", () => {
+    const term: UsageTerm = {
+      type: "option",
+      names: ["-v", "--verbose"],
+      metavar: "LEVEL",
+    };
+    const cloned = cloneUsageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "option") {
+      assert.notEqual(cloned.names, term.names);
+    }
+  });
+
+  it("should clone a command term with function usageLine", () => {
+    const usageLine = (defaultUsageLine: Usage) => defaultUsageLine;
+    const term: UsageTerm = {
+      type: "command",
+      name: "sub",
+      usageLine,
+    };
+    const cloned = cloneUsageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "command") {
+      assert.equal(cloned.usageLine, usageLine);
+    }
+  });
+
+  it("should deep-clone a command term with array usageLine", () => {
+    const inner: UsageTerm = { type: "argument", metavar: "X" };
+    const term: UsageTerm = {
+      type: "command",
+      name: "sub",
+      usageLine: [inner],
+    };
+    const cloned = cloneUsageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "command" && Array.isArray(cloned.usageLine)) {
+      assert.notEqual(cloned.usageLine, term.usageLine);
+      assert.notEqual(cloned.usageLine[0], inner);
+    }
+  });
+
+  it("should deep-clone an optional term", () => {
+    const inner: UsageTerm = { type: "argument", metavar: "X" };
+    const term: UsageTerm = { type: "optional", terms: [inner] };
+    const cloned = cloneUsageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "optional") {
+      assert.notEqual(cloned.terms, term.terms);
+      assert.notEqual(cloned.terms[0], inner);
+    }
+  });
+
+  it("should deep-clone a multiple term", () => {
+    const inner: UsageTerm = { type: "argument", metavar: "X" };
+    const term: UsageTerm = { type: "multiple", terms: [inner], min: 1 };
+    const cloned = cloneUsageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "multiple") {
+      assert.notEqual(cloned.terms, term.terms);
+      assert.notEqual(cloned.terms[0], inner);
+    }
+  });
+
+  it("should deep-clone an exclusive term", () => {
+    const inner1: UsageTerm = { type: "argument", metavar: "X" };
+    const inner2: UsageTerm = { type: "argument", metavar: "Y" };
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [[inner1], [inner2]],
+    };
+    const cloned = cloneUsageTerm(term);
+    assert.deepEqual(cloned, term);
+    assert.notEqual(cloned, term);
+    if (cloned.type === "exclusive") {
+      assert.notEqual(cloned.terms, term.terms);
+      assert.notEqual(cloned.terms[0], (term as typeof cloned).terms[0]);
+      assert.notEqual(cloned.terms[0][0], inner1);
+    }
+  });
+
+  it("should clone literal, passthrough, and ellipsis terms", () => {
+    const literal: UsageTerm = { type: "literal", value: "foo" };
+    const passthrough: UsageTerm = { type: "passthrough" };
+    const ellipsis: UsageTerm = { type: "ellipsis" };
+    for (const term of [literal, passthrough, ellipsis]) {
+      const cloned = cloneUsageTerm(term);
+      assert.deepEqual(cloned, term);
+      assert.notEqual(cloned, term);
+    }
+  });
+
+  it("should not leak mutations back to the original", () => {
+    const term: UsageTerm = { type: "argument", metavar: "FILE" };
+    const cloned = cloneUsageTerm(term);
+    (cloned as Record<string, unknown>).metavar = "CHANGED";
+    assert.equal(
+      (term as { type: "argument"; metavar: string }).metavar,
+      "FILE",
+    );
+  });
+});
+
+describe("cloneUsage", () => {
+  it("should deep-clone a usage array", () => {
+    const usage: Usage = [
+      { type: "command", name: "sub" },
+      { type: "argument", metavar: "FILE" },
+    ];
+    const cloned = cloneUsage(usage);
+    assert.deepEqual(cloned, usage);
+    assert.notEqual(cloned, usage);
+    for (let i = 0; i < usage.length; i++) {
+      assert.notEqual(cloned[i], usage[i]);
+    }
   });
 });

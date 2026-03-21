@@ -558,6 +558,60 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
   }
 }
 
+/**
+ * Creates a deep clone of a single {@link UsageTerm}.  Recursive term
+ * variants (`optional`, `multiple`, `exclusive`) are cloned recursively.
+ * For `command` terms, a function-valued `usageLine` is preserved by
+ * reference (functions are stateless callbacks), while an array-valued
+ * `usageLine` is deep-cloned.
+ *
+ * @param term The usage term to clone.
+ * @returns A structurally equal but referentially distinct copy.
+ * @since 1.0.0
+ */
+export function cloneUsageTerm(term: UsageTerm): UsageTerm {
+  switch (term.type) {
+    case "argument":
+      return { ...term };
+    case "option":
+      return { ...term, names: [...term.names] };
+    case "command": {
+      if (term.usageLine == null || typeof term.usageLine === "function") {
+        return { ...term };
+      }
+      return { ...term, usageLine: term.usageLine.map(cloneUsageTerm) };
+    }
+    case "optional":
+      return { type: "optional", terms: term.terms.map(cloneUsageTerm) };
+    case "multiple":
+      return {
+        type: "multiple",
+        terms: term.terms.map(cloneUsageTerm),
+        min: term.min,
+      };
+    case "exclusive":
+      return {
+        type: "exclusive",
+        terms: term.terms.map((u) => u.map(cloneUsageTerm)),
+      };
+    case "literal":
+    case "passthrough":
+    case "ellipsis":
+      return { ...term };
+  }
+}
+
+/**
+ * Creates a deep clone of a {@link Usage} array and all of its terms.
+ *
+ * @param usage The usage array to clone.
+ * @returns A mutable array of deeply cloned usage terms.
+ * @since 1.0.0
+ */
+export function cloneUsage(usage: Usage): UsageTerm[] {
+  return usage.map(cloneUsageTerm);
+}
+
 function filterUsageForDisplay(
   usage: Usage,
   isHidden: (hidden?: HiddenVisibility) => boolean = isUsageHidden,

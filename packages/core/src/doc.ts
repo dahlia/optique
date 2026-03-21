@@ -6,6 +6,7 @@ import {
   text,
 } from "./message.ts";
 import {
+  cloneUsageTerm,
   formatUsage,
   formatUsageTerm,
   type Usage,
@@ -119,6 +120,30 @@ export interface DocFragments {
    * @since 0.6.0
    */
   readonly footer?: Message;
+}
+
+/**
+ * Creates a deep clone of a {@link DocEntry}.  The `term` is cloned via
+ * {@link cloneUsageTerm}, and `description`, `default`, and `choices`
+ * messages are cloned via `structuredClone`.
+ *
+ * @param entry The documentation entry to clone.
+ * @returns A structurally equal but referentially distinct copy.
+ * @since 1.0.0
+ */
+export function cloneDocEntry(entry: DocEntry): DocEntry {
+  return {
+    term: cloneUsageTerm(entry.term),
+    ...(entry.description != null && {
+      description: structuredClone(entry.description),
+    }),
+    ...(entry.default != null && {
+      default: structuredClone(entry.default),
+    }),
+    ...(entry.choices != null && {
+      choices: structuredClone(entry.choices),
+    }),
+  };
 }
 
 /**

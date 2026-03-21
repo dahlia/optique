@@ -1,7 +1,18 @@
-import type { DocEntry, DocFragments, DocPage, DocSection } from "./doc.ts";
+import {
+  cloneDocEntry,
+  type DocEntry,
+  type DocFragments,
+  type DocPage,
+  type DocSection,
+} from "./doc.ts";
 import { type Message, message } from "./message.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
-import { normalizeUsage, type Usage, type UsageTerm } from "./usage.ts";
+import {
+  cloneUsage,
+  normalizeUsage,
+  type Usage,
+  type UsageTerm,
+} from "./usage.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import {
   injectAnnotations,
@@ -1008,14 +1019,14 @@ function buildDocPage(
         untitledSection = { entries: [] };
         buildingSections.push(untitledSection);
       }
-      untitledSection.entries.push(fragment);
+      untitledSection.entries.push(cloneDocEntry(fragment));
     } else if (fragment.type === "section") {
       if (fragment.title == null) {
         if (untitledSection == null) {
           untitledSection = { entries: [] };
           buildingSections.push(untitledSection);
         }
-        untitledSection.entries.push(...fragment.entries);
+        untitledSection.entries.push(...fragment.entries.map(cloneDocEntry));
       } else {
         let section = titledSectionMap.get(fragment.title);
         if (section == null) {
@@ -1023,12 +1034,12 @@ function buildDocPage(
           titledSectionMap.set(fragment.title, section);
           buildingSections.push(section);
         }
-        section.entries.push(...fragment.entries);
+        section.entries.push(...fragment.entries.map(cloneDocEntry));
       }
     }
   }
   const sections: DocSection[] = buildingSections;
-  const usage = [...normalizeUsage(parser.usage)];
+  const usage = cloneUsage(normalizeUsage(parser.usage));
   const maybeApplyCommandUsageLine = (
     term: UsageTerm | undefined,
     arg: string,
@@ -1043,7 +1054,7 @@ function buildDocPage(
     ) {
       return;
     }
-    const defaultUsageLine = usage.slice(usageIndex + 1);
+    const defaultUsageLine = cloneUsage(usage.slice(usageIndex + 1));
     const customUsageLine = typeof term.usageLine === "function"
       ? term.usageLine(defaultUsageLine)
       : term.usageLine;
@@ -1080,7 +1091,7 @@ function buildDocPage(
   if (effectiveArgs.length === 0 && usage.length > 0) {
     const first = usage[0];
     if (first.type === "command" && first.usageLine != null) {
-      const defaultUsageLine = usage.slice(1);
+      const defaultUsageLine = cloneUsage(usage.slice(1));
       const customUsageLine = typeof first.usageLine === "function"
         ? first.usageLine(defaultUsageLine)
         : first.usageLine;
@@ -1090,9 +1101,9 @@ function buildDocPage(
   return {
     usage,
     sections,
-    ...(brief != null && { brief }),
-    ...(description != null && { description }),
-    ...(footer != null && { footer }),
+    ...(brief != null && { brief: structuredClone(brief) }),
+    ...(description != null && { description: structuredClone(description) }),
+    ...(footer != null && { footer: structuredClone(footer) }),
   };
 }
 

@@ -754,6 +754,11 @@ To be released.
     as a set, so `[".json", ".yaml"]` and `[".yaml", ".json"]` correctly
     deduplicate to one suggestion.  [[#519], [#695]]
 
+ -  Fixed `getDocPage()` exposing parser-owned usage terms and doc fragments
+    by reference.  Mutating the returned `DocPage` or the `defaultUsageLine`
+    argument in a command's `usageLine` callback no longer corrupts the
+    parser definition.  [[#500]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -861,6 +866,7 @@ To be released.
 [#479]: https://github.com/dahlia/optique/issues/479
 [#488]: https://github.com/dahlia/optique/issues/488
 [#490]: https://github.com/dahlia/optique/pull/490
+[#500]: https://github.com/dahlia/optique/issues/500
 [#507]: https://github.com/dahlia/optique/issues/507
 [#508]: https://github.com/dahlia/optique/issues/508
 [#512]: https://github.com/dahlia/optique/pull/512
