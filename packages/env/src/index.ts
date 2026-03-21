@@ -1,5 +1,13 @@
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
+import {
+  createDependencySourceState,
+  dependencyId,
+  isPendingDependencySourceState,
+  isWrappedDependencySource,
+  type PendingDependencySourceState,
+  wrappedDependencySourceMarker,
+} from "@optique/core/dependency";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 import type {
@@ -278,6 +286,21 @@ export function bindEnv<
 
   const deferPromptUntilConfigResolves = parser.shouldDeferCompletion;
 
+  // Propagate wrappedDependencySourceMarker from inner parser so that
+  // object() Phase 1 can detect this wrapper contains a dependency source.
+  const wrappedDependencyMarker: {
+    [wrappedDependencySourceMarker]?: PendingDependencySourceState;
+  } = isWrappedDependencySource(parser)
+    ? {
+      [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker],
+    }
+    : isPendingDependencySourceState(parser.initialState)
+    ? { [wrappedDependencySourceMarker]: parser.initialState }
+    : {};
+  const pendingDepState = wrappedDependencyMarker[
+    wrappedDependencySourceMarker
+  ];
+
   return {
     $mode: parser.$mode,
     $valueType: parser.$valueType,
@@ -287,6 +310,7 @@ export function bindEnv<
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
     initialState: parser.initialState,
+    ...wrappedDependencyMarker,
 
     parse: (context) => {
       const annotations = getAnnotations(context.state);
@@ -360,13 +384,30 @@ export function bindEnv<
         return parser.complete(state.cliState!);
       }
 
-      return getEnvOrDefault(
+      const envResult = getEnvOrDefault(
         state,
         options,
         parser.$mode,
         parser,
         isEnvBindState(state) ? state.cliState : undefined,
       );
+
+      // When the inner parser wraps a dependency source, wrap the env/default
+      // result in DependencySourceState so that collectDependencies() in
+      // object() Phase 2 can find the dependency value.
+      if (pendingDepState) {
+        return mapModeValue(parser.$mode, envResult, (result) => {
+          if (result.success) {
+            return createDependencySourceState(
+              result,
+              pendingDepState[dependencyId],
+            ) as unknown as Result<TValue>;
+          }
+          return result;
+        });
+      }
+
+      return envResult;
     },
 
     suggest: parser.suggest,
