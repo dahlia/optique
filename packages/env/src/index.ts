@@ -278,6 +278,12 @@ export function bindEnv<
 
   const deferPromptUntilConfigResolves = parser.shouldDeferCompletion;
 
+  // Do NOT propagate wrappedDependencySourceMarker to the returned parser.
+  // Unlike withDefault(), bindEnv() cannot resolve dependencies from a
+  // synthetic pending state (it needs env annotations).  Propagating the
+  // marker would cause optional() to delegate into bindEnv with an
+  // unannotated state, surfacing "Missing env" errors instead of undefined.
+
   return {
     $mode: parser.$mode,
     $valueType: parser.$valueType,

@@ -1,12 +1,14 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { getDocPage, parse } from "@optique/core/parser";
+import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
+import { optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { bindEnv, createEnvContext } from "@optique/env";
 
@@ -1966,5 +1968,94 @@ describe("createConfigContext error paths", () => {
         message: "Synchronous mode cannot map Promise value.",
       },
     );
+  });
+});
+
+describe("bindConfig() with dependency sources", () => {
+  const mode = dependency(choice(["dev", "prod"] as const));
+  const level = mode.derive({
+    metavar: "LEVEL",
+    mode: "sync",
+    factory: (value: "dev" | "prod") =>
+      choice(
+        value === "dev"
+          ? (["debug", "verbose"] as const)
+          : (["silent", "strict"] as const),
+      ),
+    defaultValue: () => "dev" as const,
+  });
+
+  const schema = z.object({ mode: z.enum(["dev", "prod"]) });
+
+  function createParser(
+    configData: { readonly mode: "dev" | "prod" } | undefined,
+  ) {
+    const context = createConfigContext({ schema });
+    const annotations: Annotations = configData
+      ? { [context.id]: { data: configData } }
+      : {};
+    const parser = object({
+      mode: bindConfig(option("--mode", mode), {
+        context,
+        key: "mode",
+      }),
+      level: option("--level", level),
+    });
+    return { parser, annotations };
+  }
+
+  test("propagates config value as dependency to derived parser (parse)", () => {
+    const { parser, annotations } = createParser({ mode: "prod" });
+    const result = parse(parser, ["--level", "silent"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  test("propagates config value as dependency to derived parser (suggest)", () => {
+    const { parser, annotations } = createParser({ mode: "prod" });
+    const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
+    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    assert.ok(texts.includes("silent"));
+    assert.ok(texts.includes("strict"));
+    assert.ok(!texts.includes("debug"));
+    assert.ok(!texts.includes("verbose"));
+  });
+
+  test("CLI value takes priority over config for dependency", () => {
+    const { parser, annotations } = createParser({ mode: "prod" });
+    const result = parse(parser, ["--mode", "dev", "--level", "debug"], {
+      annotations,
+    });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
+    assert.equal(result.value.level, "debug");
+  });
+
+  test("rejects invalid derived value when config dependency is set", () => {
+    const { parser, annotations } = createParser({ mode: "prod" });
+    const result = parse(parser, ["--level", "debug"], { annotations });
+    assert.ok(!result.success);
+  });
+
+  test("optional(bindConfig(...)) returns undefined when config is absent", () => {
+    const context = createConfigContext({ schema });
+    // No config data in annotations
+    const annotations: Annotations = {};
+    const parser = object({
+      mode: optional(
+        bindConfig(option("--mode", mode), {
+          context,
+          key: "mode",
+        }),
+      ),
+      level: option("--level", level),
+    });
+    // When config is absent and CLI omits --mode, mode should be undefined
+    // and derived parser should use its defaultValue ("dev")
+    const result = parse(parser, ["--level", "debug"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
   });
 });

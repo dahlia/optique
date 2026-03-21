@@ -1163,6 +1163,12 @@ export function bindConfig<
     return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
   }
 
+  // Do NOT propagate wrappedDependencySourceMarker to the returned parser.
+  // Unlike withDefault(), bindConfig() cannot resolve dependencies from a
+  // synthetic pending state (it needs config annotations).  Propagating the
+  // marker would cause optional() to delegate into bindConfig with an
+  // unannotated state, surfacing "Missing config" errors instead of undefined.
+
   const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
     $valueType: parser.$valueType,

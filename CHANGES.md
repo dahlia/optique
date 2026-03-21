@@ -960,6 +960,11 @@ To be released.
     `config`/`meta` fields) now throw `TypeError` instead of causing silent
     failures.  [[#411], [#655]]
 
+ -  Fixed `bindConfig()` not propagating dependency source values to derived
+    parsers.  When a `dependency()` option was wrapped with `bindConfig()`,
+    the config-resolved value was invisible to derived parsers, which fell
+    back to `defaultValue()` instead.  [[#179], [#680]]
+
 [#111]: https://github.com/dahlia/optique/issues/111
 [#136]: https://github.com/dahlia/optique/issues/136
 [#155]: https://github.com/dahlia/optique/issues/155
@@ -967,6 +972,7 @@ To be released.
 [#161]: https://github.com/dahlia/optique/issues/161
 [#162]: https://github.com/dahlia/optique/pull/162
 [#164]: https://github.com/dahlia/optique/pull/164
+[#179]: https://github.com/dahlia/optique/issues/179
 [#259]: https://github.com/dahlia/optique/issues/259
 [#391]: https://github.com/dahlia/optique/issues/391
 [#398]: https://github.com/dahlia/optique/issues/398
@@ -979,6 +985,7 @@ To be released.
 [#627]: https://github.com/dahlia/optique/pull/627
 [#628]: https://github.com/dahlia/optique/pull/628
 [#655]: https://github.com/dahlia/optique/pull/655
+[#680]: https://github.com/dahlia/optique/pull/680
 
 ### @optique/env
 
@@ -1018,6 +1025,11 @@ environment variable integration via source contexts.  [[#86], [#135]]
  -  `bindEnv()` now throws a `TypeError` when `parser` is not a valid
     `ValueParser`, instead of deferring the crash to environment lookup
     time.  [[#415], [#637]]
+
+ -  Fixed `bindEnv()` not propagating dependency source values to derived
+    parsers.  When a `dependency()` option was wrapped with `bindEnv()`,
+    the env-resolved value was invisible to derived parsers, which fell
+    back to `defaultValue()` instead.  [[#179]]
 
 [#86]: https://github.com/dahlia/optique/issues/86
 [#135]: https://github.com/dahlia/optique/pull/135

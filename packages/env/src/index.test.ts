@@ -4,13 +4,15 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { injectAnnotations } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
-import { parse } from "@optique/core/parser";
+import { parse, suggestSync } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import {
   bindEnv,
   bool,
@@ -1555,5 +1557,127 @@ describe("createEnvContext defaults", () => {
         Object.defineProperty(globalThis, "process", originalProcess);
       }
     }
+  });
+});
+
+describe("bindEnv() with dependency sources", () => {
+  const mode = dependency(choice(["dev", "prod"] as const));
+  const level = mode.derive({
+    metavar: "LEVEL",
+    mode: "sync",
+    factory: (value: "dev" | "prod") =>
+      choice(
+        value === "dev"
+          ? (["debug", "verbose"] as const)
+          : (["silent", "strict"] as const),
+      ),
+    defaultValue: () => "dev" as const,
+  });
+
+  function createParser(envSource: (key: string) => string | undefined) {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: envSource,
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: bindEnv(option("--mode", mode), {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+      level: option("--level", level),
+    });
+    return { parser, annotations };
+  }
+
+  it("propagates env value as dependency to derived parser (parse)", () => {
+    const { parser, annotations } = createParser(
+      (key) => ({ APP_MODE: "prod" })[key],
+    );
+    const result = parse(parser, ["--level", "silent"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("propagates env value as dependency to derived parser (suggest)", () => {
+    const { parser, annotations } = createParser(
+      (key) => ({ APP_MODE: "prod" })[key],
+    );
+    const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
+    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    assert.ok(texts.includes("silent"));
+    assert.ok(texts.includes("strict"));
+    assert.ok(!texts.includes("debug"));
+    assert.ok(!texts.includes("verbose"));
+  });
+
+  it("CLI value takes priority over env for dependency", () => {
+    const { parser, annotations } = createParser(
+      (key) => ({ APP_MODE: "prod" })[key],
+    );
+    // CLI --mode dev overrides env APP_MODE=prod
+    const result = parse(parser, ["--mode", "dev", "--level", "debug"], {
+      annotations,
+    });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
+    assert.equal(result.value.level, "debug");
+  });
+
+  it("rejects invalid derived value when env dependency is set", () => {
+    const { parser, annotations } = createParser(
+      (key) => ({ APP_MODE: "prod" })[key],
+    );
+    // "debug" is not valid when mode is "prod"
+    const result = parse(parser, ["--level", "debug"], { annotations });
+    assert.ok(!result.success);
+  });
+
+  it("optional(bindEnv(...)) returns undefined when env is absent", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: optional(
+        bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+      ),
+      level: option("--level", level),
+    });
+    // When env is absent and CLI omits --mode, mode should be undefined
+    // and derived parser should use its defaultValue ("dev")
+    const result = parse(parser, ["--level", "debug"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
+  });
+
+  it("bindEnv(optional(...)) uses defaultValue when env is absent", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: bindEnv(optional(option("--mode", mode)), {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+      level: option("--level", level),
+    });
+    // When env is absent and CLI omits --mode, derived parser should use
+    // its defaultValue ("dev"), so "debug" (a dev-mode level) should work
+    const result = parse(parser, ["--level", "debug"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
   });
 });
