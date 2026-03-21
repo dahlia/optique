@@ -2450,5 +2450,47 @@ describe("branch coverage: doc.ts edge cases", () => {
       const lines = result.split("\n").filter((l) => l.trim() !== "");
       assert.equal(lines.length, 0);
     });
+
+    it("should suppress section heading when all entries are filtered", () => {
+      const page: DocPage = {
+        sections: [{
+          title: "Secrets",
+          entries: [
+            {
+              term: { type: "option", names: ["--key"], hidden: true },
+              description: [{ type: "text", text: "Secret key" }],
+            },
+            {
+              term: {
+                type: "option",
+                names: ["--token"],
+                hidden: "doc",
+              } as never,
+              description: [{ type: "text", text: "Secret token" }],
+            },
+          ],
+        }],
+      };
+      const result = formatDocPage("app", page, { colors: false });
+      assert.ok(!result.includes("Secrets"));
+      assert.ok(!result.includes("--key"));
+      assert.ok(!result.includes("--token"));
+    });
+
+    it("should not reject maxWidth when all entries are filtered", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["--secret"], hidden: true },
+            description: [{ type: "text", text: "This is a long description" }],
+          }],
+        }],
+      };
+      // maxWidth: 1 would normally be too small for entries, but since all
+      // entries are filtered out, it should not throw.
+      assert.doesNotThrow(() => {
+        formatDocPage("app", page, { colors: false, maxWidth: 1 });
+      });
+    });
   });
 });
