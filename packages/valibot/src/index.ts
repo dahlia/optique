@@ -87,14 +87,12 @@ function containsAsyncSchema(
   // Unwrap optional/nullable/nullish wrappers
   if (s.wrapped) return containsAsyncSchema(s.wrapped);
 
-  // Check union/intersect options
-  if (s.options && Array.isArray(s.options)) {
-    for (const option of s.options) {
-      if (typeof option === "object" && option != null) {
-        if (containsAsyncSchema(option)) return true;
-      }
-    }
-  }
+  // NOTE: We intentionally do NOT recurse into union/variant `options`.
+  // Valibot dispatches union arms at runtime, and CLI parsers always supply
+  // string input.  Synchronous arms that match the string will short-circuit
+  // before any async arm is reached, so rejecting a union just because one
+  // unreachable arm is async would break reusable schemas that work fine
+  // for CLI parsing.
 
   // Check pipeline actions (may themselves be schemas, e.g., v.transform)
   if (s.pipe && Array.isArray(s.pipe)) {
