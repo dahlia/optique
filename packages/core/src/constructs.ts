@@ -5745,13 +5745,19 @@ export function merge(
             ? context.dependencyRegistry.clone()
             : new DependencyRegistry();
           const childFieldPairs = collectChildFieldParsers(parsers);
-          await completeDependencySourceDefaultsAsync(
-            context,
-            childFieldPairs,
-            registry,
-          );
           if (context.state && typeof context.state === "object") {
+            await preCompleteAndRegisterDependenciesAsync(
+              context.state as Record<string | symbol, unknown>,
+              childFieldPairs,
+              registry,
+            );
             collectDependencies(context.state, registry);
+          } else {
+            await completeDependencySourceDefaultsAsync(
+              context,
+              childFieldPairs,
+              registry,
+            );
           }
           const contextWithRegistry = {
             ...context,
@@ -5797,9 +5803,15 @@ export function merge(
       // parsers so their values are registered for derived parsers.
       // See: https://github.com/dahlia/optique/issues/681
       const childFieldPairs = collectChildFieldParsers(syncParsers);
-      completeDependencySourceDefaults(context, childFieldPairs, registry);
       if (context.state && typeof context.state === "object") {
+        preCompleteAndRegisterDependencies(
+          context.state as Record<string | symbol, unknown>,
+          childFieldPairs,
+          registry,
+        );
         collectDependencies(context.state, registry);
+      } else {
+        completeDependencySourceDefaults(context, childFieldPairs, registry);
       }
       const contextWithRegistry = { ...context, dependencyRegistry: registry };
 
