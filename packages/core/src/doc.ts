@@ -393,20 +393,19 @@ export function formatDocPage(
   //  - Bare-term entries need termIndent + 1 (just 1 term char).
   //  - "Usage: " + programName + " " → maxWidth >= 8 + programName.length.
   //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
+  const hasContent = (msg: unknown): msg is readonly unknown[] =>
+    Array.isArray(msg) && msg.length > 0;
   if (options.maxWidth != null) {
     const hasEntries = page.sections.some((s) => s.entries.length > 0);
-    const hasContent = (msg: unknown): msg is readonly unknown[] =>
-      Array.isArray(msg) && msg.length > 0;
-    // The formatter renders showDefault/showChoices whenever
-    // entry.default/choices is non-null (even for empty arrays), so
-    // the validation must match: use `!= null` rather than checking
-    // array length, to avoid missing entries like `default: []`.
+    // The formatter skips empty default/choices arrays, so the
+    // validation must match: use hasContent() (which checks length > 0)
+    // rather than just `!= null`.
     const needsDescColumn = hasEntries &&
       page.sections.some((s) =>
         s.entries.some((e) =>
           hasContent(e.description) ||
-          (options.showDefault && e.default != null) ||
-          (options.showChoices && e.choices != null)
+          (options.showDefault && hasContent(e.default)) ||
+          (options.showChoices && hasContent(e.choices))
         )
       );
     // Compute minimum description column width for showDefault/showChoices.
@@ -419,49 +418,26 @@ export function formatDocPage(
     if (needsDescColumn) {
       if (
         options.showDefault &&
-        page.sections.some((s) => s.entries.some((e) => e.default != null))
+        page.sections.some((s) => s.entries.some((e) => hasContent(e.default)))
       ) {
         const prefix = typeof options.showDefault === "object"
           ? options.showDefault.prefix ?? " ["
           : " [";
-        const suffix = typeof options.showDefault === "object"
-          ? options.showDefault.suffix ?? "]"
-          : "]";
-        const hasEmptyDefault = page.sections.some((s) =>
-          s.entries.some((e) =>
-            e.default != null && Array.isArray(e.default) &&
-            e.default.length === 0
-          )
-        );
-        minDescWidth = Math.max(
-          minDescWidth,
-          hasEmptyDefault ? prefix.length + suffix.length : prefix.length,
-        );
+        minDescWidth = Math.max(minDescWidth, prefix.length);
       }
       if (
         options.showChoices &&
-        page.sections.some((s) => s.entries.some((e) => e.choices != null))
+        page.sections.some((s) => s.entries.some((e) => hasContent(e.choices)))
       ) {
         const prefix = typeof options.showChoices === "object"
           ? options.showChoices.prefix ?? " ("
           : " (";
-        const suffix = typeof options.showChoices === "object"
-          ? options.showChoices.suffix ?? ")"
-          : ")";
         const label = typeof options.showChoices === "object"
           ? options.showChoices.label ?? "choices: "
           : "choices: ";
-        const hasEmptyChoices = page.sections.some((s) =>
-          s.entries.some((e) =>
-            e.choices != null && Array.isArray(e.choices) &&
-            e.choices.length === 0
-          )
-        );
         minDescWidth = Math.max(
           minDescWidth,
-          hasEmptyChoices
-            ? prefix.length + label.length + suffix.length
-            : prefix.length + label.length,
+          prefix.length + label.length,
         );
       }
     }
@@ -643,7 +619,7 @@ export function formatDocPage(
         : formatMessage(entry.description, descFormatOptions);
 
       // Append default value if showDefault is enabled and default exists
-      if (options.showDefault && entry.default != null) {
+      if (options.showDefault && hasContent(entry.default)) {
         const prefix = typeof options.showDefault === "object"
           ? options.showDefault.prefix ?? " ["
           : " [";
@@ -698,7 +674,7 @@ export function formatDocPage(
       }
 
       // Append choices if showChoices is enabled and choices exist
-      if (options.showChoices && entry.choices != null) {
+      if (options.showChoices && hasContent(entry.choices)) {
         const prefix = typeof options.showChoices === "object"
           ? options.showChoices.prefix ?? " ("
           : " (";
