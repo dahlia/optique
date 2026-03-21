@@ -1752,6 +1752,10 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
       !texts.includes("debug"),
       `Did not expect "debug" in suggestions, got: ${JSON.stringify(texts)}`,
     );
+    assert.ok(
+      !texts.includes("verbose"),
+      `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
   });
 
   it("CLI-provided dependency source works across merged children", () => {
