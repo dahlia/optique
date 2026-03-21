@@ -2307,7 +2307,10 @@ describe("branch coverage: doc.ts edge cases", () => {
         formatDocPage("myapp", page, {
           showChoices: { maxItems: 0 },
         }),
-      RangeError,
+      {
+        name: "RangeError",
+        message: "showChoices.maxItems must be at least 1, but got 0.",
+      },
     );
   });
 
@@ -2325,7 +2328,10 @@ describe("branch coverage: doc.ts edge cases", () => {
         formatDocPage("myapp", page, {
           showChoices: { maxItems: -1 },
         }),
-      RangeError,
+      {
+        name: "RangeError",
+        message: "showChoices.maxItems must be at least 1, but got -1.",
+      },
     );
   });
 
