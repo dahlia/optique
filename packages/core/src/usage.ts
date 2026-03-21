@@ -648,7 +648,7 @@ export interface UsageTermFormatOptions extends UsageFormatOptions {
    * - `"usage"` (default): filters terms hidden from usage output
    * - `"doc"`: filters terms hidden from documentation output
    * @default `"usage"`
-   * @since 0.11.0
+   * @since 1.0.0
    */
   readonly context?: "usage" | "doc";
 }

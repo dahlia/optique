@@ -1706,7 +1706,7 @@ describe("formatUsageTerm", () => {
     it("should return empty for option with empty names", () => {
       const term: UsageTerm = {
         type: "option",
-        names: [] as unknown as readonly OptionName[],
+        names: [] as never,
         metavar: "X",
       };
       const result = formatUsageTerm(term);
