@@ -393,10 +393,10 @@ export function formatDocPage(
   //  - Bare-term entries need termIndent + 1 (just 1 term char).
   //  - "Usage: " + programName + " " → maxWidth >= 8 + programName.length.
   //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
+  const hasContent = (msg: unknown): msg is readonly unknown[] =>
+    Array.isArray(msg) && msg.length > 0;
   if (options.maxWidth != null) {
     const hasEntries = page.sections.some((s) => s.entries.length > 0);
-    const hasContent = (msg: unknown): msg is readonly unknown[] =>
-      Array.isArray(msg) && msg.length > 0;
     // The formatter skips empty default/choices arrays, so the
     // validation must match: use hasContent() (which checks length > 0)
     // rather than just `!= null`.
@@ -619,10 +619,7 @@ export function formatDocPage(
         : formatMessage(entry.description, descFormatOptions);
 
       // Append default value if showDefault is enabled and default exists
-      if (
-        options.showDefault && Array.isArray(entry.default) &&
-        entry.default.length > 0
-      ) {
+      if (options.showDefault && hasContent(entry.default)) {
         const prefix = typeof options.showDefault === "object"
           ? options.showDefault.prefix ?? " ["
           : " [";
@@ -677,10 +674,7 @@ export function formatDocPage(
       }
 
       // Append choices if showChoices is enabled and choices exist
-      if (
-        options.showChoices && Array.isArray(entry.choices) &&
-        entry.choices.length > 0
-      ) {
+      if (options.showChoices && hasContent(entry.choices)) {
         const prefix = typeof options.showChoices === "object"
           ? options.showChoices.prefix ?? " ("
           : " (";
