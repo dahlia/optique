@@ -387,7 +387,7 @@ describe("or", () => {
     void _tooMany;
   });
 
-  it("should report type-level arity error for zero parsers", () => {
+  it("should throw TypeError for zero parsers", () => {
     assert.throws(
       // @ts-expect-error - or() requires at least one parser argument.
       () => or(),
@@ -1076,7 +1076,7 @@ describe("longestMatch()", () => {
     void _tooMany;
   });
 
-  it("should report type-level arity error for zero parsers", () => {
+  it("should throw TypeError for zero parsers", () => {
     assert.throws(
       // @ts-expect-error - longestMatch() requires at least one parser argument.
       () => longestMatch(),
@@ -3428,7 +3428,7 @@ describe("merge", () => {
     void _tooMany;
   });
 
-  it("should report type-level arity error for zero parsers", () => {
+  it("should throw TypeError for zero parsers", () => {
     assert.throws(
       // @ts-expect-error - merge() requires at least one parser argument.
       () => merge(),
@@ -5144,7 +5144,7 @@ describe("concat", () => {
     void _tooMany;
   });
 
-  it("should report type-level arity error for zero tuple parsers", () => {
+  it("should throw TypeError for zero tuple parsers", () => {
     assert.throws(
       // @ts-expect-error - concat() requires at least one parser argument.
       () => concat(),
