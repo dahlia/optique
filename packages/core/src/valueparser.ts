@@ -4204,9 +4204,9 @@ export function macAddress(
 
   // Regular expressions for different formats
   const colonRegex =
-    /^([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2}):([0-9a-fA-F]{1,2})$/;
+    /^([0-9a-fA-F]{2}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2})$/;
   const hyphenRegex =
-    /^([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})-([0-9a-fA-F]{1,2})$/;
+    /^([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})$/;
   const dotRegex = /^([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})\.([0-9a-fA-F]{4})$/;
   const noneRegex = /^([0-9a-fA-F]{12})$/;
 
