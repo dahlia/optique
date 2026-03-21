@@ -279,6 +279,13 @@ describe("zod()", () => {
         assert.equal(parser.metavar, "CUSTOM");
       });
 
+      it("should reject empty metavar", () => {
+        assert.throws(
+          () => zod(z.string(), { metavar: "" as never }),
+          TypeError,
+        );
+      });
+
       it("should fallback to VALUE for unknown types", () => {
         const parser = zod(z.object({ name: z.string() }));
         assert.equal(parser.metavar, "VALUE");

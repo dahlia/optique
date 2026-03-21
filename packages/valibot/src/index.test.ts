@@ -270,6 +270,13 @@ describe("valibot()", () => {
         assert.equal(parser.metavar, "CUSTOM");
       });
 
+      it("should reject empty metavar", () => {
+        assert.throws(
+          () => valibot(v.string(), { metavar: "" as never }),
+          TypeError,
+        );
+      });
+
       it("should fallback to VALUE for unknown types", () => {
         const parser = valibot(v.object({ name: v.string() }));
         assert.equal(parser.metavar, "VALUE");
