@@ -569,11 +569,19 @@ export function checkEnumOption<T extends object>(
   allowed: readonly string[],
 ): void {
   const value = options?.[key];
-  if (value !== undefined && !allowed.includes(value as string)) {
+  if (
+    value !== undefined &&
+    (typeof value !== "string" || !allowed.includes(value))
+  ) {
+    const rendered = typeof value === "string"
+      ? JSON.stringify(value)
+      : typeof value === "symbol"
+      ? value.toString()
+      : String(value);
     throw new TypeError(
       `Expected ${String(key)} to be one of ${
         allowed.map((v) => JSON.stringify(v)).join(", ")
-      }, but got ${typeof value}: ${JSON.stringify(value)}.`,
+      }, but got ${typeof value}: ${rendered}.`,
     );
   }
 }

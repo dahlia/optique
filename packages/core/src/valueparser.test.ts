@@ -9476,11 +9476,10 @@ describe("macAddress()", () => {
     it("should throw TypeError for invalid separator value", () => {
       assert.throws(
         () => macAddress({ separator: "foo" as never }),
-        (error: unknown) => {
-          assert.ok(error instanceof TypeError);
-          assert.ok(error.message.includes("separator"));
-          assert.ok(error.message.includes('"foo"'));
-          return true;
+        {
+          name: "TypeError",
+          message:
+            'Expected separator to be one of ":", "-", ".", "none", "any", but got string: "foo".',
         },
       );
     });
@@ -9488,11 +9487,10 @@ describe("macAddress()", () => {
     it("should throw TypeError for invalid outputSeparator value", () => {
       assert.throws(
         () => macAddress({ outputSeparator: "any" as never }),
-        (error: unknown) => {
-          assert.ok(error instanceof TypeError);
-          assert.ok(error.message.includes("outputSeparator"));
-          assert.ok(error.message.includes('"any"'));
-          return true;
+        {
+          name: "TypeError",
+          message:
+            'Expected outputSeparator to be one of ":", "-", ".", "none", but got string: "any".',
         },
       );
     });
@@ -9500,11 +9498,10 @@ describe("macAddress()", () => {
     it("should throw TypeError for invalid case value", () => {
       assert.throws(
         () => macAddress({ case: "weird" as never }),
-        (error: unknown) => {
-          assert.ok(error instanceof TypeError);
-          assert.ok(error.message.includes("case"));
-          assert.ok(error.message.includes('"weird"'));
-          return true;
+        {
+          name: "TypeError",
+          message:
+            'Expected case to be one of "preserve", "upper", "lower", but got string: "weird".',
         },
       );
     });
