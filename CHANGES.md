@@ -699,6 +699,11 @@ To be released.
     `TypeError` instead of silently falling through to arbitrary behavior.
     [[#347], [#685]]
 
+ -  Fixed `--completion` option (and `--help`/`--version`) being recognized
+    after the `--` options terminator in `runParser()`, `runWith()`, and
+    `runWithSync()`.  Tokens after `--` are now correctly treated as positional
+    data and no longer trigger meta-option early-exit paths.  [[#228], [#686]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -728,6 +733,7 @@ To be released.
 [#223]: https://github.com/dahlia/optique/issues/223
 [#224]: https://github.com/dahlia/optique/issues/224
 [#225]: https://github.com/dahlia/optique/issues/225
+[#228]: https://github.com/dahlia/optique/issues/228
 [#235]: https://github.com/dahlia/optique/issues/235
 [#240]: https://github.com/dahlia/optique/issues/240
 [#241]: https://github.com/dahlia/optique/issues/241
@@ -894,6 +900,7 @@ To be released.
 [#683]: https://github.com/dahlia/optique/pull/683
 [#684]: https://github.com/dahlia/optique/issues/684
 [#685]: https://github.com/dahlia/optique/pull/685
+[#686]: https://github.com/dahlia/optique/pull/686
 
 ### @optique/config
 

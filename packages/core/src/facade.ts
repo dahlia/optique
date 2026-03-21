@@ -2185,12 +2185,19 @@ export function runParser<
   // Early return for completion requests (avoids parser conflicts)
   // Exception: if a help option is present, let the parser handle it
   if (options.completion) {
+    // Only consider args before the options terminator ("--") when checking
+    // for help options; tokens after "--" are positional data.
+    const helpTerminatorIndex = args.indexOf("--");
+    const helpOptionArgs = helpTerminatorIndex >= 0
+      ? args.slice(0, helpTerminatorIndex)
+      : args;
+
     const hasHelpOption = helpOptionConfig
       ? (completionCommandConfig && completionCommandNames.includes(args[0]))
         // Completion command detected: only check args[1] for help
         ? args.length >= 2 && helpOptionNames.includes(args[1])
-        // No completion command: check all args
-        : helpOptionNames.some((n) => args.includes(n))
+        // No completion command: check args before "--" only
+        : helpOptionNames.some((n) => helpOptionArgs.includes(n))
       : false;
 
     // Handle completion command format: "completion <shell> [args...]"
@@ -2230,6 +2237,10 @@ export function runParser<
     if (completionOptionConfig) {
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
+
+        // Stop scanning at options terminator; tokens after "--" are
+        // positional data and must not be treated as completion options.
+        if (arg === "--") break;
 
         // Check for "--completion=<shell>" format
         const equalsMatch = completionOptionNames.find((n) =>
@@ -2871,6 +2882,14 @@ function needsEarlyExit<THelp, TError>(
   const norm = <T>(c: true | T | undefined): T | undefined =>
     c === true ? ({} as T) : c;
 
+  // Only scan args before the options terminator ("--") for option-form
+  // matches; tokens after "--" are positional data and must not be
+  // interpreted as meta options.
+  const terminatorIndex = args.indexOf("--");
+  const optionArgs = terminatorIndex >= 0
+    ? args.slice(0, terminatorIndex)
+    : args;
+
   // Check help
   if (options.help) {
     const helpOptionConfig = norm<OptionSubConfig>(options.help.option);
@@ -2880,7 +2899,10 @@ function needsEarlyExit<THelp, TError>(
     const helpCommandNames: readonly string[] = helpCommandConfig?.names ??
       ["help"];
 
-    if (helpOptionConfig && helpOptionNames.some((n) => args.includes(n))) {
+    if (
+      helpOptionConfig &&
+      helpOptionNames.some((n) => optionArgs.includes(n))
+    ) {
       return true;
     }
     if (helpCommandConfig && helpCommandNames.includes(args[0])) {
@@ -2901,7 +2923,7 @@ function needsEarlyExit<THelp, TError>(
 
     if (
       versionOptionConfig &&
-      versionOptionNames.some((n) => args.includes(n))
+      versionOptionNames.some((n) => optionArgs.includes(n))
     ) {
       return true;
     }
@@ -2930,7 +2952,7 @@ function needsEarlyExit<THelp, TError>(
 
     // Option mode
     if (completionOptionConfig) {
-      for (const arg of args) {
+      for (const arg of optionArgs) {
         for (const name of completionOptionNames) {
           if (arg === name || arg.startsWith(name + "=")) {
             return true;
