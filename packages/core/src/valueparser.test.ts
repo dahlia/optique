@@ -11367,6 +11367,23 @@ describe("cidr()", () => {
         { type: "text", text: "Unique local denied." },
       ]);
     });
+
+    it("should not misclassify custom error containing 'Expected'", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        errors: {
+          privateNotAllowed: (ip) =>
+            message`Expected a public IP, but got ${ip}.`,
+        },
+      });
+      const result = parser.parse("192.168.0.0/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a public IP, but got " },
+        { type: "value", value: "192.168.0.0" },
+        { type: "text", text: "." },
+      ]);
+    });
   });
 });
 

@@ -5485,12 +5485,20 @@ export function cidr(
   const errors = options?.errors;
   const metavar = options?.metavar ?? "CIDR";
 
+  // Sentinel message passed as the invalidIpv4/invalidIpv6 error hook.
+  // When ipv4()/ipv6() return a structural parse failure they return this
+  // exact object, so we can distinguish generic failures from specific
+  // restriction errors (private, loopback, etc.) via reference equality
+  // instead of fragile text-content heuristics.
+  const genericIpSentinel: Message = [] as unknown as Message;
+
   // Create IP parsers for address validation, forwarding restriction
   // error hooks from CidrOptions.errors to the nested parsers
   const ipv4Parser = (version === 4 || version === "both")
     ? ipv4({
       ...options?.ipv4,
       errors: {
+        invalidIpv4: genericIpSentinel,
         privateNotAllowed: errors?.privateNotAllowed,
         loopbackNotAllowed: errors?.loopbackNotAllowed,
         linkLocalNotAllowed: errors?.linkLocalNotAllowed,
@@ -5505,6 +5513,7 @@ export function cidr(
     ? ipv6({
       ...options?.ipv6,
       errors: {
+        invalidIpv6: genericIpSentinel,
         loopbackNotAllowed: errors?.loopbackNotAllowed,
         linkLocalNotAllowed: errors?.linkLocalNotAllowed,
         multicastNotAllowed: errors?.multicastNotAllowed,
@@ -5621,15 +5630,13 @@ export function cidr(
 
       // Neither IPv4 nor IPv6 worked
       if (ipVersion === null || normalizedIp === null) {
-        // Prefer specific (non-generic) errors from nested IP parsers.
-        // Generic errors contain "Expected" text; specific restriction
-        // errors (private, loopback, multicast, etc.) do not.
+        // Prefer specific restriction errors (private, loopback, multicast,
+        // etc.) over the generic CIDR error.  Structural parse failures are
+        // identified by reference equality with genericIpSentinel, which was
+        // injected as the invalidIpv4/invalidIpv6 error hook above.
         for (const err of [ipv4Error, ipv6Error]) {
-          if (err !== null && !err.success) {
-            const isGeneric = err.error.some((term) =>
-              term.type === "text" && term.text.includes("Expected")
-            );
-            if (!isGeneric) return err;
+          if (err !== null && !err.success && err.error !== genericIpSentinel) {
+            return err;
           }
         }
 
