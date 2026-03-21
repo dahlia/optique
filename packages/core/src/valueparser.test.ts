@@ -9130,12 +9130,11 @@ describe("macAddress()", () => {
       assert.strictEqual(result.value, "001A2B3C4D5E");
     });
 
-    it("should accept single-digit octets with colons", () => {
+    it("should reject single-digit octets with colons", () => {
       const parser = macAddress();
 
       const result = parser.parse("0:1:2:3:4:5");
-      assert.ok(result.success);
-      assert.strictEqual(result.value, "0:1:2:3:4:5");
+      assert.ok(!result.success);
     });
   });
 
@@ -9362,6 +9361,27 @@ describe("macAddress()", () => {
       const result = parser.parse("00:1A:2B:3C:4D:1FF");
       assert.ok(!result.success);
     });
+
+    it("should reject single-digit octets with hyphens", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("0-1-2-3-4-5");
+      assert.ok(!result.success);
+    });
+
+    it("should reject mixed single and double digit octets with colons", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("0A:1:2B:3:4D:5");
+      assert.ok(!result.success);
+    });
+
+    it("should reject mixed single and double digit octets with hyphens", () => {
+      const parser = macAddress();
+
+      const result = parser.parse("0A-1-2B-3-4D-5");
+      assert.ok(!result.success);
+    });
   });
 
   describe("custom error messages", () => {
@@ -9428,20 +9448,18 @@ describe("macAddress()", () => {
       assert.strictEqual(result.value, "FF:FF:FF:FF:FF:FF");
     });
 
-    it("should handle single-digit octets in all positions", () => {
+    it("should reject single-digit octets in all positions", () => {
       const parser = macAddress();
 
       const result = parser.parse("0:1:2:3:4:5");
-      assert.ok(result.success);
-      assert.strictEqual(result.value, "0:1:2:3:4:5");
+      assert.ok(!result.success);
     });
 
-    it("should normalize single-digit octets with outputSeparator", () => {
+    it("should reject single-digit octets even with outputSeparator", () => {
       const parser = macAddress({ outputSeparator: ":" });
 
       const result = parser.parse("0:1:2:3:4:5");
-      assert.ok(result.success);
-      assert.strictEqual(result.value, "0:1:2:3:4:5");
+      assert.ok(!result.success);
     });
 
     it("should handle mixed case input with case conversion", () => {

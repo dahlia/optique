@@ -681,6 +681,11 @@ To be released.
     individually), replacing the previous `.join(", ")` approach.
     [[#340], [#682]]
 
+ -  Fixed `macAddress()` to reject single-digit octets (e.g., `0:1:2:3:4:5`)
+    in colon-separated and hyphen-separated formats.  Each octet now requires
+    exactly two hexadecimal digits, matching the documented MAC-48 validation
+    behavior.  [[#319], [#683]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -736,6 +741,7 @@ To be released.
 [#310]: https://github.com/dahlia/optique/issues/310
 [#315]: https://github.com/dahlia/optique/issues/315
 [#317]: https://github.com/dahlia/optique/issues/317
+[#319]: https://github.com/dahlia/optique/issues/319
 [#320]: https://github.com/dahlia/optique/issues/320
 [#321]: https://github.com/dahlia/optique/issues/321
 [#323]: https://github.com/dahlia/optique/issues/323
@@ -870,6 +876,7 @@ To be released.
 [#678]: https://github.com/dahlia/optique/pull/678
 [#679]: https://github.com/dahlia/optique/pull/679
 [#682]: https://github.com/dahlia/optique/pull/682
+[#683]: https://github.com/dahlia/optique/pull/683
 
 ### @optique/config
 
