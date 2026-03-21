@@ -3191,29 +3191,27 @@ function completeDependencySourceDefaults(
     )
   ) {
     const completed = parser.complete(state);
-    registerOrWrapDependency(completed, parser, registry);
+    const depState = wrapAsDependencySourceState(completed, parser);
+    if (depState) registerCompletedDependency(depState, registry);
   }
 }
 
 /**
- * Registers a completed dependency in the registry.  If the result is already
- * a {@link DependencySourceState}, registers it directly.  If the parser
+ * Wraps a completed result as a {@link DependencySourceState} if the parser
  * contains a dependency source and the result is a successful plain Result
- * with a defined value, wraps it in DependencySourceState first.
+ * with a defined value.  Returns the existing state if the result is already
+ * a DependencySourceState, or `undefined` if no wrapping applies.
+ *
+ * This helper is shared by both `object()` Phase 1 and the suggest-time
+ * pre-completion paths to keep the dep-ID selection and `value !== undefined`
+ * rule in one place.
  * @internal
  */
-function registerOrWrapDependency(
+function wrapAsDependencySourceState(
   completed: unknown,
   parser: Parser<Mode, unknown, unknown>,
-  registry: DependencyRegistryLike,
-): void {
-  if (isDependencySourceState(completed)) {
-    registerCompletedDependency(completed, registry);
-    return;
-  }
-  // Wrap plain Result from bindEnv/bindConfig in DependencySourceState.
-  // Skip undefined values (e.g., from optional() fallback) to avoid
-  // poisoning the dependency registry.
+): import("./dependency.ts").DependencySourceState | undefined {
+  if (isDependencySourceState(completed)) return completed;
   const hasDep = isWrappedDependencySource(parser) ||
     isPendingDependencySourceState(parser.initialState);
   if (
@@ -3225,14 +3223,12 @@ function registerOrWrapDependency(
     const depId = isWrappedDependencySource(parser)
       ? parser[wrappedDependencySourceMarker][dependencyId]
       : (parser.initialState as { [dependencyId]: symbol })[dependencyId];
-    registerCompletedDependency(
-      createDependencySourceState(
-        completed as { success: true; value: unknown },
-        depId,
-      ),
-      registry,
+    return createDependencySourceState(
+      completed as { success: true; value: unknown },
+      depId,
     );
   }
+  return undefined;
 }
 
 /**
@@ -3257,7 +3253,8 @@ async function completeDependencySourceDefaultsAsync(
     )
   ) {
     const completed = await parser.complete(state);
-    registerOrWrapDependency(completed, parser, registry);
+    const depState = wrapAsDependencySourceState(completed, parser);
+    if (depState) registerCompletedDependency(depState, registry);
   }
 }
 
@@ -4082,23 +4079,12 @@ export function object<
             ) {
               const annotatedFieldState = getFieldState(field, fieldParser);
               const completed = fieldParser.complete(annotatedFieldState);
-              if (isDependencySourceState(completed)) {
-                preCompletedState[fieldKey] = completed;
-                preCompletedKeys.add(fieldKey);
-              } else if (
-                completed.success && completed.value !== undefined
-              ) {
-                // Wrap the plain Result in DependencySourceState.  Determine
-                // the dependency ID from the marker or from initialState.
-                const depId = isWrappedDependencySource(fieldParser)
-                  ? fieldParser[wrappedDependencySourceMarker][dependencyId]
-                  : (fieldParser.initialState as { [dependencyId]: symbol })[
-                    dependencyId
-                  ];
-                preCompletedState[fieldKey] = createDependencySourceState(
-                  completed,
-                  depId,
-                );
+              const depState = wrapAsDependencySourceState(
+                completed,
+                fieldParser,
+              );
+              if (depState) {
+                preCompletedState[fieldKey] = depState;
                 preCompletedKeys.add(fieldKey);
               } else {
                 preCompletedState[fieldKey] = annotatedFieldState;
@@ -4226,21 +4212,12 @@ export function object<
             ) {
               const annotatedFieldState = getFieldState(field, fieldParser);
               const completed = await fieldParser.complete(annotatedFieldState);
-              if (isDependencySourceState(completed)) {
-                preCompletedState[fieldKey] = completed;
-                preCompletedKeys.add(fieldKey);
-              } else if (
-                completed.success && completed.value !== undefined
-              ) {
-                const depId = isWrappedDependencySource(fieldParser)
-                  ? fieldParser[wrappedDependencySourceMarker][dependencyId]
-                  : (fieldParser.initialState as { [dependencyId]: symbol })[
-                    dependencyId
-                  ];
-                preCompletedState[fieldKey] = createDependencySourceState(
-                  completed,
-                  depId,
-                );
+              const depState = wrapAsDependencySourceState(
+                completed,
+                fieldParser,
+              );
+              if (depState) {
+                preCompletedState[fieldKey] = depState;
                 preCompletedKeys.add(fieldKey);
               } else {
                 preCompletedState[fieldKey] = annotatedFieldState;
