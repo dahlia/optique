@@ -57,6 +57,41 @@ interface ValibotSchemaInternal {
 }
 
 /**
+ * Recursively checks whether a Valibot schema contains any async parts
+ * (e.g., `pipeAsync`, `checkAsync`).  Wrapper schemas such as `optional()`,
+ * `nullable()`, `nullish()`, and `union()` keep `async === false` on the
+ * outer layer even when they wrap async inner schemas, so a shallow check
+ * on the top-level `async` property is not sufficient.
+ */
+function containsAsyncSchema(
+  schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+): boolean {
+  const s = schema as ValibotSchemaInternal & { async?: boolean };
+  if (s.async) return true;
+
+  // Unwrap optional/nullable/nullish wrappers
+  if (s.wrapped) return containsAsyncSchema(s.wrapped);
+
+  // Check union/intersect options
+  if (s.options && Array.isArray(s.options)) {
+    for (const option of s.options) {
+      if (typeof option === "object" && option != null) {
+        if (containsAsyncSchema(option)) return true;
+      }
+    }
+  }
+
+  // Check pipeline actions
+  if (s.pipe && Array.isArray(s.pipe)) {
+    for (const action of s.pipe) {
+      if ((action as { async?: boolean }).async) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Infers an appropriate metavar string from a Valibot schema.
  *
  * This function analyzes the Valibot schema's internal structure to determine
@@ -346,7 +381,7 @@ export function valibot<T>(
   schema: v.BaseSchema<unknown, T, v.BaseIssue<unknown>>,
   options: ValibotParserOptions = {},
 ): ValueParser<"sync", T> {
-  if ((schema as { async?: boolean }).async) {
+  if (containsAsyncSchema(schema)) {
     throw new TypeError(
       "Async Valibot schemas (e.g., async validations) are not " +
         "supported by valibot(). Use synchronous schemas instead.",

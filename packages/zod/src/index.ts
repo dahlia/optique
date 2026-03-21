@@ -437,7 +437,7 @@ export function zod<T>(
       } catch (error) {
         if (
           error instanceof Error &&
-          /[Pp]romise|async/i.test(error.message)
+          error.constructor.name === "$ZodAsyncError"
         ) {
           throw new TypeError(
             "Async Zod schemas (e.g., async refinements) are not supported " +

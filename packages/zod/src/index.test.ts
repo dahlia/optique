@@ -709,5 +709,19 @@ describe("zod()", () => {
         },
       );
     });
+
+    it("should not mask unrelated errors containing 'Promise'", () => {
+      const schema = z.string().transform(() => {
+        throw new Error("Promise rejected by upstream");
+      });
+      const parser = zod(schema);
+      assert.throws(
+        () => parser.parse("ok"),
+        {
+          name: "Error",
+          message: "Promise rejected by upstream",
+        },
+      );
+    });
   });
 });

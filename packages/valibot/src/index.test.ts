@@ -666,20 +666,49 @@ describe("valibot()", () => {
   });
 
   describe("async schema rejection", () => {
+    const expectedError = {
+      name: "TypeError",
+      message: "Async Valibot schemas (e.g., async validations) are not " +
+        "supported by valibot(). Use synchronous schemas instead.",
+    };
+
     it("should throw TypeError for async validations", () => {
       const asyncSchema = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      assert.throws(
-        () => valibot(asyncSchema as never),
-        {
-          name: "TypeError",
-          message: "Async Valibot schemas (e.g., async validations) are not " +
-            "supported by valibot(). Use synchronous schemas instead.",
-        },
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should throw TypeError for async schema inside optional()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
       );
+      const asyncSchema = v.optional(asyncInner as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should throw TypeError for async schema inside nullable()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.nullable(asyncInner as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should throw TypeError for async schema inside union()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.union([v.string(), asyncInner] as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
   });
 });
