@@ -1505,6 +1505,32 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#604]: https://github.com/dahlia/optique/pull/604
 [#607]: https://github.com/dahlia/optique/pull/607
 
+### @optique/valibot
+
+ -  `valibot()` now exposes choice metadata for `v.picklist()`, `v.literal()`,
+    and `v.union()` of literal schemas.  Help text with `showChoices` enabled
+    now displays valid choices (e.g., `(choices: debug, info, warn, error)`),
+    and shell completion suggests matching values.  [[#281], [#688]]
+
+ -  `valibot()` now infers the metavar `"CHOICE"` instead of `"VALUE"` for
+    `v.literal()` schemas with string or number values, and for `v.union()`
+    schemas composed entirely of such literals.  [[#281], [#688]]
+
+[#281]: https://github.com/dahlia/optique/issues/281
+[#688]: https://github.com/dahlia/optique/pull/688
+
+### @optique/zod
+
+ -  `zod()` now exposes choice metadata for `z.enum()`, `z.nativeEnum()`,
+    `z.literal()`, and `z.union()` of literal schemas.  Help text with
+    `showChoices` enabled now displays valid choices (e.g.,
+    `(choices: debug, info, warn, error)`), and shell completion suggests
+    matching values.  [[#281], [#688]]
+
+ -  `zod()` now infers the metavar `"CHOICE"` instead of `"VALUE"` for
+    `z.literal()` schemas with string or number values, and for `z.union()`
+    schemas composed entirely of such literals.  [[#281], [#688]]
+
 
 Version 0.10.7
 --------------
