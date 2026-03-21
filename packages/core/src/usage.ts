@@ -574,6 +574,7 @@ function filterUsageForDisplay(
     // Skip degenerate zero-width leaf terms
     if (term.type === "option" && term.names.length === 0) continue;
     if (term.type === "command" && term.name === "") continue;
+    if (term.type === "argument" && term.metavar.length === 0) continue;
     if (term.type === "literal" && term.value === "") continue;
     if (term.type === "optional") {
       const filtered = filterUsageForDisplay(term.terms, isHidden);

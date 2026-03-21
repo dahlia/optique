@@ -535,6 +535,15 @@ describe("formatUsage", () => {
       const result = formatUsage("test", usage);
       assert.equal(result, "test FILE");
     });
+
+    it("should skip argument with empty metavar", () => {
+      const usage: Usage = [
+        { type: "argument", metavar: "" } as never,
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
+    });
   });
 });
 
