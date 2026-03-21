@@ -171,9 +171,10 @@ export interface ShowChoicesOptions {
 
   /**
    * Maximum number of choice values to display before truncating with
-   * `...`.  Set to `Infinity` to show all choices.
+   * `...`.  Must be at least `1`.  Set to `Infinity` to show all choices.
    *
    * @default `8`
+   * @throws {RangeError} If the value is less than `1`.
    */
   readonly maxItems?: number;
 }
@@ -687,6 +688,11 @@ export function formatDocPage(
         const maxItems = typeof options.showChoices === "object"
           ? options.showChoices.maxItems ?? 8
           : 8;
+        if (maxItems < 1) {
+          throw new RangeError(
+            `showChoices.maxItems must be at least 1, but got ${maxItems}.`,
+          );
+        }
         // Truncate at the Message level by counting value terms
         const terms = Array.isArray(entry.choices) ? entry.choices : [];
         let truncatedTerms: readonly MessageTerm[] = terms;

@@ -2293,6 +2293,42 @@ describe("branch coverage: doc.ts edge cases", () => {
     assert.ok(result.includes("..."), "should show ellipsis for truncation");
   });
 
+  it("showChoices: maxItems 0 throws RangeError", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--color"] },
+          choices: valueSet(["red", "green", "blue"]),
+        }],
+      }],
+    };
+    assert.throws(
+      () =>
+        formatDocPage("myapp", page, {
+          showChoices: { maxItems: 0 },
+        }),
+      RangeError,
+    );
+  });
+
+  it("showChoices: negative maxItems throws RangeError", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--color"] },
+          choices: valueSet(["red", "green", "blue"]),
+        }],
+      }],
+    };
+    assert.throws(
+      () =>
+        formatDocPage("myapp", page, {
+          showChoices: { maxItems: -1 },
+        }),
+      RangeError,
+    );
+  });
+
   it("section sort falls back to index when comparator ties", () => {
     const page: DocPage = {
       sections: [
