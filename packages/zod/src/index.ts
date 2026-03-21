@@ -62,6 +62,20 @@ interface ZodSchemaInternal {
 }
 
 /**
+ * Checks whether the given error is a Zod async-parse error.
+ *
+ * - **Zod v4** throws a dedicated `$ZodAsyncError` class.
+ * - **Zod v3** (3.25+) throws a plain `Error` whose message starts with
+ *   `"Async refinement encountered during synchronous parse operation"`.
+ */
+function isZodAsyncError(error: Error): boolean {
+  return error.constructor.name === "$ZodAsyncError" ||
+    error.message.startsWith(
+      "Async refinement encountered during synchronous parse operation",
+    );
+}
+
+/**
  * Infers an appropriate metavar string from a Zod schema.
  *
  * This function analyzes the Zod schema's internal structure to determine
@@ -435,10 +449,7 @@ export function zod<T>(
       try {
         result = schema.safeParse(input);
       } catch (error) {
-        if (
-          error instanceof Error &&
-          error.constructor.name === "$ZodAsyncError"
-        ) {
+        if (error instanceof Error && isZodAsyncError(error)) {
           throw new TypeError(
             "Async Zod schemas (e.g., async refinements) are not supported " +
               "by zod(). Use synchronous schemas instead.",

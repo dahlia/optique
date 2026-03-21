@@ -54,6 +54,19 @@ interface ValibotSchemaInternal {
     | readonly (string | number)[]
     | readonly v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>[];
   readonly literal?: string | number | boolean | symbol | bigint;
+  // Container members (object entries, array item, tuple items, etc.)
+  readonly entries?: Record<
+    string,
+    v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>
+  >;
+  readonly item?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+  readonly items?: readonly v.BaseSchema<
+    unknown,
+    unknown,
+    v.BaseIssue<unknown>
+  >[];
+  readonly key?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+  readonly value?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 }
 
 /**
@@ -81,12 +94,42 @@ function containsAsyncSchema(
     }
   }
 
-  // Check pipeline actions
+  // Check pipeline actions (may themselves be schemas, e.g., v.transform)
   if (s.pipe && Array.isArray(s.pipe)) {
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
+      // Pipeline actions with kind "schema" are nested schemas
+      if (
+        (action as { kind?: string }).kind === "schema" &&
+        containsAsyncSchema(
+          action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+        )
+      ) {
+        return true;
+      }
     }
   }
+
+  // Check object entries
+  if (s.entries) {
+    for (const entry of Object.values(s.entries)) {
+      if (containsAsyncSchema(entry)) return true;
+    }
+  }
+
+  // Check array item
+  if (s.item && containsAsyncSchema(s.item)) return true;
+
+  // Check tuple items
+  if (s.items && Array.isArray(s.items)) {
+    for (const item of s.items) {
+      if (containsAsyncSchema(item)) return true;
+    }
+  }
+
+  // Check record/map key and value
+  if (s.key && containsAsyncSchema(s.key)) return true;
+  if (s.value && containsAsyncSchema(s.value)) return true;
 
   return false;
 }
