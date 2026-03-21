@@ -347,6 +347,14 @@ To be released.
     composed state before delegating to child parsers, matching the behavior
     that `object()` already had.  [[#178], [#520]]
 
+ -  Fixed `merge()` not pre-completing `bindEnv()`/`bindConfig()`-backed
+    dependency sources for cross-parser resolution.  When a dependency source
+    wrapped with `bindEnv()` or `bindConfig()` lived in one child parser of
+    `merge()`, derived parsers in a different child parser could not see the
+    resolved value.  The fix pre-completes dependency source fields from child
+    parsers before resolving deferred states, and preserves annotations when
+    extracting child parser states during completion.  [[#681], [#684]]
+
  -  Fixed dependency-aware completion ignoring `withDefault()` source values.
     When a dependency source was wrapped with `withDefault()` and no explicit
     CLI value was provided, `suggest()` returned an empty array instead of
@@ -875,8 +883,10 @@ To be released.
 [#677]: https://github.com/dahlia/optique/pull/677
 [#678]: https://github.com/dahlia/optique/pull/678
 [#679]: https://github.com/dahlia/optique/pull/679
+[#681]: https://github.com/dahlia/optique/issues/681
 [#682]: https://github.com/dahlia/optique/pull/682
 [#683]: https://github.com/dahlia/optique/pull/683
+[#684]: https://github.com/dahlia/optique/issues/684
 
 ### @optique/config
 
