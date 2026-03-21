@@ -414,6 +414,9 @@ export function zod<T>(
     metavar: options.metavar ?? inferMetavar(schema),
     ...(choices != null && choices.length > 0
       ? {
+        // Safe cast: inferChoices() only extracts values from schemas
+        // that accept string input and return it as-is (enum, literal,
+        // union of string literals).
         choices: Object.freeze(choices) as readonly T[],
         *suggest(prefix: string) {
           for (const c of choices) {
