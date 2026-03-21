@@ -1374,7 +1374,7 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
               { type: "text", text: "URL protocol " },
               { type: "value", value: url.protocol },
               { type: "text", text: " is not allowed. Allowed protocols: " },
-              ...valueSet(allowedProtocols, { locale: "en-US" }),
+              ...valueSet(originalProtocols!, { locale: "en-US" }),
               { type: "text", text: "." },
             ] as Message,
         };

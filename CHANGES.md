@@ -676,8 +676,10 @@ To be released.
     (`allowedProtocols: []`, `allowedTlds: []`, `allowedDomains: []`) at
     construction time with a `TypeError`, instead of silently creating
     unsatisfiable parsers with malformed error messages.  Their default error
-    messages for disallowed values now use `valueSet()` for proper
-    locale-aware list formatting.  [[#340], [#682]]
+    messages for disallowed values now use `valueSet()` with
+    `locale: "en-US"` for consistent list formatting (each item styled
+    individually), replacing the previous `.join(", ")` approach.
+    [[#340], [#682]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
