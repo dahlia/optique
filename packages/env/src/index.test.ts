@@ -1773,6 +1773,35 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
     assert.equal(result.value.level, "silent");
   });
 
+  it("CLI-provided dependency source also wins during suggest()", () => {
+    const { parser, annotations } = createMergedParser(
+      (key) => ({ APP_MODE: "prod" })[key],
+    );
+    const texts = suggestSync(
+      parser,
+      ["--mode", "dev", "--level", ""],
+      { annotations },
+    )
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+    assert.ok(
+      texts.includes("debug"),
+      `Expected "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("verbose"),
+      `Expected "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("silent"),
+      `Did not expect "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("strict"),
+      `Did not expect "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
   it("nested merge() propagates env-backed dependency", () => {
     const envContext = createEnvContext({
       prefix: "APP_",
@@ -1835,5 +1864,47 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
     assert.ok(result.success);
     assert.equal(result.value.mode, "prod");
     assert.equal(result.value.level, "silent");
+  });
+
+  it("group()-wrapped child propagates env-backed dependency during suggest()", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = merge(
+      group(
+        "source",
+        object({
+          mode: bindEnv(option("--mode", mode), {
+            context: envContext,
+            key: "MODE",
+            parser: choice(["dev", "prod"] as const),
+          }),
+        }),
+      ),
+      object({
+        level: option("--level", level),
+      }),
+    );
+    const texts = suggestSync(parser, ["--level", "s"], { annotations })
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+    assert.ok(
+      texts.includes("silent"),
+      `Expected "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("strict"),
+      `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("debug"),
+      `Did not expect "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("verbose"),
+      `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
   });
 });
