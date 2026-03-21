@@ -734,10 +734,10 @@ To be released.
     as malformed suffixes (e.g., `(choices: )`, `[]`) when the `Message`
     array was empty.  Empty arrays are now treated as absent.  [[#469], [#692]]
 
- -  Fixed `deduplicateSuggestions()` collapsing file suggestions that differ
-    only in `includeHidden`.  The deduplication key now includes
-    `includeHidden`, so suggestions with different hidden-file completion
-    behavior are preserved.  [[#518], [#693]]
+ -  Fixed `deduplicateSuggestions()` silently dropping `includeHidden: true`
+    when merging file suggestions that differ only in `includeHidden`.
+    Duplicates are now merged with `includeHidden: true` preferred, since
+    it is a superset of the non-hidden variant.  [[#518], [#693]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
