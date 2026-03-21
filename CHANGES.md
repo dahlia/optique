@@ -1513,8 +1513,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     and shell completion suggests matching values.  [[#281], [#688]]
 
  -  `valibot()` now infers the metavar `"CHOICE"` instead of `"VALUE"` for
-    `v.literal()` schemas with string or number values, and for `v.union()`
-    schemas composed entirely of such literals.  [[#281], [#688]]
+    `v.literal()` schemas with string values, and for `v.union()` schemas
+    composed entirely of string literals.  [[#281], [#688]]
 
 [#281]: https://github.com/dahlia/optique/issues/281
 [#688]: https://github.com/dahlia/optique/pull/688
@@ -1528,8 +1528,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     matching values.  [[#281], [#688]]
 
  -  `zod()` now infers the metavar `"CHOICE"` instead of `"VALUE"` for
-    `z.literal()` schemas with string or number values, and for `z.union()`
-    schemas composed entirely of such literals.  [[#281], [#688]]
+    `z.literal()` schemas with string values, and for `z.union()` schemas
+    composed entirely of string literals.  [[#281], [#688]]
 
 
 Version 0.10.7

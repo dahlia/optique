@@ -239,6 +239,18 @@ describe("zod()", () => {
         const parser = zod(z.literal("production"));
         assert.equal(parser.metavar, "CHOICE");
       });
+
+      it("should infer VALUE for z.nativeEnum() with numeric values", () => {
+        const NumericEnum = { A: 0, B: 1, 0: "A", 1: "B" } as const;
+        const parser = zod(z.nativeEnum(NumericEnum));
+        assert.equal(parser.metavar, "VALUE");
+      });
+
+      it("should infer CHOICE for z.nativeEnum() with string values", () => {
+        const StringEnum = { Debug: "debug", Info: "info" } as const;
+        const parser = zod(z.nativeEnum(StringEnum));
+        assert.equal(parser.metavar, "CHOICE");
+      });
     });
 
     describe("edge cases", () => {

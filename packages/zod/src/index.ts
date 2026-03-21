@@ -150,12 +150,14 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
     return "DATE";
   }
 
-  // 5. Check for enum
+  // 5. Check for enum (including nativeEnum on Zod v4 which also reports
+  //    type "enum").  Gate on inferChoices() so that numeric native enums
+  //    fall back to "VALUE".
   if (
     typeName === "ZodEnum" || typeName === "enum" ||
     typeName === "ZodNativeEnum" || typeName === "nativeEnum"
   ) {
-    return "CHOICE";
+    return inferChoices(schema) != null ? "CHOICE" : "VALUE";
   }
 
   // 6. Check for literal
