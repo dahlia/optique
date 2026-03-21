@@ -1327,6 +1327,9 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
       originalProtocolsList.push(protocol);
       normalizedProtocolsList.push(normalized);
     }
+    if (originalProtocolsList.length === 0) {
+      throw new TypeError("allowedProtocols must not be empty.");
+    }
   }
   // Snapshot the original protocols for callback arguments (preserves casing),
   // and a normalized copy for internal matching.
@@ -1367,9 +1370,13 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
                 originalProtocols!,
               )
               : disallowedProtocol)
-            : message`URL protocol ${url.protocol} is not allowed. Allowed protocols: ${
-              allowedProtocols.join(", ")
-            }.`,
+            : [
+              { type: "text", text: "URL protocol " },
+              { type: "value", value: url.protocol },
+              { type: "text", text: " is not allowed. Allowed protocols: " },
+              ...valueSet(allowedProtocols),
+              { type: "text", text: "." },
+            ] as Message,
         };
       }
       return { success: true, value: url };
@@ -3048,6 +3055,9 @@ export function email(
     ? Object.freeze([...options.allowedDomains])
     : undefined;
   if (allowedDomains != null) {
+    if (allowedDomains.length === 0) {
+      throw new TypeError("allowedDomains must not be empty.");
+    }
     for (let i = 0; i < allowedDomains.length; i++) {
       const entry = allowedDomains[i];
       if (typeof entry !== "string") {
@@ -3358,12 +3368,9 @@ export function email(
               const msg = errorMsg ?? [
                 { type: "text", text: "Email domain " },
                 { type: "value", value: domain },
-                {
-                  type: "text",
-                  text: ` is not allowed. Allowed domains: ${
-                    allowedDomains.join(", ")
-                  }.`,
-                },
+                { type: "text", text: " is not allowed. Allowed domains: " },
+                ...valueSet(allowedDomains),
+                { type: "text", text: "." },
               ] as Message;
               return { success: false, error: msg };
             }
@@ -3403,12 +3410,9 @@ export function email(
             const msg = errorMsg ?? [
               { type: "text", text: "Email domain " },
               { type: "value", value: domain },
-              {
-                type: "text",
-                text: ` is not allowed. Allowed domains: ${
-                  allowedDomains.join(", ")
-                }.`,
-              },
+              { type: "text", text: " is not allowed. Allowed domains: " },
+              ...valueSet(allowedDomains),
+              { type: "text", text: "." },
             ] as Message;
             return { success: false, error: msg };
           }
@@ -4457,6 +4461,9 @@ export function domain(
   // cannot start or end with hyphen
   const labelRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
   if (allowedTlds !== undefined) {
+    if (allowedTlds.length === 0) {
+      throw new TypeError("allowedTlds must not be empty.");
+    }
     for (const [i, tld] of allowedTlds.entries()) {
       if (typeof tld !== "string") {
         const actualType = Array.isArray(tld) ? "array" : typeof tld;
@@ -4639,10 +4646,9 @@ export function domain(
           const msg = errorMsg ?? [
             { type: "text", text: "Top-level domain " },
             { type: "value", value: tld },
-            {
-              type: "text",
-              text: ` is not allowed. Allowed TLDs: ${allowedTlds.join(", ")}.`,
-            },
+            { type: "text", text: " is not allowed. Allowed TLDs: " },
+            ...valueSet(allowedTlds),
+            { type: "text", text: "." },
           ] as Message;
           return { success: false, error: msg };
         }

@@ -672,6 +672,13 @@ To be released.
     `uniqueLocalNotAllowed` error hooks to `CidrOptions.errors` so callers
     can customize these diagnostics.  [[#333], [#679]]
 
+ -  `url()`, `domain()`, and `email()` now reject empty allow-lists
+    (`allowedProtocols: []`, `allowedTlds: []`, `allowedDomains: []`) at
+    construction time with a `TypeError`, instead of silently creating
+    unsatisfiable parsers with malformed error messages.  Their default error
+    messages for disallowed values now use `valueSet()` for proper
+    locale-aware list formatting.  [[#340], [#682]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -736,6 +743,7 @@ To be released.
 [#336]: https://github.com/dahlia/optique/issues/336
 [#337]: https://github.com/dahlia/optique/issues/337
 [#338]: https://github.com/dahlia/optique/issues/338
+[#340]: https://github.com/dahlia/optique/issues/340
 [#341]: https://github.com/dahlia/optique/issues/341
 [#342]: https://github.com/dahlia/optique/issues/342
 [#344]: https://github.com/dahlia/optique/issues/344
@@ -859,6 +867,7 @@ To be released.
 [#677]: https://github.com/dahlia/optique/pull/677
 [#678]: https://github.com/dahlia/optique/pull/678
 [#679]: https://github.com/dahlia/optique/pull/679
+[#682]: https://github.com/dahlia/optique/pull/682
 
 ### @optique/config
 

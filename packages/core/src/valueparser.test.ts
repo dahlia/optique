@@ -2792,7 +2792,9 @@ describe("url", () => {
             { type: "text", text: "URL protocol " },
             { type: "value", value: "ftp:" },
             { type: "text", text: " is not allowed. Allowed protocols: " },
-            { type: "value", value: "http:, https:" },
+            { type: "value", value: "http:" },
+            { type: "text", text: " and " },
+            { type: "value", value: "https:" },
             { type: "text", text: "." },
           ] as const,
         );
@@ -2822,14 +2824,14 @@ describe("url", () => {
       assert.ok(!result2.success);
     });
 
-    it("should reject all protocols when empty protocol list is provided", () => {
-      const parser = url({ allowedProtocols: [] });
-
-      const result1 = parser.parse("https://example.com");
-      assert.ok(!result1.success);
-
-      const result2 = parser.parse("ftp://example.com");
-      assert.ok(!result2.success);
+    it("should throw TypeError when empty protocol list is provided", () => {
+      assert.throws(
+        () => url({ allowedProtocols: [] }),
+        {
+          name: "TypeError",
+          message: "allowedProtocols must not be empty.",
+        },
+      );
     });
   });
 
@@ -7607,10 +7609,11 @@ describe("email()", () => {
       assert.deepStrictEqual(result.error, [
         { type: "text", text: "Email domain " },
         { type: "value", value: "other.com" },
-        {
-          type: "text",
-          text: " is not allowed. Allowed domains: example.com, example.org.",
-        },
+        { type: "text", text: " is not allowed. Allowed domains: " },
+        { type: "value", value: "example.com" },
+        { type: "text", text: " and " },
+        { type: "value", value: "example.org" },
+        { type: "text", text: "." },
       ]);
     });
 
@@ -7639,21 +7642,24 @@ describe("email()", () => {
       assert.ok(!result2.success);
     });
 
-    it("should reject all emails when allowedDomains is empty", () => {
-      const parser = email({ allowedDomains: [] });
-
-      const result1 = parser.parse("user@example.com");
-      assert.ok(!result1.success);
-
-      const result2 = parser.parse("user@other.com");
-      assert.ok(!result2.success);
+    it("should throw TypeError when allowedDomains is empty", () => {
+      assert.throws(
+        () => email({ allowedDomains: [] }),
+        {
+          name: "TypeError",
+          message: "allowedDomains must not be empty.",
+        },
+      );
     });
 
-    it("should reject all emails when allowedDomains is empty with allowMultiple", () => {
-      const parser = email({ allowedDomains: [], allowMultiple: true });
-
-      const result = parser.parse("user@example.com,user@other.com");
-      assert.ok(!result.success);
+    it("should throw TypeError when allowedDomains is empty with allowMultiple", () => {
+      assert.throws(
+        () => email({ allowedDomains: [], allowMultiple: true }),
+        {
+          name: "TypeError",
+          message: "allowedDomains must not be empty.",
+        },
+      );
     });
   });
 
@@ -9615,10 +9621,13 @@ describe("domain()", () => {
       assert.deepStrictEqual(result.error, [
         { type: "text", text: "Top-level domain " },
         { type: "value", value: "io" },
-        {
-          type: "text",
-          text: " is not allowed. Allowed TLDs: com, org, net.",
-        },
+        { type: "text", text: " is not allowed. Allowed TLDs: " },
+        { type: "value", value: "com" },
+        { type: "text", text: ", " },
+        { type: "value", value: "org" },
+        { type: "text", text: ", and " },
+        { type: "value", value: "net" },
+        { type: "text", text: "." },
       ]);
     });
 
@@ -9627,6 +9636,16 @@ describe("domain()", () => {
       const result = parser.parse("www.example.org");
       assert.ok(result.success);
       assert.strictEqual(result.value, "www.example.org");
+    });
+
+    it("should throw TypeError when allowedTlds is empty", () => {
+      assert.throws(
+        () => domain({ allowedTlds: [] }),
+        {
+          name: "TypeError",
+          message: "allowedTlds must not be empty.",
+        },
+      );
     });
 
     it("should throw TypeError for non-string entry", () => {
