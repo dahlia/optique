@@ -654,6 +654,11 @@ describe("zod()", () => {
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
+    it("should preserve choices through z.catch()", () => {
+      const parser = zod(z.enum(["a", "b"]).catch("a"));
+      assert.deepEqual(parser.choices, ["a", "b"]);
+    });
+
     it("should not expose choices for z.string()", () => {
       const parser = zod(z.string());
       assert.equal(parser.choices, undefined);
