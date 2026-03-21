@@ -1,4 +1,5 @@
 import {
+  createDependencySourceState,
   type DeferredParseState,
   dependencyId,
   DependencyRegistry,
@@ -3111,7 +3112,9 @@ function* pendingDependencyDefaults(
       // registered for derived parsers.  Inherit parent annotations so that
       // config/env contexts can find their data.
       if (
-        !Array.isArray(fieldState) && isWrappedDependencySource(fieldParser)
+        !Array.isArray(fieldState) &&
+        (isWrappedDependencySource(fieldParser) ||
+          isPendingDependencySourceState(fieldParser.initialState))
       ) {
         const annotatedState = parentAnnotations &&
             typeof fieldState === "object" &&
@@ -3156,7 +3159,48 @@ function completeDependencySourceDefaults(
       parserPairs,
     )
   ) {
-    registerCompletedDependency(parser.complete(state), registry);
+    const completed = parser.complete(state);
+    registerOrWrapDependency(completed, parser, registry);
+  }
+}
+
+/**
+ * Registers a completed dependency in the registry.  If the result is already
+ * a {@link DependencySourceState}, registers it directly.  If the parser
+ * contains a dependency source and the result is a successful plain Result
+ * with a defined value, wraps it in DependencySourceState first.
+ * @internal
+ */
+function registerOrWrapDependency(
+  completed: unknown,
+  parser: Parser<Mode, unknown, unknown>,
+  registry: DependencyRegistryLike,
+): void {
+  if (isDependencySourceState(completed)) {
+    registerCompletedDependency(completed, registry);
+    return;
+  }
+  // Wrap plain Result from bindEnv/bindConfig in DependencySourceState.
+  // Skip undefined values (e.g., from optional() fallback) to avoid
+  // poisoning the dependency registry.
+  const hasDep = isWrappedDependencySource(parser) ||
+    isPendingDependencySourceState(parser.initialState);
+  if (
+    hasDep &&
+    typeof completed === "object" && completed !== null &&
+    "success" in completed && completed.success &&
+    "value" in completed && completed.value !== undefined
+  ) {
+    const depId = isWrappedDependencySource(parser)
+      ? parser[wrappedDependencySourceMarker][dependencyId]
+      : (parser.initialState as { [dependencyId]: symbol })[dependencyId];
+    registerCompletedDependency(
+      createDependencySourceState(
+        completed as { success: true; value: unknown },
+        depId,
+      ),
+      registry,
+    );
   }
 }
 
@@ -3181,7 +3225,8 @@ async function completeDependencySourceDefaultsAsync(
       parserPairs,
     )
   ) {
-    registerCompletedDependency(await parser.complete(state), registry);
+    const completed = await parser.complete(state);
+    registerOrWrapDependency(completed, parser, registry);
   }
 }
 
@@ -3981,24 +4026,48 @@ export function object<
               } else {
                 preCompletedState[fieldKey] = fieldState;
               }
-            } // Case 4: state is non-null/non-array, but parser wraps a dependency
-            // source.  This happens with bindEnv/bindConfig wrapping an option
-            // with a dependency source when the CLI option was not provided.
-            // The wrapper absorbs the inner parse failure and produces its own
-            // state, so Cases 1-3 don't match.  Calling complete() lets the
-            // wrapper resolve the env/config value and return a
-            // DependencySourceState.
+            } // Case 4: state is non-null/non-array, but parser contains a
+            // dependency source.  This happens with bindEnv/bindConfig wrapping
+            // an option with a dependency source when the CLI option was not
+            // provided.  The wrapper absorbs the inner parse failure and
+            // produces its own state, so Cases 1-3 don't match.
+            // complete() returns a plain Result (not DependencySourceState) to
+            // keep the public API clean, so Phase 1 wraps successful results
+            // in DependencySourceState here.  Results with value === undefined
+            // (e.g., from optional() fallback) are skipped to avoid poisoning
+            // the dependency registry.
+            // Detection: check both wrappedDependencySourceMarker (from
+            // withDefault-wrapped parsers) and isPendingDependencySourceState
+            // on initialState (from direct bindEnv/bindConfig wrappers that
+            // don't propagate the marker).
             // Use getFieldState() instead of raw fieldState so that annotations
             // are inherited from the parent state.
             else if (
               fieldState != null &&
               !Array.isArray(fieldState) &&
-              isWrappedDependencySource(fieldParser)
+              !isDependencySourceState(fieldState) &&
+              (isWrappedDependencySource(fieldParser) ||
+                isPendingDependencySourceState(fieldParser.initialState))
             ) {
               const annotatedFieldState = getFieldState(field, fieldParser);
               const completed = fieldParser.complete(annotatedFieldState);
               if (isDependencySourceState(completed)) {
                 preCompletedState[fieldKey] = completed;
+                preCompletedKeys.add(fieldKey);
+              } else if (
+                completed.success && completed.value !== undefined
+              ) {
+                // Wrap the plain Result in DependencySourceState.  Determine
+                // the dependency ID from the marker or from initialState.
+                const depId = isWrappedDependencySource(fieldParser)
+                  ? fieldParser[wrappedDependencySourceMarker][dependencyId]
+                  : (fieldParser.initialState as { [dependencyId]: symbol })[
+                    dependencyId
+                  ];
+                preCompletedState[fieldKey] = createDependencySourceState(
+                  completed,
+                  depId,
+                );
                 preCompletedKeys.add(fieldKey);
               } else {
                 preCompletedState[fieldKey] = annotatedFieldState;
@@ -4115,18 +4184,32 @@ export function object<
               } else {
                 preCompletedState[fieldKey] = fieldState;
               }
-            } // Case 4: non-null/non-array state, parser wraps a dependency source
-            // (e.g., bindEnv/bindConfig wrapping an option with dependency source)
-            // Use getFieldState() so annotations are inherited from parent.
+            } // Case 4: non-null/non-array state, parser contains dependency source
+            // (see sync branch for full explanation)
             else if (
               fieldState != null &&
               !Array.isArray(fieldState) &&
-              isWrappedDependencySource(fieldParser)
+              !isDependencySourceState(fieldState) &&
+              (isWrappedDependencySource(fieldParser) ||
+                isPendingDependencySourceState(fieldParser.initialState))
             ) {
               const annotatedFieldState = getFieldState(field, fieldParser);
               const completed = await fieldParser.complete(annotatedFieldState);
               if (isDependencySourceState(completed)) {
                 preCompletedState[fieldKey] = completed;
+                preCompletedKeys.add(fieldKey);
+              } else if (
+                completed.success && completed.value !== undefined
+              ) {
+                const depId = isWrappedDependencySource(fieldParser)
+                  ? fieldParser[wrappedDependencySourceMarker][dependencyId]
+                  : (fieldParser.initialState as { [dependencyId]: symbol })[
+                    dependencyId
+                  ];
+                preCompletedState[fieldKey] = createDependencySourceState(
+                  completed,
+                  depId,
+                );
                 preCompletedKeys.add(fieldKey);
               } else {
                 preCompletedState[fieldKey] = annotatedFieldState;

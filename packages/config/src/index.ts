@@ -19,14 +19,6 @@ import type {
 import type { Parser, ParserResult, Result } from "@optique/core/parser";
 import { annotationKey, getAnnotations } from "@optique/core/annotations";
 import { isPlaceholderValue } from "@optique/core/context";
-import {
-  createDependencySourceState,
-  dependencyId,
-  isPendingDependencySourceState,
-  isWrappedDependencySource,
-  type PendingDependencySourceState,
-  wrappedDependencySourceMarker,
-} from "@optique/core/dependency";
 import { message } from "@optique/core/message";
 import { mapModeValue, wrapForMode } from "@optique/core/mode-dispatch";
 
@@ -1171,20 +1163,11 @@ export function bindConfig<
     return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
   }
 
-  // Propagate wrappedDependencySourceMarker from inner parser so that
-  // object() Phase 1 can detect this wrapper contains a dependency source.
-  const wrappedDependencyMarker: {
-    [wrappedDependencySourceMarker]?: PendingDependencySourceState;
-  } = isWrappedDependencySource(parser)
-    ? {
-      [wrappedDependencySourceMarker]: parser[wrappedDependencySourceMarker],
-    }
-    : isPendingDependencySourceState(parser.initialState)
-    ? { [wrappedDependencySourceMarker]: parser.initialState }
-    : {};
-  const pendingDepState = wrappedDependencyMarker[
-    wrappedDependencySourceMarker
-  ];
+  // Do NOT propagate wrappedDependencySourceMarker to the returned parser.
+  // Unlike withDefault(), bindConfig() cannot resolve dependencies from a
+  // synthetic pending state (it needs config annotations).  Propagating the
+  // marker would cause optional() to delegate into bindConfig with an
+  // unannotated state, surfacing "Missing config" errors instead of undefined.
 
   const boundParser: Parser<M, TValue, TState> = {
     $mode: parser.$mode,
@@ -1195,7 +1178,6 @@ export function bindConfig<
       ? [{ type: "optional", terms: parser.usage }]
       : parser.usage,
     initialState: parser.initialState,
-    ...wrappedDependencyMarker,
 
     parse: (context) => {
       // Extract annotations from context to preserve them
@@ -1273,22 +1255,7 @@ export function bindConfig<
       }
 
       // No CLI value, check config
-      const configResult = getConfigOrDefault(state, options);
-
-      // When the inner parser wraps a dependency source, wrap the config/default
-      // result in DependencySourceState so that collectDependencies() in
-      // object() Phase 2 can find the dependency value.
-      if (pendingDepState && configResult.success) {
-        return wrapForMode(
-          parser.$mode,
-          createDependencySourceState(
-            configResult,
-            pendingDepState[dependencyId],
-          ) as unknown as Result<TValue>,
-        );
-      }
-
-      return wrapForMode(parser.$mode, configResult);
+      return wrapForMode(parser.$mode, getConfigOrDefault(state, options));
     },
 
     suggest: parser.suggest,

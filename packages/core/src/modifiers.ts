@@ -262,14 +262,11 @@ export function optional<M extends Mode, TValue, TState>(
       // optional wraps a dependency source:
       if (!Array.isArray(state)) {
         // Inner parser has a wrapped dependency source (e.g., optional(withDefault(...)))
-        // Delegate to inner parser which will provide its default value and register dependency.
-        // Catch failures so that wrappers like bindEnv/bindConfig that may
-        // fail when the env/config value is absent still fall back to
-        // undefined rather than propagating the error.
+        // Delegate to inner parser which will provide its default value and register dependency
         if (innerHasWrappedDependency && wrappedPendingState) {
           // Delegate to inner parser with the pending state wrapped in array
           // (inner parser like withDefault expects [PendingDependencySourceState])
-          const innerResult = dispatchByMode(
+          return dispatchByMode(
             parser.$mode,
             () =>
               syncParser.complete([wrappedPendingState] as unknown as TState),
@@ -278,19 +275,6 @@ export function optional<M extends Mode, TValue, TState>(
               parser.complete(
                 [wrappedPendingState] as unknown as TState,
               ) as Promise<ValueParserResult<TValue | undefined>>,
-          );
-          return mapModeValue(
-            parser.$mode,
-            innerResult,
-            (result) =>
-              // Pass through DependencySourceState (from withDefault) and
-              // successful results; only catch plain failures from wrappers
-              // like bindEnv/bindConfig that lack the env/config value.
-              isDependencySourceState(result) || result.success
-                ? result
-                : { success: true, value: undefined } as ValueParserResult<
-                  TValue | undefined
-                >,
           );
         }
         // Inner parser has completion deferral hook (e.g.,
@@ -339,12 +323,10 @@ export function optional<M extends Mode, TValue, TState>(
       ) {
         // Only pass through to inner parser if inner HAS its own wrapped dependency
         // (e.g., optional(withDefault(...))). Otherwise, return undefined.
-        // Catch failures so that bindEnv/bindConfig wrappers still fall back
-        // to undefined when the source value is absent.
         if (innerHasWrappedDependency) {
           // Pass the state as-is to the inner parser (it's already in the
           // right format [PendingDependencySourceState])
-          const innerResult = dispatchByMode(
+          return dispatchByMode(
             parser.$mode,
             () => syncParser.complete(state as unknown as TState),
             // Cast needed: parser.complete() returns ModeValue<M, ...> but we know M is "async" here
@@ -352,16 +334,6 @@ export function optional<M extends Mode, TValue, TState>(
               parser.complete(state as unknown as TState) as Promise<
                 ValueParserResult<TValue | undefined>
               >,
-          );
-          return mapModeValue(
-            parser.$mode,
-            innerResult,
-            (result) =>
-              isDependencySourceState(result) || result.success
-                ? result
-                : { success: true, value: undefined } as ValueParserResult<
-                  TValue | undefined
-                >,
           );
         }
         // Inner parser is a direct dependency source (e.g., optional(option(..., dep)))
