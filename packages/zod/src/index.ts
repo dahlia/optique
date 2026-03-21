@@ -233,19 +233,17 @@ function inferChoices(
     }
     const entries = def.entries;
     if (entries != null && typeof entries === "object") {
-      const result: string[] = [];
+      const result = new Set<string>();
       for (
         const val of Object.values(entries as Record<string, string | number>)
       ) {
         if (typeof val === "string") {
-          if (!result.includes(val)) {
-            result.push(val);
-          }
+          result.add(val);
         } else {
           return undefined;
         }
       }
-      return result.length > 0 ? result : undefined;
+      return result.size > 0 ? [...result] : undefined;
     }
     return undefined;
   }
@@ -258,14 +256,12 @@ function inferChoices(
     if (
       values != null && typeof values === "object" && !Array.isArray(values)
     ) {
-      const result: string[] = [];
+      const result = new Set<string>();
       for (
         const val of Object.values(values as Record<string, string | number>)
       ) {
         if (typeof val === "string") {
-          if (!result.includes(val)) {
-            result.push(val);
-          }
+          result.add(val);
         } else {
           // Numeric member found — bail out entirely because the parser
           // validates via safeParse() which expects the actual number, not
@@ -273,7 +269,7 @@ function inferChoices(
           return undefined;
         }
       }
-      return result.length > 0 ? result : undefined;
+      return result.size > 0 ? [...result] : undefined;
     }
     return undefined;
   }
@@ -307,13 +303,15 @@ function inferChoices(
   if (typeName === "ZodUnion" || typeName === "union") {
     const options = def.options;
     if (!Array.isArray(options)) return undefined;
-    const allChoices: string[] = [];
+    const allChoices = new Set<string>();
     for (const opt of options) {
       const sub = inferChoices(opt);
       if (sub == null) return undefined;
-      allChoices.push(...sub);
+      for (const choice of sub) {
+        allChoices.add(choice);
+      }
     }
-    return allChoices.length > 0 ? allChoices : undefined;
+    return allChoices.size > 0 ? [...allChoices] : undefined;
   }
 
   // Optional/nullable/default wrappers → unwrap

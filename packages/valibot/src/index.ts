@@ -223,19 +223,21 @@ function inferChoices(
   if (schemaType === "union") {
     const options = internalSchema.options;
     if (!Array.isArray(options)) return undefined;
-    const allChoices: string[] = [];
+    const allChoices = new Set<string>();
     for (const opt of options) {
       if (typeof opt === "object" && opt != null && "type" in opt) {
         const sub = inferChoices(
           opt as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
         );
         if (sub == null) return undefined;
-        allChoices.push(...sub);
+        for (const choice of sub) {
+          allChoices.add(choice);
+        }
       } else {
         return undefined;
       }
     }
-    return allChoices.length > 0 ? allChoices : undefined;
+    return allChoices.size > 0 ? [...allChoices] : undefined;
   }
 
   // Optional/nullable/nullish wrappers → unwrap
