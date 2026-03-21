@@ -73,30 +73,35 @@ interface ValibotSchemaInternal {
 /**
  * Checks whether a schema synchronously accepts every possible input value.
  * This includes:
- * - `v.unknown()`, `v.any()` (accept everything)
- * - Bare `v.string()` (no pipe or pipe with only non-validation actions)
+ * - `v.unknown()`, `v.any()` (accept everything regardless of input type)
+ * - Bare `v.string()` without a pipe (accepts every string)
  * - Any wrapper with a `wrapped` field pointing to a catch-all schema
  *   (e.g., `v.optional()`, `v.nullable()`, `v.nonOptional()`, etc.)
+ *
+ * Piped string schemas (e.g., `v.pipe(v.string(), v.trim())`) are NOT
+ * considered catch-all because pipes can contain transforms that change
+ * the value type followed by schemas that reject, so the arm may not
+ * actually accept all inputs.
+ *
+ * @param includeString When true, also recognize bare `v.string()` (without
+ *   pipe) as a catch-all.  Set to false after transforms where the value type
+ *   is no longer guaranteed to be a string.
  */
 function isCatchAllSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  includeString = true,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return false;
-  // v.unknown() and v.any() accept every value
+  // v.unknown() and v.any() accept every value of any type
   if (s.type === "unknown" || s.type === "any") return true;
-  if (s.type === "string") {
-    // Bare v.string() or piped string with only non-validation actions
-    // (transforms, trim, toLowerCase, etc. never reject input)
-    if (!s.pipe) return true;
-    return s.pipe.every((action) =>
-      (action as { kind?: string }).kind !== "validation"
-    );
-  }
+  // Bare v.string() without pipe accepts every string (only valid when
+  // the input is still known to be a string, i.e., before transforms)
+  if (includeString && s.type === "string" && !s.pipe) return true;
   // Unwrap any schema with a wrapped field (optional, nullable, nullish,
   // nonOptional, exactOptional, etc.)
   if (s.wrapped) {
-    return isCatchAllSchema(s.wrapped);
+    return isCatchAllSchema(s.wrapped, includeString);
   }
   return false;
 }
@@ -111,12 +116,10 @@ function isCatchAllSchema(
  * Known limitations:
  * - `v.lazy()` schemas are not inspected because the getter depends on
  *   actual parse input, making static analysis unreliable.
- * - After a `v.transform()` in a pipeline, the union catch-all string
- *   arm optimization is disabled because we cannot determine whether
- *   the transform preserves the string type.  This may cause false
- *   positives for string-preserving transforms (e.g., `s => s.trim()`
- *   via `v.transform()`).  Use Valibot's built-in `v.trim()` action
- *   instead, which is recognized as non-rejecting.
+ * - After a `v.transform()` in a pipeline, only type-agnostic catch-all
+ *   arms (`v.unknown()`, `v.any()`) disable async checking in unions.
+ *   String catch-alls are not reliable since the transform may change
+ *   the value type.
  *
  * @param afterTransform When true, the schema appears after a
  *   `v.transform()` in a pipeline, so its input type is unknown.
@@ -134,16 +137,20 @@ function containsAsyncSchema(
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
-  // For union/variant options — safe when NOT after a transform AND a
-  // catch-all synchronous string arm exists, because it will accept any
-  // string input and short-circuit before async arms run.
+  // For union/variant — a type-agnostic catch-all arm (v.unknown(), v.any())
+  // makes async arms unreachable regardless of transforms.  A string-based
+  // catch-all (bare v.string()) only applies before transforms since the
+  // input type is still known to be a string.
   if (s.options && Array.isArray(s.options)) {
     const isUnionLike = s.type === "union" || s.type === "variant";
-    if (isUnionLike && !afterTransform) {
-      const hasCatchAllStringArm = s.options.some((opt) =>
-        typeof opt === "object" && opt != null && isCatchAllSchema(opt)
+    if (isUnionLike) {
+      // After a transform, only type-agnostic catch-alls (unknown/any)
+      // are reliable; string catch-alls only work on raw CLI input.
+      const hasCatchAll = s.options.some((opt) =>
+        typeof opt === "object" && opt != null &&
+        isCatchAllSchema(opt, /* includeString */ !afterTransform)
       );
-      if (!hasCatchAllStringArm) {
+      if (!hasCatchAll) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
             if (containsAsyncSchema(option, afterTransform)) return true;
@@ -151,7 +158,7 @@ function containsAsyncSchema(
         }
       }
     } else {
-      // intersect, or union after transform: recurse into all arms
+      // intersect: all arms must match
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
           if (containsAsyncSchema(option, afterTransform)) return true;
