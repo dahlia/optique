@@ -72,48 +72,69 @@ interface ValibotSchemaInternal {
 }
 
 /**
+ * Checks whether a schema is a bare synchronous `v.string()` (no pipe,
+ * not async), possibly wrapped in `v.optional()`/`v.nullable()`/`v.nullish()`.
+ */
+function isCatchAllStringSchema(
+  schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+): boolean {
+  const s = schema as ValibotSchemaInternal & { async?: boolean };
+  if (s.async) return false;
+  if (s.type === "string" && !s.pipe) return true;
+  // Unwrap optional/nullable/nullish wrappers
+  if (
+    (s.type === "optional" || s.type === "nullable" || s.type === "nullish") &&
+    s.wrapped
+  ) {
+    return isCatchAllStringSchema(s.wrapped);
+  }
+  return false;
+}
+
+/**
  * Recursively checks whether a Valibot schema contains any async parts
  * (e.g., `pipeAsync`, `checkAsync`).  Wrapper schemas such as `optional()`,
  * `nullable()`, `nullish()`, and `union()` keep `async === false` on the
  * outer layer even when they wrap async inner schemas, so a shallow check
  * on the top-level `async` property is not sufficient.
+ *
+ * @param afterTransform When true, the schema appears after a `v.transform()`
+ *   in a pipeline, so its input is no longer a raw CLI string.  Union
+ *   catch-all string arm optimizations are disabled in this case.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  afterTransform = false,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
 
   // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) return containsAsyncSchema(s.wrapped);
+  if (s.wrapped) return containsAsyncSchema(s.wrapped, afterTransform);
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
-  // For union/variant options — only safe when a catch-all synchronous string
-  // arm (bare `v.string()` with no pipe constraints) exists, because it will
-  // accept any CLI string input and short-circuit before async arms run.
+  // For union/variant options — only safe when NOT after a transform AND a
+  // catch-all synchronous string arm exists, because it will accept any CLI
+  // string input and short-circuit before async arms run.
   if (s.options && Array.isArray(s.options)) {
     const isUnionLike = s.type === "union" || s.type === "variant";
-    if (isUnionLike) {
-      // A bare v.string() arm (no pipe, sync) accepts every string input,
-      // so async arms are unreachable from CLI parsing.
-      const hasCatchAllStringArm = s.options.some((opt) => {
-        if (typeof opt !== "object" || opt == null) return false;
-        const o = opt as ValibotSchemaInternal & { async?: boolean };
-        return !o.async && o.type === "string" && !o.pipe;
-      });
+    if (isUnionLike && !afterTransform) {
+      const hasCatchAllStringArm = s.options.some((opt) =>
+        typeof opt === "object" && opt != null && isCatchAllStringSchema(opt)
+      );
       if (!hasCatchAllStringArm) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option)) return true;
+            if (containsAsyncSchema(option, afterTransform)) return true;
           }
         }
       }
     } else {
-      // intersect: all arms must match
+      // intersect, or union after transform: recurse into all arms
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option)) return true;
+          if (containsAsyncSchema(option, afterTransform)) return true;
         }
       }
     }
@@ -121,13 +142,18 @@ function containsAsyncSchema(
 
   // Check pipeline actions (may themselves be schemas, e.g., v.transform)
   if (s.pipe && Array.isArray(s.pipe)) {
+    let seenTransform = afterTransform;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
+      if ((action as { type?: string }).type === "transform") {
+        seenTransform = true;
+      }
       // Pipeline actions with kind "schema" are nested schemas
       if (
         (action as { kind?: string }).kind === "schema" &&
         containsAsyncSchema(
           action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          seenTransform,
         )
       ) {
         return true;

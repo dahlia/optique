@@ -90,8 +90,13 @@ function isZodAsyncError(error: Error): boolean {
  */
 function hasPromiseTypeIssue(error: z.ZodError): boolean {
   for (const issue of error.issues) {
-    const received = (issue as { received?: string }).received;
-    if (received === "promise" || received === "Promise") return true;
+    const i = issue as { code?: string; received?: string };
+    if (
+      i.code === "invalid_type" &&
+      (i.received === "promise" || i.received === "Promise")
+    ) {
+      return true;
+    }
 
     // Recurse into union sub-errors (Zod v3 invalid_union)
     const unionErrors =

@@ -727,6 +727,38 @@ describe("valibot()", () => {
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
 
+    it("should not reject unions with wrapped catch-all string arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.optional(v.string()) is still a catch-all for string input
+      const asyncSchema = v.union([
+        v.optional(v.string()),
+        asyncInner,
+      ] as never);
+      const parser = valibot(asyncSchema as never);
+      const result = parser.parse("hello");
+      assert.ok(result.success);
+    });
+
+    it("should reject union with async arm after transform", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // After transform, input is no longer a string, so the v.string()
+      // catch-all doesn't guarantee the async arm is unreachable.
+      const asyncSchema = v.pipe(
+        v.string(),
+        v.transform(JSON.parse),
+        v.union([v.string(), v.object({ a: asyncInner } as never)]),
+      );
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
     it("should throw TypeError for async schema inside intersect()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
