@@ -739,6 +739,11 @@ To be released.
     Duplicates are now merged with `includeHidden: true` preferred, since
     it is a superset of the non-hidden variant.  [[#518], [#693]]
 
+ -  Fixed `deduplicateSuggestions()` treating file suggestions with the same
+    `extensions` in different order as distinct.  Extensions are now compared
+    as a set, so `[".json", ".yaml"]` and `[".yaml", ".json"]` correctly
+    deduplicate to one suggestion.  [[#519], [#695]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -850,6 +855,7 @@ To be released.
 [#513]: https://github.com/dahlia/optique/issues/513
 [#516]: https://github.com/dahlia/optique/issues/516
 [#518]: https://github.com/dahlia/optique/issues/518
+[#519]: https://github.com/dahlia/optique/issues/519
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
 [#523]: https://github.com/dahlia/optique/pull/523
@@ -946,6 +952,7 @@ To be released.
 [#690]: https://github.com/dahlia/optique/pull/690
 [#692]: https://github.com/dahlia/optique/pull/692
 [#693]: https://github.com/dahlia/optique/pull/693
+[#695]: https://github.com/dahlia/optique/pull/695
 
 ### @optique/config
 

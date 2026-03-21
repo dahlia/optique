@@ -333,7 +333,7 @@ function getSuggestionKey(suggestion: Suggestion): string {
   // File suggestion: create a composite key (excludes includeHidden,
   // which is merged separately in deduplicateSuggestions)
   return `__FILE__:${suggestion.type}:${
-    suggestion.extensions?.join(",") ?? ""
+    suggestion.extensions?.toSorted().join(",") ?? ""
   }:${suggestion.pattern ?? ""}`;
 }
 

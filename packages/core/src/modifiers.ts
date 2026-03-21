@@ -1280,7 +1280,9 @@ export function multiple<M extends Mode, TValue, TState>(
           suggestion.type,
           suggestion.pattern ?? "",
           suggestion.includeHidden === true,
-          suggestion.extensions == null ? "" : suggestion.extensions.join("\0"),
+          suggestion.extensions == null
+            ? ""
+            : suggestion.extensions.toSorted().join("\0"),
           description,
         ]);
       };

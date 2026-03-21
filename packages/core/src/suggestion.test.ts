@@ -763,6 +763,26 @@ describe("property-based tests", () => {
     });
   });
 
+  it("deduplicateSuggestions should treat extension order as insignificant", () => {
+    const suggestions: readonly Suggestion[] = [
+      {
+        kind: "file",
+        type: "file",
+        extensions: [".json", ".yaml"],
+        pattern: "x",
+      },
+      {
+        kind: "file",
+        type: "file",
+        extensions: [".yaml", ".json"],
+        pattern: "x",
+      },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 1);
+    assert.deepEqual(result[0], suggestions[0]);
+  });
+
   it("deduplicateSuggestions should be idempotent and stable", () => {
     const literalSuggestionArbitrary = safeStringArbitrary.map(
       (text: string): Suggestion => ({ kind: "literal", text }),
@@ -795,7 +815,7 @@ describe("property-based tests", () => {
         return suggestion.text;
       }
       return `__FILE__:${suggestion.type}:${
-        suggestion.extensions?.join(",") ?? ""
+        suggestion.extensions?.toSorted().join(",") ?? ""
       }:${suggestion.pattern ?? ""}`;
     };
 
