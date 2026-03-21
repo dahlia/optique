@@ -695,7 +695,6 @@ function* formatUsageTermInternal(
       width: term.metavar.length,
     };
   } else if (term.type === "option") {
-    if (term.names.length < 1) return;
     if (options?.onlyShortestOptions) {
       const shortestName = term.names.reduce((a, b) =>
         a.length <= b.length ? a : b
