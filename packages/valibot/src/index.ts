@@ -87,12 +87,37 @@ function containsAsyncSchema(
   // Unwrap optional/nullable/nullish wrappers
   if (s.wrapped) return containsAsyncSchema(s.wrapped);
 
-  // NOTE: We intentionally do NOT recurse into union/variant `options`.
-  // Valibot dispatches union arms at runtime, and CLI parsers always supply
-  // string input.  Synchronous arms that match the string will short-circuit
-  // before any async arm is reached, so rejecting a union just because one
-  // unreachable arm is async would break reusable schemas that work fine
-  // for CLI parsing.
+  // Check intersect options — all arms must match, so async arms are always
+  // reachable and must be rejected.
+  // For union/variant options — only safe when a catch-all synchronous string
+  // arm (bare `v.string()` with no pipe constraints) exists, because it will
+  // accept any CLI string input and short-circuit before async arms run.
+  if (s.options && Array.isArray(s.options)) {
+    const isUnionLike = s.type === "union" || s.type === "variant";
+    if (isUnionLike) {
+      // A bare v.string() arm (no pipe, sync) accepts every string input,
+      // so async arms are unreachable from CLI parsing.
+      const hasCatchAllStringArm = s.options.some((opt) => {
+        if (typeof opt !== "object" || opt == null) return false;
+        const o = opt as ValibotSchemaInternal & { async?: boolean };
+        return !o.async && o.type === "string" && !o.pipe;
+      });
+      if (!hasCatchAllStringArm) {
+        for (const option of s.options) {
+          if (typeof option === "object" && option != null) {
+            if (containsAsyncSchema(option)) return true;
+          }
+        }
+      }
+    } else {
+      // intersect: all arms must match
+      for (const option of s.options) {
+        if (typeof option === "object" && option != null) {
+          if (containsAsyncSchema(option)) return true;
+        }
+      }
+    }
+  }
 
   // Check pipeline actions (may themselves be schemas, e.g., v.transform)
   if (s.pipe && Array.isArray(s.pipe)) {

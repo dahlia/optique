@@ -701,18 +701,40 @@ describe("valibot()", () => {
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
 
-    it("should not reject unions with async arms alongside sync arms", () => {
+    it("should not reject unions with a catch-all sync string arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // Union with a sync v.string() arm should construct successfully
-      // because CLI input is always a string, so the sync arm matches first.
+      // Union with a bare v.string() arm is safe because CLI input is
+      // always a string, so the sync arm matches first.
       const asyncSchema = v.union([v.string(), asyncInner] as never);
       const parser = valibot(asyncSchema as never);
       const result = parser.parse("hello");
       assert.ok(result.success);
+    });
+
+    it("should throw TypeError for union without catch-all sync arm", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      // v.literal("a") only matches "a", so non-"a" inputs reach the
+      // async arm — this must be rejected.
+      const asyncSchema = v.union([v.literal("a"), asyncInner] as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
+
+    it("should throw TypeError for async schema inside intersect()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.intersect([v.string(), asyncInner] as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
 
     it("should throw TypeError for async schema inside object entries", () => {
