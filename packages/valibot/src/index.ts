@@ -68,6 +68,7 @@ interface ValibotSchemaInternal {
   readonly key?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly value?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly rest?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+  readonly getter?: () => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 }
 
 /**
@@ -134,6 +135,16 @@ function containsAsyncSchema(
 
   // Check objectWithRest/tupleWithRest rest schema
   if (s.rest && containsAsyncSchema(s.rest)) return true;
+
+  // Check lazy() getter
+  if (typeof s.getter === "function") {
+    try {
+      const inner = s.getter();
+      if (containsAsyncSchema(inner)) return true;
+    } catch {
+      // If the getter throws, we can't determine async status; skip.
+    }
+  }
 
   return false;
 }
