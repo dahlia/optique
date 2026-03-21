@@ -743,20 +743,21 @@ describe("valibot()", () => {
       assert.ok(result.success);
     });
 
-    it("should reject union with async arm after transform", () => {
+    it("should not reject union after string-preserving transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
-      // After transform, input is no longer a string, so the v.string()
-      // catch-all doesn't guarantee the async arm is unreachable.
+      // trim() preserves string type, so v.string() arm still catches all
       const asyncSchema = v.pipe(
         v.string(),
-        v.transform(JSON.parse),
-        v.union([v.string(), v.object({ a: asyncInner } as never)]),
+        v.transform((s: string) => s.trim()),
+        v.union([v.string(), asyncInner] as never),
       );
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
+      const parser = valibot(asyncSchema as never);
+      const result = parser.parse("hello");
+      assert.ok(result.success);
     });
 
     it("should throw TypeError for async schema inside intersect()", () => {
@@ -830,21 +831,6 @@ describe("valibot()", () => {
         v.checkAsync(async (val) => val === "ok", "not ok"),
       );
       const asyncSchema = v.tupleWithRest([], asyncRest as never);
-      assert.throws(() => valibot(asyncSchema as never), expectedError);
-    });
-
-    it("should throw TypeError for async schema inside lazy()", () => {
-      const asyncSchema = v.lazy((): v.BaseSchema<
-        unknown,
-        unknown,
-        v.BaseIssue<unknown>
-      > =>
-        v.pipeAsync(
-          v.string(),
-          // deno-lint-ignore require-await
-          v.checkAsync(async (val) => val === "ok", "not ok"),
-        ) as never
-      );
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
 

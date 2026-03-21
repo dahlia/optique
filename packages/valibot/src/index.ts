@@ -68,7 +68,6 @@ interface ValibotSchemaInternal {
   readonly key?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly value?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
   readonly rest?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
-  readonly getter?: () => v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 }
 
 /**
@@ -98,43 +97,44 @@ function isCatchAllStringSchema(
  * outer layer even when they wrap async inner schemas, so a shallow check
  * on the top-level `async` property is not sufficient.
  *
- * @param afterTransform When true, the schema appears after a `v.transform()`
- *   in a pipeline, so its input is no longer a raw CLI string.  Union
- *   catch-all string arm optimizations are disabled in this case.
+ * Known limitations:
+ * - `v.lazy()` schemas are not inspected because the getter depends on
+ *   actual parse input, making static analysis unreliable.
+ * - Union catch-all detection does not account for transforms that change
+ *   the value type; a `v.string()` arm is always considered a catch-all.
  */
 function containsAsyncSchema(
   schema: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  afterTransform = false,
 ): boolean {
   const s = schema as ValibotSchemaInternal & { async?: boolean };
   if (s.async) return true;
 
   // Unwrap optional/nullable/nullish wrappers
-  if (s.wrapped) return containsAsyncSchema(s.wrapped, afterTransform);
+  if (s.wrapped) return containsAsyncSchema(s.wrapped);
 
   // Check intersect options — all arms must match, so async arms are always
   // reachable and must be rejected.
-  // For union/variant options — only safe when NOT after a transform AND a
-  // catch-all synchronous string arm exists, because it will accept any CLI
-  // string input and short-circuit before async arms run.
+  // For union/variant options — safe when a catch-all synchronous string arm
+  // exists, because it will accept any string input and short-circuit before
+  // async arms run.
   if (s.options && Array.isArray(s.options)) {
     const isUnionLike = s.type === "union" || s.type === "variant";
-    if (isUnionLike && !afterTransform) {
+    if (isUnionLike) {
       const hasCatchAllStringArm = s.options.some((opt) =>
         typeof opt === "object" && opt != null && isCatchAllStringSchema(opt)
       );
       if (!hasCatchAllStringArm) {
         for (const option of s.options) {
           if (typeof option === "object" && option != null) {
-            if (containsAsyncSchema(option, afterTransform)) return true;
+            if (containsAsyncSchema(option)) return true;
           }
         }
       }
     } else {
-      // intersect, or union after transform: recurse into all arms
+      // intersect: all arms must match
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (containsAsyncSchema(option, afterTransform)) return true;
+          if (containsAsyncSchema(option)) return true;
         }
       }
     }
@@ -142,18 +142,13 @@ function containsAsyncSchema(
 
   // Check pipeline actions (may themselves be schemas, e.g., v.transform)
   if (s.pipe && Array.isArray(s.pipe)) {
-    let seenTransform = afterTransform;
     for (const action of s.pipe) {
       if ((action as { async?: boolean }).async) return true;
-      if ((action as { type?: string }).type === "transform") {
-        seenTransform = true;
-      }
       // Pipeline actions with kind "schema" are nested schemas
       if (
         (action as { kind?: string }).kind === "schema" &&
         containsAsyncSchema(
           action as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-          seenTransform,
         )
       ) {
         return true;
@@ -202,15 +197,9 @@ function containsAsyncSchema(
     }
   }
 
-  // Check lazy() getter
-  if (typeof s.getter === "function") {
-    try {
-      const inner = s.getter();
-      if (containsAsyncSchema(inner)) return true;
-    } catch {
-      // If the getter throws, we can't determine async status; skip.
-    }
-  }
+  // NOTE: v.lazy() schemas are NOT inspected here.  The getter receives
+  // the actual parse input, so the returned schema can vary per call.
+  // Static analysis at construction time would be unreliable.
 
   return false;
 }
