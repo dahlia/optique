@@ -280,10 +280,10 @@ describe("zod()", () => {
       });
 
       it("should reject empty metavar", () => {
-        assert.throws(
-          () => zod(z.string(), { metavar: "" as never }),
-          TypeError,
-        );
+        assert.throws(() => zod(z.string(), { metavar: "" as never }), {
+          name: "TypeError",
+          message: "Expected a non-empty string.",
+        });
       });
 
       it("should fallback to VALUE for unknown types", () => {
