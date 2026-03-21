@@ -11368,6 +11368,48 @@ describe("cidr()", () => {
       ]);
     });
 
+    it("should use custom linkLocalNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowLinkLocal: false },
+        errors: {
+          linkLocalNotAllowed: message`Link-local denied.`,
+        },
+      });
+      const result = parser.parse("169.254.1.0/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Link-local denied." },
+      ]);
+    });
+
+    it("should use custom broadcastNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowBroadcast: false },
+        errors: {
+          broadcastNotAllowed: message`Broadcast denied.`,
+        },
+      });
+      const result = parser.parse("255.255.255.255/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Broadcast denied." },
+      ]);
+    });
+
+    it("should use custom zeroNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowZero: false },
+        errors: {
+          zeroNotAllowed: message`Zero denied.`,
+        },
+      });
+      const result = parser.parse("0.0.0.0/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Zero denied." },
+      ]);
+    });
+
     it("should not misclassify custom error containing 'Expected'", () => {
       const parser = cidr({
         ipv4: { allowPrivate: false },

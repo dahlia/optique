@@ -5368,24 +5368,28 @@ export interface CidrOptions {
     /**
      * Custom error message when a private IPv4 address is used but disallowed.
      * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
      */
     privateNotAllowed?: Message | ((ip: string) => Message);
 
     /**
      * Custom error message when a loopback address is used but disallowed.
      * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
      */
     loopbackNotAllowed?: Message | ((ip: string) => Message);
 
     /**
      * Custom error message when a link-local address is used but disallowed.
      * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
      */
     linkLocalNotAllowed?: Message | ((ip: string) => Message);
 
     /**
      * Custom error message when a multicast address is used but disallowed.
      * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
      */
     multicastNotAllowed?: Message | ((ip: string) => Message);
 
@@ -5393,12 +5397,14 @@ export interface CidrOptions {
      * Custom error message when the broadcast address is used but disallowed
      * (IPv4 only).
      * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
      */
     broadcastNotAllowed?: Message | ((ip: string) => Message);
 
     /**
      * Custom error message when the zero address is used but disallowed.
      * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
      */
     zeroNotAllowed?: Message | ((ip: string) => Message);
 
@@ -5406,6 +5412,7 @@ export interface CidrOptions {
      * Custom error message when a unique local address is used but disallowed
      * (IPv6 only).
      * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
      */
     uniqueLocalNotAllowed?: Message | ((ip: string) => Message);
   };
@@ -5490,7 +5497,7 @@ export function cidr(
   // exact object, so we can distinguish generic failures from specific
   // restriction errors (private, loopback, etc.) via reference equality
   // instead of fragile text-content heuristics.
-  const genericIpSentinel: Message = [] as unknown as Message;
+  const genericIpSentinel: Message = [];
 
   // Create IP parsers for address validation, forwarding restriction
   // error hooks from CidrOptions.errors to the nested parsers
