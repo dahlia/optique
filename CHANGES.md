@@ -1550,10 +1550,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `v.literal()` schemas with string values, and for `v.union()` schemas
     composed entirely of string literals.  [[#281], [#688]]
 
- -  `valibot()` now validates the `metavar` option at runtime using
-    `ensureNonEmptyString()`, throwing a `TypeError` for empty strings.
-    Previously, an empty `metavar` would silently produce malformed help
-    output.  [[#460], [#691]]
+ -  `valibot()` now validates the `metavar` option at runtime and throws
+    a `TypeError` for empty strings.  Previously, an empty `metavar` would
+    silently produce malformed help output.  [[#460], [#691]]
 
 [#281]: https://github.com/dahlia/optique/issues/281
 [#460]: https://github.com/dahlia/optique/issues/460
@@ -1573,10 +1572,9 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `z.literal()` schemas with string values, and for `z.union()` schemas
     composed entirely of string literals.  [[#281], [#688]]
 
- -  `zod()` now validates the `metavar` option at runtime using
-    `ensureNonEmptyString()`, throwing a `TypeError` for empty strings.
-    Previously, an empty `metavar` would silently produce malformed help
-    output.  [[#460], [#691]]
+ -  `zod()` now validates the `metavar` option at runtime and throws
+    a `TypeError` for empty strings.  Previously, an empty `metavar` would
+    silently produce malformed help output.  [[#460], [#691]]
 
 
 Version 0.10.7
