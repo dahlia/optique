@@ -3841,6 +3841,470 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(!helpShown, "help callback should not be called");
     });
 
+    it("should treat --help after --completion as completion payload", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--completion", "bash", "--help"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(completionShown, "completion callback should be called");
+      assert.ok(!helpShown, "help callback should not be called");
+    });
+
+    it("should show help when --help precedes --completion", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--help", "--completion", "bash"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(helpShown, "help callback should be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should ignore --version in completion payload when --help precedes --completion", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+      let versionShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--help", "--completion", "bash", "--version"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          version: {
+            option: true,
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(helpShown, "help callback should be called");
+      assert.ok(!versionShown, "version callback should not be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should show help when --help follows other flags before --completion", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--verbose", "--help", "--completion", "bash"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(helpShown, "help callback should be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should show version when --version follows other flags before --completion", () => {
+      const parser = object({
+        verbose: option("--verbose"),
+      });
+
+      let completionShown = false;
+      let versionShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--verbose", "--version", "--completion", "bash"],
+        {
+          version: {
+            option: true,
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(versionShown, "version callback should be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should show help when help command precedes --completion", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["help", "--completion", "bash"],
+        {
+          help: {
+            command: true,
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(helpShown, "help callback should be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should show version when version command precedes --completion", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let versionShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["version", "--completion", "bash"],
+        {
+          version: {
+            command: true,
+            option: true,
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(versionShown, "version callback should be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should treat --help after --completion=bash as completion payload", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--completion=bash", "--help"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(completionShown, "completion callback should be called");
+      assert.ok(!helpShown, "help callback should not be called");
+    });
+
+    it("should show help when --help precedes --completion=bash", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let helpShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--help", "--completion=bash"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(helpShown, "help callback should be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should treat --version after --completion as completion payload", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let versionShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--completion", "bash", "--version"],
+        {
+          version: {
+            option: true,
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(completionShown, "completion callback should be called");
+      assert.ok(!versionShown, "version callback should not be called");
+    });
+
+    it("should show version when --version precedes --completion", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let versionShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--version", "--completion", "bash"],
+        {
+          version: {
+            option: true,
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(versionShown, "version callback should be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
+    it("should treat --version after --completion=bash as completion payload", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let versionShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--completion=bash", "--version"],
+        {
+          version: {
+            option: true,
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(completionShown, "completion callback should be called");
+      assert.ok(!versionShown, "version callback should not be called");
+    });
+
+    it("should show version when --version precedes --completion=bash", () => {
+      const parser = object({});
+
+      let completionShown = false;
+      let versionShown = false;
+
+      runParser(
+        parser,
+        "myapp",
+        ["--version", "--completion=bash"],
+        {
+          version: {
+            option: true,
+            value: "1.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
+          },
+          completion: {
+            option: true,
+            command: true,
+            onShow: () => {
+              completionShown = true;
+              return "completion-shown";
+            },
+          },
+          stdout: () => {},
+        },
+      );
+
+      assert.ok(versionShown, "version callback should be called");
+      assert.ok(!completionShown, "completion callback should not be called");
+    });
+
     it("should support --completions (plural) option", () => {
       const parser = object({
         verbose: option("--verbose"),
