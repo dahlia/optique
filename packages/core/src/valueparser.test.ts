@@ -4816,6 +4816,45 @@ describe("ValueParser suggest() methods", () => {
 
       assert.deepEqual(texts, ["http://", "https://"]);
     });
+
+    it("should suggest non-hierarchical schemes with ':' not '://'", () => {
+      const parser = url({
+        allowedProtocols: ["mailto:", "urn:", "https:"],
+      });
+
+      const suggestions = Array.from(parser.suggest!("m"));
+      const texts = suggestions.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+      assert.deepEqual(texts, ["mailto:"]);
+
+      const suggestions2 = Array.from(parser.suggest!("u"));
+      const texts2 = suggestions2.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+      assert.deepEqual(texts2, ["urn:"]);
+
+      const suggestions3 = Array.from(parser.suggest!("h"));
+      const texts3 = suggestions3.map((s) =>
+        s.kind === "literal" ? s.text : s.pattern || ""
+      );
+      assert.deepEqual(texts3, ["https://"]);
+    });
+
+    it("should stop suggesting after prefix contains ':'", () => {
+      const parser = url({
+        allowedProtocols: ["mailto:", "https:"],
+      });
+
+      assert.deepEqual(
+        Array.from(parser.suggest!("mailto:someone")),
+        [],
+      );
+      assert.deepEqual(
+        Array.from(parser.suggest!("https:")),
+        [],
+      );
+    });
   });
 
   describe("locale parser", () => {

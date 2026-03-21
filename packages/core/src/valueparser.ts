@@ -1236,6 +1236,20 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
 }
 
 /**
+ * The set of URL schemes that are considered "special" by the WHATWG URL
+ * Standard.  These schemes always use the `://` authority syntax.
+ * Non-special schemes use only `:` (e.g., `mailto:`, `urn:`).
+ */
+const SPECIAL_URL_SCHEMES: ReadonlySet<string> = new Set([
+  "ftp",
+  "file",
+  "http",
+  "https",
+  "ws",
+  "wss",
+]);
+
+/**
  * Options for creating a {@link url} parser.
  */
 export interface UrlOptions {
@@ -1364,15 +1378,14 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
       return value.href;
     },
     *suggest(prefix: string): Iterable<Suggestion> {
-      if (allowedProtocols && prefix.length > 0 && !prefix.includes("://")) {
-        // Suggest protocol completions if prefix doesn't contain ://
+      if (allowedProtocols && prefix.length > 0 && !prefix.includes(":")) {
         for (const protocol of allowedProtocols) {
-          // Remove trailing colon if present, then add ://
           const cleanProtocol = protocol.replace(/:+$/, "");
           if (cleanProtocol.startsWith(prefix.toLowerCase())) {
+            const suffix = SPECIAL_URL_SCHEMES.has(cleanProtocol) ? "://" : ":";
             yield {
               kind: "literal",
-              text: `${cleanProtocol}://`,
+              text: `${cleanProtocol}${suffix}`,
             };
           }
         }
