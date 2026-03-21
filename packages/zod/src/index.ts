@@ -84,12 +84,25 @@ function isZodAsyncError(error: Error): boolean {
  * Checks whether a Zod error contains an `invalid_type` issue with
  * `received: "promise"`, which indicates an async preprocess/transform
  * that Zod v3 does not throw for but instead reports as a type mismatch.
+ * Also recurses into `unionErrors` inside `invalid_union` issues, since
+ * Zod v3 nests the real mismatch there when the async schema is inside
+ * a `z.union()`.
  */
 function hasPromiseTypeIssue(error: z.ZodError): boolean {
-  return error.issues.some((issue) =>
-    (issue as { received?: string }).received === "promise" ||
-    (issue as { received?: string }).received === "Promise"
-  );
+  for (const issue of error.issues) {
+    const received = (issue as { received?: string }).received;
+    if (received === "promise" || received === "Promise") return true;
+
+    // Recurse into union sub-errors (Zod v3 invalid_union)
+    const unionErrors =
+      (issue as { unionErrors?: readonly z.ZodError[] }).unionErrors;
+    if (unionErrors) {
+      for (const subError of unionErrors) {
+        if (hasPromiseTypeIssue(subError)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**

@@ -136,6 +136,23 @@ function containsAsyncSchema(
   // Check objectWithRest/tupleWithRest rest schema
   if (s.rest && containsAsyncSchema(s.rest)) return true;
 
+  // Check v.promise() inner schema (stored in the overloaded `message` field)
+  if (s.type === "promise") {
+    const promiseInner = (schema as unknown as Record<string, unknown>).message;
+    if (
+      typeof promiseInner === "object" && promiseInner != null &&
+      "kind" in promiseInner
+    ) {
+      if (
+        containsAsyncSchema(
+          promiseInner as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
   // Check lazy() getter
   if (typeof s.getter === "function") {
     try {

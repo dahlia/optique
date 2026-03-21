@@ -789,5 +789,15 @@ describe("valibot()", () => {
       );
       assert.throws(() => valibot(asyncSchema as never), expectedError);
     });
+
+    it("should throw TypeError for async schema inside promise()", () => {
+      const asyncInner = v.pipeAsync(
+        v.string(),
+        // deno-lint-ignore require-await
+        v.checkAsync(async (val) => val === "ok", "not ok"),
+      );
+      const asyncSchema = v.promise(asyncInner as never);
+      assert.throws(() => valibot(asyncSchema as never), expectedError);
+    });
   });
 });
