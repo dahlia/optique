@@ -580,10 +580,18 @@ describe("valibot()", () => {
       assert.deepEqual(parser.choices, ["production"]);
     });
 
+    it("should expose choices for v.literal() with empty string", () => {
+      const parser = valibot(v.literal(""));
+      assert.deepEqual(parser.choices, [""]);
+      const suggestions = [...parser.suggest!("")];
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "" }]);
+    });
+
     it("should not expose choices for v.literal() with number", () => {
       const parser = valibot(v.literal(42));
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
+      assert.equal(parser.metavar, "VALUE");
     });
 
     it("should expose choices for v.union() of literals", () => {
@@ -607,6 +615,7 @@ describe("valibot()", () => {
       );
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
+      assert.equal(parser.metavar, "VALUE");
     });
 
     it("should preserve choices through v.optional()", () => {

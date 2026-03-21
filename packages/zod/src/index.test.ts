@@ -602,10 +602,18 @@ describe("zod()", () => {
       assert.deepEqual(parser.choices, ["production"]);
     });
 
+    it("should expose choices for z.literal() with empty string", () => {
+      const parser = zod(z.literal(""));
+      assert.deepEqual(parser.choices, [""]);
+      const suggestions = [...parser.suggest!("")];
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "" }]);
+    });
+
     it("should not expose choices for z.literal() with number", () => {
       const parser = zod(z.literal(42));
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
+      assert.equal(parser.metavar, "VALUE");
     });
 
     it("should expose choices for z.union() of literals", () => {
