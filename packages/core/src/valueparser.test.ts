@@ -11238,6 +11238,268 @@ describe("cidr()", () => {
       );
     });
   });
+
+  describe("nested IP validation error propagation", () => {
+    it("should preserve private IP error from IPv4", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("192.168.0.0/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "192.168.0.0" },
+        { type: "text", text: " is a private IP address." },
+      ]);
+    });
+
+    it("should preserve loopback error from IPv4", () => {
+      const parser = cidr({ ipv4: { allowLoopback: false } });
+      const result = parser.parse("127.0.0.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "127.0.0.0" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should preserve multicast error from IPv6", () => {
+      const parser = cidr({
+        version: 6,
+        ipv6: { allowMulticast: false },
+      });
+      const result = parser.parse("ff00::/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "ff00::" },
+        { type: "text", text: " is a multicast address." },
+      ]);
+    });
+
+    it("should preserve loopback error from IPv6", () => {
+      const parser = cidr({ ipv6: { allowLoopback: false } });
+      const result = parser.parse("::1/128");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "value", value: "::1" },
+        { type: "text", text: " is a loopback address." },
+      ]);
+    });
+
+    it("should return generic CIDR error for structurally invalid IP", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("not-an-ip/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a valid CIDR notation, but got " },
+        { type: "value", value: "not-an-ip/24" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should still succeed when no restrictions are violated", () => {
+      const parser = cidr({ version: 4 });
+      const result = parser.parse("192.168.0.0/24");
+      assert.ok(result.success);
+      assert.deepStrictEqual(result.value, {
+        address: "192.168.0.0",
+        prefix: 24,
+        version: 4,
+      });
+    });
+
+    it("should use custom privateNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        errors: {
+          privateNotAllowed: (ip) =>
+            message`Private IP ${ip} not allowed in CIDR.`,
+        },
+      });
+      const result = parser.parse("192.168.0.0/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Private IP " },
+        { type: "value", value: "192.168.0.0" },
+        { type: "text", text: " not allowed in CIDR." },
+      ]);
+    });
+
+    it("should use custom loopbackNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowLoopback: false },
+        errors: {
+          loopbackNotAllowed: message`Loopback denied.`,
+        },
+      });
+      const result = parser.parse("127.0.0.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Loopback denied." },
+      ]);
+    });
+
+    it("should use custom multicastNotAllowed error for IPv6", () => {
+      const parser = cidr({
+        version: 6,
+        ipv6: { allowMulticast: false },
+        errors: {
+          multicastNotAllowed: (ip) => message`Multicast ${ip} rejected.`,
+        },
+      });
+      const result = parser.parse("ff00::/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Multicast " },
+        { type: "value", value: "ff00::" },
+        { type: "text", text: " rejected." },
+      ]);
+    });
+
+    it("should use custom uniqueLocalNotAllowed error for IPv6", () => {
+      const parser = cidr({
+        version: 6,
+        ipv6: { allowUniqueLocal: false },
+        errors: {
+          uniqueLocalNotAllowed: message`Unique local denied.`,
+        },
+      });
+      const result = parser.parse("fd00::/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Unique local denied." },
+      ]);
+    });
+
+    it("should use custom linkLocalNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowLinkLocal: false },
+        errors: {
+          linkLocalNotAllowed: message`Link-local denied.`,
+        },
+      });
+      const result = parser.parse("169.254.1.0/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Link-local denied." },
+      ]);
+    });
+
+    it("should use custom broadcastNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowBroadcast: false },
+        errors: {
+          broadcastNotAllowed: message`Broadcast denied.`,
+        },
+      });
+      const result = parser.parse("255.255.255.255/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Broadcast denied." },
+      ]);
+    });
+
+    it("should use custom zeroNotAllowed error", () => {
+      const parser = cidr({
+        ipv4: { allowZero: false },
+        errors: {
+          zeroNotAllowed: message`Zero denied.`,
+        },
+      });
+      const result = parser.parse("0.0.0.0/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Zero denied." },
+      ]);
+    });
+
+    it("should not misclassify custom error containing 'Expected'", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        errors: {
+          privateNotAllowed: (ip) =>
+            message`Expected a public IP, but got ${ip}.`,
+        },
+      });
+      const result = parser.parse("192.168.0.0/24");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a public IP, but got " },
+        { type: "value", value: "192.168.0.0" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report invalidPrefix over private restriction for IPv4", () => {
+      const parser = cidr({ ipv4: { allowPrivate: false } });
+      const result = parser.parse("192.168.0.0/33");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length between 0 and ",
+        },
+        { type: "text", text: "32" },
+        { type: "text", text: " for IPv4, but got " },
+        { type: "text", text: "33" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report invalidPrefix over loopback restriction for IPv6", () => {
+      const parser = cidr({
+        version: 6,
+        ipv6: { allowLoopback: false },
+      });
+      const result = parser.parse("::1/129");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length between 0 and ",
+        },
+        { type: "text", text: "128" },
+        { type: "text", text: " for IPv6, but got " },
+        { type: "text", text: "129" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report prefixBelowMinimum over restriction error", () => {
+      const parser = cidr({
+        ipv4: { allowPrivate: false },
+        minPrefix: 16,
+      });
+      const result = parser.parse("192.168.0.0/8");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length greater than or equal to ",
+        },
+        { type: "text", text: "16" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "8" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should report prefixAboveMaximum over restriction error", () => {
+      const parser = cidr({
+        ipv4: { allowLoopback: false },
+        maxPrefix: 24,
+      });
+      const result = parser.parse("127.0.0.0/32");
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        {
+          type: "text",
+          text: "Expected a prefix length less than or equal to ",
+        },
+        { type: "text", text: "24" },
+        { type: "text", text: ", but got " },
+        { type: "text", text: "32" },
+        { type: "text", text: "." },
+      ]);
+    });
+  });
 });
 
 describe("branch coverage regressions", () => {

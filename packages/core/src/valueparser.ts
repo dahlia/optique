@@ -5364,6 +5364,57 @@ export interface CidrOptions {
      * Can be a static message or a function that receives the prefix and maximum.
      */
     prefixAboveMaximum?: Message | ((prefix: number, max: number) => Message);
+
+    /**
+     * Custom error message when a private IPv4 address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
+     */
+    privateNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when a loopback address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
+     */
+    loopbackNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when a link-local address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
+     */
+    linkLocalNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when a multicast address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
+     */
+    multicastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when the broadcast address is used but disallowed
+     * (IPv4 only).
+     * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
+     */
+    broadcastNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when the zero address is used but disallowed.
+     * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
+     */
+    zeroNotAllowed?: Message | ((ip: string) => Message);
+
+    /**
+     * Custom error message when a unique local address is used but disallowed
+     * (IPv6 only).
+     * Can be a static message or a function that receives the IP.
+     * @since 1.0.0
+     */
+    uniqueLocalNotAllowed?: Message | ((ip: string) => Message);
   };
 }
 
@@ -5441,13 +5492,42 @@ export function cidr(
   const errors = options?.errors;
   const metavar = options?.metavar ?? "CIDR";
 
-  // Create IP parsers for address validation
+  // Sentinel message passed as the invalidIpv4/invalidIpv6 error hook.
+  // When ipv4()/ipv6() return a structural parse failure they return this
+  // exact object, so we can distinguish generic failures from specific
+  // restriction errors (private, loopback, etc.) via reference equality
+  // instead of fragile text-content heuristics.
+  const genericIpSentinel: Message = [];
+
+  // Create IP parsers for address validation, forwarding restriction
+  // error hooks from CidrOptions.errors to the nested parsers
   const ipv4Parser = (version === 4 || version === "both")
-    ? ipv4(options?.ipv4)
+    ? ipv4({
+      ...options?.ipv4,
+      errors: {
+        invalidIpv4: genericIpSentinel,
+        privateNotAllowed: errors?.privateNotAllowed,
+        loopbackNotAllowed: errors?.loopbackNotAllowed,
+        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+        multicastNotAllowed: errors?.multicastNotAllowed,
+        broadcastNotAllowed: errors?.broadcastNotAllowed,
+        zeroNotAllowed: errors?.zeroNotAllowed,
+      },
+    })
     : null;
 
   const ipv6Parser = (version === 6 || version === "both")
-    ? ipv6(options?.ipv6)
+    ? ipv6({
+      ...options?.ipv6,
+      errors: {
+        invalidIpv6: genericIpSentinel,
+        loopbackNotAllowed: errors?.loopbackNotAllowed,
+        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+        multicastNotAllowed: errors?.multicastNotAllowed,
+        zeroNotAllowed: errors?.zeroNotAllowed,
+        uniqueLocalNotAllowed: errors?.uniqueLocalNotAllowed,
+      },
+    })
     : null;
 
   return {
@@ -5493,6 +5573,8 @@ export function cidr(
       // Try to parse as IPv4 first
       let ipVersion: 4 | 6 | null = null;
       let normalizedIp: string | null = null;
+      let ipv4Error: ValueParserResult<string> | null = null;
+      let ipv6Error: ValueParserResult<string> | null = null;
 
       if (ipv4Parser !== null) {
         const result = ipv4Parser.parse(ipPart);
@@ -5518,6 +5600,8 @@ export function cidr(
             ] as Message;
             return { success: false, error: msg };
           }
+        } else {
+          ipv4Error = result;
         }
       }
 
@@ -5546,11 +5630,82 @@ export function cidr(
             ] as Message;
             return { success: false, error: msg };
           }
+        } else {
+          ipv6Error = result;
         }
       }
 
       // Neither IPv4 nor IPv6 worked
       if (ipVersion === null || normalizedIp === null) {
+        // Prefer specific restriction errors (private, loopback, multicast,
+        // etc.) over the generic CIDR error, but only when the prefix is
+        // also valid for the implied IP version.  Structural parse failures
+        // are identified by reference equality with genericIpSentinel.
+        const candidates: readonly [
+          ValueParserResult<string> | null,
+          4 | 6,
+          number,
+        ][] = [[ipv4Error, 4, 32], [ipv6Error, 6, 128]];
+        for (const [err, ver, maxPfx] of candidates) {
+          if (err !== null && !err.success && err.error !== genericIpSentinel) {
+            // The IP was structurally valid but violated a restriction.
+            // Validate the prefix before surfacing the restriction error,
+            // so prefix errors take precedence over restriction diagnostics.
+            if (prefix > maxPfx) {
+              const errorMsg = errors?.invalidPrefix;
+              if (typeof errorMsg === "function") {
+                return { success: false, error: errorMsg(prefix, ver) };
+              }
+              const msg = errorMsg ?? [
+                {
+                  type: "text",
+                  text: "Expected a prefix length between 0 and ",
+                },
+                { type: "text", text: maxPfx.toString() },
+                { type: "text", text: ` for IPv${ver}, but got ` },
+                { type: "text", text: prefix.toString() },
+                { type: "text", text: "." },
+              ] as Message;
+              return { success: false, error: msg };
+            }
+            if (minPrefix !== undefined && prefix < minPrefix) {
+              const errorMsg = errors?.prefixBelowMinimum;
+              if (typeof errorMsg === "function") {
+                return { success: false, error: errorMsg(prefix, minPrefix) };
+              }
+              const msg = errorMsg ?? [
+                {
+                  type: "text",
+                  text: "Expected a prefix length greater than or equal to ",
+                },
+                { type: "text", text: minPrefix.toString() },
+                { type: "text", text: ", but got " },
+                { type: "text", text: prefix.toString() },
+                { type: "text", text: "." },
+              ] as Message;
+              return { success: false, error: msg };
+            }
+            if (maxPrefix !== undefined && prefix > maxPrefix) {
+              const errorMsg = errors?.prefixAboveMaximum;
+              if (typeof errorMsg === "function") {
+                return { success: false, error: errorMsg(prefix, maxPrefix) };
+              }
+              const msg = errorMsg ?? [
+                {
+                  type: "text",
+                  text: "Expected a prefix length less than or equal to ",
+                },
+                { type: "text", text: maxPrefix.toString() },
+                { type: "text", text: ", but got " },
+                { type: "text", text: prefix.toString() },
+                { type: "text", text: "." },
+              ] as Message;
+              return { success: false, error: msg };
+            }
+            return err;
+          }
+        }
+
         const errorMsg = errors?.invalidCidr;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
