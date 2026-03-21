@@ -3113,6 +3113,7 @@ function* pendingDependencyDefaults(
       // config/env contexts can find their data.
       if (
         !Array.isArray(fieldState) &&
+        !isDependencySourceState(fieldState) &&
         (isWrappedDependencySource(fieldParser) ||
           isPendingDependencySourceState(fieldParser.initialState))
       ) {

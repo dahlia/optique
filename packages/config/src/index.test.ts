@@ -1987,7 +1987,9 @@ describe("bindConfig() with dependency sources", () => {
 
   const schema = z.object({ mode: z.enum(["dev", "prod"]) });
 
-  function createParser(configData: { mode: string } | undefined) {
+  function createParser(
+    configData: { readonly mode: "dev" | "prod" } | undefined,
+  ) {
     const context = createConfigContext({ schema });
     const annotations: Annotations = configData
       ? { [context.id]: { data: configData } }
