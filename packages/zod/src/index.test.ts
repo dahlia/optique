@@ -662,9 +662,12 @@ describe("zod()", () => {
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
-    it("should preserve choices through z.catch()", () => {
+    it("should not expose choices through z.catch()", () => {
+      // .catch() makes any input valid (falls back to the default),
+      // so advertising a closed choice set would be misleading.
       const parser = zod(z.enum(["a", "b"]).catch("a"));
-      assert.deepEqual(parser.choices, ["a", "b"]);
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
     });
 
     it("should not expose choices for z.string()", () => {

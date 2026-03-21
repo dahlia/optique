@@ -188,11 +188,8 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
     return "VALUE";
   }
 
-  // 9. Handle default/catch wrappers by unwrapping
-  if (
-    typeName === "ZodDefault" || typeName === "default" ||
-    typeName === "ZodCatch" || typeName === "catch"
-  ) {
+  // 9. Handle default wrapper by unwrapping
+  if (typeName === "ZodDefault" || typeName === "default") {
     const innerType = def.innerType;
     if (innerType != null) {
       return inferMetavar(innerType);
@@ -317,12 +314,11 @@ function inferChoices(
     return allChoices.size > 0 ? [...allChoices] : undefined;
   }
 
-  // Optional/nullable/default/catch wrappers → unwrap
+  // Optional/nullable/default wrappers → unwrap
   if (
     typeName === "ZodOptional" || typeName === "optional" ||
     typeName === "ZodNullable" || typeName === "nullable" ||
-    typeName === "ZodDefault" || typeName === "default" ||
-    typeName === "ZodCatch" || typeName === "catch"
+    typeName === "ZodDefault" || typeName === "default"
   ) {
     const innerType = def.innerType;
     if (innerType != null) {
