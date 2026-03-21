@@ -507,6 +507,35 @@ describe("formatUsage", () => {
       );
     });
   });
+
+  describe("degenerate terms", () => {
+    it("should skip option with empty names", () => {
+      const usage: Usage = [
+        { type: "option", names: [] as never, metavar: "X" },
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
+    });
+
+    it("should skip command with empty name", () => {
+      const usage: Usage = [
+        { type: "command", name: "" } as never,
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
+    });
+
+    it("should skip literal with empty value", () => {
+      const usage: Usage = [
+        { type: "literal", value: "" } as never,
+        { type: "argument", metavar: "FILE" },
+      ];
+      const result = formatUsage("test", usage);
+      assert.equal(result, "test FILE");
+    });
+  });
 });
 
 describe("UsageFormatOptions", () => {
