@@ -572,7 +572,12 @@ describe("valibot()", () => {
     it("should suggest all choices for empty prefix", () => {
       const parser = valibot(v.picklist(["debug", "info", "warn", "error"]));
       const suggestions = [...parser.suggest!("")];
-      assert.equal(suggestions.length, 4);
+      assert.deepEqual(suggestions, [
+        { kind: "literal", text: "debug" },
+        { kind: "literal", text: "info" },
+        { kind: "literal", text: "warn" },
+        { kind: "literal", text: "error" },
+      ]);
     });
 
     it("should expose choices for v.literal()", () => {
