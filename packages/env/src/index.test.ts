@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { injectAnnotations } from "@optique/core/annotations";
-import { object } from "@optique/core/constructs";
+import { group, merge, object } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
 import { message } from "@optique/core/message";
@@ -1679,5 +1679,232 @@ describe("bindEnv() with dependency sources", () => {
     assert.ok(result.success);
     assert.equal(result.value.mode, undefined);
     assert.equal(result.value.level, "debug");
+  });
+});
+
+// https://github.com/dahlia/optique/issues/681
+describe("bindEnv() with dependency sources across merge() boundaries", () => {
+  const mode = dependency(choice(["dev", "prod"] as const));
+  const level = mode.derive({
+    metavar: "LEVEL",
+    mode: "sync",
+    factory: (value: "dev" | "prod") =>
+      choice(
+        value === "dev"
+          ? (["debug", "verbose"] as const)
+          : (["silent", "strict"] as const),
+      ),
+    defaultValue: () => "dev" as const,
+  });
+
+  function createMergedParser(envSource: (key: string) => string | undefined) {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: envSource,
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = merge(
+      object({
+        mode: bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+      }),
+      object({
+        level: option("--level", level),
+      }),
+    );
+    return { parser, annotations };
+  }
+
+  it("propagates env value as dependency to derived parser (parse)", () => {
+    const { parser, annotations } = createMergedParser(
+      (key) => ({ APP_MODE: "prod" })[key],
+    );
+    const result = parse(parser, ["--level", "silent"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("propagates env value as dependency to derived parser (suggest)", () => {
+    const { parser, annotations } = createMergedParser(
+      (key) => ({ APP_MODE: "prod" })[key],
+    );
+    const suggestions = suggestSync(
+      parser,
+      ["--level", "s"],
+      { annotations },
+    );
+    const texts = suggestions
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+    assert.ok(
+      texts.includes("silent"),
+      `Expected "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("strict"),
+      `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("debug"),
+      `Did not expect "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("verbose"),
+      `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
+  it("CLI-provided dependency source works across merged children", () => {
+    const { parser, annotations } = createMergedParser(
+      (key) => ({ APP_MODE: "dev" })[key],
+    );
+    // CLI --mode overrides env value
+    const result = parse(
+      parser,
+      ["--mode", "prod", "--level", "silent"],
+      { annotations },
+    );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("CLI-provided dependency source also wins during suggest()", () => {
+    const { parser, annotations } = createMergedParser(
+      (key) => ({ APP_MODE: "prod" })[key],
+    );
+    const texts = suggestSync(
+      parser,
+      ["--mode", "dev", "--level", ""],
+      { annotations },
+    )
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+    assert.ok(
+      texts.includes("debug"),
+      `Expected "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("verbose"),
+      `Expected "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("silent"),
+      `Did not expect "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("strict"),
+      `Did not expect "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+  });
+
+  it("nested merge() propagates env-backed dependency", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = merge(
+      merge(
+        object({
+          mode: bindEnv(option("--mode", mode), {
+            context: envContext,
+            key: "MODE",
+            parser: choice(["dev", "prod"] as const),
+          }),
+        }),
+        object({
+          extra: option("--extra", string()),
+        }),
+      ),
+      object({
+        level: option("--level", level),
+      }),
+    );
+    const result = parse(
+      parser,
+      ["--extra", "foo", "--level", "silent"],
+      { annotations },
+    );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("group()-wrapped child propagates env-backed dependency", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = merge(
+      group(
+        "source",
+        object({
+          mode: bindEnv(option("--mode", mode), {
+            context: envContext,
+            key: "MODE",
+            parser: choice(["dev", "prod"] as const),
+          }),
+        }),
+      ),
+      object({
+        level: option("--level", level),
+      }),
+    );
+    const result = parse(
+      parser,
+      ["--level", "silent"],
+      { annotations },
+    );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("group()-wrapped child propagates env-backed dependency during suggest()", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = merge(
+      group(
+        "source",
+        object({
+          mode: bindEnv(option("--mode", mode), {
+            context: envContext,
+            key: "MODE",
+            parser: choice(["dev", "prod"] as const),
+          }),
+        }),
+      ),
+      object({
+        level: option("--level", level),
+      }),
+    );
+    const texts = suggestSync(parser, ["--level", "s"], { annotations })
+      .filter((s) => s.kind === "literal")
+      .map((s) => s.text);
+    assert.ok(
+      texts.includes("silent"),
+      `Expected "silent" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      texts.includes("strict"),
+      `Expected "strict" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("debug"),
+      `Did not expect "debug" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      !texts.includes("verbose"),
+      `Did not expect "verbose" in suggestions, got: ${JSON.stringify(texts)}`,
+    );
   });
 });
