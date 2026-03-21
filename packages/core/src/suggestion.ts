@@ -330,7 +330,8 @@ function getSuggestionKey(suggestion: Suggestion): string {
   if (suggestion.kind === "literal") {
     return suggestion.text;
   }
-  // File suggestion: create a composite key
+  // File suggestion: create a composite key (excludes includeHidden,
+  // which is merged separately in deduplicateSuggestions)
   return `__FILE__:${suggestion.type}:${
     suggestion.extensions?.join(",") ?? ""
   }:${suggestion.pattern ?? ""}`;
@@ -343,7 +344,11 @@ function getSuggestionKey(suggestion: Suggestion): string {
  * - Literal suggestions: same text
  * - File suggestions: same type, extensions, and pattern
  *
- * The first occurrence of each unique suggestion is kept.
+ * The first occurrence of each unique suggestion is kept.  For file
+ * suggestions, `includeHidden` is merged across duplicates: if any
+ * duplicate has `includeHidden: true`, the kept suggestion is upgraded
+ * to `includeHidden: true` because it is a superset of the non-hidden
+ * variant.
  *
  * @param suggestions Array of suggestions that may contain duplicates
  * @returns A new array with duplicates removed, preserving order of first occurrences
@@ -364,13 +369,22 @@ function getSuggestionKey(suggestion: Suggestion): string {
 export function deduplicateSuggestions(
   suggestions: readonly Suggestion[],
 ): Suggestion[] {
-  const seen = new Set<string>();
-  return suggestions.filter((suggestion) => {
+  const entries = new Map<string, Suggestion>();
+  const order: string[] = [];
+  for (const suggestion of suggestions) {
     const key = getSuggestionKey(suggestion);
-    if (seen.has(key)) {
-      return false;
+    const existing = entries.get(key);
+    if (existing == null) {
+      entries.set(key, suggestion);
+      order.push(key);
+    } else if (
+      suggestion.kind === "file" &&
+      existing.kind === "file" &&
+      suggestion.includeHidden === true &&
+      existing.includeHidden !== true
+    ) {
+      entries.set(key, { ...existing, includeHidden: true });
     }
-    seen.add(key);
-    return true;
-  });
+  }
+  return order.map((key) => entries.get(key)!);
 }

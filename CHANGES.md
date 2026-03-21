@@ -734,6 +734,11 @@ To be released.
     as malformed suffixes (e.g., `(choices: )`, `[]`) when the `Message`
     array was empty.  Empty arrays are now treated as absent.  [[#469], [#692]]
 
+ -  Fixed `deduplicateSuggestions()` silently dropping `includeHidden: true`
+    when merging file suggestions that differ only in `includeHidden`.
+    Duplicates are now merged with `includeHidden: true` preferred, since
+    it is a superset of the non-hidden variant.  [[#518], [#693]]
+
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
 [#113]: https://github.com/dahlia/optique/issues/113
@@ -844,6 +849,7 @@ To be released.
 [#512]: https://github.com/dahlia/optique/pull/512
 [#513]: https://github.com/dahlia/optique/issues/513
 [#516]: https://github.com/dahlia/optique/issues/516
+[#518]: https://github.com/dahlia/optique/issues/518
 [#520]: https://github.com/dahlia/optique/pull/520
 [#522]: https://github.com/dahlia/optique/pull/522
 [#523]: https://github.com/dahlia/optique/pull/523
@@ -939,6 +945,7 @@ To be released.
 [#689]: https://github.com/dahlia/optique/pull/689
 [#690]: https://github.com/dahlia/optique/pull/690
 [#692]: https://github.com/dahlia/optique/pull/692
+[#693]: https://github.com/dahlia/optique/pull/693
 
 ### @optique/config
 

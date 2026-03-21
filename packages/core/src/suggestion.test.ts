@@ -698,6 +698,71 @@ describe("property-based tests", () => {
     );
   });
 
+  it("deduplicateSuggestions should merge file suggestions preferring includeHidden: true", () => {
+    const suggestions: readonly Suggestion[] = [
+      { kind: "file", type: "file", pattern: "x", includeHidden: false },
+      { kind: "file", type: "file", pattern: "x", includeHidden: true },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 1);
+    assert.deepEqual(result[0], {
+      kind: "file",
+      type: "file",
+      pattern: "x",
+      includeHidden: true,
+    });
+  });
+
+  it("deduplicateSuggestions should merge file suggestions preferring includeHidden: true (reverse order)", () => {
+    const suggestions: readonly Suggestion[] = [
+      { kind: "file", type: "file", pattern: "x", includeHidden: true },
+      { kind: "file", type: "file", pattern: "x", includeHidden: false },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 1);
+    assert.deepEqual(result[0], {
+      kind: "file",
+      type: "file",
+      pattern: "x",
+      includeHidden: true,
+    });
+  });
+
+  it("deduplicateSuggestions should still collapse identical file suggestions with same includeHidden", () => {
+    const suggestions: readonly Suggestion[] = [
+      { kind: "file", type: "file", pattern: "x", includeHidden: true },
+      { kind: "file", type: "file", pattern: "x", includeHidden: true },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 1);
+    assert.deepEqual(result, [suggestions[0]]);
+  });
+
+  it("deduplicateSuggestions should treat undefined and false includeHidden as equivalent", () => {
+    const suggestions: readonly Suggestion[] = [
+      { kind: "file", type: "file", pattern: "x" },
+      { kind: "file", type: "file", pattern: "x", includeHidden: false },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 1);
+    assert.deepEqual(result, [suggestions[0]]);
+  });
+
+  it("deduplicateSuggestions should upgrade undefined includeHidden to true when merging", () => {
+    const suggestions: readonly Suggestion[] = [
+      { kind: "file", type: "file", pattern: "x" },
+      { kind: "file", type: "file", pattern: "x", includeHidden: true },
+    ];
+    const result = deduplicateSuggestions(suggestions);
+    assert.equal(result.length, 1);
+    assert.deepEqual(result[0], {
+      kind: "file",
+      type: "file",
+      pattern: "x",
+      includeHidden: true,
+    });
+  });
+
   it("deduplicateSuggestions should be idempotent and stable", () => {
     const literalSuggestionArbitrary = safeStringArbitrary.map(
       (text: string): Suggestion => ({ kind: "literal", text }),
@@ -717,6 +782,7 @@ describe("property-based tests", () => {
         ),
         { nil: undefined },
       ),
+      includeHidden: fc.option(fc.boolean(), { nil: undefined }),
     }) as fc.Arbitrary<Suggestion>;
 
     const suggestionsArbitrary = fc.array(
@@ -758,6 +824,21 @@ describe("property-based tests", () => {
             assert.ok(firstIndex >= 0);
             assert.ok(firstIndex > previousIndex);
             previousIndex = firstIndex;
+          }
+
+          // File suggestions should have includeHidden: true if any input
+          // with the same key had includeHidden: true
+          for (const suggestion of deduplicated) {
+            if (suggestion.kind !== "file") continue;
+            const key = keyOf(suggestion);
+            const anyHidden = suggestions.some(
+              (s) =>
+                keyOf(s) === key && s.kind === "file" &&
+                s.includeHidden === true,
+            );
+            if (anyHidden) {
+              assert.ok(suggestion.includeHidden);
+            }
           }
         },
       ),
