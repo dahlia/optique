@@ -9470,6 +9470,67 @@ describe("macAddress()", () => {
       assert.strictEqual(result.value, "AA:BB:CC:DD:EE:FF");
     });
   });
+
+  describe("option validation", () => {
+    it("should throw TypeError for invalid separator value", () => {
+      assert.throws(
+        () => macAddress({ separator: "foo" as never }),
+        (error: unknown) => {
+          assert.ok(error instanceof TypeError);
+          assert.ok(error.message.includes("separator"));
+          assert.ok(error.message.includes('"foo"'));
+          return true;
+        },
+      );
+    });
+
+    it("should throw TypeError for invalid outputSeparator value", () => {
+      assert.throws(
+        () => macAddress({ outputSeparator: "any" as never }),
+        (error: unknown) => {
+          assert.ok(error instanceof TypeError);
+          assert.ok(error.message.includes("outputSeparator"));
+          assert.ok(error.message.includes('"any"'));
+          return true;
+        },
+      );
+    });
+
+    it("should throw TypeError for invalid case value", () => {
+      assert.throws(
+        () => macAddress({ case: "weird" as never }),
+        (error: unknown) => {
+          assert.ok(error instanceof TypeError);
+          assert.ok(error.message.includes("case"));
+          assert.ok(error.message.includes('"weird"'));
+          return true;
+        },
+      );
+    });
+
+    it("should accept all valid separator values", () => {
+      for (const sep of [":", "-", ".", "none", "any"] as const) {
+        macAddress({ separator: sep });
+      }
+    });
+
+    it("should accept all valid outputSeparator values", () => {
+      for (const sep of [":", "-", ".", "none"] as const) {
+        macAddress({ outputSeparator: sep });
+      }
+    });
+
+    it("should accept all valid case values", () => {
+      for (const c of ["preserve", "upper", "lower"] as const) {
+        macAddress({ case: c });
+      }
+    });
+
+    it("should accept undefined options", () => {
+      macAddress();
+      macAddress({});
+    });
+  });
 });
 
 describe("domain()", () => {
