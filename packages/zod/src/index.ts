@@ -215,9 +215,15 @@ function inferChoices(
 
   const typeName = def.typeName || def.type;
 
-  // z.enum(["a", "b"]):
-  //   Zod v3: _def.values is string[]
-  //   Zod v4: _def.entries is Record<string, string>
+  // z.enum(["a", "b"]) or z.nativeEnum(StringEnum):
+  //   Zod v3: _def.values is string[] for z.enum()
+  //   Zod v4: _def.entries is Record<string, string | number> for both
+  //           z.enum() and z.nativeEnum()
+  // For Zod v4, z.nativeEnum() with a numeric TypeScript enum also reports
+  // type "enum" with entries containing reverse mappings (e.g.,
+  // { A: 0, 0: "A" }).  We must bail out when any entry value is not a
+  // string, since safeParse() would reject string representations of those
+  // values from CLI input.
   if (typeName === "ZodEnum" || typeName === "enum") {
     const values = def.values;
     if (Array.isArray(values)) {
@@ -225,7 +231,19 @@ function inferChoices(
     }
     const entries = def.entries;
     if (entries != null && typeof entries === "object") {
-      return Object.values(entries).map(String);
+      const result: string[] = [];
+      for (
+        const val of Object.values(entries as Record<string, string | number>)
+      ) {
+        if (typeof val === "string") {
+          if (!result.includes(val)) {
+            result.push(val);
+          }
+        } else {
+          return undefined;
+        }
+      }
+      return result.length > 0 ? result : undefined;
     }
     return undefined;
   }

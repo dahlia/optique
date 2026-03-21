@@ -613,6 +613,20 @@ describe("zod()", () => {
       assert.equal(parser.suggest, undefined);
     });
 
+    it("should not expose choices for z.nativeEnum() with numeric values", () => {
+      // Simulate a numeric TypeScript enum with reverse mappings
+      const NumericEnum = { A: 0, B: 1, 0: "A", 1: "B" } as const;
+      const parser = zod(z.nativeEnum(NumericEnum));
+      assert.equal(parser.choices, undefined);
+      assert.equal(parser.suggest, undefined);
+    });
+
+    it("should expose choices for z.nativeEnum() with string values", () => {
+      const StringEnum = { Debug: "debug", Info: "info" } as const;
+      const parser = zod(z.nativeEnum(StringEnum));
+      assert.deepEqual(parser.choices, ["debug", "info"]);
+    });
+
     it("should preserve choices through z.optional()", () => {
       const parser = zod(z.enum(["a", "b"]).optional());
       assert.deepEqual(parser.choices, ["a", "b"]);
