@@ -666,7 +666,11 @@ To be released.
 
  -  Fixed `cidr()` discarding specific nested IPv4/IPv6 validation errors
     (e.g., private network, loopback, multicast restrictions) behind a
-    generic “Expected a valid CIDR notation” error message.  [[#333]]
+    generic “Expected a valid CIDR notation” error message.  Added
+    `privateNotAllowed`, `loopbackNotAllowed`, `linkLocalNotAllowed`,
+    `multicastNotAllowed`, `broadcastNotAllowed`, `zeroNotAllowed`, and
+    `uniqueLocalNotAllowed` error hooks to `CidrOptions.errors` so callers
+    can customize these diagnostics.  [[#333], [#679]]
 
 [RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562
 [#110]: https://github.com/dahlia/optique/issues/110
@@ -854,6 +858,7 @@ To be released.
 [#676]: https://github.com/dahlia/optique/pull/676
 [#677]: https://github.com/dahlia/optique/pull/677
 [#678]: https://github.com/dahlia/optique/pull/678
+[#679]: https://github.com/dahlia/optique/pull/679
 
 ### @optique/config
 
