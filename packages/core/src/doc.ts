@@ -388,6 +388,19 @@ export function formatDocPage(
   }));
   page = { ...page, sections: filteredSections };
 
+  // Validate showChoices.maxItems before any per-entry rendering.
+  if (
+    typeof options.showChoices === "object" &&
+    options.showChoices.maxItems != null
+  ) {
+    const maxItems = options.showChoices.maxItems;
+    if (maxItems < 1) {
+      throw new RangeError(
+        `showChoices.maxItems must be at least 1, but got ${maxItems}.`,
+      );
+    }
+  }
+
   // Validate maxWidth against the minimum feasible layout.  The minimum
   // depends on which page features are active:
   //  - Entries with a description column need enough space for term +
@@ -689,11 +702,6 @@ export function formatDocPage(
         const maxItems = typeof options.showChoices === "object"
           ? options.showChoices.maxItems ?? 8
           : 8;
-        if (maxItems < 1) {
-          throw new RangeError(
-            `showChoices.maxItems must be at least 1, but got ${maxItems}.`,
-          );
-        }
         // Truncate at the Message level by counting value terms
         const terms = Array.isArray(entry.choices) ? entry.choices : [];
         let truncatedTerms: readonly MessageTerm[] = terms;

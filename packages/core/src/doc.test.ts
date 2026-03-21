@@ -2335,6 +2335,26 @@ describe("branch coverage: doc.ts edge cases", () => {
     );
   });
 
+  it("showChoices: maxItems 0 throws even without choices entries", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--verbose"] },
+        }],
+      }],
+    };
+    assert.throws(
+      () =>
+        formatDocPage("myapp", page, {
+          showChoices: { maxItems: 0 },
+        }),
+      {
+        name: "RangeError",
+        message: "showChoices.maxItems must be at least 1, but got 0.",
+      },
+    );
+  });
+
   it("section sort falls back to index when comparator ties", () => {
     const page: DocPage = {
       sections: [
