@@ -395,7 +395,10 @@ export function bindEnv<
       // When the inner parser wraps a dependency source, wrap the env/default
       // result in DependencySourceState so that collectDependencies() in
       // object() Phase 2 can find the dependency value.
-      if (pendingDepState) {
+      // Only wrap when the value actually came from env or default — not
+      // when getEnvOrDefault fell back to the inner parser's own complete(),
+      // which may return a fallback like undefined from optional().
+      if (pendingDepState && envOrDefaultExists(state, options)) {
         return mapModeValue(parser.$mode, envResult, (result) => {
           if (result.success) {
             return createDependencySourceState(
@@ -482,6 +485,27 @@ function getEnvOrDefault<M extends Mode, TValue>(
     success: false as const,
     error: message`Missing required environment variable: ${envVar(fullKey)}`,
   });
+}
+
+/**
+ * Checks whether the env variable or a default value is available, without
+ * parsing or processing them.  Used to decide whether to wrap the result
+ * as a DependencySourceState — the inner parser fallback path should not
+ * be wrapped.
+ */
+function envOrDefaultExists<M extends Mode, TValue>(
+  state: unknown,
+  options: BindEnvOptions<M, TValue>,
+): boolean {
+  const annotations = getAnnotations(state);
+  const sourceData =
+    (annotations?.[options.context.id] as EnvSourceData | undefined) ??
+      getActiveEnvSource(options.context.id);
+  const fullKey = `${
+    sourceData?.prefix ?? options.context.prefix
+  }${options.key}`;
+  return sourceData?.source(fullKey) !== undefined ||
+    options.default !== undefined;
 }
 
 /**

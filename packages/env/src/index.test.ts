@@ -10,6 +10,7 @@ import { message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import type { Parser } from "@optique/core/parser";
 import { parse, suggestSync } from "@optique/core/parser";
+import { optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import {
@@ -1632,5 +1633,51 @@ describe("bindEnv() with dependency sources", () => {
     // "debug" is not valid when mode is "prod"
     const result = parse(parser, ["--level", "debug"], { annotations });
     assert.ok(!result.success);
+  });
+
+  it("optional(bindEnv(...)) returns undefined when env is absent", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: optional(
+        bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+      ),
+      level: option("--level", level),
+    });
+    // When env is absent and CLI omits --mode, mode should be undefined
+    // and derived parser should use its defaultValue ("dev")
+    const result = parse(parser, ["--level", "debug"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
+  });
+
+  it("bindEnv(optional(...)) uses defaultValue when env is absent", () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations() as Record<symbol, unknown>;
+    const parser = object({
+      mode: bindEnv(optional(option("--mode", mode)), {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+      level: option("--level", level),
+    });
+    // When env is absent and CLI omits --mode, derived parser should use
+    // its defaultValue ("dev"), so "debug" (a dev-mode level) should work
+    const result = parse(parser, ["--level", "debug"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
   });
 });

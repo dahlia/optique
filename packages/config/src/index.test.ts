@@ -5,6 +5,7 @@ import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
 import { object } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
+import { optional } from "@optique/core/modifiers";
 import { fail, flag, option } from "@optique/core/primitives";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
 import { choice, integer, string } from "@optique/core/valueparser";
@@ -2033,5 +2034,26 @@ describe("bindConfig() with dependency sources", () => {
     const { parser, annotations } = createParser({ mode: "prod" });
     const result = parse(parser, ["--level", "debug"], { annotations });
     assert.ok(!result.success);
+  });
+
+  test("optional(bindConfig(...)) returns undefined when config is absent", () => {
+    const context = createConfigContext({ schema });
+    // No config data in annotations
+    const annotations: Annotations = {};
+    const parser = object({
+      mode: optional(
+        bindConfig(option("--mode", mode), {
+          context,
+          key: "mode",
+        }),
+      ),
+      level: option("--level", level),
+    });
+    // When config is absent and CLI omits --mode, mode should be undefined
+    // and derived parser should use its defaultValue ("dev")
+    const result = parse(parser, ["--level", "debug"], { annotations });
+    assert.ok(result.success);
+    assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
   });
 });
