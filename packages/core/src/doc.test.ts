@@ -2023,6 +2023,19 @@ describe("formatDocPage", () => {
       assert.ok(!choicesResult.includes("choices"));
       assert.ok(!choicesResult.includes("("));
       assert.ok(!choicesResult.includes(")"));
+      // Empty arrays should not inflate maxWidth requirements
+      assert.doesNotThrow(() =>
+        formatDocPage("app", defaultPage, {
+          maxWidth: 8,
+          showDefault: true,
+        })
+      );
+      assert.doesNotThrow(() =>
+        formatDocPage("app", choicesPage, {
+          maxWidth: 8,
+          showChoices: true,
+        })
+      );
     });
 
     it("should allow non-empty showDefault at narrow width", () => {

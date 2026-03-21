@@ -397,16 +397,15 @@ export function formatDocPage(
     const hasEntries = page.sections.some((s) => s.entries.length > 0);
     const hasContent = (msg: unknown): msg is readonly unknown[] =>
       Array.isArray(msg) && msg.length > 0;
-    // The formatter renders showDefault/showChoices whenever
-    // entry.default/choices is non-null (even for empty arrays), so
-    // the validation must match: use `!= null` rather than checking
-    // array length, to avoid missing entries like `default: []`.
+    // The formatter skips empty default/choices arrays, so the
+    // validation must match: use hasContent() (which checks length > 0)
+    // rather than just `!= null`.
     const needsDescColumn = hasEntries &&
       page.sections.some((s) =>
         s.entries.some((e) =>
           hasContent(e.description) ||
-          (options.showDefault && e.default != null) ||
-          (options.showChoices && e.choices != null)
+          (options.showDefault && hasContent(e.default)) ||
+          (options.showChoices && hasContent(e.choices))
         )
       );
     // Compute minimum description column width for showDefault/showChoices.
@@ -419,7 +418,7 @@ export function formatDocPage(
     if (needsDescColumn) {
       if (
         options.showDefault &&
-        page.sections.some((s) => s.entries.some((e) => e.default != null))
+        page.sections.some((s) => s.entries.some((e) => hasContent(e.default)))
       ) {
         const prefix = typeof options.showDefault === "object"
           ? options.showDefault.prefix ?? " ["
@@ -428,7 +427,7 @@ export function formatDocPage(
       }
       if (
         options.showChoices &&
-        page.sections.some((s) => s.entries.some((e) => e.choices != null))
+        page.sections.some((s) => s.entries.some((e) => hasContent(e.choices)))
       ) {
         const prefix = typeof options.showChoices === "object"
           ? options.showChoices.prefix ?? " ("
